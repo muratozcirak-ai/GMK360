@@ -1,0 +1,123 @@
+@model IReadOnlyList<GMK360.Core.Entities.Property>
+
+@{
+    ViewData["Title"] = "İlan Moderasyonu";
+    Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml"; // Ensure this exists or use fallback
+}
+
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-4">
+                <div class="card-header pb-0 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 text-primary fw-bold">Onay Bekleyen İlanlar</h6>
+                    <span class="badge bg-warning text-dark">@Model.Count İlan Bekliyor</span>
+                </div>
+                <div class="card-body px-0 pt-0 pb-2">
+                    @if (TempData["SuccessMessage"] != null)
+                    {
+                        <div class="alert alert-success mx-4 mt-3 text-white">@TempData["SuccessMessage"]</div>
+                    }
+                    @if (TempData["ErrorMessage"] != null)
+                    {
+                        <div class="alert alert-danger mx-4 mt-3 text-white">@TempData["ErrorMessage"]</div>
+                    }
+
+                    <div class="table-responsive p-0">
+                        <table class="table align-items-center mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">İlan</th>
+                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Kullanıcı</th>
+                                    <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Fiyat</th>
+                                    <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Tarih</th>
+                                    <th class="text-secondary opacity-7"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (!Model.Any())
+                                {
+                                    <tr>
+                                        <td colspan="5" class="text-center py-4">
+                                            <p class="text-secondary mb-0">Onay bekleyen ilan bulunmuyor. Harika!</p>
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    foreach (var property in Model)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex px-2 py-1">
+                                                    <div>
+                                                        <img src="@(property.Images?.FirstOrDefault()?.ImageUrl ?? "/img/placeholder.jpg")" class="avatar avatar-sm me-3" alt="property">
+                                                    </div>
+                                                    <div class="d-flex flex-column justify-content-center">
+                                                        <h6 class="mb-0 text-sm">@property.Title</h6>
+                                                        <p class="text-xs text-secondary mb-0">@(property.Complex != null ? property.Complex.Name : "Bilinmiyor")</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <p class="text-xs font-weight-bold mb-0">@property.User?.FirstName @property.User?.LastName</p>
+                                                <p class="text-xs text-secondary mb-0">@property.User?.Email</p>
+                                            </td>
+                                            <td class="align-middle text-center text-sm">
+                                                <span class="badge badge-sm bg-gradient-success">@property.Price.ToString("N0") ₺</span>
+                                            </td>
+                                            <td class="align-middle text-center">
+                                                <span class="text-secondary text-xs font-weight-bold">@property.CreatedAt.ToString("dd MMM yyyy")</span>
+                                            </td>
+                                            <td class="align-middle">
+                                                <a href="/ilan/@property.Id" target="_blank" class="text-secondary font-weight-bold text-xs me-3" data-toggle="tooltip" data-original-title="İncele">
+                                                    İncele
+                                                </a>
+                                                
+                                                <form asp-action="Approve" asp-controller="Moderation" method="post" class="d-inline">
+                                                    <input type="hidden" name="id" value="@property.Id" />
+                                                    <button type="submit" class="btn btn-sm btn-success mb-0 me-2" onclick="return confirm('Bu ilanı onaylamak istediğinize emin misiniz?');">
+                                                        Onayla
+                                                    </button>
+                                                </form>
+
+                                                <button type="button" class="btn btn-sm btn-danger mb-0" data-bs-toggle="modal" data-bs-target="#rejectModal-@property.Id">
+                                                    Reddet
+                                                </button>
+
+                                                <!-- Reddetme Modalı -->
+                                                <div class="modal fade" id="rejectModal-@property.Id" tabindex="-1" aria-labelledby="rejectModalLabel" aria-hidden="true">
+                                                    <div class="modal-dialog">
+                                                        <div class="modal-content">
+                                                            <div class="modal-header">
+                                                                <h5 class="modal-title" id="rejectModalLabel">İlanı Reddet</h5>
+                                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                            </div>
+                                                            <form asp-action="Reject" asp-controller="Moderation" method="post">
+                                                                <div class="modal-body">
+                                                                    <input type="hidden" name="id" value="@property.Id" />
+                                                                    <div class="mb-3">
+                                                                        <label class="form-label">Reddetme Sebebi (Kullanıcıya gönderilecek)</label>
+                                                                        <textarea name="reason" class="form-control" rows="3" required placeholder="Örn: Fotoğraflarınız çok kalitesiz veya fiyat piyasa değerinin çok üzerinde."></textarea>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="modal-footer">
+                                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                                                                    <button type="submit" class="btn btn-danger">Reddet ve Bildir</button>
+                                                                </div>
+                                                            </form>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,407 @@
+@{
+    ViewData["Title"] = "Bölge Bölme ve Birleştirme";
+    Layout = "~/Views/Shared/_AdminLayout.cshtml";
+    var cities = ViewBag.Cities as List<GMK360.Core.Entities.City>;
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0"><i class="bi bi-diagram-3 text-primary me-2"></i> Bölge Bölme ve Birleştirme Paneli</h2>
+            <p class="text-muted">Evrensel Taşıma Merkezi (İlçe, Mahalle ve Sokak seviyelerinde toplu aktarım yapın)</p>
+        </div>
+        <a href="/AdminLocation/Index" class="btn btn-light rounded-pill"><i class="bi bi-arrow-left me-2"></i> Adres Merge Ana Sayfa</a>
+    </div>
+
+    <!-- TABS -->
+    <ul class="nav nav-pills mb-4 bg-white p-2 rounded-4 shadow-sm" id="moveTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold rounded-pill px-4" id="district-tab" data-bs-toggle="tab" data-bs-target="#district" type="button" role="tab" onclick="setMoveLevel('district')">İlçe Taşı (İlden -> İle)</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active fw-bold rounded-pill px-4" id="neighborhood-tab" data-bs-toggle="tab" data-bs-target="#neighborhood" type="button" role="tab" onclick="setMoveLevel('neighborhood')">Mahalle Taşı (İlçeden -> İlçeye)</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold rounded-pill px-4" id="street-tab" data-bs-toggle="tab" data-bs-target="#street" type="button" role="tab" onclick="setMoveLevel('street')">Sokak Taşı (Mahalleden -> Mahalleye)</button>
+        </li>
+    </ul>
+
+    <!-- DUAL PANELS -->
+    <div class="row g-4">
+        <!-- LEFT PANEL (KAYNAK) -->
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-bottom-0 pt-4 pb-0">
+                    <h5 class="fw-bold text-primary"><i class="ph ph-upload-simple me-2"></i> BURADAN (Kaynak)</h5>
+                    <p class="small text-muted mb-0">Taşınacak verilerin bulunduğu mevcut adresi seçin.</p>
+                </div>
+                <div class="card-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-4">
+                            <select id="srcCity" class="form-select rounded-3">
+                                <option value="">-- İl Seç --</option>
+                                @foreach(var c in cities) { <option value="@c.Id">@c.Name</option> }
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <select id="srcDistrict" class="form-select rounded-3" disabled><option value="">-- İlçe --</option></select>
+                        </div>
+                        <div class="col-4">
+                            <select id="srcNeighborhood" class="form-select rounded-3" disabled><option value="">-- Mahalle --</option></select>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-2 bg-light p-2 rounded-3 border">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="selectAllItems">
+                            <label class="form-check-label fw-bold small" for="selectAllItems">Tümünü Seç</label>
+                        </div>
+                        <span class="badge bg-primary rounded-pill" id="selectedCountText">0 seçildi</span>
+                    </div>
+
+                    <div class="border rounded-3 p-0" style="height: 400px; overflow-y: auto; background: #f8fafc;">
+                        <ul class="list-group list-group-flush" id="sourceList">
+                            <li class="list-group-item text-center text-muted py-5" style="background: transparent;">Lütfen yukarıdan seçim yapın.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL (HEDEF) -->
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-warning" style="border-width: 2px !important;">
+                <div class="card-header bg-white border-bottom-0 pt-4 pb-0">
+                    <h5 class="fw-bold text-warning"><i class="ph ph-download-simple me-2"></i> BURAYA (Hedef)</h5>
+                    <p class="small text-muted mb-0">Verilerin aktarılacağı (taşınacağı) yeni adresi seçin.</p>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <div class="row g-2 mb-3">
+                        <div class="col-4">
+                            <select id="tgtCity" class="form-select rounded-3">
+                                <option value="">-- İl Seç --</option>
+                                @foreach(var c in cities) { <option value="@c.Id">@c.Name</option> }
+                            </select>
+                        </div>
+                        <div class="col-4 d-flex gap-1">
+                            <select id="tgtDistrict" class="form-select rounded-3" disabled><option value="">-- İlçe --</option></select>
+                            <button class="btn btn-outline-success px-2 rounded-3" id="btnAddDistrict" style="display:none;" onclick="openAddModal('district')" title="Yeni İlçe Ekle"><i class="bi bi-plus-lg"></i></button>
+                        </div>
+                        <div class="col-4 d-flex gap-1">
+                            <select id="tgtNeighborhood" class="form-select rounded-3" disabled><option value="">-- Mahalle --</option></select>
+                            <button class="btn btn-outline-success px-2 rounded-3" id="btnAddNeighborhood" style="display:none;" onclick="openAddModal('neighborhood')" title="Yeni Mahalle Ekle"><i class="bi bi-plus-lg"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="flex-grow-1 d-flex flex-column align-items-center justify-content-center bg-light rounded-3 border border-warning border-opacity-50 p-4 text-center">
+                        <i class="ph ph-arrows-merge text-warning opacity-50 mb-3" style="font-size: 5rem;"></i>
+                        <h4 class="fw-bold">Taşımaya Hazır</h4>
+                        <p class="text-muted">Sol taraftan seçtiğiniz <strong id="readyCount" class="text-dark">0</strong> adet veriyi sağ tarafta seçili olan konuma kalıcı olarak taşıyacaksınız.</p>
+                        <button id="btnExecuteMove" class="btn btn-warning btn-lg rounded-pill px-5 fw-bold shadow-sm mt-3" disabled onclick="executeMove()">
+                            <i class="ph ph-check-circle me-2"></i> SEÇİLİLERİ TAŞI
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Yeni Ekleme Modalı -->
+<div class="modal fade" id="addLocationModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title fw-bold" id="addModalTitle">Yeni Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-0">
+                <input type="hidden" id="addType" />
+                <div class="mb-3">
+                    <label class="form-label text-muted small">Bağlı Olduğu Üst Konum</label>
+                    <input type="text" id="addParentName" class="form-control rounded-3" disabled />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-muted small" id="addNameLabel">Adı</label>
+                    <input type="text" id="addNameInput" class="form-control rounded-3 form-control-lg" required placeholder="İsim giriniz..." />
+                </div>
+            </div>
+            <div class="modal-footer border-top-0 pt-0">
+                <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-success rounded-pill px-4" onclick="saveNewLocation()">Kaydet</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    let currentLevel = 'neighborhood'; // Default: Mahalle Taşı
+
+    function setMoveLevel(level) {
+        currentLevel = level;
+        
+        // Reset selections
+        $('#srcCity, #tgtCity').val('');
+        $('#srcDistrict, #tgtDistrict').val('').prop('disabled', true);
+        $('#srcNeighborhood, #tgtNeighborhood').val('').prop('disabled', true);
+        
+        $('#sourceList').html('<li class="list-group-item text-center text-muted py-5" style="background: transparent;">Lütfen yukarıdan seçim yapın.</li>');
+        updateCounts();
+
+        // Adjust visibility
+        if (level === 'district') {
+            $('#srcDistrict, #tgtDistrict').hide();
+            $('#srcNeighborhood, #tgtNeighborhood').hide();
+            $('#btnAddDistrict, #btnAddNeighborhood').hide();
+        } else if (level === 'neighborhood') {
+            $('#srcDistrict, #tgtDistrict').show();
+            $('#srcNeighborhood, #tgtNeighborhood').hide();
+            $('#btnAddDistrict').show();
+            $('#btnAddNeighborhood').hide();
+        } else if (level === 'street') {
+            $('#srcDistrict, #tgtDistrict').show();
+            $('#srcNeighborhood, #tgtNeighborhood').show();
+            $('#btnAddDistrict').hide();
+            $('#btnAddNeighborhood').show();
+        }
+    }
+
+    $(document).ready(function() {
+        setMoveLevel('neighborhood'); // Init
+
+        // SOURCE CASCADING
+        $('#srcCity').change(function() {
+            var cityId = $(this).val();
+            if (currentLevel === 'district') {
+                if(cityId) loadList('district', cityId);
+                return;
+            }
+            if(cityId) {
+                $('#srcDistrict').prop('disabled', false).html('<option value="">Yükleniyor...</option>');
+                $.get('/api/LocationApi/GetDistricts/' + cityId, function(data) {
+                    var opts = '<option value="">-- İlçe --</option>';
+                    data.forEach(d => opts += `<option value="${d.id}">${d.name}</option>`);
+                    $('#srcDistrict').html(opts);
+                });
+            } else {
+                $('#srcDistrict').prop('disabled', true).html('<option value="">-- İlçe --</option>');
+            }
+        });
+
+        $('#srcDistrict').change(function() {
+            var districtId = $(this).val();
+            if (currentLevel === 'neighborhood') {
+                if(districtId) loadList('neighborhood', districtId);
+                return;
+            }
+            if(districtId) {
+                $('#srcNeighborhood').prop('disabled', false).html('<option value="">Yükleniyor...</option>');
+                $.get('/api/LocationApi/GetNeighborhoods/' + districtId, function(data) {
+                    var opts = '<option value="">-- Mahalle --</option>';
+                    data.forEach(d => opts += `<option value="${d.id}">${d.name}</option>`);
+                    $('#srcNeighborhood').html(opts);
+                });
+            } else {
+                $('#srcNeighborhood').prop('disabled', true).html('<option value="">-- Mahalle --</option>');
+            }
+        });
+
+        $('#srcNeighborhood').change(function() {
+            var nhId = $(this).val();
+            if (currentLevel === 'street' && nhId) {
+                loadList('street', nhId);
+            }
+        });
+
+        // TARGET CASCADING
+        $('#tgtCity').change(function() {
+            var cityId = $(this).val();
+            validateTarget();
+            if (currentLevel === 'district') return; // We only need city for target
+            
+            if(cityId) {
+                $('#tgtDistrict').prop('disabled', false).html('<option value="">Yükleniyor...</option>');
+                $.get('/api/LocationApi/GetDistricts/' + cityId, function(data) {
+                    var opts = '<option value="">-- İlçe --</option>';
+                    data.forEach(d => opts += `<option value="${d.id}">${d.name}</option>`);
+                    $('#tgtDistrict').html(opts);
+                });
+            } else {
+                $('#tgtDistrict').prop('disabled', true).html('<option value="">-- İlçe --</option>');
+            }
+        });
+
+        $('#tgtDistrict').change(function() {
+            var districtId = $(this).val();
+            validateTarget();
+            if (currentLevel === 'neighborhood') return;
+            
+            if(districtId) {
+                $('#tgtNeighborhood').prop('disabled', false).html('<option value="">Yükleniyor...</option>');
+                $.get('/api/LocationApi/GetNeighborhoods/' + districtId, function(data) {
+                    var opts = '<option value="">-- Mahalle --</option>';
+                    data.forEach(d => opts += `<option value="${d.id}">${d.name}</option>`);
+                    $('#tgtNeighborhood').html(opts);
+                });
+            } else {
+                $('#tgtNeighborhood').prop('disabled', true).html('<option value="">-- Mahalle --</option>');
+            }
+        });
+        
+        $('#tgtNeighborhood').change(function() { validateTarget(); });
+
+        // CHECKBOXES
+        $('#selectAllItems').change(function() {
+            $('.item-check').prop('checked', $(this).prop('checked'));
+            updateCounts();
+        });
+
+        $(document).on('change', '.item-check', function() {
+            if(!$(this).prop('checked')) $('#selectAllItems').prop('checked', false);
+            updateCounts();
+        });
+    });
+
+    function loadList(type, parentId) {
+        $('#sourceList').html('<li class="list-group-item text-center text-muted py-5"><div class="spinner-border text-primary"></div></li>');
+        $('#selectAllItems').prop('checked', false);
+        
+        // Use existing LocationApi endpoints
+        var url = '';
+        if (type === 'district') url = '/api/LocationApi/GetDistricts/' + parentId;
+        else if (type === 'neighborhood') url = '/api/LocationApi/GetNeighborhoods/' + parentId;
+        else if (type === 'street') url = '/api/LocationApi/GetStreets/' + parentId;
+
+        $.get(url, function(data) {
+            if(data.length === 0) {
+                $('#sourceList').html('<li class="list-group-item text-center text-muted py-5">Kayıt bulunamadı.</li>');
+                updateCounts();
+                return;
+            }
+            var html = '';
+            data.forEach(item => {
+                html += `
+                <li class="list-group-item d-flex align-items-center bg-white" style="cursor: pointer;" onclick="$(this).find('.item-check').click()">
+                    <input class="form-check-input item-check me-3" type="checkbox" value="${item.id}" onclick="event.stopPropagation()">
+                    <div>
+                        <span class="d-block fw-bold">${item.name}</span>
+                        <span class="text-muted small">ID: #${item.id}</span>
+                    </div>
+                </li>`;
+            });
+            $('#sourceList').html(html);
+            updateCounts();
+        });
+    }
+
+    function updateCounts() {
+        var count = $('.item-check:checked').length;
+        $('#selectedCountText').text(count + ' seçildi');
+        $('#readyCount').text(count);
+        validateTarget();
+    }
+
+    function validateTarget() {
+        var count = $('.item-check:checked').length;
+        var validTarget = false;
+        
+        if (currentLevel === 'district' && $('#tgtCity').val()) validTarget = true;
+        if (currentLevel === 'neighborhood' && $('#tgtDistrict').val()) validTarget = true;
+        if (currentLevel === 'street' && $('#tgtNeighborhood').val()) validTarget = true;
+
+        if (count > 0 && validTarget) {
+            $('#btnExecuteMove').prop('disabled', false).removeClass('btn-secondary').addClass('btn-warning');
+        } else {
+            $('#btnExecuteMove').prop('disabled', true).removeClass('btn-warning').addClass('btn-secondary');
+        }
+    }
+
+    function openAddModal(type) {
+        $('#addType').val(type);
+        $('#addNameInput').val('');
+        
+        if (type === 'district') {
+            var cityText = $("#tgtCity option:selected").text();
+            if(!$('#tgtCity').val()) { alert("Önce hedef İli seçiniz."); return; }
+            $('#addModalTitle').text("Yeni İlçe Ekle");
+            $('#addParentName').val(cityText + " İli");
+            $('#addNameLabel').text("İlçe Adı");
+        } else if (type === 'neighborhood') {
+            var distText = $("#tgtDistrict option:selected").text();
+            if(!$('#tgtDistrict').val()) { alert("Önce hedef İlçeyi seçiniz."); return; }
+            $('#addModalTitle').text("Yeni Mahalle Ekle");
+            $('#addParentName').val(distText + " İlçesi");
+            $('#addNameLabel').text("Mahalle Adı");
+        }
+        var m = new bootstrap.Modal(document.getElementById('addLocationModal'));
+        m.show();
+    }
+
+    function saveNewLocation() {
+        var type = $('#addType').val();
+        var name = $('#addNameInput').val();
+        if(!name) { alert("Lütfen isim giriniz."); return; }
+
+        var url = '';
+        var data = {};
+        
+        if (type === 'district') {
+            url = '/AdminLocation/CreateDistrictAjax';
+            data = { name: name, cityId: $('#tgtCity').val() };
+        } else if (type === 'neighborhood') {
+            url = '/AdminLocation/CreateNeighborhoodAjax';
+            data = { name: name, districtId: $('#tgtDistrict').val() };
+        }
+
+        $.post(url, data, function(res) {
+            bootstrap.Modal.getInstance(document.getElementById('addLocationModal')).hide();
+            
+            // Seçilen listeye ekle ve onu seçili yap
+            if (type === 'district') {
+                $('#tgtDistrict').append(`<option value="${res.id}">${res.name}</option>`);
+                $('#tgtDistrict').val(res.id).trigger('change');
+            } else if (type === 'neighborhood') {
+                $('#tgtNeighborhood').append(`<option value="${res.id}">${res.name}</option>`);
+                $('#tgtNeighborhood').val(res.id).trigger('change');
+            }
+        }).fail(function() { alert("Bir hata oluştu."); });
+    }
+
+    function executeMove() {
+        var count = $('.item-check:checked').length;
+        if(!confirm(count + " adet veriyi kalıcı olarak taşımak istediğinize emin misiniz?")) return;
+
+        var ids = [];
+        $('.item-check:checked').each(function() { ids.push(parseInt($(this).val())); });
+        
+        var targetId = 0;
+        var url = '';
+        
+        if (currentLevel === 'district') {
+            targetId = $('#tgtCity').val();
+            url = '/AdminLocation/ExecuteDistrictMove';
+        } else if (currentLevel === 'neighborhood') {
+            targetId = $('#tgtDistrict').val();
+            url = '/AdminLocation/ExecuteNeighborhoodMove';
+        } else if (currentLevel === 'street') {
+            targetId = $('#tgtNeighborhood').val();
+            url = '/AdminLocation/ExecuteStreetMove';
+        }
+
+        $.ajax({
+            url: url,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ Ids: ids, TargetId: parseInt(targetId) }),
+            success: function(res) {
+                alert(res.message);
+                // Refresh left side
+                if (currentLevel === 'district') $('#srcCity').trigger('change');
+                if (currentLevel === 'neighborhood') $('#srcDistrict').trigger('change');
+                if (currentLevel === 'street') $('#srcNeighborhood').trigger('change');
+            }
+        });
+    }
+</script>
+}

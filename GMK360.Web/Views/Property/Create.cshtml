@@ -1,0 +1,2695 @@
+@model GMK360.Web.Models.PropertyCreateViewModel
+@{
+    ViewData["Title"] = "Yeni İlan Ekle (Profesyonel)";
+    Layout = "_Layout";
+}
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+<style>
+    .wizard-step { display: none; }
+    .wizard-step.active { display: block; animation: fadeIn 0.4s ease-in-out; }
+    @@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .wizard-header .step-indicator { width: 40px; height: 40px; border-radius: 50%; background-color: #e2e8f0; color: #64748b; display: flex; align-items: center; justify-content: center; font-weight: bold; transition: all 0.3s; }
+    .wizard-header .step-item.active .step-indicator { background-color: var(--primary); color: white; }
+    .wizard-header .step-item.completed .step-indicator { background-color: #10b981; color: white; }
+    .wizard-line { height: 4px; background-color: #e2e8f0; flex: 1; margin: 0 10px; border-radius: 2px; position: relative; }
+    .wizard-line-fill { height: 100%; background-color: var(--primary); width: 0%; transition: width 0.3s ease; border-radius: 2px; }
+    .category-box { border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s; }
+    .category-box:hover { border-color: var(--primary); background: #f8fafc; }
+    .category-box.active { border-color: var(--primary); background: #e0f2fe; color: var(--primary); font-weight: bold; }
+    .feature-lock { opacity: 0.6; pointer-events: none; position: relative; }
+    .feature-lock::after { content: "Tesis seçildiği için otomatik dolduruldu"; position: absolute; top: 0; right: 0; background: var(--bs-info); color: white; padding: 4px 8px; font-size: 12px; border-radius: 4px; }
+</style>
+
+<div class="container py-5" style="margin-top: 80px;">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card shadow-lg border-0" style="border-radius: 16px;">
+                <div class="card-body p-5">
+                    <h2 class="fw-bold mb-4 text-center">İlan Verme Sihirbazı</h2>
+
+                    @if (TempData["ErrorMessage"] != null)
+                    {
+                        <div class="alert alert-danger mb-4">
+                            <i class="ph ph-warning-circle"></i> @TempData["ErrorMessage"]
+                        </div>
+                    }
+
+                    <!-- Wizard Header 7 Adım -->
+                    <div class="wizard-header d-flex align-items-center justify-content-between mb-5 px-2">
+                        <div class="step-item active text-center" data-step="1">
+                            <div class="step-indicator mx-auto mb-2">1</div>
+                            <small class="fw-bold">Kategori</small>
+                        </div>
+                        <div class="wizard-line"><div class="wizard-line-fill" id="line1"></div></div>
+                        <div class="step-item text-center" data-step="2">
+                            <div class="step-indicator mx-auto mb-2">2</div>
+                            <small class="fw-bold">Konum</small>
+                        </div>
+                        <div class="wizard-line"><div class="wizard-line-fill" id="line2"></div></div>
+                        <div class="step-item text-center" data-step="3">
+                            <div class="step-indicator mx-auto mb-2">3</div>
+                            <small class="fw-bold">Temel Özellikler</small>
+                        </div>
+                        <div class="wizard-line"><div class="wizard-line-fill" id="line3"></div></div>
+                        <div class="step-item text-center" data-step="4">
+                            <div class="step-indicator mx-auto mb-2">4</div>
+                            <small class="fw-bold">İç Özellikler</small>
+                        </div>
+                        <div class="wizard-line"><div class="wizard-line-fill" id="line4"></div></div>
+                        <div class="step-item text-center" data-step="5">
+                            <div class="step-indicator mx-auto mb-2">5</div>
+                            <small class="fw-bold" id="step4HeaderTitle">Yapı Özellikleri</small>
+                        </div>
+                        <div class="wizard-line"><div class="wizard-line-fill" id="line5"></div></div>
+                        <div class="step-item text-center" data-step="6">
+                            <div class="step-indicator mx-auto mb-2">6</div>
+                            <small class="fw-bold">Medya</small>
+                        </div>
+                        <div class="wizard-line"><div class="wizard-line-fill" id="line6"></div></div>
+                        <div class="wizard-line"><div class="wizard-line-fill" id="line6"></div></div>
+                        <div class="step-item text-center" data-step="7">
+                            <div class="step-indicator mx-auto mb-2">7</div>
+                            <small class="fw-bold">Eşya Detayı</small>
+                        </div>
+                        <div class="wizard-line"><div class="wizard-line-fill" id="line7"></div></div>
+                        <div class="step-item text-center" data-step="8">
+                            <div class="step-indicator mx-auto mb-2">8</div>
+                            <small class="fw-bold">Onay</small>
+                        </div>
+                    </div>
+
+                    <form id="propertyWizardForm" asp-action="Create" method="post" enctype="multipart/form-data">
+                        <input type="hidden" name="Id" value="@(Model?.Id ?? 0)" />
+                        <input type="hidden" name="DraftStep" value="@(Model?.DraftStep ?? 0)" />
+                        
+                        <!-- STEP 1: Kategori Seçimi -->
+                        <div class="wizard-step active" id="step1">
+                            <h4 class="mb-4 text-primary">1. Adım: Kategori Seçimi</h4>
+                            
+                            <div class="row g-0 border rounded bg-white shadow-sm mb-4">
+                                <div class="row g-0 text-center fw-bold bg-light border-bottom d-none d-md-flex text-secondary">
+                                    <div class="col-md-4 p-3 border-end">İşlem Tipi</div>
+                                    <div class="col-md-4 p-3 border-end">Emlak Türü</div>
+                                    <div class="col-md-4 p-3">Alt Tür</div>
+                                </div>
+                                <!-- 1. İşlem Tipi Kolonu -->
+                                <div class="col-md-3 border-end p-0">
+                                    <div class="bg-light p-3 border-bottom fw-bold text-secondary d-md-none">
+                                        İşlem Tipi
+                                    </div>
+                                    <div class="list-group list-group-flush" id="statusList" style="height: 300px; overflow-y: auto;">
+                                        @if (ViewBag.PropertyStatuses != null)
+                                        {
+                                            var isFirst = true;
+                                            foreach (var status in ViewBag.PropertyStatuses)
+                                            {
+                                                <button type="button" class="list-group-item list-group-item-action status-item @(isFirst ? "active fw-bold" : "")" data-code="@status.SystemCode" onclick="selectStatusList(@status.Id, '@status.SystemCode', this)">
+                                                    @status.Name
+                                                </button>
+                                                if (isFirst) isFirst = false;
+                                            }
+                                        }
+                                    </div>
+                                    <input type="hidden" asp-for="StatusId" id="hdnStatus" value="@(ViewBag.PropertyStatuses != null && ViewBag.PropertyStatuses.Count > 0 ? ViewBag.PropertyStatuses[0].Id : 1)" />
+                                </div>
+                                
+                                <!-- 2. Emlak Türü Kolonu -->
+                                <div class="col-md-3 border-end p-0">
+                                    <div class="bg-light p-3 border-bottom fw-bold text-secondary d-md-none">
+                                        Emlak Türü
+                                    </div>
+                                    <div class="list-group list-group-flush" id="typeList" style="height: 300px; overflow-y: auto;">
+                                        @if (ViewBag.PropertyTypes != null)
+                                        {
+                                            var isFirstType = true;
+                                            foreach (var type in ViewBag.PropertyTypes)
+                                            {
+                                                <button type="button" class="list-group-item list-group-item-action type-item @(isFirstType ? "active fw-bold" : "")" data-code="@type.SystemCode" onclick="selectTypeList(@type.Id, '@type.SystemCode', this)">
+                                                    @type.Name
+                                                </button>
+                                                if (isFirstType) isFirstType = false;
+                                            }
+                                        }
+                                    </div>
+                                    <input type="hidden" asp-for="TypeId" id="hdnType" value="@(ViewBag.PropertyTypes != null && ViewBag.PropertyTypes.Count > 0 ? ViewBag.PropertyTypes[0].Id : 1)" />
+                                </div>
+
+                                <!-- 3. Alt Tür Kolonu -->
+                                <div class="col-md-3 border-end p-0">
+                                    <div class="bg-light p-3 border-bottom fw-bold text-secondary d-md-none">
+                                        Alt Tür
+                                    </div>
+                                    <div class="list-group list-group-flush" id="subTypeList" style="height: 300px; overflow-y: auto;">
+                                        @if (ViewBag.PropertySubTypes != null)
+                                        {
+                                            foreach (var subType in ViewBag.PropertySubTypes)
+                                            {
+                                                <button type="button" class="list-group-item list-group-item-action subtype-item" style="display:none;" data-parent="@subType.Category.SystemCode.Replace("SUB_TYPE_", "")" data-code="@subType.SystemCode" onclick="selectSubTypeList(@subType.Id, '@subType.SystemCode', this)">
+                                                    @subType.Name
+                                                </button>
+                                            }
+                                        }
+                                    </div>
+                                    <input type="hidden" asp-for="SubTypeId" id="hdnSubType" value="" />
+                                    
+                                    @if(ViewBag.UserType == "Consultant")
+                                    {
+                                        <div id="agencyVisibilityToggle" class="p-3 border-top">
+                                            <div class="form-check form-switch">
+                                                <input asp-for="ShowAgencyInfo" class="form-check-input" type="checkbox" id="showAgencyInfo" checked>
+                                                <label class="form-check-label text-secondary small" for="showAgencyInfo">Bağlı olduğum kurumu ilanda göster</label>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                                
+                                <!-- 4. Yapı Tipi Kolonu (Sadece Daire ve Villa için dinamik görünür) -->
+                                <div class="col-md-3 p-0" id="buildingTypeCol" style="display:none; background-color: #f8f9fa;">
+                                    <div class="bg-light p-3 border-bottom fw-bold text-secondary d-md-none">
+                                        Yapı Tipi
+                                    </div>
+                                    <div class="list-group list-group-flush" id="buildingTypeList" style="height: 300px; overflow-y: auto;">
+                                        <button type="button" class="list-group-item list-group-item-action building-type-item" onclick="selectBuildingType(true, this)">
+                                            <i class="ph ph-buildings me-2"></i> Site İçi
+                                        </button>
+                                        <button type="button" class="list-group-item list-group-item-action building-type-item" onclick="selectBuildingType(false, this)">
+                                            <i class="ph ph-house me-2"></i> Apartman / Bağımsız Bina
+                                        </button>
+                                    </div>
+                                    <input type="hidden" id="hdnIsSite" name="IsSite" value="" />
+                                </div>
+                            </div>
+                            
+                            <!-- Günlük Kiralık Uyarı -->
+                            <div id="dailyRentAlert" class="alert alert-warning mt-4" style="display:none;">
+                                <i class="ph ph-warning-circle"></i> <strong>Yasal Uyarı:</strong> Günlük kiralık ilanlarda, misafir girişlerinde Kimlik Bildirim Sistemi (KBS) kullanılması yasal zorunluluktur. İlan kiralandığında rezervasyon modülü üzerinden bildirim yapmanız gerekecektir.
+                            </div>
+                            
+                            <!-- Devre Mülk Detayları -->
+                            <div id="timeshareDetails" class="alert alert-info mt-4" style="display:none;">
+                                <h5>Devre Mülk Dönem Bilgileri</h5>
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label>Dönem Adı</label>
+                                        <input asp-for="TimesharePeriod" class="form-control" placeholder="Örn: Kırmızı Dönem" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label>Başlangıç</label>
+                                        <input type="date" asp-for="TimeshareStartDate" class="form-control" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label>Bitiş</label>
+                                        <input type="date" asp-for="TimeshareEndDate" class="form-control" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-end mt-5">
+                                <button type="button" class="btn btn-primary px-5" onclick="nextStep(2)">İleri <i class="ph ph-arrow-right"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- STEP 2: Konum & Bina -->
+                        <div class="wizard-step" id="step2">
+                            <h4 class="mb-4 text-primary">2. Adım: Konum & Tesis Seçimi</h4>
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <label asp-for="CityId" class="form-label fw-bold">İl</label>
+                                    <select asp-for="CityId" class="form-select form-select-lg" id="citySelect">
+                                        <option value="">Yükleniyor...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label asp-for="DistrictId" class="form-label fw-bold">İlçe</label>
+                                    <select asp-for="DistrictId" class="form-select form-select-lg" id="districtSelect">
+                                        <option value="">Önce İl Seçiniz...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label asp-for="NeighborhoodId" class="form-label fw-bold">Mahalle</label>
+                                    <select asp-for="NeighborhoodId" class="form-select form-select-lg" id="neighborhoodSelect">
+                                        <option value="">Önce İlçe Seçiniz...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label asp-for="StreetId" class="form-label fw-bold">Sokak / Cadde</label>
+                                    <select asp-for="StreetId" class="form-select form-select-lg" id="streetSelect">
+                                        <option value="">Önce Mahalle Seçiniz...</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="col-12 mt-3">
+                                    <div class="form-check form-switch form-switch-lg">
+                                        <input class="form-check-input" type="checkbox" id="chkHideLocation" asp-for="HideLocation" value="true">
+                                        <label class="form-check-label fw-bold text-dark ms-2" for="chkHideLocation">
+                                            Tam adresim gizlensin, haritada sadece bölge çemberi gösterilsin
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-12 mt-4 p-4 rounded bg-light border border-primary">
+                                    <h5 class="text-primary mb-3" id="step2BuildingTitle"><i class="ph ph-buildings"></i> Bina / Yapı Detayları</h5>
+                                    
+                                    <input type="hidden" asp-for="IsSite" id="IsSite" value="true" />
+
+                                    <div id="siteSelectionArea">
+                                        <label id="lblComplexSelect" asp-for="ComplexId" class="form-label fw-bold">Bina / Site Seçiniz</label>
+                                        <select asp-for="ComplexId" class="form-select form-select-lg" id="complexSelect">
+                                            <option value="">Önce Konum Seçiniz...</option>
+                                        </select>
+                                        <div class="mt-2 text-end">
+                                            <button type="button" class="btn btn-sm btn-outline-warning me-2" onclick="openReportBuildingModal()" style="display:none;" id="btnReportBuilding">
+    <i class="ph ph-flag"></i> İsimde Hata Var
+</button>
+<button type="button" class="btn btn-sm btn-outline-secondary" id="btnNewComplex" data-bs-toggle="modal" data-bs-target="#newComplexModal" onclick="document.getElementById('newComplexIsSite').checked = (document.getElementById('IsSite').value === 'true');">
+    <i class="ph ph-plus"></i> Listede yoksa ekle (Mühürle)
+</button>
+<button type="button" class="btn btn-sm btn-outline-danger ms-2" data-bs-toggle="modal" data-bs-target="#newStreetModal">
+    <i class="ph ph-warning"></i> Sokağımı Bulamadım
+</button>
+                                                </button>
+                                        </div>
+                                    </div>
+
+
+
+                                        <div class="col-md-6 mt-3" style="display:none;">
+                                            <label asp-for="Latitude" class="form-label fw-bold">Enlem (Lat)</label>
+                                            <input asp-for="Latitude" type="text" id="latInput" class="form-control form-control-lg" placeholder="41.0082" />
+                                        </div>
+                                        <div class="col-md-6 mt-3" style="display:none;">
+                                            <label asp-for="Longitude" class="form-label fw-bold">Boylam (Lng)</label>
+                                            <input asp-for="Longitude" type="text" id="lngInput" class="form-control form-control-lg" placeholder="28.9784" />
+                                        </div>
+                                </div>
+
+                                <!-- POI Container -->
+                                <div class="col-12 mt-4 p-4 rounded bg-light border border-info" id="poiContainer" style="display:none;">
+                                    <h5 class="text-info mb-3"><i class="ph ph-map-pin"></i> Yakın Çevredeki Önemli Noktalar (Tesisler)</h5>
+                                    <p class="text-muted small">Mahallenizde sistemin otomatik bulduğu bu tesisleri ilanınıza tek tıkla ekleyebilirsiniz. Seçtikleriniz ilanın "Yakın Çevre" özelliklerinde sergilenecektir.</p>
+                                    <div id="poiList" class="row g-3 mt-2"></div>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-5">
+                                <button type="button" class="btn btn-light px-5" onclick="prevStep(1)"><i class="ph ph-arrow-left"></i> Geri</button>
+                                <button type="button" class="btn btn-primary px-5" onclick="nextStep(3)">İleri <i class="ph ph-arrow-right"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- STEP 3: Temel Özellikler -->
+                        <div class="wizard-step" id="step3">
+                            <h4 class="mb-4 text-primary">3. Adım: Temel Özellikler</h4>
+                            
+                            <!-- Özet Bilgi Panosu -->
+                            <div class="alert alert-info shadow-sm mb-4 d-flex align-items-center gap-3">
+                                <i class="ph ph-map-pin fs-2 text-info"></i>
+                                <div>
+                                    <div class="fw-bold fs-5 text-dark" id="summaryBuildingName">Bina Adı Bekleniyor...</div>
+                                    <div class="text-muted small" id="summaryLocation">İl / İlçe / Mahalle / Sokak</div>
+                                </div>
+                            </div>
+
+                            <div class="row g-4">
+                                <!-- Gizli Alanlar (Model Binding İçin) -->
+                                <input type="hidden" asp-for="BuildingNumber" id="BuildingNumber" />
+                                <input type="hidden" asp-for="TotalFloors" id="TotalFloors" />
+                                
+                                <!-- Blok Seçimi (Gizli/Görünür) -->
+                                <div class="col-12" id="blockSelectionContainer" style="display:none;">
+                                    <div class="p-3 bg-light border border-info rounded">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label class="form-label fw-bold text-primary mb-0">Blok Seçiniz</label>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addNewBlockModal">
+                                                <i class="ph ph-plus"></i> Yeni Blok Ekle
+                                            </button>
+                                        </div>
+                                        <select class="form-select form-select-lg" id="blockSelectDropdown" onchange="onBlockSelected()">
+                                            <option value="">Seçiniz...</option>
+                                        </select>
+                                        <input type="hidden" asp-for="HasBlock" id="HasBlock" value="false" />
+                                        <input type="hidden" asp-for="BlockName" id="BlockName" />
+                                    </div>
+                                </div>
+
+                                <!-- Kat / Daire No / Cephe -->
+                                <div class="col-md-4" id="floorNumberContainer">
+                                    <label asp-for="FloorNumber" class="form-label fw-bold">Bulunduğu Kat</label>
+                                    <input asp-for="FloorNumber" type="number" class="form-control form-control-lg" placeholder="Örn: 3" />
+                                </div>
+                                <div class="col-md-4" id="unitNumbersContainer">
+                                    <label class="form-label fw-bold">İç Kapı / Daire No</label>
+                                    <div class="dynamic-unit-inputs">
+                                        <input name="UnitNumber" type="text" class="form-control form-control-lg mb-2 unit-input" placeholder="Örn: 4" oninput="handleUnitInput(this)" required />
+                                    </div>
+                                    <small class="text-muted text-primary" style="display:none;" id="unitNumberNote">
+                                        <i class="ph ph-info"></i> Bu binada başka bir daireniz varsa yeni açılan kutuya yazabilirsiniz. Tek seferde toplu ilan oluşturulacaktır.
+                                    </small>
+                                </div>
+                                <div class="col-md-4">
+                                    <label asp-for="Facade" class="form-label fw-bold">Cephe</label>
+                                    <select asp-for="Facade" class="form-select form-select-lg">
+                                        <option value="">Seçiniz...</option>
+                                        <option value="Kuzey">Kuzey</option>
+                                        <option value="Güney">Güney</option>
+                                        <option value="Doğu">Doğu</option>
+                                        <option value="Batı">Batı</option>
+                                        <option value="Kuzey-Doğu">Kuzey-Doğu</option>
+                                        <option value="Kuzey-Batı">Kuzey-Batı</option>
+                                        <option value="Güney-Doğu">Güney-Doğu</option>
+                                        <option value="Güney-Batı">Güney-Batı</option>
+                                    </select>
+                                </div>
+
+                                <!-- M2 / Oda / Banyo -->
+                                <div class="col-md-2">
+                                    <label asp-for="GrossArea" class="form-label fw-bold">Brüt m²</label>
+                                    <input asp-for="GrossArea" type="number" class="form-control form-control-lg" />
+                                </div>
+                                <div class="col-md-2">
+                                    <label asp-for="NetArea" class="form-label fw-bold">Net m²</label>
+                                    <input asp-for="NetArea" type="number" class="form-control form-control-lg" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label asp-for="RoomCount" class="form-label fw-bold">Oda / Salon Sayısı</label>
+                                    <select asp-for="RoomCount" class="form-select form-select-lg">
+                                        <option value="">Seçiniz...</option>
+                                        <option value="1+0 (Stüdyo)">1+0 (Stüdyo)</option>
+                                        <option value="1+1">1+1</option>
+                                        <option value="2+1">2+1</option>
+                                        <option value="3+1">3+1</option>
+                                        <option value="4+1">4+1</option>
+                                        <option value="5+1 ve üzeri">5+1 ve üzeri</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label asp-for="BathroomCount" class="form-label fw-bold">Banyo Sayısı</label>
+                                    <input asp-for="BathroomCount" type="number" class="form-control form-control-lg" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label asp-for="WcCount" class="form-label fw-bold">Tuvalet (WC) Sayısı</label>
+                                    <input asp-for="WcCount" type="number" class="form-control form-control-lg" placeholder="Banyosuz" />
+                                </div>
+                                <div class="col-md-2">
+                                    <label asp-for="BalconyCount" class="form-label fw-bold">Balkon Sayısı</label>
+                                    <input asp-for="BalconyCount" type="number" class="form-control form-control-lg" />
+                                </div>
+
+                                <!-- Bina Yaşı / Aidat / Eşyalı -->
+                                <div class="col-md-4" id="buildingAgeContainer">
+                                    <label asp-for="BuildingAge" class="form-label fw-bold">Bina Yaşı</label>
+                                    <select asp-for="BuildingAge" class="form-select form-select-lg">
+                                        <option value="">Seçiniz...</option>
+                                        <option value="0 (Sıfır)">0 (Sıfır)</option>
+                                        <option value="1-5 Arası">1-5 Arası</option>
+                                        <option value="6-10 Arası">6-10 Arası</option>
+                                        <option value="11-20 Arası">11-20 Arası</option>
+                                        <option value="21 ve üzeri">21 ve üzeri</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label asp-for="Dues" class="form-label fw-bold">Aidat (Aylık)</label>
+                                    <input asp-for="Dues" type="number" class="form-control form-control-lg" placeholder="Varsa giriniz" />
+                                </div>
+                                <div class="col-md-4 d-flex align-items-end mb-2">
+                                    <div class="form-check form-switch form-check-lg w-100 p-3 bg-light rounded border border-light">
+                                        <input class="form-check-input ms-0 mt-1 me-2" type="checkbox" asp-for="IsFurnished" id="chkIsFurnished">
+                                        <label class="form-check-label fw-bold" for="chkIsFurnished">Bu ilan eşyalı mı?</label>
+                                    </div>
+                                </div>
+
+                                <!-- Fiyat / Başlık -->
+                                <div class="col-md-4">
+                                    <label asp-for="Price" class="form-label fw-bold">Fiyat</label>
+                                    <div class="input-group input-group-lg">
+                                        <input asp-for="Price" type="number" class="form-control" />
+                                        <select asp-for="Currency" class="form-select" style="max-width: 100px;">
+                                            <option value="TRY">TL</option>
+                                            <option value="USD">USD</option>
+                                            <option value="EUR">EUR</option>
+                                        </select>
+                                    </div>
+                                    <small class="text-muted mt-1 d-block" id="priceCurrencyHelper">
+                                        <i class="ph ph-info"></i> Güncel Kurlar yükleniyor...
+                                    </small>
+                                </div>
+                                <div class="col-md-8">
+                                    <label asp-for="Title" class="form-label fw-bold">İlan Başlığı</label>
+                                    <input asp-for="Title" class="form-control form-control-lg" placeholder="Örn: Moda'da Deniz Manzaralı Eşyalı Kiralık" />
+                                </div>
+
+                                <!-- ARSA / HİSSE DETAYLARI -->
+                                <div class="col-12 mt-4" id="landDetailsSection" style="display:none;">
+                                    <div class="p-3 bg-light border rounded">
+                                        <h6 class="text-primary border-bottom pb-2 mb-3"><i class="ph ph-map-trifold"></i> Arsa / Tapu Bilgileri (Sadece Arsa İlanları İçin)</h6>
+                                        <div class="row g-3">
+                                            <div class="col-md-4">
+                                                <label asp-for="DeedStatus" class="form-label fw-bold">Tapu Durumu</label>
+                                                <select asp-for="DeedStatus" class="form-select">
+                                                    <option value="">Seçiniz</option>
+                                                    <option value="Müstakil Tapu">Müstakil Tapu</option>
+                                                    <option value="Hisseli Tapu">Hisseli Tapu</option>
+                                                    <option value="Tahsis">Tahsis</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label asp-for="BlockNumber" class="form-label fw-bold">Ada No</label>
+                                                <input asp-for="BlockNumber" class="form-control" />
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label asp-for="ParcelNumber" class="form-label fw-bold">Parsel No</label>
+                                                <input asp-for="ParcelNumber" class="form-control" />
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label asp-for="TotalAreaSqm" class="form-label fw-bold">Arsanın Toplam M²'si</label>
+                                                <input asp-for="TotalAreaSqm" type="number" class="form-control" />
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label asp-for="ShareAreaSqm" class="form-label fw-bold">Hisseye Düşen M²</label>
+                                                <input asp-for="ShareAreaSqm" type="number" class="form-control" />
+                                                <small class="text-muted">Fiyat / M² hesaplanırken burası baz alınır.</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- DINAMIK SELECT KUTULARI (Kategoriye Göre Değişen Seçimler) -->
+                                @if (ViewBag.DynamicDropdowns != null)
+                                {
+                                    var dynamicDropdowns = (IEnumerable<GMK360.Core.Entities.DefinitionCategory>)ViewBag.DynamicDropdowns;
+                                    foreach (var category in dynamicDropdowns)
+                                    {
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-bold">@category.Name</label>
+                                            <select name="DynamicSelects[@category.Id]" class="form-select form-select-lg">
+                                                <option value="">Seçiniz...</option>
+                                                @foreach (var val in category.Values)
+                                                {
+                                                    <option value="@val.Id">@val.Name</option>
+                                                }
+                                            </select>
+                                        </div>
+                                    }
+                                }
+                                
+                                <div class="col-12 mt-4">
+                                    <label asp-for="Description" class="form-label fw-bold">Detaylı Açıklama</label>
+                                    <textarea asp-for="Description" class="form-control" rows="5" placeholder="İlanınız hakkında detaylı bilgi verin..."></textarea>
+                                </div>
+                                
+                            </div>
+                            <div class="d-flex justify-content-between mt-5">
+                                <button type="button" class="btn btn-light px-5" onclick="prevStep(2)"><i class="ph ph-arrow-left"></i> Geri</button>
+                                <button type="button" class="btn btn-primary px-5" onclick="nextStep(4)">İleri <i class="ph ph-arrow-right"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- STEP 5: Yapı Özellikleri -->
+                        <div class="wizard-step" id="step5">
+                            <h4 class="mb-4 text-primary" id="step4Title">5. Adım: Yapı Özellikleri</h4>
+                            <div class="alert alert-info" id="complexFeaturesAlert" style="display:none;">
+                                <i class="ph ph-info"></i> Bu özellikler 2. adımda seçtiğiniz <strong><span id="selectedComplexName"></span></strong> isimli yapı üzerinden otomatik olarak miras alınmıştır. Dilerseniz sadece bu ilan için değişiklik yapabilirsiniz.
+                            </div>
+                            
+                            <div id="complexFeaturesContainer">
+                                @{ int featureIndexComplex = 0; }
+                                @if (ViewBag.MatrixCategoriesComplex != null)
+                                {
+                                    var matrixCategoriesComplex = (IEnumerable<GMK360.Core.Entities.DefinitionCategory>)ViewBag.MatrixCategoriesComplex;
+                                    foreach (var group in matrixCategoriesComplex)
+                                    {
+                                        <div class="col-12 mt-4 p-4 rounded bg-light border border-secondary">
+                                            <h5 class="text-primary mb-4 pb-2 border-bottom"><i class="ph ph-buildings"></i> @group.Name</h5>
+                                            
+                                            <div class="row g-4">
+                                                @if (group.SubCategories != null)
+                                                {
+                                                    foreach (var question in group.SubCategories.OrderBy(q => q.Name))
+                                                    {
+                                                        <div class="col-12">
+                                                            <div class="row align-items-center">
+                                                                <div class="col-md-3">
+                                                                    <p class="mb-0 fw-bold text-dark" style="font-size:1.05rem;">@question.Name</p>
+                                                                    @if(question.IsMultiSelect) {
+                                                                        <small class="text-muted" style="font-size:0.75rem;">(Birden çok seçilebilir)</small>
+                                                                    }
+                                                                </div>
+                                                                
+                                                                <div class="col-md-9 d-flex flex-wrap gap-3 align-items-center">
+                                                                    @if (question.Values != null)
+                                                                    {
+                                                                        foreach (var answer in question.Values.OrderBy(v => v.Order))
+                                                                        {
+                                                                            <div class="form-check form-check-inline mb-0 me-3 d-flex align-items-center">
+                                                                                <input type="hidden" name="MatrixFeaturesComplex[@featureIndexComplex].DefinitionValueId" value="@answer.Id" />
+                                                                                
+                                                                                @if (question.IsMultiSelect)
+                                                                                {
+                                                                                    <input class="form-check-input exam-input" type="checkbox" name="MatrixFeaturesComplex[@featureIndexComplex].IsSelected" value="true" id="ansComplex_@answer.Id" onchange="toggleTextInput(this, 'textComplex_@answer.Id')">
+                                                                                }
+                                                                                else
+                                                                                {
+                                                                                    <input class="form-check-input exam-input" type="radio" name="RadioGroupComplex_@question.Id" value="@answer.Id" id="ansComplex_@answer.Id" onchange="syncRadioSelectionComplex(this, @featureIndexComplex, @question.Id); toggleTextInput(this, 'textComplex_@answer.Id')">
+                                                                                    
+                                                                                    <input type="hidden" name="MatrixFeaturesComplex[@featureIndexComplex].IsSelected" id="hiddenComplex_@answer.Id" value="false" class="radio-hidden-sync-complex-@question.Id" />
+                                                                                }
+                                                                                
+                                                                                <label class="form-check-label ms-2 cursor-pointer" for="ansComplex_@answer.Id">@answer.Name</label>
+                                                                                
+                                                                                @if(answer.RequiresTextInput) {
+                                                                                    <input type="text" class="form-control form-control-sm ms-2" name="MatrixFeaturesComplex[@featureIndexComplex].Note" id="textComplex_@answer.Id" placeholder="Açıklama" style="display:none; width:180px;" />
+                                                                                }
+                                                                            </div>
+                                                                            featureIndexComplex++;
+                                                                        }
+                                                                    }
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-12"><hr class="my-1 border-light" /></div>
+                                                    }
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                            </div>
+
+                            <div class="d-flex justify-content-between mt-5">
+                                <button type="button" class="btn btn-light px-5" onclick="prevStep(4)"><i class="ph ph-arrow-left"></i> Geri</button>
+                                <button type="button" class="btn btn-primary px-5" onclick="nextStep(6)">İleri <i class="ph ph-arrow-right"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- STEP 4: İç Özellikler -->
+                        <div class="wizard-step" id="step4">
+                            <h4 class="mb-4 text-primary">4. Adım: İç Özellikler</h4>
+                            
+                            <div class="row g-4">
+                                @{ int featureIndex = 0; }
+                                @if (ViewBag.MatrixCategoriesProperty != null)
+                                {
+                                    var matrixCategoriesProperty = (IEnumerable<GMK360.Core.Entities.DefinitionCategory>)ViewBag.MatrixCategoriesProperty;
+                                    foreach (var group in matrixCategoriesProperty)
+                                    {
+                                        <div class="col-12 mt-4 p-4 rounded bg-light border border-secondary">
+                                            <h5 class="text-primary mb-4 pb-2 border-bottom"><i class="ph ph-folder-open"></i> @group.Name</h5>
+                                            
+                                            <div class="row g-4">
+                                                @if (group.SubCategories != null)
+                                                {
+                                                    foreach (var question in group.SubCategories.OrderBy(q => q.Name))
+                                                    {
+                                                        <div class="col-12">
+                                                            <div class="row align-items-center">
+                                                                <div class="col-md-3">
+                                                                    <p class="mb-0 fw-bold text-dark" style="font-size:1.05rem;">@question.Name</p>
+                                                                    @if(question.IsMultiSelect) {
+                                                                        <small class="text-muted" style="font-size:0.75rem;">(Birden çok seçilebilir)</small>
+                                                                    }
+                                                                </div>
+                                                                
+                                                                <div class="col-md-9 d-flex flex-wrap gap-3 align-items-center">
+                                                                    @if (question.Values != null)
+                                                                    {
+                                                                        foreach (var answer in question.Values.OrderBy(v => v.Order))
+                                                                        {
+                                                                            <div class="form-check form-check-inline mb-0 me-3 d-flex align-items-center">
+                                                                                <input type="hidden" name="MatrixFeatures[@featureIndex].DefinitionValueId" value="@answer.Id" />
+                                                                                
+                                                                                @if (question.IsMultiSelect)
+                                                                                {
+                                                                                    <input class="form-check-input exam-input" type="checkbox" name="MatrixFeatures[@featureIndex].IsSelected" value="true" id="ans_@answer.Id" onchange="toggleTextInput(this, 'text_@answer.Id')" data-is-media-tag="@question.IsMediaTag.ToString().ToLower()">
+                                                                                }
+                                                                                else
+                                                                                {
+                                                                                    <input class="form-check-input exam-input" type="radio" name="RadioGroup_@question.Id" value="@answer.Id" id="ans_@answer.Id" onchange="syncRadioSelection(this, @featureIndex, @question.Id); toggleTextInput(this, 'text_@answer.Id')" data-is-media-tag="@question.IsMediaTag.ToString().ToLower()">
+                                                                                    
+                                                                                    <input type="hidden" name="MatrixFeatures[@featureIndex].IsSelected" id="hidden_@answer.Id" value="false" class="radio-hidden-sync-@question.Id" />
+                                                                                }
+                                                                                
+                                                                                <label class="form-check-label ms-2 cursor-pointer" for="ans_@answer.Id">@answer.Name</label>
+                                                                                
+                                                                                @if(answer.RequiresTextInput) {
+                                                                                    <input type="text" class="form-control form-control-sm ms-2" name="MatrixFeatures[@featureIndex].Note" id="text_@answer.Id" placeholder="Açıklama" style="display:none; width:180px;" />
+                                                                                }
+                                                                            </div>
+                                                                            featureIndex++;
+                                                                        }
+                                                                    }
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-12"><hr class="my-1 border-light" /></div>
+                                                    }
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                }
+
+                                <div class="col-12 mt-4 p-4 rounded bg-light border border-secondary">
+                                    <h5 class="text-primary mb-3"><i class="ph ph-list-plus"></i> Ekstra Değerli Özellikler (Anahtar - Değer)</h5>
+                                    <p class="text-muted small mb-3">Tavan yüksekliği, özel imkanlar gibi değer gerektiren özellikleri buradan ekleyebilirsiniz.</p>
+                                    
+                                    <div class="row g-2 align-items-center mb-3">
+                                        <div class="col-md-5">
+                                            <select id="newKvKey" class="form-select">
+                                                <option value="">Özellik Seçiniz...</option>
+                                                @if(ViewBag.DynamicFeatureKeys != null) {
+                                                    foreach(var key in ViewBag.DynamicFeatureKeys) {
+                                                        <option value="@key.Id" data-name="@key.Name">@key.Name</option>
+                                                    }
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-md-5">
+                                            <input type="text" id="newKvValue" class="form-control" placeholder="Değeri (Örn: 2.8m)" />
+                                        </div>
+                                        <div class="col-md-2">
+                                            <button type="button" class="btn btn-outline-primary w-100" onclick="addKvFeature()">Ekle</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row g-3" id="featuresKvRow">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex justify-content-between mt-5">
+                                <button type="button" class="btn btn-light px-5" onclick="prevStep(3)"><i class="ph ph-arrow-left"></i> Geri</button>
+                                <button type="button" class="btn btn-primary px-5" onclick="nextStep(5)">İleri <i class="ph ph-arrow-right"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- STEP 6: Medya -->
+                        <div class="wizard-step" id="step6">
+                            <h4 class="mb-4 text-primary">6. Adım: Medya Galerisi</h4>
+                            
+                            <div class="alert alert-info mb-4">
+                                <i class="ph ph-info"></i> Fotoğraf ve videolarınızı aşağıdaki alana sürükleyip bırakın. En başa koyduğunuz resim <strong>Kapak Fotoğrafı</strong> olur. İç özellikleri otomatik algılayıp hap butonlara yansıtırız; tıklayarak hızlıca etiketleyebilirsiniz (Zorunlu değildir).
+                            </div>
+
+                            <div class="row g-4">
+                                <div class="col-12">
+                                    <div class="p-5 text-center border rounded bg-light position-relative" id="mediaDropzone" style="border: 2px dashed #cbd5e1 !important; cursor: pointer; transition: all 0.3s;" onclick="document.getElementById('mediaFileInput').click()">
+                                        <i class="ph ph-cloud-arrow-up text-primary" style="font-size: 64px;"></i>
+                                        <h4 class="mt-3">Fotoğraf veya Video Yüklemek İçin Tıklayın veya Sürükleyin</h4>
+                                        <p class="text-muted">Aynı anda birden fazla dosya seçebilirsiniz (JPG, PNG, MP4)</p>
+                                        <input type="file" id="mediaFileInput" multiple accept="image/*,video/mp4,video/x-m4v,video/webm" style="display:none;" onchange="handleMediaSelect(event)" />
+                                    </div>
+                                    
+                                    <!-- Yükleniyor Göstergesi -->
+                                    <div id="mediaUploadProgress" class="mt-3" style="display:none;">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <div class="spinner-border text-primary spinner-border-sm me-2" role="status"></div>
+                                            <span class="fw-bold">Dosyalar Yükleniyor...</span>
+                                        </div>
+                                        <div class="progress" style="height: 10px;">
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 100%"></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Uploaded Media Grid -->
+                                    <div id="mediaPreviewGrid" class="row g-3 mt-4 sortable-grid">
+                                        <!-- Kartlar JS ile eklenecek -->
+                                    </div>
+                                </div>
+                                
+                                <div class="col-12 mt-4">
+                                    <label class="form-label fw-bold"><i class="ph ph-youtube-logo text-danger"></i> veya YouTube / Vimeo Linki Ekle (İsteğe Bağlı)</label>
+                                    <input type="url" asp-for="VideoUrl" class="form-control" placeholder="Örn: https://www.youtube.com/watch?v=..." />
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex justify-content-between mt-4 border-top pt-4">
+                                <button type="button" class="btn btn-outline-secondary btn-lg" onclick="nextStep(5)"><i class="ph ph-arrow-left"></i> Geri</button>
+                                <button type="button" class="btn btn-primary btn-lg" onclick="nextStep(7)">İleri <i class="ph ph-arrow-right"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- STEP 7: Eşya Detayı -->
+                        <div class="wizard-step" id="step7">
+                            <h4 class="mb-4 text-primary">7. Adım: Eşya Detayı</h4>
+                            <div class="p-4 bg-light border rounded shadow-sm">
+                                <p class="text-muted"><i class="ph ph-info"></i> İlana ait eşya bilgilerini detaylandırın (sadece eşyalı ilanlar için).</p>
+                                
+                                <div class="row g-3 mt-3">
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch mb-3 p-3 bg-white border rounded">
+                                            <input class="form-check-input ms-0 mt-1 me-2" type="checkbox" asp-for="IsFurnished" id="chkIsFurnishedStep8" onchange="document.getElementById('chkIsFurnished').checked = this.checked;">
+                                            <label class="form-check-label fw-bold" for="chkIsFurnishedStep8">Bu ilan eşyalı mı?</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row g-3 mt-2">
+                                    <div class="col-md-12">
+                                        <label class="form-label fw-bold">Eşya Listesi ve Durumu</label>
+                                        <textarea class="form-control" name="FurnitureDetails" rows="4" placeholder="Beyaz eşyalar, mobilyalar vb. hakkında detaylı bilgi giriniz..."></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex justify-content-between mt-4 border-top pt-4">
+                                <button type="button" class="btn btn-outline-secondary btn-lg" onclick="nextStep(6)"><i class="ph ph-arrow-left"></i> Geri</button>
+                                <button type="button" class="btn btn-primary btn-lg" onclick="nextStep(8)">İleri (Onay) <i class="ph ph-arrow-right"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- STEP 8: Onay -->
+                        <div class="wizard-step" id="step8">
+                            <h4 class="mb-4 text-primary">8. Adım: Özet ve Onay</h4>
+                            <div class="alert alert-success">
+                                <i class="ph ph-check-circle"></i> Tüm bilgileri başarıyla doldurdunuz! Güvenlik adımını geçtikten sonra ilanınızı yayınlayabilirsiniz.
+                            </div>
+                            
+                            <!-- EİDS Yetki Belgesi Doğrulama (Simülasyon) -->
+                            <div class="card border-info mb-4 shadow-sm">
+                                <div class="card-header bg-info text-white fw-bold">
+                                    <i class="ph ph-shield-check"></i> EİDS Satış Yetki Belgesi Doğrulama
+                                </div>
+                                <div class="card-body">
+                                    <div class="alert alert-warning mb-3">
+                                        <i class="ph ph-warning-circle"></i> Yeni yönetmelik gereği, Taşınmaz Ticareti Yetki Belgeniz veya mülk sahibinin E-Devlet (EİDS) onayı olmadan bu ilanı yayınlayamazsınız.
+                                    </div>
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="hasAuthorizationSwitch" name="HasAuthorization" value="true">
+                                        <label class="form-check-label fw-bold" for="hasAuthorizationSwitch">Mülk sahibi tarafından tarafıma yetki verilmiştir</label>
+                                    </div>
+                                    <div id="eidsFields" style="display:none;">
+                                        <div class="row g-3">
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold">Taşınmaz Ticareti Yetki Belgesi No</label>
+                                                <input type="text" class="form-control" name="AuthorizationDocumentNo" id="authDocNo" placeholder="Örn: 3400012">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold">Mal Sahibi T.C. Kimlik / VKN</label>
+                                                <input type="text" class="form-control" name="OwnerIdNumber" id="ownerIdNo" placeholder="Örn: 12345678901">
+                                            </div>
+                                        </div>
+                                        <div class="mt-3">
+                                            <button type="button" class="btn btn-outline-info w-100" id="btnVerifyEids" onclick="verifyEids()">
+                                                <i class="ph ph-arrows-clockwise"></i> Sistemden Doğrula (Simülasyon)
+                                            </button>
+                                        </div>
+                                        <div id="eidsSuccess" class="alert alert-success mt-3" style="display:none;">
+                                            <i class="ph ph-check-circle"></i> EİDS Doğrulaması Başarılı! Bakanlık sisteminden onay alındı.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card bg-light border-0 mb-4">
+                                <div class="card-body text-center py-4">
+                                    <div class="mb-3">
+                                        <i class="ph ph-robot" style="font-size:48px; color:var(--primary);"></i>
+                                    </div>
+                                    <div class="form-check d-inline-block text-start">
+                                        <input class="form-check-input" type="checkbox" id="robotCheck" required>
+                                        <label class="form-check-label fw-bold" for="robotCheck">
+                                            Ben robot değilim (Mock reCAPTCHA)
+                                        </label>
+                                    </div>
+                                    <input type="hidden" asp-for="RecaptchaToken" id="recaptchaToken" />
+                                    <span asp-validation-for="RecaptchaToken" class="text-danger d-block mt-2"></span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-5">
+                                <button type="button" class="btn btn-light px-5 btn-lg" onclick="nextStep(7)"><i class="ph ph-arrow-left"></i> Geri</button>
+                                <button type="button" class="btn btn-success px-5 btn-lg" id="btnSubmitPublish" onclick="attemptSubmit()" disabled>İlanı Yayınla <i class="ph ph-rocket"></i></button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Yeni Blok Ekle Modal -->
+
+<!-- YENİ SOKAK EKLE MODALI (ON-THE-FLY) -->
+<div class="modal fade" id="newStreetModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-danger">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="ph ph-warning"></i> Sokağımı Bulamadım</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Sokağınızı listede bulamadıysanız, adını yazarak ekleyebilir ve işleminize kesintisiz devam edebilirsiniz. Yöneticilerimiz arka planda kontrol edecektir.</p>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Yeni Sokak Adı</label>
+                    <input type="text" id="newStreetNameInput" class="form-control" placeholder="Örn: Papatya Sokak" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-danger" onclick="submitNewStreet()">Kaydet ve Devam Et</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- BİNA HATA BİLDİRİM MODALI -->
+<div class="modal fade" id="reportBuildingModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-warning">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="ph ph-flag"></i> Bina Bilgisinde Hata Bildir</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Seçtiğiniz binanın adında yazım yanlışı (Örn: Yaşer Bey yerine Yaşar Bey) olduğunu düşünüyorsanız, doğrusunu bize bildirin.</p>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Olması Gereken Doğru İsim</label>
+                    <input type="text" id="correctBuildingNameInput" class="form-control" placeholder="Örn: Yaşar Bey Apartmanı" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-warning" onclick="submitBuildingTypo()">Bildirimi Gönder</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="addNewBlockModal" tabindex="-1" aria-labelledby="addNewBlockModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addNewBlockModalLabel">Yeni Blok Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Blok Adı</label>
+                    <input type="text" id="newBlockName" class="form-control" placeholder="Örn: C Blok" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Kat Sayısı</label>
+                    <input type="number" id="newBlockTotalFloors" class="form-control" placeholder="Örn: 10" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" onclick="saveNewBlockToComplex()">Kaydet ve Seç</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Modal: Harita -->
+<div class="modal fade" id="mapModal" tabindex="-1" aria-labelledby="mapModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="mapModalLabel">Haritadan Konum Seç</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="locationMap" style="height: 600px; width: 100%; z-index: 1;"></div>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <div class="text-muted small"><i class="ph ph-info"></i> Haritaya tıklayarak veya pini sürükleyerek tam konumu belirleyebilirsiniz.</div>
+                <div>
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">İptal</button>
+                    <button type="button" class="btn btn-primary px-4" data-bs-dismiss="modal">Konumu Onayla</button>
+                </div>
+            </div>
+        </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Taslak Kurtarma -->
+<div class="modal fade" id="draftRecoveryModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-labelledby="draftRecoveryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-warning shadow-lg">
+            <div class="modal-header bg-warning text-dark border-0">
+                <h5 class="modal-title fw-bold" id="draftRecoveryModalLabel"><i class="ph ph-warning-circle"></i> Yarım Kalan İlanlarınız Var</h5>
+            </div>
+            <div class="modal-body p-4">
+                <p class="fs-5 text-center">Sistemimizde daha önceden tamamlanmamış taslak ilanlarınız bulundu.</p>
+                <p class="text-muted text-center mb-4">Kaldığınız yerden devam etmek istediğiniz taslağı seçebilir veya yepyeni bir ilan başlatabilirsiniz.</p>
+                
+                @if (ViewBag.UserDrafts != null)
+                {
+                    <div class="table-responsive mb-4">
+                        <table class="table table-hover align-middle border">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>İlan Başlığı / Özeti</th>
+                                    <th>Kayıt Tarihi</th>
+                                    <th>Kaldığınız Adım</th>
+                                    <th class="text-end">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var draft in (IEnumerable<GMK360.Core.Entities.Property>)ViewBag.UserDrafts)
+                                {
+                                    <tr id="draft-row-@draft.Id">
+                                        <td class="fw-bold text-primary">@(string.IsNullOrEmpty(draft.Title) ? "İsimsiz Taslak" : draft.Title)</td>
+                                        <td>@draft.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                                        <td><span class="badge bg-secondary">@(draft.DraftStep > 0 ? draft.DraftStep.ToString() : "1"). Adım</span></td>
+                                        <td class="text-end">
+                                            <a href="/Property/Create?draftId=@draft.Id" class="btn btn-sm btn-warning fw-bold"><i class="ph ph-play-circle"></i> Devam Et</a>
+                                            <button type="button" class="btn btn-sm btn-outline-danger ms-1" onclick="discardDraft(@draft.Id)"><i class="ph ph-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                <div class="d-grid mt-4">
+                    <button type="button" class="btn btn-primary btn-lg fw-bold" data-bs-dismiss="modal">
+                        <i class="ph ph-plus-circle"></i> Hepsini Geç, Yepyeni İlan Başlat
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Yeni Bina Ekle Removed -->
+
+<div class="modal fade" id="ajaxLoginModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h4 class="modal-title fw-bold text-primary">Az Kaldı!</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <p class="text-muted">İlanınızı yayınlamak için giriş yapmanız gerekiyor. Giriş yaptığınızda kaldığınız yerden form otomatik olarak gönderilecektir.</p>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">E-posta</label>
+                    <input type="email" id="ajaxEmail" class="form-control form-control-lg" placeholder="mail@ornek.com">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Şifre</label>
+                    <input type="password" id="ajaxPassword" class="form-control form-control-lg" placeholder="••••••••">
+                </div>
+                <div id="ajaxLoginError" class="alert alert-danger" style="display:none;"></div>
+                <button type="button" class="btn btn-primary w-100 btn-lg" onclick="performAjaxLogin()">Giriş Yap ve Yayınla</button>
+                <div class="text-center mt-3">
+                    <span class="text-muted">Hesabınız yok mu?</span> <a href="/Account/Register" target="_blank">Yeni Sekmede Üye Ol</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="newComplexModal" tabindex="-1" aria-labelledby="newComplexModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newComplexModalLabel">Yeni Bina / Site Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info py-2">
+                    <i class="ph ph-info"></i> Lütfen önce formdan İl, İlçe ve Mahalle seçtiğinizden emin olun. Yeni eklediğiniz binalar sistem yöneticisi tarafından incelenecektir.
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold">Bina / Site Adı</label>
+                        <input type="text" id="ncName" class="form-control" placeholder="Örn: Sinpaş Koru Sitesi" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Dış Kapı No</label>
+                        <input type="text" id="ncBuildingNumber" class="form-control" placeholder="Örn: 12" />
+                    </div>
+                    
+                    <div class="col-12 mt-3">
+                        <div class="form-check form-switch form-check-lg">
+                            <input class="form-check-input" type="checkbox" id="ncHasBlocks" onchange="toggleNcBlocks()">
+                            <label class="form-check-label fw-bold ms-2 text-info" for="ncHasBlocks">Bu yapı birden çok bloktan oluşuyor</label>
+                        </div>
+                    </div>
+                    
+                    <!-- Tek Bina İse Sadece Kat Sayısı -->
+                    <div class="col-md-4 mt-2" id="ncSingleFloorContainer">
+                        <label class="form-label fw-bold">Binanın Kat Sayısı</label>
+                        <input type="number" id="ncTotalFloors" class="form-control" placeholder="Örn: 5" />
+                    </div>
+                    
+                    <!-- Bloklar İse -->
+                    <div class="col-12 mt-2" id="ncBlocksContainer" style="display:none;">
+                        <div class="d-flex align-items-center mb-2">
+                            <h6 class="mb-0 text-secondary">Blokları Ekleyin</h6>
+                            <button type="button" class="btn btn-sm btn-outline-primary ms-auto" onclick="addNcBlockRow()">+ Yeni Blok Ekle</button>
+                        </div>
+                        <div id="ncBlockRows">
+                            <!-- JS ile eklenecek -->
+                        </div>
+                    </div>
+
+                    <div class="col-12 mt-3">
+                        <label class="form-label fw-bold">Binanın Konumu (Haritadan İşaretleyin)</label>
+                        <div id="modalMap" style="height:600px; width:100%; border-radius:10px; border:1px solid #ccc;"></div>
+                        <div class="d-flex gap-2 mt-2">
+                            <input type="text" id="ncLat" class="form-control form-control-sm" placeholder="Enlem (Latitude)" readonly />
+                            <input type="text" id="ncLng" class="form-control form-control-sm" placeholder="Boylam (Longitude)" readonly />
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-primary" id="btnSaveComplex" onclick="saveNewComplex()">Kaydet ve Seç</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        // Matrix Complex Logic
+        function syncRadioSelectionComplex(radioElement, featureIndex, questionId) {
+            var allHiddenForQuestion = document.querySelectorAll('.radio-hidden-sync-complex-' + questionId);
+            allHiddenForQuestion.forEach(function(el) {
+                el.value = 'false';
+            });
+            var myHidden = document.getElementById('hiddenComplex_' + radioElement.value);
+            if(myHidden) {
+                myHidden.value = 'true';
+            }
+        }
+
+        var currentUserType = '@ViewBag.UserType';
+
+        // UI Toggle Logic
+        function toggleSiteLogic() {
+            var isSiteInput = document.getElementById('hdnIsSite');
+            var isSite = isSiteInput ? (isSiteInput.value === 'true') : false;
+            
+            var lblSelect = document.getElementById('lblComplexSelect');
+            var btnNew = document.getElementById('btnNewComplex');
+            
+            function onBlockSelected() {
+                var select = document.getElementById('blockSelectDropdown');
+                var selectedOption = select.options[select.selectedIndex];
+                
+                var blockNameEl = document.getElementById('BlockName');
+                var totalFloorsEl = document.getElementById('TotalFloors');
+                
+                if (selectedOption && selectedOption.value) {
+                    if (blockNameEl) blockNameEl.value = selectedOption.value;
+                    if (totalFloorsEl) totalFloorsEl.value = selectedOption.dataset.floors || '';
+                } else {
+                    if (blockNameEl) blockNameEl.value = '';
+                    if (totalFloorsEl) totalFloorsEl.value = '';
+                }
+            } 
+            
+            if(isSite) {
+                if(lblSelect) lblSelect.innerText = 'Site Seçiniz';
+                if(btnNew) btnNew.innerHTML = '<i class="ph ph-plus"></i> Listede yoksa ekle ve haritadan seç';
+            } else {
+                if(lblSelect) lblSelect.innerText = 'Bina / Apartman Seçiniz';
+                if(btnNew) btnNew.innerHTML = '<i class="ph ph-plus"></i> Listede yoksa ekle ve haritadan seç';
+            }
+        }
+        
+        function toggleBlockLogic() {
+            var hasBlock = document.getElementById('HasBlock').checked;
+            if(hasBlock) {
+                document.getElementById('blockNameInputArea').style.display = 'block';
+            } else {
+                document.getElementById('blockNameInputArea').style.display = 'none';
+            }
+        }
+
+        // Wizard Logic
+        function validateStep(currentStep) {
+            if (currentStep === 1) {
+                var status = document.getElementById('hdnStatus').value;
+                if(!status) { alert("Lütfen işlem tipi seçiniz (Satılık, Kiralık vb.)."); return false; }
+                var type = document.getElementById('hdnType').value;
+                if(!type) { alert("Lütfen emlak türü seçiniz (Konut, İş Yeri vb.)."); return false; }
+                var subType = document.getElementById('hdnSubType').value;
+                if(!subType) { alert("Lütfen alt tür seçiniz (Daire, Ofis vb.)."); return false; }
+                
+                if (currentSubTypeCode === 'RES_DAIRE' || currentSubTypeCode === 'RES_VILLA') {
+                    var isSite = document.getElementById('hdnIsSite').value;
+                    if(isSite === '') { alert("Lütfen Yapı Tipi seçiniz (Site İçi veya Bağımsız Bina)."); return false; }
+                }
+            }
+            else if (currentStep === 2) {
+                var city = document.getElementById('citySelect').value;
+                if(!city) { alert("İl seçimi zorunludur."); return false; }
+                var dist = document.getElementById('districtSelect').value;
+                if(!dist) { alert("İlçe seçimi zorunludur."); return false; }
+                var neigh = document.getElementById('neighborhoodSelect').value;
+                if(!neigh) { alert("Mahalle seçimi zorunludur."); return false; }
+                var comp = document.getElementById('complexSelect').value;
+                if(!comp) { alert("Bina / Yapı seçimi zorunludur. Listede bina yoksa 'Listede yoksa ekle ve haritadan seç' butonunu kullanın."); return false; }
+            }
+            else if (currentStep === 3) {
+                var requiredIds = ['Title', 'Price', 'GrossArea', 'NetArea'];
+                var labels = { 'Title': 'İlan Başlığı', 'Price': 'Fiyat', 'GrossArea': 'Brüt m²', 'NetArea': 'Net m²' };
+                for(let id of requiredIds) {
+                    var el = document.getElementById(id);
+                    if(el && !el.value.trim()) {
+                        alert(labels[id] + " alanı zorunludur.");
+                        el.focus();
+                        return false;
+                    }
+                }
+                
+                var hasBlock = document.getElementById('HasBlock');
+                if (hasBlock && hasBlock.value === 'true') {
+                    var dropdown = document.getElementById('blockSelectDropdown');
+                    if (!dropdown || !dropdown.value) {
+                        alert("Lütfen bulunduğunuz bloğu seçiniz.");
+                        if(dropdown) dropdown.focus();
+                        return false;
+                    }
+                    var blockNameEl = document.getElementById('BlockName');
+                    if(blockNameEl) blockNameEl.value = dropdown.value;
+                }
+                var unitNo = document.getElementById('UnitNumber');
+                if(unitNo && !unitNo.value.trim()) { alert("İç Kapı / Daire No alanı zorunludur."); unitNo.focus(); return false; }
+            }
+            return true;
+        }
+
+        function nextStep(step) {
+            var currentStep = step - 1;
+            if (currentStep > 0 && !validateStep(currentStep)) {
+                return;
+            }
+
+            autoSaveDraft(currentStep);
+
+            moveToStep(step);
+        }
+
+        function autoSaveDraft(step) {
+            var form = document.getElementById('propertyWizardForm');
+            if(!form) return;
+            var formData = new FormData(form);
+            formData.set('DraftStep', step);
+
+            fetch('/Property/SaveDraft', {
+                method: 'POST',
+                body: formData // Form data sends natively as multipart/form-data
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success && data.draftId > 0) {
+                    var idInput = document.querySelector('input[name="Id"]');
+                    if(idInput) {
+                        idInput.value = data.draftId;
+                    }
+                    showDraftSavedToast();
+                }
+            })
+            .catch(err => console.log('Draft save error:', err));
+        }
+
+        // Otomatik kaydetme için zamanlayıcı (Debounce)
+        var draftTimer = null;
+        document.addEventListener('input', function(e) {
+            if(e.target.closest('#propertyWizardForm')) {
+                clearTimeout(draftTimer);
+                draftTimer = setTimeout(function() {
+                    var currentStep = 1;
+                    document.querySelectorAll('.step-item').forEach(function(item) {
+                        if(item.classList.contains('active')) {
+                            currentStep = parseInt(item.getAttribute('data-step'));
+                        }
+                    });
+                    autoSaveDraft(currentStep);
+                }, 5000); // 5 saniye hareketsizlik sonrası otomatik kaydet
+            }
+        });
+
+        function showDraftSavedToast() {
+            var toast = document.getElementById('draftToast');
+            if(!toast) {
+                var html = '<div id="draftToast" style="position:fixed; bottom:20px; right:20px; background:#28a745; color:white; padding:10px 20px; border-radius:5px; z-index:9999; box-shadow:0 4px 6px rgba(0,0,0,0.1); display:none; transition: opacity 0.5s;">Taslak otomatik kaydedildi <i class="ph ph-check-circle"></i></div>';
+                document.body.insertAdjacentHTML('beforeend', html);
+                toast = document.getElementById('draftToast');
+            }
+            toast.style.display = 'block';
+            toast.style.opacity = '1';
+            setTimeout(function(){ toast.style.opacity = '0'; setTimeout(()=> toast.style.display='none', 500); }, 3000);
+        }
+
+        function moveToStep(step) {
+            if (step === 2) {
+                var isSite = currentSubTypeCode.includes('SITE') || currentSubTypeCode.includes('RESIDENCE');
+                document.getElementById('IsSite').value = isSite ? 'true' : 'false';
+                var buildingTitle = document.getElementById('step2BuildingTitle');
+                if (buildingTitle) {
+                    buildingTitle.innerHTML = isSite ? '<i class="ph ph-buildings"></i> Site / Kompleks Detayları' : '<i class="ph ph-buildings"></i> Bina / Apartman Detayları';
+                }
+                toggleSiteLogic();
+            }
+            if (step === 3) {
+                updateSummaryHeader();
+                var mustakilCodes = ['RES_MUSTAKIL', 'RES_VILLA', 'RES_CIFT', 'RES_YAZLIK', 'RES_VILLA_BINA', 'RES_VILLA_SITE'];
+                var isMustakil = mustakilCodes.includes(currentSubTypeCode);
+                if (isMustakil) {
+                    var elFloor = document.getElementById('floorNumberContainer');
+                    if (elFloor) elFloor.style.display = 'none';
+                    var elBlock = document.getElementById('blockContainer');
+                    if (elBlock) elBlock.style.display = 'none';
+                } else {
+                    var elFloor = document.getElementById('floorNumberContainer');
+                    if (elFloor) elFloor.style.display = 'block';
+                    var elBlock = document.getElementById('blockContainer');
+                    if (elBlock) elBlock.style.display = 'block';
+                }
+            }
+            if (step === 4) {
+                var isSiteInput = document.getElementById('IsSite');
+                var isSite = isSiteInput ? (isSiteInput.value === 'true') : false;
+                var step4Title = document.getElementById('step4Title');
+                var step4HeaderTitle = document.getElementById('step4HeaderTitle');
+                if (step4Title) {
+                    if (isSite) {
+                        step4Title.innerHTML = '4. Adım: Site Özellikleri';
+                        if(step4HeaderTitle) step4HeaderTitle.innerHTML = 'Site Özellikleri';
+                    } else {
+                        step4Title.innerHTML = '4. Adım: Yapı Özellikleri';
+                        if(step4HeaderTitle) step4HeaderTitle.innerHTML = 'Yapı Özellikleri';
+                    }
+                }
+            }
+            if (step === 5) {
+                // Akıllı Banyo Tikleme Logic (Banyo sayısı 2 ve üzeriyse otomatik Ebeveyn ve Duşakabin tikle)
+                var bathroomCountInput = document.getElementById('BathroomCount');
+                if (bathroomCountInput && parseInt(bathroomCountInput.value) >= 2) {
+                    document.querySelectorAll('label.form-check-label').forEach(lbl => {
+                        var text = lbl.innerText.trim();
+                        if (text === 'Ebeveyn Banyosu' || text === 'Duşakabin') {
+                            var checkboxId = lbl.getAttribute('for');
+                            if (checkboxId) {
+                                var checkbox = document.getElementById(checkboxId);
+                                if (checkbox && !checkbox.checked) {
+                                    checkbox.checked = true;
+                                    checkbox.dispatchEvent(new Event('change')); // Varsa tetikleyicileri çalıştır
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+
+            document.querySelectorAll('.wizard-step').forEach(el => el.classList.remove('active'));
+            document.getElementById('step' + step).classList.add('active');
+            updateHeader(step);
+        }
+        function prevStep(step) {
+            document.querySelectorAll('.wizard-step').forEach(el => el.classList.remove('active'));
+            document.getElementById('step' + step).classList.add('active');
+            updateHeader(step);
+        }
+        function updateHeader(currentStep) {
+            for(let i=1; i<=8; i++) {
+                const item = document.querySelector(`.step-item[data-step="${i}"]`);
+                if(item) {
+                    if(i < currentStep) {
+                        item.classList.add('completed');
+                        item.classList.remove('active');
+                    } else if (i === currentStep) {
+                        item.classList.add('active');
+                        item.classList.remove('completed');
+                    } else {
+                        item.classList.remove('active', 'completed');
+                    }
+                }
+                const line = document.getElementById('line' + i);
+                if(line) {
+                    line.style.width = (i < currentStep) ? '100%' : '0%';
+                }
+            }
+        }
+
+        // Smart UI Logic - Bathrooms
+        function checkBathroomLogic() {
+            var val = document.getElementById('bathroomSelect').value;
+            var msg = document.getElementById('ensuiteMsg');
+            if(parseInt(val) >= 2) {
+                msg.style.display = 'block';
+            } else {
+                msg.style.display = 'none';
+            }
+        }
+
+        // Smart UI Logic - Parking
+        function checkParkingLogic() {
+            var val = document.getElementById('parkingSelect').value;
+            var alert = document.getElementById('lpgAlert');
+            if(val === 'Kapalı') {
+                alert.style.display = 'block';
+            } else {
+                alert.style.display = 'none';
+            }
+        }
+
+        // Smart UI Logic - Furnished
+        function checkFurnishedLogic() {
+            var val = document.getElementById('furnishedSelect').value;
+            var div = document.getElementById('furnishedDetailsWrap');
+            if(val === 'true') {
+                div.style.display = 'block';
+            } else {
+                div.style.display = 'none';
+            }
+        }
+
+        // Category Selection UI (Open Lists)
+        function selectStatusList(id, code, el) {
+            document.getElementById('hdnStatus').value = id;
+            
+            // Remove active classes from siblings
+            var siblings = document.querySelectorAll('#statusList .list-group-item');
+            siblings.forEach(s => {
+                s.classList.remove('active', 'fw-bold');
+            });
+            
+            // Add active class to clicked item
+            el.classList.add('active', 'fw-bold');
+            
+            if(code === 'DAILY') {
+                document.getElementById('dailyRentAlert').style.display = 'block';
+            } else {
+                document.getElementById('dailyRentAlert').style.display = 'none';
+            }
+        }
+
+        function selectTypeList(id, code, el) {
+            document.getElementById('hdnType').value = id;
+            
+            // Remove active classes from siblings
+            var siblings = document.querySelectorAll('#typeList .list-group-item');
+            siblings.forEach(s => {
+                s.classList.remove('active', 'fw-bold');
+            });
+            
+            // Add active class to clicked item
+            el.classList.add('active', 'fw-bold');
+            
+            if(code === 'TIMESHARE') {
+                document.getElementById('timeshareDetails').style.display = 'block';
+            } else {
+                document.getElementById('timeshareDetails').style.display = 'none';
+            }
+
+            var landSection = document.getElementById('landDetailsSection');
+            if(landSection) {
+                if(code === 'LAND' || code.includes('ARSA') || el.innerText.trim().toUpperCase().includes('ARSA')) {
+                    landSection.style.display = 'block';
+                } else {
+                    landSection.style.display = 'none';
+                }
+            }
+
+            // FILTER: Devren Satılık/Kiralık only for COMMERCIAL or TOURISM
+            var statusItems = document.querySelectorAll('#statusList .status-item');
+            statusItems.forEach(s => {
+                var sCode = s.getAttribute('data-code');
+                if (sCode && sCode.startsWith('DEVREN_')) {
+                    if (code === 'COMMERCIAL' || code === 'TOURISM') {
+                        s.style.display = 'block';
+                    } else {
+                        s.style.display = 'none';
+                        if (s.classList.contains('active')) {
+                            s.classList.remove('active', 'fw-bold');
+                            document.getElementById('hdnStatus').value = '';
+                        }
+                    }
+                }
+            });
+
+            // FILTER: SubTypes
+            var subTypeItems = document.querySelectorAll('#subTypeList .subtype-item');
+            subTypeItems.forEach(s => {
+                var parentCode = s.getAttribute('data-parent');
+                if (parentCode === code) {
+                    s.style.display = 'block';
+                } else {
+                    s.style.display = 'none';
+                    s.classList.remove('active', 'fw-bold');
+                }
+            });
+
+            document.getElementById('hdnSubType').value = '';
+        }
+
+        var currentSubTypeCode = '';
+        function selectSubTypeList(id, code, el) {
+            document.getElementById('hdnSubType').value = id;
+            currentSubTypeCode = code;
+            var siblings = document.querySelectorAll('#subTypeList .list-group-item');
+            siblings.forEach(s => s.classList.remove('active', 'fw-bold'));
+            el.classList.add('active', 'fw-bold');
+            
+            // 4th Column Logic
+            if (code === 'RES_DAIRE' || code === 'RES_VILLA') {
+                document.getElementById('buildingTypeCol').style.display = 'block';
+                // Reset any previous selection
+                var bSiblings = document.querySelectorAll('#buildingTypeList .list-group-item');
+                bSiblings.forEach(s => s.classList.remove('active', 'fw-bold'));
+                document.getElementById('hdnIsSite').value = 'false';
+            } else {
+                document.getElementById('buildingTypeCol').style.display = 'none';
+                document.getElementById('hdnIsSite').value = 'false';
+                // Auto advance since no 4th step
+                nextStep(2);
+            }
+        }
+        
+        function selectBuildingType(isSite, el) {
+            document.getElementById('hdnIsSite').value = isSite ? 'true' : 'false';
+            var siblings = document.querySelectorAll('#buildingTypeList .list-group-item');
+            siblings.forEach(s => s.classList.remove('active', 'fw-bold'));
+            el.classList.add('active', 'fw-bold');
+            
+            // Proceed to step 2 after making the selection
+            nextStep(2);
+        }
+
+        function selectFromWhomList(id, code, el) {
+            document.getElementById('hdnFromWhom').value = id;
+            var siblings = document.querySelectorAll('#fromWhomList .list-group-item');
+            siblings.forEach(s => s.classList.remove('active', 'fw-bold'));
+            el.classList.add('active', 'fw-bold');
+
+            var agencyToggle = document.getElementById('agencyVisibilityToggle');
+            if (currentUserType === 'Consultant' && code === 'CONSULTANT') {
+                agencyToggle.style.display = 'block';
+            } else {
+                agencyToggle.style.display = 'none';
+            }
+        }
+
+        // Complex Lock Logic
+        document.getElementById('complexSelect').addEventListener('change', function() {
+            var val = this.value;
+            var btnReport = document.getElementById('btnReportBuilding');
+            if (btnReport) {
+                btnReport.style.display = val ? 'inline-block' : 'none';
+            }
+            
+            // Note: unitNumberSelect fetching has been removed to allow dynamic multiple flat entry.
+
+            var val = this.value;
+            var alertBox = document.getElementById('complexFeaturesAlert');
+            var spanName = document.getElementById('selectedComplexName');
+            
+            if(val !== '') {
+                // Bina seçildi
+                if(alertBox) alertBox.style.display = 'block';
+                if(spanName) spanName.innerText = this.options[this.selectedIndex].text;
+                
+                // Bina ve Blok Detaylarını Getir
+                fetch('/api/ComplexApi/GetComplexDetails/' + val)
+                    .then(response => response.json())
+                    .then(data => {
+                        var buildingNoInput = document.getElementById('BuildingNumber');
+                        if (buildingNoInput) {
+                            buildingNoInput.value = data.buildingNumber || '';
+                        }
+                        
+                        var totalFloorsInput = document.getElementById('TotalFloors');
+                        var blockContainer = document.getElementById('blockSelectionContainer');
+                        var blockSelectDropdown = document.getElementById('blockSelectDropdown');
+                        var hasBlockInput = document.getElementById('HasBlock');
+                        var blockNameInput = document.getElementById('BlockName');
+                        
+                        if (data.hasBlocks) {
+                            blockContainer.style.display = 'block';
+                            hasBlockInput.value = 'true';
+                            totalFloorsInput.value = ''; 
+                            
+                            blockSelectDropdown.innerHTML = '<option value="">Blok Seçiniz...</option>';
+                            data.blocks.forEach(b => {
+                                var opt = document.createElement('option');
+                                opt.value = b.name;
+                                opt.dataset.floors = b.totalFloors;
+                                opt.innerHTML = b.name;
+                                blockSelectDropdown.appendChild(opt);
+                            });
+                            
+                            if (data.blocks.length === 1) {
+                                blockSelectDropdown.value = data.blocks[0].name;
+                                setTimeout(function() { onBlockSelected(); }, 50);
+                                // Kullanıcı tek blok varsa seçmeye gerek kalmasın dediği için gizliyoruz
+                                blockContainer.style.display = 'none';
+                            } else {
+                                blockContainer.style.display = 'block';
+                            }
+                        } else {
+                            blockContainer.style.display = 'none';
+                            hasBlockInput.value = 'false';
+                            blockNameInput.value = '';
+                            totalFloorsInput.value = data.totalFloors || '';
+                        }
+                    })
+                    .catch(console.error);
+                
+                // AJAX çağrısı ile bu sitenin MatrixFeaturesComplex değerlerini getir ve formda işaretle
+                fetch('/api/ComplexApi/GetFeatures/' + val)
+                    .then(response => response.json())
+                    .then(data => {
+                        // Önce tüm matrix seçimlerini temizle
+                        document.querySelectorAll('#complexFeaturesContainer .exam-input').forEach(el => {
+                            el.checked = false;
+                        });
+                        document.querySelectorAll('#complexFeaturesContainer input[type="text"]').forEach(el => {
+                            el.value = '';
+                            el.style.display = 'none';
+                        });
+
+                        // Gelen veriye göre işaretle
+                        data.forEach(feature => {
+                            var input = document.getElementById('ansComplex_' + feature.definitionValueId);
+                            if (input) {
+                                input.checked = true;
+                                // Eğer radio ise, trigger event veya hidden guncelleme
+                                if (input.type === 'radio') {
+                                    var hidden = document.getElementById('hiddenComplex_' + feature.definitionValueId);
+                                    if (hidden) hidden.value = 'true';
+                                }
+                                
+                                // Text input göster/doldur
+                                var noteInput = document.getElementById('textComplex_' + feature.definitionValueId);
+                                if (noteInput) {
+                                    noteInput.style.display = 'inline-block';
+                                    if(feature.note) noteInput.value = feature.note;
+                                }
+                            }
+                        });
+                    })
+                    .catch(err => console.error('Complex features error:', err));
+            } else {
+                if(alertBox) alertBox.style.display = 'none';
+                // Reset
+                document.querySelectorAll('#complexFeaturesContainer .exam-input').forEach(el => {
+                    el.checked = false;
+                });
+            }
+        });
+
+        // Location API Fetch
+        document.addEventListener('DOMContentLoaded', function() {
+            // UserType Kimden Filtreleme
+            var fromWhomItems = document.querySelectorAll('#fromWhomList .fromwhom-item');
+            var defaultClicked = false;
+            fromWhomItems.forEach(function(item) {
+                var code = item.getAttribute('data-code');
+                var show = true;
+                
+                if (currentUserType === 'Individual') {
+                    show = (code === 'OWNER');
+                } else if (currentUserType === 'Consultant') {
+                    show = (code === 'CONSULTANT' || code === 'AGENCY');
+                } else if (currentUserType === 'Corporate') {
+                    show = (code !== 'OWNER' && code !== 'CONSULTANT');
+                }
+                
+                if (show) {
+                    item.style.display = 'block';
+                    if (!defaultClicked) {
+                        item.click(); // Otomatik olarak ilk uygun olanı seç
+                        defaultClicked = true;
+                    }
+                } else {
+                    item.style.display = 'none';
+                    item.classList.remove('active', 'fw-bold');
+                }
+            });
+
+            // Matrix Toggle Logic
+            document.addEventListener('change', function(e) {
+                if (e.target && e.target.classList.contains('matrix-toggle')) {
+                    var detailsDiv = e.target.closest('.row.align-items-center').querySelector('.matrix-details');
+                    if (detailsDiv) {
+                        detailsDiv.style.display = e.target.checked ? 'block' : 'none';
+                    }
+                }
+            });
+
+            // Zorunlu alanlara kırmızı yıldız ekle
+            var requiredInputs = document.querySelectorAll('input[data-val-required], select[data-val-required], textarea[data-val-required]');
+            requiredInputs.forEach(function(input) {
+                var label = document.querySelector('label[for="' + input.id + '"]');
+                if (label && !label.innerHTML.includes('text-danger')) {
+                    label.innerHTML += ' <span class="text-danger">*</span>';
+                }
+            });
+
+            var citySelect = document.getElementById('citySelect');
+            var districtSelect = document.getElementById('districtSelect');
+            var neighborhoodSelect = document.getElementById('neighborhoodSelect');
+            var streetSelect = document.getElementById('streetSelect');
+            var complexSelect = document.getElementById('complexSelect');
+
+            // 1. İlleri Yükle
+            fetch('/api/Location/Cities')
+                .then(res => res.json())
+                .then(data => {
+                    citySelect.innerHTML = '<option value="">İl Seçiniz...</option>';
+                    data.forEach(city => {
+                        citySelect.innerHTML += `<option value="${city.id}">${city.name}</option>`;
+                    });
+                });
+
+            // 2. İlçe Yükle
+            citySelect.addEventListener('change', function() {
+                var cityId = this.value;
+                districtSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+                neighborhoodSelect.innerHTML = '<option value="">Önce İlçe Seçiniz...</option>';
+                streetSelect.innerHTML = '<option value="">Önce Mahalle Seçiniz...</option>';
+                
+                if(!cityId) {
+                    districtSelect.innerHTML = '<option value="">Önce İl Seçiniz...</option>';
+                    return;
+                }
+
+                fetch('/api/Location/Districts/' + cityId)
+                    .then(res => res.json())
+                    .then(data => {
+                        districtSelect.innerHTML = '<option value="">İlçe Seçiniz...</option>';
+                        let currentGroup = '';
+                        let html = '';
+                        data.forEach(d => {
+                            if(d.regionName) {
+                                if(currentGroup !== d.regionName) {
+                                    if(currentGroup !== '') html += '</optgroup>';
+                                    currentGroup = d.regionName;
+                                    html += `<optgroup label="${currentGroup}">`;
+                                }
+                            } else {
+                                if(currentGroup !== '') {
+                                    html += '</optgroup>';
+                                    currentGroup = '';
+                                }
+                            }
+                            html += `<option value="${d.id}">${d.name}</option>`;
+                        });
+                        if(currentGroup !== '') html += '</optgroup>';
+                        districtSelect.innerHTML += html;
+                    });
+            });
+
+            // 3. Mahalle Yükle
+            districtSelect.addEventListener('change', function() {
+                var districtId = this.value;
+                neighborhoodSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+                streetSelect.innerHTML = '<option value="">Önce Mahalle Seçiniz...</option>';
+
+                if(!districtId) {
+                    neighborhoodSelect.innerHTML = '<option value="">Önce İlçe Seçiniz...</option>';
+                    return;
+                }
+
+                fetch('/api/Location/Neighborhoods/' + districtId)
+                    .then(res => res.json())
+                    .then(data => {
+                        neighborhoodSelect.innerHTML = '<option value="">Mahalle Seçiniz...</option>';
+                        if(data && data.length > 0) {
+                            data.forEach(n => {
+                                neighborhoodSelect.innerHTML += `<option value="${n.id}">${n.name}</option>`;
+                            });
+                        } else {
+                            neighborhoodSelect.innerHTML = '<option value="">Mahalle Bulunamadı</option>';
+                        }
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        neighborhoodSelect.innerHTML = '<option value="">Hata Oluştu</option>';
+                    });
+            });
+
+            // 4. Sokak Yükle
+            neighborhoodSelect.addEventListener('change', function() {
+                var neighborhoodId = this.value;
+                streetSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+                complexSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+                
+                // POI'leri Yükle (Otomatik Bilgilendirme)
+                fetch('/api/Location/POIs/' + neighborhoodId)
+                    .then(res => res.json())
+                    .then(data => {
+                        var container = document.getElementById('poiContainer');
+                        var list = document.getElementById('poiList');
+                        list.innerHTML = '';
+                        if(data && data.length > 0) {
+                            container.style.display = 'block';
+                            
+                            // Kategorilere göre grupla
+                            var groupedData = {};
+                            data.forEach(p => {
+                                if(!groupedData[p.categoryName]) groupedData[p.categoryName] = [];
+                                groupedData[p.categoryName].push(p);
+                            });
+
+                            for (var category in groupedData) {
+                                var html = `<div class="col-md-6 mb-3">
+                                                <h6 class="text-secondary border-bottom pb-1">${category}</h6>
+                                                <div class="d-flex flex-wrap gap-2 mt-2">`;
+                                
+                                groupedData[category].forEach(p => {
+                                    html += `<span class="badge bg-light text-dark border"><i class="ph ph-check-circle text-success"></i> ${p.poiName} <small class="text-muted ms-1">(${Math.round(p.distanceInMeters)}m)</small></span>`;
+                                });
+                                
+                                html += `</div></div>`;
+                                list.innerHTML += html;
+                            }
+                        } else {
+                            container.style.display = 'none';
+                        }
+                    })
+                    .catch(err => console.error("POI yüklenirken hata:", err));
+
+                if(!neighborhoodId) {
+                    streetSelect.innerHTML = '<option value="">Önce Mahalle Seçiniz...</option>';
+                    complexSelect.innerHTML = '<option value="">Önce Konum Seçiniz...</option>';
+                    return;
+                }
+
+                // Sokakları Yükle
+                fetch('/api/Location/Streets/' + neighborhoodId)
+                    .then(res => res.json())
+                    .then(data => {
+                        if(data && data.length > 0) {
+                            streetSelect.innerHTML = '<option value="">Sokak/Cadde Seçiniz...</option>';
+                            data.forEach(s => {
+                                streetSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+                            });
+                        } else {
+                            streetSelect.innerHTML = '<option value="">Bu mahalleye kayıtlı sokak yok</option>';
+                        }
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        streetSelect.innerHTML = '<option value="">Hata Oluştu</option>';
+                    });
+                    
+                // Binaları Yükle
+                fetch('/api/ComplexApi/GetByNeighborhood/' + neighborhoodId)
+                    .then(res => res.json())
+                    .then(data => {
+                        if(data && data.results && data.results.length > 0) {
+                            complexSelect.innerHTML = '<option value="">Bina/Site Seçiniz...</option>';
+                            data.results.forEach(c => {
+                                complexSelect.innerHTML += `<option value="${c.id}">${c.text}</option>`;
+                            });
+                        } else {
+                            complexSelect.innerHTML = '<option value="">Bu konumda kayıtlı bina/site yok</option>';
+                        }
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        complexSelect.innerHTML = '<option value="">Hata Oluştu</option>';
+                    });
+            });
+        });
+
+        var modalMap = null;
+        var modalMarker = null;
+
+        document.getElementById('newComplexModal').addEventListener('shown.bs.modal', function () {
+            var lat = 41.0082;
+            var lng = 28.9784; // Default İstanbul
+            
+            var reverseGeocodeModal = function(lat, lng) {
+                fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data && data.address) {
+                            var roadName = data.address.road || data.address.pedestrian;
+                            if (roadName) {
+                                window.lastDetectedRoadName = roadName;
+                                // We don't modify the dropdown here anymore to avoid annoying the user during pin drag.
+                                // It will be handled during saveNewComplex.
+                            }
+                        }
+                    })
+                    .catch(err => console.error("Reverse geocode error:", err));
+            };
+
+            var initMap = function(latitude, longitude, zoomLevel) {
+                if (!modalMap) {
+                    modalMap = L.map('modalMap').setView([latitude, longitude], zoomLevel);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19
+                    }).addTo(modalMap);
+
+                    modalMarker = L.marker([latitude, longitude], { draggable: true }).addTo(modalMap);
+                    
+                    document.getElementById('ncLat').value = latitude.toFixed(6);
+                    document.getElementById('ncLng').value = longitude.toFixed(6);
+
+                    modalMarker.on('dragend', function (e) {
+                        var position = modalMarker.getLatLng();
+                        document.getElementById('ncLat').value = position.lat.toFixed(6);
+                        document.getElementById('ncLng').value = position.lng.toFixed(6);
+                        reverseGeocodeModal(position.lat, position.lng);
+                    });
+
+                    modalMap.on('click', function(e) {
+                        modalMarker.setLatLng(e.latlng);
+                        document.getElementById('ncLat').value = e.latlng.lat.toFixed(6);
+                        document.getElementById('ncLng').value = e.latlng.lng.toFixed(6);
+                        reverseGeocodeModal(e.latlng.lat, e.latlng.lng);
+                    });
+                } else {
+                    setTimeout(function() {
+                        modalMap.invalidateSize();
+                        modalMap.setView([latitude, longitude], zoomLevel);
+                        modalMarker.setLatLng([latitude, longitude]);
+                        document.getElementById('ncLat').value = latitude.toFixed(6);
+                        document.getElementById('ncLng').value = longitude.toFixed(6);
+                    }, 100);
+                }
+            };
+            
+            // Eğer formda seçili il/ilçe varsa onun koordinatını geocode edelim
+            var citySelect = document.getElementById('citySelect');
+            var distSelect = document.getElementById('districtSelect');
+            var neighSelect = document.getElementById('neighborhoodSelect');
+            var streetSelect = document.getElementById('streetSelect');
+            
+            var cityName = citySelect.options[citySelect.selectedIndex]?.text || '';
+            var distName = distSelect.options[distSelect.selectedIndex]?.text || '';
+            var neighName = neighSelect.options[neighSelect.selectedIndex]?.text || '';
+            
+            if(cityName && distName && neighName) {
+                var query = `${neighName}, ${distName}, ${cityName}, Turkey`;
+                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if(data && data.length > 0) {
+                            initMap(parseFloat(data[0].lat), parseFloat(data[0].lon), 16);
+                        } else {
+                            // Bulamazsa sadece İlçe/İl ile dene
+                            var fallbackQuery = `${distName}, ${cityName}, Turkey`;
+                            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fallbackQuery)}&limit=1`)
+                                .then(res => res.json())
+                                .then(data2 => {
+                                    if(data2 && data2.length > 0) {
+                                        initMap(parseFloat(data2[0].lat), parseFloat(data2[0].lon), 14);
+                                    } else {
+                                        initMap(lat, lng, 14);
+                                    }
+                                }).catch(() => initMap(lat, lng, 14));
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Geocoding failed", err);
+                        initMap(lat, lng, 14);
+                    });
+            } else {
+                initMap(lat, lng, 14);
+            }
+        });
+
+        function toggleNcBlocks() {
+            var hasBlocks = document.getElementById('ncHasBlocks').checked;
+            document.getElementById('ncSingleFloorContainer').style.display = hasBlocks ? 'none' : 'block';
+            document.getElementById('ncBlocksContainer').style.display = hasBlocks ? 'block' : 'none';
+            if (hasBlocks && document.getElementById('ncBlockRows').children.length === 0) {
+                addNcBlockRow(); // Varsayılan olarak 1 tane ekle
+            }
+        }
+
+        function addNcBlockRow() {
+            var container = document.getElementById('ncBlockRows');
+            var row = document.createElement('div');
+            row.className = 'row g-2 mb-2 nc-block-row';
+            row.innerHTML = `
+                <div class="col-md-6">
+                    <input type="text" class="form-control nc-block-name" placeholder="Blok Adı (Örn: A Blok)" />
+                </div>
+                <div class="col-md-4">
+                    <input type="number" class="form-control nc-block-floors" placeholder="Kat Sayısı" />
+                </div>
+                <div class="col-md-2">
+                    <button type="button" class="btn btn-outline-danger w-100" onclick="this.parentElement.parentElement.remove()">Sil</button>
+                </div>
+            `;
+            container.appendChild(row);
+        }
+
+        function saveNewComplex() {
+            var name = document.getElementById('ncName').value;
+            var cityId = document.getElementById('citySelect').value;
+            var districtId = document.getElementById('districtSelect').value;
+            var neighborhoodId = document.getElementById('neighborhoodSelect').value;
+            var streetId = document.getElementById('streetSelect').value;
+            
+            var buildingNumber = document.getElementById('ncBuildingNumber').value;
+            var hasBlocks = document.getElementById('ncHasBlocks').checked;
+            var totalFloors = document.getElementById('ncTotalFloors').value;
+
+            if(!name) { alert("Lütfen Bina/Site adını giriniz."); return; }
+            if(!cityId || !districtId || !neighborhoodId) {
+                alert("Önce ana formdaki İl, İlçe ve Mahalle alanlarını doldurmalısınız.");
+                return;
+            }
+            if (!hasBlocks && !totalFloors) { alert("Lütfen Binanın Kat Sayısını giriniz."); return; }
+            if (!buildingNumber) { alert("Lütfen Dış Kapı No giriniz."); return; }
+
+            var blocksData = [];
+            if (hasBlocks) {
+                var rows = document.querySelectorAll('.nc-block-row');
+                if (rows.length === 0) { alert("Lütfen en az bir blok ekleyin."); return; }
+                for (let row of rows) {
+                    var bName = row.querySelector('.nc-block-name').value;
+                    var bFloors = row.querySelector('.nc-block-floors').value;
+                    if (!bName || !bFloors) { alert("Lütfen tüm blokların adını ve kat sayısını doldurunuz."); return; }
+                    blocksData.push({ Name: bName, TotalFloors: parseInt(bFloors) });
+                }
+            }
+
+            var payload = {
+                name: name,
+                cityId: parseInt(cityId),
+                districtId: parseInt(districtId),
+                neighborhoodId: parseInt(neighborhoodId),
+                streetId: streetId ? parseInt(streetId) : null,
+                newStreetName: window.lastDetectedRoadName,
+                buildingNumber: buildingNumber,
+                latitude: parseFloat(document.getElementById('ncLat').value || 0),
+                longitude: parseFloat(document.getElementById('ncLng').value || 0),
+                hasSecurity: false,
+                hasPool: false,
+                hasBlocks: hasBlocks,
+                blocks: blocksData,
+                totalUnits: null,
+                totalFloors: hasBlocks ? null : parseInt(totalFloors)
+            };
+
+            var btn = document.getElementById('btnSaveComplex');
+            var originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Kaydediliyor...';
+            btn.disabled = true;
+
+            fetch('/api/ComplexApi/Create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(async res => {
+                if(!res.ok) {
+                    var errorText = await res.text();
+                    throw new Error(errorText || "Kayıt hatası");
+                }
+                return res.json();
+            })
+            .then(data => {
+                var complexSelect = document.getElementById('complexSelect');
+                var opt = document.createElement('option');
+                opt.value = data.id;
+                opt.innerHTML = data.text + " (Yeni Eklendi)";
+                complexSelect.appendChild(opt);
+                complexSelect.value = data.id;
+
+                // Close Modal
+                var myModal = bootstrap.Modal.getInstance(document.getElementById('newComplexModal'));
+                myModal.hide();
+
+                // Trigger Change
+                complexSelect.dispatchEvent(new Event('change'));
+
+                alert("Bina başarıyla eklendi ve seçildi! Yöneticiler onaylayana kadar bu binayı sadece siz görebilirsiniz.");
+            })
+            .catch(err => {
+                console.error(err);
+                try {
+                    var errObj = JSON.parse(err.message);
+                    if (errObj.errors) {
+                        var msgs = [];
+                        for(var key in errObj.errors) {
+                            msgs.push(key + ": " + errObj.errors[key].join(', '));
+                        }
+                        alert("Doğrulama Hatası:\n" + msgs.join('\n'));
+                        return;
+                    }
+                } catch(e) {}
+                alert("Bina kaydedilirken bir hata oluştu: " + err.message);
+            })
+            .finally(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            });
+        }
+
+        // Authentication & Submit Logic
+        var isAuthenticated = @User.Identity.IsAuthenticated.ToString().ToLower();
+
+        function attemptSubmit() {
+            // Verify ReCaptcha
+            document.getElementById('recaptchaToken').value = document.getElementById('robotCheck').checked ? 'VERIFIED' : '';
+            if(!document.getElementById('robotCheck').checked) {
+                alert("Lütfen robot olmadığınızı doğrulayın.");
+                return;
+            }
+
+            if (isAuthenticated) {
+                document.getElementById('propertyWizardForm').submit();
+            } else {
+                var modal = new bootstrap.Modal(document.getElementById('ajaxLoginModal'));
+                modal.show();
+            }
+        }
+
+        function performAjaxLogin() {
+            var email = document.getElementById('ajaxEmail').value;
+            var pass = document.getElementById('ajaxPassword').value;
+            var errDiv = document.getElementById('ajaxLoginError');
+            
+            fetch('/Account/LoginAjax', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ Email: email, Password: pass, RememberMe: true })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    isAuthenticated = true;
+                    errDiv.style.display = 'none';
+                    document.getElementById('propertyWizardForm').submit();
+                } else {
+                    errDiv.innerText = data.message;
+                    errDiv.style.display = 'block';
+                }
+            })
+            .catch(err => {
+                errDiv.innerText = "Sunucu ile iletişim kurulamadı.";
+                errDiv.style.display = 'block';
+            });
+        }
+
+        function updateSummaryHeader() {
+            var city = document.getElementById('citySelect').options[document.getElementById('citySelect').selectedIndex]?.text || '';
+            var district = document.getElementById('districtSelect').options[document.getElementById('districtSelect').selectedIndex]?.text || '';
+            var neighborhood = document.getElementById('neighborhoodSelect').options[document.getElementById('neighborhoodSelect').selectedIndex]?.text || '';
+            var complex = document.getElementById('complexSelect').options[document.getElementById('complexSelect').selectedIndex]?.text || '';
+            var bNo = document.getElementById('BuildingNumber')?.value || '';
+            
+            var locStr = `${city} / ${district} / ${neighborhood}`;
+            var bStr = complex;
+            if(bNo) bStr += ` - No: ${bNo}`;
+            
+            var sumLoc = document.getElementById('summaryLocation');
+            var sumName = document.getElementById('summaryBuildingName');
+            if (sumLoc) sumLoc.innerText = locStr;
+            if (sumName) sumName.innerText = bStr;
+        }
+
+        async function saveNewBlockToComplex() {
+            var complexId = document.getElementById('complexSelect').value;
+            if(!complexId) {
+                alert("Lütfen önce bir bina/site seçiniz.");
+                return;
+            }
+            
+            var name = document.getElementById('newBlockName').value.trim();
+            var floors = document.getElementById('newBlockTotalFloors').value.trim();
+            
+            if(!name || !floors) {
+                alert("Blok adı ve kat sayısı zorunludur.");
+                return;
+            }
+            
+            var btn = document.querySelector('#addNewBlockModal .btn-primary');
+            var originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Kaydediliyor...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/api/ComplexApi/AddBlockToComplex', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ComplexId: parseInt(complexId),
+                        Name: name,
+                        TotalFloors: parseInt(floors)
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    var dropdown = document.getElementById('blockSelectDropdown');
+                    var opt = document.createElement('option');
+                    opt.value = data.name;
+                    opt.dataset.floors = data.totalFloors;
+                    opt.innerHTML = data.name;
+                    dropdown.appendChild(opt);
+                    
+                    dropdown.value = data.name;
+                    onBlockSelected();
+                    
+                    var myModal = bootstrap.Modal.getInstance(document.getElementById('addNewBlockModal'));
+                    if (myModal) myModal.hide();
+                    
+                    document.getElementById('newBlockName').value = '';
+                    document.getElementById('newBlockTotalFloors').value = '';
+                } else {
+                    alert("Blok eklenirken bir hata oluştu.");
+                }
+            } catch (error) {
+                console.error("Blok ekleme hatası:", error);
+                alert("Bir ağ hatası oluştu.");
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var selects = ['citySelect', 'districtSelect', 'neighborhoodSelect', 'streetSelect', 'complexSelect'];
+            selects.forEach((id, index) => {
+                var el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            for (var i = index + 1; i < selects.length; i++) {
+                                var nextEl = document.getElementById(selects[i]);
+                                if (nextEl && !nextEl.disabled && nextEl.offsetParent !== null) {
+                                    nextEl.focus();
+                                    break;
+                                }
+                            }
+                        }
+                    });
+                }
+            });
+        });
+    </script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+
+        function addNewFeature(type) {
+            var featureName = prompt("Eklemek istediğiniz özelliğin adını yazınız:");
+            if (!featureName || featureName.trim() === '') return;
+            
+            fetch('/api/FeatureApi/Create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ Name: featureName.trim(), Type: type })
+            })
+            .then(res => {
+                if(!res.ok) throw new Error("Hata oluştu");
+                return res.json();
+            })
+            .then(data => {
+                if(data && data.id) {
+                    var html = `
+                        <div class="col-md-3 col-sm-4 col-6">
+                            <div class="form-check form-switch form-check-lg">
+                                <input class="form-check-input" type="checkbox" name="SelectedFeatureIds" value="${data.id}" id="feat_${data.id}" checked>
+                                <label class="form-check-label" for="feat_${data.id}">${data.name}</label>
+                            </div>
+                        </div>
+                    `;
+                    var targetRow = type === 'IN' ? document.getElementById('featuresInRow') : document.getElementById('featuresOutRow');
+                    targetRow.insertAdjacentHTML('beforeend', html);
+                } else {
+                    alert('Özellik eklenirken bir hata oluştu.');
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Özellik eklenemedi.');
+            });
+        }
+
+        function addKvFeature() {
+            var keySelect = document.getElementById('newKvKey');
+            var keyId = keySelect.value;
+            var keyName = keySelect.options[keySelect.selectedIndex] ? keySelect.options[keySelect.selectedIndex].getAttribute('data-name') : '';
+            var valueStr = document.getElementById('newKvValue').value;
+            
+            if (!keyId || !valueStr || valueStr.trim() === '') {
+                alert("Lütfen bir özellik seçin ve değerini giriniz.");
+                return;
+            }
+            
+            var html = `
+                <div class="col-md-4 col-sm-6">
+                    <div class="input-group mb-2">
+                        <span class="input-group-text bg-white text-primary fw-bold">${keyName}</span>
+                        <input type="text" class="form-control" name="DynamicFeatures[${keyId}]" value="${valueStr.trim()}" readonly>
+                        <button class="btn btn-outline-danger" type="button" onclick="this.parentElement.parentElement.remove()">X</button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('featuresKvRow').insertAdjacentHTML('beforeend', html);
+            document.getElementById('newKvKey').value = '';
+            document.getElementById('newKvKey').value = '';
+            document.getElementById('newKvValue').value = '';
+        }
+
+        function toggleTextInput(checkboxElement, textInputId) {
+            var textInput = document.getElementById(textInputId);
+            if (textInput) {
+                if (checkboxElement.checked) {
+                    textInput.style.display = 'inline-block';
+                    textInput.focus();
+                } else {
+                    textInput.style.display = 'none';
+                    textInput.value = ''; // Seçim kalkınca metni de sil
+                }
+            }
+        }
+
+        function syncRadioSelection(radioElement, featureIndex, questionId) {
+            // Önce aynı soruya (questionId) ait tüm gizli IsSelected alanlarını false yap
+            var hiddenFields = document.querySelectorAll('.radio-hidden-sync-' + questionId);
+            hiddenFields.forEach(function (field) {
+                field.value = "false";
+            });
+
+            // Sonra seçilen Radio'ya ait gizli IsSelected alanını true yap
+            var selectedHiddenField = document.getElementById('hidden_' + radioElement.value);
+            if (selectedHiddenField) {
+                selectedHiddenField.value = "true";
+            }
+            
+            // Seçili olmayan radio'ların varsa metin kutularını kapat
+            var allRadios = document.querySelectorAll('input[name="RadioGroup_' + questionId + '"]');
+            allRadios.forEach(function(r) {
+                if(r !== radioElement) {
+                    var txt = document.getElementById('text_' + r.value);
+                    if(txt) {
+                        txt.style.display = 'none';
+                        txt.value = '';
+                    }
+                }
+            });
+        }
+
+        // Media Gallery Upload and Tagging Logic
+        var uploadedMediaFiles = [];
+        var mediaCounter = 0;
+
+        function getSelectedRoomTags() {
+            var tags = [];
+            // Adım 4 (Dış/Site Özellikleri) ve Adım 5 (İç Özellikler)
+            var checkedInputs = document.querySelectorAll('#step4 input.exam-input:checked[data-is-media-tag="true"], #step5 input.exam-input:checked[data-is-media-tag="true"]');
+            checkedInputs.forEach(function(input) {
+                var label = document.querySelector('label[for="' + input.id + '"]');
+                if(label) {
+                    var text = label.innerText.trim();
+                    if(text) tags.push(text);
+                }
+            });
+            // Text girdilerini de ekleyelim (eğer onlar da etiket sayılacaksa, ama şimdilik sadece checkbox/radio etiketleri)
+            return [...new Set(tags)];
+        }
+
+        var dropzone = document.getElementById('mediaDropzone');
+        if(dropzone) {
+            dropzone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                dropzone.style.borderColor = '#0d6efd';
+                dropzone.style.backgroundColor = '#e9ecef';
+            });
+            dropzone.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                dropzone.style.borderColor = '#cbd5e1';
+                dropzone.style.backgroundColor = '#f8f9fa';
+            });
+            dropzone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                dropzone.style.borderColor = '#cbd5e1';
+                dropzone.style.backgroundColor = '#f8f9fa';
+                
+                if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    document.getElementById('mediaFileInput').files = e.dataTransfer.files;
+                    handleMediaSelect({ target: { files: e.dataTransfer.files } });
+                }
+            });
+        }
+
+        async function handleMediaSelect(event) {
+            var files = event.target.files;
+            if(!files || files.length === 0) return;
+
+            document.getElementById('mediaUploadProgress').style.display = 'block';
+
+            for(let i = 0; i < files.length; i++) {
+                var file = files[i];
+                var formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    var response = await fetch('/api/PropertyImageApi/upload-and-label', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if(response.ok) {
+                        var data = await response.json();
+                        addMediaToGrid(data);
+                    } else {
+                        console.error('Dosya yükleme hatası:', file.name);
+                    }
+                } catch(error) {
+                    console.error('Bağlantı hatası:', error);
+                }
+            }
+
+            document.getElementById('mediaUploadProgress').style.display = 'none';
+            document.getElementById('mediaFileInput').value = '';
+            updateMediaIndexes();
+        }
+
+        function addMediaToGrid(mediaData) {
+            var grid = document.getElementById('mediaPreviewGrid');
+            var index = mediaCounter++;
+            
+            var tags = getSelectedRoomTags();
+            // Varsayılan bazı etiketleri ekleyelim, eğer hiç özellik seçilmediyse
+            if(tags.length === 0) {
+                tags = ['Salon', 'Banyo', 'Mutfak', 'Yatak Odası', 'Balkon', 'Manzara', 'Dış Cephe'];
+            }
+            
+            // AI modelinden gelen etiket tags içinde yoksa ekle
+            if (mediaData.aiLabel && mediaData.aiLabel !== "Oda" && !tags.includes(mediaData.aiLabel)) {
+                tags.unshift(mediaData.aiLabel);
+            }
+
+            var tagsHtml = tags.map(tag => {
+                var isSelected = (tag === mediaData.aiLabel) ? 'btn-primary text-white' : 'btn-outline-secondary';
+                return `<button type="button" class="btn btn-sm ${isSelected} rounded-pill me-1 mb-1 room-tag-btn" onclick="selectRoomTag(this, '${tag}', ${index})">
+                    ${tag}
+                </button>`;
+            }).join('');
+
+            var aiBadgeHtml = mediaData.aiLabel ? `<span class="badge bg-success position-absolute top-0 end-0 m-2 me-5" style="z-index:10;"><i class="bi bi-robot"></i> AI: ${mediaData.aiLabel}</span>` : '';
+            var isCoverBadge = (grid.children.length === 0) ? '<span class="badge bg-danger position-absolute top-0 start-0 m-2 cover-badge">KAPAK</span>' : '<span class="badge bg-secondary position-absolute top-0 start-0 m-2 cover-badge" style="display:none;">KAPAK</span>';
+
+            var previewContent = mediaData.isVideo ? 
+                `<video src="${mediaData.filePath}" class="card-img-top bg-dark" style="height: 150px; object-fit: cover;" controls></video>` :
+                `<img src="${mediaData.filePath}" class="card-img-top bg-light" style="height: 150px; object-fit: cover;" alt="Preview" />`;
+
+            var itemHtml = `
+                <div class="col-md-4 col-sm-6 media-grid-item" id="media_item_${index}">
+                    <div class="card shadow-sm h-100 position-relative border-0" style="background:#f8f9fa;">
+                        ${isCoverBadge}
+                        ${aiBadgeHtml}
+                        <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-2 rounded-circle shadow" onclick="removeMediaItem(${index})" style="z-index:10;"><i class="ph ph-trash"></i></button>
+                        
+                        ${previewContent}
+                        
+                        <div class="card-body p-2" style="max-height: 120px; overflow-y: auto;">
+                            <small class="text-muted d-block mb-2 fw-bold" style="font-size:0.75rem;"><i class="ph ph-tag"></i> Etiket Seç (İsteğe Bağlı):</small>
+                            <div class="tags-container">
+                                ${tagsHtml}
+                            </div>
+                        </div>
+                        
+                        <input type="hidden" name="ProcessedImages.Index" value="${index}" />
+                        <input type="hidden" name="ProcessedImages[${index}].TempPath" value="${mediaData.tempPath || ''}" />
+                        <input type="hidden" name="ProcessedImages[${index}].ImageUrl" value="${mediaData.filePath}" />
+                        <input type="hidden" name="ProcessedImages[${index}].IsVideo" value="${mediaData.isVideo || false}" />
+                        <input type="hidden" name="ProcessedImages[${index}].SortOrder" class="media-sort-order" value="" />
+                        <input type="hidden" name="ProcessedImages[${index}].RoomTag" id="room_tag_${index}" value="${mediaData.aiLabel || ''}" />
+                    </div>
+                </div>
+            `;
+            grid.insertAdjacentHTML('beforeend', itemHtml);
+            
+            initSortable();
+        }
+
+        function selectRoomTag(btnElement, tagValue, index) {
+            var card = btnElement.closest('.card-body');
+            var buttons = card.querySelectorAll('.room-tag-btn');
+            
+            if(btnElement.classList.contains('btn-primary')) {
+                btnElement.classList.remove('btn-primary', 'text-white');
+                btnElement.classList.add('btn-outline-secondary');
+                document.getElementById('room_tag_' + index).value = '';
+                return;
+            }
+            
+            buttons.forEach(b => {
+                b.classList.remove('btn-primary', 'text-white');
+                b.classList.add('btn-outline-secondary');
+            });
+            
+            btnElement.classList.remove('btn-outline-secondary');
+            btnElement.classList.add('btn-primary', 'text-white');
+            document.getElementById('room_tag_' + index).value = tagValue;
+        }
+
+        function removeMediaItem(index) {
+            var el = document.getElementById('media_item_' + index);
+            if(el) {
+                el.remove();
+                updateMediaIndexes();
+            }
+        }
+
+        function updateMediaIndexes() {
+            var items = document.querySelectorAll('.media-grid-item');
+            items.forEach((item, idx) => {
+                var orderInput = item.querySelector('.media-sort-order');
+                if(orderInput) orderInput.value = (idx + 1);
+                
+                var coverBadge = item.querySelector('.cover-badge');
+                if(idx === 0) {
+                    coverBadge.classList.replace('bg-secondary', 'bg-danger');
+                    coverBadge.style.display = 'block';
+                } else {
+                    coverBadge.classList.replace('bg-danger', 'bg-secondary');
+                    coverBadge.style.display = 'none';
+                }
+            });
+        }
+
+        var sortableInstance = null;
+        function initSortable() {
+            if(!sortableInstance && typeof Sortable !== 'undefined') {
+                var grid = document.getElementById('mediaPreviewGrid');
+                if(grid) {
+                    sortableInstance = new Sortable(grid, {
+                        animation: 150,
+                        ghostClass: 'opacity-50',
+                        onEnd: function () {
+                            updateMediaIndexes();
+                        }
+                    });
+                }
+            }
+        }
+    </script>
+    <!-- SortableJS (Drag & Drop Sıralama İçin) -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <!-- Select2 -->
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            var locationSelects = ['#citySelect', '#districtSelect', '#neighborhoodSelect', '#streetSelect', '#complexSelect'];
+            
+            locationSelects.forEach(function(id) {
+                $(id).select2({
+                    theme: "bootstrap-5",
+                    width: '100%',
+                    placeholder: "Seçiniz..."
+                });
+            });
+
+            locationSelects.forEach(function(id, index) {
+                $(id).on('select2:select', function (e) {
+                    for (var i = index + 1; i < locationSelects.length; i++) {
+                        var nextId = locationSelects[i];
+                        var $next = $(nextId);
+                        if ($next.length && !$next.prop('disabled') && $next.is(':visible')) {
+                            setTimeout(function() { $next.select2('open'); }, 50);
+                            break;
+                        }
+                    }
+                });
+            });
+
+            // EİDS Yetki Belgesi Göster/Gizle
+            $('#hasAuthorizationSwitch').change(function() {
+                if(this.checked) {
+                    $('#eidsFields').slideDown();
+                } else {
+                    $('#eidsFields').slideUp();
+                }
+            });
+
+            // Taslak Kurtarma Modalı
+            var hasDrafts = @(ViewBag.UserDrafts != null && ((IEnumerable<GMK360.Core.Entities.Property>)ViewBag.UserDrafts).Any() ? "true" : "false");
+            var draftStep = @(Model?.DraftStep ?? 0);
+            
+            console.log("hasDrafts:", hasDrafts, "draftStep:", draftStep);
+            
+            if(hasDrafts) {
+                var draftModal = new bootstrap.Modal(document.getElementById('draftRecoveryModal'));
+                draftModal.show();
+            } else if(draftStep > 1 && draftStep <= 7) {
+                setTimeout(function() {
+                    moveToStep(draftStep);
+                }, 500);
+            }
+        });
+
+        function discardDraft(propertyId) {
+            if(!propertyId || propertyId == "0") return;
+            
+            if(!confirm("Bu taslağı kalıcı olarak silmek istediğinize emin misiniz?")) return;
+
+            fetch('/api/PropertyApi/DiscardDraft?propertyId=' + propertyId, {
+                method: 'POST'
+            })
+            .then(res => res.json())
+            .then(data => {
+                // Sadece o satırı tablodan kaldır
+                var row = document.getElementById('draft-row-' + propertyId);
+                if(row) {
+                    row.remove();
+                }
+                
+                // Eğer tabloda başka taslak kalmadıysa modalı kapat ve sayfayı yenile
+                var tbody = document.querySelector('#draftRecoveryModal tbody');
+                if(tbody && tbody.children.length === 0) {
+                    window.location.href = '/Property/Create';
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Taslak silinirken bir hata oluştu.");
+            });
+        }
+
+        function verifyEids() {
+            var authDoc = document.getElementById('authDocNo').value;
+            var ownerId = document.getElementById('ownerIdNo').value;
+            
+            if(!authDoc || !ownerId) {
+                alert("Lütfen Yetki Belgesi Numarası ve Mal Sahibi TC/VKN alanlarını doldurunuz.");
+                return;
+            }
+
+            var btn = document.getElementById('btnVerifyEids');
+            var originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="spinner-border spinner-border-sm"></i> Bakanlıktan Doğrulanıyor...';
+            btn.disabled = true;
+
+            // Simüle edilmiş bekleme süresi (1.5 saniye)
+            setTimeout(function() {
+                btn.style.display = 'none';
+                document.getElementById('eidsSuccess').style.display = 'block';
+                document.getElementById('btnSubmitPublish').disabled = false; // Yayınla Butonunu Aktif Et
+            }, 1500);
+        }
+
+        // UX İyileştirmesi: Rakam alanlarına tıklandığında içindeki "0" değerini temizle
+        document.addEventListener('DOMContentLoaded', function() {
+            var numberInputs = document.querySelectorAll('input[type="number"]');
+            numberInputs.forEach(function(input) {
+                input.addEventListener('focus', function() {
+                    if (this.value === '0') {
+                        this.value = '';
+                    }
+                });
+                input.addEventListener('blur', function() {
+                    if (this.value.trim() === '') {
+                        this.value = '0';
+                    }
+                });
+            });
+        });
+    
+        function openReportBuildingModal() {
+            var val = document.getElementById('complexSelect').value;
+            if(!val) { alert("Lütfen önce listeden hatalı binayı seçin."); return; }
+            var modal = new bootstrap.Modal(document.getElementById('reportBuildingModal'));
+            modal.show();
+        }
+
+        async function submitBuildingTypo() {
+            var val = document.getElementById('complexSelect').value;
+            var correctName = document.getElementById('correctBuildingNameInput').value;
+            if(!correctName) { alert("Lütfen doğru ismi yazın."); return; }
+
+            await fetch('/api/ComplexApi/ReportBuildingTypo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ BuildingId: parseInt(val), CorrectName: correctName })
+            })
+            .then(res => res.json())
+            .then(data => {
+                alert("Bildiriminiz yöneticilere iletildi. En kısa sürede düzeltilecektir. İlan verme işleminize devam edebilirsiniz.");
+                bootstrap.Modal.getInstance(document.getElementById('reportBuildingModal')).hide();
+            });
+        }
+
+        async function submitNewStreet() {
+            var streetName = document.getElementById('newStreetNameInput').value;
+            var cityId = document.getElementById('citySelect').value;
+            var districtId = document.getElementById('districtSelect').value;
+            var neighborhoodId = document.getElementById('neighborhoodSelect').value;
+
+            if(!streetName || !neighborhoodId) { alert("Lütfen sokak adını yazın ve mahallenin seçili olduğundan emin olun."); return; }
+
+            await fetch('/api/ComplexApi/CreateUnapprovedStreet', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    CityId: parseInt(cityId),
+                    DistrictId: parseInt(districtId),
+                    NeighborhoodId: parseInt(neighborhoodId),
+                    StreetName: streetName 
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                var streetSelect = document.getElementById('streetSelect');
+                var opt = document.createElement('option');
+                opt.value = data.id;
+                opt.innerHTML = data.name + " (Yeni Eklendi)";
+                streetSelect.appendChild(opt);
+                streetSelect.value = data.id;
+
+                bootstrap.Modal.getInstance(document.getElementById('newStreetModal')).hide();
+                streetSelect.dispatchEvent(new Event('change'));
+                alert("Yeni sokak sisteme eklendi ve seçildi! Yöneticiler onaylayana kadar işleminize devam edebilirsiniz.");
+            });
+        }
+
+    function handleUnitInput(el) {
+        var container = el.parentElement;
+        var inputs = container.querySelectorAll('.unit-input');
+        var lastInput = inputs[inputs.length - 1];
+        
+        var note = document.getElementById('unitNumberNote');
+        if (el.value.trim() !== '') {
+            if (note) note.style.display = 'block';
+        }
+        
+        if (lastInput.value.trim() !== '') {
+            var newInput = document.createElement('input');
+            newInput.name = 'UnitNumber';
+            newInput.type = 'text';
+            newInput.className = 'form-control form-control-lg mb-2 unit-input';
+            newInput.placeholder = 'Diğer Daire No (Opsiyonel)';
+            newInput.oninput = function() { handleUnitInput(this); };
+            container.appendChild(newInput);
+        }
+    }
+</script>
+}

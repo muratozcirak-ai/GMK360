@@ -1,0 +1,154 @@
+@model GMK360.Core.Entities.Complex
+@{
+    ViewData["Title"] = $"{Model.Name} - Detaylar";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container py-5">
+    <div class="mb-3">
+        <a href="/AdminLocation/Complexes?neighborhoodId=@Model.NeighborhoodId" class="text-decoration-none text-muted"><i class="ph ph-arrow-left"></i> Listeye Dön</a>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>
+            <i class="ph ph-building"></i> @Model.Name 
+            @if(Model.IsApproved) {
+                <span class="badge bg-success fs-6 align-middle ms-2"><i class="ph ph-check-circle"></i> Onaylı</span>
+            } else {
+                <span class="badge bg-warning text-dark fs-6 align-middle ms-2"><i class="ph ph-clock"></i> Bekliyor</span>
+            }
+        </h2>
+        
+        <div class="d-flex gap-2">
+            @if (!Model.IsApproved)
+            {
+                <form action="/AdminLocation/ApproveComplex" method="post" class="d-inline">
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <button type="submit" class="btn btn-success">
+                        <i class="ph ph-check-circle"></i> Herkes İçin Yayınla (Onayla)
+                    </button>
+                </form>
+            }
+            
+            <form action="/AdminLocation/DeleteComplex" method="post" class="d-inline" onsubmit="return confirm('Bu binayı kalıcı olarak silmek istediğinize emin misiniz? Tüm özellikleri de silinecektir.');">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <button type="submit" class="btn btn-outline-danger">
+                    <i class="ph ph-trash"></i> Sil
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Temel Bilgiler -->
+        <div class="col-md-6">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-light fw-bold"><i class="ph ph-info"></i> Temel Bilgiler</div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span class="text-muted">Konum:</span>
+                            <span class="fw-bold text-end">@Model.Neighborhood?.District?.City?.Name, @Model.Neighborhood?.District?.Name, @Model.Neighborhood?.Name</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span class="text-muted">Sokak/Cadde:</span>
+                            <span class="fw-bold">@(Model.Street != null ? Model.Street.Name : "-")</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span class="text-muted">Dış Kapı No:</span>
+                            <span class="fw-bold">@(string.IsNullOrEmpty(Model.BuildingNumber) ? "-" : Model.BuildingNumber)</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span class="text-muted">Koordinatlar:</span>
+                            <span class="fw-bold">@Model.Latitude.ToString("0.######"), @Model.Longitude.ToString("0.######")</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Yapı ve Blok Detayları -->
+        <div class="col-md-6">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-light fw-bold"><i class="ph ph-buildings"></i> Yapı Detayları</div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush mb-3">
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span class="text-muted">Yapı Türü:</span>
+                            <span class="fw-bold">@(Model.IsSite ? "Site" : "Bina")</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span class="text-muted">Güvenlik:</span>
+                            <span class="fw-bold">@(Model.HasSecurity ? "Var" : "Yok")</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span class="text-muted">Havuz:</span>
+                            <span class="fw-bold">@(Model.HasPool ? "Var" : "Yok")</span>
+                        </li>
+                    </ul>
+
+                    @if (Model.HasBlocks)
+                    {
+                        <h6 class="fw-bold text-primary mt-4 mb-2">Sisteme Kayıtlı Bloklar</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Blok Adı</th>
+                                        <th>Kat Sayısı</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var block in Model.Blocks)
+                                    {
+                                        <tr>
+                                            <td>@block.Name</td>
+                                            <td>@block.TotalFloors</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info py-2 mb-0">
+                            <strong>Bu yapı tek blokludur.</strong> Toplam Kat Sayısı: @Model.TotalFloors
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Sihirbaz Özellikleri (Matrix) -->
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-light fw-bold"><i class="ph ph-list-dashes"></i> Tesis Özellikleri (Sihirbazdan Gelenler)</div>
+                <div class="card-body">
+                    @if (Model.Features != null && Model.Features.Any())
+                    {
+                        <div class="row">
+                            @foreach (var feature in Model.Features)
+                            {
+                                <div class="col-md-4 mb-3">
+                                    <div class="p-2 border rounded bg-light">
+                                        <div class="text-muted small">@feature.DefinitionValue?.Category?.Name</div>
+                                        <div class="fw-bold text-dark">@feature.DefinitionValue?.Name</div>
+                                        @if (!string.IsNullOrEmpty(feature.Note))
+                                        {
+                                            <div class="text-muted small fst-italic mt-1">Not: @feature.Note</div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-3">Bu site/bina için sihirbazdan henüz detaylı özellik girilmemiş.</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

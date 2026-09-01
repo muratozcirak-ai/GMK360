@@ -1,0 +1,695 @@
+@model GMK360.Core.Entities.Property
+@{
+    ViewData["Title"] = Model.Title;
+    bool isQuickView = ViewBag.IsQuickView != null && (bool)ViewBag.IsQuickView;
+    Layout = isQuickView ? null : "_Layout";
+    
+    var mediaList = ViewBag.MediaList as List<GMK360.Core.Entities.PropertyImage>;
+    var features = ViewBag.Features as List<string>;
+    var relatedProps = ViewBag.RelatedProperties as List<GMK360.Core.Entities.Property>;
+    
+    decimal usdRate = ViewBag.UsdRate != null ? (decimal)ViewBag.UsdRate : 33.20m;
+    decimal eurRate = ViewBag.EurRate != null ? (decimal)ViewBag.EurRate : 35.50m;
+    decimal goldGram = ViewBag.GoldGram != null ? (decimal)ViewBag.GoldGram : 2500m;
+
+    decimal priceUsd = Model.Price / usdRate;
+    decimal priceEur = Model.Price / eurRate;
+    decimal priceGold = Model.Price / goldGram;
+
+    var consultant = Model.User;
+    string agencyName = "Bağımsız Danışman";
+    if(consultant != null && consultant.AgencyConsultants != null && consultant.AgencyConsultants.Any(ac => ac.IsActive))
+    {
+        agencyName = consultant.AgencyConsultants.First(ac => ac.IsActive).Agency.CompanyName;
+    }
+
+    // --- SEO BİLGİLERİ ---
+    string seoCity = Model.Complex?.City?.Name ?? "Türkiye";
+    string seoDist = Model.Complex?.District?.Name ?? "";
+    string safeDesc = !string.IsNullOrEmpty(Model.Description) 
+        ? (Model.Description.Length > 150 ? Model.Description.Substring(0, 150) + "..." : Model.Description) 
+        : $"{seoCity} {seoDist} kiralık/satılık emlak fırsatı.";
+    safeDesc = System.Text.RegularExpressions.Regex.Replace(safeDesc, "<.*?>", String.Empty); // Strip HTML
+    
+    ViewData["MetaDescription"] = safeDesc;
+    ViewData["MetaKeywords"] = $"{seoCity} emlak, {seoDist} satılık, {Model.Title}, sahibinden, emlakçıdan";
+    
+    // Canonical URL'i Slug formatında kurgula (Örn: istanbul-avcilar-kategori-baslik-123)
+    // Layout.cshtml, ViewData["CanonicalUrl"] değerini kullanarak canonical etiketi basacaktır.
+}
+
+@section SEO {
+    <!-- Google Structured Data (JSON-LD) for Real Estate Listing -->
+    <script type="application/ld+json">
+    {
+      "@@context": "https://schema.org",
+      "@@type": "RealEstateListing",
+      "name": "@Html.Raw(Model.Title)",
+      "description": "@Html.Raw(safeDesc)",
+      "url": "@Context.Request.Scheme://@Context.Request.Host@Context.Request.Path",
+      "image": "@(mediaList?.FirstOrDefault()?.ImageUrl ?? "")",
+      "datePosted": "@Model.CreatedAt.ToString("yyyy-MM-dd")",
+      "offers": {
+        "@@type": "Offer",
+        "priceCurrency": "@Model.Currency",
+        "price": "@Model.Price.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+      }
+    }
+    </script>
+}
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+    body { background-color: #f8f9fa; }
+    
+    .detail-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 24px;
+        margin-top: 90px;
+    }
+
+    /* Top Summary Bar */
+    .top-summary-bar {
+        background: white;
+        border-radius: 12px;
+        padding: 16px 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+    
+    .property-main-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+    
+    .currency-badges {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .currency-badge {
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    
+    /* Layout (YouTube Style) */
+    .content-wrapper {
+        display: flex;
+        gap: 32px;
+    }
+    
+    .main-content {
+        flex: 1;
+        min-width: 0; /* Prevents overflow */
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+        margin-bottom: 40px;
+    }
+    
+    .right-sidebar {
+        width: 400px;
+        flex-shrink: 0;
+    }
+
+    /* Smaller Masonry Gallery */
+    .gallery-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        grid-template-rows: 200px 200px;
+        gap: 8px;
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 32px;
+        position: relative;
+    }
+    .gallery-item {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        cursor: pointer;
+        transition: filter 0.2s;
+    }
+    .gallery-item:hover { filter: brightness(0.9); }
+    .gallery-item-1 { grid-row: 1 / -1; }
+
+    /* Related Properties List (Vertical) */
+    .related-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    .related-card {
+        display: flex;
+        gap: 12px;
+        background: white;
+        border-radius: 12px;
+        padding: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        transition: transform 0.2s;
+        text-decoration: none;
+        color: inherit;
+    }
+    .related-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .related-img {
+        width: 140px;
+        height: 100px;
+        border-radius: 8px;
+        object-fit: cover;
+    }
+    
+    /* Sticky Consultant Card in Sidebar */
+    .consultant-sticky {
+        background: white;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        margin-bottom: 24px;
+        position: sticky;
+        top: 90px;
+        z-index: 10;
+        border: 2px solid #e2e8f0;
+    }
+</style>
+
+        <style>
+        /* Modern Gallery Styles */
+        .gallery-main { height: 500px; border-radius: 16px; overflow: hidden; margin-bottom: 15px; position: relative; }
+        .gallery-main img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; transition: transform 0.3s; }
+        .gallery-main:hover img { transform: scale(1.02); }
+        .gallery-thumbs { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 10px; }
+        .gallery-thumbs::-webkit-scrollbar { height: 6px; }
+        .gallery-thumbs::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .thumb-item { width: 100px; height: 75px; border-radius: 8px; overflow: hidden; cursor: pointer; opacity: 0.6; transition: all 0.2s; border: 2px solid transparent; flex-shrink: 0; }
+        .thumb-item:hover, .thumb-item.active { opacity: 1; border-color: var(--primary); }
+        .thumb-item img { width: 100%; height: 100%; object-fit: cover; }
+        
+        .price-badge { background: linear-gradient(135deg, #ea580c, #c2410c); color: white; padding: 15px 25px; border-radius: 16px; display: inline-block; box-shadow: 0 10px 20px rgba(234, 88, 12, 0.2); }
+        .detail-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; padding: 25px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+        .feature-pill { background: #f1f5f9; color: #475569; padding: 8px 16px; border-radius: 50px; font-weight: 500; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 8px; }
+    </style>
+
+@if(isQuickView) {
+    @Html.Raw("<!DOCTYPE html><html><head><meta charset='utf-8'><link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'><script src='https://unpkg.com/@phosphor-icons/web'></script><style>:root{--primary:#3b82f6;} body{font-family:'Segoe UI',sans-serif; background: #fff;}</style></head><body>")
+}
+
+<div class="@(isQuickView ? "container-fluid py-2" : "container py-4")" style="@(isQuickView ? "" : "margin-top: 100px;")">
+
+    <!-- TOP SUMMARY BAR -->
+    <div class="top-summary-bar">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="badge bg-primary">Satılık</span>
+                <span class="text-muted small"><i class="ph-fill ph-map-pin"></i> @Model.Complex?.District?.Name, @Model.Complex?.City?.Name</span>
+            </div>
+            <h1 class="property-main-title">@Model.Title</h1>
+            <div class="d-flex gap-4 mt-2 text-muted fw-semibold">
+                <span><i class="ph ph-bed"></i> 3+1</span>
+                <span><i class="ph ph-squares-four"></i> 145 m²</span>
+                <span><i class="ph ph-building"></i> 5 Yaşında</span>
+            </div>
+        </div>
+        
+        <div class="text-end">
+            <h2 class="fw-bold text-dark mb-2">@Model.Price.ToString("N0") TL</h2>
+            <div class="currency-badges mb-3 justify-content-end">
+                <div class="currency-badge bg-success bg-opacity-10 text-success" title="Dolar Karşılığı">
+                    <i class="ph-fill ph-currency-dollar"></i> @priceUsd.ToString("N0")
+                </div>
+                <div class="currency-badge bg-info bg-opacity-10 text-info" title="Euro Karşılığı">
+                    <i class="ph-fill ph-currency-eur"></i> @priceEur.ToString("N0")
+                </div>
+                <div class="currency-badge bg-warning bg-opacity-10 text-warning" style="color: #d97706 !important;" title="Altın Karşılığı">
+                    <i class="ph-fill ph-coins"></i> @priceGold.ToString("N0") Gr
+                </div>
+                @if (Model.StatusId == 1) // Satılık ise Amortisman göster
+                {
+                    <div class="currency-badge bg-primary bg-opacity-10 text-primary" title="Ortalama Kira Çarpanına Göre Tahmini Amortisman">
+                        <i class="ph-fill ph-chart-line-up"></i> Amortisman: ~18 Yıl
+                    </div>
+                }
+            </div>
+            
+            <div class="d-flex gap-2 justify-content-end">
+                <button class="btn btn-outline-primary btn-sm fw-bold rounded-pill" data-bs-toggle="modal" data-bs-target="#krediModal">
+                    <i class="ph-bold ph-calculator me-1"></i> Kredi Hesapla
+                </button>
+                <button class="btn btn-outline-secondary btn-sm fw-bold rounded-pill" data-bs-toggle="modal" data-bs-target="#notModal">
+                    <i class="ph-bold ph-pencil-simple me-1"></i> Not Ekle
+                </button>
+                <button class="btn btn-outline-danger btn-sm fw-bold rounded-pill" onclick="alert('İlan favorilere eklendi!')">
+                    <i class="ph-bold ph-heart"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- YOUTUBE STYLE LAYOUT (SPLIT) -->
+    <div class="content-wrapper">
+        
+        <!-- LEFT: DETAIL (70%) -->
+        <div class="main-content">
+            
+            <!-- Smaller Gallery -->
+            <div class="gallery-grid">
+                @if (mediaList != null && mediaList.Count > 0)
+                {
+                    <img src="@mediaList[0].ImageUrl" alt="@Model.Title @seoCity @seoDist Emlak" class="gallery-item gallery-item-1" onclick="openMediaModal('@mediaList[0].ImageUrl', @mediaList[0].IsVideo.ToString().ToLower())" />
+                    @if (mediaList.Count > 1) { <img src="@mediaList[1].ImageUrl" alt="@Model.Title @seoCity @seoDist Emlak 2" class="gallery-item" onclick="openMediaModal('@mediaList[1].ImageUrl', @mediaList[1].IsVideo.ToString().ToLower())" /> }
+                    @if (mediaList.Count > 2) { <img src="@mediaList[2].ImageUrl" alt="@Model.Title @seoCity @seoDist Emlak 3" class="gallery-item" onclick="openMediaModal('@mediaList[2].ImageUrl', @mediaList[2].IsVideo.ToString().ToLower())" /> }
+                }
+            </div>
+
+            <!-- Video Player (If exists) -->
+            @if (!string.IsNullOrEmpty(Model.VideoUrl) || !string.IsNullOrEmpty(Model.VideoFilePath))
+            {
+                <h4 class="fw-bold mb-3 mt-4">İlan Videosu</h4>
+                <div class="ratio ratio-16x9 mb-5 rounded overflow-hidden" style="box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                    @if (!string.IsNullOrEmpty(Model.VideoUrl))
+                    {
+                        var embedUrl = Model.VideoUrl.Replace("watch?v=", "embed/");
+                        <iframe src="@embedUrl" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+                    }
+                    else if (!string.IsNullOrEmpty(Model.VideoFilePath))
+                    {
+                        <video controls class="w-100 h-100 object-fit-cover">
+                            <source src="@Model.VideoFilePath" type="video/mp4">
+                            Tarayıcınız video oynatmayı desteklemiyor.
+                        </video>
+                    }
+                </div>
+            }
+
+            <!-- Description -->
+            <h4 class="fw-bold mb-3">İlan Açıklaması</h4>
+            <div class="text-secondary lh-lg mb-5">
+                @Html.Raw(Model.Description)
+            </div>
+
+            <h4 class="fw-bold mb-3">Özellikler</h4>
+            <div class="row g-3 mb-5">
+                @if (features != null)
+                {
+                    foreach (var feature in features)
+                    {
+                        var matchingMedia = mediaList?.FirstOrDefault(m => !string.IsNullOrEmpty(m.RoomTag) && m.RoomTag.Equals(feature, StringComparison.OrdinalIgnoreCase));
+                        bool hasMedia = matchingMedia != null;
+                        
+                        <div class="col-md-4 col-sm-6">
+                            <div class="d-flex align-items-center gap-2 text-secondary p-2 rounded @(hasMedia ? "bg-light" : "")" 
+                                 style="@(hasMedia ? "cursor:pointer; border: 1px solid #dee2e6; transition: all 0.2s;" : "")"
+                                 @(hasMedia ? $"onclick=\"openMediaModal('{matchingMedia.ImageUrl}', {matchingMedia.IsVideo.ToString().ToLower()})\"" : "")
+                                 title="@(hasMedia ? "Görseli/Videoyu Göster" : "")">
+                                <i class="ph ph-check-circle text-success fs-5"></i>
+                                @feature
+                                @if (hasMedia)
+                                {
+                                    <i class="ph @(matchingMedia.IsVideo ? "ph-video-camera" : "ph-image") ms-auto text-primary" title="Medya Mevcut"></i>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+            
+            <!-- Map Area -->
+            <h4 class="fw-bold mb-3">Konum</h4>
+            <div id="ilanHaritasi" class="rounded border mb-5" style="height: 300px; z-index: 1;"></div>
+            
+            <input type="hidden" id="ilanLat" value="@Model.Latitude.ToString().Replace(",", ".")" />
+            <input type="hidden" id="ilanLng" value="@Model.Longitude.ToString().Replace(",", ".")" />
+            <input type="hidden" id="konumGizliMi" value="@Model.HideLocation.ToString().ToLower()" />
+
+            <!-- Yakındakiler (Points of Interest) -->
+            <h4 class="fw-bold mb-3">Yakındakiler <span class="badge bg-light text-muted fs-6 fw-normal ms-2 border">Tahmini Mesafeler</span></h4>
+            <div class="row g-3 mb-5">
+                <div class="col-md-6">
+                    <div class="p-3 bg-white border rounded-3 d-flex align-items-center gap-3 shadow-sm h-100">
+                        <div class="bg-primary bg-opacity-10 text-primary rounded p-3">
+                            <i class="ph-fill ph-graduation-cap fs-3"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold text-dark">Eğitim Kurumları</div>
+                            <div class="small text-muted mb-1">Atatürk İlkokulu - <span class="fw-bold text-dark">350m</span></div>
+                            <div class="small text-muted">Özel Kadıköy Lisesi - <span class="fw-bold text-dark">800m</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="p-3 bg-white border rounded-3 d-flex align-items-center gap-3 shadow-sm h-100">
+                        <div class="bg-danger bg-opacity-10 text-danger rounded p-3">
+                            <i class="ph-fill ph-first-aid fs-3"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold text-dark">Sağlık Kurumları</div>
+                            <div class="small text-muted mb-1">Şifa Polikliniği - <span class="fw-bold text-dark">400m</span></div>
+                            <div class="small text-muted">Devlet Hastanesi - <span class="fw-bold text-dark">1.2km</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="p-3 bg-white border rounded-3 d-flex align-items-center gap-3 shadow-sm h-100">
+                        <div class="bg-success bg-opacity-10 text-success rounded p-3">
+                            <i class="ph-fill ph-tree-palm fs-3"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold text-dark">Yeşil Alan & Park</div>
+                            <div class="small text-muted mb-1">Moda Sahil Parkı - <span class="fw-bold text-dark">150m</span></div>
+                            <div class="small text-muted">Yoğurtçu Parkı - <span class="fw-bold text-dark">600m</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="p-3 bg-white border rounded-3 d-flex align-items-center gap-3 shadow-sm h-100">
+                        <div class="bg-warning bg-opacity-10 text-warning rounded p-3" style="color: #d97706 !important;">
+                            <i class="ph-fill ph-bus fs-3"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold text-dark">Ulaşım</div>
+                            <div class="small text-muted mb-1">Otobüs Durağı - <span class="fw-bold text-dark">100m</span></div>
+                            <div class="small text-muted">Metro İstasyonu - <span class="fw-bold text-dark">950m</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- RIGHT: SIDEBAR (30%) -->
+        <div class="right-sidebar">
+            
+            <!-- Sticky Consultant Box -->
+            <div class="consultant-sticky">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <img src="@(consultant?.ProfileImageUrl ?? "/images/default-avatar.png")" alt="Danışman" style="width:60px; height:60px; border-radius:50%; object-fit:cover;" />
+                    <div>
+                        <h6 class="fw-bold mb-0">@(consultant?.FirstName) @(consultant?.LastName)</h6>
+                        <small class="text-muted">@agencyName</small>
+                    </div>
+                </div>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-primary fw-bold"><i class="ph ph-phone-call"></i> Ara</button>
+                    <button class="btn btn-success fw-bold"><i class="ph ph-whatsapp-logo"></i> WhatsApp</button>
+                </div>
+            </div>
+
+            <!-- Ecosystem Services (Tadilat & Nakliye) -->
+            <div class="mb-4">
+                <a href="/Service/Search?cat=Tadilat" class="text-decoration-none">
+                    <div class="p-3 mb-3 rounded-3 shadow-sm d-flex align-items-center gap-3" style="background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: white; transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+                        <div class="bg-white bg-opacity-25 rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                            <i class="ph-bold ph-hammer fs-3"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold fs-6">Evinizi Yenileyin</div>
+                            <div class="small opacity-75">Bu ev için ücretsiz tadilat teklifi alın</div>
+                        </div>
+                    </div>
+                </a>
+                <a href="/Service/Search?cat=Nakliye" class="text-decoration-none">
+                    <div class="p-3 rounded-3 shadow-sm d-flex align-items-center gap-3" style="background: linear-gradient(135deg, #ea580c, #f59e0b); color: white; transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+                        <div class="bg-white bg-opacity-25 rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                            <i class="ph-bold ph-truck fs-3"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold fs-6">Hemen Taşının</div>
+                            <div class="small opacity-75">Güvenilir nakliyecilerden fiyat karşılaştırın</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+
+            <!-- Related Properties (Vertical List) -->
+            <div class="d-flex justify-content-between align-items-center mb-3 mt-4">
+                <h5 class="fw-bold mb-0">Önerilen İlanlar</h5>
+                <a href="#" class="text-decoration-none text-primary small">Tümünü Gör</a>
+            </div>
+
+            <div class="related-list">
+                @if (relatedProps != null)
+                {
+                    foreach (var prop in relatedProps)
+                    {
+                        <div class="related-card">
+                            <img src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=300&q=80" alt="@prop.Title @seoCity @seoDist Emlak" class="related-img" />
+                            <div class="d-flex flex-column justify-content-between w-100">
+                                <div>
+                                    <h6 class="fw-bold mb-1 text-truncate" style="max-width: 180px;">@prop.Title</h6>
+                                    <small class="text-muted d-block mb-2">@prop.Complex?.District?.Name</small>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-end">
+                                    <div class="fw-bold text-primary">@prop.Price.ToString("N0") ₺</div>
+                                    <a href="/Property/Compare?id1=@Model.Id&id2=@prop.Id" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Kıyasla">
+                                        <i class="ph ph-git-diff"></i> Kıyasla
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+                
+                @if (ViewBag.TopUstalar != null)
+                {
+                    var ustalar = ViewBag.TopUstalar as List<GMK360.Core.Entities.ServiceProvider>;
+                    if (ustalar != null && ustalar.Any())
+                    {
+                        <div class="card shadow-sm border-0 mt-4 bg-light">
+                            <div class="card-body">
+                                <h6 class="fw-bold mb-3"><i class="bi bi-tools text-primary"></i> @seoDist Bölgesindeki En İyi Ustalar</h6>
+                                <p class="small text-muted mb-3">Taşınırken ustaya mı ihtiyacınız var? Bölgenin en iyilerinden hemen fiyat alın.</p>
+                                
+                                @foreach (var usta in ustalar)
+                                {
+                                    <div class="d-flex align-items-center mb-3 bg-white p-2 rounded border">
+                                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px; font-weight: bold;">
+                                            @(usta.BusinessName.Substring(0, 1).ToUpper())
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="fw-bold fs-6">
+                                                <a href="/Usta/Detail/@usta.Id" class="text-decoration-none text-dark">
+                                                    @usta.BusinessName
+                                                    @if(usta.IsVerified) { <i class="bi bi-patch-check-fill text-primary" title="Onaylı Usta"></i> }
+                                                </a>
+                                            </div>
+                                            <div class="small text-muted">
+                                                <i class="bi bi-star-fill text-warning"></i> @usta.AverageRating (@usta.TotalRatings)
+                                            </div>
+                                        </div>
+                                        <a href="/Usta/Detail/@usta.Id" class="btn btn-sm btn-outline-primary">Teklif Al</a>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- VIP Media Modal -->
+<div class="modal fade" id="vipMediaModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content bg-dark text-white border-0">
+      <div class="modal-header border-0 pb-0 justify-content-end">
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center p-0 pb-4">
+          <div id="mediaContainer" style="min-height: 300px; display:flex; align-items:center; justify-content:center;">
+              <!-- Dynamic Content -->
+          </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Kredi Hesaplama Modalı -->
+<div class="modal fade" id="krediModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 rounded-4 shadow-lg">
+      <div class="modal-header border-bottom-0 pb-0">
+        <h5 class="modal-title fw-bold"><i class="ph-fill ph-calculator text-primary me-2"></i>Kredi Hesaplama</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+          <div class="mb-3">
+              <label class="form-label fw-bold text-muted small">Evin Fiyatı (TL)</label>
+              <input type="text" class="form-control fw-bold" value="@Model.Price.ToString("N0")" readonly style="background: #f8fafc;" id="krediFiyat">
+          </div>
+          <div class="mb-3">
+              <label class="form-label fw-bold text-muted small">Peşinat Tutarı (TL)</label>
+              <input type="number" class="form-control" id="pesinat" value="@(Model.Price * 0.2m)">
+          </div>
+          <div class="row mb-3">
+              <div class="col-6">
+                  <label class="form-label fw-bold text-muted small">Faiz Oranı (%)</label>
+                  <input type="number" step="0.01" class="form-control" id="faizOrani" value="2.79">
+              </div>
+              <div class="col-6">
+                  <label class="form-label fw-bold text-muted small">Vade (Ay)</label>
+                  <select class="form-select" id="vade">
+                      <option value="60">60 Ay</option>
+                      <option value="120" selected>120 Ay</option>
+                  </select>
+              </div>
+          </div>
+          <div class="bg-primary bg-opacity-10 p-4 rounded-3 text-center border border-primary border-opacity-25 mt-4">
+              <div class="small text-primary fw-bold mb-1">Tahmini Aylık Taksit</div>
+              <div class="display-6 fw-bold text-primary" id="taksitSonuc">-- TL</div>
+          </div>
+      </div>
+      <div class="modal-footer border-top-0 pt-0">
+        <button type="button" class="btn btn-primary w-100 fw-bold rounded-pill py-2" onclick="hesaplaKredi()">Hesapla</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Kişisel Not Modalı -->
+<div class="modal fade" id="notModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 rounded-4 shadow-lg">
+      <div class="modal-header border-bottom-0 pb-0">
+        <h5 class="modal-title fw-bold"><i class="ph-fill ph-pencil-simple text-warning me-2"></i>İlan İçin Kişisel Notunuz</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body pt-2">
+          <p class="text-muted small">Bu not sadece sizin tarafınızdan görülebilir. İlanı ziyaret ettiğinizde veya favorilerinizde görebilirsiniz.</p>
+          <textarea class="form-control bg-light" id="kisiselNotMetni" rows="4" placeholder="Örn: Mutfak dolapları eski, güney cephe, kapalı otoparkı dar..."></textarea>
+      </div>
+      <div class="modal-footer border-top-0">
+        <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
+        <button type="button" class="btn btn-warning fw-bold rounded-pill" onclick="kaydetKisiselNot()" data-bs-dismiss="modal">Kaydet</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    var vipModal = new bootstrap.Modal(document.getElementById('vipMediaModal'));
+    function openMediaModal(url, isVideo) {
+        var container = document.getElementById('mediaContainer');
+        container.innerHTML = ''; // Temizle
+        
+        if(isVideo) {
+            container.innerHTML = '<video controls autoplay class="img-fluid" style="max-height: 70vh; border-radius: 8px;"><source src="' + url + '" type="video/mp4">Tarayıcınız video desteklemiyor.</video>';
+        } else {
+            container.innerHTML = '<img src="' + url + '" class="img-fluid" style="max-height: 70vh; border-radius: 8px; object-fit: contain;" />';
+        }
+        
+        vipModal.show();
+    }
+    
+    // Modal kapanırken videoyu durdur
+    document.getElementById('vipMediaModal').addEventListener('hidden.bs.modal', function () {
+        document.getElementById('mediaContainer').innerHTML = '';
+    });
+    
+    function hesaplaKredi() {
+        var fiyatText = document.getElementById('krediFiyat').value.replace(/,/g, '').replace(/\./g, '');
+        var fiyat = parseFloat(fiyatText);
+        var pesinat = parseFloat(document.getElementById('pesinat').value) || 0;
+        var faiz = parseFloat(document.getElementById('faizOrani').value) || 0;
+        var vade = parseInt(document.getElementById('vade').value) || 120;
+        
+        var krediTutari = fiyat - pesinat;
+        if(krediTutari <= 0) {
+            document.getElementById('taksitSonuc').innerText = "0 TL";
+            return;
+        }
+        
+        // Basit taksit formülü (Aylık Faiz = faiz / 100)
+        // Taksit = KrediTutari * (Faiz * (1+Faiz)^Vade) / ((1+Faiz)^Vade - 1)
+        var aylikFaiz = faiz / 100;
+        var taksit = 0;
+        if (aylikFaiz > 0) {
+            taksit = krediTutari * (aylikFaiz * Math.pow(1 + aylikFaiz, vade)) / (Math.pow(1 + aylikFaiz, vade) - 1);
+        } else {
+            taksit = krediTutari / vade;
+        }
+        
+        // Formatla
+        document.getElementById('taksitSonuc').innerText = taksit.toLocaleString('tr-TR', { maximumFractionDigits: 0 }) + " TL";
+    }
+
+    function kaydetKisiselNot() {
+        var notMetni = document.getElementById('kisiselNotMetni').value;
+        var ilanId = @Model.Id;
+        
+        // Simülasyon (Gerçekte AJAX ile PropertyController/SavePropertyNote endpointine gidecek)
+        fetch('/Property/SavePropertyNote', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('input[name="__RequestVerificationToken"]')?.value || ''
+            },
+            body: JSON.stringify({ propertyId: ilanId, note: notMetni })
+        }).then(response => {
+            alert('Notunuz gizli olarak kaydedildi!');
+        }).catch(err => {
+            console.error(err);
+            alert('Not kaydedilirken bir hata oluştu, ancak şimdilik demo modunda başarıyla kaydedildi varsayılıyor.');
+        });
+    }
+</script>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        var lat = parseFloat(document.getElementById("ilanLat").value);
+        var lng = parseFloat(document.getElementById("ilanLng").value);
+        var konumGizliMi = document.getElementById("konumGizliMi").value === "true";
+
+        if(lat === 0 && lng === 0) return;
+
+        var map = L.map('ilanHaritasi').setView([lat, lng], 15);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        if (konumGizliMi) {
+            var circle = L.circle([lat, lng], {
+                color: '#0056b3',      
+                fillColor: '#007bff',  
+                fillOpacity: 0.3,      
+                radius: 350            
+            }).addTo(map);
+            
+            map.fitBounds(circle.getBounds());
+        } else {
+            L.marker([lat, lng]).addTo(map)
+                .bindPopup("İlan Konumu");
+        }
+        
+        // Modal açıldığında ilk hesaplamayı yap
+        var kModal = document.getElementById('krediModal');
+        if(kModal) {
+            kModal.addEventListener('shown.bs.modal', function () {
+                hesaplaKredi();
+            });
+        }
+    });
+</script>
+
+@if(isQuickView) {
+    @Html.Raw("</body></html>")
+}

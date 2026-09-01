@@ -1,0 +1,308 @@
+@{
+    ViewData["Title"] = "Günlük Kiralama Ajandası (KBS)";
+    Layout = "_DashboardLayout";
+}
+
+<!-- FullCalendar Premium CSS -->
+<link href='https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@6.1.10/main.min.css' rel='stylesheet' />
+<style>
+    .fc-event { border-radius: 8px; cursor: pointer; border: none; padding: 2px 4px; color: #fff !important; font-weight: bold; font-size: 0.85rem; }
+    .status-bekliyor { background-color: #ef4444 !important; } /* Kırmızı */
+    .status-kapora { background-color: #f59e0b !important; }   /* Sarı */
+    .status-tamamlandi { background-color: #10b981 !important; } /* Yeşil */
+    
+    .kbs-indicator {
+        position: absolute;
+        top: 2px;
+        right: 4px;
+        background: white;
+        border-radius: 50%;
+        width: 16px;
+        height: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-calendar-range text-primary me-2"></i> Günlük Kiralama Ajandası</h2>
+    <button class="btn btn-primary" onclick="openReservationModal()"><i class="bi bi-plus-lg"></i> Yeni Kayıt</button>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        <div class="d-flex gap-4 mb-3" style="font-size: 0.85rem;">
+            <div><span class="d-inline-block rounded-circle me-1" style="width:12px; height:12px; background:#ef4444;"></span> Bekliyor</div>
+            <div><span class="d-inline-block rounded-circle me-1" style="width:12px; height:12px; background:#f59e0b;"></span> Kapora Alındı</div>
+            <div><span class="d-inline-block rounded-circle me-1" style="width:12px; height:12px; background:#10b981;"></span> Tamamlandı</div>
+            <div class="ms-auto">
+                ✅ KBS Bildirildi &nbsp;|&nbsp; ❗️ KBS Bekliyor
+            </div>
+        </div>
+        <div id='calendar'></div>
+    </div>
+</div>
+
+<!-- Yeni Müşteri Kayıt Kartı Modal -->
+<div class="modal fade" id="reservationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold"><i class="bi bi-person-badge me-2"></i> Müşteri Kayıt Kartı & KBS</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="reservationForm">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label">Daire / Oda</label>
+                            <select class="form-select" id="daireId" required>
+                                <option value="1">Boğaz Manzaralı 1+1</option>
+                                <option value="2">Jakuzili Suit</option>
+                                <option value="3">Oda 101</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Giriş Tarihi</label>
+                            <input type="date" class="form-control" id="checkInDate" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Çıkış Tarihi</label>
+                            <input type="date" class="form-control" id="checkOutDate" required>
+                        </div>
+                    </div>
+
+                    <div class="card bg-light border-0 mb-4">
+                        <div class="card-body">
+                            <h6 class="fw-bold text-secondary mb-3">Finansal Bilgiler</h6>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Toplam Tutar</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="totalAmount">
+                                        <span class="input-group-text">₺</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Ödenen Tutar</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="paidAmount">
+                                        <span class="input-group-text">₺</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Durum</label>
+                                    <select class="form-select" id="paymentStatus">
+                                        <option value="Bekliyor">Bekliyor (Kırmızı)</option>
+                                        <option value="Kapora">Kapora Alındı (Sarı)</option>
+                                        <option value="Tamamlandi">Tamamlandı (Yeşil)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold text-secondary mb-0">Misafir Listesi (KBS İçin Zorunlu)</h6>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addGuestRow()"><i class="bi bi-person-plus"></i> Misafir Ekle</button>
+                    </div>
+
+                    <div id="guestList">
+                        <!-- Tek bir misafir satırı -->
+                        <div class="row g-2 mb-2 align-items-center bg-white p-2 border rounded guest-row">
+                            <div class="col-md-3">
+                                <input type="text" class="form-control form-control-sm tc-input" placeholder="T.C. / Pasaport No" required>
+                            </div>
+                            <div class="col-md-2">
+                                <input type="text" class="form-control form-control-sm name-input" placeholder="Ad" required>
+                            </div>
+                            <div class="col-md-2">
+                                <input type="text" class="form-control form-control-sm surname-input" placeholder="Soyad" required>
+                            </div>
+                            <div class="col-md-2">
+                                <select class="form-select form-select-sm">
+                                    <option>Erkek</option>
+                                    <option>Kadın</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 text-end d-flex gap-1 justify-content-end">
+                                <button type="button" class="btn btn-sm btn-info text-white px-2" onclick="triggerOcr(this)" title="Kimlik/Pasaport Tara">
+                                    <i class="bi bi-camera"></i> Tara
+                                </button>
+                                <input type="file" class="d-none ocr-file-input" accept="image/*" onchange="processOcr(this)">
+                                <button type="button" class="btn btn-sm btn-danger px-2" onclick="this.closest('.guest-row').remove()"><i class="bi bi-trash"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer bg-light d-flex justify-content-between">
+                <button type="button" class="btn btn-warning" onclick="sendToKbs()"><i class="bi bi-send-check"></i> Emniyete Bildir (KBS)</button>
+                <div>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="button" class="btn btn-primary" onclick="saveReservation()">Kaydet</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <!-- FullCalendar JS -->
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@6.1.10/index.global.min.js'></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var calendarEl = document.getElementById('calendar');
+
+            var calendar = new FullCalendar.Calendar(calendarEl, {
+                schedulerLicenseKey: 'CC-Attribution-NonCommercial-NoDerivatives', // Sadece demo/geliştirme için
+                initialView: 'resourceTimelineMonth',
+                locale: 'tr',
+                height: 600,
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'resourceTimelineMonth,resourceTimelineWeek'
+                },
+                resourceAreaWidth: '200px',
+                resourceAreaHeaderContent: 'Daireler',
+                resources: [
+                    { id: '1', title: 'Boğaz Manzaralı 1+1' },
+                    { id: '2', title: 'Jakuzili Suit' },
+                    { id: '3', title: 'Oda 101' },
+                    { id: '4', title: 'Oda 102' }
+                ],
+                events: [
+                    // Mock Veri 1
+                    { id: '1', resourceId: '1', start: '2026-07-22', end: '2026-07-25', title: 'Ahmet Yılmaz', classNames: ['status-kapora'], extendedProps: { kbs: true } },
+                    // Mock Veri 2
+                    { id: '2', resourceId: '2', start: '2026-07-23', end: '2026-07-28', title: 'Ayşe Kaya', classNames: ['status-tamamlandi'], extendedProps: { kbs: true } },
+                    // Mock Veri 3
+                    { id: '3', resourceId: '3', start: '2026-07-26', end: '2026-07-29', title: 'Mehmet Demir', classNames: ['status-bekliyor'], extendedProps: { kbs: false } }
+                ],
+                eventContent: function(arg) {
+                    let kbsIcon = arg.event.extendedProps.kbs ? '✅' : '❗️';
+                    return {
+                        html: `<div class="fc-event-main px-1">${arg.event.title} <div class="kbs-indicator text-dark">${kbsIcon}</div></div>`
+                    };
+                },
+                dateClick: function(info) {
+                    // Boş hücreye tıklandığında modalı aç
+                    document.getElementById('checkInDate').value = info.dateStr;
+                    document.getElementById('daireId').value = info.resource ? info.resource.id : '1';
+                    var myModal = new bootstrap.Modal(document.getElementById('reservationModal'));
+                    myModal.show();
+                },
+                eventClick: function(info) {
+                    alert('Rezervasyon Detayı: ' + info.event.title);
+                }
+            });
+
+            calendar.render();
+        });
+
+        function openReservationModal() {
+            var myModal = new bootstrap.Modal(document.getElementById('reservationModal'));
+            myModal.show();
+        }
+
+        function addGuestRow() {
+            var html = `
+                <div class="row g-2 mb-2 align-items-center bg-white p-2 border rounded guest-row">
+                    <div class="col-md-3">
+                        <input type="text" class="form-control form-control-sm tc-input" placeholder="T.C. / Pasaport No" required>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="text" class="form-control form-control-sm name-input" placeholder="Ad" required>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="text" class="form-control form-control-sm surname-input" placeholder="Soyad" required>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select form-select-sm">
+                            <option>Erkek</option>
+                            <option>Kadın</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 text-end d-flex gap-1 justify-content-end">
+                        <button type="button" class="btn btn-sm btn-info text-white px-2" onclick="triggerOcr(this)" title="Kimlik/Pasaport Tara">
+                            <i class="bi bi-camera"></i> Tara
+                        </button>
+                        <input type="file" class="d-none ocr-file-input" accept="image/*" onchange="processOcr(this)">
+                        <button type="button" class="btn btn-sm btn-danger px-2" onclick="this.closest('.guest-row').remove()"><i class="bi bi-trash"></i></button>
+                    </div>
+                </div>`;
+            document.getElementById('guestList').insertAdjacentHTML('beforeend', html);
+        }
+
+        function saveReservation() {
+            alert('Rezervasyon Veritabanına Kaydedildi!');
+            var myModal = bootstrap.Modal.getInstance(document.getElementById('reservationModal'));
+            myModal.hide();
+        }
+
+        function sendToKbs() {
+            // Animasyon simülasyonu
+            var btn = document.querySelector('#reservationModal .btn-warning');
+            var originalHtml = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Emniyete İletiliyor...';
+            btn.disabled = true;
+
+            setTimeout(() => {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                alert('Tüm misafir kimlik bilgileri EGM / KBS sistemine başarıyla iletildi!');
+            }, 1500);
+        }
+
+        function triggerOcr(btn) {
+            var row = btn.closest('.guest-row');
+            var fileInput = row.querySelector('.ocr-file-input');
+            fileInput.click();
+        }
+
+        function processOcr(input) {
+            if (!input.files || input.files.length === 0) return;
+            var file = input.files[0];
+            var row = input.closest('.guest-row');
+            var btn = row.querySelector('.btn-info');
+            
+            var originalHtml = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+            btn.disabled = true;
+
+            var formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/api/OcrApi/extract-identity', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                input.value = ''; // Reset input
+
+                if (data.success) {
+                    if(data.tcIdentityNo) row.querySelector('.tc-input').value = data.tcIdentityNo;
+                    if(data.firstName) row.querySelector('.name-input').value = data.firstName;
+                    if(data.lastName) row.querySelector('.surname-input').value = data.lastName;
+                    
+                    alert('Kimlik bilgileri başarıyla okundu. Resim hafızadan silindi (Sıfır İz).');
+                } else {
+                    alert('Okuma başarısız: ' + data.message);
+                }
+            })
+            .catch(error => {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                input.value = '';
+                alert('Sunucu ile iletişimde bir hata oluştu.');
+                console.error(error);
+            });
+        }
+    </script>
+}

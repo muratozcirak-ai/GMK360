@@ -1,0 +1,133 @@
+@model GMK360.Core.Entities.Identity.ApplicationUser
+
+@{
+    ViewData["Title"] = "Müşteri Paneli";
+    var subscriptions = ViewBag.Subscriptions as List<GMK360.Core.Entities.UserSubscription>;
+    bool isShadow = ViewBag.IsShadow ?? false;
+}
+
+<div class="container mt-5 pt-4">
+    <div class="d-flex justify-content-between align-items-center mb-5">
+        <div>
+            <h2 class="fw-bold mb-1">Hoş Geldiniz, @Model.FirstName 👋</h2>
+            <p class="text-muted">GMK360 Ekosistemindeki aktif modüllerinizi aşağıdan yönetebilirsiniz.</p>
+        </div>
+        <div class="text-end">
+            <span class="d-block small text-muted mb-1">Cüzdan Bakiyesi</span>
+            <span class="fs-4 fw-bold text-success">@ViewBag.WalletBalance.ToString("C2")</span>
+            <div class="mt-1">
+                <a href="/Wallet" class="btn btn-sm btn-outline-success">Çekim Talebi</a>
+                <a href="/CustomerDashboard/Referrals" class="btn btn-sm btn-primary"><i class="ph ph-users"></i> Referans Kazançları</a>
+            </div>
+        </div>
+    </div>
+
+    @if (isShadow)
+    {
+        <div class="alert alert-warning d-flex align-items-center mb-4" role="alert">
+            <i class="ph ph-warning-circle fs-3 me-3"></i>
+            <div>
+                <strong>Hesabınız henüz onaylanmadı!</strong>
+                Bir yönetici tarafından sisteme dahil edildiniz ancak şifrenizi kendiniz belirlemediniz. Lütfen <a href="/Account/CompleteProfile">profilinizi tamamlayın</a>.
+            </div>
+        </div>
+    }
+
+    <h4 class="fw-bold mb-4 pb-2 border-bottom"><i class="ph ph-squares-four text-primary me-2"></i> Aktif Panelleriniz</h4>
+    
+    <div class="row g-4 mb-5">
+        
+        @{
+            bool hasAnyPanel = false;
+        }
+
+        @if (subscriptions != null && subscriptions.Any())
+        {
+            @foreach (var sub in subscriptions)
+            {
+                var pkgName = sub.Package.Name.ToLower();
+                
+                // MANTIK: Paket adına göre ilgili butonu (Dashboard'u) render et.
+                if (pkgName.Contains("inşaat") || pkgName.Contains("şantiye") || pkgName.Contains("erp"))
+                {
+                    hasAnyPanel = true;
+                    <div class="col-md-4">
+                        <a href="/ConstructionProject/Index" class="text-decoration-none">
+                            <div class="card h-100 shadow-sm border-0 text-white text-center p-4" style="background-color: #f97316; transition: transform 0.2s; border-radius: 1rem;">
+                                <i class="ph ph-crane" style="font-size: 4rem; opacity: 0.9;"></i>
+                                <h4 class="fw-bold mt-3 text-white">İnşaat Projesi Yönetimi</h4>
+                                <p class="small text-white-50 mt-2">Şantiyeleriniz, taşeronlar ve işçi puantajları.</p>
+                                <div class="mt-3 bg-white bg-opacity-25 rounded p-2 small">
+                                    Abonelik: @sub.Package.Name
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                }
+                else if (pkgName.Contains("site") || pkgName.Contains("bina") || pkgName.Contains("yönetim"))
+                {
+                    hasAnyPanel = true;
+                    <div class="col-md-4">
+                        <a href="/BuildingManager/Index" class="text-decoration-none">
+                            <div class="card h-100 shadow-sm border-0 bg-primary text-white text-center p-4" style="transition: transform 0.2s; border-radius: 1rem;">
+                                <i class="ph ph-buildings" style="font-size: 4rem; opacity: 0.9;"></i>
+                                <h4 class="fw-bold mt-3 text-white">Bina ve Site Yönetimi</h4>
+                                <p class="small text-white-50 mt-2">Apartmanlar, aidatlar ve personel yönetimi.</p>
+                                <div class="mt-3 bg-white bg-opacity-25 rounded p-2 small">
+                                    Abonelik: @sub.Package.Name
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                }
+                else if (pkgName.Contains("günlük") || pkgName.Contains("pansiyon") || pkgName.Contains("kiralama"))
+                {
+                    hasAnyPanel = true;
+                    <div class="col-md-4">
+                        <a href="/DailyRental/Index" class="text-decoration-none">
+                            <div class="card h-100 shadow-sm border-0 text-white text-center p-4" style="background-color: #8b5cf6; transition: transform 0.2s; border-radius: 1rem;">
+                                <i class="ph ph-bed" style="font-size: 4rem; opacity: 0.9;"></i>
+                                <h4 class="fw-bold mt-3 text-white">Günlük Kiralama</h4>
+                                <p class="small text-white-50 mt-2">Pansiyon ve günlük daire doluluk yönetimi.</p>
+                                <div class="mt-3 bg-white bg-opacity-25 rounded p-2 small">
+                                    Abonelik: @sub.Package.Name
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                }
+            }
+        }
+
+        @* TEST ORTAMI İÇİN GEÇİCİ GÜVENLİK AĞI (FALLBACK) *@
+        @* Eğer lokalde test yapıyorsanız ve henüz "Satın Alınmış" bir abonelik datası yoksa bile panelleri görebilmeniz için: *@
+        @if (!hasAnyPanel && (User.IsInRole("InsaatFirmasi") || User.IsInRole("Admin")))
+        {
+            <div class="col-md-4">
+                <a href="/ConstructionProject/Index" class="text-decoration-none">
+                    <div class="card h-100 shadow-sm border-0 text-white text-center p-4" style="background-color: #f97316; transition: transform 0.2s; border-radius: 1rem;">
+                        <i class="ph ph-crane" style="font-size: 4rem; opacity: 0.9;"></i>
+                        <h4 class="fw-bold mt-3 text-white">İnşaat Projesi Yönetimi</h4>
+                        <p class="small text-white-50 mt-2">Şantiyeleriniz, taşeronlar ve işçi puantajları.</p>
+                        <div class="mt-3 bg-white bg-opacity-25 rounded p-2 small fw-bold">
+                            (Deneme Sürümü / Yetkili Erişim)
+                        </div>
+                    </div>
+                </a>
+            </div>
+            hasAnyPanel = true;
+        }
+
+        @if (!hasAnyPanel)
+        {
+            <div class="col-12">
+                <div class="p-5 bg-light rounded-4 text-center text-muted border border-dashed">
+                    <i class="ph ph-shopping-cart mb-3 text-secondary" style="font-size: 3rem;"></i>
+                    <h5 class="fw-bold text-dark">Henüz Aktif Bir Paketiniz Bulunmuyor</h5>
+                    <p class="mb-4">İnşaat, Site Yönetimi veya Günlük Kiralama modüllerimizi kullanmaya başlamak için bir paket seçin.</p>
+                    <a href="/Pricing" class="btn btn-primary rounded-pill px-4 fw-bold">Modül Paketlerini İncele</a>
+                </div>
+            </div>
+        }
+    </div>
+</div>

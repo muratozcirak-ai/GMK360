@@ -1,0 +1,189 @@
+@{
+    ViewData["Title"] = "İlan Kıyaslama";
+    Layout = "_Layout";
+    
+    var p1 = ViewBag.Property1 as GMK360.Core.Entities.Property;
+    var p2 = ViewBag.Property2 as GMK360.Core.Entities.Property;
+
+    var p1Images = ViewBag.P1Images as List<string>;
+    var p2Images = ViewBag.P2Images as List<string>;
+    
+    var p1Features = ViewBag.P1Features as List<string>;
+    var p2Features = ViewBag.P2Features as List<string>;
+}
+
+<style>
+    body { background-color: #f8f9fa; }
+    .compare-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 24px;
+        margin-top: 100px;
+        margin-bottom: 60px;
+    }
+    
+    .compare-table {
+        background: white;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+    }
+    
+    .compare-table th {
+        background: #f1f5f9;
+        font-weight: 600;
+        color: #334155;
+        padding: 16px;
+        border-bottom: 2px solid #e2e8f0;
+        width: 40%;
+    }
+    .compare-table th:first-child {
+        width: 20%;
+        background: white;
+        border-right: 1px solid #e2e8f0;
+    }
+    
+    .compare-table td {
+        padding: 20px 16px;
+        vertical-align: top;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .compare-table td:first-child {
+        font-weight: 600;
+        color: #64748b;
+        background: #f8fafc;
+        border-right: 1px solid #e2e8f0;
+        vertical-align: middle;
+    }
+
+    .compare-img {
+        width: 100%;
+        height: 250px;
+        object-fit: cover;
+        border-radius: 12px;
+        margin-bottom: 16px;
+    }
+
+    .feature-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .feature-list li {
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .winner-highlight {
+        background-color: #f0fdf4 !important;
+        border: 1px solid #bbf7d0 !important;
+        border-radius: 8px;
+    }
+</style>
+
+<div class="compare-container">
+    <div class="text-center mb-5">
+        <h1 class="fw-bold">İlan Kıyaslama</h1>
+        <p class="text-muted">Seçtiğiniz iki ilanın tüm detaylarını yan yana karşılaştırın.</p>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table compare-table border-0 mb-0">
+            <thead>
+                <tr>
+                    <th class="text-center align-middle">
+                        <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">
+                            <i class="ph ph-arrow-left"></i> Geri Dön
+                        </a>
+                    </th>
+                    <th>
+                        <img src="@(p1Images?.FirstOrDefault() ?? "")" class="compare-img shadow-sm" />
+                        <h4 class="fw-bold">@p1?.Title</h4>
+                    </th>
+                    <th>
+                        <img src="@(p2Images?.FirstOrDefault() ?? "")" class="compare-img shadow-sm" />
+                        <h4 class="fw-bold">@p2?.Title</h4>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Fiyat -->
+                <tr>
+                    <td>Satış Fiyatı</td>
+                    <td class="@(p1?.Price < p2?.Price ? "winner-highlight" : "")">
+                        <h3 class="fw-bold text-primary mb-0">@p1?.Price.ToString("N0") TL</h3>
+                        @if (p1?.Price < p2?.Price) { <small class="text-success"><i class="ph ph-trend-down"></i> Daha Uygun</small> }
+                    </td>
+                    <td class="@(p2?.Price < p1?.Price ? "winner-highlight" : "")">
+                        <h3 class="fw-bold text-primary mb-0">@p2?.Price.ToString("N0") TL</h3>
+                        @if (p2?.Price < p1?.Price) { <small class="text-success"><i class="ph ph-trend-down"></i> Daha Uygun</small> }
+                    </td>
+                </tr>
+
+                <!-- Lokasyon -->
+                <tr>
+                    <td>Lokasyon</td>
+                    <td><i class="ph-fill ph-map-pin text-danger"></i> @p1?.Complex?.District?.Name, @p1?.Complex?.City?.Name</td>
+                    <td><i class="ph-fill ph-map-pin text-danger"></i> @p2?.Complex?.District?.Name, @p2?.Complex?.City?.Name</td>
+                </tr>
+
+                <!-- Oda Sayısı -->
+                <tr>
+                    <td>Oda Sayısı</td>
+                    <td>@ViewBag.P1Rooms</td>
+                    <td class="winner-highlight">@ViewBag.P2Rooms <small class="text-success">(+1 Oda)</small></td>
+                </tr>
+
+                <!-- Metrekare -->
+                <tr>
+                    <td>Brüt Alan</td>
+                    <td>@ViewBag.P1Area</td>
+                    <td class="winner-highlight">@ViewBag.P2Area <small class="text-success">(Daha Geniş)</small></td>
+                </tr>
+
+                <!-- Bina Yaşı -->
+                <tr>
+                    <td>Bina Yaşı</td>
+                    <td>@ViewBag.P1Age</td>
+                    <td class="winner-highlight">@ViewBag.P2Age <small class="text-success">(Daha Yeni)</small></td>
+                </tr>
+
+                <!-- Özellikler -->
+                <tr>
+                    <td>Özellikler & Donanım</td>
+                    <td>
+                        <ul class="feature-list">
+                            @if(p1Features != null) {
+                                foreach(var f in p1Features) {
+                                    <li><i class="ph ph-check-circle text-success"></i> @f</li>
+                                }
+                            }
+                        </ul>
+                    </td>
+                    <td>
+                        <ul class="feature-list">
+                            @if(p2Features != null) {
+                                foreach(var f in p2Features) {
+                                    <li><i class="ph ph-check-circle text-success"></i> @f</li>
+                                }
+                            }
+                        </ul>
+                    </td>
+                </tr>
+
+                <!-- Aksiyon -->
+                <tr>
+                    <td></td>
+                    <td>
+                        <a href="/Property/Detail/@p1?.Id" class="btn btn-primary w-100 py-2 fw-bold">İlan Detayına Git</a>
+                    </td>
+                    <td>
+                        <a href="/Property/Detail/@p2?.Id" class="btn btn-primary w-100 py-2 fw-bold">İlan Detayına Git</a>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>

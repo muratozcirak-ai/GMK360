@@ -1,0 +1,121 @@
+@model IEnumerable<GMK360.Core.Entities.SubscriptionPackage>
+@{
+    ViewData["Title"] = "Abonelik Paketleri";
+    Layout = "~/Views/Shared/_AdminLayout.cshtml";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold text-navy mb-1"><i class="ph ph-package me-2 text-orange"></i>Abonelik Paketleri</h2>
+        <p class="text-muted">Platform kullanicilarina sunacaginiz ucretli/ucretsiz kampanya ve paketleri tanimlayin.</p>
+    </div>
+    <button class="btn btn-orange fw-bold rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#createPackageModal">
+        <i class="ph ph-plus fw-bold me-1"></i> Yeni Ekle
+    </button>
+</div>
+
+@if (!Model.Any())
+{
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-0">
+        <div class="p-5 text-center bg-light rounded-4">
+            <div class="d-inline-flex align-items-center justify-content-center bg-white shadow-sm rounded-circle mb-3" style="width: 80px; height: 80px;">
+                <i class="ph ph-package text-secondary" style="font-size: 40px;"></i>
+            </div>
+            <h5 class="fw-bold text-dark">Henuz Kayit Yok</h5>
+            <p class="text-muted mb-4">Sistemde su an hicbir abonelik paketi bulunmuyor.</p>
+            <button class="btn btn-outline-navy fw-bold rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#createPackageModal">Ilk Kaydi Olustur</button>
+        </div>
+    </div>
+</div>
+}
+else
+{
+<div class="row row-cols-1 row-cols-md-3 g-4">
+    @foreach(var package in Model)
+    {
+        <div class="col">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body p-4 position-relative">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div class="d-inline-flex align-items-center justify-content-center bg-orange-subtle text-orange rounded-3 p-2">
+                            <i class="ph ph-package" style="font-size: 24px;"></i>
+                        </div>
+                        <span class="badge @(package.IsActive ? "bg-success" : "bg-danger")">@(package.IsActive ? "Aktif" : "Pasif")</span>
+                    </div>
+                    <h5 class="fw-bold text-navy mb-1">@package.Name</h5>
+                    <h3 class="fw-bold text-orange mb-3">@package.Price.ToString("N2") TL <span class="fs-6 text-muted fw-normal">/@package.Period</span></h3>
+                    
+                    <ul class="list-unstyled mb-4 text-muted">
+                        <li class="mb-2"><i class="ph ph-check-circle text-success me-2"></i>Hedef: @(package.TargetUserType?.ToString() ?? "Genel")</li>
+                        <li class="mb-2"><i class="ph ph-check-circle text-success me-2"></i>Ilan Limiti: @(package.MaxListingCount?.ToString() ?? "Sinirsiz")</li>
+                        <li class="mb-2"><i class="ph ph-check-circle text-success me-2"></i>Vitrin Hakki: @(package.MaxFeaturedListingCount?.ToString() ?? "Yok")</li>
+                    </ul>
+
+                    <form asp-action="TogglePackage" asp-route-id="@package.Id" method="post" class="mt-auto">
+                        <button type="submit" class="btn @(package.IsActive ? "btn-outline-danger" : "btn-outline-success") w-100 fw-bold rounded-pill">
+                            @(package.IsActive ? "Pasife Al" : "Aktife Al")
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+}
+
+<!-- Create Package Modal -->
+<div class="modal fade" id="createPackageModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title fw-bold text-navy"><i class="ph ph-package text-orange me-2"></i>Yeni Paket Olustur</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form asp-action="CreatePackage" method="post">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold text-muted small">Paket Adi</label>
+                            <input type="text" name="Name" class="form-control" required placeholder="Orn: Premium Emlakci Paketi" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-muted small">Fiyat (TL)</label>
+                            <input type="number" step="0.01" name="Price" class="form-control" required placeholder="0.00" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-muted small">Periyot</label>
+                            <select name="Period" class="form-select">
+                                <option value="Monthly">Aylik</option>
+                                <option value="Yearly">Yillik</option>
+                                <option value="Lifetime">Omur Boyu</option>
+                                <option value="Free">Ucretsiz</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-muted small">Hedef Kitle</label>
+                            <select name="TargetUserType" class="form-select">
+                                <option value="">Genel (Herkes)</option>
+                                <option value="Corporate">Kurumsal (Emlakci)</option>
+                                <option value="Individual">Bireysel (Dijital Evim)</option>
+                                <option value="Professional">Usta (Teknik Servis)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-muted small">Ilan Limiti (Bos=Sinirsiz)</label>
+                            <input type="number" name="MaxListingCount" class="form-control" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-muted small">Vitrin (Doping) Hakki</label>
+                            <input type="number" name="MaxFeaturedListingCount" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="mt-4 text-end">
+                        <button type="button" class="btn btn-light rounded-pill px-4 fw-bold me-2" data-bs-dismiss="modal">Iptal</button>
+                        <button type="submit" class="btn btn-orange rounded-pill px-4 fw-bold">Paketi Kaydet</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

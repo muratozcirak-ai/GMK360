@@ -1,0 +1,106 @@
+@model IEnumerable<GMK360.Core.Entities.BuildingExpense>
+@{
+    ViewData["Title"] = "Gider ve Fatura Takibi";
+    Layout = "~/Views/Shared/_FacilityLayout.cshtml";
+    var buildings = ViewBag.Buildings as IEnumerable<GMK360.Core.Entities.Building>;
+    var selectedBuildingId = ViewBag.SelectedBuildingId as int?;
+    
+    var totalExpenses = Model.Sum(e => e.TotalAmount);
+}
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card bg-warning bg-opacity-10 border-warning border-start border-4 border-0">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="text-warning fw-bold text-dark">Toplam Gerçekleşen Gider</h6>
+                    <h3 class="mb-0 text-dark">@totalExpenses.ToString("C")</h3>
+                </div>
+                <i class="bi bi-graph-down-arrow text-warning display-4 opacity-50"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-receipt"></i> Gider ve Fatura Takibi</h5>
+        <div class="d-flex gap-2">
+            <form method="get" class="d-flex">
+                <select name="buildingId" class="form-select form-select-sm me-2" onchange="this.form.submit()">
+                    <option value="">Tüm Binalar</option>
+                    @if(buildings != null)
+                    {
+                        foreach(var b in buildings)
+                        {
+                            if(selectedBuildingId == b.Id)
+                            {
+                                <option value="@b.Id" selected>@b.Name</option>
+                            }
+                            else
+                            {
+                                <option value="@b.Id">@b.Name</option>
+                            }
+                        }
+                    }
+                </select>
+            </form>
+            <button class="btn btn-sm btn-primary"><i class="bi bi-plus"></i> Yeni Gider/Fatura Ekle</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Tarih</th>
+                        <th>Bina</th>
+                        <th>Gider Açıklaması</th>
+                        <th>Ödeme Yapan / Sorumlu</th>
+                        <th>Toplam Tutar</th>
+                        <th>Fatura/Belge</th>
+                        <th>İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if(!Model.Any())
+                    {
+                        <tr><td colspan="7" class="text-center text-muted">Kayıt bulunamadı.</td></tr>
+                    }
+                    else
+                    {
+                        foreach (var exp in Model)
+                        {
+                            <tr>
+                                <td>@exp.Date.ToString("dd.MM.yyyy")</td>
+                                <td><span class="badge bg-secondary">@exp.Building.Name</span></td>
+                                <td><strong>@exp.Description</strong></td>
+                                <td>
+                                    @if(exp.PayerType == "Tenant")
+                                    {
+                                        <span class="badge bg-info text-dark">Kiracılar Öder</span>
+                                    }
+                                    else if (exp.PayerType == "Owner")
+                                    {
+                                        <span class="badge bg-primary">Ev Sahipleri Öder</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-dark">Herkes (Eşit)</span>
+                                    }
+                                </td>
+                                <td><strong class="text-danger">@exp.TotalAmount.ToString("C")</strong></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-paperclip"></i> Yok</button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary" title="Düzenle"><i class="bi bi-pencil"></i></button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

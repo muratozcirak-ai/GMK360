@@ -1,0 +1,100 @@
+@model IEnumerable<GMK360.Core.Entities.DefinitionCategory>
+@{
+    var group = ViewBag.Group as GMK360.Core.Entities.DefinitionCategory;
+    ViewData["Title"] = $"{group?.Name} Soruları";
+    Layout = "~/Views/Shared/_AdminLayout.cshtml";
+}
+
+<div class="mb-4">
+    <a asp-action="Index" class="btn btn-sm btn-link text-muted px-0 mb-2">
+        <i class="ph ph-arrow-left"></i> Gruplara Dön
+    </a>
+    <h4 class="mb-1">
+        <i class="ph ph-folder text-warning me-2"></i> @group?.Name
+        <span class="text-muted fw-normal">/ Özellik Soruları</span>
+    </h4>
+    <p class="text-muted">Bu grubun altındaki özellikleri (Soruları) ve bunların çoklu/tekli seçim mantığını ayarlayın.</p>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body p-4">
+        <h6 class="mb-3 text-primary"><i class="ph ph-question"></i> Yeni Soru (Özellik) Ekle</h6>
+        <form asp-action="AddQuestion" method="post" class="row g-3 align-items-end">
+            <input type="hidden" name="groupId" value="@group?.Id" />
+            
+            <div class="col-md-5">
+                <label class="form-label fw-bold">Soru / Özellik Adı</label>
+                <input type="text" name="name" class="form-control" placeholder="Örn: Asansör, Banyo" required />
+            </div>
+            
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Cevaplama Mantığı</label>
+                <select name="isMultiSelect" class="form-select">
+                    <option value="false">Tek Şık Seçilebilir (Radio - Örn: Asansör)</option>
+                    <option value="true">Birden Çok Şık Seçilebilir (Checkbox - Örn: Banyo)</option>
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" name="isMediaTag" value="true" id="isMediaTagChk">
+                    <label class="form-check-label fw-bold" for="isMediaTagChk">Foto Etiketi Mi?</label>
+                </div>
+            </div>
+
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Soru Ekle</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="px-4 py-3">Soru (Özellik) Adı</th>
+                        <th class="py-3">Tipi</th>
+                        <th class="px-4 py-3 text-end">Cevaplar (Şıklar)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model)
+                    {
+                        <tr>
+                            <td class="px-4 fw-bold">
+                                <i class="ph ph-question text-info me-2"></i> @item.Name
+                            </td>
+                            <td>
+                                @if(item.IsMultiSelect) {
+                                    <span class="badge bg-primary bg-opacity-10 text-primary"><i class="ph ph-check-square"></i> Çoklu Seçim (Checkbox)</span>
+                                } else {
+                                    <span class="badge bg-success bg-opacity-10 text-success"><i class="ph ph-radio-button"></i> Tekli Seçim (Radio)</span>
+                                }
+                                @if(item.IsMediaTag) {
+                                    <span class="badge bg-danger bg-opacity-10 text-danger ms-1"><i class="ph ph-image"></i> Medya Etiketi</span>
+                                }
+                            </td>
+                            <td class="px-4 text-end">
+                                <a asp-action="Answers" asp-route-questionId="@item.Id" class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                                    <i class="ph ph-list-numbers"></i> Şıkları Yönet
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                    @if (!Model.Any())
+                    {
+                        <tr>
+                            <td colspan="3" class="text-center py-5 text-muted">
+                                <i class="ph ph-question d-block mb-2" style="font-size: 32px;"></i>
+                                Bu gruba henüz soru eklenmemiş.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

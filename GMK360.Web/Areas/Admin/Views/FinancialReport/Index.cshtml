@@ -1,0 +1,143 @@
+@{
+    ViewData["Title"] = "Finansal Raporlama ve Fon Dağılımı";
+    decimal totalUserBalances = ViewBag.TotalUserBalances ?? 0m;
+    var activeRules = ViewBag.ActiveRules as IEnumerable<GMK360.Core.Entities.GlobalObligationRule>;
+}
+
+<div class="container-fluid py-4">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Finansal Raporlama (Merkez Havuz)</h1>
+        <a href="#" class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm">
+            <i class="bi bi-download text-white-50"></i> Rapor İndir (PDF)
+        </a>
+    </div>
+
+    <!-- Content Row -->
+    <div class="row">
+        <!-- Kullanıcıların Toplam Bakiyesi (Emanet Fon) -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Kullanıcı Emanet Fonu (Cüzdanlar)</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">@totalUserBalances.ToString("C")</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-wallet2 fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Beklenen Stopaj/Vergi Fonu (Sanal Ayrım) -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Stopaj ve Vergi Karşılıkları (Bu Ay)</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">₺0,00</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-bank fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Şirket Komisyon Geliri -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Şirket Hizmet / Komisyon Geliri
+                            </div>
+                            <div class="row no-gutters align-items-center">
+                                <div class="col-auto">
+                                    <div class="h5 mb-0 mr-3 font-weight-bold text-gray-800">₺0,00</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-cash-stack fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bekleyen Çekim Talepleri (Fatura Bekleyenler vs) -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Bekleyen Nakit Çıkış Talepleri</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">0 Talep</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-hourglass-split fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Aktif Kesinti Kuralları (Stopaj, Hizmet Bedeli vb.) -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Aktif Sistem Kesinti ve Vergi Kuralları</h6>
+                </div>
+                <div class="card-body">
+                    @if (activeRules != null && activeRules.Any())
+                    {
+                        <ul class="list-group list-group-flush">
+                            @foreach(var rule in activeRules)
+                            {
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>@rule.RuleName</strong><br/>
+                                        <small class="text-muted">Hedef Kategori: @(rule.TargetExpenseCategory?.Name ?? "Tümü")</small>
+                                    </div>
+                                    <span class="badge bg-primary rounded-pill">
+                                        %@(rule.Rate * 100)
+                                    </span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <p class="text-muted">Şu an aktif bir sistem kesinti/vergi kuralı bulunmuyor.</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Neden Bu Ekran Var?</h6>
+                </div>
+                <div class="card-body">
+                    <p>
+                        Sistemdeki tüm bakiye fiziksel olarak tek bir havuz/banka hesabında dursa bile, muhasebesel olarak bu paranın ne kadarının <strong>kullanıcılara</strong> (Emanet Fon), ne kadarının <strong>devlete</strong> (Stopaj/Vergi Karşılıkları) ve ne kadarının <strong>şirkete</strong> (Komisyon Gelirleri) ait olduğunu bu sayfadan anlık olarak takip edebilirsiniz.
+                    </p>
+                    <p class="mb-0">
+                        İlerleyen fazlarda "Ledger" (Çift Taraflı Kayıt) mimarisi aktif olduğunda buradaki tutarlar kuruşu kuruşuna günlük işlem hacminden hesaplanarak yansıyacaktır.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

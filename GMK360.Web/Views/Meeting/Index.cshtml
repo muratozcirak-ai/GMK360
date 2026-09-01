@@ -1,0 +1,146 @@
+@model IEnumerable<GMK360.Core.Entities.SystemMeeting>
+@{
+    ViewData["Title"] = "Toplantı ve Karar Defteri";
+    Layout = "~/Views/Shared/_AdminLayout.cshtml";
+    var building = ViewBag.Building as GMK360.Core.Entities.Building;
+}
+
+<div class="container-fluid py-4">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb bg-transparent p-0 mb-0">
+            <li class="breadcrumb-item"><a href="/BuildingManager" class="text-decoration-none">Binalarım</a></li>
+            <li class="breadcrumb-item"><a href="/BuildingManager/Detail?id=@building?.Id" class="text-decoration-none">@building?.Name</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Toplantı & Karar Defteri</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="text-primary fw-bold mb-1"><i class="fas fa-book-open me-2"></i>Dijital Karar Defteri</h2>
+            <p class="text-muted mb-0">Toplantıları planlayın ve alınan kararları şeffafça paylaşın.</p>
+        </div>
+        <button class="btn btn-primary px-4 py-2" data-bs-toggle="modal" data-bs-target="#newMeetingModal">
+            <i class="fas fa-calendar-plus me-2"></i>Yeni Toplantı Planla
+        </button>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle me-2"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="row">
+        @if (!Model.Any())
+        {
+            <div class="col-12">
+                <div class="card shadow-sm border-0 text-center py-5">
+                    <div class="card-body">
+                        <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+                        <h5>Henüz hiç toplantı kaydı yok</h5>
+                        <p class="text-muted mb-0">İlk toplantıyı planlamak için yukarıdaki butonu kullanabilirsiniz.</p>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            @foreach (var meeting in Model)
+            {
+                <div class="col-12 mb-4">
+                    <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+                        <div class="card-header bg-white border-bottom p-4 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="fw-bold mb-1">@meeting.AgendaTitle</h5>
+                                <span class="badge @(meeting.IsConcluded ? "bg-success" : "bg-warning text-dark")">
+                                    @(meeting.IsConcluded ? "Sonuçlandı" : "Planlandı / Devam Ediyor")
+                                </span>
+                                <span class="text-muted ms-2"><i class="far fa-calendar-alt me-1"></i> @meeting.MeetingDate.ToString("dd MMMM yyyy HH:mm")</span>
+                            </div>
+                            
+                            @if (!meeting.IsConcluded)
+                            {
+                                <form asp-action="ConcludeMeeting" asp-controller="Meeting" method="post" onsubmit="return confirm('Bu toplantıyı sonlandırmak istediğinize emin misiniz? Karar defteri sakinlere açılacaktır.');">
+                                    <input type="hidden" name="meetingId" value="@meeting.Id" />
+                                    <button type="submit" class="btn btn-outline-success btn-sm"><i class="fas fa-check-double me-1"></i> Toplantıyı Kapat</button>
+                                </form>
+                            }
+                        </div>
+                        <div class="card-body p-4 bg-light">
+                            <h6 class="fw-bold text-dark mb-3"><i class="fas fa-gavel me-2 text-primary"></i>Alınan Kararlar</h6>
+                            
+                            @if (!meeting.Decisions.Any())
+                            {
+                                <p class="text-muted fst-italic">Henüz karar eklenmemiş.</p>
+                            }
+                            else
+                            {
+                                <ul class="list-group list-group-flush shadow-sm rounded mb-4">
+                                    @foreach (var decision in meeting.Decisions)
+                                    {
+                                        <li class="list-group-item d-flex align-items-start p-3">
+                                            <div class="ms-2 me-auto">
+                                                <div class="fw-bold mb-1">Karar No: @decision.Id</div>
+                                                @decision.DecisionText
+                                            </div>
+                                            <span class="text-muted small">@decision.CreatedAt.ToString("HH:mm")</span>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+
+                            @if (!meeting.IsConcluded)
+                            {
+                                <form asp-action="AddDecision" asp-controller="Meeting" method="post" class="mt-3">
+                                    <input type="hidden" name="meetingId" value="@meeting.Id" />
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" name="decisionText" placeholder="Yeni karar maddesi yazın..." required />
+                                        <button class="btn btn-primary" type="submit"><i class="fas fa-plus me-1"></i> Ekle</button>
+                                    </div>
+                                </form>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+<!-- Yeni Toplantı Modal -->
+<div class="modal fade" id="newMeetingModal" tabindex="-1" aria-labelledby="newMeetingModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header bg-light border-bottom-0">
+                <h5 class="modal-title fw-bold" id="newMeetingModalLabel"><i class="fas fa-calendar-plus text-primary me-2"></i>Yeni Toplantı Planla</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form asp-action="CreateMeeting" asp-controller="Meeting" method="post">
+                <div class="modal-body p-4">
+                    <input type="hidden" name="buildingId" value="@building?.Id" />
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Ajanda / Konu</label>
+                        <input type="text" class="form-control" name="agendaTitle" placeholder="Örn: Olağanüstü Bütçe Toplantısı" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Tarih ve Saat</label>
+                        <input type="datetime-local" class="form-control" name="meetingDate" required>
+                    </div>
+
+                    <div class="alert alert-info py-2 mb-0">
+                        <i class="fas fa-info-circle me-2"></i>Toplantı planlandığında bina sakinlerine otomatik duyuru (SMS/Email) yapılacaktır.
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary px-4">Planla ve Duyur</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

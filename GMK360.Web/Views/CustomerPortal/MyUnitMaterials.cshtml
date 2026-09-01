@@ -1,0 +1,151 @@
+@model GMK360.Core.Entities.BuildingUnit
+
+@{
+    ViewData["Title"] = "Dairem İçin Malzeme Seçimleri";
+    // Müşterinin portal layout'u farklı olabilir, varsayılan Layout kullanıyoruz.
+    Layout = "~/Views/Shared/_Layout.cshtml"; 
+    
+    var project = Model.Building?.ConstructionProject;
+    var catalogs = project?.MaterialCatalogs?.ToList() ?? new List<GMK360.Core.Entities.Construction.ProjectMaterialCatalog>();
+    var categories = catalogs.Select(c => c.Category).Distinct().ToList();
+}
+
+<div class="container py-5">
+    <div class="row mb-5 align-items-center">
+        <div class="col-md-8">
+            <h2 class="fw-bold text-navy mb-2"><i class="bi bi-house-heart text-primary me-2"></i>Evinizi Tasarlayın</h2>
+            <p class="text-muted fs-5 mb-0">@ViewBag.ProjectName - @ViewBag.BlockName Blok, No: @Model.DoorNumber</p>
+        </div>
+        <div class="col-md-4 text-md-end mt-3 mt-md-0">
+            <div class="badge bg-light text-dark border p-3 rounded-4 shadow-sm text-start w-100">
+                <div class="small text-muted mb-1">Mülk Sahibi</div>
+                <div class="fw-bold">@Model.OwnerName</div>
+                <div class="small mt-2">Daire Tipi: <strong>@Model.RoomLayout</strong></div>
+            </div>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-4 border-0 shadow-sm mb-4" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (!categories.Any())
+    {
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-tools text-muted mb-3" style="font-size: 3rem;"></i>
+                <h4>Seçim Kataloğu Henüz Hazır Değil</h4>
+                <p class="text-muted">Müteahhit firma bu daire için henüz malzeme ve donanım seçeneklerini sisteme yüklememiş.</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            @foreach (var category in categories)
+            {
+                var options = catalogs.Where(c => c.Category == category).ToList();
+                
+                // Müşteri bu kategori için daha önce seçim yapmış mı?
+                var currentSelection = options.SelectMany(o => o.Selections)
+                                              .FirstOrDefault(s => s.BuildingUnitId == Model.Id);
+                
+                <div class="col-12">
+                    <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-3">
+                        <div class="card-header bg-white border-bottom p-4 d-flex justify-content-between align-items-center">
+                            <h4 class="fw-bold mb-0">@category</h4>
+                            @if (currentSelection != null)
+                            {
+                                <span class="badge bg-success rounded-pill px-3 py-2"><i class="bi bi-check-lg me-1"></i>Seçim Yapıldı</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2"><i class="bi bi-exclamation-circle me-1"></i>Seçim Bekleniyor</span>
+                            }
+                        </div>
+                        <div class="card-body p-4 bg-light">
+                            <div class="row g-4">
+                                @foreach (var option in options)
+                                {
+                                    bool isSelected = currentSelection != null && currentSelection.ProjectMaterialCatalogId == option.Id;
+                                    
+                                    <div class="col-md-6 col-lg-4">
+                                        <div class="card h-100 border-2 rounded-4 overflow-hidden transition-all @(isSelected ? "border-primary shadow" : "border-light")">
+                                            @if (!string.IsNullOrEmpty(option.ImageUrl))
+                                            {
+                                                <img src="@option.ImageUrl" class="card-img-top" alt="@option.MaterialName" style="height: 200px; object-fit: cover;">
+                                            }
+                                            <div class="card-body">
+                                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                                    <h5 class="fw-bold mb-0">@option.MaterialName</h5>
+                                                    @if(isSelected)
+                                                    {
+                                                        <i class="bi bi-check-circle-fill text-primary fs-5"></i>
+                                                    }
+                                                </div>
+                                                <p class="small text-muted mb-3">@option.Description</p>
+                                                
+                                                @if (option.PriceDifference > 0)
+                                                {
+                                                    <div class="fw-bold text-danger mb-3">
+                                                        Fiyat Farkı: +@option.PriceDifference.ToString("N2") ₺
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="fw-bold text-success mb-3">
+                                                        Standart Paket (Ücretsiz)
+                                                    </div>
+                                                }
+                                            </div>
+                                            <div class="card-footer bg-white border-top-0 pt-0 pb-3 text-center">
+                                                @if (isSelected)
+                                                {
+                                                    <button class="btn btn-primary w-100 rounded-pill disabled">
+                                                        <i class="bi bi-check-lg me-2"></i> Geçerli Seçiminiz
+                                                    </button>
+                                                    @if (currentSelection.IsApprovedByAdmin)
+                                                    {
+                                                        <div class="small text-success mt-2"><i class="bi bi-shield-check me-1"></i>Firma tarafından onaylandı.</div>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <form asp-action="SaveSelection" method="post">
+                                                        <input type="hidden" name="unitId" value="@Model.Id" />
+                                                        <input type="hidden" name="catalogId" value="@option.Id" />
+                                                        <button type="submit" class="btn btn-outline-primary w-100 rounded-pill" onclick="return confirm('Bu seçeneği kaydetmek istediğinize emin misiniz?');">
+                                                            Bunu Seç
+                                                        </button>
+                                                    </form>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+        
+        <div class="alert alert-info mt-4 rounded-4 border-0">
+            <i class="bi bi-info-circle-fill me-2"></i> Tüm seçimlerinizi tamamladıktan sonra şantiye yöneticisi onay sürecini başlatacaktır. Onaylanan seçimler sonradan değiştirilemez.
+        </div>
+    }
+</div>
+
+<style>
+    .transition-all {
+        transition: all 0.3s ease;
+    }
+    .card:hover.border-light {
+        border-color: #dee2e6 !important;
+        box-shadow: 0 .125rem .25rem rgba(0,0,0,.075) !important;
+    }
+</style>

@@ -1,0 +1,179 @@
+@model IEnumerable<GMK360.Core.Entities.Identity.ApplicationUser>
+@{
+    ViewData["Title"] = "Kullanıcılar & CRM";
+    Layout = "~/Views/Shared/_AdminLayout.cshtml";
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0 text-primary">Kullanıcılar & CRM</h2>
+            <p class="text-muted">Platformdaki tüm kullanıcıları, abonelik paketlerini ve aktif durumlarını buradan takip edin. (Üye Yönetimi ve CRM Birleştirilmiştir)</p>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body">
+            <form method="get" asp-action="Index">
+                <div class="input-group input-group-lg">
+                    <input type="text" name="query" class="form-control border-end-0 bg-light" placeholder="İsim, soyisim veya e-posta ile ara...">
+                    <button class="btn btn-primary border-0" type="submit"><i class="bi bi-search"></i></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4" style="width: 40px;"></th>
+                            <th>Müşteri</th>
+                            <th>İletişim</th>
+                            <th>Rol / Hesap Tipi</th>
+                            <th>Abonelikler</th>
+                            <th>Doğrulama</th>
+                            <th class="text-end pe-4">İşlemler</th>
+                        </tr>
+                    </thead>
+                                        <tbody>
+                        @foreach(var u in Model)
+                        {
+                            var subs = u.Subscriptions?.ToList() ?? new List<GMK360.Core.Entities.UserSubscription>();
+                            var activeCount = subs.Count(s => s.IsActive && (s.EndDate == null || s.EndDate > DateTime.UtcNow));
+                            
+                            <tr data-bs-toggle="collapse" data-bs-target="#collapse-@u.Id" class="cursor-pointer hover-lift">
+                                <td class="ps-4 text-primary">
+                                    <i class="ph ph-caret-down"></i>
+                                </td>
+                                <td>
+                                    <h6 class="mb-0 fw-bold">@(string.IsNullOrEmpty(u.FirstName) ? "İsimsiz" : u.FirstName) @u.LastName</h6>
+                                    <small class="text-muted">Kayıt: @u.Id.Substring(0,6)</small>
+                                    @if (!string.IsNullOrEmpty(u.ReferredByUserId))
+                                    {
+                                        <br><small class="text-success"><i class="bi bi-person-heart"></i> Davetle Geldi</small>
+                                    }
+                                    else
+                                    {
+                                        <br><small class="text-muted"><i class="bi bi-globe"></i> Doğrudan Kayıt</small>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="mb-1"><i class="bi bi-envelope me-2 text-muted"></i>@u.Email</div>
+                                    <div><i class="bi bi-telephone me-2 text-muted"></i>@(u.PhoneNumber ?? "-")</div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark border d-inline-block">@u.UserType.ToString()</span>
+                                    @if(u.IsShadowAccount)
+                                    {
+                                        <span class="badge bg-secondary rounded-pill ms-1" style="font-size:0.7rem;"><i class="bi bi-cloud me-1"></i>Gölge Hesap</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if(subs.Any())
+                                    {
+                                        <span class="badge bg-primary rounded-pill">@activeCount Aktif Paket</span>
+                                        <span class="text-muted small ms-1">(@subs.Count() Toplam)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">Paket Yok</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if(u.IsEDevletVerified)
+                                    {
+                                        <span class="text-primary fw-bold"><i class="bi bi-patch-check-fill me-1"></i>e-Devlet Onaylı</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Beyan Esası</span>
+                                    }
+                                </td>
+                                <td class="text-end pe-4">
+                                    <a href="/AdminCRM/Detail/@u.Id" class="btn btn-sm btn-outline-primary rounded-pill" onclick="event.stopPropagation();">
+                                        Detay Gör
+                                    </a>
+                                </td>
+                            </tr>
+                            <tr id="collapse-@u.Id" class="collapse bg-light border-bottom">
+                                <td colspan="7" class="p-0">
+                                    <div class="p-4">
+                                        <h6 class="fw-bold mb-3 text-navy"><i class="ph ph-stack me-2"></i>Abonelik ve Paket Geçmişi</h6>
+                                        @if(subs.Any())
+                                        {
+                                            <div class="table-responsive bg-white rounded border">
+                                                <table class="table table-sm table-hover mb-0 align-middle">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th class="ps-3">Paket Adı</th>
+                                                            <th>Başlangıç</th>
+                                                            <th>Bitiş</th>
+                                                            <th>Durum</th>
+                                                            <th>Tutar</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach(var sub in subs.OrderByDescending(s => s.StartDate))
+                                                        {
+                                                            <tr>
+                                                                <td class="ps-3 fw-medium">
+                                                                    <i class="bi bi-box text-primary me-2"></i>@(sub.Package?.Name ?? "Bilinmeyen Paket")
+                                                                </td>
+                                                                <td class="text-muted small">@sub.StartDate.ToString("dd.MM.yyyy")</td>
+                                                                <td class="text-muted small">
+                                                                    @(sub.EndDate.HasValue ? sub.EndDate.Value.ToString("dd.MM.yyyy") : "Süresiz")
+                                                                </td>
+                                                                <td>
+                                                                    @if(sub.IsActive)
+                                                                    {
+                                                                        if(sub.EndDate.HasValue && sub.EndDate.Value > DateTime.UtcNow)
+                                                                        {
+                                                                            var kalanGun = (sub.EndDate.Value - DateTime.UtcNow).Days;
+                                                                            <span class="badge bg-warning text-dark"><i class="bi bi-clock-history me-1"></i>Deneme Sürecinde (Kalan: @kalanGun Gün)</span>
+                                                                        }
+                                                                        else if(sub.EndDate.HasValue && sub.EndDate.Value <= DateTime.UtcNow)
+                                                                        {
+                                                                            <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Süresi Doldu</span>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Aktif</span>
+                                                                        }
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span class="badge bg-secondary"><i class="bi bi-pause-circle me-1"></i>Pasif / İptal</span>
+                                                                    }
+                                                                </td>
+                                                                <td class="fw-bold text-success">@sub.PricePaid.ToString("C")</td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="alert alert-secondary mb-0 py-2 text-center">Bu kullanıcıya ait herhangi bir paket veya abonelik kaydı bulunmuyor.</div>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+    <style>
+        .cursor-pointer { cursor: pointer; }
+        .hover-lift { transition: all 0.2s ease-in-out; }
+        .hover-lift:hover { background-color: #f8f9fa; transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    </style>
+}

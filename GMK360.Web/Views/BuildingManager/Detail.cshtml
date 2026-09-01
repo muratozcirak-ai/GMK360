@@ -1,0 +1,268 @@
+@model GMK360.Core.Entities.Building
+@{
+    ViewData["Title"] = Model.Name + " Yönetim Paneli";
+    Layout = "~/Views/Shared/_FacilityLayout.cshtml";
+
+    // Toplam toplanacak borç (Ödenmemiş)
+    var totalUnpaid = Model.Units.SelectMany(u => u.Debts).Where(d => !d.IsPaid).Sum(d => d.Amount);
+    var totalPaid = Model.Units.SelectMany(u => u.Debts).Where(d => d.IsPaid).Sum(d => d.Amount);
+}
+
+<div class="container mt-5">
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle me-2"></i>@TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>@TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <!-- Üst Başlık ve Özet -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <a href="/BuildingManager/Index" class="text-decoration-none text-muted small mb-2 d-inline-block"><i class="bi bi-arrow-left me-1"></i> Binalarıma Dön</a>
+            <h2 class="fw-bold mb-0">@Model.Name</h2>
+            <p class="text-muted"><i class="bi bi-geo-alt me-1"></i> @Model.Address</p>
+        </div>
+        <div class="d-flex gap-3 text-end align-items-center">
+            <a href="/BuildingManager/TicketManagement?buildingId=@Model.Id" class="btn btn-outline-info shadow-sm rounded-pill px-4">
+                <i class="bi bi-headset me-2"></i>İç Talepler (Ticket)
+            </a>
+            <a href="/Meeting/Index?buildingId=@Model.Id" class="btn btn-outline-primary shadow-sm rounded-pill px-4">
+                <i class="bi bi-book me-2"></i>Karar Defteri (Toplantı)
+            </a>
+            <a href="/BuildingManager/Accounting/@Model.Id" class="btn btn-outline-success shadow-sm rounded-pill px-4">
+                <i class="bi bi-bank me-2"></i>Muhasebe & Personel
+            </a>
+            <div class="bg-success bg-opacity-10 text-success p-3 rounded-4">
+                <span class="d-block small fw-bold">Toplanan</span>
+                <span class="fs-4 fw-bold">@totalPaid.ToString("C")</span>
+            </div>
+            <div class="bg-danger bg-opacity-10 text-danger p-3 rounded-4">
+                <span class="d-block small fw-bold">Bekleyen (Alacak)</span>
+                <span class="fs-4 fw-bold">@totalUnpaid.ToString("C")</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Sol Kolon: Daireler ve Borç Durumları -->
+        <div class="col-lg-8">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="fw-bold mb-0">Daireler / Bağımsız Bölümler</h4>
+                <button class="btn btn-sm btn-primary rounded-pill fw-bold px-3" data-bs-toggle="modal" data-bs-target="#addUnitModal">
+                    <i class="bi bi-plus"></i> Daire Ekle
+                </button>
+            </div>
+
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4">Daire No</th>
+                                    <th>Kişiler (Ev Sahibi / Kiracı)</th>
+                                    <th>Durum</th>
+                                    <th>Borç Bakiyesi</th>
+                                    <th class="pe-4 text-end">Detay</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var unit in Model.Units)
+                                {
+                                    var unitUnpaid = unit.Debts.Where(d => !d.IsPaid).Sum(d => d.Amount);
+                                    <tr>
+                                        <td class="ps-4 fw-bold">@unit.UnitNumber</td>
+                                        <td>
+                                            @if(!unit.IsEmpty)
+                                            {
+                                                <div class="small">
+                                                    <span class="text-muted">Sahibi:</span> @(string.IsNullOrEmpty(unit.OwnerName) ? "-" : unit.OwnerName) <br/>
+                                                    <span class="text-muted">Kiracı:</span> @(string.IsNullOrEmpty(unit.TenantName) ? "-" : unit.TenantName)
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted fst-italic">Boş</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if(unit.IsEmpty) { <span class="badge bg-secondary">Boş</span> }
+                                            else if(unitUnpaid > 0) { <span class="badge bg-danger">Borçlu</span> }
+                                            else { <span class="badge bg-success">Borcu Yok</span> }
+                                        </td>
+                                        <td class="fw-bold @(unitUnpaid > 0 ? "text-danger" : "text-success")">
+                                            @unitUnpaid.ToString("C")
+                                        </td>
+                                        <td class="pe-4 text-end">
+                                            <button class="btn btn-sm btn-outline-secondary rounded-pill" type="button" data-bs-toggle="collapse" data-bs-target="#unit_@unit.Id">
+                                                Hesap Özeti <i class="bi bi-chevron-down ms-1"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <tr class="collapse bg-light" id="unit_@unit.Id">
+                                        <td colspan="5" class="p-4">
+                                            <h6 class="fw-bold mb-3">Hesap Hareketleri (@unit.UnitNumber)</h6>
+                                            @if(!unit.Debts.Any())
+                                            {
+                                                <p class="text-muted small">Henüz bir gider yansıtılmamış.</p>
+                                            }
+                                            else
+                                            {
+                                                <table class="table table-sm mb-0">
+                                                    <thead>
+                                                        <tr class="text-muted small">
+                                                            <th>Açıklama</th>
+                                                            <th>Tutar</th>
+                                                            <th>Kimin Sorumluluğu</th>
+                                                            <th>Durum</th>
+                                                            <th class="text-end">İşlem</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach(var debt in unit.Debts)
+                                                        {
+                                                            <tr>
+                                                                <td>@debt.BuildingExpense.Description</td>
+                                                                <td class="fw-bold">@debt.Amount.ToString("C")</td>
+                                                                <td>
+                                                                    @if(debt.BuildingExpense.PayerType == "Tenant") { <span>Kiracı</span> }
+                                                                    else if(debt.BuildingExpense.PayerType == "Owner") { <span>Ev Sahibi</span> }
+                                                                    else { <span>Ortak</span> }
+                                                                </td>
+                                                                <td>
+                                                                    @if(debt.IsPaid) { <span class="text-success small"><i class="bi bi-check-circle"></i> Ödendi (@debt.PaymentDate?.ToString("dd.MM.yy"))</span> }
+                                                                    else { <span class="text-danger small"><i class="bi bi-x-circle"></i> Bekliyor</span> }
+                                                                </td>
+                                                                <td class="text-end">
+                                                                    @if(!debt.IsPaid)
+                                                                    {
+                                                                        <form asp-action="MarkDebtAsPaid" method="post" class="d-inline">
+                                                                            <input type="hidden" name="debtId" value="@debt.Id" />
+                                                                            <!-- Gerçek senaryoda kimin ödediğini seçtiren bir UI olabilir, şimdilik statik -->
+                                                                            <input type="hidden" name="paidBy" value="Bina Sakini" />
+                                                                            <button type="submit" class="btn btn-sm btn-success rounded-pill px-3">Ödendi İşaretle</button>
+                                                                        </form>
+                                                                    }
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                                
+                                @if(!Model.Units.Any())
+                                {
+                                    <tr>
+                                        <td colspan="5" class="text-center py-4 text-muted">
+                                            Bu binaya henüz hiç daire eklenmemiş.
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sağ Kolon: Gider / Fatura Ekleme -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4 position-sticky" style="top: 2rem;">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-4"><i class="bi bi-receipt text-primary me-2"></i> Ortak Gider Yansıt</h5>
+                    
+                    <form asp-action="AddExpense" method="post">
+                        <input type="hidden" name="buildingId" value="@Model.Id" />
+                        
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Gider Açıklaması</label>
+                            <input type="text" name="description" class="form-control bg-light border-0" placeholder="Örn: Ekim Ayı Asansör Bakımı" required />
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Fatura Tutarı (₺)</label>
+                            <input type="number" step="0.01" name="totalAmount" class="form-control bg-light border-0" placeholder="0.00" required />
+                            <div class="form-text small">Bu tutar, binadaki daire sayısına (@Model.Units.Count) eşit bölünecektir.</div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold">Kimin Sorumluluğu (Resmi Olmayan Takip)</label>
+                            <select name="payerType" class="form-select bg-light border-0">
+                                <option value="Tenant">Kiracının Sorumluluğu (Aidat, Ortak Elektrik vb.)</option>
+                                <option value="Owner">Ev Sahibinin Sorumluluğu (Demirbaş, Çatı Tamiri vb.)</option>
+                                <option value="All">Fark Etmez / Ortak</option>
+                            </select>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary w-100 rounded-pill fw-bold" @(Model.Units.Count == 0 ? "disabled" : "")>
+                            Gideri Ekle ve Dairelere Dağıt
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Daire Ekle Modal -->
+<div class="modal fade" id="addUnitModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title fw-bold">Yeni Daire/Bölüm Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="AddUnit" method="post">
+                <input type="hidden" name="buildingId" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Daire/Kapı No</label>
+                        <input type="text" name="unitNumber" class="form-control bg-light border-0" placeholder="Örn: Daire 1, Dükkan A" required />
+                    </div>
+                    <hr/>
+                    <h6 class="fw-bold small text-muted text-uppercase mb-3">Kişi Bilgileri (Opsiyonel)</h6>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small">Ev Sahibi Adı</label>
+                            <input type="text" name="ownerName" class="form-control bg-light border-0" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small">Ev Sahibi Tel</label>
+                            <input type="text" name="ownerPhone" class="form-control bg-light border-0" />
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small">Kiracı Adı</label>
+                            <input type="text" name="tenantName" class="form-control bg-light border-0" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small">Kiracı Tel</label>
+                            <input type="text" name="tenantPhone" class="form-control bg-light border-0" />
+                        </div>
+                    </div>
+                    <div class="form-check form-switch mt-3">
+                        <input class="form-check-input" type="checkbox" role="switch" name="isEmpty" value="true" id="isEmptySwitch">
+                        <label class="form-check-label small" for="isEmptySwitch">Bu daire şu an boş (kimse oturmuyor)</label>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4">Daireyi Ekle</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

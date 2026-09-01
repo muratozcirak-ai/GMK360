@@ -1,0 +1,115 @@
+@model List<GMK360.Core.Entities.Identity.ApplicationUser>
+
+@{
+    ViewData["Title"] = "Kullanıcı Yönetimi";
+    Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
+}
+
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-4">
+                <div class="card-header pb-0 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 text-primary fw-bold">Sistem Kullanıcıları</h6>
+                    <span class="badge bg-info text-dark">Toplam @Model.Count Kullanıcı</span>
+                </div>
+                <div class="card-body px-0 pt-0 pb-2">
+                    @if (TempData["SuccessMessage"] != null)
+                    {
+                        <div class="alert alert-success mx-4 mt-3 text-white">@TempData["SuccessMessage"]</div>
+                    }
+
+                    <div class="table-responsive p-0">
+                        <table class="table align-items-center mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Kullanıcı</th>
+                                    <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Telefon</th>
+                                    <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Durum</th>
+                                    <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Kayıt Tarihi</th>
+                                    <th class="text-secondary opacity-7">İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var user in Model)
+                                {
+                                    bool isLocked = user.LockoutEnd.HasValue && user.LockoutEnd.Value > DateTimeOffset.UtcNow;
+                                    
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex px-2 py-1">
+                                                <div class="d-flex flex-column justify-content-center">
+                                                    <h6 class="mb-0 text-sm">@user.FirstName @user.LastName</h6>
+                                                    <p class="text-xs text-secondary mb-0">@user.Email</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="align-middle text-center text-sm">
+                                            <span class="text-secondary text-xs font-weight-bold">@(string.IsNullOrEmpty(user.PhoneNumber) ? "-" : user.PhoneNumber)</span>
+                                        </td>
+                                        <td class="align-middle text-center text-sm">
+                                            @if (isLocked)
+                                            {
+                                                <span class="badge badge-sm bg-gradient-danger">Engelli (Banlı)</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-sm bg-gradient-success">Aktif</span>
+                                            }
+                                        </td>
+                                        <td class="align-middle text-center">
+                                            <span class="text-secondary text-xs font-weight-bold">-</span>
+                                        </td>
+                                        <td class="align-middle">
+                                            @if (isLocked)
+                                            {
+                                                <form asp-action="UnlockUser" asp-controller="UserManager" method="post" class="d-inline">
+                                                    <input type="hidden" name="id" value="@user.Id" />
+                                                    <button type="submit" class="btn btn-sm btn-success mb-0" onclick="return confirm('Bu kullanıcının engelini kaldırmak istediğinize emin misiniz?');">
+                                                        Engeli Kaldır
+                                                    </button>
+                                                </form>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="btn btn-sm btn-warning mb-0" data-bs-toggle="modal" data-bs-target="#lockModal-@user.Id">
+                                                    Hesabı Dondur
+                                                </button>
+
+                                                <!-- Ban Modalı -->
+                                                <div class="modal fade" id="lockModal-@user.Id" tabindex="-1" aria-labelledby="lockModalLabel" aria-hidden="true">
+                                                    <div class="modal-dialog">
+                                                        <div class="modal-content">
+                                                            <div class="modal-header">
+                                                                <h5 class="modal-title" id="lockModalLabel">Kullanıcıyı Banla</h5>
+                                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                            </div>
+                                                            <form asp-action="LockUser" asp-controller="UserManager" method="post">
+                                                                <div class="modal-body text-start">
+                                                                    <input type="hidden" name="id" value="@user.Id" />
+                                                                    <div class="mb-3">
+                                                                        <label class="form-label">Banlanma Sebebi</label>
+                                                                        <textarea name="reason" class="form-control" rows="2" required placeholder="Sahte ilan, dolandırıcılık vb."></textarea>
+                                                                    </div>
+                                                                    <p class="text-xs text-danger">Bu işlem kullanıcının sisteme giriş yapmasını tamamen engelleyecektir.</p>
+                                                                </div>
+                                                                <div class="modal-footer">
+                                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                                                                    <button type="submit" class="btn btn-warning">Hesabı Dondur (Banla)</button>
+                                                                </div>
+                                                            </form>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

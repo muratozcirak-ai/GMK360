@@ -1,0 +1,91 @@
+@model IEnumerable<GMK360.Core.Entities.Offer>
+@{
+    ViewData["Title"] = "Pazarlık / Teklifler";
+    var sentOffers = ViewBag.SentOffers as IEnumerable<GMK360.Core.Entities.Offer>;
+}
+
+<div class="container mt-5">
+    <div class="row">
+        <!-- Gelen Teklifler -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0 text-primary"><i class="ph ph-download-simple"></i> Gelen Teklifler</h5>
+                </div>
+                <div class="card-body p-0">
+                    @if (Model != null && Model.Any())
+                    {
+                        <ul class="list-group list-group-flush">
+                            @foreach (var offer in Model)
+                            {
+                                <li class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="fw-bold">@offer.Buyer?.Email</span>
+                                        <span class="badge bg-@(offer.Status == GMK360.Core.Entities.OfferStatus.Pending ? "warning" : offer.Status == GMK360.Core.Entities.OfferStatus.Accepted ? "success" : "danger")">
+                                            @offer.Status
+                                        </span>
+                                    </div>
+                                    <p class="mb-1 text-muted">İlan ID: #@offer.PropertyId - Teklif: <strong>@offer.OfferedPrice.ToString("N2") ₺</strong></p>
+                                    <small class="text-muted d-block mb-2">@offer.CreatedAt.ToString("dd MMM yyyy HH:mm")</small>
+                                    
+                                    @if (offer.Status == GMK360.Core.Entities.OfferStatus.Pending)
+                                    {
+                                        <div class="btn-group w-100 mt-2">
+                                            <form asp-action="UpdateStatus" method="post" class="w-50">
+                                                <input type="hidden" name="offerId" value="@offer.Id" />
+                                                <input type="hidden" name="status" value="Accepted" />
+                                                <button type="submit" class="btn btn-sm btn-success w-100">Kabul Et</button>
+                                            </form>
+                                            <form asp-action="UpdateStatus" method="post" class="w-50">
+                                                <input type="hidden" name="offerId" value="@offer.Id" />
+                                                <input type="hidden" name="status" value="Rejected" />
+                                                <button type="submit" class="btn btn-sm btn-danger w-100">Reddet</button>
+                                            </form>
+                                        </div>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <div class="p-4 text-center text-muted">Henüz gelen teklif yok.</div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Gönderilen Teklifler -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0 text-secondary"><i class="ph ph-upload-simple"></i> Yaptığım Teklifler</h5>
+                </div>
+                <div class="card-body p-0">
+                    @if (sentOffers != null && sentOffers.Any())
+                    {
+                        <ul class="list-group list-group-flush">
+                            @foreach (var offer in sentOffers)
+                            {
+                                <li class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="fw-bold text-dark">İlan ID: #@offer.PropertyId</span>
+                                        <span class="badge bg-@(offer.Status == GMK360.Core.Entities.OfferStatus.Pending ? "warning" : offer.Status == GMK360.Core.Entities.OfferStatus.Accepted ? "success" : "danger")">
+                                            @offer.Status
+                                        </span>
+                                    </div>
+                                    <p class="mb-1">Teklifim: <strong>@offer.OfferedPrice.ToString("N2") ₺</strong></p>
+                                    <small class="text-muted">@offer.CreatedAt.ToString("dd MMM yyyy HH:mm") - Satıcı: @offer.Seller?.Email</small>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <div class="p-4 text-center text-muted">Henüz bir ilana teklif yapmadınız.</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

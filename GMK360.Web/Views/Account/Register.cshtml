@@ -1,0 +1,284 @@
+@model GMK360.Web.Models.RegisterViewModel
+@{
+    ViewData["Title"] = "GMK360'a Kayıt Olun";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    
+    bool isShadow = !string.IsNullOrEmpty(Model?.ShadowToken);
+}
+
+<div class="auth-page py-5" style="background-color: #f8fafc; min-height: calc(100vh - 80px);">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                
+                <div class="text-center mb-5">
+                    <h2 class="fw-bold text-navy">GMK360 Ekosistemine Katılın</h2>
+                    @if(isShadow)
+                    {
+                        <div class="alert alert-info d-inline-block mt-3 px-4 py-2 rounded-pill border-0 shadow-sm">
+                            <i class="ph-fill ph-users-three me-2"></i> Bir davet linki (Gölge Kullanıcı) ile geldiniz. Ana hesabın altına bağlanacaksınız.
+                        </div>
+                    }
+                    else if(!string.IsNullOrEmpty(Model?.ReferralCode))
+                    {
+                        <div class="alert alert-success d-inline-block mt-3 px-4 py-2 rounded-pill border-0 shadow-sm">
+                            <i class="ph-fill ph-gift me-2"></i> Özel referans linki ile geldiniz! Hoş geldin hediyeniz kayıttan sonra cüzdanınıza eklenecektir.
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted mt-2">İhtiyacınıza uygun hesap türünü seçerek saniyeler içinde kaydınızı tamamlayın.</p>
+                    }
+                </div>
+
+                <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                    <div class="card-body p-5">
+                        
+                        <form asp-action="Register" method="post" id="registerForm">
+                            @Html.AntiForgeryToken()
+                            
+                            @if(Context.Request.Query.ContainsKey("campaignId"))
+                            {
+                                <input type="hidden" name="CampaignId" value="@Context.Request.Query["campaignId"]" />
+                            }
+                            @if(Context.Request.Query.ContainsKey("plan"))
+                            {
+                                <input type="hidden" name="SelectedPlan" value="@Context.Request.Query["plan"]" />
+                            }
+
+                            @if(!string.IsNullOrEmpty(Model?.ReferralCode))
+                            {
+                                <input type="hidden" name="ReferralCode" value="@Model.ReferralCode" />
+                            }
+
+                            @if(isShadow)
+                            {
+                                <input type="hidden" name="ShadowToken" value="@Model.ShadowToken" />
+                                <input type="hidden" name="UserType" value="Individual" id="roleInput" />
+                            }
+                            else
+                            {
+                                <!-- ROL SEÇİMİ (Shadow değilse) -->
+                                @if(Context.Request.Query.ContainsKey("userType"))
+                                {
+                                    string requestedRole = Context.Request.Query["userType"];
+                                    <input type="hidden" name="UserType" value="@requestedRole" id="hiddenUserType" />
+                                    <div class="alert alert-primary mb-4 border-0 shadow-sm d-flex align-items-center">
+                                        <i class="ph-fill ph-check-circle fs-3 me-3"></i>
+                                        <div>
+                                            <strong>Hesap Türünüz Onaylandı</strong><br/>
+                                            Gelişmiş sektörel özelliklerle donatılmış sisteme kayıt oluyorsunuz.
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                <h5 class="fw-bold mb-4">1. Hesap Türünüzü Seçin</h5>
+                                <div class="row g-3 mb-5">
+                                    <div class="col-md-4">
+                                        <input type="radio" class="btn-check" name="UserType" id="role-individual" value="Individual" autocomplete="off" checked onchange="toggleRoleFields()">
+                                        <label class="btn btn-outline-primary w-100 p-4 rounded-4 h-100 text-start" for="role-individual">
+                                            <i class="ph-fill ph-user fs-2 mb-3"></i>
+                                            <h6 class="fw-bold mb-1">Bireysel / Ev Sahibi</h6>
+                                            <small class="text-muted d-block" style="font-size: 0.8rem;">Site/bina sakini, mülk sahibi</small>
+                                        </label>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <input type="radio" class="btn-check" name="UserType" id="role-corporate" value="Corporate" autocomplete="off" onchange="toggleRoleFields()">
+                                        <label class="btn btn-outline-primary w-100 p-4 rounded-4 h-100 text-start" for="role-corporate">
+                                            <i class="ph-fill ph-buildings fs-2 mb-3"></i>
+                                            <h6 class="fw-bold mb-1">Kurumsal / Yönetim</h6>
+                                            <small class="text-muted d-block" style="font-size: 0.8rem;">Yönetim firması, inşaat, emlak ofisi</small>
+                                        </label>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <input type="radio" class="btn-check" name="UserType" id="role-provider" value="ServiceProvider" autocomplete="off" onchange="toggleRoleFields()">
+                                        <label class="btn btn-outline-primary w-100 p-4 rounded-4 h-100 text-start" for="role-provider">
+                                            <i class="ph-fill ph-wrench fs-2 mb-3"></i>
+                                            <h6 class="fw-bold mb-1">Hizmet Veren</h6>
+                                            <small class="text-muted d-block" style="font-size: 0.8rem;">Usta, temizlik, nakliye vb.</small>
+                                        </label>
+                                    </div>
+                                </div>
+                                }
+                            }
+
+                            <!-- KİŞİSEL VE GÜVENLİK BİLGİLERİ -->
+                            <h5 class="fw-bold mb-4">2. Kişisel Bilgiler & Güvenlik</h5>
+                            <div class="alert alert-light border d-flex align-items-start mb-4">
+                                <i class="ph-fill ph-shield-check text-success fs-3 me-3"></i>
+                                <div class="small text-muted">
+                                    <strong class="text-dark">NVI Kimlik Doğrulaması</strong><br/>
+                                    Ad, Soyad, Doğum Yılı ve T.C. Kimlik numarası Nüfus ve Vatandaşlık İşleri sisteminden anlık olarak doğrulanacaktır. (Lokal testlerde bypass aktiftir).
+                                </div>
+                            </div>
+                            
+                            @if (!ViewData.ModelState.IsValid)
+                            {
+                                <div class="alert alert-danger">
+                                    <div asp-validation-summary="All" class="text-danger small"></div>
+                                </div>
+                            }
+
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <label class="form-label text-muted small fw-bold">Adınız</label>
+                                    <input type="text" asp-for="FirstName" class="form-control premium-input bg-light" required oninput="this.value = this.value.replace(/[^a-zA-ZçğıöşüÇĞİÖŞÜ\s]/g, '').toLocaleUpperCase('tr-TR');" style="text-transform: uppercase;">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-muted small fw-bold">Soyadınız</label>
+                                    <input type="text" asp-for="LastName" class="form-control premium-input bg-light" required oninput="this.value = this.value.replace(/[^a-zA-ZçğıöşüÇĞİÖŞÜ\s]/g, '').toLocaleUpperCase('tr-TR');" style="text-transform: uppercase;">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-muted small fw-bold">T.C. Kimlik Numaranız</label>
+                                    <input type="text" asp-for="TcIdentityNo" class="form-control premium-input bg-light" maxlength="11" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-muted small fw-bold">Doğum Tarihiniz</label>
+                                    <input type="date" asp-for="DateOfBirth" class="form-control premium-input bg-light" required>
+                                </div>
+                                <div class="col-md-12 mt-4 border-top pt-4">
+                                    <label class="form-label text-muted small fw-bold">E-Posta Adresiniz (Giriş için kullanılacak)</label>
+                                    <input type="email" asp-for="Email" class="form-control premium-input bg-light" required oninput="this.value = this.value.toLowerCase();" style="text-transform: lowercase;">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-muted small fw-bold">Şifre</label>
+                                    <input type="password" asp-for="Password" class="form-control premium-input bg-light" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-muted small fw-bold">Şifre Tekrar</label>
+                                    <input type="password" asp-for="ConfirmPassword" class="form-control premium-input bg-light" required>
+                                </div>
+                            </div>
+
+                            <!-- KURUMSAL EK ALANLAR -->
+                            <div id="corporateFields" class="mt-4 pt-4 border-top" style="display: none;">
+                                <h5 class="fw-bold mb-4">3. Kurumsal Firma Bilgileri</h5>
+                                <div class="row g-4">
+                                    <div class="col-md-12">
+                                        <label class="form-label text-muted small fw-bold">Firma Adı (Örn: Yıldız Site Yönetimi)</label>
+                                        <input type="text" asp-for="CompanyName" class="form-control premium-input bg-light">
+                                    </div>
+                                    <div class="col-md-12">
+                                        <label class="form-label text-muted small fw-bold">Vergi Numarası (VKN)</label>
+                                        <input type="text" asp-for="TaxNumber" class="form-control premium-input bg-light" maxlength="10">
+                                        <div class="form-text text-muted"><i class="ph-fill ph-info"></i> VKN kayıt anında otomatik doğrulanmaz, beyanınız esas alınır.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- HİZMET VEREN (USTA) EK ALANLAR -->
+                            <div id="providerFields" class="mt-4 pt-4 border-top" style="display: none;">
+                                <h5 class="fw-bold mb-4">3. Hizmet / Ustalık Bilgileri</h5>
+                                <div class="row g-4">
+                                    <div class="col-md-12">
+                                        <label class="form-label text-muted small fw-bold">Hizmet Kategoriniz</label>
+                                        <select asp-for="ServiceCategoryId" class="form-select premium-input bg-light">
+                                            <option value="">-- Kategori Seçiniz --</option>
+                                            @if(ViewBag.ServiceCategories != null)
+                                            {
+                                                foreach(var cat in ViewBag.ServiceCategories)
+                                                {
+                                                    <option value="@cat.Id">@cat.Name</option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ONAY VE BUTON -->
+                            <div class="mt-5 text-center">
+                                <div class="form-check d-flex justify-content-center align-items-center mb-4">
+                                    <input class="form-check-input me-2" type="checkbox" id="kvkkCheck" style="width: 20px; height: 20px;" required>
+                                    <label class="form-check-label ms-1 mt-1 text-muted" for="kvkkCheck">
+                                        <a href="#" class="text-dark fw-bold text-decoration-none">Aydınlatma Metnini</a> okudum, T.C. kimlik bilgilerimin NVI üzerinden doğrulanmasını onaylıyorum.
+                                    </label>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-lg rounded-pill px-5 fw-bold shadow-sm" style="min-width: 250px;">Kayıt Ol ve Giriş Yap</button>
+                            </div>
+
+                        </form>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        function toggleRoleFields() {
+            var role = "";
+            var hiddenInput = document.getElementById('hiddenUserType');
+            
+            if (hiddenInput) {
+                role = hiddenInput.value;
+            } else {
+                var selectedRole = document.querySelector('input[name="UserType"]:checked');
+                if (selectedRole) {
+                    role = selectedRole.value;
+                }
+            }
+            
+            if (!role) return;
+            
+            var corp = document.getElementById('corporateFields');
+            if (corp) corp.style.display = (role === 'Corporate' || role === 'Consultant') ? 'block' : 'none';
+            
+            var prov = document.getElementById('providerFields');
+            if (prov) prov.style.display = (role === 'ServiceProvider') ? 'block' : 'none';
+        }
+
+        // Sayfa yüklendiğinde check et
+        document.addEventListener('DOMContentLoaded', function() {
+            toggleRoleFields();
+        });
+    </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const accTypeSelect = document.getElementById('AccountType');
+            const corpFields = document.getElementById('corporate-fields');
+
+            accTypeSelect.addEventListener('change', function() {
+                if(this.value === 'Corporate') {
+                    corpFields.classList.remove('d-none');
+                } else {
+                    corpFields.classList.add('d-none');
+                }
+            });
+        });
+    </script>
+    <style>
+        .premium-input {
+            border: 1px solid #e2e8f0;
+            padding: 0.8rem 1rem;
+            border-radius: 12px;
+            font-size: 1rem;
+        }
+        .premium-input:focus {
+            box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.1);
+            border-color: #0d6efd;
+            background-color: #fff !important;
+        }
+        .btn-check:checked + .btn-outline-primary {
+            background-color: rgba(13, 110, 253, 0.05);
+            border-color: #0d6efd;
+            border-width: 2px;
+        }
+        .btn-outline-primary {
+            border-color: #cbd5e1;
+            color: #334155;
+            transition: all 0.2s;
+        }
+        .btn-outline-primary:hover {
+            border-color: #94a3b8;
+            background-color: transparent;
+            color: #0f172a;
+            transform: translateY(-2px);
+        }
+    </style>
+}
+

@@ -1,0 +1,250 @@
+@model GMK360.Web.Models.CreateProjectWizardViewModel
+
+@{
+    ViewData["Title"] = "Yeni Proje Sihirbazı";
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+}
+
+<style>
+    .wizard-step { display: none; }
+    .wizard-step.active { display: block; animation: fadeIn 0.5s; }
+    @@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .step-indicator {
+        width: 40px; height: 40px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background-color: #e9ecef; color: #6c757d; font-weight: bold;
+        transition: all 0.3s ease;
+    }
+    .step-indicator.active { background-color: #f97316; color: white; box-shadow: 0 0 15px rgba(249, 115, 22, 0.4); }
+    .step-indicator.completed { background-color: #198754; color: white; }
+    .step-line { flex-grow: 1; height: 3px; background-color: #e9ecef; margin: 0 15px; transition: all 0.3s ease; }
+    .step-line.active { background-color: #198754; }
+</style>
+
+<div class="row">
+    <div class="col-lg-10 mx-auto">
+        <div class="card shadow-sm border-0 rounded-4">
+            
+            <!-- Wizard Header -->
+            <div class="card-header bg-white border-bottom-0 pt-5 pb-4 px-5">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="step-wrapper text-center d-flex flex-column align-items-center">
+                        <div class="step-indicator active" id="ind-1">1</div>
+                        <span class="small mt-2 fw-bold text-dark">Proje Künyesi</span>
+                    </div>
+                    <div class="step-line" id="line-1"></div>
+                    
+                    <div class="step-wrapper text-center d-flex flex-column align-items-center">
+                        <div class="step-indicator" id="ind-2">2</div>
+                        <span class="small mt-2 text-muted">Blok ve Dağılım</span>
+                    </div>
+                    <div class="step-line" id="line-2"></div>
+                    
+                    <div class="step-wrapper text-center d-flex flex-column align-items-center">
+                        <div class="step-indicator" id="ind-3"><i class="ph ph-check"></i></div>
+                        <span class="small mt-2 text-muted">Özet & Onay</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-body p-5 pt-0">
+                <form id="wizardForm" asp-action="CreateWizard" asp-controller="ConstructionProject" method="post" enctype="multipart/form-data">
+                    
+                    <!-- STEP 1: Basic Info -->
+                    <div class="wizard-step active" id="step1">
+                        <h4 class="fw-bold text-navy mb-4"><i class="ph ph-buildings text-orange me-2"></i> İlk Projenizi Oluşturun</h4>
+                        <div class="row g-4">
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold">Proje Adı</label>
+                                <input asp-for="Name" class="form-control form-control-lg rounded-3" placeholder="Örn: Vadi Konakları" required />
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold">Kısa Açıklama / Proje Vizyonu</label>
+                                <textarea asp-for="Description" class="form-control rounded-3" rows="2" placeholder="Projenin konseptini buraya yazabilirsiniz..."></textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Planlanan Başlangıç Tarihi</label>
+                                <input asp-for="StartDate" type="date" class="form-control rounded-3" required />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Hedeflenen Teslim</label>
+                                <input asp-for="EndDate" type="date" class="form-control rounded-3" required />
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold">Mimari Çizim / Proje Görseli (URL)</label>
+                                <input asp-for="CoverImageFile" type="file" class="form-control rounded-3" accept="image/jpeg,image/png,application/pdf" />
+                                <div class="form-text text-muted">Mimari resim veya 3D render görselini bilgisayarınızdan seçin (JPG/PNG).</div>
+                            </div>
+                        </div>
+                        <div class="text-end mt-5">
+                            <button type="button" class="btn btn-orange btn-lg rounded-pill px-5 fw-bold" onclick="nextStep(2)">Devam Et <i class="ph ph-arrow-right ms-2"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- STEP 2: Blocks -->
+                    <div class="wizard-step" id="step2">
+                        <h4 class="fw-bold text-navy mb-4"><i class="ph ph-squares-four text-orange me-2"></i> Blok ve Aşama Dağılımı</h4>
+                        <p class="text-muted mb-4">Temel kazısı, kaba inşaat gibi aşamaları blok bazlı takip edebilmeniz için projenizdeki blokları tanımlayın.</p>
+                        
+                        <div class="row mb-4 align-items-end bg-light p-4 rounded-4">
+                            <div class="col-md-8">
+                                <label class="form-label fw-bold">Projenizde Kaç Blok (Bina) Var?</label>
+                                <input type="number" id="blockCount" class="form-control form-control-lg rounded-3" min="1" max="20" value="1" />
+                            </div>
+                            <div class="col-md-4">
+                                <button type="button" class="btn btn-dark btn-lg w-100 rounded-3" onclick="generateBlocks()">Blokları Oluştur</button>
+                            </div>
+                        </div>
+
+                        <div id="blocksContainer">
+                            <!-- Blocks will be injected here via JS -->
+                        </div>
+
+                        <div class="d-flex justify-content-between mt-5">
+                            <button type="button" class="btn btn-outline-secondary btn-lg rounded-pill px-4" onclick="nextStep(1)"><i class="ph ph-arrow-left me-2"></i> Geri</button>
+                            <button type="button" class="btn btn-orange btn-lg rounded-pill px-5 fw-bold" onclick="prepareSummary()">Devam Et <i class="ph ph-arrow-right ms-2"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- STEP 3: Summary -->
+                    <div class="wizard-step" id="step3">
+                        <h4 class="fw-bold text-navy mb-4"><i class="ph ph-check-circle text-success me-2"></i> Proje Özeti ve Onay</h4>
+                        
+                        <div class="bg-light p-4 rounded-4 mb-4">
+                            <h5 class="fw-bold text-orange" id="summaryName"></h5>
+                            <p class="text-muted mb-3" id="summaryDesc"></p>
+                            
+                            <div class="row text-center mb-4">
+                                <div class="col-4 border-end">
+                                    <h3 class="fw-bold text-navy" id="summaryBlockCount">0</h3>
+                                    <span class="small text-muted text-uppercase">Toplam Blok</span>
+                                </div>
+                                <div class="col-4 border-end">
+                                    <h3 class="fw-bold text-navy" id="summaryTotalApts">0</h3>
+                                    <span class="small text-muted text-uppercase">Toplam Daire</span>
+                                </div>
+                                <div class="col-4">
+                                    <h3 class="fw-bold text-navy" id="summaryTotalShops">0</h3>
+                                    <span class="small text-muted text-uppercase">Toplam Dükkan</span>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-success d-flex align-items-center mb-0">
+                                <i class="ph ph-info me-3 fs-4"></i>
+                                <div>
+                                    Proje başlatıldıktan sonra <strong>her blok için bağımsız şantiye aşamaları (Hafriyat, Temel vs.)</strong> başlatabileceksiniz.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between mt-5">
+                            <button type="button" class="btn btn-outline-secondary btn-lg rounded-pill px-4" onclick="nextStep(2)"><i class="ph ph-arrow-left me-2"></i> Geri</button>
+                            <button type="submit" class="btn btn-success btn-lg rounded-pill px-5 fw-bold"><i class="ph ph-rocket-launch me-2"></i> Şantiyeyi Başlat</button>
+                        </div>
+                    </div>
+
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function nextStep(step) {
+            document.querySelectorAll('.wizard-step').forEach(el => el.classList.remove('active'));
+            document.getElementById('step' + step).classList.add('active');
+            
+            // Update Indicators
+            if(step == 1) {
+                document.getElementById('ind-1').className = "step-indicator active";
+                document.getElementById('ind-2').className = "step-indicator";
+                document.getElementById('ind-3').className = "step-indicator";
+                document.getElementById('line-1').className = "step-line";
+                document.getElementById('line-2').className = "step-line";
+            }
+            if(step == 2) {
+                document.getElementById('ind-1').className = "step-indicator completed";
+                document.getElementById('ind-2').className = "step-indicator active";
+                document.getElementById('ind-3').className = "step-indicator";
+                document.getElementById('line-1').className = "step-line active";
+                document.getElementById('line-2').className = "step-line";
+                
+                if(document.getElementById('blocksContainer').innerHTML.trim() === '') {
+                    generateBlocks();
+                }
+            }
+            if(step == 3) {
+                document.getElementById('ind-1').className = "step-indicator completed";
+                document.getElementById('ind-2').className = "step-indicator completed";
+                document.getElementById('ind-3').className = "step-indicator active";
+                document.getElementById('line-1').className = "step-line active";
+                document.getElementById('line-2').className = "step-line active";
+            }
+        }
+
+        function generateBlocks() {
+            const count = parseInt(document.getElementById('blockCount').value) || 1;
+            const container = document.getElementById('blocksContainer');
+            container.innerHTML = '';
+            
+            const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            
+            for(let i = 0; i < count; i++) {
+                const defaultName = count === 1 ? "Tek Blok" : letters[i] + " Blok";
+                
+                const html = `
+                    <div class="card border border-2 border-light shadow-sm rounded-4 mb-3 block-item">
+                        <div class="card-body p-4">
+                            <h5 class="fw-bold text-navy border-bottom pb-2 mb-3"><i class="ph ph-building me-2 text-orange"></i> ${i+1}. Blok Tanımı</h5>
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">Blok Adı</label>
+                                    <input type="text" name="Blocks[${i}].BlockName" class="form-control b-name" value="${defaultName}" required />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">Kat Sayısı</label>
+                                    <input type="number" name="Blocks[${i}].TotalFloors" class="form-control b-floors" value="5" required />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">Daire Sayısı</label>
+                                    <input type="number" name="Blocks[${i}].TotalApartments" class="form-control b-apts" value="10" required />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">Dükkan Sayısı</label>
+                                    <input type="number" name="Blocks[${i}].TotalShops" class="form-control b-shops" value="0" required />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += html;
+            }
+        }
+
+        function prepareSummary() {
+            // Get values from Step 1
+            const name = document.querySelector('input[name="Name"]').value;
+            const desc = document.querySelector('textarea[name="Description"]').value;
+            
+            // Get values from Step 2
+            const blocks = document.querySelectorAll('.block-item');
+            let totalApts = 0;
+            let totalShops = 0;
+            
+            blocks.forEach(b => {
+                totalApts += parseInt(b.querySelector('.b-apts').value) || 0;
+                totalShops += parseInt(b.querySelector('.b-shops').value) || 0;
+            });
+
+            // Set Summary
+            document.getElementById('summaryName').innerText = name || "İsimsiz Proje";
+            document.getElementById('summaryDesc').innerText = desc;
+            document.getElementById('summaryBlockCount').innerText = blocks.length;
+            document.getElementById('summaryTotalApts').innerText = totalApts;
+            document.getElementById('summaryTotalShops').innerText = totalShops;
+            
+            nextStep(3);
+        }
+    </script>
+}

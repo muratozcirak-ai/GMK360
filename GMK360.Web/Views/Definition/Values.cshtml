@@ -1,0 +1,158 @@
+@model IEnumerable<GMK360.Core.Entities.DefinitionValue>
+@{
+    var category = ViewBag.Category as GMK360.Core.Entities.DefinitionCategory;
+    ViewData["Title"] = $"{category?.Name} - Seçenekler";
+}
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="h3 mb-0 text-gray-800 fw-bold"><i class="ph ph-list-dashes me-2"></i>@category?.Name</h2>
+            <p class="text-muted mt-1">Bu kategori altındaki seçenekler ve özellikleri yönetin.</p>
+        </div>
+        <a asp-action="Index" class="btn btn-outline-secondary" style="border-radius: 8px;">
+            <i class="ph ph-arrow-left me-2"></i>Kategorilere Dön
+        </a>
+    </div>
+
+    <!-- Add Value Card -->
+    <div class="card border-0 shadow-sm mb-4" style="border-radius: 15px;">
+        <div class="card-body p-4">
+            <h5 class="card-title fw-bold mb-3"><i class="ph ph-plus-circle me-2 text-primary"></i>Yeni Seçenek Ekle</h5>
+            <form asp-action="AddValue" method="post">
+                <input type="hidden" name="categoryId" value="@category?.Id" />
+                <div class="row g-3 align-items-center">
+                    <div class="col-md-3">
+                        <div class="form-floating">
+                            <input type="text" name="name" id="valName" class="form-control" placeholder="Örn: Asansör" required />
+                            <label for="valName">Seçenek Adı (Örn: Asansör)</label>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-floating">
+                            <input type="text" name="systemCode" id="valSys" class="form-control" placeholder="Opsiyonel" />
+                            <label for="valSys">Sistem Kodu</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-floating">
+                            <input type="text" name="subOptions" id="valSub" class="form-control" placeholder="Örn: Kabin, Ebeveyn" />
+                            <label for="valSub">Alt Seçenekler (Virgülle)</label>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" id="valHasCount" name="hasCount" value="true">
+                            <label class="form-check-label fw-bold" for="valHasCount">Adet Sorulsun mu?</label>
+                        </div>
+                        <div class="form-floating mt-2">
+                            <input type="number" name="order" id="valOrd" class="form-control form-control-sm" value="1" required />
+                            <label for="valOrd">Sıra No</label>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100 py-3 fw-bold" style="border-radius: 10px;">
+                            <i class="ph ph-plus me-1"></i> Ekle
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Values List Card -->
+    <div class="card border-0 shadow-sm" style="border-radius: 15px;">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="px-4 py-3 border-0 rounded-top-start" style="width:80px;">Sıra</th>
+                            <th class="px-4 py-3 border-0">Seçenek (Değer)</th>
+                            <th class="px-4 py-3 border-0">Matris Ayarları</th>
+                            <th class="px-4 py-3 border-0">Sistem Kodu</th>
+                            <th class="px-4 py-3 border-0 text-end rounded-top-end">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if(!Model.Any()) {
+                            <tr><td colspan="4" class="text-center py-4 text-muted">Henüz hiç seçenek eklenmemiş.</td></tr>
+                        }
+                        @foreach (var val in Model)
+                        {
+                            <tr>
+                                <td class="px-4 py-3 fw-bold text-muted">@val.Order</td>
+                                <td class="px-4 py-3 fw-bold">@val.Name</td>
+                                <td class="px-4 py-3">
+                                    @if(val.HasCount) { <span class="badge bg-info me-1">Adet Sorulur</span> }
+                                    @if(!string.IsNullOrEmpty(val.SubOptions)) { <span class="badge bg-warning text-dark" title="@val.SubOptions">Alt Seçenekler Var</span> }
+                                </td>
+                                <td class="px-4 py-3">
+                                    @if(!string.IsNullOrEmpty(val.SystemCode)) {
+                                        <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 px-2 py-1">@val.SystemCode</span>
+                                    } else {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td class="px-4 py-3 text-end">
+                                    <button type="button" class="btn btn-sm btn-outline-primary me-1" style="border-radius: 6px;" title="Düzenle" data-bs-toggle="modal" data-bs-target="#editModal-@val.Id">
+                                        <i class="ph ph-pencil-simple"></i>
+                                    </button>
+                                    <form asp-action="DeleteValue" method="post" class="d-inline" onsubmit="return confirm('Bu seçeneği silmek istediğinize emin misiniz?');">
+                                        <input type="hidden" name="id" value="@val.Id" />
+                                        <input type="hidden" name="categoryId" value="@category.Id" />
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" style="border-radius: 6px;" title="Sil">
+                                            <i class="ph ph-trash"></i>
+                                        </button>
+                                    </form>
+
+                                    <!-- Edit Modal -->
+                                    <div class="modal fade text-start" id="editModal-@val.Id" tabindex="-1" aria-labelledby="editModalLabel-@val.Id" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title" id="editModalLabel-@val.Id">Seçeneği Düzenle</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <form asp-action="EditValue" method="post">
+                                                    <div class="modal-body">
+                                                        <input type="hidden" name="id" value="@val.Id" />
+                                                        <input type="hidden" name="categoryId" value="@category.Id" />
+                                                        <div class="mb-3">
+                                                            <label class="form-label">Seçenek Adı</label>
+                                                            <input type="text" name="name" class="form-control" value="@val.Name" required />
+                                                        </div>
+                                                        <div class="mb-3">
+                                                            <label class="form-label">Sistem Kodu</label>
+                                                            <input type="text" name="systemCode" class="form-control" value="@val.SystemCode" />
+                                                        </div>
+                                                        <div class="mb-3">
+                                                            <label class="form-label">Alt Seçenekler (Virgülle)</label>
+                                                            <input type="text" name="subOptions" class="form-control" value="@val.SubOptions" />
+                                                        </div>
+                                                        <div class="mb-3 form-check form-switch">
+                                                            <input class="form-check-input" type="checkbox" name="hasCount" value="true" @(val.HasCount ? "checked" : "")>
+                                                            <label class="form-check-label">Adet Sorulsun mu?</label>
+                                                        </div>
+                                                        <div class="mb-3">
+                                                            <label class="form-label">Sıra No</label>
+                                                            <input type="number" name="order" class="form-control" value="@val.Order" required />
+                                                        </div>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                                                        <button type="submit" class="btn btn-primary">Kaydet</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,182 @@
+@{
+    ViewData["Title"] = "GMK360 Asistan";
+    Layout = "~/Views/Shared/_IndividualLayout.cshtml";
+}
+
+<div class="container-fluid py-4 h-100">
+    <div class="row justify-content-center h-100">
+        <div class="col-lg-10 col-xl-8 h-100 d-flex flex-column">
+            
+            <div class="card border-0 shadow-sm rounded-4 flex-grow-1 d-flex flex-column" style="max-height: 80vh;">
+                <!-- Header -->
+                <div class="card-header bg-white border-bottom p-4 rounded-top-4 d-flex align-items-center">
+                    <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 50px; height: 50px;">
+                        <i class="ph-fill ph-robot fs-3"></i>
+                    </div>
+                    <div>
+                        <h5 class="fw-bold text-navy mb-0">GMK360 Akýllý Asistan (Saha Askerimiz)</h5>
+                        <small class="text-muted">Vergi, Hukuk, Sýkça Sorulan Sorular ve Fatura Okuma</small>
+                    </div>
+                </div>
+
+                <!-- Chat Body -->
+                <div class="card-body p-4 bg-light overflow-auto" id="chat-body" style="flex: 1 1 auto;">
+                    <!-- AI Welcome Message -->
+                    <div class="d-flex mb-4">
+                        <div class="bg-white border rounded-3 p-3 shadow-sm" style="max-width: 80%;">
+                            <p class="mb-0 text-dark">Merhaba! Ben GMK360'ýn akýllý asistanýyým. Size þu konularda yardýmcý olabilirim:</p>
+                            <ul class="mb-0 mt-2 text-muted small">
+                                <li>Kira Gelir Vergisi Beyannamesi hesaplamalarý</li>
+                                <li>Gayrimenkul Hukuku (Tahliye, Sözleþme vb.)</li>
+                                <li>Sistemin kullanýmý ile ilgili Sýkça Sorulan Sorular</li>
+                                <li>Fatura / Fiþ Fotoðrafý yükleyip okunmasýný saðlama</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Footer / Input -->
+                <div class="card-footer bg-white border-top p-3 rounded-bottom-4">
+                    <!-- Dosya Onizleme Alani -->
+                    <div id="file-preview-container" class="d-none mb-2 px-2">
+                        <span class="badge bg-light text-dark border p-2 d-inline-flex align-items-center">
+                            <i class="ph ph-image me-2"></i> <span id="file-name">dosya.jpg</span>
+                            <button type="button" class="btn-close ms-2" style="font-size: 0.6rem;" onclick="removeFile()"></button>
+                        </span>
+                    </div>
+
+                    <form id="chat-form" class="d-flex align-items-center gap-2">
+                        <!-- Gizli File Input -->
+                        <input type="file" id="file-input" class="d-none" accept="image/*,application/pdf">
+                        <button type="button" class="btn btn-light rounded-circle text-muted" title="Fatura veya Resim Yükle" onclick="document.getElementById('file-input').click()">
+                            <i class="ph ph-paperclip fs-5"></i>
+                        </button>
+
+                        <input type="text" id="chat-input" class="form-control form-control-lg bg-light border-0 rounded-pill px-4" placeholder="Sisteme, vergiye veya hukuka dair sorunuzu yazýn...">
+                        <button type="submit" id="btn-submit" class="btn btn-primary rounded-circle shadow-sm" style="width: 48px; height: 48px;">
+                            <i class="ph-fill ph-paper-plane-tilt fs-5"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const chatForm = document.getElementById('chat-form');
+        const chatInput = document.getElementById('chat-input');
+        const chatBody = document.getElementById('chat-body');
+        const fileInput = document.getElementById('file-input');
+        const btnSubmit = document.getElementById('btn-submit');
+        const filePreview = document.getElementById('file-preview-container');
+        const fileNameDisplay = document.getElementById('file-name');
+
+        let selectedFile = null;
+
+        fileInput.addEventListener('change', function(e) {
+            if (e.target.files.length > 0) {
+                selectedFile = e.target.files[0];
+                fileNameDisplay.textContent = selectedFile.name;
+                filePreview.classList.remove('d-none');
+            }
+        });
+
+        window.removeFile = function() {
+            selectedFile = null;
+            fileInput.value = '';
+            filePreview.classList.add('d-none');
+        };
+
+        chatForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const messageText = chatInput.value.trim();
+            if(messageText === '' && !selectedFile) return;
+            
+            // 1. Kullanici Mesajini Ekrana Ekle
+            let userContent = messageText;
+            if (selectedFile) {
+                userContent += <br/><small class='text-warning'><i class='ph ph-paperclip'></i>  + selectedFile.name + </small>;
+            }
+
+            const msgHtml = 
+            <div class="d-flex mb-4 justify-content-end">
+                <div class="bg-primary text-white rounded-3 p-3 shadow-sm" style="max-width: 80%;">
+                    <p class="mb-0"> + userContent + </p>
+                </div>
+            </div>;
+            chatBody.insertAdjacentHTML('beforeend', msgHtml);
+            
+            // Temizlik ve Kaydirma
+            chatInput.value = '';
+            const fileToSend = selectedFile;
+            removeFile();
+            chatBody.scrollTop = chatBody.scrollHeight;
+
+            // 2. Yukleniyor Gostergesi
+            const loadingId = 'loading-' + Date.now();
+            const loadingHtml = 
+            <div id=" + loadingId + " class="d-flex mb-4">
+                <div class="bg-white border rounded-3 p-3 shadow-sm d-flex align-items-center">
+                    <div class="spinner-grow spinner-grow-sm text-primary me-2" role="status"></div>
+                    <span class="text-muted small">Asker Düþünüyor...</span>
+                </div>
+            </div>;
+            chatBody.insertAdjacentHTML('beforeend', loadingHtml);
+            chatBody.scrollTop = chatBody.scrollHeight;
+
+            // 3. Backend'e Ýstek At
+            const formData = new FormData();
+            formData.append('message', messageText);
+            if (fileToSend) {
+                formData.append('file', fileToSend);
+            }
+
+            try {
+                btnSubmit.disabled = true;
+                const response = await fetch('/AiAssistant/SendMessage', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                // Yukleniyor gostergesini sil
+                document.getElementById(loadingId).remove();
+
+                if (result.success) {
+                    const aiHtml = 
+                    <div class="d-flex mb-4">
+                        <div class="bg-white border rounded-3 p-3 shadow-sm" style="max-width: 80%;">
+                            <p class="mb-0 text-dark"> + result.reply + </p>
+                        </div>
+                    </div>;
+                    chatBody.insertAdjacentHTML('beforeend', aiHtml);
+                } else {
+                    const errHtml = 
+                    <div class="d-flex mb-4">
+                        <div class="bg-danger text-white border rounded-3 p-3 shadow-sm" style="max-width: 80%;">
+                            <p class="mb-0">HATA:  + result.message + </p>
+                        </div>
+                    </div>;
+                    chatBody.insertAdjacentHTML('beforeend', errHtml);
+                }
+            } catch (err) {
+                document.getElementById(loadingId).remove();
+                const errHtml = 
+                <div class="d-flex mb-4">
+                    <div class="bg-danger text-white border rounded-3 p-3 shadow-sm" style="max-width: 80%;">
+                        <p class="mb-0">Sunucu ile iletiþim kurulamadý.</p>
+                    </div>
+                </div>;
+                chatBody.insertAdjacentHTML('beforeend', errHtml);
+            } finally {
+                btnSubmit.disabled = false;
+                chatBody.scrollTop = chatBody.scrollHeight;
+            }
+        });
+    </script>
+}

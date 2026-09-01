@@ -1,0 +1,1410 @@
+@model GMK360.Core.Entities.Property
+@{
+    ViewData["Title"] = "Dijital Evim - Adım 1: Adres Seçimi";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    int draftStep = Model?.DraftStep ?? 0;
+}
+
+
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+
+<div class="container py-5" style="margin-top: 2rem;">
+    
+    <!-- Wizard Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-navy mb-1">Dijital Evinizi Kuralım</h2>
+            <p class="text-muted">Ev yönetimi, aidat ve vergi takibi için adresinizi belirleyin.</p>
+        </div>
+        <a href="/CustomerDashboard" class="btn btn-light text-secondary rounded-pill px-4 fw-medium border shadow-sm hover-bg-light">
+            Şimdilik Atla <i class="ph ph-arrow-right ms-1"></i>
+        </a>
+    </div>
+
+    <!-- PRO Upgrade Modal -->
+    <div class="modal fade" id="proRequiredModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4 shadow-lg overflow-hidden">
+                <div class="modal-header border-0 bg-warning bg-opacity-10 pb-0 pt-4 px-4 position-relative">
+                    <div class="position-absolute top-0 end-0 p-3">
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="text-center w-100">
+                        <div class="d-inline-flex align-items-center justify-content-center bg-warning text-white rounded-circle shadow-sm mb-3" style="width: 70px; height: 70px;">
+                            <i class="ph-fill ph-crown" style="font-size: 2.5rem;"></i>
+                        </div>
+                        <h4 class="modal-title fw-bold text-dark mb-2">PRO Sınırına Ulaştınız</h4>
+                    </div>
+                </div>
+                <div class="modal-body p-4 text-center">
+                    <p class="text-muted mb-4 fs-6" id="proRequiredMessage">
+                        Ücretsiz planda sadece tek bir bina/lokasyonda mülk yönetebilirsiniz. Kat karşılığı edindiğiniz veya farklı bölgelerdeki diğer mülklerinizi tek ekrandan yönetmek için PRO pakete geçiş yapmanız gerekmektedir.
+                    </p>
+                    <div class="bg-light rounded-3 p-3 mb-4 text-start">
+                        <h6 class="fw-bold text-dark mb-3"><i class="ph-fill ph-check-circle text-success me-2"></i>PRO Paket Avantajları:</h6>
+                        <ul class="list-unstyled mb-0 small text-muted">
+                            <li class="mb-2"><i class="ph ph-check text-primary me-2 fw-bold"></i>Sınırsız farklı lokasyonda mülk ekleme</li>
+                            <li class="mb-2"><i class="ph ph-check text-primary me-2 fw-bold"></i>Toplu finansal raporlama</li>
+                            <li class="mb-0"><i class="ph ph-check text-primary me-2 fw-bold"></i>Öncelikli destek ve yasal asistan</li>
+                        </ul>
+                    </div>
+                    <a href="/Subscription/Upgrade" class="btn btn-warning w-100 py-3 rounded-pill fw-bold text-dark shadow-sm hover-lift">
+                        Hemen PRO'ya Geç
+                    </a>
+                    <button type="button" class="btn btn-link text-muted text-decoration-none mt-2 w-100" data-bs-dismiss="modal">
+                        Belki Daha Sonra
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sayfa sonu için boşluk -->
+    <div style="height: 100px;"></div>
+
+    <!-- Progress Tracker -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="d-flex align-items-center justify-content-between position-relative">
+                <div class="progress position-absolute w-100" style="height: 4px; z-index: 0; top: 50%; transform: translateY(-50%);">
+                    <div class="progress-bar bg-primary" role="progressbar" style="width: 20%;" aria-valuenow="20" aria-valuemin="0" aria-valuemax="100" id="wizardProgressBar"></div>
+                </div>
+                
+                <div class="position-relative z-1 text-center bg-white px-2">
+                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center mx-auto mb-2 shadow step-icon" id="icon-step-1" style="width: 40px; height: 40px; border: 4px solid #fff;">
+                        <i class="ph-fill ph-map-pin"></i>
+                    </div>
+                    <span class="fw-bold text-primary small d-block step-text" id="text-step-1">1. Adres</span>
+                </div>
+                
+                <div class="position-relative z-1 text-center bg-white px-2">
+                    <div class="rounded-circle bg-light text-secondary d-flex align-items-center justify-content-center mx-auto mb-2 step-icon" id="icon-step-2" style="width: 40px; height: 40px; border: 4px solid #fff;">
+                        <i class="ph ph-house"></i>
+                    </div>
+                    <span class="text-muted small d-block step-text" id="text-step-2">2. Özellikler</span>
+                </div>
+
+                <div class="position-relative z-1 text-center bg-white px-2">
+                    <div class="rounded-circle bg-light text-secondary d-flex align-items-center justify-content-center mx-auto mb-2 step-icon" id="icon-step-3" style="width: 40px; height: 40px; border: 4px solid #fff;">
+                        <i class="ph ph-user-circle"></i>
+                    </div>
+                    <span class="text-muted small d-block step-text" id="text-step-3">3. Rol</span>
+                </div>
+                
+                <div class="position-relative z-1 text-center bg-white px-2">
+                    <div class="rounded-circle bg-light text-secondary d-flex align-items-center justify-content-center mx-auto mb-2 step-icon" id="icon-step-4" style="width: 40px; height: 40px; border: 4px solid #fff;">
+                        <i class="ph ph-receipt"></i>
+                    </div>
+                    <span class="text-muted small d-block step-text" id="text-step-4">4. Finans</span>
+                </div>
+                
+                <div class="position-relative z-1 text-center bg-white px-2">
+                    <div class="rounded-circle bg-light text-secondary d-flex align-items-center justify-content-center mx-auto mb-2 step-icon" id="icon-step-5" style="width: 40px; height: 40px; border: 4px solid #fff;">
+                        <i class="ph ph-check-circle"></i>
+                    </div>
+                    <span class="text-muted small d-block step-text" id="text-step-5">Bitti</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="row g-0 justify-content-center">
+            <!-- Form Alanı -->
+            <div class="col-lg-8">
+                <div class="p-5">
+                    <form id="wizardForm" novalidate>
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" id="draftPropertyId" name="propertyId" value="@(Model?.Id)" />
+                        <input type="hidden" id="initialDraftStep" value="@draftStep" />
+                        
+                        <!-- PANE 1: ADRES -->
+                        <div class="wizard-pane active" id="pane-1">
+                            <h4 class="fw-bold mb-4">Mülk ve Adres Bilgileri</h4>
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-8">
+                                    <label class="form-label text-muted small fw-bold">Mülk Türü</label>
+                                    <select name="propertySubTypeId" id="propertyTypeSelect" class="form-select form-select-lg premium-input" required>
+                                        <option value="">Seçiniz</option>
+                                        <option value="1">Daire / Apartman Dairesi</option>
+                                        <option value="2">Müstakil Ev</option>
+                                        <option value="3">Villa</option>
+                                        <option value="4">İş Yeri / Ofis</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4 d-flex align-items-end" id="isComplexWrapper" style="display: none !important;">
+                                    <div class="form-check form-switch mb-2 w-100 p-3 bg-light rounded-3 border text-center">
+                                        <input class="form-check-input float-none ms-0 me-2" type="checkbox" name="isComplex" id="isComplexCheck" value="true">
+                                        <label class="form-check-label text-primary fw-bold" style="cursor:pointer;" for="isComplexCheck">
+                                            🏢 Site İçi Mi?
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-4" id="globalSiteSearchArea" style="display: none;">
+                                <div class="col-md-12">
+                                    <label class="form-label text-primary fw-bold"><i class="ph-fill ph-magnifying-glass"></i> Site Arama</label>
+                                    <select id="globalSiteSearch" class="form-select form-select-lg premium-input border-primary">
+                                        <option value="">Lütfen sitenizin adını yazın...</option>
+                                    </select>
+                                    <small class="text-muted mt-1 d-block">Siteniz listede çıkmazsa "Yeni Site Ekle" diyebilirsiniz.</small>
+                                </div>
+                            </div>
+
+                            <div class="row g-3" id="locationSelectionArea">
+                                <div class="col-md-6">
+                                    <label class="form-label text-muted small fw-bold">İl</label>
+                                    <select name="city" id="citySelect" class="form-select form-select-lg premium-input" required>
+                                        <option value="">İl Seçiniz</option>
+                                        @if(ViewBag.Cities != null)
+                                        {
+                                            foreach(var city in ViewBag.Cities)
+                                            {
+                                                <option value="@city.Name" data-id="@city.Id">@city.Name</option>
+                                            }
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-muted small fw-bold">İlçe</label>
+                                    <select name="district" id="districtSelect" class="form-select form-select-lg premium-input" disabled required>
+                                        <option value="">Önce İl Seçiniz</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="col-md-12">
+                                    <label class="form-label text-muted small fw-bold">Mahalle / Köy</label>
+                                    <select name="neighborhood" id="neighborhoodSelect" class="form-select form-select-lg premium-input" disabled required>
+                                        <option value="">Önce İlçe Seçiniz</option>
+                                    </select>
+                                </div>
+                                
+                                
+
+                                <div class="col-md-12" id="streetSelectArea">
+                                    <label class="form-label text-muted small fw-bold">Cadde / Sokak</label>
+                                    <select name="streetId" id="streetSelect" class="form-select form-select-lg premium-input" disabled required>
+                                        <option value="">Önce Mahalle Seçiniz</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="col-md-12" id="buildingSelectArea">
+                                    <label class="form-label text-muted small fw-bold">Bina Seçimi</label>
+                                    <select name="buildingId" id="buildingSelect" class="form-select form-select-lg premium-input" disabled required>
+                                        <option value="">Önce Sokak Seçiniz</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-12 mt-2" id="complexSelectArea" style="display:none;">
+                                    <label class="form-label text-primary small fw-bold">Site Seçimi</label>
+                                    <select name="selectedComplexName" id="complexSelect" class="form-select form-select-lg premium-input border-primary">
+                                        <option value="">Önce Sokak Seçiniz</option>
+                                    </select>
+                                </div>
+
+                                
+                                <input type="hidden" name="hiddenCity" id="hiddenCity" />
+                                <input type="hidden" name="hiddenDistrict" id="hiddenDistrict" />
+                                <input type="hidden" name="hiddenNeighborhood" id="hiddenNeighborhood" />
+                                <input type="hidden" name="hiddenStreetId" id="hiddenStreetId" />
+                                <input type="hidden" name="hiddenComplexName" id="hiddenComplexName" />
+
+                                <!-- YENİ BİNA EKLEME ALANI (GİZLİ) -->
+                                <div class="col-md-12 d-none mt-3" id="newBuildingArea">
+                                    <div class="p-4 bg-light rounded-4 border">
+                                        <h6 class="fw-bold mb-3 text-primary" id="newBuildingTitle"><i class="ph-fill ph-plus-circle me-2"></i>Yeni Bina / Site Tanımlama</h6>
+                                        <div class="row g-3">
+                                            <div class="col-md-8" id="normalBuildingNameArea">
+                                                <label class="form-label text-muted small fw-bold">Bina Adı (Eğer Yoksa)</label>
+                                                <input type="text" name="newBuildingName" id="newBuildingName" class="form-control premium-input uppercase-input" placeholder="Örn: YAŞAR BEY APARTMANI">
+                                            </div>
+                                            <div class="col-md-4" id="normalBuildingNoArea">
+                                                <label class="form-label text-muted small fw-bold">Dış Kapı No</label>
+                                                <input type="text" name="newBuildingNo" id="newBuildingNo" class="form-control premium-input uppercase-input" placeholder="Örn: 16">
+                                            </div>
+                                            
+                                            <!-- Düz Bina İçin Blok Seçeneği -->
+                                            <div class="col-md-12 mt-2" id="normalBuildingBlockCheckboxArea">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" id="normalBuildingHasBlockCheck" onchange="toggleNormalBuildingBlock()">
+                                                    <label class="form-check-label text-muted small fw-bold" for="normalBuildingHasBlockCheck">Bu binanın girişi/bloğu var mı? (Örn: A Blok)</label>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="col-md-6 d-none" id="normalBuildingBlockNameArea">
+                                                <label class="form-label text-muted small fw-bold">Blok Adı</label>
+                                                <input type="text" name="normalBuildingBlockName" id="normalBuildingBlockName" class="form-control premium-input uppercase-input" placeholder="Örn: A">
+                                            </div>
+
+                                            <!-- Site Seçilmiş Ama Yeni Ekle Denmişse Çıkacak Alanlar -->
+                                            <div class="col-md-8 d-none" id="complexNameArea">
+                                                <label class="form-label text-muted small fw-bold">Yeni Site Adı</label>
+                                                <input type="text" name="complexName" id="complexNameInput" class="form-control premium-input uppercase-input" placeholder="Örn: HUZUR SİTESİ">
+                                            </div>
+                                            <div class="col-md-4 d-none" id="complexBlockArea">
+                                                <label class="form-label text-muted small fw-bold">Blok Adı</label>
+                                                <input type="text" name="complexBlock" id="complexBlockInput" class="form-control premium-input uppercase-input" placeholder="Örn: A">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <script>
+                                        function toggleNormalBuildingBlock() {
+                                            var isChecked = document.getElementById('normalBuildingHasBlockCheck').checked;
+                                            var blockNameArea = document.getElementById('normalBuildingBlockNameArea');
+                                            
+                                            if (isChecked) {
+                                                blockNameArea.classList.remove('d-none');
+                                            } else {
+                                                blockNameArea.classList.add('d-none');
+                                                document.getElementById('normalBuildingBlockName').value = '';
+                                            }
+                                        }
+                                    </script>
+                                </div>
+                                
+                                <div class="col-md-6 mt-3 d-none" id="doorNumberArea">
+                                    <label class="form-label text-muted small fw-bold">İç Kapı / Daire No</label>
+                                    <input type="text" name="doorNumber" class="form-control form-control-lg premium-input uppercase-input" placeholder="Örn: 5">
+                                </div>
+
+                                <!-- Koordinat Alanı -->
+                                <div class="col-md-12 mt-3">
+                                    <label class="form-label text-muted small fw-bold">Binanın Konumu (Haritadan İşaretleyin - İsteğe Bağlı)</label>
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <button type="button" class="btn btn-outline-primary fw-bold" data-bs-toggle="modal" data-bs-target="#mapModal">
+                                            <i class="ph-fill ph-map-pin me-1"></i> Haritadan Seç
+                                        </button>
+                                        <input type="text" name="lat" id="ncLat" class="form-control premium-input bg-light text-muted" placeholder="Enlem" readonly />
+                                        <input type="text" name="lng" id="ncLng" class="form-control premium-input bg-light text-muted" placeholder="Boylam" readonly />
+                                    </div>
+                                    <div class="form-text text-muted small mt-1"><i class="ph ph-info"></i> Haritadan seçtiğiniz konum buraya otomatik yansır.</div>
+                                </div>
+
+                            <div class="mt-5 d-flex justify-content-between align-items-center">
+                                <a href="/CustomerDashboard" class="text-muted text-decoration-none hover-primary fw-medium">İptal</a>
+                                <button type="button" class="btn btn-primary btn-lg rounded-pill px-5 shadow" onclick="nextStep(2)">Sonraki Adım <i class="ph ph-caret-right ms-2"></i></button>
+                            </div>
+                        </div>
+                        <!-- pane-1 kapanışı -->
+                        </div>
+
+                        <!-- PANE 2: MÜLK ÖZELLİKLERİ -->
+                        <div class="wizard-pane d-none" id="pane-2">
+                            <h4 class="fw-bold mb-4">Mülk Özellikleri</h4>
+                            <p class="text-muted mb-4">Mülkünüzün temel detaylarını ve donanımlarını girerek yapay zeka destekli değerleme için profilinizi oluşturun.</p>
+                            
+                            <div class="row g-4">
+                                <div class="col-md-12">
+                                    <label class="form-label text-muted small fw-bold">Mülkünüzün Özel Adı (Sizin için bir isim)</label>
+                                    <input type="text" name="title" id="propTitle" class="form-control form-control-lg premium-input" placeholder="Örn: Kadıköy Dükkan, Beylikdüzü Daire" value="@Model?.Title">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-muted small fw-bold">Brüt Metrekare</label>
+                                    <div class="input-group">
+                                        <input type="number" name="grossArea" id="grossArea" class="form-control form-control-lg premium-input border-end-0" placeholder="0" value="@Model?.GrossArea">
+                                        <span class="input-group-text bg-white text-muted border-start-0">m²</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-muted small fw-bold">Net Metrekare</label>
+                                    <div class="input-group">
+                                        <input type="number" name="netArea" id="netArea" class="form-control form-control-lg premium-input border-end-0" placeholder="0" value="@Model?.NetArea">
+                                        <span class="input-group-text bg-white text-muted border-start-0">m²</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label text-muted small fw-bold">Oda Sayısı</label>
+                                    <select name="roomCount" id="roomCount" class="form-select form-select-lg premium-input">
+                                        <option value="">Seçiniz</option>
+                                        <option value="1+0">1+0 (Stüdyo)</option>
+                                        <option value="1+1">1+1</option>
+                                        <option value="2+1">2+1</option>
+                                        <option value="3+1">3+1</option>
+                                        <option value="4+1">4+1</option>
+                                        <option value="5+1">5+1 ve üzeri</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label text-muted small fw-bold">Banyo Sayısı</label>
+                                    <input type="number" name="bathroomCount" id="bathroomCount" class="form-control form-control-lg premium-input" placeholder="1" value="@Model?.BathroomCount">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label text-muted small fw-bold">Bulunduğu Kat</label>
+                                    <input type="number" name="floorNumber" id="floorNumber" class="form-control form-control-lg premium-input" placeholder="0" value="@Model?.FloorNumber">
+                                </div>
+                                <div class="col-md-12">
+                                    <label class="form-label text-muted small fw-bold">Bina Yaşı</label>
+                                    <select name="buildingAge" id="buildingAge" class="form-select form-select-lg premium-input">
+                                        <option value="">Seçiniz</option>
+                                        <option value="0">0 (Yeni)</option>
+                                        <option value="1-5">1-5 Yaş</option>
+                                        <option value="6-10">6-10 Yaş</option>
+                                        <option value="11-20">11-20 Yaş</option>
+                                        <option value="21+">21+ Yaş</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="col-md-12 mt-4">
+                                    <label class="form-label text-primary small fw-bold"><i class="ph-fill ph-star me-1"></i> İlave Özellikler</label>
+                                    <div class="row g-3">
+                                        <div class="col-6 col-md-3">
+                                            <div class="form-check form-switch bg-light p-3 rounded-3 border">
+                                                <input class="form-check-input float-none ms-0 me-2" type="checkbox" name="hasParking" id="hasParking" value="true">
+                                                <label class="form-check-label fw-bold text-muted" style="cursor:pointer;" for="hasParking">Kapalı Otopark</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <div class="form-check form-switch bg-light p-3 rounded-3 border">
+                                                <input class="form-check-input float-none ms-0 me-2" type="checkbox" name="hasElevator" id="hasElevator" value="true">
+                                                <label class="form-check-label fw-bold text-muted" style="cursor:pointer;" for="hasElevator">Asansör</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <div class="form-check form-switch bg-light p-3 rounded-3 border">
+                                                <input class="form-check-input float-none ms-0 me-2" type="checkbox" name="hasShowerCabin" id="hasShowerCabin" value="true">
+                                                <label class="form-check-label fw-bold text-muted" style="cursor:pointer;" for="hasShowerCabin">Duşakabin</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <div class="form-check form-switch bg-light p-3 rounded-3 border">
+                                                <input class="form-check-input float-none ms-0 me-2" type="checkbox" name="isFurnished" id="isFurnished" value="true">
+                                                <label class="form-check-label fw-bold text-muted" style="cursor:pointer;" for="isFurnished">Eşyalı</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-5 d-flex justify-content-between align-items-center">
+                                <button type="button" class="btn btn-light fw-medium rounded-pill px-4" onclick="prevStep(1)"><i class="ph ph-caret-left me-2"></i> Geri</button>
+                                <button type="button" class="btn btn-primary btn-lg rounded-pill px-5 shadow" onclick="nextStep(3)">Sonraki Adım <i class="ph ph-caret-right ms-2"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- PANE 3: ROL SEÇİMİ -->
+                        <div class="wizard-pane d-none" id="pane-3">
+                            <h4 class="fw-bold mb-4">Bu Adresteki Durumunuz</h4>
+                            <p class="text-muted mb-4">Sistem özelliklerini size göre ayarlamamız için bu evdeki rolünüzü seçin.</p>
+                            
+                            <input type="hidden" name="userRole" id="userRoleInput" value="@(Model?.ManagementRole != null ? (Model.ManagementRole == GMK360.Core.Entities.ManagementRole.Owner && Model.IsResident == false ? "OwnerInvestment" : (Model.ManagementRole == GMK360.Core.Entities.ManagementRole.Owner ? "OwnerLiving" : "Tenant")) : "")" />
+                            
+                            <div class="row g-3">
+                                <!-- Kiracı -->
+                                <div class="col-12">
+                                    <label class="module-card border rounded p-4 d-block position-relative cursor-pointer hover-lift" for="role-tenant" onclick="selectRole('Tenant')">
+                                        <input type="radio" name="roleRadio" id="role-tenant" class="d-none">
+                                        <div class="d-flex align-items-start gap-3">
+                                            <div class="bg-light p-3 rounded-circle text-primary">
+                                                <i class="ph-fill ph-keys fs-2"></i>
+                                            </div>
+                                            <div>
+                                                <h5 class="fw-bold text-navy mb-1">Kiracıyım</h5>
+                                                <p class="text-muted small mb-0">Bu evde kiracı olarak yaşıyorum. Kira ve aidat takibi yapmak istiyorum.</p>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+                                
+                                <!-- Ev Sahibi (Oturuyor) -->
+                                <div class="col-12">
+                                    <label class="module-card border rounded p-4 d-block position-relative cursor-pointer hover-lift" for="role-owner-living" onclick="selectRole('OwnerLiving')">
+                                        <input type="radio" name="roleRadio" id="role-owner-living" class="d-none">
+                                        <div class="d-flex align-items-start gap-3">
+                                            <div class="bg-light p-3 rounded-circle text-success">
+                                                <i class="ph-fill ph-house-line fs-2"></i>
+                                            </div>
+                                            <div>
+                                                <h5 class="fw-bold text-navy mb-1">Ev Sahibiyim (Kendim Oturuyorum)</h5>
+                                                <p class="text-muted small mb-0">Ev benim ve ben yaşıyorum. Aidat ve bina duyurularını takip edeceğim.</p>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <!-- Ev Sahibi (Yatırımcı) -->
+                                <div class="col-12">
+                                    <label class="module-card border rounded p-4 d-block position-relative cursor-pointer hover-lift" for="role-owner-investment" onclick="selectRole('OwnerInvestment')">
+                                        <input type="radio" name="roleRadio" id="role-owner-investment" class="d-none">
+                                        <div class="d-flex align-items-start gap-3">
+                                            <div class="bg-light p-3 rounded-circle text-warning">
+                                                <i class="ph-fill ph-wallet fs-2"></i>
+                                            </div>
+                                            <div>
+                                                <h5 class="fw-bold text-navy mb-1">Ev Sahibiyim (Kiracım Var / Yatırım)</h5>
+                                                <p class="text-muted small mb-0">Ev benim ama yaşamıyorum. Kira geliri ve kiracı takibi yapacağım.</p>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="mt-5 d-flex justify-content-between align-items-center">
+                                <button type="button" class="btn btn-light fw-medium rounded-pill px-4" onclick="prevStep(2)"><i class="ph ph-caret-left me-2"></i> Geri</button>
+                                <button type="button" class="btn btn-primary btn-lg rounded-pill px-5 shadow" id="btnStep3Next" disabled onclick="nextStep(4)">Sonraki Adım <i class="ph ph-caret-right ms-2"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- PANE 4: FİNANS / DETAYLAR -->
+                        <div class="wizard-pane d-none" id="pane-4">
+                            <h4 class="fw-bold mb-1">Mülk Detayları</h4>
+                            <p class="text-muted mb-4">Aidat, Kira ve Fatura aboneliklerinizi buraya girerek takip panonuzu kişiselleştirin.</p>
+                            
+                            <div class="accordion" id="financeAccordion">
+                                
+                                <!-- AİDAT BÖLÜMÜ -->
+                                <div class="accordion-item border-0 mb-3 rounded-4 shadow-sm" id="duesAreaItem">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button rounded-4 fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDues" aria-expanded="true">
+                                            <i class="ph ph-buildings me-2 fs-5 text-primary"></i> Aidat Bilgileri
+                                        </button>
+                                    </h2>
+                                    <div id="collapseDues" class="accordion-collapse collapse show" data-bs-parent="#financeAccordion">
+                                        <div class="accordion-body bg-light rounded-bottom-4">
+                                            <div class="row g-3">
+                                                <div class="col-md-6">
+                                                    <label class="form-label text-muted small fw-bold">Aylık Aidat Tutarı (TL)</label>
+                                                    <input type="number" name="duesAmount" class="form-control form-control-lg premium-input" placeholder="0">
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label text-muted small fw-bold">Son Ödeme Günü (Ayın)</label>
+                                                    <input type="number" name="duesDay" min="1" max="31" class="form-control form-control-lg premium-input" placeholder="15">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- KİRA BÖLÜMÜ -->
+                                <div class="accordion-item border-0 mb-3 rounded-4 shadow-sm d-none" id="rentAreaItem">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button rounded-4 fw-bold collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRent" id="btnCollapseRent">
+                                            <i class="ph ph-wallet me-2 fs-5 text-success"></i> Kiracı ve Sözleşme Bilgileri
+                                        </button>
+                                    </h2>
+                                    <div id="collapseRent" class="accordion-collapse collapse" data-bs-parent="#financeAccordion">
+                                        <div class="accordion-body bg-light rounded-bottom-4">
+                                            <div class="row g-3">
+                                                
+                                                <!-- YATIRIMCI (OWNER) İSE GÖSTERİLECEK: KİRACI BİLGİLERİ -->
+                                                <div class="col-12 d-none" id="ownerTenantInfoDiv">
+                                                    <h6 class="fw-bold text-dark mb-2"><i class="ph ph-users"></i> Kiracı İletişim Bilgileri</h6>
+                                                    
+                                                    <!-- Motivasyon Mesajı -->
+                                                    <div class="alert alert-info border-0 bg-info bg-opacity-10 py-2 px-3 mb-3 d-flex align-items-center" role="alert">
+                                                        <i class="ph-fill ph-lightbulb fs-4 text-info me-3"></i>
+                                                        <div class="small text-info-emphasis">
+                                                            <strong>İpucu:</strong> Kiracınızın adını, telefonunu ve e-postasını eksiksiz girerseniz; sistem üzerinden kiracınıza <strong>ücretsiz SMS ve E-posta bildirimleri</strong> gönderebilirsiniz.
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="row g-3">
+                                                        <div class="col-md-3">
+                                                            <label class="form-label text-muted small fw-bold">Adı</label>
+                                                            <input type="text" name="tenantFirstName" class="form-control premium-input uppercase-input" placeholder="AYFER">
+                                                        </div>
+                                                        <div class="col-md-3">
+                                                            <label class="form-label text-muted small fw-bold">Soyadı</label>
+                                                            <input type="text" name="tenantLastName" class="form-control premium-input uppercase-input" placeholder="YILMAZ">
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label class="form-label text-muted small fw-bold">Telefon Numarası</label>
+                                                            <input type="tel" name="tenantPhone" class="form-control premium-input" placeholder="05XX XXX XX XX" pattern="[0-9]*" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label class="form-label text-muted small fw-bold">E-Posta Adresi</label>
+                                                            <input type="email" name="tenantEmail" class="form-control premium-input">
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label class="form-label text-muted small fw-bold">T.C. Kimlik No (Opsiyonel)</label>
+                                                            <input type="text" name="tenantIdentityNumber" class="form-control premium-input">
+                                                        </div>
+                                                    </div>
+                                                    <hr class="text-muted opacity-25 mt-4 mb-2">
+                                                </div>
+
+                                                <!-- KİRA DETAYLARI ORTAK -->
+                                                <div class="col-12 mt-0">
+                                                    <h6 class="fw-bold text-dark mb-2"><i class="ph ph-file-text"></i> Sözleşme Detayları</h6>
+                                                </div>
+                                                <div class="col-md-6 mt-2">
+                                                    <label class="form-label text-muted small fw-bold">Kira Tutarı (TL)</label>
+                                                    <input type="number" name="rentAmount" class="form-control form-control-lg premium-input" placeholder="0">
+                                                </div>
+                                                <div class="col-md-6 mt-2">
+                                                    <label class="form-label text-muted small fw-bold">Ödeme Günü (Ayın)</label>
+                                                    <input type="number" name="rentPaymentDay" min="1" max="31" class="form-control form-control-lg premium-input" placeholder="1">
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label text-muted small fw-bold">Sözleşme Başlangıç Tarihi</label>
+                                                    <input type="date" name="contractStartDate" class="form-control form-control-lg premium-input">
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label text-muted small fw-bold">Sözleşme Bitiş Tarihi</label>
+                                                    <input type="date" name="contractEndDate" class="form-control form-control-lg premium-input">
+                                                </div>
+                                                <div class="col-12">
+                                                    <label class="form-label text-muted small fw-bold">Kira Sözleşmesi (İsteğe Bağlı)</label>
+                                                    <input type="file" name="leaseContractFile" class="form-control form-control-lg premium-input" accept=".pdf,.jpg,.jpeg,.png">
+                                                    <div class="form-text text-muted small mt-1">
+                                                        <i class="ph ph-folder-notch me-1"></i> Arşivlemek için sözleşmenin fotoğrafını veya taranmış halini klasörünüze yükleyebilirsiniz.
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- KİRACI (TENANT) İSE GÖSTERİLECEK: KİME ÖDENECEK -->
+                                                <div class="col-12" id="tenantPayeeDiv">
+                                                    <label class="form-label text-muted small fw-bold">Kime Ödenecek (Ev Sahibi Ad ve Soyad)</label>
+                                                    <div class="row g-2">
+                                                        <div class="col-md-6">
+                                                            <input type="text" name="payeeFirstName" class="form-control form-control-lg premium-input uppercase-input" placeholder="Adı (Örn: AHMET)">
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <input type="text" name="payeeLastName" class="form-control form-control-lg premium-input uppercase-input" placeholder="Soyadı (Örn: YILMAZ)">
+                                                        </div>
+                                                    </div>
+                                                    <div class="form-check form-switch mt-3">
+                                                        <input class="form-check-input" type="checkbox" name="useIyzico" id="useIyzicoCheck" value="true">
+                                                        <label class="form-check-label text-muted small ms-2" for="useIyzicoCheck">
+                                                            <i class="ph-fill ph-shield-check text-primary"></i> 
+                                                            Sistem üzerinden güvenli ödeme (Iyzico) altyapısı kullanmak istiyorum.
+                                                        </label>
+                                                    </div>
+                                                </div>
+
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- FATURA BÖLÜMÜ (GİZLİ - İLERİDE KULLANILABİLİR) -->
+                                <div class="accordion-item border-0 mb-3 rounded-4 shadow-sm d-none" id="utilitiesAreaItem">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button rounded-4 fw-bold collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseUtilities">
+                                            <i class="ph ph-drop me-2 fs-5 text-info"></i> Fatura Abonelikleri (Adınıza Kayıtlı Varsa)
+                                        </button>
+                                    </h2>
+                                    <div id="collapseUtilities" class="accordion-collapse collapse" data-bs-parent="#financeAccordion">
+                                        <div class="accordion-body bg-light rounded-bottom-4">
+                                            
+                                            <!-- Mal Sahibi (Yatırımcı) ise şu soruyu sor: -->
+                                            <div class="mb-4 d-none" id="ownerUtilitiesQuestionDiv">
+                                                <div class="card border-0 shadow-sm rounded-4">
+                                                    <div class="card-body">
+                                                        <h6 class="fw-bold mb-2">Abonelikler (Elektrik, Su) sizin adınıza mı kayıtlı?</h6>
+                                                        <p class="text-muted small mb-3">Faturaları hala kendi üzerinizde tutuyorsanız işaretleyin.</p>
+                                                        <div class="form-check form-switch form-switch-lg">
+                                                            <input class="form-check-input" type="checkbox" id="isUtilitiesOnOwnerCheck" name="isUtilitiesOnOwner" value="true" onchange="toggleUtilitiesForm()">
+                                                            <label class="form-check-label fw-bold ms-2" for="isUtilitiesOnOwnerCheck">Evet, benim üzerime kayıtlı</label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div id="utilitiesFormDiv">
+                                                <p class="text-muted small mb-3">Faturalarınızı tek ekranda takip etmek için kurum ve abone numaralarınızı ekleyebilirsiniz.</p>
+                                                
+                                                <!-- Su Faturası -->
+                                                <div class="card border-0 shadow-sm rounded-4 mb-3">
+                                                    <div class="card-body">
+                                                        <h6 class="fw-bold mb-3"><i class="ph-fill ph-drop text-info"></i> Su Faturası</h6>
+                                                        <div class="row g-2">
+                                                            <div class="col-md-6">
+                                                                <input type="text" name="waterInstitution" class="form-control form-control-sm premium-input" placeholder="Kurum (Örn: İSKİ, Diğer...)">
+                                                            </div>
+                                                            <div class="col-md-6">
+                                                                <input type="text" name="waterSubscriberNo" class="form-control form-control-sm premium-input" placeholder="Abone Numarası">
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Elektrik Faturası -->
+                                                <div class="card border-0 shadow-sm rounded-4 mb-3">
+                                                    <div class="card-body">
+                                                        <h6 class="fw-bold mb-3"><i class="ph-fill ph-lightning text-warning"></i> Elektrik Faturası</h6>
+                                                        <div class="row g-2">
+                                                            <div class="col-md-6">
+                                                                <input type="text" name="electricityInstitution" class="form-control form-control-sm premium-input" placeholder="Kurum (Örn: BEDAŞ, Diğer...)">
+                                                            </div>
+                                                            <div class="col-md-6">
+                                                                <input type="text" name="electricitySubscriberNo" class="form-control form-control-sm premium-input" placeholder="Abone Numarası">
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <script>
+                                    function toggleUtilitiesForm() {
+                                        var isChecked = document.getElementById('isUtilitiesOnOwnerCheck').checked;
+                                        var utilsForm = document.getElementById('utilitiesFormDiv');
+                                        if(isChecked) {
+                                            utilsForm.classList.remove('d-none');
+                                        } else {
+                                            utilsForm.classList.add('d-none');
+                                        }
+                                    }
+                                </script>
+                            </div>
+
+                            <div class="mt-5 d-flex justify-content-between align-items-center">
+                                <button type="button" class="btn btn-light fw-medium rounded-pill px-4" onclick="prevStep(3)"><i class="ph ph-caret-left me-2"></i> Geri</button>
+                                <button type="button" class="btn btn-success btn-lg rounded-pill px-5 shadow" onclick="nextStep(5)">Kaydı Tamamla <i class="ph ph-check-circle ms-2"></i></button>
+                            </div>
+                        </div>
+
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Modal: Harita -->
+<div class="modal fade" id="mapModal" tabindex="-1" aria-labelledby="mapModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-header bg-light border-0">
+                <h5 class="modal-title fw-bold text-primary" id="mapModalLabel"><i class="ph-fill ph-map-pin me-2"></i> Haritadan Konum Seç</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="modalMap" style="height: 600px; width: 100%; z-index: 1;"></div>
+            </div>
+            <div class="modal-footer bg-light border-0 d-flex justify-content-between align-items-center">
+                <div class="text-muted small"><i class="ph ph-info me-1"></i> Haritaya tıklayarak veya pini sürükleyerek tam konumu belirleyebilirsiniz.</div>
+                <div>
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="button" class="btn btn-primary rounded-pill px-4" data-bs-dismiss="modal">Konumu Onayla</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+        // Adım Değiştirme (Asenkron - Kaydederek)
+        async function nextStep(targetStep) {
+            var targetPaneId = 'pane-' + targetStep;
+            var form = document.getElementById('wizardForm');
+            var formData = new FormData(form);
+            var propertyId = document.getElementById('draftPropertyId')?.value;
+
+            // Eğer pane-1'den pane-2'ye geçiliyorsa (Step 1 -> 2)
+            if (targetPaneId === 'pane-2') {
+                // Form validasyon kontrolü (Adres vb. dolu mu)
+                if (!document.getElementById('propertyTypeSelect').value || !document.getElementById('citySelect').value) {
+                    alert('Lütfen zorunlu adres alanlarını doldurun.');
+                    return;
+                }
+
+                // isComplex && globalSiteSelect manuel eklemeleri
+                var isComplex = document.getElementById('isComplexCheck').checked;
+                var globalSiteSelect = $('#globalSiteSearch').val();
+                
+                if (isComplex && globalSiteSelect && globalSiteSelect !== 'NEW') {
+                    formData.append('streetId', $('#hiddenStreetId').val());
+                    formData.append('city', $('#hiddenCity').val());
+                    formData.append('district', $('#hiddenDistrict').val());
+                    formData.append('neighborhood', $('#hiddenNeighborhood').val());
+                    formData.append('selectedComplexName', $('#hiddenComplexName').val());
+                } else if (isComplex && globalSiteSelect === 'NEW') {
+                    formData.append('selectedComplexName', 'NEW');
+                }
+
+                // AJAX isteği
+                try {
+                    let response = await fetch('/DigitalHome/SaveWizardStep1', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!response.ok) {
+                        let errorText = await response.text();
+                        alert('Kayıt Başarısız (Hata Kodu: ' + response.status + '): ' + errorText);
+                        return;
+                    }
+                    
+                    let result = await response.json();
+                    
+                    if (result.success) {
+                        document.getElementById('draftPropertyId').value = result.propertyId; // Sonraki adımlar için kaydet
+                    } else {
+                        if (result.requiresPro) {
+                            var proModal = new bootstrap.Modal(document.getElementById('proRequiredModal'));
+                            document.getElementById('proRequiredMessage').innerText = result.message;
+                            proModal.show();
+                            return; // Geçişi durdur
+                        }
+                        alert('Adres kaydedilirken bir hata oluştu: ' + (result.message || 'Bilinmeyen hata'));
+                        return;
+                    }
+                } catch(e) {
+                    console.error(e);
+                    alert('Sunucuya bağlanılamadı.');
+                    return;
+                }
+            }
+
+            // Eğer pane-2'den pane-3'e geçiliyorsa (Step 2 -> 3) (Mülk Özellikleri kaydediliyor)
+            if (targetPaneId === 'pane-3') {
+                var formDataStep2 = new FormData(form);
+                formDataStep2.append('propertyId', propertyId);
+                
+                try {
+                    let response = await fetch('/DigitalHome/SaveWizardStep2', {
+                        method: 'POST',
+                        body: formDataStep2
+                    });
+                    
+                    if (!response.ok) {
+                        let errorText = await response.text();
+                        alert('Mülk özellikleri kaydedilemedi: ' + errorText);
+                        return;
+                    }
+                    
+                    let result = await response.json();
+                    if (!result.success) {
+                        alert('Özellikler kaydedilirken bir hata oluştu.');
+                        return;
+                    }
+                } catch(e) {
+                    console.error(e);
+                    alert('Sunucuya bağlanılamadı.');
+                    return;
+                }
+            }
+
+            // Eğer pane-3'ten pane-4'e geçiliyorsa (Step 3 -> 4) (Rol kaydediliyor)
+            if (targetPaneId === 'pane-4') {
+                var role = document.getElementById('userRoleInput').value;
+                if (!role) {
+                    alert('Lütfen bir rol seçin.');
+                    return;
+                }
+                
+                var data = new FormData();
+                data.append('propertyId', propertyId);
+                data.append('userRole', role);
+                data.append('__RequestVerificationToken', document.querySelector('input[name="__RequestVerificationToken"]').value);
+
+                try {
+                    let response = await fetch('/DigitalHome/SaveWizardStep3', {
+                        method: 'POST',
+                        body: data
+                    });
+                    let result = await response.json();
+                    
+                    if (!result.success) {
+                        alert('Rol kaydedilirken bir hata oluştu.');
+                        return;
+                    }
+                } catch(e) {
+                    console.error(e);
+                    alert('Sunucuya bağlanılamadı.');
+                    return;
+                }
+            }
+
+            // UI Geçişi
+            document.querySelectorAll('.wizard-pane').forEach(p => p.classList.add('d-none'));
+            document.querySelectorAll('.wizard-pane').forEach(p => p.classList.remove('active'));
+            
+            var targetPane = document.getElementById(targetPaneId);
+            if(targetPane) {
+                targetPane.classList.remove('d-none');
+                targetPane.classList.add('active');
+            }
+
+            // Finans form alanlarını role göre göster/gizle
+            if (targetStep === 4) {
+                var role = document.getElementById('userRoleInput').value;
+                applyRoleUI(role);
+            }
+
+            updateProgressTracker(targetStep);
+        }
+
+        // Form Submit Handler (Step 3 Finalize)
+        document.getElementById('wizardForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            var propertyId = document.getElementById('draftPropertyId')?.value;
+            if(!propertyId) {
+                alert("Önceki adımlar eksik, lütfen baştan başlayın.");
+                return;
+            }
+
+            var formData = new FormData(this);
+            formData.append('propertyId', propertyId);
+
+            try {
+                let response = await fetch('/DigitalHome/SaveWizardStep4', {
+                    method: 'POST',
+                    body: formData
+                });
+                let result = await response.json();
+                
+                if(result.success) {
+                    window.location.href = result.redirectUrl;
+                } else {
+                    alert('Kayıt tamamlanırken bir hata oluştu: ' + (result.message || 'Bilinmeyen hata'));
+                }
+            } catch(e) {
+                console.error(e);
+                alert('Sunucuya bağlanırken veya işlem sırasında kritik bir hata oluştu.\nDetay: ' + e.message);
+            }
+        });
+
+        function prevStep(step) {
+            document.querySelectorAll('.wizard-pane').forEach(p => p.classList.add('d-none'));
+            document.querySelectorAll('.wizard-pane').forEach(p => p.classList.remove('active'));
+            
+            var targetPane = document.getElementById('pane-' + step);
+            if(targetPane) {
+                targetPane.classList.remove('d-none');
+                targetPane.classList.add('active');
+            }
+            updateProgressTracker(step);
+        }
+
+        function updateProgressTracker(step) {
+            // İlerici bar ve simgelerin güncellenmesi
+            let totalSteps = 4;
+            let progress = ((step - 1) / totalSteps) * 100;
+            if (step === 5) progress = 100;
+            document.getElementById('wizardProgressBar').style.width = progress + '%';
+            
+            for (let i = 1; i <= 5; i++) {
+                let icon = document.getElementById('icon-step-' + i);
+                let text = document.getElementById('text-step-' + i);
+                
+                if (!icon) continue;
+
+                if (i < step) {
+                    // Geçmiş adımlar
+                    icon.className = "rounded-circle bg-success text-white d-flex align-items-center justify-content-center mx-auto mb-2 step-icon";
+                    text.className = "fw-bold text-success small d-block step-text";
+                } else if (i === step) {
+                    // Mevcut adım
+                    icon.className = "rounded-circle bg-primary text-white d-flex align-items-center justify-content-center mx-auto mb-2 shadow step-icon";
+                    text.className = "fw-bold text-primary small d-block step-text";
+                } else {
+                    // Gelecek adımlar
+                    icon.className = "rounded-circle bg-light text-secondary d-flex align-items-center justify-content-center mx-auto mb-2 step-icon";
+                    text.className = "text-muted small d-block step-text";
+                }
+            }
+        }
+
+        function selectRole(roleName) {
+            document.getElementById('userRoleInput').value = roleName;
+            
+            // Tüm kartlardan active class'ını kaldır
+            document.querySelectorAll('.module-card').forEach(c => c.classList.remove('border-primary', 'bg-primary', 'bg-opacity-10'));
+            
+            // Seçili karta active class ekle
+            var selectedRadio = document.querySelector('input[name="roleRadio"]:checked');
+            if (selectedRadio) {
+                var label = selectedRadio.closest('label');
+                label.classList.add('border-primary', 'bg-primary', 'bg-opacity-10');
+            }
+            
+            // Sonraki adım butonunu aktifleştir
+            document.getElementById('btnStep3Next').disabled = false;
+        }
+
+        // UI Güncelleme Fonksiyonu
+        function updateUI() {
+            var propertyType = document.getElementById('propertyTypeSelect').value;
+            var isComplexWrapper = document.getElementById('isComplexWrapper');
+            
+            // Daire(1), Villa(3), İş Yeri(4) için Site İçi butonu gösterilebilir
+            if (propertyType === '1' || propertyType === '3' || propertyType === '4') {
+                isComplexWrapper.style.setProperty('display', 'flex', 'important');
+            } else {
+                isComplexWrapper.style.setProperty('display', 'none', 'important');
+                document.getElementById('isComplexCheck').checked = false;
+            }
+
+            var isComplex = document.getElementById('isComplexCheck').checked;
+            var globalSiteSelect = $('#globalSiteSearch').val();
+            
+            var isNewBuilding = document.getElementById('buildingSelect').value === 'NEW';
+            
+            var normalBuildingNameArea = document.getElementById('normalBuildingNameArea');
+            var normalBuildingNoArea = document.getElementById('normalBuildingNoArea');
+            var complexNameArea = document.getElementById('complexNameArea');
+            var complexBlockArea = document.getElementById('complexBlockArea');
+            var newBuildingTitle = document.getElementById('newBuildingTitle');
+            
+            var buildingSelectArea = document.getElementById('buildingSelectArea');
+            var complexSelectArea = document.getElementById('complexSelectArea');
+            var newBuildingArea = document.getElementById('newBuildingArea');
+            var doorNumberArea = document.getElementById('doorNumberArea');
+            
+            var locationSelectionArea = document.getElementById('locationSelectionArea');
+            var globalSiteSearchArea = document.getElementById('globalSiteSearchArea');
+
+            // Default
+            document.getElementById('streetSelectArea').style.display = 'block';
+            document.getElementById('citySelect').required = true;
+            document.getElementById('streetSelect').required = true;
+            
+            if (isComplex) {
+                // SİTE İÇİ AÇIK (GLOBAL ARAMA)
+                globalSiteSearchArea.style.display = 'block';
+                buildingSelectArea.style.display = 'none';
+                document.getElementById('buildingSelect').required = false;
+                
+                normalBuildingNameArea.classList.add('d-none');
+                
+                if (globalSiteSelect === 'NEW') {
+                    // YENİ SİTE
+                    locationSelectionArea.style.display = 'flex'; // İl ilçe seçimi ZORUNLU
+                    document.getElementById('streetSelect').required = true;
+                    
+                    newBuildingArea.classList.remove('d-none');
+                    complexNameArea.classList.remove('d-none');
+                    complexBlockArea.classList.remove('d-none');
+                    normalBuildingNoArea.classList.remove('d-none'); // Dış kapı no lazım
+                    
+                    document.getElementById('complexNameInput').required = true;
+                    document.getElementById('complexBlockInput').required = true;
+                    document.getElementById('newBuildingNo').required = true;
+                    newBuildingTitle.innerHTML = '<i class="ph-fill ph-buildings me-1"></i> Yeni Site & Blok Ekle';
+                    doorNumberArea.classList.remove('d-none');
+                    
+                    // Geleneksel site seçimi kapalı
+                    complexSelectArea.style.display = 'none';
+                    document.getElementById('complexSelect').required = false;
+                } else if (globalSiteSelect) {
+                    // MEVCUT SİTE SEÇİLDİ (Global)
+                    locationSelectionArea.style.display = 'none'; // İl ilçe gizli, çünkü siteden otomatik geldi
+                    document.getElementById('citySelect').required = false;
+                    document.getElementById('districtSelect').required = false;
+                    document.getElementById('neighborhoodSelect').required = false;
+                    document.getElementById('streetSelect').required = false;
+                    
+                    newBuildingArea.classList.remove('d-none');
+                    complexNameArea.classList.add('d-none');
+                    complexBlockArea.classList.remove('d-none');
+                    normalBuildingNoArea.classList.add('d-none'); // Mevcut sitenin dış kapı no'su zaten var
+                    
+                    document.getElementById('complexNameInput').required = false;
+                    document.getElementById('complexBlockInput').required = true;
+                    document.getElementById('newBuildingNo').required = false;
+                    newBuildingTitle.innerHTML = '<i class="ph-fill ph-buildings me-1"></i> Hangi Blok?';
+                    doorNumberArea.classList.remove('d-none');
+                    
+                    complexSelectArea.style.display = 'none';
+                    document.getElementById('complexSelect').required = false;
+                } else {
+                    // Henüz site seçilmedi
+                    locationSelectionArea.style.display = 'none';
+                    document.getElementById('citySelect').required = false;
+                    document.getElementById('streetSelect').required = false;
+                    newBuildingArea.classList.add('d-none');
+                    doorNumberArea.classList.add('d-none');
+                    complexSelectArea.style.display = 'none';
+                }
+            } else {
+                // NORMAL BİNA AÇIK (Klasik İl/İlçe/Sokak hiyerarşisi)
+                globalSiteSearchArea.style.display = 'none';
+                locationSelectionArea.style.display = 'flex';
+                
+                complexSelectArea.style.display = 'none';
+                buildingSelectArea.style.display = 'block';
+                document.getElementById('buildingSelect').required = true;
+                document.getElementById('complexSelect').required = false;
+
+                complexNameArea.classList.add('d-none');
+                complexBlockArea.classList.add('d-none');
+                document.getElementById('complexNameInput').required = false;
+                document.getElementById('complexBlockInput').required = false;
+
+                if (isNewBuilding) {
+                    // YENİ BİNA
+                    newBuildingArea.classList.remove('d-none');
+                    normalBuildingNameArea.classList.remove('d-none');
+                    normalBuildingNoArea.classList.remove('d-none');
+                    
+                    document.getElementById('newBuildingNo').required = true;
+                    newBuildingTitle.innerHTML = '<i class="ph-fill ph-buildings me-1"></i> Yeni Bina Ekle';
+                    doorNumberArea.classList.remove('d-none');
+                } else if (document.getElementById('buildingSelect').value) {
+                    // MEVCUT BİNA
+                    newBuildingArea.classList.add('d-none');
+                    doorNumberArea.classList.remove('d-none');
+                } else {
+                    newBuildingArea.classList.add('d-none');
+                    doorNumberArea.classList.add('d-none');
+                }
+            }
+        }
+
+        document.getElementById('propertyTypeSelect').addEventListener('change', updateUI);
+        document.getElementById('isComplexCheck').addEventListener('change', updateUI);
+
+        $(document).ready(function() {
+            $('#globalSiteSearch').select2({
+                theme: 'bootstrap-5',
+                placeholder: 'Lütfen sitenizin adını yazın...',
+                minimumInputLength: 3,
+                language: {
+                    inputTooShort: function() { return "En az 3 karakter girmelisiniz"; },
+                    noResults: function() { return "Site bulunamadı."; },
+                    searching: function() { return "Aranıyor..."; }
+                },
+                ajax: {
+                    url: '/api/LocationApi/complexes/search',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function (params) {
+                        return { q: params.term };
+                    },
+                    processResults: function (data, params) {
+                        var searchTerm = params.term || '';
+                        var results = data.map(function(item) {
+                            return {
+                                id: item.id,
+                                text: item.text,
+                                data: item
+                            };
+                        });
+                        results.push({ id: 'NEW', text: '+ Listede Yok (Yeni Site Ekle)', data: null, searchTerm: searchTerm.toLocaleUpperCase('tr-TR') });
+                        return { results: results };
+                    },
+                    cache: true
+                }
+            });
+
+            $('#globalSiteSearch').on('select2:select', function (e) {
+                var data = e.params.data;
+                if(data.id !== 'NEW' && data.data) {
+                    // Populate hidden inputs for the backend
+                    $('#hiddenCity').val(data.data.cityName);
+                    $('#hiddenDistrict').val(data.data.districtName);
+                    $('#hiddenNeighborhood').val(data.data.neighborhoodName);
+                    $('#hiddenStreetId').val(data.data.streetId);
+                    $('#hiddenComplexName').val(data.data.name);
+                    
+                    $('#complexNameInput').val(data.data.name);
+                } else if (data.id === 'NEW' && data.searchTerm) {
+                    $('#complexNameInput').val(data.searchTerm);
+                }
+                updateUI();
+            });
+
+
+            var modalMap = null;
+            var modalMarker = null;
+
+            var mapModalEl = document.getElementById('mapModal');
+            if (mapModalEl) {
+                mapModalEl.addEventListener('shown.bs.modal', function () {
+                    var lat = 41.0082;
+                    var lng = 28.9784; // Default İstanbul
+                    
+                    var initMap = function(latitude, longitude, zoomLevel) {
+                        if (!modalMap) {
+                            modalMap = L.map('modalMap').setView([latitude, longitude], zoomLevel);
+                            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                                maxZoom: 19
+                            }).addTo(modalMap);
+
+                            modalMarker = L.marker([latitude, longitude], { draggable: true }).addTo(modalMap);
+                            
+                            document.getElementById('ncLat').value = latitude.toFixed(6);
+                            document.getElementById('ncLng').value = longitude.toFixed(6);
+
+                            modalMarker.on('dragend', function (e) {
+                                var position = modalMarker.getLatLng();
+                                document.getElementById('ncLat').value = position.lat.toFixed(6);
+                                document.getElementById('ncLng').value = position.lng.toFixed(6);
+                            });
+
+                            modalMap.on('click', function(e) {
+                                modalMarker.setLatLng(e.latlng);
+                                document.getElementById('ncLat').value = e.latlng.lat.toFixed(6);
+                                document.getElementById('ncLng').value = e.latlng.lng.toFixed(6);
+                            });
+                        } else {
+                            setTimeout(function() {
+                                modalMap.invalidateSize();
+                                modalMap.setView([latitude, longitude], zoomLevel);
+                                modalMarker.setLatLng([latitude, longitude]);
+                                document.getElementById('ncLat').value = latitude.toFixed(6);
+                                document.getElementById('ncLng').value = longitude.toFixed(6);
+                            }, 100);
+                        }
+                    };
+                    
+                    // Eğer formda seçili il/ilçe/mahalle/sokak varsa onun koordinatını getirelim
+                    var citySelect = document.getElementById('citySelect');
+                    var distSelect = document.getElementById('districtSelect');
+                    var neighSelect = document.getElementById('neighborhoodSelect');
+                    var streetSelect = document.getElementById('streetSelect');
+                    
+                    var cityName = citySelect.options[citySelect.selectedIndex]?.text || '';
+                    var distName = distSelect.options[distSelect.selectedIndex]?.text || '';
+                    var neighName = neighSelect.options[neighSelect.selectedIndex]?.text || '';
+                    var streetName = streetSelect.options[streetSelect.selectedIndex]?.text || '';
+                    
+                    if(cityName && distName && !cityName.includes('Seçiniz') && !distName.includes('Seçiniz')) {
+                        var queryParts = [];
+                        if (streetName && !streetName.includes('Seçiniz')) queryParts.push(streetName.replace('(Sokak)', '').replace('(Cadde)', '').trim());
+                        if (neighName && !neighName.includes('Seçiniz')) queryParts.push(neighName.replace('MAHALLESİ', 'Mahallesi').trim());
+                        queryParts.push(distName);
+                        queryParts.push(cityName);
+                        queryParts.push("Turkey");
+                        
+                        var query = queryParts.join(", ");
+                        
+                        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`)
+                            .then(res => res.json())
+                            .then(data => {
+                                if(data && data.length > 0) {
+                                    // Sokak/mahalle bazlı bulduğunda daha yakından (zoom 17) başlasın
+                                    initMap(parseFloat(data[0].lat), parseFloat(data[0].lon), 17);
+                                } else {
+                                    // Eğer bu detaylı arama sonuç vermezse, sadece İlçe ve Şehir ile tekrar ara
+                                    var fallbackQuery = `${distName}, ${cityName}, Turkey`;
+                                    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fallbackQuery)}&limit=1`)
+                                        .then(res2 => res2.json())
+                                        .then(data2 => {
+                                            if(data2 && data2.length > 0) {
+                                                initMap(parseFloat(data2[0].lat), parseFloat(data2[0].lon), 14);
+                                            } else {
+                                                initMap(lat, lng, 13);
+                                            }
+                                        }).catch(err => { initMap(lat, lng, 13); });
+                                }
+                            })
+                            .catch(err => {
+                                initMap(lat, lng, 13);
+                            });
+                    } else {
+                        initMap(lat, lng, 13);
+                    }
+                });
+            }
+
+            
+            updateUI();
+        });
+
+        // Initial state logic for drafts
+        document.addEventListener('DOMContentLoaded', function() {
+            var initialStep = parseInt(document.getElementById('initialDraftStep')?.value || '0');
+            if (initialStep > 0) {
+                var targetStep = initialStep + 1;
+                
+                document.querySelectorAll('.wizard-pane').forEach(p => p.classList.add('d-none'));
+                document.querySelectorAll('.wizard-pane').forEach(p => p.classList.remove('active'));
+                
+                var targetPane = document.getElementById('pane-' + targetStep);
+                if(targetPane) {
+                    targetPane.classList.remove('d-none');
+                    targetPane.classList.add('active');
+                }
+                
+                // Eğer sayfa yenilendiğinde 3. adımdaysak, UI'ı role göre ayarla
+                if (targetStep === 3) {
+                    var role = document.getElementById('userRoleInput').value;
+                    if (role) {
+                        applyRoleUI(role);
+                    }
+                }
+            }
+        });
+
+        function applyRoleUI(role) {
+            var duesItem = document.getElementById('duesAreaItem');
+            var rentItem = document.getElementById('rentAreaItem');
+            var tenantPayeeDiv = document.getElementById('tenantPayeeDiv');
+            var ownerTenantInfoDiv = document.getElementById('ownerTenantInfoDiv');
+            
+            if (role === 'Tenant') {
+                duesItem.classList.remove('d-none');
+                rentItem.classList.remove('d-none');
+                
+                document.getElementById('collapseDues').classList.add('show');
+                document.getElementById('collapseRent').classList.remove('show');
+                document.getElementById('btnCollapseRent').classList.add('collapsed');
+                
+                tenantPayeeDiv.classList.remove('d-none');
+                ownerTenantInfoDiv.classList.add('d-none');
+            } else if (role === 'OwnerLiving') {
+                duesItem.classList.remove('d-none');
+                rentItem.classList.add('d-none');
+                
+                document.getElementById('collapseDues').classList.add('show');
+                
+            } else if (role === 'OwnerInvestment') {
+                duesItem.classList.add('d-none');
+                rentItem.classList.remove('d-none');
+                
+                document.getElementById('collapseDues').classList.remove('show');
+                document.getElementById('collapseRent').classList.add('show');
+                document.getElementById('btnCollapseRent').classList.remove('collapsed');
+                
+                tenantPayeeDiv.classList.add('d-none');
+                ownerTenantInfoDiv.classList.remove('d-none');
+            }
+        }
+
+        // Ajax İlçe Yükleme
+        document.getElementById('citySelect').addEventListener('change', function() {
+            var cityId = this.options[this.selectedIndex].getAttribute('data-id');
+            var districtSelect = document.getElementById('districtSelect');
+            var neighborhoodSelect = document.getElementById('neighborhoodSelect');
+            
+            districtSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+            districtSelect.disabled = true;
+            neighborhoodSelect.innerHTML = '<option value="">Önce İlçe Seçiniz</option>';
+            neighborhoodSelect.disabled = true;
+
+            if(!cityId) return;
+
+            fetch('/api/LocationApi/districts/' + cityId)
+                .then(response => response.json())
+                .then(data => {
+                    districtSelect.innerHTML = '<option value="">İlçe Seçiniz</option>';
+                    data.forEach(item => {
+                        districtSelect.innerHTML += `<option value="${item.name}" data-id="${item.id}">${item.name}</option>`;
+                    });
+                    districtSelect.disabled = false;
+                });
+        });
+
+        // Ajax Mahalle Yükleme
+        document.getElementById('districtSelect').addEventListener('change', function() {
+            var districtId = this.options[this.selectedIndex].getAttribute('data-id');
+            var neighborhoodSelect = document.getElementById('neighborhoodSelect');
+            var streetSelect = document.getElementById('streetSelect');
+            
+            neighborhoodSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+            neighborhoodSelect.disabled = true;
+            streetSelect.innerHTML = '<option value="">Önce Mahalle Seçiniz</option>';
+            streetSelect.disabled = true;
+
+            if(!districtId) return;
+
+            fetch('/api/LocationApi/neighborhoods/' + districtId)
+                .then(response => response.json())
+                .then(data => {
+                    neighborhoodSelect.innerHTML = '<option value="">Mahalle Seçiniz</option>';
+                    data.forEach(item => {
+                        neighborhoodSelect.innerHTML += `<option value="${item.name}" data-id="${item.id}">${item.name}</option>`;
+                    });
+                    neighborhoodSelect.disabled = false;
+                });
+        });
+
+        // Ajax Sokak Yükleme
+        document.getElementById('neighborhoodSelect').addEventListener('change', function() {
+            var neighborhoodId = this.options[this.selectedIndex].getAttribute('data-id');
+            var streetSelect = document.getElementById('streetSelect');
+            
+            streetSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+            streetSelect.disabled = true;
+            
+            if(!neighborhoodId) return;
+
+            fetch('/api/LocationApi/streets/' + neighborhoodId)
+                .then(response => response.json())
+                .then(data => {
+                    streetSelect.innerHTML = '<option value="">Sokak Seçiniz</option>';
+                    data.forEach(item => {
+                        streetSelect.innerHTML += `<option value="${item.id}" data-id="${item.id}">${item.name}</option>`;
+                    });
+                    streetSelect.disabled = false;
+                });
+        });
+
+        // Ajax Bina Yükleme (Sokağa göre - Klasik Akış)
+        document.getElementById('streetSelect').addEventListener('change', function() {
+            var streetId = this.options[this.selectedIndex].getAttribute('data-id');
+            var isComplex = document.getElementById('isComplexCheck').checked;
+            
+            if(!streetId || isComplex) return; // Site içiyse artık burası çalışmaz (Globalden seçiyor)
+
+            var buildingSelect = document.getElementById('buildingSelect');
+            buildingSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+            buildingSelect.disabled = true;
+            
+            fetch('/api/LocationApi/buildings/' + streetId)
+                .then(response => response.json())
+                .then(data => {
+                    buildingSelect.innerHTML = '<option value="">Bina Seçiniz</option>';
+                    data.forEach(item => {
+                        var buildingLabel = item.name;
+                        if (item.buildingNumber) buildingLabel += ` (No: ${item.buildingNumber})`;
+                        if (item.blockName) buildingLabel += ` (${item.blockName} Blok)`;
+                        buildingSelect.innerHTML += `<option value="${item.id}" data-id="${item.id}">${buildingLabel}</option>`;
+                    });
+                    buildingSelect.innerHTML += `<option value="NEW" class="fw-bold text-primary">+ Listede Yok (Yeni Ekle)</option>`;
+                    buildingSelect.disabled = false;
+                    updateUI();
+                });
+        });
+
+        document.getElementById('buildingSelect').addEventListener('change', updateUI);
+
+        // UPPERCASE Event Listener
+        document.querySelectorAll('.uppercase-input').forEach(function(input) {
+            input.addEventListener('input', function() {
+                this.value = this.value.toLocaleUpperCase('tr-TR');
+            });
+        });
+        
+        document.getElementById('buildingSelect').addEventListener('change', function() {
+            var val = this.value;
+            var newBuildingArea = document.getElementById('newBuildingArea');
+            
+            if(val === 'NEW') {
+                newBuildingArea.classList.remove('d-none');
+            } else {
+                newBuildingArea.classList.add('d-none');
+                document.getElementById('newBuildingName').value = "";
+                document.getElementById('newBuildingNo').value = "";
+                document.getElementById('complexNameInput').value = "";
+                document.getElementById('complexBlockInput').value = "";
+            }
+            updateUI();
+        });
+    </script>
+<style>
+        .premium-input {
+            border: 1px solid #e2e8f0;
+            background-color: #f8fafc;
+            border-radius: 10px;
+        }
+        .premium-input:focus {
+            background-color: #fff;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+        .hover-primary:hover { color: #3b82f6 !important; }
+        .hover-bg-light:hover { background-color: #f1f5f9 !important; }
+        .module-card {
+            transition: all 0.2s ease-in-out;
+        }
+        .module-card:hover {
+            border-color: #3b82f6 !important;
+            transform: translateY(-2px);
+        }
+    </style>
+}

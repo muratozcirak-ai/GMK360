@@ -1,0 +1,639 @@
+@model IEnumerable<GMK360.Core.Entities.Property>
+@{
+    ViewData["Title"] = "Kişisel Yönetim Paneli";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var activeListings = Model.Where(p => p.State == GMK360.Core.Entities.ListingState.Active).ToList();
+    var draftListings = Model.Where(p => p.State == GMK360.Core.Entities.ListingState.Draft).ToList();
+    var passiveListings = Model.Where(p => p.State == GMK360.Core.Entities.ListingState.Passive || p.State == GMK360.Core.Entities.ListingState.Revoked).ToList();
+    var boostedListings = Model.Where(p => p.IsBoosted && p.PromotedEndDate.HasValue && p.PromotedEndDate > DateTime.Now).ToList();
+}
+
+<script src="https://unpkg.com/@@phosphor-icons/web"></script>
+<style>
+    body { background-color: #f4f7f6; }
+    
+    /* Sidebar Styles */
+    .dashboard-sidebar {
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.05);
+        padding: 20px 10px;
+        height: calc(100vh - 100px);
+        position: sticky;
+        top: 80px;
+        overflow-y: auto;
+    }
+    .user-profile-widget {
+        text-align: center;
+        padding-bottom: 20px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #edf2f9;
+    }
+    .user-profile-widget .avatar {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        margin: 0 auto 15px;
+        box-shadow: 0 4px 15px rgba(118, 75, 162, 0.3);
+    }
+    .nav-sidebar .nav-link {
+        color: #4a5568;
+        border-radius: 10px;
+        padding: 12px 20px;
+        font-weight: 600;
+        margin-bottom: 5px;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+    }
+    .nav-sidebar .nav-link i {
+        font-size: 1.25rem;
+        margin-right: 12px;
+        opacity: 0.7;
+    }
+    .nav-sidebar .nav-link:hover {
+        background-color: #f8fafc;
+        color: #2b6cb0;
+        transform: translateX(5px);
+    }
+    .nav-sidebar .nav-link.active {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        color: #ffffff;
+        box-shadow: 0 4px 15px rgba(42, 82, 152, 0.3);
+    }
+    .nav-sidebar .nav-link.active i {
+        opacity: 1;
+    }
+
+    /* Content Area */
+    .dashboard-content {
+        padding: 0 15px;
+    }
+    .content-header {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        border-radius: 16px;
+        padding: 30px;
+        color: white;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        margin-bottom: 30px;
+        position: relative;
+        overflow: hidden;
+    }
+    .content-header::after {
+        content: '';
+        position: absolute;
+        top: -50%; right: -10%;
+        width: 300px; height: 300px;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%);
+        border-radius: 50%;
+    }
+    
+    .stat-card {
+        background: rgba(255,255,255,0.1);
+        border-radius: 12px;
+        padding: 20px;
+        backdrop-filter: blur(10px);
+        text-align: center;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+    .stat-card h3 { font-size: 2.2rem; margin: 0; font-weight: 700; }
+    .stat-card p { margin: 5px 0 0; opacity: 0.8; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;}
+
+    /* Inner Tabs (For Listings) */
+    .inner-nav-pills {
+        background: white;
+        padding: 8px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+        display: inline-flex;
+        margin-bottom: 25px;
+        flex-wrap: wrap;
+    }
+    .inner-nav-pills .nav-link {
+        border-radius: 8px;
+        padding: 10px 20px;
+        font-weight: 600;
+        color: #64748b;
+        transition: all 0.3s;
+    }
+    .inner-nav-pills .nav-link.active {
+        background-color: #f1f5f9;
+        color: #0f172a;
+    }
+
+    /* Cards */
+    .property-card {
+        border: none;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        margin-bottom: 25px;
+        overflow: hidden;
+        background: white;
+    }
+    .property-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+    }
+    .property-card img {
+        height: 220px;
+        object-fit: cover;
+    }
+    .badge-vitrin {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: linear-gradient(45deg, #f39c12, #f1c40f);
+        color: white;
+        padding: 6px 16px;
+        border-radius: 30px;
+        font-weight: bold;
+        box-shadow: 0 4px 15px rgba(243, 156, 18, 0.4);
+        z-index: 10;
+        font-size: 0.85rem;
+        letter-spacing: 0.5px;
+    }
+    .action-buttons .btn { border-radius: 8px; padding: 10px 15px; font-weight: 600; font-size: 0.9rem;}
+
+    /* Placeholder Cards */
+    .placeholder-module {
+        background: white;
+        border-radius: 16px;
+        padding: 40px;
+        text-align: center;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+    }
+    .placeholder-module i {
+        font-size: 4rem;
+        color: #cbd5e1;
+        margin-bottom: 20px;
+    }
+</style>
+
+<div class="container-fluid mt-4 mb-5 pt-4 px-xl-5">
+    <div class="row">
+        <!-- SIDEBAR -->
+        <div class="col-lg-3 col-xl-2 mb-4">
+            <div class="dashboard-sidebar">
+                <div class="user-profile-widget">
+                    <div class="avatar">
+                        <i class="ph ph-user"></i>
+                    </div>
+                    <h5 class="fw-bold mb-1">@User.Identity.Name</h5>
+                    <span class="badge bg-light text-secondary border">Bireysel Üye</span>
+                </div>
+                
+                <div class="nav flex-column nav-pills nav-sidebar" id="v-pills-tab" role="tablist" aria-orientation="vertical">
+                    <button class="nav-link active" id="v-pills-overview-tab" data-bs-toggle="pill" data-bs-target="#v-pills-overview" type="button" role="tab" aria-controls="v-pills-overview" aria-selected="true">
+                        <i class="ph ph-squares-four"></i> Genel Bakış
+                    </button>
+                    <button class="nav-link" id="v-pills-listings-tab" data-bs-toggle="pill" data-bs-target="#v-pills-listings" type="button" role="tab" aria-controls="v-pills-listings" aria-selected="false">
+                        <i class="ph ph-house-line"></i> İlanlarım
+                    </button>
+                    <button class="nav-link" id="v-pills-wallet-tab" data-bs-toggle="pill" data-bs-target="#v-pills-wallet" type="button" role="tab" aria-controls="v-pills-wallet" aria-selected="false">
+                        <i class="ph ph-wallet"></i> Cüzdan & Kredi
+                    </button>
+                    <button class="nav-link" id="v-pills-agenda-tab" data-bs-toggle="pill" data-bs-target="#v-pills-agenda" type="button" role="tab" aria-controls="v-pills-agenda" aria-selected="false">
+                        <i class="ph ph-calendar-check"></i> Ajanda
+                    </button>
+                    <button class="nav-link" id="v-pills-messages-tab" data-bs-toggle="pill" data-bs-target="#v-pills-messages" type="button" role="tab" aria-controls="v-pills-messages" aria-selected="false">
+                        <i class="ph ph-chats"></i> Mesajlar
+                    </button>
+                    <button class="nav-link" id="v-pills-offers-tab" data-bs-toggle="pill" data-bs-target="#v-pills-offers" type="button" role="tab" aria-controls="v-pills-offers" aria-selected="false">
+                        <i class="ph ph-handshake"></i> Teklifler
+                    </button>
+                    <button class="nav-link" id="v-pills-customers-tab" data-bs-toggle="pill" data-bs-target="#v-pills-customers" type="button" role="tab" aria-controls="v-pills-customers" aria-selected="false">
+                        <i class="ph ph-users"></i> Müşteriler
+                    </button>
+                    
+                    <hr class="my-3 opacity-25">
+                    
+                    <a href="/Property/Create" class="btn btn-primary rounded-pill fw-bold w-100 py-2 shadow-sm">
+                        <i class="ph ph-plus-circle me-1"></i> Yeni İlan Ver
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN CONTENT -->
+        <div class="col-lg-9 col-xl-10 dashboard-content">
+            <div class="tab-content" id="v-pills-tabContent">
+                
+                <!-- 1. GENEL BAKIŞ (OVERVIEW) -->
+                <div class="tab-pane fade show active" id="v-pills-overview" role="tabpanel" aria-labelledby="v-pills-overview-tab">
+                    <div class="content-header">
+                        <div class="row align-items-center position-relative" style="z-index: 2;">
+                            <div class="col-md-7">
+                                <h2 class="fw-bold mb-2">Hoş Geldiniz, @User.Identity.Name!</h2>
+                                <p class="mb-0 opacity-75" style="font-size:1.1rem;">Bugün harika bir gün. Portföyünüzü genişletmek ve müşterilerinize ulaşmak için her şey hazır.</p>
+                            </div>
+                            <div class="col-md-5 mt-4 mt-md-0">
+                                <div class="row g-3">
+                                    <div class="col-6">
+                                        <div class="stat-card">
+                                            <h3>@activeListings.Count</h3>
+                                            <p>Yayında</p>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="stat-card">
+                                            <h3>@Model.Sum(x => x.ViewCount)</h3>
+                                            <p>Görüntülenme</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Actions -->
+                    <h5 class="fw-bold mb-4 text-secondary">Hızlı İşlemler</h5>
+                    <div class="row g-4 mb-5">
+                        <div class="col-md-3">
+                            <a href="/Property/Create" class="card text-center border-0 shadow-sm h-100 text-decoration-none text-dark" style="border-radius: 12px; transition: 0.3s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+                                <div class="card-body p-4">
+                                    <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                                        <i class="ph ph-plus fs-2"></i>
+                                    </div>
+                                    <h6 class="fw-bold">Yeni İlan Ekle</h6>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card text-center border-0 shadow-sm h-100 text-decoration-none text-dark cursor-pointer" onclick="document.getElementById('v-pills-wallet-tab').click()" style="border-radius: 12px; transition: 0.3s; cursor:pointer;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+                                <div class="card-body p-4">
+                                    <div class="bg-warning bg-opacity-10 text-warning rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                                        <i class="ph ph-coin fs-2"></i>
+                                    </div>
+                                    <h6 class="fw-bold">Kredi Yükle</h6>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card text-center border-0 shadow-sm h-100 text-decoration-none text-dark cursor-pointer" onclick="document.getElementById('v-pills-agenda-tab').click()" style="border-radius: 12px; transition: 0.3s; cursor:pointer;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+                                <div class="card-body p-4">
+                                    <div class="bg-success bg-opacity-10 text-success rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                                        <i class="ph ph-calendar-plus fs-2"></i>
+                                    </div>
+                                    <h6 class="fw-bold">Randevu Oluştur</h6>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card text-center border-0 shadow-sm h-100 text-decoration-none text-dark cursor-pointer" onclick="document.getElementById('v-pills-listings-tab').click()" style="border-radius: 12px; transition: 0.3s; cursor:pointer;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+                                <div class="card-body p-4">
+                                    <div class="bg-info bg-opacity-10 text-info rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                                        <i class="ph ph-chart-bar fs-2"></i>
+                                    </div>
+                                    <h6 class="fw-bold">İlan İstatistikleri</h6>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. İLANLARIM (LISTINGS) -->
+                <div class="tab-pane fade" id="v-pills-listings" role="tabpanel" aria-labelledby="v-pills-listings-tab">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h3 class="fw-bold text-dark mb-0"><i class="ph ph-house-line text-primary me-2"></i>İlanlarım</h3>
+                        <a href="/Property/Create" class="btn btn-primary rounded-pill"><i class="ph ph-plus-circle me-1"></i> Yeni İlan</a>
+                    </div>
+                    
+                    <ul class="nav nav-pills inner-nav-pills" id="listingInnerTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#active" type="button" role="tab">Yayındakiler (@activeListings.Count)</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" data-bs-toggle="pill" data-bs-target="#boosted" type="button" role="tab">Vitrin İlanlarım (@boostedListings.Count)</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" data-bs-toggle="pill" data-bs-target="#drafts" type="button" role="tab">Taslaklar (@draftListings.Count)</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" data-bs-toggle="pill" data-bs-target="#passive" type="button" role="tab">Pasif & İptal (@passiveListings.Count)</button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content mt-3" id="listingTabsContent">
+                        <!-- ACTIVE LISTINGS -->
+                        <div class="tab-pane fade show active" id="active" role="tabpanel">
+                            <div class="row">
+                                @if(!activeListings.Any()) { <div class="col-12"><div class="alert alert-info border-0 shadow-sm rounded-3"><i class="ph ph-info me-2"></i>Yayında ilanınız bulunmuyor.</div></div> }
+                                @foreach(var item in activeListings)
+                                {
+                                    <div class="col-md-6 col-lg-4">
+                                        <div class="card property-card h-100">
+                                            @if(item.IsBoosted && item.PromotedEndDate > DateTime.Now) {
+                                                <span class="badge-vitrin"><i class="bi bi-star-fill me-1"></i>VİTRİN</span>
+                                            }
+                                            <img src="@(item.Images.FirstOrDefault(i => i.IsCover)?.ImageUrl ?? "https://via.placeholder.com/400x200?text=Gorsel+Yok")" class="card-img-top" alt="...">
+                                            <div class="card-body d-flex flex-column">
+                                                <h5 class="card-title text-truncate fw-bold" title="@item.Title">@item.Title</h5>
+                                                <h4 class="text-primary fw-bold mb-3">@item.Price.ToString("N0") @item.Currency</h4>
+                                                <p class="text-muted small mb-2"><i class="ph ph-map-pin"></i> @(item.Complex?.City?.Name), @(item.Complex?.District?.Name)</p>
+                                                <p class="text-muted small mb-3"><i class="ph ph-eye"></i> @item.ViewCount Görüntülenme</p>
+                                                
+                                                <div class="mt-auto action-buttons d-flex gap-2 flex-wrap">
+                                                    <a href="/Property/Create/@item.Id" class="btn btn-light border flex-grow-1"><i class="ph ph-pencil-simple"></i> Düzenle</a>
+                                                    <button onclick="toggleState(@item.Id, 'Passive')" class="btn btn-light border flex-grow-1 text-warning"><i class="ph ph-pause-circle"></i> Pasif</button>
+                                                    @if(!item.IsBoosted || item.PromotedEndDate <= DateTime.Now)
+                                                    {
+                                                        <button onclick="openBoostModal(@item.Id, '@item.Title')" class="btn btn-outline-primary w-100 mt-2"><i class="ph ph-lightning"></i> Vitrin Yap (50 Kredi)</button>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- BOOSTED LISTINGS -->
+                        <div class="tab-pane fade" id="boosted" role="tabpanel">
+                             <div class="row">
+                                @if(!boostedListings.Any()) { <div class="col-12"><div class="alert alert-info border-0 shadow-sm rounded-3"><i class="ph ph-info me-2"></i>Vitrinde ilanınız bulunmuyor.</div></div> }
+                                @foreach(var item in boostedListings)
+                                {
+                                    <div class="col-md-6 col-lg-4">
+                                        <div class="card property-card h-100 border-warning" style="border-width: 2px;">
+                                            <span class="badge-vitrin"><i class="bi bi-star-fill me-1"></i>VİTRİN</span>
+                                            <img src="@(item.Images.FirstOrDefault(i => i.IsCover)?.ImageUrl ?? "https://via.placeholder.com/400x200?text=Gorsel+Yok")" class="card-img-top" alt="...">
+                                            <div class="card-body d-flex flex-column">
+                                                <h5 class="card-title text-truncate fw-bold">@item.Title</h5>
+                                                <h4 class="text-primary fw-bold mb-3">@item.Price.ToString("N0") @item.Currency</h4>
+                                                <p class="text-muted small mb-3 text-warning fw-bold"><i class="ph ph-clock"></i> Bitiş: @item.PromotedEndDate?.ToString("dd.MM.yyyy")</p>
+                                                <div class="mt-auto action-buttons d-flex gap-2 flex-wrap">
+                                                    <a href="/Property/Create/@item.Id" class="btn btn-light border w-100"><i class="ph ph-pencil-simple"></i> Düzenle</a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                             </div>
+                        </div>
+
+                        <!-- DRAFTS -->
+                        <div class="tab-pane fade" id="drafts" role="tabpanel">
+                            <div class="row">
+                                @if(!draftListings.Any()) { <div class="col-12"><div class="alert alert-light border-0 shadow-sm rounded-3">Taslak ilanınız bulunmuyor.</div></div> }
+                                @foreach(var item in draftListings)
+                                {
+                                    <div class="col-md-6 col-lg-4">
+                                        <div class="card property-card h-100 bg-light border-0">
+                                            <div class="card-body d-flex flex-column p-4">
+                                                <div class="mb-3">
+                                                    <span class="badge bg-secondary rounded-pill px-3 py-2">Taslak</span>
+                                                </div>
+                                                <h5 class="card-title fw-bold text-dark mb-3">@(string.IsNullOrEmpty(item.Title) ? "İsimsiz Taslak" : item.Title)</h5>
+                                                <div class="bg-white rounded p-3 mb-4 shadow-sm border">
+                                                    <p class="text-muted small mb-1 fw-bold"><i class="ph ph-hourglass-high text-warning"></i> @item.DraftStep. Adımda Kaldı</p>
+                                                    <p class="text-muted small mb-0"><i class="ph ph-calendar-blank text-secondary"></i> @item.CreatedAt.ToString("dd.MM.yyyy HH:mm")</p>
+                                                </div>
+                                                
+                                                <div class="mt-auto action-buttons d-flex gap-2">
+                                                    <a href="/Property/Create/@item.Id" class="btn btn-primary flex-grow-1"><i class="ph ph-play-circle"></i> Devam Et</a>
+                                                    <button onclick="discardDraft(@item.Id)" class="btn btn-outline-danger px-3"><i class="ph ph-trash"></i></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- PASSIVE / REVOKED -->
+                        <div class="tab-pane fade" id="passive" role="tabpanel">
+                            <div class="row">
+                                @if(!passiveListings.Any()) { <div class="col-12"><div class="alert alert-light border-0 shadow-sm rounded-3">Pasif ilanınız bulunmuyor.</div></div> }
+                                @foreach(var item in passiveListings)
+                                {
+                                    <div class="col-md-6 col-lg-4">
+                                        <div class="card property-card h-100 bg-light border-0 opacity-75">
+                                            <img src="@(item.Images.FirstOrDefault(i => i.IsCover)?.ImageUrl ?? "https://via.placeholder.com/400x200?text=Pasif")" class="card-img-top" style="filter: grayscale(100%);" alt="...">
+                                            <div class="card-body d-flex flex-column">
+                                                <h5 class="card-title text-truncate fw-bold text-muted">@item.Title</h5>
+                                                
+                                                @if(item.State == GMK360.Core.Entities.ListingState.Revoked)
+                                                {
+                                                    <div class="alert alert-danger p-2 small mb-3 border-0"><i class="ph ph-warning-circle"></i> Sistem Tarafından İptal (Yetki)</div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="alert alert-secondary p-2 small mb-3 border-0"><i class="ph ph-pause-circle"></i> Kullanıcı Tarafından Pasif</div>
+                                                }
+                                                
+                                                <div class="mt-auto action-buttons d-flex gap-2 flex-wrap">
+                                                    @if(item.State != GMK360.Core.Entities.ListingState.Revoked)
+                                                    {
+                                                        <button onclick="toggleState(@item.Id, 'Active')" class="btn btn-success flex-grow-1"><i class="ph ph-play-circle"></i> Tekrar Yayına Al</button>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. CÜZDAN & KREDİ (WALLET) -->
+                <div class="tab-pane fade" id="v-pills-wallet" role="tabpanel" aria-labelledby="v-pills-wallet-tab">
+                    <h3 class="fw-bold text-dark mb-4"><i class="ph ph-wallet text-warning me-2"></i>Cüzdan & Krediler</h3>
+                    
+                    <div class="row g-4">
+                        <div class="col-md-5">
+                            <div class="card border-0 shadow-sm" style="border-radius:16px; background: linear-gradient(135deg, #f6d365 0%, #fda085 100%); color: white;">
+                                <div class="card-body p-5 text-center">
+                                    <h5 class="mb-4 text-white opacity-75">Mevcut Bakiyeniz</h5>
+                                    <h1 class="display-3 fw-bold mb-0">150</h1>
+                                    <p class="fs-5 mt-2 opacity-75">Kredi</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-7">
+                            <div class="card border-0 shadow-sm h-100" style="border-radius:16px;">
+                                <div class="card-body p-4">
+                                    <h5 class="fw-bold mb-4">Kredi Paketleri</h5>
+                                    <div class="list-group">
+                                        <label class="list-group-item d-flex gap-3 py-3 border-light align-items-center">
+                                            <input class="form-check-input flex-shrink-0 fs-4" type="radio" name="creditPack" value="" checked>
+                                            <div class="d-flex gap-2 w-100 justify-content-between align-items-center">
+                                                <div>
+                                                    <h6 class="mb-0 fw-bold">100 Kredi Paketi</h6>
+                                                    <p class="mb-0 opacity-75 small">Vitrin ve Doping için ideal</p>
+                                                </div>
+                                                <span class="fs-5 fw-bold text-success">₺499</span>
+                                            </div>
+                                        </label>
+                                        <label class="list-group-item d-flex gap-3 py-3 border-light align-items-center">
+                                            <input class="form-check-input flex-shrink-0 fs-4" type="radio" name="creditPack" value="">
+                                            <div class="d-flex gap-2 w-100 justify-content-between align-items-center">
+                                                <div>
+                                                    <h6 class="mb-0 fw-bold">250 Kredi Paketi <span class="badge bg-danger ms-2">POPÜLER</span></h6>
+                                                    <p class="mb-0 opacity-75 small">Yoğun kullanımlar için ekstra %10 bonus</p>
+                                                </div>
+                                                <span class="fs-5 fw-bold text-success">₺999</span>
+                                            </div>
+                                        </label>
+                                    </div>
+                                    <button class="btn btn-primary w-100 mt-4 rounded-pill py-2 fw-bold">Satın Al</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. AJANDA (AGENDA) -->
+                <div class="tab-pane fade" id="v-pills-agenda" role="tabpanel" aria-labelledby="v-pills-agenda-tab">
+                    <h3 class="fw-bold text-dark mb-4"><i class="ph ph-calendar-check text-success me-2"></i>Ajanda</h3>
+                    <div class="placeholder-module">
+                        <i class="ph ph-calendar-blank"></i>
+                        <h4 class="fw-bold">Takvim ve Ajanda Yönetimi</h4>
+                        <p class="text-muted mx-auto" style="max-width:500px;">Müşteri randevuları, yer gösterme planları ve ofis toplantılarınızı buradan kolayca organize edebilirsiniz. Çok yakında eklenecek!</p>
+                        <button class="btn btn-outline-success rounded-pill px-4 mt-3">Hatırlatıcı Kur</button>
+                    </div>
+                </div>
+
+                <!-- 5. MESAJLAR (MESSAGES) -->
+                <div class="tab-pane fade" id="v-pills-messages" role="tabpanel" aria-labelledby="v-pills-messages-tab">
+                    <h3 class="fw-bold text-dark mb-4"><i class="ph ph-chats text-info me-2"></i>Mesajlar</h3>
+                    <div class="placeholder-module">
+                        <i class="ph ph-chat-circle-dots"></i>
+                        <h4 class="fw-bold">Gelen Kutusu</h4>
+                        <p class="text-muted mx-auto" style="max-width:500px;">İlanlarınızla ilgilenen müşterilerden gelen mesajları buradan yanıtlayın. Şu anda yeni mesajınız bulunmuyor.</p>
+                    </div>
+                </div>
+
+                <!-- 6. TEKLİFLER (OFFERS) -->
+                <div class="tab-pane fade" id="v-pills-offers" role="tabpanel" aria-labelledby="v-pills-offers-tab">
+                    <h3 class="fw-bold text-dark mb-4"><i class="ph ph-handshake text-primary me-2"></i>Gelen Teklifler</h3>
+                    <div class="placeholder-module">
+                        <i class="ph ph-handshake"></i>
+                        <h4 class="fw-bold">Fiyat Teklifleri</h4>
+                        <p class="text-muted mx-auto" style="max-width:500px;">Yayındaki ilanlarınıza gelen online fiyat teklifleri burada listelenecektir.</p>
+                    </div>
+                </div>
+
+                <!-- 7. MÜŞTERİLER (CUSTOMERS) -->
+                <div class="tab-pane fade" id="v-pills-customers" role="tabpanel" aria-labelledby="v-pills-customers-tab">
+                    <h3 class="fw-bold text-dark mb-4"><i class="ph ph-users text-secondary me-2"></i>Müşteri Rehberi</h3>
+                    <div class="placeholder-module">
+                        <i class="ph ph-address-book"></i>
+                        <h4 class="fw-bold">CRM & Müşteri Kayıtları</h4>
+                        <p class="text-muted mx-auto" style="max-width:500px;">Portföyünüzle ilgilenen müşterilerin iletişim bilgilerini ve notlarınızı güvenle saklayın.</p>
+                        <button class="btn btn-primary rounded-pill px-4 mt-3"><i class="ph ph-plus"></i> Yeni Müşteri Ekle</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vitrin (Boost) Modal -->
+<div class="modal fade" id="boostModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg" style="border-radius:16px;">
+      <div class="modal-header border-0 bg-primary bg-opacity-10">
+        <h5 class="modal-title fw-bold text-primary"><i class="ph ph-lightning text-warning"></i> İlanı Vitrine Taşı</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4 text-center">
+        <h5 id="boostPropertyTitle" class="mb-3 text-truncate fw-bold text-dark"></h5>
+        <div class="alert alert-light border shadow-sm p-4 mb-4 rounded-4">
+            <h1 class="display-4 fw-bold text-warning mb-0">50 <span class="fs-5 text-muted">Kredi</span></h1>
+            <p class="text-muted mb-0 mt-2">30 Günlük Vitrin Süresi</p>
+        </div>
+        <p class="text-muted">Bu işlem cüzdan bakiyenizden 50 Kredi düşecektir. İlanınız anında tüm sayfalarda "Öne Çıkan" statüsünde sergilenecektir.</p>
+        <div id="boostErrorAlert" class="alert alert-danger d-none border-0 rounded-3"></div>
+      </div>
+      <div class="modal-footer border-0 bg-light rounded-bottom-4">
+        <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+        <button type="button" class="btn btn-warning rounded-pill px-4 fw-bold text-dark" id="btnConfirmBoost">
+            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span> 
+            Onayla ve Öde
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+@section Scripts {
+    <script>
+        let currentBoostId = 0;
+        const boostModal = new bootstrap.Modal(document.getElementById('boostModal'));
+        
+        function toggleState(id, newState) {
+            if(confirm("İlan durumunu değiştirmek istediğinize emin misiniz?")) {
+                $.post('/Property/ToggleState', { id: id }, function(res) {
+                    if(res.success) {
+                        location.reload();
+                    } else {
+                        alert("İşlem başarısız oldu.");
+                    }
+                });
+            }
+        }
+
+        function discardDraft(id) {
+            if(confirm("Bu taslağı tamamen silmek istediğinize emin misiniz?")) {
+                $.post('/api/PropertyApi/DiscardDraft?propertyId=' + id, function(res) {
+                    if(res.success) {
+                        location.reload();
+                    } else {
+                        alert("Silme işlemi başarısız oldu.");
+                    }
+                });
+            }
+        }
+
+        function openBoostModal(id, title) {
+            currentBoostId = id;
+            document.getElementById('boostPropertyTitle').innerText = title;
+            document.getElementById('boostErrorAlert').classList.add('d-none');
+            boostModal.show();
+        }
+
+        document.getElementById('btnConfirmBoost').addEventListener('click', function() {
+            const btn = this;
+            btn.disabled = true;
+            btn.querySelector('.spinner-border').classList.remove('d-none');
+            
+            $.post('/Property/BoostProperty', { id: currentBoostId }, function(res) {
+                if(res.success) {
+                    location.reload();
+                } else {
+                    const errAlert = document.getElementById('boostErrorAlert');
+                    errAlert.innerText = res.message;
+                    errAlert.classList.remove('d-none');
+                    btn.disabled = false;
+                    btn.querySelector('.spinner-border').classList.add('d-none');
+                    
+                    if(res.redirectUrl) {
+                        errAlert.innerHTML += `<br><button onclick="document.getElementById('boostModal').querySelector('.btn-close').click(); document.getElementById('v-pills-wallet-tab').click();" class="btn btn-sm btn-dark mt-3 rounded-pill px-4">Cüzdana Git</button>`;
+                    }
+                }
+            });
+        });
+
+        // URL hash kontrolü ile istenen tab'ı açma
+        $(document).ready(function() {
+            let hash = window.location.hash;
+            if(hash) {
+                let triggerEl = document.querySelector('button[data-bs-target="' + hash + '"]');
+                if(triggerEl) {
+                    let tab = new bootstrap.Tab(triggerEl);
+                    tab.show();
+                }
+            }
+        });
+    </script>
+}

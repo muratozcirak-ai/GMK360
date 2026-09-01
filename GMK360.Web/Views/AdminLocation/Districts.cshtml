@@ -1,0 +1,158 @@
+@model IEnumerable<GMK360.Core.Entities.District>
+@{
+    ViewData["Title"] = "İlçe Yönetimi";
+    Layout = "~/Views/Shared/_AdminLayout.cshtml";
+    var cities = ViewBag.Cities as List<GMK360.Core.Entities.City>;
+    var selectedCityId = ViewBag.SelectedCityId as int?;
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0">İlçe Yönetimi</h2>
+            <p class="text-muted">İlçe isimlerini düzenleyin, yeni ilçe ekleyin veya ilçeyi başka bir ile taşıyın.</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-primary rounded-pill me-2" data-bs-toggle="modal" data-bs-target="#addDistrictModal">
+                <i class="bi bi-plus-lg me-2"></i> Yeni İlçe Ekle
+            </button>
+            <a href="/AdminLocation/Index" class="btn btn-light rounded-pill"><i class="bi bi-arrow-left me-2"></i> Merkeze Dön</a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label text-muted small">İl'e Göre Filtrele</label>
+                    <select name="cityId" class="form-select rounded-3" onchange="this.form.submit()">
+                        <option value="">-- Tüm İller --</option>
+                        @foreach(var city in cities)
+                        {
+                            if (selectedCityId == city.Id) {
+                                <option value="@city.Id" selected>@city.Name</option>
+                            } else {
+                                <option value="@city.Id">@city.Name</option>
+                            }
+                        }
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">ID</th>
+                            <th>Bağlı Olduğu İl</th>
+                            <th>İlçe Adı</th>
+                            <th class="text-end pe-4">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach(var item in Model)
+                        {
+                            <tr>
+                                <td class="ps-4 text-muted">#@item.Id</td>
+                                <td>@item.City?.Name</td>
+                                <td class="fw-bold">@item.Name</td>
+                                <td class="text-end pe-4">
+                                    <button class="btn btn-sm btn-outline-primary rounded-pill" onclick="editDistrict(@item.Id, '@item.Name', @item.CityId)">Düzenle / Taşı</button>
+                                </td>
+                            </tr>
+                        }
+                        @if(!Model.Any())
+                        {
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">Kayıt bulunamadı.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add District Modal -->
+<div class="modal fade" id="addDistrictModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title fw-bold">Yeni İlçe Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="/AdminLocation/AddDistrict" method="post">
+                <div class="modal-body py-0">
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">Bağlı Olacağı İl</label>
+                        <select name="cityId" class="form-select rounded-3" required>
+                            <option value="">-- Seçiniz --</option>
+                            @foreach(var city in cities)
+                            {
+                                <option value="@city.Id">@city.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">İlçe Adı</label>
+                        <input type="text" name="name" class="form-control rounded-3" required />
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit District Modal -->
+<div class="modal fade" id="editDistrictModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title fw-bold">İlçeyi Düzenle / Taşı</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="/AdminLocation/EditDistrict" method="post">
+                <input type="hidden" id="editId" name="id" />
+                <div class="modal-body py-0">
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">Bağlı Olduğu İl</label>
+                        <select id="editCityId" name="cityId" class="form-select rounded-3" required>
+                            @foreach(var city in cities)
+                            {
+                                <option value="@city.Id">@city.Name</option>
+                            }
+                        </select>
+                        <small class="text-primary">İlçeyi başka bir ile taşımak istiyorsanız buradan değiştirebilirsiniz.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">İlçe Adı</label>
+                        <input type="text" id="editName" name="name" class="form-control rounded-3" required />
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function editDistrict(id, currentName, currentCityId) {
+        document.getElementById('editId').value = id;
+        document.getElementById('editName').value = currentName;
+        document.getElementById('editCityId').value = currentCityId;
+        var modal = new bootstrap.Modal(document.getElementById('editDistrictModal'));
+        modal.show();
+    }
+</script>

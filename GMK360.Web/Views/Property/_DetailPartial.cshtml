@@ -1,0 +1,111 @@
+@model GMK360.Core.Entities.Property
+
+@{
+    var coverImg = ViewBag.MediaList != null && ((List<GMK360.Core.Entities.PropertyImage>)ViewBag.MediaList).Count > 0 
+        ? ((List<GMK360.Core.Entities.PropertyImage>)ViewBag.MediaList)[0].ImageUrl 
+        : "/images/hero.jpg";
+        
+    var formatPrice = Model.Currency == "USD" ? $"${Model.Price:N0}" 
+                    : Model.Currency == "EUR" ? $"€{Model.Price:N0}" 
+                    : $"{Model.Price:N0} ₺";
+}
+
+<div class="detail-partial-container d-flex flex-column h-100 bg-white shadow-sm border-start" data-id="@Model.Id" style="transition: all 0.3s ease;">
+    <!-- Header: Action Buttons -->
+    <div class="d-flex justify-content-between align-items-center p-3 border-bottom bg-white" style="z-index: 5;">
+        <h5 class="m-0 fw-bold text-truncate pe-3" title="@Model.Title" style="color: #1e293b; font-size: 1.1rem;">@Model.Title</h5>
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-secondary fw-bold" title="Not Ekle" onclick="alert('Lütfen kişisel not eklemek için tam sayfa görünüme geçin veya giriş yapın.')">
+                <i class="fas fa-pencil-alt fs-5"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-danger fw-bold" title="Favoriye Ekle" onclick="alert('Lütfen favoriye eklemek için giriş yapınız.')">
+                <i class="far fa-heart fs-5"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-success fw-bold" title="Fiyatı Düşünce Haber Ver" onclick="alert('Bu ilan için fiyat düşüş alarmı kuruldu.')">
+                <i class="far fa-bell fs-5"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-warning btn-pin d-flex align-items-center gap-1 fw-bold" title="Bu ilanı sabitle ve kıyasla">
+                <i class="fas fa-thumbtack fs-5"></i> Sabitle
+            </button>
+            <button class="btn btn-sm btn-outline-secondary btn-close-panel d-flex align-items-center" title="Kapat">
+                <i class="fas fa-times fs-5"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Body: Scrollable Content -->
+    <div class="p-3 overflow-y-auto custom-scrollbar" style="flex: 1; background: #f8fafc;">
+        <!-- Görsel -->
+        <div class="position-relative mb-4 rounded-4 overflow-hidden shadow-sm" style="height: 280px; background: #e2e8f0;">
+            <img src="@coverImg" alt="@Model.Title" class="w-100 h-100" style="object-fit: cover; transition: transform 0.5s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" />
+            <div class="position-absolute bottom-0 start-0 w-100 p-3" style="background: linear-gradient(to top, rgba(15,23,42,0.9), transparent);">
+                <div class="d-flex justify-content-between align-items-end">
+                    <span class="fs-2 fw-bold" style="color: #ea580c; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">@formatPrice</span>
+                    <span class="badge bg-primary fs-6">@Model.Status?.Name</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Özellikler (Grid) -->
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-lg-3">
+                <div class="p-3 bg-white rounded-3 text-center border shadow-sm h-100 d-flex flex-column justify-content-center">
+                    <i class="fas fa-vector-square mb-2" style="font-size: 2rem; color: #3b82f6;"></i>
+                    <div class="small text-muted mb-1">Brüt Alan</div>
+                    <div class="fw-bold fs-6">@Model.GrossArea m²</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="p-3 bg-white rounded-3 text-center border shadow-sm h-100 d-flex flex-column justify-content-center">
+                    <i class="fas fa-door-open mb-2" style="font-size: 2rem; color: #10b981;"></i>
+                    <div class="small text-muted mb-1">Oda Sayısı</div>
+                    <div class="fw-bold fs-6">@Model.RoomCount</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="p-3 bg-white rounded-3 text-center border shadow-sm h-100 d-flex flex-column justify-content-center">
+                    <i class="fas fa-building mb-2" style="font-size: 2rem; color: #8b5cf6;"></i>
+                    <div class="small text-muted mb-1">Bina Yaşı</div>
+                    <div class="fw-bold fs-6">@Model.BuildingAge</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="p-3 bg-white rounded-3 text-center border shadow-sm h-100 d-flex flex-column justify-content-center">
+                    <i class="fas fa-map-marker-alt mb-2" style="font-size: 2rem; color: #f59e0b;"></i>
+                    <div class="small text-muted mb-1">Lokasyon</div>
+                    <div class="fw-bold fs-6 text-truncate w-100" title="@Model.Complex?.City?.Name / @Model.Complex?.District?.Name">@Model.Complex?.District?.Name</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dinamik Özellikler -->
+        @if (ViewBag.Features != null && ((List<string>)ViewBag.Features).Any())
+        {
+            <div class="bg-white p-3 rounded-4 border shadow-sm mb-4">
+                <h6 class="fw-bold mb-3" style="color: #334155;"><i class="fas fa-star text-warning me-2"></i>Öne Çıkan Özellikler</h6>
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach(var feat in (List<string>)ViewBag.Features)
+                    {
+                        <span class="badge bg-light text-dark border py-2 px-3 rounded-pill">
+                            <i class="fas fa-check text-success me-1"></i> @feat
+                        </span>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Açıklama -->
+        <div class="bg-white p-4 rounded-4 border shadow-sm mb-4">
+            <h6 class="fw-bold mb-3" style="color: #334155;"><i class="fas fa-file-alt text-primary me-2"></i>İlan Açıklaması</h6>
+            <div class="text-muted" style="font-size: 0.95rem; line-height: 1.6;">
+                @Html.Raw(Model.Description)
+            </div>
+        </div>
+    </div>
+    
+    <div class="p-3 border-top bg-white text-center shadow-lg" style="z-index: 5;">
+        <a href="/ilan/@Model.Id" class="btn btn-primary w-100 fw-bold py-2 fs-5 rounded-3 d-flex justify-content-center align-items-center gap-2" style="background: #1e3a8a; border: none;">
+            Tam Sayfa Görüntüle <i class="fas fa-arrow-right"></i>
+        </a>
+    </div>
+</div>

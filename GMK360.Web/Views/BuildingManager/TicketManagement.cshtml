@@ -1,0 +1,70 @@
+@model IEnumerable<GMK360.Core.Entities.SupportTicket>
+@{
+    ViewData["Title"] = "İç Talepler Yönetimi";
+    Layout = "~/Views/Shared/_AdminLayout.cshtml";
+    var building = ViewBag.Building as GMK360.Core.Entities.Building;
+}
+
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <div>
+        <h1 class="h2"><i class="bi bi-headset text-primary me-2"></i> İç Talepler (Ticket)</h1>
+        <p class="text-muted">@building?.Name binasına ait tüm teknik, şikayet ve toplantı talepleri</p>
+    </div>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="/BuildingManager/Detail/@building?.Id" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Binaya Dön
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    @if (!Model.Any())
+    {
+        <div class="col-12">
+            <div class="card shadow-sm text-center py-5">
+                <div class="card-body">
+                    <i class="bi bi-emoji-smile fs-1 text-muted mb-3 d-block"></i>
+                    <h5>Harika! Bekleyen bir talep yok.</h5>
+                    <p class="text-muted">Sakinler tarafından açılan yeni talepler burada listelenecektir.</p>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        @foreach (var ticket in Model)
+        {
+            <div class="col-12 mb-3">
+                <div class="card shadow-sm border-start border-4 @(ticket.Status == "Open" ? "border-warning" : ticket.Status == "Resolved" ? "border-success" : "border-primary")">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h5 class="fw-bold mb-1">@ticket.Title</h5>
+                                <p class="text-muted small mb-2">
+                                    <i class="bi bi-person me-1"></i> Gönderen: @(ticket.CreatorUser?.FirstName ?? "Sakin") | 
+                                    <i class="bi bi-calendar3 me-1"></i> @ticket.CreatedAt.ToString("dd MMM yyyy HH:mm") |
+                                    <i class="bi bi-tag me-1"></i> @ticket.Category
+                                </p>
+                                <p class="text-dark mb-0">@ticket.Description</p>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge @(ticket.Status == "Open" ? "bg-warning text-dark" : ticket.Status == "Resolved" ? "bg-success" : "bg-primary") mb-2 d-block">
+                                    Durum: @(ticket.Status == "Open" ? "Açık" : ticket.Status == "Resolved" ? "Çözüldü" : ticket.Status)
+                                </span>
+                                
+                                <form method="post" action="/BuildingManager/UpdateTicketStatus" class="d-flex gap-2">
+                                    <input type="hidden" name="ticketId" value="@ticket.Id" />
+                                    <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                                        <option value="Open" selected="@(ticket.Status == "Open")">Açık</option>
+                                        <option value="In Progress" selected="@(ticket.Status == "In Progress")">İnceleniyor</option>
+                                        <option value="Resolved" selected="@(ticket.Status == "Resolved")">Çözüldü</option>
+                                    </select>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>

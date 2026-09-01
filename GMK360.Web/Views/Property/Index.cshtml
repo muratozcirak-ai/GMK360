@@ -1,0 +1,563 @@
+@model IEnumerable<GMK360.Core.Entities.Property>
+
+@{
+    ViewData["Title"] = "İlanlar - Akıllı Kıyaslama";
+}
+
+<style>
+    /* Full height layout, preventing document scroll so panes scroll internally */
+    body {
+        overflow: hidden;
+    }
+    
+    .split-container {
+        display: flex;
+        height: calc(100vh - 115px); /* Adjusted for layout padding */
+        overflow: hidden;
+        margin: 0;
+        padding: 0;
+        background: #f8fafc;
+        width: 100%;
+    }
+
+    .filter-pane, .master-pane, .detail-pane, .compare-pane {
+        transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+        overflow-y: auto;
+        height: 100%;
+    }
+    
+    /* Scrollbar styling */
+    .filter-pane::-webkit-scrollbar, .master-pane::-webkit-scrollbar, .detail-pane::-webkit-scrollbar, .compare-pane::-webkit-scrollbar {
+        width: 6px;
+    }
+    .filter-pane::-webkit-scrollbar-track, .master-pane::-webkit-scrollbar-track, .detail-pane::-webkit-scrollbar-track, .compare-pane::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .filter-pane::-webkit-scrollbar-thumb, .master-pane::-webkit-scrollbar-thumb, .detail-pane::-webkit-scrollbar-thumb, .compare-pane::-webkit-scrollbar-thumb {
+        background-color: #cbd5e1;
+        border-radius: 10px;
+    }
+    
+    /* Base Widths */
+    .filter-pane {
+        width: 22%;
+        border-right: 1px solid #e2e8f0;
+        background: #f8fafc;
+    }
+    
+    .master-pane {
+        width: 78%;
+        border-right: 1px solid #e2e8f0;
+        background: #fff;
+    }
+    
+    .detail-pane, .compare-pane {
+        width: 0;
+        opacity: 0;
+        display: none;
+    }
+    
+    /* State: Detail (1 Pane Open) */
+    .state-detail .filter-pane { width: 18%; }
+    .state-detail .master-pane { width: 30%; }
+    .state-detail .detail-pane {
+        width: 52%;
+        opacity: 1;
+        display: block;
+    }
+    
+    /* State: Compare (2 Panes Open) */
+    .state-compare .filter-pane { width: 15%; }
+    .state-compare .master-pane { width: 25%; }
+    .state-compare .detail-pane { width: 30%; opacity: 1; display: block; }
+    .state-compare .compare-pane { width: 30%; opacity: 1; display: block; }
+
+    /* Property Card Horizontal */
+    .property-card-hz {
+        display: flex;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #fff;
+        margin-bottom: 1rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        height: 140px;
+    }
+    .property-card-hz:hover {
+        border-color: #cbd5e1;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        transform: translateY(-2px);
+    }
+    .property-card-hz.active {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        background-color: #f0f9ff;
+    }
+    .pc-img-wrap {
+        width: 140px;
+        flex-shrink: 0;
+        position: relative;
+    }
+    .pc-img-wrap img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 12px 0 0 12px;
+    }
+    .pc-content {
+        padding: 0.75rem 1rem;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-width: 0;
+    }
+
+    /* Filter Form Enhancements */
+    .filter-label { font-size: 0.85rem; font-weight: 700; color: #475569; margin-bottom: 0.3rem; }
+    .filter-select, .filter-input { border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.9rem; padding: 0.5rem; }
+</style>
+
+<div class="split-container" id="splitContainer">
+    
+    <!-- FILTER PANE (Left Sidebar) -->
+    <div class="filter-pane p-3" id="filterPane">
+        <h6 class="fw-bold mb-3" style="color: #1e293b;"><i class="ph-bold ph-faders me-2"></i>Detaylı Arama</h6>
+        
+        <!-- Sorting Shortcuts -->
+        <div class="mb-4">
+            <div class="filter-label">Sıralama</div>
+            <select class="form-select filter-select bg-white">
+                <option>Önerilen</option>
+                <option>Fiyata Göre Artan</option>
+                <option>Fiyata Göre Azalan</option>
+                <option>En Yeni İlanlar</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <div class="filter-label">İşlem</div>
+            <div class="btn-group w-100" role="group">
+                <input type="radio" class="btn-check" name="islemType" id="satilik" checked>
+                <label class="btn btn-outline-primary btn-sm" for="satilik">Satılık</label>
+                
+                <input type="radio" class="btn-check" name="islemType" id="kiralik">
+                <label class="btn btn-outline-primary btn-sm" for="kiralik">Kiralık</label>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <div class="filter-label">Kategori</div>
+            <select class="form-select filter-select">
+                <option>Konut</option>
+                <option>İşyeri</option>
+                <option>Arsa</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <div class="filter-label">Konum</div>
+            <select class="form-select filter-select mb-2">
+                <option>İl Seçin</option>
+                <option>İstanbul</option>
+                <option>Ankara</option>
+            </select>
+            <select class="form-select filter-select">
+                <option>İlçe Seçin</option>
+                <option>Kadıköy</option>
+                <option>Beşiktaş</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <div class="filter-label">Fiyat Aralığı (TL)</div>
+            <div class="d-flex gap-2">
+                <input type="number" class="form-control filter-input" placeholder="Min">
+                <input type="number" class="form-control filter-input" placeholder="Max">
+            </div>
+        </div>
+
+        <div class="mb-4">
+            <div class="filter-label">Oda Sayısı</div>
+            <select class="form-select filter-select">
+                <option>Farketmez</option>
+                <option>1+1</option>
+                <option>2+1</option>
+                <option>3+1</option>
+                <option>4+1 ve üzeri</option>
+            </select>
+        </div>
+
+        <hr />
+        
+        <!-- Action Buttons -->
+        <div class="d-grid gap-2">
+            <button class="btn btn-primary fw-bold rounded-pill">
+                <i class="fas fa-search me-1"></i> Sonuçları Yenile
+            </button>
+            <button class="btn btn-outline-success fw-bold rounded-pill" onclick="alert('Bu arama kriterleri başarıyla kaydedildi. Yeni ilan eklendiğinde bildirim alacaksınız.')">
+                <i class="far fa-bell me-1"></i> Bu Aramayı Kaydet
+            </button>
+        </div>
+    </div>
+
+    <!-- MASTER PANE (List) -->
+    <div class="master-pane position-relative" id="masterPane">
+        <div class="p-3 border-bottom sticky-top bg-white d-flex justify-content-between align-items-center shadow-sm" style="z-index:10;">
+            <h5 class="m-0 fw-bold d-flex align-items-center" style="color: #1e293b;">
+                <i class="fas fa-list text-primary me-2 fs-4"></i> 
+                Tüm İlanlar <span class="badge bg-light text-primary ms-2 border">@Model.Count()</span>
+            </h5>
+            <div>
+                <button class="btn btn-sm btn-outline-primary fw-bold" onclick="openMapModal()">
+                    <i class="fas fa-map-marked-alt me-1"></i> Haritada Gör
+                </button>
+            </div>
+        </div>
+        
+        <div class="p-3 pb-5">
+            @if(!Model.Any()) {
+                <div class="text-center py-5">
+                    <i class="fas fa-search text-muted" style="font-size: 3rem;"></i>
+                    <p class="mt-3 text-muted">Kriterlerinize uygun ilan bulunamadı.</p>
+                </div>
+            }
+            @foreach (var p in Model)
+            {
+                var img = p.Images?.FirstOrDefault()?.ImageUrl ?? "https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80";
+                var formatPrice = p.Currency == "USD" ? $"${p.Price:N0}" : p.Currency == "EUR" ? $"€{p.Price:N0}" : $"{p.Price:N0} ₺";
+                
+                <div class="property-card-hz position-relative" data-id="@p.Id" onclick="loadPropertyDetail(@p.Id, this)">
+                    <div class="pc-img-wrap">
+                        <img src="@img" alt="@p.Title" />
+                        <span class="badge position-absolute top-0 start-0 m-2" style="background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);">@p.Status?.Name</span>
+                    </div>
+                    
+                    <!-- Favori Butonu (Absolute, Kartın sağ üstünde) -->
+                    <button class="btn btn-sm btn-light position-absolute rounded-circle shadow-sm" style="top: 10px; right: 10px; z-index: 5; width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;" onclick="toggleFavorite(event, @p.Id, this)" title="Favoriye Ekle">
+                        <i class="far fa-heart text-danger"></i>
+                    </button>
+
+                    <div class="pc-content">
+                        <div class="pe-4"> <!-- Favori butonu için sağdan boşluk -->
+                            <div class="fw-bold fs-5 text-truncate" style="color: #ea580c;">@formatPrice</div>
+                            <div class="fw-bold text-truncate mt-1" style="color: #1e293b; font-size: 0.95rem;">@p.Title</div>
+                        </div>
+                        <div class="d-flex gap-3 small text-muted mt-2">
+                            <span class="d-flex align-items-center gap-1"><i class="fas fa-door-open"></i> @p.RoomCount</span>
+                            <span class="d-flex align-items-center gap-1"><i class="fas fa-vector-square"></i> @p.GrossArea m²</span>
+                        </div>
+                        <div class="small text-muted text-truncate mt-2 d-flex align-items-center gap-1">
+                            <i class="fas fa-map-marker-alt text-primary"></i> @p.Complex?.City?.Name / @p.Complex?.District?.Name
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+    
+    <!-- DETAIL PANE -->
+    <div class="detail-pane position-relative" id="detailPane">
+        <div id="detailContent" class="h-100"></div>
+    </div>
+
+    <!-- COMPARE PANE (Second Detail) -->
+    <div class="compare-pane position-relative border-start" id="comparePane">
+        <div id="compareContent" class="h-100"></div>
+    </div>
+
+</div>
+
+<!-- MAP MODAL -->
+<div class="modal fade" id="mapModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header border-bottom-0 pb-0 position-absolute w-100" style="z-index: 1050; pointer-events: none;">
+        <button type="button" class="btn-close bg-white rounded-circle shadow p-2" data-bs-dismiss="modal" aria-label="Close" style="pointer-events: auto; margin-top: 10px; margin-right: 10px; opacity: 1;"></button>
+      </div>
+      <div class="modal-body p-0" style="height: 70vh;">
+          <div id="searchResultsMap" style="width: 100%; height: 100%;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+@section Scripts {
+    <!-- Leaflet CSS & JS for Map Modal -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        let pinnedId = null;
+        let mapInstance = null;
+        let propertiesData = []; // Will be populated with locations
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const selectedId = urlParams.get('selectedId');
+            if (selectedId) {
+                const cardElement = document.querySelector(`.property-card-hz[data-id="${selectedId}"]`);
+                loadPropertyDetail(selectedId, cardElement);
+                
+                if (cardElement) {
+                    setTimeout(() => {
+                        cardElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 300);
+                }
+            }
+
+            // Extract property locations for the map from DOM (Simple Mock Approach)
+            // In a real app, this data would come from the model directly as JSON
+            document.querySelectorAll('.property-card-hz').forEach(card => {
+                propertiesData.push({
+                    id: card.getAttribute('data-id'),
+                    title: card.querySelector('.fw-bold.text-truncate:not([style*="color: #ea580c"])').innerText,
+                    price: card.querySelector('.fw-bold.text-truncate[style*="color: #ea580c"]').innerText,
+                    img: card.querySelector('img').src,
+                    lat: 41.0082 + (Math.random() * 0.1 - 0.05), // Fake lat near Istanbul
+                    lng: 28.9784 + (Math.random() * 0.1 - 0.05)  // Fake lng near Istanbul
+                });
+            });
+        });
+
+        // --- FAVORITE BUTTON TOGGLE ---
+        function toggleFavorite(event, propertyId, btnElement) {
+            event.stopPropagation(); // Prevent card click
+            const icon = btnElement.querySelector('i');
+            
+            if (icon.classList.contains('far')) {
+                // Add to fav
+                icon.classList.remove('far');
+                icon.classList.add('fas');
+                // Could call fetch('/Property/AddFavorite', { ... })
+                // alert('İlan favorilere eklendi!');
+            } else {
+                // Remove from fav
+                icon.classList.remove('fas');
+                icon.classList.add('far');
+            }
+        }
+
+        // --- MAP MODAL & LEAFLET ---
+        function openMapModal() {
+            var myModal = new bootstrap.Modal(document.getElementById('mapModal'), {
+                keyboard: true
+            });
+            myModal.show();
+
+            document.getElementById('mapModal').addEventListener('shown.bs.modal', function () {
+                if (!mapInstance) {
+                    mapInstance = L.map('searchResultsMap').setView([41.0082, 28.9784], 12); // Default center
+
+                    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                        subdomains: 'abcd',
+                        maxZoom: 20
+                    }).addTo(mapInstance);
+
+                    // Add markers
+                    propertiesData.forEach(p => {
+                        const customIcon = L.divIcon({
+                            className: 'custom-div-icon',
+                            html: `<div style="background-color:#3b82f6;color:white;padding:4px 8px;border-radius:20px;font-weight:bold;font-size:12px;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);white-space:nowrap;">${p.price}</div>`,
+                            iconSize: [80, 30],
+                            iconAnchor: [40, 15]
+                        });
+
+                        const popupContent = `
+                            <div style="width: 200px; padding: 0;">
+                                <img src="${p.img}" style="width:100%; height:120px; object-fit:cover; border-radius:8px 8px 0 0;">
+                                <div style="padding: 10px;">
+                                    <h6 style="margin:0; font-weight:bold; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.title}</h6>
+                                    <div style="color:#ea580c; font-weight:bold; margin-top:5px;">${p.price}</div>
+                                    <button onclick="window.location.href='/Property/Index?selectedId=${p.id}'" style="margin-top:10px; width:100%; border:none; background:#3b82f6; color:white; padding:5px; border-radius:4px; cursor:pointer;">İncele</button>
+                                </div>
+                            </div>
+                        `;
+
+                        L.marker([p.lat, p.lng], {icon: customIcon})
+                         .bindPopup(popupContent, { className: 'custom-popup', maxWidth: 200 })
+                         .addTo(mapInstance);
+                    });
+                }
+                setTimeout(() => {
+                    mapInstance.invalidateSize();
+                }, 100);
+            }, { once: true });
+        }
+
+        function showLoader(elementId) {
+            document.getElementById(elementId).innerHTML = `
+                <div class="d-flex justify-content-center align-items-center h-100 bg-white" style="opacity: 0.8;">
+                    <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                        <span class="visually-hidden">Yükleniyor...</span>
+                    </div>
+                </div>`;
+        }
+
+        function loadPropertyDetail(id, cardElement) {
+            const container = document.getElementById('splitContainer');
+            const detailPane = document.getElementById('detailPane');
+            const comparePane = document.getElementById('comparePane');
+            const detailContent = document.getElementById('detailContent');
+            const compareContent = document.getElementById('compareContent');
+            
+            // Activate clicked card visually
+            if(cardElement) {
+                // If this card is already the pinned one and we are in compare mode, do nothing or just focus
+                if(pinnedId === id && container.classList.contains('state-compare')) return;
+                
+                document.querySelectorAll('.property-card-hz').forEach(c => {
+                    // Don't remove active from pinned card
+                    if(parseInt(c.getAttribute('data-id')) !== pinnedId) {
+                        c.classList.remove('active');
+                    }
+                });
+                cardElement.classList.add('active');
+            }
+
+            if (pinnedId === null) {
+                // NORMAL LOAD (No pinned item) -> Load into Detail Pane
+                container.classList.remove('state-compare');
+                container.classList.add('state-detail');
+                
+                showLoader('detailContent');
+                
+                fetch(`/Property/DetailPartial/${id}`)
+                    .then(res => res.text())
+                    .then(html => {
+                        detailContent.innerHTML = html;
+                        bindPanelEvents(detailContent, 'detail');
+                    })
+                    .catch(err => {
+                        detailContent.innerHTML = '<div class="p-5 text-center text-danger"><i class="fas fa-exclamation-triangle fs-1"></i><br>İlan yüklenirken hata oluştu.</div>';
+                    });
+            } else {
+                // COMPARE LOAD (There is a pinned item) -> Load into Compare Pane
+                if (pinnedId === id) return; // Ignore if clicking pinned item again
+
+                container.classList.add('state-compare');
+                
+                showLoader('compareContent');
+                
+                fetch(`/Property/DetailPartial/${id}`)
+                    .then(res => res.text())
+                    .then(html => {
+                        compareContent.innerHTML = html;
+                        bindPanelEvents(compareContent, 'compare');
+                    })
+                    .catch(err => {
+                        compareContent.innerHTML = '<div class="p-5 text-center text-danger"><i class="fas fa-exclamation-triangle fs-1"></i><br>İlan yüklenirken hata oluştu.</div>';
+                    });
+            }
+        }
+
+        function bindPanelEvents(panelContent, type) {
+            const btnClose = panelContent.querySelector('.btn-close-panel');
+            const btnPin = panelContent.querySelector('.btn-pin');
+            const container = document.getElementById('splitContainer');
+
+            if (btnClose) {
+                btnClose.addEventListener('click', () => {
+                    const panelId = parseInt(panelContent.querySelector('.detail-partial-container').getAttribute('data-id'));
+                    
+                    if (type === 'detail') {
+                        // Closing main detail pane
+                        if (container.classList.contains('state-compare')) {
+                            // Compare is active. Shift compare content to detail pane.
+                            const compareHtml = document.getElementById('compareContent').innerHTML;
+                            document.getElementById('detailContent').innerHTML = compareHtml;
+                            document.getElementById('compareContent').innerHTML = '';
+                            container.classList.remove('state-compare');
+                            
+                            // The shifted content is no longer pinned
+                            pinnedId = null; 
+                            
+                            // Clean up active classes from master list
+                            document.querySelectorAll('.property-card-hz').forEach(c => {
+                                const cid = parseInt(c.getAttribute('data-id'));
+                                if(cid === panelId) c.classList.remove('active'); // remove closed
+                            });
+                            
+                            bindPanelEvents(document.getElementById('detailContent'), 'detail');
+                        } else {
+                            // Just close detail
+                            container.classList.remove('state-detail');
+                            document.getElementById('detailContent').innerHTML = '';
+                            document.querySelectorAll('.property-card-hz').forEach(c => c.classList.remove('active'));
+                            pinnedId = null;
+                        }
+                    } else if (type === 'compare') {
+                        // Closing compare pane
+                        container.classList.remove('state-compare');
+                        document.getElementById('compareContent').innerHTML = '';
+                        
+                        document.querySelectorAll('.property-card-hz').forEach(c => {
+                            if(parseInt(c.getAttribute('data-id')) === panelId) c.classList.remove('active');
+                        });
+                    }
+                });
+            }
+
+            if (btnPin) {
+                const panelContainer = panelContent.querySelector('.detail-partial-container');
+                const id = parseInt(panelContainer.getAttribute('data-id'));
+
+                // Initialize visual state if this is the pinned panel
+                if (pinnedId === id) {
+                    btnPin.classList.remove('btn-outline-warning');
+                    btnPin.classList.add('btn-warning');
+                    btnPin.innerHTML = '<i class="ph-fill ph-push-pin fs-5"></i> Sabitlendi';
+                }
+
+                btnPin.addEventListener('click', () => {
+                    if (pinnedId === id) {
+                        // UNPIN
+                        pinnedId = null;
+                        btnPin.classList.remove('btn-warning');
+                        btnPin.classList.add('btn-outline-warning');
+                        btnPin.innerHTML = '<i class="ph-fill ph-push-pin fs-5"></i> Sabitle';
+                        
+                        // If we unpin while compare is open, close compare pane to simplify UX
+                        if (container.classList.contains('state-compare')) {
+                            container.classList.remove('state-compare');
+                            document.getElementById('compareContent').innerHTML = '';
+                            
+                            // Re-evaluate active classes
+                            const detailId = parseInt(document.getElementById('detailContent').querySelector('.detail-partial-container').getAttribute('data-id'));
+                            document.querySelectorAll('.property-card-hz').forEach(c => {
+                                if(parseInt(c.getAttribute('data-id')) !== detailId) c.classList.remove('active');
+                            });
+                        }
+                    } else {
+                        // PIN
+                        pinnedId = id;
+                        
+                        // Reset all other pin buttons visually
+                        document.querySelectorAll('.btn-pin').forEach(btn => {
+                            btn.classList.remove('btn-warning');
+                            btn.classList.add('btn-outline-warning');
+                            btn.innerHTML = '<i class="ph-fill ph-push-pin fs-5"></i> Sabitle';
+                        });
+
+                        btnPin.classList.remove('btn-outline-warning');
+                        btnPin.classList.add('btn-warning');
+                        btnPin.innerHTML = '<i class="ph-fill ph-push-pin fs-5"></i> Sabitlendi';
+                        
+                        // If user pinned the Compare pane, shift it to Detail pane so it is the primary pinned item
+                        if (type === 'compare') {
+                            const compareHtml = document.getElementById('compareContent').innerHTML;
+                            const detailHtml = document.getElementById('detailContent').innerHTML;
+                            
+                            document.getElementById('detailContent').innerHTML = compareHtml;
+                            document.getElementById('compareContent').innerHTML = detailHtml;
+                            
+                            bindPanelEvents(document.getElementById('detailContent'), 'detail');
+                            bindPanelEvents(document.getElementById('compareContent'), 'compare');
+                        }
+                    }
+                });
+            }
+        }
+    </script>
+}

@@ -1,0 +1,525 @@
+@{
+    ViewData["Title"] = "Emlak Arama Motoru";
+}
+
+<style>
+    body {
+        background-color: #f8fafc;
+    }
+    
+    /* Search Layout */
+    .search-layout {
+        display: flex;
+        height: calc(100vh - 80px); /* Adjust based on navbar height */
+        overflow: hidden;
+        margin-top: 20px;
+    }
+    
+    .filter-sidebar {
+        width: 320px;
+        background: #fff;
+        border-right: 1px solid #e2e8f0;
+        display: flex;
+        flex-direction: column;
+        z-index: 10;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.05);
+    }
+    
+    .filter-header {
+        padding: 1.25rem;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    
+    .filter-body {
+        padding: 1.25rem;
+        overflow-y: auto;
+        flex: 1;
+    }
+    
+    .results-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        background: #f8fafc;
+    }
+    
+    .results-header {
+        padding: 1.25rem;
+        background: #fff;
+        border-bottom: 1px solid #e2e8f0;
+        position: sticky;
+        top: 0;
+        z-index: 5;
+    }
+    
+    .map-area {
+        width: 40%;
+        border-left: 1px solid #e2e8f0;
+        display: none; /* Desktop default: hide map until toggled, or we can show it by default */
+    }
+    
+    @@media (min-width: 1400px) {
+        .map-area { display: block; }
+    }
+    
+    /* Custom Scrollbar */
+    .filter-body::-webkit-scrollbar, .results-area::-webkit-scrollbar {
+        width: 6px;
+    }
+    .filter-body::-webkit-scrollbar-thumb, .results-area::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+    }
+    
+    /* Listing Cards */
+    .listing-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1.25rem;
+        padding: 1.25rem;
+    }
+    
+    .listing-card {
+        background: #fff;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        overflow: hidden;
+        transition: transform 0.2s, box-shadow 0.2s;
+        position: relative;
+    }
+    
+    .listing-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 20px -5px rgba(0,0,0,0.1);
+    }
+    
+    .card-img-wrapper {
+        height: 200px;
+        position: relative;
+        background: #e2e8f0;
+    }
+    
+    .card-img-wrapper img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .card-price {
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        background: rgba(0,0,0,0.75);
+        color: #fff;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-weight: 700;
+        font-size: 1.1rem;
+        backdrop-filter: blur(4px);
+    }
+    
+    /* Aklında Tut Butonu */
+    .btn-favorite {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(255,255,255,0.9);
+        border: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: #64748b;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        transition: all 0.2s;
+    }
+    
+    .btn-favorite:hover {
+        color: #ef4444;
+        transform: scale(1.1);
+    }
+    
+    .btn-favorite.active {
+        color: #ef4444;
+        background: #fee2e2;
+    }
+    
+    .btn-gallery {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: rgba(255,255,255,0.9);
+        border: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: #1e293b;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        transition: all 0.2s;
+    }
+    
+    .btn-gallery:hover {
+        background: #f1f5f9;
+        transform: scale(1.1);
+    }
+    
+    /* Kıyaslama Barı */
+    .comparison-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: #1e293b;
+        color: #fff;
+        padding: 1rem 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transform: translateY(100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 1000;
+        box-shadow: 0 -4px 15px rgba(0,0,0,0.2);
+    }
+    
+    .comparison-bar.show {
+        transform: translateY(0);
+    }
+</style>
+
+<div class="search-layout">
+    
+    <!-- SOL FİLTRE (Sürtünmesiz Akış) -->
+    <div class="filter-sidebar">
+        <div class="filter-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fw-bold"><i class="ph ph-sliders"></i> Filtreler</h5>
+            <button class="btn btn-sm btn-link text-muted text-decoration-none p-0" onclick="resetFilters()">Temizle</button>
+        </div>
+        
+        <div class="filter-body">
+            <!-- Omnibox -->
+            <div class="mb-4">
+                <label class="form-label fw-bold text-muted small text-uppercase">Akıllı Arama</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white"><i class="ph ph-magnifying-glass"></i></span>
+                    <input type="text" id="filterKeyword" class="form-control" placeholder="Ataşehir site içi 3+1..." onkeyup="debounceSearch()">
+                </div>
+            </div>
+            
+            <!-- Fiyat Aralığı (EN TEPEDE GÖREV EMRİNE İSTİNADEN) -->
+            <div class="mb-4">
+                <label class="form-label fw-bold text-muted small text-uppercase">Fiyat Aralığı</label>
+                <div class="d-flex gap-2">
+                    <input type="number" id="filterMinPrice" class="form-control form-control-sm" placeholder="Min TL" onkeyup="debounceSearch()">
+                    <input type="number" id="filterMaxPrice" class="form-control form-control-sm" placeholder="Max TL" onkeyup="debounceSearch()">
+                </div>
+            </div>
+            
+            <!-- Lokasyon (Multi-Select Simülasyonu) -->
+            <div class="mb-4">
+                <label class="form-label fw-bold text-muted small text-uppercase">Şehir</label>
+                <select id="filterCities" class="form-select" multiple size="3" onchange="triggerSearch()">
+                    <option value="34">İstanbul</option>
+                    <option value="6">Ankara</option>
+                    <option value="35">İzmir</option>
+                </select>
+                <div class="form-text">Ctrl (Windows) veya Cmd (Mac) basılı tutarak çoklu seçim yapabilirsiniz.</div>
+            </div>
+            
+            <!-- Kategori -->
+            <div class="mb-4">
+                <label class="form-label fw-bold text-muted small text-uppercase">Kategori</label>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="1" id="cat1" name="filterCategories" onchange="triggerSearch()">
+                    <label class="form-check-label" for="cat1">Daire (Apartman/Bina)</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="2" id="cat2" name="filterCategories" onchange="triggerSearch()">
+                    <label class="form-check-label" for="cat2">Site İçi Daire</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="3" id="cat3" name="filterCategories" onchange="triggerSearch()">
+                    <label class="form-check-label" for="cat3">Villa (Müstakil)</label>
+                </div>
+            </div>
+            
+        </div>
+        
+        <div class="p-3 border-top bg-light">
+            <button class="btn btn-primary w-100 fw-bold" onclick="saveSearchAlert()">
+                <i class="ph ph-bell-ringing"></i> Bu Kriterleri Kaydet
+            </button>
+        </div>
+    </div>
+    
+    <!-- ORTA KISIM: İLANLAR -->
+    <div class="results-area">
+        <div class="results-header d-flex justify-content-between align-items-center">
+            <div>
+                <h4 class="mb-1 fw-bold" id="resultsCount">İlanlar Yükleniyor...</h4>
+                <div class="d-flex gap-2 mt-2">
+                    <span class="badge bg-light text-dark border">🔥 Acil Satılık</span>
+                    <span class="badge bg-light text-dark border">🛋️ Eşyalı</span>
+                    <span class="badge bg-light text-dark border">🏦 Krediye Uygun</span>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <select class="form-select form-select-sm w-auto">
+                    <option>Önerilen Sıralama</option>
+                    <option>En Düşük Fiyat</option>
+                    <option>En Yüksek Fiyat</option>
+                    <option>En Yeni İlanlar</option>
+                </select>
+                <button class="btn btn-sm btn-outline-secondary d-xl-none"><i class="ph ph-map"></i> Harita</button>
+            </div>
+        </div>
+        
+        <div class="listing-grid" id="listingsContainer">
+            <!-- AJAX ile dolacak -->
+        </div>
+    </div>
+    
+    <!-- SAĞ KISIM: HARİTA -->
+    <div class="map-area">
+        <div id="map" style="width: 100%; height: 100%; background: #e2e8f0; display:flex; align-items:center; justify-content:center;">
+            <div class="text-center text-muted">
+                <i class="ph ph-map-trifold" style="font-size: 3rem;"></i>
+                <p class="mt-2">İnteraktif Harita (Leaflet/Google Maps Entegrasyonu Buraya Gelecek)</p>
+            </div>
+        </div>
+    </div>
+    
+</div>
+
+<!-- KIYASLAMA BARI (Aklında Tut) -->
+<div class="comparison-bar" id="comparisonBar">
+    <div>
+        <h5 class="mb-0 fw-bold"><i class="ph ph-push-pin"></i> Aklında Tutanlar (<span id="compareCount">0</span>)</h5>
+        <small class="text-white-50">Seçtiğiniz ilanlar tarayıcınızda geçici olarak saklanmaktadır.</small>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-light btn-sm" onclick="clearFavorites()">Tümünü Temizle</button>
+        <button class="btn btn-warning btn-sm fw-bold text-dark" onclick="showComparisonMatrix()">
+            <i class="ph ph-columns"></i> Seçtiklerimi Kıyasla
+        </button>
+    </div>
+</div>
+
+<!-- KIYASLAMA MODALI VEYA TAM EKRAN (Isolation Model) -->
+<div class="modal fade" id="comparisonModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-fullscreen">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white border-0">
+        <h5 class="modal-title fw-bold"><i class="ph ph-columns"></i> İlan Kıyaslama Matrisi</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body bg-light">
+          <!-- 4 Sütunlu Matriks Buraya AJAX ile Basılacak -->
+          <div class="row g-3" id="comparisonMatrixArea">
+              <div class="col-12 text-center mt-5">
+                  <div class="spinner-border text-primary" role="status"></div>
+                  <h5 class="mt-3">Kıyaslama Tablosu Hazırlanıyor...</h5>
+              </div>
+          </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+@section Scripts {
+    <script>
+        let searchTimeout;
+        let favoritePropertyIds = JSON.parse(localStorage.getItem('eb_favorites') || '[]');
+        
+        document.addEventListener("DOMContentLoaded", () => {
+            updateComparisonBar();
+            triggerSearch(); // Initial load
+        });
+        
+        function debounceSearch() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                triggerSearch();
+            }, 500);
+        }
+        
+        function getSelectedValues(selectId) {
+            const select = document.getElementById(selectId);
+            const result = [];
+            if(select && select.options) {
+                for(let i = 0; i < select.options.length; i++) {
+                    if(select.options[i].selected) {
+                        result.push(parseInt(select.options[i].value));
+                    }
+                }
+            }
+            return result;
+        }
+        
+        function getCheckedCheckboxes(name) {
+            const checkboxes = document.querySelectorAll(`input[name="${name}"]:checked`);
+            const result = [];
+            checkboxes.forEach(cb => result.push(parseInt(cb.value)));
+            return result;
+        }
+        
+        function triggerSearch() {
+            document.getElementById('listingsContainer').innerHTML = `
+                <div class="col-12 text-center mt-5 w-100" style="grid-column: 1 / -1;">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-muted">Sonuçlar Güncelleniyor...</p>
+                </div>
+            `;
+            
+            const filter = {
+                Keyword: document.getElementById('filterKeyword').value,
+                MinPrice: document.getElementById('filterMinPrice').value ? parseFloat(document.getElementById('filterMinPrice').value) : null,
+                MaxPrice: document.getElementById('filterMaxPrice').value ? parseFloat(document.getElementById('filterMaxPrice').value) : null,
+                CityIds: getSelectedValues('filterCities'),
+                CategoryIds: getCheckedCheckboxes('filterCategories'),
+                PageNumber: 1,
+                PageSize: 12
+            };
+            
+            fetch('/api/SearchApi/GetListings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(filter)
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('resultsCount').innerText = `${data.totalRecords} İlan Bulundu`;
+                renderListings(data.data);
+            })
+            .catch(err => {
+                console.error(err);
+                document.getElementById('listingsContainer').innerHTML = '<div class="alert alert-danger w-100">Sonuçlar yüklenirken hata oluştu.</div>';
+            });
+        }
+        
+        function renderListings(items) {
+            const container = document.getElementById('listingsContainer');
+            container.innerHTML = '';
+            
+            if(!items || items.length === 0) {
+                container.innerHTML = '<div class="alert alert-info w-100 text-center" style="grid-column: 1 / -1;">Arama kriterlerinize uygun ilan bulunamadı. Lütfen filtreleri esnetin.</div>';
+                return;
+            }
+            
+            items.forEach(item => {
+                const isFav = favoritePropertyIds.includes(item.id);
+                const favClass = isFav ? 'active' : '';
+                const favIcon = isFav ? 'ph-fill' : 'ph';
+                
+                const card = `
+                    <div class="listing-card">
+                        <div class="card-img-wrapper">
+                            <img src="${item.thumbnailUrl}" alt="${item.title}" onerror="this.src='/images/hero.jpg'">
+                            <div class="card-price">${new Intl.NumberFormat('tr-TR').format(item.price)} ${item.currency}</div>
+                            <button class="btn-favorite ${favClass}" onclick="toggleFavorite(${item.id}, this)" title="Aklında Tut">
+                                <i class="${favIcon} ph-push-pin" style="font-size: 1.25rem;"></i>
+                            </button>
+                            <button class="btn-gallery" title="Galeriyi Aç" onclick="openGallery(${item.id})">
+                                <i class="ph ph-images" style="font-size: 1.25rem;"></i>
+                            </button>
+                        </div>
+                        <div class="p-3">
+                            <h6 class="fw-bold mb-1 text-truncate">${item.title}</h6>
+                            <div class="text-muted small mb-2"><i class="ph ph-map-pin"></i> ${item.districtName}, ${item.cityName}</div>
+                            
+                            <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+                                <div class="d-flex gap-3 text-muted small">
+                                    <span><i class="ph ph-bed"></i> ${item.roomCount || '-'}</span>
+                                    <span><i class="ph ph-squares-four"></i> ${item.grossArea || '-'} m²</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+        }
+        
+        // --- İZOLASYON / AKLINDA TUT (FAVORİ) MANTIĞI ---
+        
+        function toggleFavorite(id, btnElement) {
+            const index = favoritePropertyIds.indexOf(id);
+            if (index > -1) {
+                favoritePropertyIds.splice(index, 1); // Çıkar
+                btnElement.classList.remove('active');
+                btnElement.querySelector('i').classList.replace('ph-fill', 'ph');
+            } else {
+                favoritePropertyIds.push(id); // Ekle
+                btnElement.classList.add('active');
+                btnElement.querySelector('i').classList.replace('ph', 'ph-fill');
+            }
+            
+            localStorage.setItem('eb_favorites', JSON.stringify(favoritePropertyIds));
+            updateComparisonBar();
+        }
+        
+        function updateComparisonBar() {
+            const count = favoritePropertyIds.length;
+            document.getElementById('compareCount').innerText = count;
+            
+            const bar = document.getElementById('comparisonBar');
+            if (count > 0) {
+                bar.classList.add('show');
+            } else {
+                bar.classList.remove('show');
+            }
+        }
+        
+        function clearFavorites() {
+            favoritePropertyIds = [];
+            localStorage.setItem('eb_favorites', '[]');
+            updateComparisonBar();
+            triggerSearch(); // Butonların rengini sıfırlamak için
+        }
+        
+        function showComparisonMatrix() {
+            const modal = new bootstrap.Modal(document.getElementById('comparisonModal'));
+            modal.show();
+            
+            // Gerçek projede: fetch(`/api/SearchApi/GetComparison?ids=${favoritePropertyIds.join(',')}`)
+            // Şimdilik simülasyon:
+            setTimeout(() => {
+                let html = '';
+                if(favoritePropertyIds.length > 4) {
+                   html = '<div class="alert alert-warning w-100">Lütfen en fazla 4 ilanı kıyaslayın. Ekran genişliği 4 sütuna kadar en iyi deneyimi sunar.</div>';
+                } else {
+                    html = '<div class="alert alert-success w-100">Backend Kıyaslama API\'si çağrıldı. Seçilen İlan ID\'leri: ' + favoritePropertyIds.join(', ') + '. Matris buraya çizilecek.</div>';
+                }
+                document.getElementById('comparisonMatrixArea').innerHTML = html;
+            }, 1000);
+        }
+        
+        function resetFilters() {
+            document.getElementById('filterKeyword').value = '';
+            document.getElementById('filterMinPrice').value = '';
+            document.getElementById('filterMaxPrice').value = '';
+            
+            document.getElementById('filterCities').selectedIndex = -1;
+            
+            const checks = document.querySelectorAll('input[name="filterCategories"]');
+            checks.forEach(c => c.checked = false);
+            
+            triggerSearch();
+        }
+        
+        function saveSearchAlert() {
+            alert("Harika! Kriterleriniz 'Avcı' algoritmamıza kaydedildi. (Backend Entegrasyonu). Yeni ilan eklendiğinde anında haberiniz olacak.");
+        }
+        
+        function openGallery(id) {
+            alert(`İlan ${id} için şık Modal Galeri açılıyor... (Zeki Galeri Modeli)`);
+        }
+    </script>
+}

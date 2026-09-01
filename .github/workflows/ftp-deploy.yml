@@ -1,0 +1,46 @@
+name: Deploy to Turhost (FTP)
+
+on:
+  push:
+    branches:
+      - main
+      - master # Eğer ana dalınız master ise bunu kullanır
+
+jobs:
+  web-deploy:
+    name: Build and Deploy to Turhost
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 🚚 Kodu Al (Checkout)
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: ⚙️ .NET Kurulumu
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x' # Projenizin kullandığı .NET sürümü
+
+    - name: 🔐 appsettings.json Şifreleri Güncelle (DB ve SMTP)
+      if: env.DB_CONN != '' || env.SMTP_PASS != ''
+      uses: microsoft/variable-substitution@v1
+      with:
+        files: 'EmlakBurada.Web/appsettings.json'
+      env:
+        ConnectionStrings.DefaultConnection: ${{ secrets.DB_CONNECTION_STRING }}
+        DB_CONN: ${{ secrets.DB_CONNECTION_STRING }}
+        MailSettings.Password: ${{ secrets.SMTP_PASSWORD }}
+        SMTP_PASS: ${{ secrets.SMTP_PASSWORD }}
+
+    - name: 📦 Projeyi Derle ve Yayınla (Publish)
+      run: dotnet publish EmlakBurada.Web/EmlakBurada.Web.csproj -c Release -o ./publish
+
+    - name: 🚀 FTP ile Turhost'a Yükle
+      uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      with:
+        server: ${{ secrets.FTP_SERVER }}
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
+        local-dir: ./publish/
+        server-dir: /httpdocs/ # Turhost panelinizdeki public klasör adı (httpdocs veya public_html olabilir)

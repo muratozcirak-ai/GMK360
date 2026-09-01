@@ -1,0 +1,335 @@
+@{
+    ViewData["Title"] = "Yeni Mülk Ekle - Dijital Evim";
+    Layout = "~/Views/Shared/_CustomerLayout.cshtml"; // Assuming a customer layout exists
+}
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="text-center mb-5">
+                <h2 class="fw-bold text-navy">Dijital Evim'e Hoş Geldiniz</h2>
+                <p class="text-muted">Evinizi sisteme ekleyerek kira, aidat ve evrak takibine hemen başlayın.</p>
+            </div>
+
+            <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="card-body p-5">
+                    
+                    <form id="addPropertyForm">
+                        
+                        <!-- ADIM 1: ADRES (İL-İLÇE-MAHALLE-SOKAK) -->
+                        <div class="step-container" id="step1">
+                            <h4 class="fw-bold mb-4"><i class="bi bi-geo-alt text-orange me-2"></i> Adres Seçimi</h4>
+                            
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label text-muted small fw-bold">İl Seçiniz</label>
+                                    <select class="form-select form-select-lg bg-light border-0" id="citySelect" required>
+                                        <option value="">İl Seçin...</option>
+                                        @foreach(var city in ViewBag.Cities)
+                                        {
+                                            <option value="@city.Id">@city.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-muted small fw-bold">İlçe Seçiniz</label>
+                                    <select class="form-select form-select-lg bg-light border-0" id="districtSelect" disabled required>
+                                        <option value="">Önce İl Seçin</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-muted small fw-bold">Mahalle Seçiniz</label>
+                                    <select class="form-select form-select-lg bg-light border-0" id="neighborhoodSelect" disabled required>
+                                        <option value="">Önce İlçe Seçin</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-muted small fw-bold">Sokak / Cadde</label>
+                                    <select class="form-select form-select-lg bg-light border-0" id="streetSelect" disabled required>
+                                        <option value="">Önce Mahalle Seçin</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4 text-end">
+                                <button type="button" class="btn btn-navy btn-lg px-5 rounded-pill" onclick="nextStep(2)">Devam Et <i class="bi bi-arrow-right ms-2"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- ADIM 2: BİNA SEÇİMİ -->
+                        <div class="step-container d-none" id="step2">
+                            <h4 class="fw-bold mb-4"><i class="bi bi-building text-orange me-2"></i> Bina Seçimi</h4>
+                            <p class="text-muted small mb-4">Seçtiğiniz sokaktaki mevcut binalar aşağıda listelenmiştir. Lütfen binanızı seçin veya listede yoksa yeni ekleyin.</p>
+                            
+                            <div class="mb-4">
+                                <label class="form-label text-muted small fw-bold">Kayıtlı Binalar</label>
+                                <select class="form-select form-select-lg bg-light border-0" id="buildingSelect">
+                                    <option value="">Yükleniyor...</option>
+                                </select>
+                            </div>
+
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="isNewBuildingSwitch">
+                                <label class="form-check-label fw-bold text-navy" for="isNewBuildingSwitch">Binam listede yok, yeni bina eklemek istiyorum.</label>
+                            </div>
+
+                            <div class="d-none p-4 bg-light rounded-3 mb-4 border border-warning border-opacity-50" id="newBuildingContainer">
+                                <div class="alert alert-warning py-2 small mb-3">
+                                    <i class="bi bi-info-circle me-1"></i> Lütfen binanın adını ve kapı numarasını eksiksiz girin. (Örn: Yaşar Bey Apt. No:16)
+                                </div>
+                                <label class="form-label text-muted small fw-bold">Bina Adı ve Kapı No</label>
+                                <input type="text" class="form-control form-control-lg border-0" id="newBuildingName" placeholder="Örn: Güneş Apt. No:15">
+                            </div>
+
+                            <div class="d-flex justify-content-between mt-4">
+                                <button type="button" class="btn btn-light btn-lg px-4 rounded-pill" onclick="nextStep(1)"><i class="bi bi-arrow-left me-2"></i> Geri</button>
+                                <button type="button" class="btn btn-navy btn-lg px-5 rounded-pill" onclick="nextStep(3)">Devam Et <i class="bi bi-arrow-right ms-2"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- ADIM 3: DAİRE DETAYLARI -->
+                        <div class="step-container d-none" id="step3">
+                            <h4 class="fw-bold mb-4"><i class="bi bi-house-door text-orange me-2"></i> Daire Detayları</h4>
+                            
+                            <div class="row g-4">
+                                <div class="col-md-12">
+                                    <label class="form-label text-muted small fw-bold">Bu Evdeki Rolünüz Nedir?</label>
+                                    <div class="d-flex gap-3">
+                                        <input type="radio" class="btn-check" name="RoleType" id="roleOwner" value="1" checked>
+                                        <label class="btn btn-outline-navy flex-fill py-3 rounded-3" for="roleOwner">
+                                            <i class="bi bi-key fs-4 d-block mb-1"></i> Ev Sahibiyim
+                                        </label>
+
+                                        <input type="radio" class="btn-check" name="RoleType" id="roleTenant" value="2">
+                                        <label class="btn btn-outline-navy flex-fill py-3 rounded-3" for="roleTenant">
+                                            <i class="bi bi-person-door fs-4 d-block mb-1"></i> Kiracıyım
+                                        </label>
+                                    </div>
+                                </div>
+
+                                
+                                <div class="col-md-12">
+                                    <label class="form-label text-muted small fw-bold">Mülk Tipi</label>
+                                    <select class="form-select form-select-lg bg-light border-0" id="propertyTypeSelect" required>
+                                        <option value="">Seçiniz...</option>
+                                        @foreach(var pt in ViewBag.PropertyTypes)
+                                        {
+                                            <option value="@pt.Id" data-code="@pt.SystemCode">@pt.Name</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label text-muted small fw-bold">Kapı / Daire No</label>
+                                    <input type="text" class="form-control form-control-lg bg-light border-0" id="doorNumber" required placeholder="Örn: 5">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-muted small fw-bold">Oda Sayısı (Opsiyonel)</label>
+                                    <select class="form-select form-select-lg bg-light border-0" id="roomCount">
+                                        <option value="">Seçiniz...</option>
+                                        <option value="1+0">1+0 (Stüdyo)</option>
+                                        <option value="1+1">1+1</option>
+                                        <option value="2+1">2+1</option>
+                                        <option value="3+1">3+1</option>
+                                        <option value="4+1">4+1 ve üzeri</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between mt-5">
+                                <button type="button" class="btn btn-light btn-lg px-4 rounded-pill" onclick="nextStep(2)"><i class="bi bi-arrow-left me-2"></i> Geri</button>
+                                <button type="submit" class="btn btn-success btn-lg px-5 rounded-pill shadow" id="btnSubmit">
+                                    Mülkü Kaydet ve Başla <i class="bi bi-check2-circle ms-2"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .btn-navy { background-color: #1e3a8a; color: white; }
+    .btn-navy:hover { background-color: #172554; color: white; }
+    .btn-outline-navy { border-color: #1e3a8a; color: #1e3a8a; }
+    .btn-outline-navy:hover, .btn-check:checked + .btn-outline-navy { background-color: #1e3a8a; color: white; }
+    .text-navy { color: #1e3a8a; }
+    .text-orange { color: #f97316; }
+</style>
+
+@section Scripts {
+    <script>
+        // API FETCH LOGIC
+        document.getElementById('citySelect').addEventListener('change', async function() {
+            let cityId = this.value;
+            let distSelect = document.getElementById('districtSelect');
+            distSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+            distSelect.disabled = true;
+            
+            if(!cityId) return;
+
+            let res = await fetch(`/api/LocationApi/districts/${cityId}`);
+            let data = await res.json();
+            
+            distSelect.innerHTML = '<option value="">İlçe Seçin...</option>';
+            data.forEach(d => distSelect.innerHTML += `<option value="${d.id}">${d.name}</option>`);
+            distSelect.disabled = false;
+        });
+
+        document.getElementById('districtSelect').addEventListener('change', async function() {
+            let distId = this.value;
+            let neighSelect = document.getElementById('neighborhoodSelect');
+            neighSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+            neighSelect.disabled = true;
+            
+            if(!distId) return;
+
+            let res = await fetch(`/api/LocationApi/neighborhoods/${distId}`);
+            let data = await res.json();
+            
+            neighSelect.innerHTML = '<option value="">Mahalle Seçin...</option>';
+            data.forEach(n => neighSelect.innerHTML += `<option value="${n.id}">${n.name}</option>`);
+            neighSelect.disabled = false;
+        });
+
+        document.getElementById('neighborhoodSelect').addEventListener('change', async function() {
+            let neighId = this.value;
+            let streetSelect = document.getElementById('streetSelect');
+            streetSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+            streetSelect.disabled = true;
+            
+            if(!neighId) return;
+
+            let res = await fetch(`/api/LocationApi/streets/${neighId}`);
+            let data = await res.json();
+            
+            streetSelect.innerHTML = '<option value="">Sokak/Cadde Seçin...</option>';
+            data.forEach(s => streetSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`);
+            streetSelect.disabled = false;
+        });
+
+        // WIZARD NAVIGATION
+        async function nextStep(step) {
+            // Basic validation
+            if(step === 2) {
+                if(!document.getElementById('streetSelect').value) {
+                    alert("Lütfen tüm adres adımlarını tamamlayın.");
+                    return;
+                }
+                // Load Buildings
+                let streetId = document.getElementById('streetSelect').value;
+                let buildSelect = document.getElementById('buildingSelect');
+                buildSelect.innerHTML = '<option value="">Binalar Yükleniyor...</option>';
+                
+                let res = await fetch(`/api/LocationApi/buildings/${streetId}`);
+                let data = await res.json();
+                
+                if(data.length > 0) {
+                    buildSelect.innerHTML = '<option value="">Listeden Binanızı Seçin...</option>';
+                    data.forEach(b => buildSelect.innerHTML += `<option value="${b.id}">${b.name}</option>`);
+                } else {
+                    buildSelect.innerHTML = '<option value="">Bu sokakta henüz kayıtlı bina yok.</option>';
+                    document.getElementById('isNewBuildingSwitch').checked = true;
+                    document.getElementById('isNewBuildingSwitch').dispatchEvent(new Event('change'));
+                }
+            }
+            if(step === 3) {
+                let isNew = document.getElementById('isNewBuildingSwitch').checked;
+                if(isNew && !document.getElementById('newBuildingName').value) {
+                    alert("Lütfen yeni bina adını giriniz.");
+                    return;
+                }
+                if(!isNew && !document.getElementById('buildingSelect').value) {
+                    alert("Lütfen listeden bir bina seçin veya yeni bina ekle seçeneğini işaretleyin.");
+                    return;
+                }
+            }
+
+            document.querySelectorAll('.step-container').forEach(el => el.classList.add('d-none'));
+            document.getElementById('step' + step).classList.remove('d-none');
+        }
+
+        // NEW BUILDING SWITCH
+        document.getElementById('isNewBuildingSwitch').addEventListener('change', function() {
+            let container = document.getElementById('newBuildingContainer');
+            let select = document.getElementById('buildingSelect');
+            if(this.checked) {
+                container.classList.remove('d-none');
+                select.disabled = true;
+                select.value = "";
+            } else {
+                container.classList.add('d-none');
+                select.disabled = false;
+            }
+        });
+
+        
+        document.getElementById('propertyTypeSelect').addEventListener('change', function() {
+            let selectedOption = this.options[this.selectedIndex];
+            let code = selectedOption.getAttribute('data-code');
+            let roomCountDiv = document.getElementById('roomCount').closest('.col-md-6');
+            let doorNumberLabel = document.getElementById('doorNumber').previousElementSibling;
+
+            if (code === 'LAND') {
+                roomCountDiv.classList.add('d-none');
+                doorNumberLabel.innerText = 'Parsel / Kapı No (Varsa)';
+                document.getElementById('doorNumber').placeholder = 'Opsiyonel';
+                document.getElementById('doorNumber').required = false;
+            } else if (code === 'COMMERCIAL') {
+                roomCountDiv.classList.add('d-none');
+                doorNumberLabel.innerText = 'Dükkan / Ofis Kapı No';
+                document.getElementById('doorNumber').required = true;
+            } else {
+                roomCountDiv.classList.remove('d-none');
+                doorNumberLabel.innerText = 'Daire (İç Kapı) No';
+                document.getElementById('doorNumber').required = true;
+            }
+        });
+
+        // FORM SUBMIT
+        document.getElementById('addPropertyForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            let payload = {
+                cityId: parseInt(document.getElementById('citySelect').value),
+                districtId: parseInt(document.getElementById('districtSelect').value),
+                neighborhoodId: parseInt(document.getElementById('neighborhoodSelect').value),
+                streetId: parseInt(document.getElementById('streetSelect').value),
+                
+                existingBuildingId: document.getElementById('isNewBuildingSwitch').checked ? null : parseInt(document.getElementById('buildingSelect').value),
+                newBuildingName: document.getElementById('newBuildingName').value,
+                doorNumber: document.getElementById('doorNumber').value,
+                
+                roleType: parseInt(document.querySelector('input[name="RoleType"]:checked').value),
+                propertyTypeId: parseInt(document.getElementById('propertyTypeSelect').value),
+                roomCount: document.getElementById('roomCount').value
+            };
+
+            document.getElementById('btnSubmit').disabled = true;
+            document.getElementById('btnSubmit').innerHTML = '<span class="spinner-border spinner-border-sm"></span> Kaydediliyor...';
+
+            try {
+                let res = await fetch('/CustomerDashboard/AddProperty', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if(res.ok) {
+                    window.location.href = '/CustomerDashboard/Index';
+                } else {
+                    alert("Bir hata oluştu, lütfen tekrar deneyin.");
+                    document.getElementById('btnSubmit').disabled = false;
+                    document.getElementById('btnSubmit').innerHTML = 'Mülkü Kaydet ve Başla <i class="bi bi-check2-circle ms-2"></i>';
+                }
+            } catch(e) {
+                alert("Sistemsel bir hata oluştu.");
+                document.getElementById('btnSubmit').disabled = false;
+                document.getElementById('btnSubmit').innerHTML = 'Mülkü Kaydet ve Başla <i class="bi bi-check2-circle ms-2"></i>';
+            }
+        });
+    </script>
+}

@@ -1,0 +1,521 @@
+@model IEnumerable<GMK360.Core.Entities.Street>
+@{
+    ViewData["Title"] = "Sokak Yönetimi";
+    Layout = "~/Views/Shared/_AdminLayout.cshtml";
+    var cities = ViewBag.Cities as List<GMK360.Core.Entities.City>;
+    var selectedCityId = ViewBag.SelectedCityId as int?;
+    var selectedDistrictId = ViewBag.SelectedDistrictId as int?;
+    var selectedNeighborhoodId = ViewBag.SelectedNeighborhoodId as int?;
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0">Sokak & Cadde Yönetimi</h2>
+            <p class="text-muted">1.1 Milyon kaydı hızlıca filtreleyin, sokak ekleyin veya sokağı başka mahalleye taşıyın.</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-primary rounded-pill me-2" data-bs-toggle="modal" data-bs-target="#addStreetModal">
+                <i class="bi bi-plus-lg me-2"></i> Yeni Sokak Ekle
+            </button>
+            <a href="/AdminLocation/Index" class="btn btn-light rounded-pill"><i class="bi bi-arrow-left me-2"></i> Merkeze Dön</a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 mb-4 bg-light">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end" id="filterForm">
+                <div class="col-md-3">
+                    <label class="form-label text-muted small fw-bold">1. İl Seçin</label>
+                    <select name="cityId" id="filterCity" class="form-select rounded-3">
+                        <option value="">-- Tümü --</option>
+                        @foreach(var city in cities)
+                        {
+                            if (selectedCityId == city.Id) {
+                                <option value="@city.Id" selected>@city.Name</option>
+                            } else {
+                                <option value="@city.Id">@city.Name</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-muted small fw-bold">2. İlçe Seçin</label>
+                    <select name="districtId" id="filterDistrict" class="form-select rounded-3">
+                        <option value="">-- Seçiniz --</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-muted small fw-bold">3. Mahalle Seçin</label>
+                    <select name="neighborhoodId" id="filterNeighborhood" class="form-select rounded-3">
+                        <option value="">-- Seçiniz --</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label text-muted small fw-bold">Kelime Arama</label>
+                    <input type="text" name="searchQuery" class="form-control rounded-3" value="@ViewBag.SearchQuery" placeholder="Sokak adı...">
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-primary rounded-pill w-100"><i class="bi bi-search"></i></button>
+                </div>
+            </form>
+            <div class="row mt-3" id="bulkActionContainer" style="display:none;">
+                <div class="col-12 text-end border-top pt-3">
+                    <span class="fw-bold me-3 text-primary"><span id="selectedCount">0</span> sokak seçildi</span>
+                    <button type="button" class="btn btn-warning rounded-pill" onclick="openBulkMoveModal()">
+                        <i class="ph ph-arrows-split me-2"></i> Seçili Sokakları Taşı (Böl)
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4" style="width: 40px;"><input class="form-check-input" type="checkbox" id="selectAll"></th>
+                            <th>ID</th>
+                            <th>İl / İlçe</th>
+                            <th>Bağlı Olduğu Mahalle</th>
+                            <th>Sokak Adı</th>
+                            <th class="text-end pe-4">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody id="streetTableBody">
+                        @if(Model.Any()) {
+                            @foreach(var item in Model)
+                            {
+                                <tr class="@(item.IsActive ? "" : "table-danger")">
+                                    <td class="ps-4"><input class="form-check-input bulk-check" type="checkbox" value="@item.Id"></td>
+                                    <td class="text-muted">#@item.Id</td>
+                                    <td>@item.Neighborhood?.District?.City?.Name / @item.Neighborhood?.District?.Name</td>
+                                    <td>@item.Neighborhood?.Name</td>
+                                    <td class="fw-bold">
+                                        @item.Name
+                                        @if(!item.IsActive) { <span class="badge bg-danger">PASİF</span> }
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        @if(item.IsActive) {
+                                            <button class="btn btn-sm btn-outline-danger rounded-pill" onclick="toggleStatus(@item.Id)">Pasife Al</button>
+                                        } else {
+                                            <button class="btn btn-sm btn-outline-success rounded-pill" onclick="toggleStatus(@item.Id)">Aktifleştir</button>
+                                        }
+                                        <button class="btn btn-sm btn-outline-primary rounded-pill" onclick="editStreet(@item.Id, '@item.Name', @item.Neighborhood?.District?.CityId, @item.Neighborhood?.DistrictId, @item.NeighborhoodId)">Düzenle / Taşı</button>
+                                    </td>
+                                </tr>
+                            }
+                        } else {
+                            <tr>
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    <i class="bi bi-search display-1 text-light"></i>
+                                    <p class="mt-3">Sokakları listelemek için lütfen yukarıdan İl > İlçe veya Mahalle seçimi yapınız.<br>Sistemde 1.1 Milyon sokak kayıtlıdır.</p>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if(Model.Any()) {
+                    <div class="p-3 bg-light text-center text-muted small border-top">
+                        Arama sonucunda en fazla ilk 500 kayıt listelenmektedir. Tam sonucu görmek için aramanızı daraltın.
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Street Modal -->
+<div class="modal fade" id="addStreetModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title fw-bold">Yeni Sokak/Cadde Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="/AdminLocation/AddStreet" method="post">
+                <div class="modal-body py-0">
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">İl</label>
+                        <select id="addCity" class="form-select rounded-3" required>
+                            <option value="">-- Seçiniz --</option>
+                            @foreach(var city in cities)
+                            {
+                                <option value="@city.Id">@city.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">İlçe</label>
+                        <select id="addDistrict" class="form-select rounded-3" required>
+                            <option value="">-- Önce İl Seçiniz --</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">Bağlı Olacağı Mahalle</label>
+                        <select id="addNeighborhood" name="neighborhoodId" class="form-select rounded-3" required>
+                            <option value="">-- Önce İlçe Seçiniz --</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">Sokak Adı</label>
+                        <input type="text" name="name" class="form-control rounded-3" required />
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Street Modal -->
+<div class="modal fade" id="editStreetModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title fw-bold">Sokağı Düzenle / Taşı</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="/AdminLocation/EditStreet" method="post">
+                <input type="hidden" id="editId" name="id" />
+                <div class="modal-body py-0">
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">İl</label>
+                        <select id="editCity" class="form-select rounded-3" required>
+                            <option value="">-- Seçiniz --</option>
+                            @foreach(var city in cities)
+                            {
+                                <option value="@city.Id">@city.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">İlçe</label>
+                        <select id="editDistrict" class="form-select rounded-3" required>
+                            <option value="">-- Önce İl Seçiniz --</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">Bağlı Olduğu Mahalle</label>
+                        <select id="editNeighborhood" name="neighborhoodId" class="form-select rounded-3" required>
+                            <option value="">-- Önce İlçe Seçiniz --</option>
+                        </select>
+                        <small class="text-primary">Sokağı başka mahalleye kaydırmak (taşımak) istiyorsanız buradan değiştirebilirsiniz.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">Sokak Adı</label>
+                        <input type="text" id="editName" name="name" class="form-control rounded-3" required />
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function loadDistricts(cityId, targetSelectId, selectedDistrictId = null) {
+        var targetSelect = document.getElementById(targetSelectId);
+        targetSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+        if(!cityId) {
+            targetSelect.innerHTML = '<option value="">-- Seçiniz --</option>';
+            return;
+        }
+        fetch('/AdminLocation/GetDistricts?cityId=' + cityId)
+            .then(response => response.json())
+            .then(data => {
+                targetSelect.innerHTML = '<option value="">-- Seçiniz --</option>';
+                data.forEach(function (d) {
+                    var isSelected = (selectedDistrictId == d.id) ? 'selected' : '';
+                    targetSelect.innerHTML += `<option value="${d.id}" ${isSelected}>${d.name}</option>`;
+                });
+            });
+    }
+
+    function loadNeighborhoods(districtId, targetSelectId, selectedNeighborhoodId = null) {
+        var targetSelect = document.getElementById(targetSelectId);
+        targetSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+        if(!districtId) {
+            targetSelect.innerHTML = '<option value="">-- Seçiniz --</option>';
+            return;
+        }
+        fetch('/AdminLocation/GetNeighborhoods?districtId=' + districtId)
+            .then(response => response.json())
+            .then(data => {
+                targetSelect.innerHTML = '<option value="">-- Seçiniz --</option>';
+                data.forEach(function (n) {
+                    var isSelected = (selectedNeighborhoodId == n.id) ? 'selected' : '';
+                    targetSelect.innerHTML += `<option value="${n.id}" ${isSelected}>${n.name}</option>`;
+                });
+            });
+    }
+
+    // --- FILTER ---
+    document.getElementById('filterCity').addEventListener('change', function() {
+        loadDistricts(this.value, 'filterDistrict');
+        document.getElementById('filterNeighborhood').innerHTML = '<option value="">-- Seçiniz --</option>';
+    });
+    document.getElementById('filterDistrict').addEventListener('change', function() {
+        loadNeighborhoods(this.value, 'filterNeighborhood');
+    });
+
+    // --- ADD ---
+    document.getElementById('addCity').addEventListener('change', function() {
+        loadDistricts(this.value, 'addDistrict');
+        document.getElementById('addNeighborhood').innerHTML = '<option value="">-- Seçiniz --</option>';
+    });
+    document.getElementById('addDistrict').addEventListener('change', function() {
+        loadNeighborhoods(this.value, 'addNeighborhood');
+    });
+
+    // --- EDIT ---
+    document.getElementById('editCity').addEventListener('change', function() {
+        loadDistricts(this.value, 'editDistrict');
+        document.getElementById('editNeighborhood').innerHTML = '<option value="">-- Seçiniz --</option>';
+    });
+    document.getElementById('editDistrict').addEventListener('change', function() {
+        loadNeighborhoods(this.value, 'editNeighborhood');
+    });
+
+    // Initialize filter dropdowns on load
+    window.addEventListener('load', function() {
+        var currentCityId = document.getElementById('filterCity').value;
+        var currentDistrictId = '@(selectedDistrictId)';
+        var currentNeighborhoodId = '@(selectedNeighborhoodId)';
+        
+        if(currentCityId) {
+            loadDistricts(currentCityId, 'filterDistrict', currentDistrictId);
+            if(currentDistrictId) {
+                loadNeighborhoods(currentDistrictId, 'filterNeighborhood', currentNeighborhoodId);
+            }
+        }
+    });
+
+    function editStreet(id, currentName, currentCityId, currentDistrictId, currentNeighborhoodId) {
+        document.getElementById('editId').value = id;
+        document.getElementById('editName').value = currentName;
+        document.getElementById('editCity').value = currentCityId;
+        
+        // Load districts and neighborhoods
+        loadDistricts(currentCityId, 'editDistrict', currentDistrictId);
+        // Timeout to simulate sequential loading since JS fetches are async. Better to wait for district to load.
+        setTimeout(() => {
+             loadNeighborhoods(currentDistrictId, 'editNeighborhood', currentNeighborhoodId);
+        }, 500);
+        
+        var modal = new bootstrap.Modal(document.getElementById('editStreetModal'));
+        modal.show();
+    }
+</script>
+
+<!-- Bulk Move Modal -->
+<div class="modal fade" id="bulkMoveModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 rounded-4 shadow border-warning">
+            <div class="modal-header border-bottom-0 bg-warning text-dark">
+                <h5 class="modal-title fw-bold">Toplu Taşıma (Bölge Bölme)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-0 mt-3">
+                <div class="alert alert-info">
+                    <i class="ph ph-info"></i> Seçtiğiniz <strong id="bulkSelectedCount">0</strong> adet sokağı hedef mahalleye aktarmak üzeresiniz.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-muted small">Hedef İl</label>
+                    <select id="bulkCity" class="form-select rounded-3">
+                        <option value="">-- Seçiniz --</option>
+                        @foreach(var city in cities)
+                        {
+                            <option value="@city.Id">@city.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-muted small">Hedef İlçe</label>
+                    <select id="bulkDistrict" class="form-select rounded-3">
+                        <option value="">-- Önce İl Seçiniz --</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-muted small">Hedef Mahalle (Yeni Bağlanacağı Yer)</label>
+                    <select id="bulkNeighborhood" class="form-select rounded-3">
+                        <option value="">-- Önce İlçe Seçiniz --</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer border-top-0 pt-0">
+                <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-warning rounded-pill px-4" onclick="executeBulkMove()">Seçili Sokakları Taşı</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Live Search (Canlı Arama) AJAX Function
+    function loadStreets() {
+        var cityId = $('#filterCity').val();
+        var districtId = $('#filterDistrict').val();
+        var neighborhoodId = $('#filterNeighborhood').val();
+        var searchQuery = $('input[name="searchQuery"]').val();
+
+        if(!cityId && !districtId && !neighborhoodId && !searchQuery) {
+            // Hiç filtre yoksa tabloyu boşalt
+            $('#streetTableBody').html(`<tr><td colspan="6" class="text-center py-5 text-muted"><i class="bi bi-search display-1 text-light"></i><p class="mt-3">Sokakları listelemek için lütfen yukarıdan İl seçimi yapınız.<br>Sistemde 1.1 Milyon sokak kayıtlıdır.</p></td></tr>`);
+            updateBulkActionVisibility();
+            return;
+        }
+
+        $('#streetTableBody').html(`<tr><td colspan="6" class="text-center py-5 text-muted">Yükleniyor... (Canlı Arama)</td></tr>`);
+
+        $.ajax({
+            url: '/AdminLocation/Streets',
+            type: 'GET',
+            data: { cityId: cityId, districtId: districtId, neighborhoodId: neighborhoodId, searchQuery: searchQuery, isAjax: true },
+            success: function(data) {
+                if(data.length === 0) {
+                    $('#streetTableBody').html(`<tr><td colspan="6" class="text-center py-5 text-muted">Sonuç bulunamadı.</td></tr>`);
+                    updateBulkActionVisibility();
+                    return;
+                }
+                var html = '';
+                data.forEach(function(item) {
+                    var statusBadge = item.isActive ? '' : '<span class="badge bg-danger">PASİF</span>';
+                    var trClass = item.isActive ? '' : 'table-danger';
+                    var statusBtn = item.isActive 
+                        ? `<button class="btn btn-sm btn-outline-danger rounded-pill" onclick="toggleStatus(${item.id})">Pasife Al</button>`
+                        : `<button class="btn btn-sm btn-outline-success rounded-pill" onclick="toggleStatus(${item.id})">Aktifleştir</button>`;
+                    
+                    html += `<tr class="${trClass}">
+                                <td class="ps-4"><input class="form-check-input bulk-check" type="checkbox" value="${item.id}"></td>
+                                <td class="text-muted">#${item.id}</td>
+                                <td>${item.cityName} / ${item.districtName}</td>
+                                <td>${item.neighborhoodName}</td>
+                                <td class="fw-bold">${item.name} ${statusBadge}</td>
+                                <td class="text-end pe-4">
+                                    ${statusBtn}
+                                    <button class="btn btn-sm btn-outline-primary rounded-pill" onclick="editStreet(${item.id}, '${item.name}', ${item.cityId}, ${item.districtId}, ${item.neighborhoodId})">Düzenle / Taşı</button>
+                                </td>
+                            </tr>`;
+                });
+                $('#streetTableBody').html(html);
+                updateBulkActionVisibility();
+            }
+        });
+    }
+
+    // Tetikleyiciler
+    $(document).ready(function() {
+        $('#filterCity, #filterDistrict, #filterNeighborhood').on('change', function() {
+            // load districts/neighborhoods logic is already in another script block, so we setTimeout slightly
+            setTimeout(loadStreets, 200); 
+        });
+        
+        var typingTimer;
+        $('input[name="searchQuery"]').on('keyup', function() {
+            clearTimeout(typingTimer);
+            typingTimer = setTimeout(loadStreets, 500); // 500ms delay for live search
+        });
+        
+        // Prevent form submit since we use AJAX
+        $('#filterForm').on('submit', function(e) {
+            e.preventDefault();
+            loadStreets();
+        });
+
+        // Select All Logic
+        $(document).on('change', '#selectAll', function() {
+            $('.bulk-check').prop('checked', $(this).prop('checked'));
+            updateBulkActionVisibility();
+        });
+
+        $(document).on('change', '.bulk-check', function() {
+            if(!$(this).prop('checked')) $('#selectAll').prop('checked', false);
+            updateBulkActionVisibility();
+        });
+
+        // Bulk Modal cascading dropdowns
+        $('#bulkCity').change(function() {
+            var cityId = $(this).val();
+            $('#bulkDistrict').html('<option value="">Yükleniyor...</option>');
+            if(cityId) {
+                $.get('/api/LocationApi/GetDistricts/' + cityId, function(data) {
+                    var options = '<option value="">-- Seçiniz --</option>';
+                    data.forEach(function(d) { options += `<option value="${d.id}">${d.name}</option>`; });
+                    $('#bulkDistrict').html(options);
+                });
+            } else {
+                $('#bulkDistrict').html('<option value="">-- Önce İl Seçiniz --</option>');
+            }
+            $('#bulkNeighborhood').html('<option value="">-- Önce İlçe Seçiniz --</option>');
+        });
+
+        $('#bulkDistrict').change(function() {
+            var districtId = $(this).val();
+            $('#bulkNeighborhood').html('<option value="">Yükleniyor...</option>');
+            if(districtId) {
+                $.get('/api/LocationApi/GetNeighborhoods/' + districtId, function(data) {
+                    var options = '<option value="">-- Seçiniz --</option>';
+                    data.forEach(function(n) { options += `<option value="${n.id}">${n.name}</option>`; });
+                    $('#bulkNeighborhood').html(options);
+                });
+            } else {
+                $('#bulkNeighborhood').html('<option value="">-- Önce İlçe Seçiniz --</option>');
+            }
+        });
+    });
+
+    function updateBulkActionVisibility() {
+        var count = $('.bulk-check:checked').length;
+        $('#selectedCount').text(count);
+        if(count > 0) {
+            $('#bulkActionContainer').slideDown();
+        } else {
+            $('#bulkActionContainer').slideUp();
+        }
+    }
+
+    function openBulkMoveModal() {
+        var count = $('.bulk-check:checked').length;
+        $('#bulkSelectedCount').text(count);
+        var modal = new bootstrap.Modal(document.getElementById('bulkMoveModal'));
+        modal.show();
+    }
+
+    function executeBulkMove() {
+        var targetNh = $('#bulkNeighborhood').val();
+        if(!targetNh) { alert("Lütfen hedef mahalleyi seçin."); return; }
+
+        var ids = [];
+        $('.bulk-check:checked').each(function() { ids.push(parseInt($(this).val())); });
+
+        $.ajax({
+            url: '/AdminLocation/BulkMoveStreets',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ StreetIds: ids, TargetNeighborhoodId: parseInt(targetNh) }),
+            success: function(res) {
+                alert(res.message);
+                bootstrap.Modal.getInstance(document.getElementById('bulkMoveModal')).hide();
+                loadStreets(); // Refresh live search
+            }
+        });
+    }
+
+    function toggleStatus(id) {
+        if(confirm("Bu sokağın durumunu değiştirmek istediğinize emin misiniz?")) {
+            $.post('/AdminLocation/ToggleStreetStatus/' + id, function(res) {
+                loadStreets(); // Refresh table
+            });
+        }
+    }
+</script>

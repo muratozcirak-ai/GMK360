@@ -1,0 +1,160 @@
+@model GMK360.Web.Models.TaxAssistantViewModel
+@{
+    ViewData["Title"] = $"{Model.TaxYear} Yılı Beyanname Asistanı";
+    Layout = "_Layout";
+}
+
+<div class="container-fluid px-4 py-5">
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-8">
+            <h2 class="fw-bold text-dark mb-1">GİB Hazır Beyan Asistanı (Kopya Kağıdı)</h2>
+            <p class="text-muted fs-6">@Model.TaxYear Yılı Kira Geliri (GMSİ) beyannamenizi devletin sistemine girerken bu ekrandaki rakamları kullanabilirsiniz.</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="https://hazirbeyan.gib.gov.tr" target="_blank" class="btn btn-primary btn-lg rounded-pill px-4 shadow-sm fw-bold">
+                <i class="ph ph-arrow-square-out me-2"></i> GİB Sistemine Git
+            </a>
+        </div>
+    </div>
+
+    <!-- ÖZET KARTLARI -->
+    <div class="row g-4 mb-5">
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100 overflow-hidden">
+                <div class="card-body p-4 position-relative">
+                    <div class="text-muted small fw-bold text-uppercase mb-2">Toplam Kira Geliriniz</div>
+                    <h3 class="fw-bold mb-0 text-dark">@Model.TotalRentalIncome.ToString("N2") ₺</h3>
+                    <div class="position-absolute opacity-10" style="right: -10px; bottom: -10px;">
+                        <i class="ph-fill ph-money fs-1 text-primary" style="font-size: 5rem !important;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100 overflow-hidden">
+                <div class="card-body p-4 position-relative">
+                    <div class="text-muted small fw-bold text-uppercase mb-2">Yasal İstisna Tutarı</div>
+                    <h3 class="fw-bold mb-0 text-warning">@Model.LegalExemptionAmount.ToString("N2") ₺</h3>
+                    <div class="position-absolute opacity-10" style="right: -10px; bottom: -10px;">
+                        <i class="ph-fill ph-shield-check fs-1 text-warning" style="font-size: 5rem !important;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100 overflow-hidden bg-primary bg-opacity-10 border border-primary border-opacity-25">
+                <div class="card-body p-4 position-relative">
+                    <div class="text-primary small fw-bold text-uppercase mb-2">Bina/Tamirat/Giderleriniz</div>
+                    <h3 class="fw-bold mb-0 text-primary">@Model.TotalExpenses.ToString("N2") ₺</h3>
+                    <div class="position-absolute opacity-10" style="right: -10px; bottom: -10px;">
+                        <i class="ph-fill ph-receipt fs-1 text-primary" style="font-size: 5rem !important;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-lg rounded-4 h-100 bg-dark text-white overflow-hidden">
+                <div class="card-body p-4 position-relative z-1">
+                    <div class="text-white-50 small fw-bold text-uppercase mb-2">Ödenecek Tahmini Vergi</div>
+                    @if (Model.IsRealExpenseBetter)
+                    {
+                        <h2 class="fw-bold mb-0 text-success">@Model.EstimatedTaxWithRealExpense.ToString("N2") ₺</h2>
+                    }
+                    else
+                    {
+                        <h2 class="fw-bold mb-0 text-success">@Model.EstimatedTaxWithLumpSum.ToString("N2") ₺</h2>
+                    }
+                </div>
+                <div class="position-absolute opacity-25" style="right: -10px; bottom: -10px;">
+                    <i class="ph-fill ph-bank fs-1 text-white" style="font-size: 5rem !important;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- STRATEJİK YÖNLENDİRME -->
+    <div class="row mb-5">
+        <div class="col-12">
+            @if (Model.IsRealExpenseBetter && Model.AdvantageAmount > 0)
+            {
+                <div class="alert alert-success border-0 shadow-sm rounded-4 p-4 d-flex align-items-center">
+                    <div class="bg-white rounded-circle p-3 text-success me-4 shadow-sm">
+                        <i class="ph-fill ph-trend-up fs-2"></i>
+                    </div>
+                    <div>
+                        <h5 class="fw-bold mb-1">Tebrikler! Sisteme girdiğiniz giderler işe yaradı.</h5>
+                        <p class="mb-0 fs-6">Eğer masraflarınızı girmeyip Götürü Gider seçseydiniz <b>@Model.EstimatedTaxWithLumpSum.ToString("N2") ₺</b> vergi ödeyecektiniz. Gerçek Gider yöntemini kullanarak tam <b>@Model.AdvantageAmount.ToString("N2") ₺</b> kâr ettiniz!</p>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info border-0 shadow-sm rounded-4 p-4 d-flex align-items-center">
+                    <div class="bg-white rounded-circle p-3 text-info me-4 shadow-sm">
+                        <i class="ph-fill ph-info fs-2"></i>
+                    </div>
+                    <div>
+                        <h5 class="fw-bold mb-1">Bu Yıl Sizin İçin "Götürü Gider" Daha Avantajlı</h5>
+                        <p class="mb-0 fs-6">Sisteme eklediğiniz faturalı gerçek giderleriniz, devletin standart %15 indiriminin altında kaldığı için GİB ekranında <b>Götürü Gider</b> seçmeniz sizin lehinizedir.</p>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- ADIM ADIM KILAVUZ -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="card-header bg-white border-bottom pt-4 pb-3 px-4">
+            <h5 class="fw-bold mb-0"><i class="ph-fill ph-list-numbers text-primary me-2"></i> Nasıl Yapılır? Kılavuzu</h5>
+        </div>
+        <div class="card-body p-5">
+            <div class="row g-5">
+                <div class="col-md-4">
+                    <div class="d-flex mb-3">
+                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold fs-5 me-3" style="width: 45px; height: 45px; min-width: 45px;">1</div>
+                        <div>
+                            <h6 class="fw-bold mb-2">Devletin Sitesine Girin</h6>
+                            <p class="text-muted small">Yukarıdaki butona tıklayarak Hazır Beyan sistemine gidin ve e-Devlet şifrenizle giriş yapın.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex mb-3">
+                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold fs-5 me-3" style="width: 45px; height: 45px; min-width: 45px;">2</div>
+                        <div>
+                            <h6 class="fw-bold mb-2">Gider Türünü Seçin</h6>
+                            <p class="text-muted small">Beyanname formunda yer alan "Gider Türü" alanından 
+                                @if(Model.IsRealExpenseBetter) { <strong class="text-success border-bottom border-success">GERÇEK GİDER</strong> } else { <strong class="text-info border-bottom border-info">GÖTÜRÜ GİDER</strong> } 
+                            seçeneğini işaretleyin.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex mb-3">
+                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold fs-5 me-3" style="width: 45px; height: 45px; min-width: 45px;">3</div>
+                        <div>
+                            <h6 class="fw-bold mb-2">Rakamları Aktarın</h6>
+                            @if(Model.IsRealExpenseBetter)
+                            {
+                                <p class="text-muted small mb-2">'İndirilecek Giderler' kutusuna tam olarak yandaki rakamı yazın:</p>
+                                <div class="bg-light border rounded-3 p-2 d-flex justify-content-between align-items-center">
+                                    <span class="fw-bold text-dark fs-5">@Model.TotalExpenses.ToString("N2")</span>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="navigator.clipboard.writeText('@Model.TotalExpenses.ToString("F2")'); alert('Kopyalandı!');"><i class="ph ph-copy"></i> Kopyala</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="text-muted small mb-2">Götürü gider seçtiğiniz için sistem otomatik %15 indirim uygulayacaktır. Sadece onaylamanız yeterlidir.</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="text-center mt-5">
+                <a href="https://hazirbeyan.gib.gov.tr" target="_blank" class="btn btn-dark btn-lg rounded-pill px-5 fw-bold">
+                    İşlemi Tamamlamak İçin Tıklayın
+                </a>
+            </div>
+        </div>
+    </div>
+</div>

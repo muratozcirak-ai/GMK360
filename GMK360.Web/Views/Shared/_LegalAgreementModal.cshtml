@@ -1,0 +1,110 @@
+<!-- Legal Agreement Modal -->
+<div class="modal fade" id="legalAgreementModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="legalAgreementModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="legalAgreementModalLabel">Sözleşme Onayı Gerekiyor</h5>
+            </div>
+            <div class="modal-body p-4" id="legalAgreementContentArea" style="max-height: 400px; overflow-y: auto;">
+                <!-- Dinamik olarak doldurulacak HTML içerik -->
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Yükleniyor...</span>
+                    </div>
+                    <p class="mt-2">Sözleşme yükleniyor...</p>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <!-- Data-id içine aktif sözleşme ID'si atılacak -->
+                <button type="button" class="btn btn-primary px-4 py-2" id="btnAcceptAgreement" data-id="0">
+                    <i class="bi bi-check2-circle me-1"></i> Okudum, Onaylıyorum
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        // Sadece giriş yapmış kullanıcılar için çalıştır
+        const isAuthenticated = @User.Identity.IsAuthenticated.ToString().ToLower();
+        if (!isAuthenticated) return;
+
+        let pendingAgreements = [];
+        let currentAgreementIndex = 0;
+        let modalInstance = null;
+
+        function checkAgreements() {
+            fetch('/Agreement/GetPendingAgreements')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.agreements && data.agreements.length > 0) {
+                        pendingAgreements = data.agreements;
+                        currentAgreementIndex = 0;
+                        showCurrentAgreement();
+                        
+                        if (!modalInstance) {
+                            const modalEl = document.getElementById('legalAgreementModal');
+                            modalInstance = new bootstrap.Modal(modalEl);
+                        }
+                        modalInstance.show();
+                    }
+                })
+                .catch(err => console.error("Sözleşme kontrolünde hata:", err));
+        }
+
+        function showCurrentAgreement() {
+            if (currentAgreementIndex >= pendingAgreements.length) {
+                // Tüm sözleşmeler bitti, modalı kapat
+                if (modalInstance) modalInstance.hide();
+                return;
+            }
+
+            const agreement = pendingAgreements[currentAgreementIndex];
+            document.getElementById('legalAgreementModalLabel').textContent = agreement.title + " (v" + agreement.version + ")";
+            document.getElementById('legalAgreementContentArea').innerHTML = agreement.content;
+            document.getElementById('btnAcceptAgreement').dataset.id = agreement.id;
+            
+            // Kullanıcının okuması için en üste kaydır
+            document.getElementById('legalAgreementContentArea').scrollTop = 0;
+        }
+
+        document.getElementById('btnAcceptAgreement').addEventListener('click', function () {
+            const agreementId = this.dataset.id;
+            const btn = this;
+            
+            // Butonu kilitle
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Onaylanıyor...';
+            btn.disabled = true;
+
+            const formData = new FormData();
+            formData.append('agreementId', agreementId);
+
+            fetch('/Agreement/AcceptAgreement', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    currentAgreementIndex++;
+                    showCurrentAgreement();
+                } else {
+                    alert(data.message || "Sözleşme onaylanırken bir hata oluştu.");
+                }
+            })
+            .catch(err => {
+                console.error("Onay hatası:", err);
+                alert("Sistem hatası. Lütfen daha sonra tekrar deneyin.");
+            })
+            .finally(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            });
+        });
+
+        // Sayfa yüklendikten 1 saniye sonra sözleşmeleri kontrol et
+        setTimeout(checkAgreements, 1000);
+    });
+</script>

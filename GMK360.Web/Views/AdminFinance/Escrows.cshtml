@@ -1,0 +1,100 @@
+@model IEnumerable<GMK360.Core.Entities.EscrowTransaction>
+
+@{
+    ViewData["Title"] = "Havuz (Escrow) İşlemleri";
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold text-dark">Havuz (Escrow) Hareketleri</h3>
+        <a asp-action="Index" class="btn btn-outline-secondary">Geri Dön</a>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Tarih</th>
+                            <th>Toplam İşlem</th>
+                            <th>Satıcı Hak Edişi</th>
+                            <th>Referans Hak Edişi</th>
+                            <th>Platform Net Kesintisi</th>
+                            <th>Serbest Bırakılma</th>
+                            <th class="pe-4 text-end">Durum</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var escrow in Model)
+                        {
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="fw-bold">@escrow.CreatedAt.ToString("dd MMM yyyy")</div>
+                                    <small class="text-muted">@escrow.CreatedAt.ToString("HH:mm")</small>
+                                </td>
+                                <td>
+                                    <span class="text-primary fw-bold">@escrow.TotalAmount.ToString("C")</span>
+                                </td>
+                                <td>
+                                    @if(escrow.SellerUserId != null)
+                                    {
+                                        <div class="fw-bold">@escrow.SellerUser?.FirstName @escrow.SellerUser?.LastName</div>
+                                        <small class="text-muted">Net: @escrow.SellerNetAmount.ToString("C") (Vergi: @escrow.SellerTaxAmount.ToString("C"))</small>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if(escrow.ReferrerUserId != null)
+                                    {
+                                        <div class="fw-bold">@escrow.ReferrerUser?.FirstName @escrow.ReferrerUser?.LastName</div>
+                                        <small class="text-muted">Net: @escrow.ReferrerNetAmount.ToString("C") (Vergi: @escrow.ReferrerTaxAmount.ToString("C"))</small>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="text-success fw-bold">@escrow.PlatformCommissionGross.ToString("C")</span>
+                                </td>
+                                <td>
+                                    <div class="@(escrow.ReleaseDate <= DateTime.UtcNow ? "text-success" : "text-warning")">
+                                        @escrow.ReleaseDate.ToString("dd MMM yyyy")
+                                    </div>
+                                </td>
+                                <td class="pe-4 text-end">
+                                    @if(escrow.Status == GMK360.Core.Entities.EscrowStatus.Pending)
+                                    {
+                                        <span class="badge bg-warning text-dark px-3 py-2">Havuzda Bekliyor</span>
+                                    }
+                                    else if (escrow.Status == GMK360.Core.Entities.EscrowStatus.Released)
+                                    {
+                                        <span class="badge bg-success px-3 py-2">Serbest Bırakıldı</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger px-3 py-2">İade Edildi</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        
+                        @if (!Model.Any())
+                        {
+                            <tr>
+                                <td colspan="7" class="text-center py-5 text-muted">
+                                    <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                                    Hiç işlem bulunamadı.
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

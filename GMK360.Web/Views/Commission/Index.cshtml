@@ -1,0 +1,120 @@
+@model IEnumerable<GMK360.Core.Entities.PropertyReservation>
+
+@{
+    ViewData["Title"] = "Bekleyen Komisyon Ödemeleri";
+    Layout = "_DashboardLayout";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-cash-coin text-primary me-2"></i> Bekleyen Komisyon Ödemeleri</h2>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        @if (!Model.Any())
+        {
+            <div class="alert alert-info">
+                Şu anda ödeme bekleyen bir komisyon bulunmamaktadır.
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Rezervasyon ID</th>
+                            <th>Daire/Oda</th>
+                            <th>Partner (Emlakçı/Şahıs)</th>
+                            <th>Tip</th>
+                            <th>Hak Ediş Tutarı</th>
+                            <th>İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model)
+                        {
+                            <tr id="row-@item.Id">
+                                <td>#@item.Id</td>
+                                <td>@(item.Property?.Title ?? "Bilinmiyor")</td>
+                                <td>
+                                    <strong>@item.Partner.FullNameOrCompanyName</strong><br />
+                                    <small class="text-muted">@item.Partner.Phone</small>
+                                </td>
+                                <td>
+                                    @if (item.Partner.IsTaxpayer)
+                                    {
+                                        <span class="badge bg-primary">Esnaf</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">Şahıs</span>
+                                    }
+                                </td>
+                                <td class="fw-bold text-success">
+                                    @item.CommissionAmount.ToString("N2") ₺
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-success" 
+                                            onclick="payCommission(@item.Id, '@item.Partner.IsTaxpayer.ToString().ToLower()', '@item.CommissionAmount.ToString("N2")')">
+                                        <i class="bi bi-check-circle"></i> Öde ve Kapat
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function payCommission(reservationId, isTaxpayerStr, amount) {
+            var isTaxpayer = (isTaxpayerStr === 'true');
+            var docType = '';
+
+            if (isTaxpayer) {
+                if (!confirm("Fatura teslim alındı mı?\n\nKDV Dahil " + amount + " ₺ tutar ödenecektir.")) {
+                    return;
+                }
+                docType = 'Fatura Alındı';
+            } else {
+                if (!confirm("Bu kişi vergi mükellefi değildir.\n\nMuhasebeye " + amount + " ₺ için Gider Pusulası (Stopajlı) kestirilecektir. Onaylıyor musunuz?")) {
+                    return;
+                }
+                docType = 'Gider Pusulası Kesildi';
+            }
+
+            // AJAX çağrısı
+            fetch('/api/CommissionApi/pay', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    reservationId: reservationId,
+                    documentType: docType
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert("Ödeme başarıyla kaydedildi.");
+                    // Satırı tablodan kaldır
+                    var row = document.getElementById('row-' + reservationId);
+                    if (row) {
+                        row.remove();
+                    }
+                } else {
+                    alert("Hata: " + (data.message || "İşlem başarısız."));
+                }
+            })
+            .catch(error => {
+                console.error("Error:", error);
+                alert("Sunucu ile iletişimde hata oluştu.");
+            });
+        }
+    </script>
+}

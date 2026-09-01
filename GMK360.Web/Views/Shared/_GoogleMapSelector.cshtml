@@ -1,0 +1,64 @@
+@* 
+    Google Maps Konum Seçici (Mocked API Key)
+    Kullanım: <partial name="_GoogleMapSelector" model="new { LatField = "ncLat", LngField = "ncLng", MapDivId = "googleMapDiv" }" />
+*@
+
+<div id="googleMapDiv" style="height: 600px; width: 100%; border-radius: 10px; border: 1px solid #ccc;"></div>
+<div class="mt-2 text-muted small">
+    <i class="ph-bold ph-info"></i> Haritada işaretlediğiniz konum, formdaki Enlem/Boylam alanlarına otomatik yansır.
+</div>
+
+<script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY_HERE&libraries=places&callback=initGoogleMap" async defer></script>
+
+<script>
+    let gMap;
+    let gMarker;
+
+    function initGoogleMap() {
+        const defaultLocation = { lat: 41.0082, lng: 28.9784 }; // Istanbul
+        
+        gMap = new google.maps.Map(document.getElementById("googleMapDiv"), {
+            zoom: 13,
+            center: defaultLocation,
+            mapTypeControl: false,
+        });
+
+        gMarker = new google.maps.Marker({
+            position: defaultLocation,
+            map: gMap,
+            draggable: true,
+            title: "Konumu Sürükleyin"
+        });
+
+        // Marker sürüklendiğinde
+        google.maps.event.addListener(gMarker, 'dragend', function(evt) {
+            updateCoordinates(evt.latLng.lat(), evt.latLng.lng());
+        });
+
+        // Haritaya tıklandığında
+        google.maps.event.addListener(gMap, 'click', function(evt) {
+            gMarker.setPosition(evt.latLng);
+            updateCoordinates(evt.latLng.lat(), evt.latLng.lng());
+        });
+        
+        // Arama Kutusu (Autocomplete) Eklenebilir
+    }
+    
+    function updateCoordinates(lat, lng) {
+        // Hedef inputları güncelle
+        const latInput = document.getElementById('ncLat');
+        const lngInput = document.getElementById('ncLng');
+        if(latInput) latInput.value = lat.toFixed(6);
+        if(lngInput) lngInput.value = lng.toFixed(6);
+    }
+    
+    function setMapLocation(lat, lng, zoomLevel = 15) {
+        if(gMap && gMarker) {
+            const pos = { lat: parseFloat(lat), lng: parseFloat(lng) };
+            gMap.setCenter(pos);
+            gMap.setZoom(zoomLevel);
+            gMarker.setPosition(pos);
+            updateCoordinates(pos.lat, pos.lng);
+        }
+    }
+</script>

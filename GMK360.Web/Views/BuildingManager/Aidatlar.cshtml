@@ -1,0 +1,116 @@
+@model IEnumerable<GMK360.Core.Entities.UnitDebt>
+@{
+    ViewData["Title"] = "Aidat ve Borç Takibi";
+    Layout = "~/Views/Shared/_FacilityLayout.cshtml";
+    var buildings = ViewBag.Buildings as IEnumerable<GMK360.Core.Entities.Building>;
+    var selectedBuildingId = ViewBag.SelectedBuildingId as int?;
+    
+    var totalCollected = Model.Where(d => d.IsPaid).Sum(d => d.Amount);
+    var totalUnpaid = Model.Where(d => !d.IsPaid).Sum(d => d.Amount);
+}
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card bg-success bg-opacity-10 border-success border-start border-4 border-0">
+            <div class="card-body">
+                <h6 class="text-success fw-bold">Tahsil Edilen (Ödenen)</h6>
+                <h3 class="mb-0">@totalCollected.ToString("C")</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card bg-danger bg-opacity-10 border-danger border-start border-4 border-0">
+            <div class="card-body">
+                <h6 class="text-danger fw-bold">Bekleyen (Ödenmemiş)</h6>
+                <h3 class="mb-0">@totalUnpaid.ToString("C")</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-cash-stack"></i> Aidat / Gider Borçları</h5>
+        <div class="d-flex gap-2">
+            <form method="get" class="d-flex">
+                <select name="buildingId" class="form-select form-select-sm me-2" onchange="this.form.submit()">
+                    <option value="">Tüm Binalar</option>
+                    @if(buildings != null)
+                    {
+                        foreach(var b in buildings)
+                        {
+                            if(selectedBuildingId == b.Id)
+                            {
+                                <option value="@b.Id" selected>@b.Name</option>
+                            }
+                            else
+                            {
+                                <option value="@b.Id">@b.Name</option>
+                            }
+                        }
+                    }
+                </select>
+            </form>
+            <button class="btn btn-sm btn-primary"><i class="bi bi-plus"></i> Toplu Aidat Borçlandır</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Tarih</th>
+                        <th>Bina / Daire</th>
+                        <th>Açıklama (Gider Tipi)</th>
+                        <th>Tutar</th>
+                        <th>Durum</th>
+                        <th>İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if(!Model.Any())
+                    {
+                        <tr><td colspan="6" class="text-center text-muted">Kayıt bulunamadı.</td></tr>
+                    }
+                    else
+                    {
+                        foreach (var debt in Model)
+                        {
+                            <tr>
+                                <td>@debt.BuildingExpense.Date.ToString("dd.MM.yyyy")</td>
+                                <td>
+                                    <span class="badge bg-secondary">@debt.BuildingUnit.Building.Name</span><br/>
+                                    <strong>Daire: @debt.BuildingUnit.UnitNumber</strong>
+                                </td>
+                                <td>@debt.BuildingExpense.Description</td>
+                                <td><strong class="text-dark">@debt.Amount.ToString("C")</strong></td>
+                                <td>
+                                    @if (debt.IsPaid)
+                                    {
+                                        <span class="badge bg-success">Ödendi</span><br/>
+                                        <small class="text-muted">(@debt.PaidBy - @debt.PaymentDate?.ToString("dd.MM.yyyy"))</small>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger">Ödenmedi</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (!debt.IsPaid)
+                                    {
+                                        <form asp-action="MarkDebtAsPaid" method="post" class="d-inline">
+                                            <input type="hidden" name="debtId" value="@debt.Id" />
+                                            <input type="hidden" name="paidBy" value="@(string.IsNullOrEmpty(debt.BuildingUnit.TenantName) ? debt.BuildingUnit.OwnerName : debt.BuildingUnit.TenantName)" />
+                                            <button type="submit" class="btn btn-sm btn-outline-success" title="Tahsil Edildi İşaretle"><i class="bi bi-check2-circle"></i></button>
+                                        </form>
+                                    }
+                                    <button class="btn btn-sm btn-outline-secondary" title="Makbuz/Detay"><i class="bi bi-receipt"></i></button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

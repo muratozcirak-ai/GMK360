@@ -1,0 +1,525 @@
+@model GMK360.Core.Entities.Building
+@{
+    ViewData["Title"] = "Bina Yönetimi Kurulum Sihirbazı";
+    Layout = "~/Views/Shared/_AdminLayout.cshtml";
+    int currentStep = Model?.OnboardingStep ?? 0;
+}
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <h2 class="text-primary fw-bold">Bina Yönetimi Kurulum Sihirbazı</h2>
+            <p class="text-muted">Binanızı yönetmeye başlamak için aşağıdaki adımları tamamlayın.</p>
+        </div>
+    </div>
+
+    <!-- Stepper Navigation -->
+    <div class="row justify-content-center mb-5">
+        <div class="col-md-8">
+            <div class="d-flex justify-content-between position-relative stepper-wrapper">
+                <!-- Step 1 Indicator -->
+                <div class="step text-center @(currentStep >= 0 ? "active" : "")" id="step1-indicator">
+                    <div class="step-icon rounded-circle mx-auto d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-building"></i>
+                    </div>
+                    <span class="fw-bold">1. Temel Atma</span>
+                </div>
+                <!-- Line -->
+                <div class="step-line flex-grow-1 align-self-center mx-2 @(currentStep >= 1 ? "active-line" : "")" id="line1"></div>
+                <!-- Step 2 Indicator -->
+                <div class="step text-center @(currentStep >= 1 ? "active" : "")" id="step2-indicator">
+                    <div class="step-icon rounded-circle mx-auto d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <span class="fw-bold">2. Bağımsız Bölümler</span>
+                </div>
+                <!-- Line -->
+                <div class="step-line flex-grow-1 align-self-center mx-2 @(currentStep >= 2 ? "active-line" : "")" id="line2"></div>
+                <!-- Step 3 Indicator -->
+                <div class="step text-center @(currentStep >= 2 ? "active" : "")" id="step3-indicator">
+                    <div class="step-icon rounded-circle mx-auto d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-file-invoice-dollar"></i>
+                    </div>
+                    <span class="fw-bold">3. Sabit Giderler</span>
+                </div>
+                <!-- Line -->
+                <div class="step-line flex-grow-1 align-self-center mx-2 @(currentStep >= 3 ? "active-line" : "")" id="line3"></div>
+                <!-- Step 4 Indicator -->
+                <div class="step text-center @(currentStep >= 3 ? "active" : "")" id="step4-indicator">
+                    <div class="step-icon rounded-circle mx-auto d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <span class="fw-bold">4. Tamamla</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step Content Containers -->
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm border-0 rounded-4">
+                <div class="card-body p-5 position-relative">
+                    
+                    <!-- Loading Overlay -->
+                    <div id="loadingOverlay" class="position-absolute w-100 h-100 top-0 start-0 bg-white bg-opacity-75 d-none justify-content-center align-items-center" style="z-index: 10; border-radius: inherit;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Yükleniyor...</span>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="BuildingId" value="@(Model?.Id ?? 0)" />
+                    <input type="hidden" id="CurrentStep" value="@currentStep" />
+
+                    <!-- Step 1: Bina ve Adres Kaydı -->
+                    <div id="step1-content" class="step-content @(currentStep == 0 ? "" : "d-none")">
+                        <h4 class="mb-4 text-dark"><i class="fas fa-map-marker-alt text-primary me-2"></i>Bina ve Adres Bilgileri</h4>
+                        <form id="formStep1">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Bina Adı / No</label>
+                                <input type="text" class="form-control" id="binaAdi" placeholder="Örn: Güneş Apartmanı No:12" required value="@(Model?.Name)">
+                            </div>
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold">İl</label>
+                                    <select class="form-select" id="binaIl" required>
+                                        <option value="">Seçiniz...</option>
+                                        <option value="34" selected>İstanbul</option>
+                                        <option value="6">Ankara</option>
+                                        <option value="35">İzmir</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold">İlçe</label>
+                                    <select class="form-select" id="binaIlce" required>
+                                        <option value="">Seçiniz...</option>
+                                        <option value="1" selected>Kadıköy</option>
+                                        <option value="2">Beşiktaş</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold">Mahalle</label>
+                                    <select class="form-select" id="binaMahalle" required>
+                                        <option value="">Seçiniz...</option>
+                                        <option value="1" selected>Moda</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="mb-4 position-relative">
+                                <label class="form-label fw-semibold">Açık Adres</label>
+                                <textarea class="form-control" id="binaAdres" rows="3" required>@(Model?.Address)</textarea>
+                                <div class="form-text text-info">
+                                    <i class="fas fa-info-circle me-1"></i> Resmi tebligatlar ve harita konumlandırması için adresin tam ve eksiksiz olması önemlidir.
+                                </div>
+                            </div>
+                            
+                            <div class="text-end mt-4 border-top pt-3">
+                                <button type="button" class="btn btn-primary px-4 py-2" onclick="saveStep1()">Kaydet ve İlerle <i class="fas fa-arrow-right ms-2"></i></button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Step 2: Bağımsız Bölümler ve Kişiler -->
+                    <div id="step2-content" class="step-content @(currentStep == 1 ? "" : "d-none")">
+                        <h4 class="mb-3 text-dark"><i class="fas fa-door-open text-primary me-2"></i>Daireler ve Sakinler</h4>
+                        <p class="text-muted mb-4">Şimdi bu binadaki daireleri ve sakinleri ekleyelim. Eklediğiniz kişilere otomatik olarak davet SMS'i gönderilecektir.</p>
+                        
+                        <div class="table-responsive mb-4">
+                            <table class="table table-hover align-middle" id="unitsTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Kapı No</th>
+                                        <th>Durum</th>
+                                        <th>Ev Sahibi Ad / Telefon</th>
+                                        <th>Kiracı Ad / Telefon</th>
+                                        <th>İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic rows will be added here -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-4 border-top pt-3">
+                            <button type="button" class="btn btn-outline-primary" onclick="addUnitRow()"><i class="fas fa-plus me-2"></i>Yeni Daire Ekle</button>
+                            <button type="button" class="btn btn-primary px-4 py-2" onclick="saveStep2()">Kaydet ve Davet Et <i class="fas fa-paper-plane ms-2"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Sabit Giderler ve Sözleşmeler -->
+                    <div id="step3-content" class="step-content @(currentStep == 2 ? "" : "d-none")">
+                        <h4 class="mb-3 text-dark"><i class="fas fa-file-signature text-primary me-2"></i>Sabit Giderler ve Sözleşmeler</h4>
+                        <p class="text-muted mb-4">Binanın aylık düzenli giderlerini ve personel sözleşmelerini tanımlayın. Aidat bütçesi bu giderlere göre şekillenecektir.</p>
+
+                        <div class="table-responsive mb-4">
+                            <table class="table table-hover align-middle" id="expensesTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Gider Kalemi</th>
+                                        <th>Aylık Tutar (₺)</th>
+                                        <th>Açıklama / Sözleşme No</th>
+                                        <th>İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic rows will be added here -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-4 border-top pt-3">
+                            <button type="button" class="btn btn-outline-primary" onclick="addExpenseRow()"><i class="fas fa-plus me-2"></i>Yeni Gider Ekle</button>
+                            <button type="button" class="btn btn-primary px-4 py-2" onclick="saveStep3()">Sistemi Başlat <i class="fas fa-rocket ms-2"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Başarılı -->
+                    <div id="step4-content" class="step-content @(currentStep == 3 ? "" : "d-none") text-center py-5">
+                        <div class="display-1 text-success mb-4">
+                            <i class="fas fa-check-circle shadow-sm rounded-circle"></i>
+                        </div>
+                        <h3 class="fw-bold">Tebrikler! Kurulum Tamamlandı</h3>
+                        <p class="text-muted fs-5 mb-5">Bina yönetim sisteminiz başarıyla oluşturuldu. Davetiyeler gönderildi ve aidat bütçeniz hazırlandı.</p>
+                        
+                        <a href="/BuildingManager/Detail?id=@(Model?.Id ?? 0)" id="goToDashboardBtn" class="btn btn-primary btn-lg px-5 py-3">
+                            <i class="fas fa-tachometer-alt me-2"></i> Yönetim Paneline Git
+                        </a>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .stepper-wrapper {
+        z-index: 1;
+    }
+    .step-icon {
+        width: 60px;
+        height: 60px;
+        background-color: #e9ecef;
+        color: #6c757d;
+        font-size: 24px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    .step.active .step-icon {
+        background-color: #0d6efd;
+        color: white;
+        transform: scale(1.1);
+        box-shadow: 0 6px 12px rgba(13, 110, 253, 0.2);
+    }
+    .step span {
+        color: #6c757d;
+        font-size: 14px;
+        transition: color 0.3s ease;
+    }
+    .step.active span {
+        color: #0d6efd;
+    }
+    .step-line {
+        height: 4px;
+        background-color: #e9ecef;
+        border-radius: 2px;
+        transition: background-color 0.3s ease;
+    }
+    .active-line {
+        background-color: #0d6efd;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: #86b7fe;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+</style>
+
+@section Scripts {
+    <script>
+        let currentStep = parseInt($('#CurrentStep').val()) || 0;
+        let buildingId = parseInt($('#BuildingId').val()) || 0;
+
+        $(document).ready(function () {
+            // Initial setup for step 2 if we are on it
+            if (currentStep === 1) addUnitRow();
+            if (currentStep === 2) addExpenseRow();
+            
+            // If completed, update dashboard link
+            if (currentStep >= 3 && buildingId > 0) {
+                $('#goToDashboardBtn').attr('href', '/BuildingManager/Detail?id=' + buildingId);
+            }
+        });
+
+        function showLoading() { $('#loadingOverlay').removeClass('d-none').addClass('d-flex'); }
+        function hideLoading() { $('#loadingOverlay').addClass('d-none').removeClass('d-flex'); }
+
+        function navigateToStep(stepNumber) {
+            $('.step-content').addClass('d-none');
+            $('#step' + stepNumber + '-content').removeClass('d-none');
+            
+            // Update indicators
+            for(let i=1; i<=4; i++) {
+                if(i <= stepNumber) {
+                    $('#step' + i + '-indicator').addClass('active');
+                } else {
+                    $('#step' + i + '-indicator').removeClass('active');
+                }
+                
+                if(i < 4) {
+                    if(i < stepNumber) {
+                        $('#line' + i).addClass('active-line');
+                    } else {
+                        $('#line' + i).removeClass('active-line');
+                    }
+                }
+            }
+            currentStep = stepNumber - 1;
+        }
+
+        // STEP 1
+        function saveStep1() {
+            if (!$('#formStep1')[0].checkValidity()) {
+                $('#formStep1')[0].reportValidity();
+                return;
+            }
+
+            const data = {
+                Name: $('#binaAdi').val(),
+                Address: $('#binaAdres').val(),
+                CityId: parseInt($('#binaIl').val()) || null,
+                DistrictId: parseInt($('#binaIlce').val()) || null,
+                NeighborhoodId: parseInt($('#binaMahalle').val()) || null
+            };
+
+            showLoading();
+            $.ajax({
+                url: '/BuildingManager/SaveOnboardingStep1',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                success: function (res) {
+                    hideLoading();
+                    if (res.success) {
+                        buildingId = res.buildingId;
+                        $('#BuildingId').val(buildingId);
+                        addUnitRow(); // Add one empty row
+                        navigateToStep(2);
+                    } else {
+                        alert("Hata: " + (res.message || "Bilinmeyen bir hata oluştu."));
+                    }
+                },
+                error: function (err) {
+                    hideLoading();
+                    console.error(err);
+                    alert("Sunucu ile iletişim kurulamadı.");
+                }
+            });
+        }
+
+        // STEP 2
+        function addUnitRow() {
+            const html = `
+                <tr>
+                    <td><input type="text" class="form-control form-control-sm unit-no" placeholder="Örn: 1" required></td>
+                    <td>
+                        <select class="form-select form-select-sm unit-status" onchange="toggleUnitStatus(this)">
+                            <option value="false">Dolu</option>
+                            <option value="true">Boş</option>
+                        </select>
+                    </td>
+                    <td>
+                        <div class="input-group input-group-sm mb-1">
+                            <span class="input-group-text"><i class="fas fa-user"></i></span>
+                            <input type="text" class="form-control owner-name" placeholder="Ad Soyad" required>
+                        </div>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text"><i class="fas fa-phone"></i></span>
+                            <input type="tel" class="form-control owner-phone" placeholder="05XX">
+                        </div>
+                    </td>
+                    <td>
+                        <div class="tenant-fields">
+                            <div class="input-group input-group-sm mb-1">
+                                <span class="input-group-text"><i class="fas fa-user"></i></span>
+                                <input type="text" class="form-control tenant-name" placeholder="Ad Soyad (Varsa)">
+                            </div>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text"><i class="fas fa-phone"></i></span>
+                                <input type="tel" class="form-control tenant-phone" placeholder="05XX">
+                            </div>
+                        </div>
+                    </td>
+                    <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)"><i class="fas fa-trash"></i></button></td>
+                </tr>
+            `;
+            $('#unitsTable tbody').append(html);
+        }
+
+        function toggleUnitStatus(select) {
+            const isEmpty = $(select).val() === "true";
+            const row = $(select).closest('tr');
+            if(isEmpty) {
+                row.find('.tenant-fields').hide();
+                row.find('.tenant-name, .tenant-phone').val('');
+            } else {
+                row.find('.tenant-fields').show();
+            }
+        }
+
+        function removeRow(btn) {
+            $(btn).closest('tr').remove();
+        }
+
+        function saveStep2() {
+            if(buildingId === 0) {
+                alert("Önce bina bilgileri kaydedilmelidir!");
+                return;
+            }
+
+            const units = [];
+            let isValid = true;
+
+            $('#unitsTable tbody tr').each(function () {
+                const no = $(this).find('.unit-no').val();
+                const isEmpty = $(this).find('.unit-status').val() === "true";
+                const oName = $(this).find('.owner-name').val();
+                
+                if(!no || !oName) {
+                    isValid = false;
+                    $(this).addClass('table-danger');
+                    return;
+                } else {
+                    $(this).removeClass('table-danger');
+                }
+
+                units.push({
+                    UnitNumber: no,
+                    IsEmpty: isEmpty,
+                    OwnerName: oName,
+                    OwnerPhone: $(this).find('.owner-phone').val(),
+                    TenantName: $(this).find('.tenant-name').val(),
+                    TenantPhone: $(this).find('.tenant-phone').val()
+                });
+            });
+
+            if(!isValid) {
+                alert("Lütfen zorunlu alanları (Kapı No ve Ev Sahibi Adı) doldurun.");
+                return;
+            }
+            if(units.length === 0) {
+                alert("En az 1 daire eklemelisiniz.");
+                return;
+            }
+
+            showLoading();
+            $.ajax({
+                url: '/BuildingManager/SaveOnboardingStep2?buildingId=' + buildingId,
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(units),
+                success: function (res) {
+                    hideLoading();
+                    if (res.success) {
+                        addExpenseRow(); // Add one empty row
+                        navigateToStep(3);
+                    } else {
+                        alert("Hata: " + (res.message || "Bilinmeyen bir hata oluştu."));
+                    }
+                },
+                error: function (err) {
+                    hideLoading();
+                    console.error(err);
+                    alert("Sunucu ile iletişim kurulamadı.");
+                }
+            });
+        }
+
+        // STEP 3
+        function addExpenseRow() {
+            const html = `
+                <tr>
+                    <td>
+                        <select class="form-select form-select-sm exp-desc" required>
+                            <option value="">Seçiniz...</option>
+                            <option value="Apartman Görevlisi Maaşı">Apartman Görevlisi Maaşı</option>
+                            <option value="Asansör Bakım">Asansör Bakım</option>
+                            <option value="Ortak Elektrik">Ortak Elektrik</option>
+                            <option value="Temizlik Hizmeti">Temizlik Hizmeti</option>
+                            <option value="Diğer">Diğer</option>
+                        </select>
+                    </td>
+                    <td>
+                        <div class="input-group input-group-sm">
+                            <input type="number" class="form-control exp-amount" min="0" step="0.01" required>
+                            <span class="input-group-text">₺</span>
+                        </div>
+                    </td>
+                    <td><input type="text" class="form-control form-control-sm exp-note" placeholder="Örn: 2026/Ağustos"></td>
+                    <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)"><i class="fas fa-trash"></i></button></td>
+                </tr>
+            `;
+            $('#expensesTable tbody').append(html);
+        }
+
+        function saveStep3() {
+            if(buildingId === 0) {
+                alert("Bina bilgisi bulunamadı!");
+                return;
+            }
+
+            const expenses = [];
+            let isValid = true;
+
+            $('#expensesTable tbody tr').each(function () {
+                const desc = $(this).find('.exp-desc').val();
+                const amount = parseFloat($(this).find('.exp-amount').val());
+                const note = $(this).find('.exp-note').val();
+                
+                if(!desc || isNaN(amount)) {
+                    isValid = false;
+                    $(this).addClass('table-danger');
+                    return;
+                } else {
+                    $(this).removeClass('table-danger');
+                }
+
+                expenses.push({
+                    Description: note ? desc + " - " + note : desc,
+                    TotalAmount: amount,
+                    PayerType: "Owner" // Default
+                });
+            });
+
+            if(!isValid) {
+                alert("Lütfen zorunlu alanları (Kalem ve Tutar) doldurun.");
+                return;
+            }
+
+            showLoading();
+            $.ajax({
+                url: '/BuildingManager/SaveOnboardingStep3?buildingId=' + buildingId,
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(expenses),
+                success: function (res) {
+                    hideLoading();
+                    if (res.success) {
+                        $('#goToDashboardBtn').attr('href', '/BuildingManager/Detail?id=' + buildingId);
+                        navigateToStep(4);
+                    } else {
+                        alert("Hata: " + (res.message || "Bilinmeyen bir hata oluştu."));
+                    }
+                },
+                error: function (err) {
+                    hideLoading();
+                    console.error(err);
+                    alert("Sunucu ile iletişim kurulamadı.");
+                }
+            });
+        }
+    </script>
+}

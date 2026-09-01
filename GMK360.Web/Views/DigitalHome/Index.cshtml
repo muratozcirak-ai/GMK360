@@ -1,0 +1,270 @@
+@model GMK360.Web.Models.DigitalHomeDashboardViewModel
+
+@{
+    ViewData["Title"] = "Dijital Evim (Mülklerim)";
+}
+
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-navy mb-1"><i class="ph-fill ph-house-line text-primary me-2"></i> Dijital Evim</h2>
+            <p class="text-muted">Mülklerinizi, kiracılarınızı ve finansal akışınızı buradan yönetin.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="/DigitalHome/SetupWizard" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold">
+                <i class="ph ph-plus me-1"></i> Yeni Mülk/Kira Ekle
+            </a>
+        </div>
+    </div>
+
+    <!-- SEKMELER (TABS) -->
+    <ul class="nav nav-pills mb-4 p-1 bg-white rounded-pill shadow-sm d-inline-flex border" id="pills-tab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active rounded-pill fw-bold px-4" id="pills-properties-tab" data-bs-toggle="pill" data-bs-target="#pills-properties" type="button" role="tab" aria-controls="pills-properties" aria-selected="true">
+                <i class="ph-fill ph-buildings me-2"></i> Mülklerim
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link rounded-pill fw-bold px-4" id="pills-finance-tab" data-bs-toggle="pill" data-bs-target="#pills-finance" type="button" role="tab" aria-controls="pills-finance" aria-selected="false">
+                <i class="ph-fill ph-chart-line-up me-2"></i> Finansal Ajanda
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="pills-tabContent">
+        <!-- MÜLKLERİM SEKMESİ -->
+        <div class="tab-pane fade show active" id="pills-properties" role="tabpanel" aria-labelledby="pills-properties-tab">
+            @if (!Model.Properties.Any())
+            {
+                <div class="text-center text-muted py-5 bg-light rounded-4 border border-dashed">
+                    <i class="ph-fill ph-buildings" style="font-size: 4rem;"></i>
+                    <h4 class="mt-4 fw-bold">Henüz takip ettiğiniz bir mülk veya kira yok.</h4>
+                    <p class="fs-5">Evinizi veya kiraladığınız mülkü ekleyerek gelir/gider ve belge takibine başlayın.</p>
+                    <a href="/DigitalHome/SetupWizard" class="btn btn-primary rounded-pill mt-3 px-5">İlk Mülkünü Ekle</a>
+                </div>
+            }
+            else
+            {
+                <div class="accordion accordion-flush shadow-sm rounded-4 border overflow-hidden" id="propertyAccordion">
+                    @foreach (var property in Model.Properties)
+                    {
+                        var title = string.IsNullOrEmpty(property.Title) ? "İsimsiz Mülk" : property.Title;
+                        var address = property.Building != null ? $"{property.Building.Name} No: {property.Building.BuildingNumber} - {(property.Building.District?.Name ?? "")}" : "Adres belirtilmemiş";
+                        var isDraft = property.DraftStep > 0;
+                        var isOwner = property.ManagementRole == GMK360.Core.Entities.ManagementRole.Owner;
+
+                        <div class="accordion-item border-0 border-bottom">
+                            <h2 class="accordion-header" id="heading-@property.Id">
+                                <button class="accordion-button collapsed py-4 bg-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-@property.Id" aria-expanded="false" aria-controls="collapse-@property.Id">
+                                    <div class="d-flex align-items-center w-100 pe-3">
+                                        <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 me-3">
+                                            <i class="ph-fill ph-building fs-3"></i>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <h5 class="fw-bold mb-1 text-navy">@title</h5>
+                                            <p class="text-muted small mb-0"><i class="ph-fill ph-map-pin me-1"></i> @address</p>
+                                        </div>
+                                        <div>
+                                            @if (isDraft)
+                                            {
+                                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2"><i class="ph-fill ph-warning me-1"></i> Kurulum Tamamlanmadı</span>
+                                            }
+                                            else if(isOwner)
+                                            {
+                                                <span class="badge bg-success rounded-pill px-3 py-2"><i class="ph-fill ph-house-line me-1"></i> Ev Sahibi</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-info rounded-pill px-3 py-2"><i class="ph-fill ph-keys me-1"></i> Kiracı</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </button>
+                            </h2>
+                            <div id="collapse-@property.Id" class="accordion-collapse collapse bg-light" aria-labelledby="heading-@property.Id" data-bs-parent="#propertyAccordion">
+                                <div class="accordion-body p-4">
+                                    
+                                    @if (isDraft)
+                                    {
+                                        <div class="text-center py-3">
+                                            <p class="text-warning fw-bold mb-3"><i class="ph-fill ph-warning-circle"></i> Bu mülkün kayıt işlemleri yarım kalmış.</p>
+                                            <a href="/DigitalHome/SetupWizard" class="btn btn-warning rounded-pill px-5 fw-bold">
+                                                Kurulumu Tamamla <i class="ph-bold ph-arrow-right ms-2"></i>
+                                            </a>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="row g-4">
+                                            @if (isOwner)
+                                            {
+                                                <!-- KİRACI İŞLEMLERİ AĞACI -->
+                                                <div class="col-md-6">
+                                                    <div class="card border-0 shadow-sm h-100 rounded-4 hover-lift">
+                                                        <div class="card-body p-4">
+                                                            <div class="d-flex align-items-center mb-3">
+                                                                <div class="bg-primary bg-opacity-10 text-primary rounded-3 p-2 me-3">
+                                                                    <i class="ph-fill ph-users fs-3"></i>
+                                                                </div>
+                                                                <h5 class="fw-bold mb-0 text-navy">Kiracı İşlemleri</h5>
+                                                            </div>
+                                                            <p class="text-muted small mb-4">Kiracı bilgileri, kira ödemeleri (ajanda), tahsilatlar ve hukuki ihtar süreçlerini buradan yönetin.</p>
+                                                            
+                                                            <a href="/DigitalHome/Details/@property.Id?focus=tenant" class="btn btn-outline-primary rounded-pill w-100 fw-medium">
+                                                                İşlemlere Git <i class="ph-bold ph-arrow-right ms-1"></i>
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+
+                                            <!-- MÜLK İŞLEMLERİ AĞACI -->
+                                            <div class="col-md-6">
+                                                <div class="card border-0 shadow-sm h-100 rounded-4 hover-lift">
+                                                    <div class="card-body p-4">
+                                                        <div class="d-flex align-items-center mb-3">
+                                                            <div class="bg-navy text-navy rounded-3 p-2 me-3" style="background-color: rgba(26, 35, 126, 0.1);">
+                                                                <i class="ph-fill ph-bank fs-3"></i>
+                                                            </div>
+                                                            <h5 class="fw-bold mb-0 text-navy">Mülk İşlemleri</h5>
+                                                        </div>
+                                                        <p class="text-muted small mb-4">Emlak/Kira vergileri, kurum abonelikleri, bina demirbaş giderleri ve mülk ayarlarına buradan ulaşın.</p>
+                                                        
+                                                        <a href="/DigitalHome/Details/@property.Id?focus=property" class="btn btn-outline-navy rounded-pill w-100 fw-medium border-navy text-navy">
+                                                            İşlemlere Git <i class="ph-bold ph-arrow-right ms-1"></i>
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- FİNANSAL AJANDA SEKMESİ -->
+        <div class="tab-pane fade" id="pills-finance" role="tabpanel" aria-labelledby="pills-finance-tab">
+            
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="fw-bold text-navy mb-0">Bu Ayki Finansal Özetiniz</h4>
+                <a href="/TaxAssistant/Simulator" class="btn btn-dark rounded-pill px-4 shadow-sm fw-bold">
+                    <i class="ph ph-calculator me-1"></i> Yıl Sonu Beyanname Asistanı
+                </a>
+            </div>
+
+            <!-- BİLANÇO KARTLARI -->
+            <div class="row g-4 mb-5">
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm rounded-4 h-100 overflow-hidden bg-success bg-opacity-10 border border-success border-opacity-25">
+                        <div class="card-body p-4 position-relative">
+                            <div class="text-success small fw-bold text-uppercase mb-2">Beklenen Kira (Bu Ay)</div>
+                            <h3 class="fw-bold mb-0 text-success">@Model.FinancialAgenda.TotalExpectedRentThisMonth.ToString("N2") ₺</h3>
+                            <div class="position-absolute opacity-10" style="right: -10px; bottom: -10px;">
+                                <i class="ph-fill ph-arrow-down-left fs-1 text-success" style="font-size: 5rem !important;"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm rounded-4 h-100 overflow-hidden bg-danger bg-opacity-10 border border-danger border-opacity-25">
+                        <div class="card-body p-4 position-relative">
+                            <div class="text-danger small fw-bold text-uppercase mb-2">Toplam Gider (Bu Ay)</div>
+                            <h3 class="fw-bold mb-0 text-danger">@Model.FinancialAgenda.TotalExpensesThisMonth.ToString("N2") ₺</h3>
+                            <div class="position-absolute opacity-10" style="right: -10px; bottom: -10px;">
+                                <i class="ph-fill ph-arrow-up-right fs-1 text-danger" style="font-size: 5rem !important;"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm rounded-4 h-100 overflow-hidden bg-primary bg-opacity-10 border border-primary border-opacity-25">
+                        <div class="card-body p-4 position-relative">
+                            <div class="text-primary small fw-bold text-uppercase mb-2">Net Nakit Akışı</div>
+                            <h3 class="fw-bold mb-0 text-primary">@Model.FinancialAgenda.NetCashFlow.ToString("N2") ₺</h3>
+                            <div class="position-absolute opacity-10" style="right: -10px; bottom: -10px;">
+                                <i class="ph-fill ph-coins fs-1 text-primary" style="font-size: 5rem !important;"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- YAKLAŞANLAR (TIMELINE) -->
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                <div class="card-header bg-white border-bottom pt-4 pb-3 px-4">
+                    <h5 class="fw-bold mb-0"><i class="ph-fill ph-calendar-check text-primary me-2"></i> Önümüzdeki 30 Gün</h5>
+                </div>
+                <div class="card-body p-0">
+                    @if (!Model.FinancialAgenda.UpcomingEvents.Any())
+                    {
+                        <div class="text-center text-muted py-5">
+                            <i class="ph-fill ph-calendar-blank fs-1 mb-2 text-light"></i>
+                            <p class="mb-0">Önümüzdeki 30 gün içinde planlanmış bir etkinlik veya ödeme görünmüyor.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <ul class="list-group list-group-flush">
+                            @foreach (var ev in Model.FinancialAgenda.UpcomingEvents)
+                            {
+                                <li class="list-group-item p-4 border-bottom">
+                                    <div class="d-flex align-items-center">
+                                        <div class="me-4 text-center" style="min-width: 60px;">
+                                            <div class="fs-5 fw-bold text-navy">@ev.Date.ToString("dd")</div>
+                                            <div class="text-muted small text-uppercase">@ev.Date.ToString("MMM")</div>
+                                        </div>
+                                        <div class="rounded-circle p-3 @ev.ColorClass bg-opacity-10 bg-light me-4">
+                                            <i class="ph-fill @ev.IconClass fs-4 @ev.ColorClass"></i>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <h6 class="fw-bold mb-1">@ev.Title</h6>
+                                            <p class="text-muted small mb-0"><i class="ph-fill ph-map-pin me-1"></i> @ev.PropertyName</p>
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="fw-bold fs-5 @ev.ColorClass">
+                                                @(ev.IsIncome ? "+" : "-") @ev.Amount.ToString("N2") ₺
+                                            </div>
+                                            <div class="badge bg-light text-dark border">@ev.StatusText</div>
+                                        </div>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<style>
+    .text-navy { color: #1a237e !important; }
+    .bg-navy { background-color: #1a237e !important; }
+    .border-navy { border-color: #1a237e !important; }
+    
+    .nav-pills .nav-link {
+        color: #6c757d;
+        transition: all 0.3s ease;
+    }
+    .nav-pills .nav-link.active {
+        background-color: #1a237e;
+        color: white;
+        box-shadow: 0 4px 6px rgba(26, 35, 126, 0.2);
+    }
+    .nav-pills .nav-link:hover:not(.active) {
+        background-color: #f8f9fa;
+        color: #1a237e;
+    }
+    
+    .btn-outline-navy:hover { background-color: #1a237e; color: white !important; }
+    .hover-lift { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
+    .hover-lift:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
+    
+    .accordion-button:not(.collapsed) { background-color: #f8f9fa; color: #1a237e; box-shadow: none; }
+    .accordion-button:focus { box-shadow: none; border-color: rgba(0,0,0,0.1); }
+</style>

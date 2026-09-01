@@ -1,0 +1,109 @@
+@model GMK360.Core.Entities.BuildingUnit
+
+@{
+    ViewData["Title"] = "Portal - " + Model.Building?.Name;
+    var announcements = ViewBag.Announcements as List<GMK360.Core.Entities.BuildingAnnouncement> ?? new List<GMK360.Core.Entities.BuildingAnnouncement>();
+    var debts = ViewBag.Debts as List<GMK360.Core.Entities.UnitDebt> ?? new List<GMK360.Core.Entities.UnitDebt>();
+}
+
+<div class="container py-4">
+    <div class="d-flex align-items-center mb-4">
+        <a href="@Url.Action("Index", "ResidentPortal")" class="btn btn-outline-secondary me-3">
+            <i class="bi bi-arrow-left"></i> Geri
+        </a>
+        <h2 class="mb-0">@Model.Building?.Name - Daire @Model.UnitNumber</h2>
+    </div>
+
+    <div class="row">
+        <!-- Announcements & Decisions -->
+        <div class="col-lg-7 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-megaphone me-2"></i>Duyurular ve Kararlar</h5>
+                    <span class="badge bg-light text-primary rounded-pill">@announcements.Count</span>
+                </div>
+                <div class="card-body p-0">
+                    @if (announcements.Any())
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var ann in announcements)
+                            {
+                                <div class="list-group-item p-3">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h6 class="mb-1 fw-bold">@ann.Title</h6>
+                                        <small class="text-muted">@ann.Date.ToString("dd MMM yyyy")</small>
+                                    </div>
+                                    <span class="badge bg-secondary mb-2">@ann.Type</span>
+                                    <p class="mb-1 text-secondary">@ann.Content</p>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-4 text-center text-muted">
+                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                            Henüz bir duyuru veya karar bulunmuyor.
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Financial Status (Debts) -->
+        <div class="col-lg-5 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-wallet2 me-2"></i>Finansal Durum</h5>
+                </div>
+                <div class="card-body p-0">
+                    @if (debts.Any())
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var debt in debts)
+                            {
+                                <div class="list-group-item p-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="mb-0">@debt.BuildingExpense?.Description</h6>
+                                        <span class="fs-5 fw-bold @(debt.IsPaid ? "text-success" : "text-danger")">
+                                            @debt.Amount.ToString("N2") ₺
+                                        </span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <small class="text-muted">Tarih: @debt.BuildingExpense?.Date.ToString("dd.MM.yyyy")</small>
+                                        @if (debt.IsPaid)
+                                        {
+                                            <span class="badge bg-success rounded-pill px-3 py-2">
+                                                <i class="bi bi-check-circle me-1"></i> Ödendi
+                                                <br><small class="fw-normal">(@debt.PaymentDate?.ToString("dd.MM.yyyy"))</small>
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-danger rounded-pill px-3 py-2">
+                                                <i class="bi bi-x-circle me-1"></i> Ödenmedi
+                                            </span>
+                                        }
+                                    </div>
+                                    @if (debt.IsPaid && !string.IsNullOrEmpty(debt.PaidBy))
+                                    {
+                                        <div class="mt-2 text-muted small">
+                                            <i class="bi bi-person me-1"></i> Ödeyen: @debt.PaidBy
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-4 text-center text-muted">
+                            <i class="bi bi-emoji-smile fs-1 d-block mb-2 text-success"></i>
+                            Harika! Herhangi bir borcunuz bulunmuyor.
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

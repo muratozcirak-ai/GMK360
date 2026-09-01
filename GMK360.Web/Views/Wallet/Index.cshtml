@@ -1,0 +1,164 @@
+@model IEnumerable<GMK360.Core.Entities.Identity.UserWalletTransaction>
+@{
+    ViewData["Title"] = "Cüzdanım & Cari Hesap";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container py-5">
+    <div class="row mb-5 align-items-center">
+        <div class="col-md-8">
+            <h1 class="fw-bold mb-2">Cüzdanım</h1>
+            <p class="text-muted">Bakiye yükleyin, ilan vitrin paketi satın alın ve harcamalarınızı takip edin.</p>
+        </div>
+        <div class="col-md-6 text-end">
+            <div class="d-flex gap-3 justify-content-end">
+                <!-- Gerçek Bakiye -->
+                <div class="card bg-primary text-white border-0 shadow-sm flex-fill" style="border-radius: 16px; max-width: 250px;">
+                    <div class="card-body p-4 text-start position-relative overflow-hidden">
+                        <i class="ph ph-wallet position-absolute text-white opacity-25" style="font-size: 6rem; right: -20px; top: -10px;"></i>
+                        <h6 class="text-uppercase mb-1" style="letter-spacing: 1px; font-size: 0.85rem; color: rgba(255,255,255,0.8);">Cüzdan Bakiye</h6>
+                        <h3 class="fw-bold mb-0">@ViewBag.RealBalance.ToString("C2")</h3>
+                    </div>
+                </div>
+
+                <!-- Hediye Bakiye -->
+                <div class="card bg-success text-white border-0 shadow-sm flex-fill" style="border-radius: 16px; max-width: 250px;">
+                    <div class="card-body p-4 text-start position-relative overflow-hidden">
+                        <i class="ph ph-gift position-absolute text-white opacity-25" style="font-size: 6rem; right: -20px; top: -10px;"></i>
+                        <h6 class="text-uppercase mb-1" style="letter-spacing: 1px; font-size: 0.85rem; color: rgba(255,255,255,0.8);">Hediye Bakiye</h6>
+                        <h3 class="fw-bold mb-0">@ViewBag.GiftBalance.ToString("C2")</h3>
+                        @if(ViewBag.ActiveGiftsCount > 0)
+                        {
+                            <small class="d-block mt-2" style="font-size: 0.75rem;">@ViewBag.ActiveGiftsCount Aktif Hediye</small>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Bakiye Yükleme Kartı -->
+        <div class="col-lg-4 mb-4">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 16px;">
+                <div class="card-body p-4">
+                    <h4 class="fw-bold mb-4">Bakiye Yükle</h4>
+                    <form asp-action="TopUp" method="post">
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">Yüklemek İstediğiniz Tutar (₺)</label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-white"><i class="ph ph-currency-try"></i></span>
+                                <input type="number" name="amount" class="form-control" placeholder="2500" min="10" step="10" required />
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">Ödeme Yöntemi</label>
+                            <div class="border rounded p-3 d-flex align-items-center gap-3 bg-light">
+                                <i class="ph ph-credit-card fs-2 text-primary"></i>
+                                <div>
+                                    <div class="fw-bold">Kredi / Banka Kartı</div>
+                                    <div class="text-muted small">Anında bakiyenize yansır</div>
+                                </div>
+                                <div class="ms-auto text-success">
+                                    <i class="ph ph-check-circle-fill fs-4"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg w-100" style="border-radius: 12px;">
+                            <i class="ph ph-arrow-circle-up me-2"></i> Güvenle Yükle
+                        </button>
+                    </form>
+                </div>
+        </div>
+
+        <!-- Para Çekme Kartı -->
+        <div class="col-lg-4 mb-4">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 16px;">
+                <div class="card-body p-4">
+                    <h4 class="fw-bold mb-4 text-primary">Para Çek (Nakit Talebi)</h4>
+                    <p class="text-muted small mb-4">
+                        Minimum para çekme limiti: <strong>@(((decimal)ViewBag.MinimumWithdrawalAmount).ToString("C2"))</strong>.
+                        Nakit taleplerinizde bireysel kullanıcılar için yasal vergi (stopaj) kesintisi uygulanabilir.
+                    </p>
+                    <form asp-action="RequestWithdrawal" method="post">
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">Çekmek İstediğiniz Tutar (₺)</label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-light text-primary"><i class="ph ph-bank"></i></span>
+                                <input type="number" name="amount" class="form-control" placeholder="10000" min="@ViewBag.MinimumWithdrawalAmount" step="10" required />
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-outline-primary btn-lg w-100" style="border-radius: 12px;">
+                            <i class="ph ph-arrow-circle-down me-2"></i> Talep Oluştur
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- İşlem Geçmişi (Cari Ekstre) -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm" style="border-radius: 16px;">
+                <div class="card-header bg-white border-0 pt-4 pb-0 px-4">
+                    <h4 class="fw-bold mb-0">İşlem Geçmişi (Cari Ekstre)</h4>
+                </div>
+                <div class="card-body p-4">
+                    @if (!Model.Any())
+                    {
+                        <div class="text-center py-5">
+                            <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 80px; height: 80px;">
+                                <i class="ph ph-receipt fs-1 text-muted"></i>
+                            </div>
+                            <h5 class="fw-bold">Henüz işlem bulunmuyor</h5>
+                            <p class="text-muted">Cüzdanınıza bakiye yüklediğinizde veya harcama yaptığınızda burada listelenecektir.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th class="text-muted small text-uppercase">Tarih</th>
+                                        <th class="text-muted small text-uppercase">İşlem Tipi</th>
+                                        <th class="text-muted small text-uppercase">Açıklama</th>
+                                        <th class="text-muted small text-uppercase text-end">Tutar</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in Model)
+                                    {
+                                        <tr>
+                                            <td style="white-space: nowrap;">@item.CreatedAt.ToString("dd MMM yyyy, HH:mm")</td>
+                                            <td>
+                                                @if (item.TransactionType == "TopUp")
+                                                {
+                                                    <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1"><i class="ph ph-arrow-down me-1"></i>Yükleme</span>
+                                                }
+                                                else if (item.TransactionType == "ReferralBonus")
+                                                {
+                                                    <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 px-2 py-1"><i class="ph ph-gift me-1"></i>Ödül</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 px-2 py-1"><i class="ph ph-arrow-up me-1"></i>Harcama</span>
+                                                }
+                                            </td>
+                                            <td class="text-muted">@item.Description</td>
+                                            <td class="text-end fw-bold @(item.Amount > 0 ? "text-success" : "text-danger")">
+                                                @(item.Amount > 0 ? "+" : "")@item.Amount.ToString("C2")
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
