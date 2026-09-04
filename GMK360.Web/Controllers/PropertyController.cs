@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using GMK360.Core.Interfaces;
 using GMK360.Core.Entities;
@@ -348,7 +348,7 @@ namespace GMK360.Web.Controllers
                     .ToListAsync();
             }
 
-            return View(property);
+            return View("Detail", property);
         }
 
         public async Task<IActionResult> DetailPartial(int id)

@@ -20,17 +20,17 @@ namespace GMK360.Web.Services.AI
         public async Task<AiSupportResult> AnalyzeMessageAsync(string messageText)
         {
             // PROMPT MİMARİSİ
-            string systemPrompt = @"
-Sen GMK360 gayrimenkul sisteminin destek asistanısın. Gelen şu mesajı oku ve sadece şu 2 kategoriden birini JSON formatında dön:
-1: 'AutoReply' (Şifre sıfırlama, sistemin nasıl kullanıldığı, aidatın nereden ödendiği gibi basit sorular. Bu durumda uygun bir cevap metni de üret.)
-2: 'HumanEscalation' (Mahkeme, tahliye, karmaşık vergi itirazları, şikayetler. Bu durumda sadece 'Uzmana aktarıldı' mesajı dön.)
-
-Beklenen JSON Formatı:
-{
-  ""Intent"": ""AutoReply"", // veya ""HumanEscalation""
-  ""AiGeneratedResponse"": ""Cevabınız..."" 
-}
-";
+            // string systemPrompt = @"
+            // Sen GMK360 gayrimenkul sisteminin destek asistanısın. Gelen şu mesajı oku ve sadece şu 2 kategoriden birini JSON formatında dön:
+            // 1: 'AutoReply' (Şifre sıfırlama, sistemin nasıl kullanıldığı, aidatın nereden ödendiği gibi basit sorular. Bu durumda uygun bir cevap metni de üret.)
+            // 2: 'HumanEscalation' (Mahkeme, tahliye, karmaşık vergi itirazları, şikayetler. Bu durumda sadece 'Uzmana aktarıldı' mesajı dön.)
+            // 
+            // Beklenen JSON Formatı:
+            // {
+            //   ""Intent"": ""AutoReply"", // veya ""HumanEscalation""
+            //   ""AiGeneratedResponse"": ""Cevabınız..."" 
+            // }
+            // ";
             try
             {
                 // TODO: Gerçek Gemini API Çağrısı Burada Yapılacak

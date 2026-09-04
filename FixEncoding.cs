@@ -6,25 +6,25 @@ class Program
 {
     static void Main()
     {
-        string[] dirs = { "GMK360.Web/Views/Shared", "GMK360.Web/Views/Account" };
-        foreach (var dir in dirs)
-        {
-            if (!Directory.Exists(dir)) continue;
-            foreach (var file in Directory.GetFiles(dir, "*.cshtml"))
-            {
-                string content = File.ReadAllText(file, Encoding.Default);
-                if (content.Contains("ö") || content.Contains("ı") || content.Contains("ş") || content.Contains("ü") || content.Contains("ç") || content.Contains("ğ") || content.Contains("Ç"))
-                {
-                    // This means the file was saved as ANSI but contains UTF8 byte sequences as ANSI chars.
-                    // Let's read the raw ANSI bytes and parse them as UTF8!
-                    byte[] bytes = Encoding.Default.GetBytes(content);
-                    string fixedContent = Encoding.UTF8.GetString(bytes);
-                    
-                    // After fixing, save back as UTF8 (without BOM)
-                    File.WriteAllText(file, fixedContent, new UTF8Encoding(false));
-                    Console.WriteLine("Fixed " + file);
-                }
-            }
-        }
+        string path = @"c:\Users\murat\source\repos\GMK360\GMK360.Web\Views\ConstructionProject\ManageBlock.cshtml";
+        string text = File.ReadAllText(path, Encoding.UTF8);
+
+        text = text.Replace("BrÃ¼t", "Brüt");
+        text = text.Replace("mÂ²", "m²");
+        text = text.Replace("Ã–rn:", "Örn:");
+        text = text.Replace("GÃ¼ney", "Güney");
+        text = text.Replace("Ã–zellikl", "Özellikl");
+        text = text.Replace("DÃ¼zenle", "Düzenle");
+        text = text.Replace("BatÄ±", "Batı");
+        text = text.Replace("Ã–zellikler", "Özellikler");
+        text = text.Replace("AsansÃ¶r", "Asansör");
+        text = text.Replace("YÃ¼k", "Yük");
+        text = text.Replace("AsansÃ¶rÃ¼", "Asansörü");
+        text = text.Replace("Ã‡ift", "Çift");
+        text = text.Replace("AÃ§Ä±klama", "Açıklama");
+        text = text.Replace("AdÄ±", "Adı");
+        text = text.Replace("BaÄŸÄ±msÄ±z", "Bağımsız");
+
+        File.WriteAllText(path, text, new UTF8Encoding(true)); // Save with BOM
     }
 }

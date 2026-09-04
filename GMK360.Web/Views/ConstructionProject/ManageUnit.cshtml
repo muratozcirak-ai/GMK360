@@ -1,0 +1,130 @@
+﻿@model GMK360.Core.Entities.BuildingUnit
+
+@{
+    ViewData["Title"] = Model.DoorNumber + " - İç Alan Yönetimi";
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="ms-3 me-3 flex-shrink-0">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a asp-action="Manage" asp-route-id="@Model.Building.ConstructionProjectId">Şantiye</a></li>
+                    <li class="breadcrumb-item"><a asp-action="ManageBlock" asp-route-id="@Model.BuildingId">@Model.Building.BlockName</a></li>
+                    <li class="breadcrumb-item active">@Model.DoorNumber</li>
+                </ol>
+            </nav>
+            <h3 class="fw-bold text-navy mb-0"><i class="bi bi-door-open text-primary me-2"></i>@Model.DoorNumber - İç Alan Yönetimi</h3>
+            <p class="text-muted small">@Model.FloorName | @Model.RoomLayout | Müşteri: @(Model.OwnerName ?? "Sahipsiz")</p>
+        </div>
+        <a asp-action="ManageBlock" asp-route-id="@Model.BuildingId" class="btn btn-outline-secondary rounded-pill px-4">
+            <i class="bi bi-arrow-left me-2"></i>Bloğa Dön
+        </a>
+    </div>
+
+    <div class="row">
+        <!-- Sol Taraf: Alan Ekleme Sihirbazı -->
+        <div class="col-md-3 mb-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-0 pt-4 pb-0">
+                    <h5 class="fw-bold mb-0 text-primary"><i class="bi bi-plus-square-dotted me-2"></i>Yeni Alan Ekle</h5>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-4">Daire içerisindeki odaları (Örn: Salon, Mutfak, Banyo) buraya tanımlayın.</p>
+                    
+                    <form asp-action="AddUnitSpace" method="post">
+                        <input type="hidden" name="unitId" value="@Model.Id" />
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Oda Adı</label>
+                            <input type="text" name="name" class="form-control" placeholder="Örn: Ebeveyn Banyosu" required />
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Kullanım Tipi</label>
+                            <select name="spaceType" class="form-select">
+                                <option value="Yaşam Alanı">Yaşam Alanı (Oda/Salon)</option>
+                                <option value="Islak Hacim">Islak Hacim (Banyo/Wc)</option>
+                                <option value="Mutfak">Mutfak</option>
+                                <option value="Sirkülasyon">Sirkülasyon (Koridor/Antre)</option>
+                                <option value="Balkon">Balkon / Teras</option>
+                                <option value="Depolama">Depolama (Kiler/Giyinme)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="form-label fw-bold small">Metrekare (m2) - Opsiyonel</label>
+                            <input type="number" step="0.01" name="squareMeters" class="form-control" placeholder="Örn: 15.5" />
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary w-100 rounded-pill">
+                            <i class="bi bi-plus-circle me-1"></i> Alanı Ekle
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sağ Taraf: Eklenen Alanlar (Akordiyon) -->
+        <div class="col-md-9">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-header bg-white border-0 pt-4 pb-0 row align-items-center">
+                    <div class="col-auto"><h5 class="fw-bold mb-0"><i class="bi bi-diagram-3 me-2 text-info"></i>Daire İç Planı</h5></div>
+                    <div class="col-auto text-end"><span class="badge bg-light text-dark border">Toplam: @Model.Spaces.Count() Alan</span>
+                </div>
+                <div class="card-body">
+                    @if (Model.Spaces.Any())
+                    {
+                        <div class="accordion" id="spacesAccordion">
+                            @foreach (var space in Model.Spaces.OrderBy(s => s.Id))
+                            {
+                                var collapseId = "collapseSpace_" + space.Id;
+                                var headingId = "headingSpace_" + space.Id;
+                                
+                                <div class="accordion-item border mb-2 rounded-3 overflow-hidden">
+                                    <h2 class="accordion-header" id="@headingId">
+                                        <button class="accordion-button bg-light fw-bold collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId" aria-expanded="false" aria-controls="@collapseId""><span class="w-100 text-truncate fw-bold"><i class="bi bi-bounding-box-circles me-2 text-secondary"></i> @space.Name <small class="text-muted fw-normal ms-2">(@space.Type @if(space.SquareMeters.HasValue){<text>- @space.SquareMeters m²</text>})</small></span></button>
+                                    </h2>
+                                    <div id="@collapseId" class="accordion-collapse collapse" aria-labelledby="@headingId" data-bs-parent="#spacesAccordion">
+                                        <div class="accordion-body bg-white">
+                                            <div class="row">
+                                                <div class="col-md-8 border-end">
+                                                    <h6 class="fw-bold text-muted mb-3"><i class="bi bi-bricks me-2"></i>Oda İçi Malzemeler & Detaylar</h6>
+                                                    <div class="alert alert-warning py-2 mb-0 border-0 rounded-3">
+                                                        <i class="bi bi-info-circle me-2"></i> <em>Malzeme seçim ve atama özelliği geliştirme aşamasındadır. Yakında buraya seramik, dolap, parke vb. seçimi eklenecektir.</em>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4 text-center">
+                                                    <h6 class="fw-bold text-muted mb-3"><i class="bi bi-image me-2"></i>Oda Görseli / Planı</h6>
+                                                    @if (!string.IsNullOrEmpty(space.PlanImagePath))
+                                                    {
+                                                        <img src="@space.PlanImagePath" class="img-fluid rounded-3 mb-2" alt="@space.Name Planı" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="bg-light rounded-3 d-flex align-items-center justify-content-center mb-2" style="height: 100px; border: 2px dashed #ddd;">
+                                                            <span class="text-muted small">Görsel Yok</span>
+                                                        </div>
+                                                    }
+                                                    <button class="btn btn-sm btn-outline-primary w-100 mt-2"><i class="bi bi-upload me-1"></i> Resim Yükle</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <i class="bi bi-vector-pen text-muted mb-3" style="font-size: 3rem;"></i>
+                            <h5>Bu daireye ait hiçbir oda/alan tanımlanmamış.</h5>
+                            <p class="text-muted">Lütfen sol taraftaki formu kullanarak Mutfak, Banyo, Salon gibi odaları tanımlamaya başlayın.</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

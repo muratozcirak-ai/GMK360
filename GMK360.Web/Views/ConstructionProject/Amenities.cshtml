@@ -1,0 +1,303 @@
+﻿@model GMK360.Core.Entities.Construction.ConstructionProject
+
+@{
+    ViewData["Title"] = "Sosyal Donatılar ve Dış Alanlar";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-5">
+    <div>
+        <h3 class="fw-bolder text-dark mb-1">Sosyal Donatılar ve Dış Alanlar</h3>
+        <span class="text-muted fw-bold fs-6">@Model.Name - @Model.Amenities.Count() Alan Bulunuyor</span>
+    </div>
+    <div>
+        <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-secondary rounded-pill me-2">
+            <i class="bi bi-arrow-left"></i> Projeye Dön
+        </a>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show rounded-3" role="alert">
+        <i class="bi bi-check-circle me-2"></i> @TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+
+
+<div class="card shadow-sm rounded-4 border-0 mb-5">
+    <div class="card-body p-5">
+        <div class="row g-5">
+            <!-- Sol: Toplam Arazi Girişi -->
+            <div class="col-md-5 border-end pe-md-5">
+                <h5 class="fw-bold mb-4"><i class="bi bi-aspect-ratio text-primary me-2"></i>Genel Arazi Bilgisi</h5>
+                <form asp-action="UpdateProjectLandArea" method="post">
+                    <input type="hidden" name="projectId" value="@Model.Id" />
+                    <input type="hidden" name="landscapeArea" value="" /> <!-- Removed landscape area -->
+                    
+                    <div class="mb-4">
+                        <label class="form-label fw-bold text-muted">Proje Toplam Arazi Alanı (m²)</label>
+                        <div class="input-group input-group-solid">
+                            <input type="number" step="0.1" name="totalLandArea" class="form-control form-control-lg fw-bolder text-dark" value="@Model.TotalLandArea" placeholder="Örn: 2500" />
+                            <span class="input-group-text bg-light">m²</span>
+                        </div>
+                        <div class="form-text">Tapuda geçen toplam arsa büyüklüğü.</div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary rounded-pill w-100 fw-bold"><i class="bi bi-check2"></i> Araziyi Kaydet</button>
+                </form>
+            </div>
+            
+            <!-- Sağ: Matematik ve Bloklar -->
+            <div class="col-md-7 ps-md-5">
+                <h5 class="fw-bold mb-4"><i class="bi bi-calculator text-success me-2"></i>Arazi Dağılımı ve Oto-Kontrol</h5>
+                
+                @{
+                    double totalLand = Model.TotalLandArea ?? 0;
+                    double totalBlocksFootprint = Model.Blocks?.Sum(b => b.BaseArea ?? 0) ?? 0;
+                    double totalAmenities = Model.Amenities?.Sum(a => a.SquareMeters ?? 0) ?? 0;
+                    double remainingSpace = totalLand - totalBlocksFootprint - totalAmenities;
+                    
+                    // Progress bar math
+                    double blocksPercent = totalLand > 0 ? (totalBlocksFootprint / totalLand) * 100 : 0;
+                    double amenitiesPercent = totalLand > 0 ? (totalAmenities / totalLand) * 100 : 0;
+                }
+                
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-bold text-muted">Blokların Toplam Taban Oturumu:</span>
+                    <span class="fw-bolder fs-5 text-dark">@totalBlocksFootprint m²</span>
+                </div>
+                <!-- Blok Detayları Listesi -->
+                @if(Model.Blocks != null && Model.Blocks.Any())
+                {
+                    <div class="bg-light rounded p-3 mb-3">
+                        @foreach(var block in Model.Blocks)
+                        {
+                            <div class="d-flex justify-content-between text-muted small mb-1">
+                                <span><i class="bi bi-building me-1"></i> @block.Name</span>
+                                <span>@(block.BaseArea.HasValue ? block.BaseArea.Value + " m²" : "Belirtilmedi (Lütfen Blok ayarlarından girin)")</span>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-bold text-muted">Eklenen Dış Alanlar (Kamelya, Park vb):</span>
+                    <span class="fw-bolder fs-5 text-dark">@totalAmenities m²</span>
+                </div>
+                
+                <hr />
+                
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="fw-bolder fs-4">Kalan Boş Alan (Net):</span>
+                    <span class="fw-bolder fs-3 @(remainingSpace < 0 ? "text-danger" : "text-success")">@remainingSpace m²</span>
+                </div>
+                
+                @if(totalLand > 0)
+                {
+                    <div class="progress h-8px rounded-pill">
+                        <div class="progress-bar bg-primary" style="width: @blocksPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%"></div>
+                        <div class="progress-bar bg-warning" style="width: @amenitiesPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%"></div>
+                    </div>
+                    <div class="d-flex mt-2 small text-muted justify-content-between">
+                        <span><i class="bi bi-circle-fill text-primary"></i> Binalar</span>
+                        <span><i class="bi bi-circle-fill text-warning"></i> Donatılar</span>
+                        <span><i class="bi bi-circle-fill text-light"></i> Boş</span>
+                    </div>
+                }
+                
+                @if(remainingSpace < 0)
+                {
+                    <div class="alert alert-danger mt-3 mb-0 py-2">
+                        <i class="bi bi-exclamation-triangle me-2"></i> <strong>Uyarı!</strong> Eklediğiniz binaların ve donatıların toplam alanı, genel arazi alanını aşıyor. Lütfen metrekareleri kontrol edin.
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+<div class="row g-5">
+    <!-- Alan Ekleme Formu -->
+    <div class="col-md-4">
+        <div class="card shadow-sm rounded-4 border-0">
+            <div class="card-header bg-white border-0 pt-5 pb-0">
+                <h5 class="fw-bold mb-0 text-primary"><i class="bi bi-plus-circle me-2"></i> Yeni Alan Ekle</h5>
+                <div class="text-muted small mt-2">Peyzaj, açık otopark, havuz vb. alanları ekleyin.</div>
+            </div>
+            <div class="card-body pt-4">
+                <form asp-action="AddAmenity" method="post">
+                    <input type="hidden" name="projectId" value="@Model.Id" />
+                    
+                    <div class="mb-4">
+                        <label class="form-label fw-bold fs-7">Alan Adı (Örn: Çocuk Parkı)</label>
+                        <input type="text" name="name" class="form-control form-control-solid rounded-3" required />
+                    </div>
+
+                    <input type="hidden" name="type" value="Dış Alan" />
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold fs-7">Metrekare (m²) - Opsiyonel</label>
+                        <input type="number" step="0.1" name="squareMeters" class="form-control form-control-solid rounded-3" />
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold fs-7">Kısa Açıklama - Opsiyonel</label>
+                        <textarea name="description" class="form-control form-control-solid rounded-3" rows="2"></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 rounded-pill shadow-sm">
+                        <i class="bi bi-plus"></i> Alana Ekle
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mevcut Alanlar -->
+    <div class="col-md-8">
+        <div class="card shadow-sm rounded-4 border-0 h-100">
+            <div class="card-header bg-white border-0 pt-5 pb-0">
+                <h5 class="fw-bold mb-0"><i class="bi bi-tree me-2 text-success"></i> Dış Alan Listesi</h5>
+            </div>
+            <div class="card-body">
+                @if (Model.Amenities.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-row-dashed table-row-gray-300 align-middle gs-0 gy-4">
+                            <thead>
+                                <tr class="fw-bolder text-muted">
+                                    <th class="min-w-150px">Alan Adı</th>
+                                    
+                                    <th class="min-w-120px text-center">Büyüklük</th>
+                                    <th class="min-w-100px text-center">Durum</th>
+                                    <th class="text-end min-w-100px">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in Model.Amenities.OrderBy(a => a.Type).ThenBy(a => a.Name))
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="symbol symbol-45px me-5">
+                                                    <span class="symbol-label bg-light-success text-success fw-bold fs-6">
+                                                        <i class="bi bi-geo-alt"></i>
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-start flex-column">
+                                                    <span class="text-dark fw-bolder fs-6">@item.Name</span>
+                                                    @if(!string.IsNullOrEmpty(item.Description))
+                                                    {
+                                                        <span class="text-muted fw-bold text-muted d-block fs-7">@item.Description</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </td>
+                                        
+                                        <td class="text-center">
+                                            @if(item.SquareMeters.HasValue)
+                                            {
+                                                <span class="text-dark fw-bold d-block fs-6">@item.SquareMeters m²</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted d-block fs-7">-</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if(item.IsCompleted)
+                                            {
+                                                <span class="badge badge-light-success border border-success">Tamamlandı</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-light-warning border border-warning">Planlandı</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="d-flex justify-content-end align-items-center">
+                                                <form asp-action="ToggleAmenityStatus" method="post" class="me-2">
+                                                    <input type="hidden" name="amenityId" value="@item.Id" />
+                                                    <input type="hidden" name="projectId" value="@Model.Id" />
+                                                    <button type="submit" class="btn btn-icon btn-light-@(item.IsCompleted ? "warning" : "success") btn-sm" title="@(item.IsCompleted ? "Planlandı Yap" : "Tamamlandı Yap")">
+                                                        <i class="bi bi-@(item.IsCompleted ? "arrow-counterclockwise" : "check2-all")"></i>
+                                                    </button>
+                                                </form>
+                                                <button type="button" class="btn btn-icon btn-light-primary btn-sm me-2" onclick="openEditModal(@item.Id, '@item.Name', '@item.SquareMeters', '@item.Description')">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                <form asp-action="DeleteAmenity" method="post" onsubmit="return confirm('Bu açık alanı silmek istediğinize emin misiniz?');">
+                                                    <input type="hidden" name="amenityId" value="@item.Id" />
+                                                    <input type="hidden" name="projectId" value="@Model.Id" />
+                                                    <button type="submit" class="btn btn-icon btn-light-danger btn-sm">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-secondary text-center mt-5">
+                        <i class="bi bi-info-circle fs-3 d-block mb-2"></i>
+                        Henüz hiç sosyal donatı / açık alan eklenmemiş. Soldaki formu kullanarak ekleyebilirsiniz.
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editAmenityModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Alanı Düzenle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form asp-action="EditAmenity" method="post">
+                    <input type="hidden" name="projectId" value="@Model.Id" />
+                    <input type="hidden" name="amenityId" id="editAmenityId" />
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Alan Adı</label>
+                        <input type="text" name="name" id="editAmenityName" class="form-control" required />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Metrekare (m²)</label>
+                        <input type="number" step="0.1" name="squareMeters" id="editAmenitySq" class="form-control" />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Kısa Açıklama</label>
+                        <textarea name="description" id="editAmenityDesc" class="form-control" rows="2"></textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100 rounded-pill">Kaydet</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openEditModal(id, name, sq, desc) {
+            document.getElementById('editAmenityId').value = id;
+            document.getElementById('editAmenityName').value = name;
+            document.getElementById('editAmenitySq').value = sq;
+            document.getElementById('editAmenityDesc').value = desc;
+            var modal = new bootstrap.Modal(document.getElementById('editAmenityModal'));
+            modal.show();
+        }
+    </script>
+}

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -259,7 +259,7 @@ namespace GMK360.Web.Controllers
 
                 // --- PRO PAKET KONTROLÜ (İkinci Bina Kısıtlaması) ---
                 bool isPro = await _context.UserSubscriptions.AnyAsync(s => s.UserId == user.Id && s.IsActive && (s.EndDate == null || s.EndDate >= DateTime.UtcNow));
-                var userBuildingIds = await _context.Properties.Where(p => p.UserId == user.Id && p.BuildingId != null).Select(p => p.BuildingId).Distinct().ToListAsync();
+                var userBuildingIds = await _context.Properties.Where(p => p.UserId == user.Id).Select(p => p.BuildingId).Distinct().ToListAsync();
 
                 if (!isPro && userBuildingIds.Count > 0)
                 {

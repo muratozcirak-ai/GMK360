@@ -25,7 +25,18 @@ namespace GMK360.Core.Entities.Construction
         public virtual ICollection<ProjectMaterialCatalog> MaterialCatalogs { get; set; }
         public virtual ICollection<ConstructionTask> Tasks { get; set; }
         
+        // Arsa ve Peyzaj Bilgileri
+        public double? TotalLandArea { get; set; } // Toplam Arsa Alanı (m2)
+        public double? LandscapeArea { get; set; } // Peyzaj Alanı (m2)
+
         // Projeye ait bloklar / binalar
         public virtual ICollection<Building> Blocks { get; set; }
+        public virtual ICollection<UnitTemplate> UnitTemplates { get; set; } = new List<UnitTemplate>();
+        
+        // Açık Alanlar ve Sosyal Donatılar
+        public virtual ICollection<ProjectAmenity> Amenities { get; set; } = new List<ProjectAmenity>();
+
+        // Proje Çalışanları (Şantiye İzolasyonu için)
+        public virtual ICollection<ProjectAssignment> Assignments { get; set; } = new List<ProjectAssignment>();
     }
 }

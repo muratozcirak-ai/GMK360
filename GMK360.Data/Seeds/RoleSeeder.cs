@@ -12,7 +12,7 @@ namespace GMK360.Data.Seeds
         {
             var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
 
-            string[] roleNames = { "Bireysel", "Kurumsal", "Danışman", "Admin" };
+            string[] roleNames = { "Bireysel", "Kurumsal", "Danışman", "Admin", "SantiyeCalisani", "Taseron", "HakSahibi" };
 
             foreach (var roleName in roleNames)
             {

@@ -1,16 +1,33 @@
-@model GMK360.Core.Entities.Building
+﻿@model GMK360.Core.Entities.Building
 
 @{
     ViewData["Title"] = "Blok Yönetimi: " + Model.BlockName;
     Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
     
-    var unitsByFloor = Model.Units?
-        .GroupBy(u => u.FloorLevel)
-        .OrderByDescending(g => g.Key)
-        .ToList();
-        
+    
+    var allUnits = Model.Units ?? new List<GMK360.Core.Entities.BuildingUnit>();
+    
+    // Determine all possible floor levels (Expected + Actual)
+    var floorLevels = new HashSet<int>();
+    
+    // 1. Add expected floors from Building properties
+    int totalF = Model.TotalFloors ?? 0;
+    int baseF = Model.BasementFloors;
+    
+    if (Model.HasRoof) floorLevels.Add(totalF + 1);
+    for (int i = totalF; i >= 1; i--) floorLevels.Add(i);
+    if (Model.HasGroundFloor) floorLevels.Add(0);
+    for (int i = 1; i <= baseF; i++) floorLevels.Add(-i);
+    
+    // 2. Add any floors that actually have units (in case they added one outside expected bounds)
+    foreach(var u in allUnits) {
+        floorLevels.Add(u.FloorLevel);
+    }
+    
+    var sortedFloors = floorLevels.OrderByDescending(f => f).ToList();
+    
     var blockImages = ViewBag.BlockImages as List<GMK360.Core.Entities.DmsDocument> ?? new List<GMK360.Core.Entities.DmsDocument>();
-    var floorPlans = ViewBag.FloorPlans as List<GMK360.Core.Entities.DmsDocument> ?? new List<GMK360.Core.Entities.DmsDocument>();
+    var floorPlanıs = ViewBag.FloorPlanıs as List<GMK360.Core.Entities.DmsDocument> ?? new List<GMK360.Core.Entities.DmsDocument>();
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -33,56 +50,56 @@
 
 <div class="row g-4">
     <div class="col-md-4">
-        <!-- Otomatik Üretim Sihirbazı -->
+        <!-- Blok Özellikleri -->
         <div class="card border-0 shadow-sm rounded-4 mb-4">
             <div class="card-body p-4">
-                <h5 class="fw-bold border-bottom pb-2 mb-3"><i class="bi bi-magic text-warning me-2"></i>Hızlı Kat/Daire Üretici</h5>
-                <p class="text-muted small">Bu bloğun mimari yapısını tek tıkla oluşturabilirsiniz. Sistem kat sayısına göre daireleri otomatik sıralayacaktır.</p>
-                
-                <form asp-action="GenerateUnits" method="post">
-                    <input type="hidden" name="buildingId" value="@Model.Id" />
-                    
-                    <div class="row">
-                        <div class="col-6 mb-3">
-                            <label class="form-label fw-bold small">Normal Kat Sayısı</label>
-                            <input type="number" name="normalFloors" class="form-control" value="@(Model.TotalFloors ?? 5)" required min="0" />
-                        </div>
-                        <div class="col-6 mb-3">
-                            <label class="form-label fw-bold small">Bodrum Kat Sayısı</label>
-                            <input type="number" name="basementFloors" class="form-control" value="@Model.BasementFloors" required min="0" />
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" name="hasGroundFloor" value="true" id="hasGroundCheck" @(Model.HasGroundFloor ? "checked" : "")>
-                            <label class="form-check-label fw-bold small" for="hasGroundCheck">Zemin Kat Var</label>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small">Her Kattaki Daire/Dükkan Sayısı</label>
-                        <input type="number" name="unitsPerFloor" class="form-control" value="2" required min="1" />
-                    </div>
-                    
-                    <div class="mb-4">
-                        <label class="form-label fw-bold small">Standart Daire Planı</label>
-                        <select name="roomLayout" class="form-select">
-                            <option value="1+1">1+1</option>
-                            <option value="2+1">2+1</option>
-                            <option value="3+1" selected>3+1</option>
-                            <option value="4+1">4+1</option>
-                            <option value="Dükkan">Dükkan / Ticari</option>
-                        </select>
-                    </div>
-                    
-                    <button type="submit" class="btn btn-primary w-100 rounded-pill shadow-sm" onclick="return confirm('Bağımsız bölümler otomatik oluşturulacak, devam etmek istiyor musunuz?');">
-                        <i class="bi bi-gear-fill me-2"></i> Mimariyi Üret
+                <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                    <h5 class="fw-bold mb-0"><i class="bi bi-info-square text-info me-2"></i>Blok Özellikleri</h5>
+                    <button class="btn btn-sm btn-icon btn-light-primary rounded-circle" data-bs-toggle="modal" data-bs-target="#editBlockDetailsModal" title="Düzenle">
+                        <i class="bi bi-pencil"></i>
                     </button>
-                </form>
+                </div>
+                <div class="mb-3">
+                    <span class="text-muted small d-block">Taban Oturumu</span>
+                    <span class="fw-bold text-dark">@(Model.BaseArea.HasValue ? Model.BaseArea.Value + " m²" : "Belirtilmedi")</span>
+                </div>
+                <div class="mb-3">
+                    <span class="text-muted small d-block">Otopark</span>
+                    <span class="fw-bold text-dark">@(string.IsNullOrEmpty(Model.ParkingType) ? "Belirtilmedi" : Model.ParkingType)</span>
+                </div>
+                <div class="mb-3">
+                    <span class="text-muted small d-block">Asansör</span>
+                    <span class="fw-bold text-dark">@(Model.ElevatorCount.HasValue ? Model.ElevatorCount + " Adet" : "Belirtilmedi")</span>
+                </div>
+                <div class="mb-3">
+                    <span class="text-muted small d-block">Mantolama / Yalıtım</span>
+                    <span class="fw-bold text-dark">@(string.IsNullOrEmpty(Model.InsulationType) ? "Belirtilmedi" : Model.InsulationType)</span>
+                </div>
+
+                <div class="mb-3">
+                    <span class="text-muted small d-block mb-1">Diğer Donanımlar ve Notlar</span>
+                    @if (!string.IsNullOrEmpty(Model.TechnicalFeatures))
+                    {
+                        var features = Model.TechnicalFeatures.Split(new[] { "," }, StringSplitOptions.RemoveEmptyEntries);
+                        <ul class="list-unstyled mb-0">
+                            @foreach (var f in features)
+                            {
+                                <li class="text-dark small mb-1"><i class="bi bi-check2 text-success me-2"></i>@f.Trim()</li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <span class="text-dark small">Belirtilmedi</span>
+                    }
+                </div>
+                <div>
+                    <span class="text-muted small d-block">Açıklama</span>
+                    <span class="text-dark small">@(string.IsNullOrEmpty(Model.Description) ? "Belirtilmedi" : Model.Description)</span>
+                </div>
             </div>
         </div>
-        
+
         <!-- Mimari Dış Cephe Çizimler Paneli -->
         <div class="card border-0 shadow-sm rounded-4 mb-4">
             <div class="card-header bg-white border-bottom p-4 d-flex justify-content-between align-items-center">
@@ -130,51 +147,97 @@
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-4">
-                    <h5 class="fw-bold mb-0"><i class="bi bi-diagram-3 text-navy me-2"></i>Mimari Ağaç ve Bağımsız Bölümler</h5>
-                    <span class="badge bg-primary rounded-pill px-3 py-2">Toplam @(Model.Units?.Count ?? 0) Adet</span>
+                    <h5 class="fw-bold mb-0"><i class="bi bi-diagram-3 text-navy me-2"></i>Bağımsız Bölümler ve Toplu Düzenleme</h5>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-success rounded-pill px-3 me-2 btn-add-global" data-bs-toggle="modal" data-bs-target="#editBlockSkeletonModal">
+                            <i class="bi bi-building-up me-1"></i> Bina Ä°skeletini GÃ¼ncelle (Kat Ekle/Ã‡Ä±kar)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 me-2" data-bs-toggle="modal" data-bs-target="#bulkEditUnitsModal">
+                            <i class="bi bi-pencil-square me-1"></i> Seçili Daireleri Toplu Düzenle
+                        </button>
+                        
+                    </div>
                 </div>
                 
-                @if (unitsByFloor != null && unitsByFloor.Any())
+                @if (sortedFloors.Any())
                 {
                     <div class="accordion" id="floorAccordion">
-                        @foreach (var floorGroup in unitsByFloor)
+                        @foreach (var floorLevel in sortedFloors)
                         {
-                            var floorName = floorGroup.First().FloorName ?? $"{floorGroup.Key}. Kat";
-                            var headingId = $"heading{floorGroup.Key}".Replace("-", "minus");
-                            var collapseId = $"collapse{floorGroup.Key}".Replace("-", "minus");
+                            var floorUnits = allUnits.Where(u => u.FloorLevel == floorLevel).OrderBy(u => u.Id).ToList();
+                            string defaultName = floorLevel == 0 ? "Zemin Kat" : (floorLevel < 0 ? $"{-floorLevel}. Bodrum" : (floorLevel == (Model.TotalFloors ?? 0) + 1 && Model.HasRoof ? "Çatı Katı" : $"{floorLevel}. Kat"));
+                            var floorName = floorUnits.FirstOrDefault()?.FloorName ?? defaultName;
                             
-                            // Kat planını bul
-                            var planDoc = floorPlans.FirstOrDefault(d => d.EntityId == floorGroup.Key);
+                            var headingId = $"heading{floorLevel}".Replace("-", "minus");
+                            var collapseId = $"collapse{floorLevel}".Replace("-", "minus");
+                            
+                            var planDoc = floorPlanıs.FirstOrDefault(d => d.EntityId == floorLevel);
                             
                             <div class="accordion-item border-0 mb-3 shadow-sm rounded-4 overflow-hidden">
-                                <h2 class="accordion-header" id="@headingId">
-                                    <button class="accordion-button bg-light fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId" aria-expanded="true" aria-controls="@collapseId">
-                                        <i class="bi bi-building-up me-2 text-primary"></i> @floorName
-                                        <span class="badge bg-secondary ms-auto me-3">@(floorGroup.Count()) Birim</span>
+                                <h2 class="accordion-header d-flex align-items-center bg-light border-bottom" id="@headingId">
+                                    <button class="accordion-button bg-transparent fw-bold collapsed flex-grow-1 shadow-none border-0" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId" aria-expanded="false" aria-controls="@collapseId">
+                                        <i class="bi bi-building-up me-2 text-primary"></i> <span class="text-dark me-2">@floorName</span> <small class="text-muted fw-normal">(@(floorUnits.Count()) Birim)</small>
+                                    </button>
+                                    
+                                    <div class="pe-3 d-flex align-items-center" style="min-width: 500px; z-index: 2;">
                                         @if(planDoc != null)
                                         {
-                                            <span class="badge bg-success me-2"><i class="bi bi-file-earmark-image"></i> Plan Yüklü</span>
+                                            <a href="@planDoc.DocumentUrl" target="_blank" class="btn btn-sm btn-success rounded-pill me-2"><i class="bi bi-file-earmark-image me-1"></i> Planıı Gör</a>
+                                            <form asp-action="DeleteArchitectureMedia" method="post" class="m-0 p-0">
+                                                <input type="hidden" name="documentId" value="@planDoc.Id" />
+                                                <input type="hidden" name="buildingId" value="@Model.Id" />
+                                                <button type="submit" class="btn btn-sm btn-outline-danger rounded-circle p-1" onclick="return confirm('Silmek istediğinize emin misiniz?');" title="Planıı Sil"><i class="bi bi-trash"></i></button>
+                                            </form>
                                         }
-                                    </button>
+                                        else
+                                        {
+                                            <form asp-action="UploadArchitectureMedia" method="post" enctype="multipart/form-data" class="d-flex m-0 p-0 w-100">
+                                                <input type="hidden" name="buildingId" value="@Model.Id" />
+                                                <input type="hidden" name="entityType" value="BuildingFloor_@Model.Id" />
+                                                <input type="hidden" name="entityId" value="@floorLevel" />
+                                                <input type="hidden" name="title" value="@floorName Planıı" />
+                                                <div class="input-group input-group-sm">
+                                                    <input type="text" name="PhysicalLocationNote" class="form-control form-control-sm" placeholder="Fiziksel Konum (Örn: Mavi Klasör)" style="max-width:200px;" />
+                                                    <input type="file" name="file" class="form-control form-control-sm" accept="image/*,.pdf" required style="max-width:220px;" />
+                                                    <button type="submit" class="btn btn-primary"><i class="bi bi-upload"></i> Yükle</button>
+                                                </div>
+                                            </form>
+                                        }
+                                    </div>
                                 </h2>
-                                <div id="@collapseId" class="accordion-collapse collapse show" aria-labelledby="@headingId">
+                                <!-- COLLAPSED by default (removed 'show' class) -->
+                                <div id="@collapseId" class="accordion-collapse collapse" aria-labelledby="@headingId">
                                     <div class="accordion-body p-0">
                                         <table class="table table-hover align-middle mb-0">
                                             <thead class="table-light small">
                                                 <tr>
-                                                    <th class="ps-4">No</th>
-                                                    <th>Plan</th>
+                                                    <th class="ps-4" style="width:40px;">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input select-all-floor" type="checkbox" data-floor="@floorLevel">
+                                                        </div>
+                                                    </th>
+                                                    <th>No</th>
+                                                    <th>Planı</th>
+                                                    <th>Cephe / Alan</th>
                                                     <th>Mal Sahibi</th>
-                                                    <th>Seçim Durumu</th>
-                                                    <th class="text-end pe-4">İşlemler</th>
+                                                    <th class="text-end pe-4">İşİşlemler</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                @foreach (var unit in floorGroup.OrderBy(u => u.Id))
+                                                @foreach (var unit in floorUnits)
                                                 {
                                                     <tr>
-                                                        <td class="ps-4 fw-bold text-navy">No: @unit.DoorNumber</td>
+                                                        <td class="ps-4">
+                                                            <div class="form-check">
+                                                                <input class="form-check-input unit-checkbox" type="checkbox" name="selectedUnitIds" value="@unit.Id" data-floor="@floorLevel">
+                                                            </div>
+                                                        </td>
+                                                        <td class="fw-bold text-navy">No: @unit.DoorNumber</td>
                                                         <td><span class="badge bg-light text-dark border"><i class="bi bi-aspect-ratio me-1"></i>@unit.RoomLayout</span></td>
+                                                        <td class="small">
+                                                            <div class="text-muted">Cephe: @(string.IsNullOrEmpty(unit.FacadeDirection) ? "-" : unit.FacadeDirection)</div>
+                                                            <div class="text-muted">Brüt: @(unit.GrossSquareMeters?.ToString() ?? "-") m²</div>
+                                                        </td>
                                                         <td>
                                                             @if (!string.IsNullOrEmpty(unit.OwnerName))
                                                             {
@@ -185,9 +248,6 @@
                                                                 <span class="text-muted small fst-italic">Sahipsiz / Boş</span>
                                                             }
                                                         </td>
-                                                        <td>
-                                                            <span class="badge bg-secondary-subtle text-secondary small">Bekleniyor</span>
-                                                        </td>
                                                         <td class="text-end pe-4">
                                                             <a asp-controller="CustomerPortal" asp-action="MyUnitMaterials" asp-route-unitId="@unit.Id" class="btn btn-sm btn-outline-primary rounded-pill me-1" title="Müşteri Seçim Portalı (Görünüm)"><i class="bi bi-shop"></i> Portal</a>
                                                             <button class="btn btn-sm btn-outline-secondary rounded-pill" title="Düzenle"><i class="bi bi-pencil"></i></button>
@@ -195,39 +255,21 @@
                                                     </tr>
                                                 }
                                             </tbody>
+                                            <tfoot class="table-light">
+                                                <tr>
+                                                    <td colspan="6" class="text-center py-2">
+                                                        <button type="button" class="btn btn-sm btn-link text-success text-decoration-none fw-bold btn-add-unit-to-floor" data-bs-toggle="modal" data-bs-target="#addUnitModal" data-floorlevel="@floorLevel" data-floorname="@floorName">
+                                                                <i class="bi bi-plus-circle me-1"></i> Bu Kata Yeni Birim Ekle
+                                                            </button>
+                                                            <button type="button" class="btn btn-sm btn-link text-primary text-decoration-none fw-bold btn-copy-floor ms-3" data-bs-toggle="modal" data-bs-target="#copyFloorModal" data-floorlevel="@floorLevel" data-floorname="@floorName">
+                                                                <i class="bi bi-files me-1"></i> Bu Katı Kopyala (ŞŞablon)
+                                                            </button>
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
                                         </table>
                                         
-                                        <!-- KAT PLANI BÖLÜMÜ -->
-                                        <div class="bg-white p-3 text-end border-top d-flex justify-content-between align-items-center">
-                                            @if(planDoc != null)
-                                            {
-                                                <div>
-                                                    <a href="@planDoc.DocumentUrl" target="_blank" class="btn btn-sm btn-success rounded-pill"><i class="bi bi-file-earmark-image me-1"></i> @floorName Planını Görüntüle</a>
-                                                </div>
-                                                <form asp-action="DeleteArchitectureMedia" method="post" class="d-inline">
-                                                    <input type="hidden" name="documentId" value="@planDoc.Id" />
-                                                    <input type="hidden" name="buildingId" value="@Model.Id" />
-                                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill" onclick="return confirm('Kat planını silmek istediğinize emin misiniz?');">Planı Sil</button>
-                                                </form>
-                                            }
-                                            else
-                                            {
-                                                <div class="w-100">
-                                                    <form asp-action="UploadArchitectureMedia" method="post" enctype="multipart/form-data" class="d-flex align-items-center justify-content-end">
-                                                        <input type="hidden" name="buildingId" value="@Model.Id" />
-                                                        <input type="hidden" name="entityType" value="BuildingFloor_@Model.Id" />
-                                                        <input type="hidden" name="entityId" value="@floorGroup.Key" />
-                                                        <input type="hidden" name="title" value="@floorName Planı" />
-                                                        
-                                                        <label class="small text-muted me-2">Bu Kata Ait Planı Yükle:</label>
-                                                        <div class="input-group input-group-sm" style="max-width: 300px;">
-                                                            <input type="file" name="file" class="form-control" accept="image/*,.pdf" required />
-                                                            <button type="submit" class="btn btn-primary"><i class="bi bi-upload"></i></button>
-                                                        </div>
-                                                    </form>
-                                                </div>
-                                            }
-                                        </div>
+
                                     </div>
                                 </div>
                             </div>
@@ -239,7 +281,7 @@
                     <div class="text-center py-5 text-muted">
                         <i class="bi bi-tree" style="font-size: 3rem;"></i>
                         <p class="mt-3">Bu blokta henüz hiçbir daire veya dükkan oluşturulmamış.</p>
-                        <p class="small">Sol taraftaki sihirbazı kullanarak mimari ağacı oluşturabilirsiniz.</p>
+                        <p class="small">Daireleri ekleyebileceğiniz detaylıı yönetim arayüzü yakında aktif edilecektir.</p>
                     </div>
                 }
             </div>
@@ -247,6 +289,239 @@
     </div>
 </div>
 
+<!-- Edit Block Details Modal -->
+<div class="modal fade" id="editBlockDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form asp-action="UpdateBlockDetails" method="post">
+                <input type="hidden" name="Id" value="@Model.Id" />
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square text-primary me-2"></i>Blok Özelliklerini Düzenle</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Blok Adı</label>
+                            <input type="text" name="BlockName" class="form-control" value="@Model.BlockName" required />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Taban Oturumu (m²)</label>
+                            <input type="number" step="0.1" name="BaseArea" class="form-control" value="@Model.BaseArea" />
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Asansör Sayısı</label>
+                            <input type="number" name="ElevatorCount" class="form-control" value="@Model.ElevatorCount" placeholder="Örn: 2" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Otopark Tipi</label>
+                            <select name="ParkingType" class="form-select">
+                                <option value="" selected="@(string.IsNullOrEmpty(Model.ParkingType))">Seçiniz...</option>
+                                <option value="Kapalı Otopark" selected="@(Model.ParkingType == "Kapalı Otopark")">Kapalı Otopark</option>
+                                <option value="Açık Otopark" selected="@(Model.ParkingType == "Açık Otopark")">Açık Otopark</option>
+                                <option value="Açık ve Kapalı Otopark" selected="@(Model.ParkingType == "Açık ve Kapalı Otopark")">Açık ve Kapalı Otopark</option>
+                                <option value="Yok" selected="@(Model.ParkingType == "Yok")">Yok</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Mantolama / Yalıtım</label>
+                        <input type="text" name="InsulationType" class="form-control" placeholder="Örn: Taş Yünü" value="@Model.InsulationType" />
+                    </div>
+                    
+                    <div class="mb-4 p-3 bg-light rounded">
+                        <label class="form-label fw-bold text-primary mb-3"><i class="bi bi-ui-checks-grid me-1"></i> Diğer Donanım ve Altyapılar</label>
+                        <div class="row g-2">
+                            @{
+                                var existingFeatures = Model.TechnicalFeatures ?? "";
+                                string[] predefined = { "Su Deposu", "Sığınak", "Jeneratör", "Fiber İnternet", "Uydu Sistemi", "Görüntülü Diyafon", "Şifreli Giriş", "Kamera Sistemi", "Akıllı Ev Altyapısı", "Engelli Rampası" };
+                            }
+                            @foreach(var item in predefined)
+                            {
+                                <div class="col-md-4 col-sm-6">
+                                    <div class="form-check form-check-custom">
+                                        <input class="form-check-input" type="checkbox" name="SelectedFeatures" value="@item" id="feat_@item.Replace(" ", "")" @(existingFeatures.Contains(item) ? "checked" : "") />
+                                        <label class="form-check-label text-dark small" for="feat_@item.Replace(" ", "")">@item</label>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Özel Eklemeler ve Notlar</label>
+                        <div class="form-text mb-2">Yukarıdaki listede olmayan ekstra bir özellik varsa (Örn: Güneş Paneli) veya detay yazmak istiyorsanız buraya ekleyebilirsiniz.</div>
+                        <textarea name="TechnicalFeatures" class="form-control" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Genel Açıklama</label>
+                        <textarea name="Description" class="form-control" rows="2">@Model.Description</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Edit Units Modal (Daire Özellikleri Toplu Düzenleme) -->
+<div class="modal fade" id="bulkEditUnitsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form id="bulkEditForm" method="post">
+                <!-- We will populate this hidden input via JavaScript with selected unit IDs -->
+                <input type="hidden" name="unitIds" id="bulkUnitIds" value="" />
+                
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-collection text-primary me-2"></i>Toplu Daire Düzenleme</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2 small">
+                        <i class="bi bi-info-circle me-1"></i> Sadece doldurduğunuz alanlar seçili dairelere uygulanacaktır. Boş bıraktığınız alanlar değişmeden kalır.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Cephe Değiştir</label>
+                        <select name="FacadeDirection" class="form-select">
+                            <option value="">Değiştirme (Aynı Kalsın)</option>
+                            <option value="Kuzey">Kuzey</option>
+                            <option value="Güney">Güney</option>
+                            <option value="Doğu">Doğu</option>
+                            <option value="Batı">Batı</option>
+                            <option value="Kuzey-Doğu">Kuzey-Doğu</option>
+                            <option value="Kuzey-Batı">Kuzey-Batı</option>
+                            <option value="Güney-Doğu">Güney-Doğu</option>
+                            <option value="Güney-Batı">Güney-Batı</option>
+                        </select>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Brüt Alan (m²)</label>
+                            <input type="number" step="0.1" name="GrossSquareMeters" class="form-control" placeholder="Değiştirme" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Net Alan (m²)</label>
+                            <input type="number" step="0.1" name="NetSquareMeters" class="form-control" placeholder="Değiştirme" />
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Daire Planıı (Oda Sayısı vb.)</label>
+                        <select name="RoomLayout" class="form-select">
+                            <option value="">Değiştirme</option>
+                            <option value="Stüdyo">Stüdyo</option>
+                            <option value="1+1">1+1</option>
+                            <option value="2+1">2+1</option>
+                            <option value="3+1">3+1</option>
+                            <option value="4+1">4+1</option>
+                            <option value="Dükkan">Dükkan / Ticari</option>
+                            <option value="Depo">Depo</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="button" class="btn btn-primary rounded-pill px-4" id="btnSubmitBulkEdit">Seçili Dairelere Uygula</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+<!-- Add Unit Modal -->
+<div class="modal fade" id="addUnitModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form id="addUnitForm" asp-action="AddBuildingUnit" method="post">
+                <input type="hidden" name="buildingId" value="@Model.Id" />
+                
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-plus-square text-success me-2"></i>Yeni Bağımsız Bölüm Ekle</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2 small mb-4" id="addUnitAlert">
+                          <i class="bi bi-info-circle me-1"></i> Yeni bir kata birim eklerseniz o kat otomatik olarak oluşturulur.
+                      </div>
+                    
+                    <div class="row" id="floorDataRow">
+                          <div class="col-md-6 mb-3">
+                              <label class="form-label fw-bold small">Kat Seviyesi (Sayısal)</label> (Sayısal)</label>
+                            <input type="number" name="FloorLevel" class="form-control" placeholder="Örn: 1, 0, -1" required />
+                            <div class="form-text" style="font-size:11px;">Zemin: 0, Bodrum: -1, Normal: 1</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Kat Adı (Görünüm)</label>
+                            <input type="text" name="FloorName" class="form-control" placeholder="Örn: Zemin Kat" />
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label fw-bold small">Adet (Çoklu)</label>
+                            <input type="number" name="Quantity" class="form-control" value="1" min="1" required />
+                        </div>
+                        <div class="col-md-9 mb-3">
+                            <label class="form-label fw-bold small">Kapı No / İsim</label>
+                            <input type="text" name="DoorNumber" class="form-control" placeholder="Örn: 15 veya Su Deposu" required />
+                            <div class="form-text" style="font-size:10px;">Adet 1'den büyükse sonuna sayı eklenir (Örn: Depo 1, Depo 2)</div>
+                        </div>
+                        
+                        <div class="col-md-12 mb-3">
+                            <label class="form-label fw-bold small">Yapı / Tür</label>
+                            <select name="UnitStructure" class="form-select" id="unitStructureSelect">
+                                <option value="Ara Kat" selected>Ara Kat</option>
+                                <option value="Çatı Dubleksi">Çatı Dubleksi</option>
+                                <option value="Ters Dubleks">Ters Dubleks</option>
+                                <option value="Bahçe Katı">Bahçe Katı</option>
+                                <option value="Dükkan / Ticari">Dükkan / Ticari</option>
+                                <option value="Su Deposu">Su Deposu</option>
+                                <option value="Sığınak">Sığınak</option>
+                                <option value="Otopark">Otopark</option>
+                                <option value="Depo">Depo</option>
+                                <option value="Ortak Alan">Diğer Ortak Alan</option>
+                            </select>
+                            <div class="form-text text-info" style="font-size:11px;"><i class="bi bi-info-circle me-1"></i>Aradığınız tür listede yoksa, Sistem Ayarları > Tanımlamalar menüsünden yeni tür ekleyebilirsiniz. (Not: 3+1 gibi detaylıar daire iç ölçülerinde belirlenecektir.)</div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Brüt Alan (m²)</label>
+                            <input type="number" step="0.1" name="GrossSquareMeters" class="form-control" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Cephe</label>
+                            <select name="FacadeDirection" class="form-select">
+                                <option value="">Seçiniz...</option>
+                                <option value="Kuzey">Kuzey</option>
+                                <option value="Güney">Güney</option>
+                                <option value="Doğu">Doğu</option>
+                                <option value="Batı">Batı</option>
+                                <option value="Kuzey-Güney">Kuzey-Güney (Çift)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4">Bölümü Ekle</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 <style>
     .accordion-button:not(.collapsed) {
         color: #0d6efd;
@@ -258,3 +533,164 @@
         border-color: rgba(0,0,0,.125);
     }
 </style>
+
+<!-- Edit Block Skeleton Modal -->
+<div class="modal fade" id="editBlockSkeletonModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form asp-action="UpdateBlockSkeleton" method="post">
+                <input type="hidden" name="buildingId" value="@Model.Id" />
+                
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-building-up text-success me-2"></i>Bina Ä°skeletini GÃ¼ncelle</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning py-2 small mb-4">
+                        <i class="bi bi-exclamation-triangle me-1"></i> Kat sayÄ±larÄ±nÄ± deÄŸiÅŸtirdiÄŸinizde binanÄ±n kat yapÄ±sÄ± yeniden Ã§izilir. Mevcut daireler silinmez ancak tanÄ±mlanan kat aralÄ±ÄŸÄ± dÄ±ÅŸÄ±na Ã§Ä±kan katlar (Ã¶rn: 9'dan 8'e dÃ¼ÅŸÃ¼rÃ¼lÃ¼rse 9. kat) listede gÃ¶rÃ¼nmez.
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Normal Kat SayÄ±sÄ±</label>
+                            <input type="number" name="TotalFloors" class="form-control" value="@Model.TotalFloors" min="0" required />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Bodrum Kat SayÄ±sÄ±</label>
+                            <input type="number" name="BasementFloors" class="form-control" value="@Model.BasementFloors" min="0" required />
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check form-switch mt-2">
+                                <input class="form-check-input" type="checkbox" id="hasGroundSwitch" name="HasGroundFloor" value="true" @(Model.HasGroundFloor ? "checked" : "")>
+                                <label class="form-check-label fw-bold small" for="hasGroundSwitch">Zemin Kat Var</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check form-switch mt-2">
+                                <input class="form-check-input" type="checkbox" id="hasRoofSwitch" name="HasRoof" value="true" @(Model.HasRoof ? "checked" : "")>
+                                <label class="form-check-label fw-bold small" for="hasRoofSwitch">Ã‡atÄ± KatÄ± Var</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Ä°ptal</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4">Ä°skeleti GÃ¼ncelle</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            
+            // Populate Copy Floor Modal
+            $('.btn-copy-floor').click(function() {
+                var floorLevel = $(this).data('floorlevel');
+                var floorName = $(this).data('floorname');
+                $('#copyFloorModal #sourceFloorLevel').val(floorLevel);
+                $('#copyFloorModal #sourceFloorNameDisplay').text(floorName);
+                $('#copyFloorModal input[name="targetFloorLevels"]').val('');
+            });
+            
+            // Populate Add Unit Modal when clicked from a specific floor
+            var rowIdx = 1;
+            $('#btnAddNewUnitRow').click(function() {
+                var newRow = `<tr>
+                                <td><input type="text" name="Units[${rowIdx}].DoorNumber" class="form-control form-control-sm" required /></td>
+                                <td>
+                                    <select name="Units[${rowIdx}].UnitStructure" class="form-select form-select-sm">
+                                        <option value="Ara Kat" selected>Ara Kat</option>
+                                        <option value="Çatı Dubleksi">Çatı Dubleksi</option>
+                                        <option value="Ters Dubleks">Ters Dubleks</option>
+                                        <option value="Bahçe Katı">Bahçe Katı</option>
+                                        <option value="Dükkan / Ticari">Dükkan / Ticari</option>
+                                        <option value="Su Deposu">Su Deposu</option>
+                                        <option value="Sığınak">Sığınak</option>
+                                        <option value="Otopark">Otopark</option>
+                                        <option value="Depo">Depo</option>
+                                        <option value="Ortak Alan">Diğer Ortak Alan</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <select name="Units[${rowIdx}].FacadeDirection" class="form-select form-select-sm">
+                                        <option value="">Seçiniz...</option>
+                                        <option value="Kuzey">Kuzey</option>
+                                        <option value="Güney">Güney</option>
+                                        <option value="Doğu">Doğu</option>
+                                        <option value="Batı">Batı</option>
+                                        <option value="Kuzeydoğu">Kuzeydoğu</option>
+                                        <option value="Kuzeybatı">Kuzeybatı</option>
+                                        <option value="Güneydoğu">Güneydoğu</option>
+                                        <option value="Güneybatı">Güneybatı</option>
+                                    </select>
+                                </td>
+                                <td><input type="number" name="Units[${rowIdx}].GrossSquareMeters" class="form-control form-control-sm" /></td>
+                                <td><button type="button" class="btn btn-sm btn-danger remove-unit-row"><i class="bi bi-trash"></i></button></td>
+                              </tr>`;
+                $('#dynamicUnitsTable tbody').append(newRow);
+                rowIdx++;
+            });
+
+            $(document).on('click', '.remove-unit-row', function() {
+                $(this).closest('tr').remove();
+            });
+
+            $('.btn-add-unit-to-floor').click(function() {
+                  var floorLevel = $(this).data('floorlevel');
+                  var floorName = $(this).data('floorname');
+                  $('[name="FloorLevel"]').val(floorLevel);
+                  $('[name="FloorName"]').val(floorName);
+                  $('#addUnitModal .modal-title').html('<i class="bi bi-plus-square text-success me-2"></i>' + floorName + ' - Hızlı Birim Ekle');
+                  $('#floorDataRow').hide();
+                  $('#addUnitAlert').hide();
+              });
+
+              $('[data-bs-target="#addUnitModal"]:not(.btn-add-unit-to-floor)').click(function() {
+                  $('[name="FloorLevel"]').val('');
+                  $('[name="FloorName"]').val('');
+                  $('#addUnitModal .modal-title').html('<i class="bi bi-plus-square text-success me-2"></i>Yeni Kat / Birim Ekle');
+                  $('#floorDataRow').show();
+                  $('#addUnitAlert').show();
+              });            
+            // For the global Add Floor button
+            $('.btn-add-global').click(function(){
+                 $('#addUnitModalTitle').text('Yeni Kat / Birim Ekle');
+                 // For a global add, we need them to type the floor manually, but we hid it!
+                 // Let's just prompt them for floor level if it's empty
+            });
+
+            // Floor checkbox toggles all units in that floor// Floor checkbox toggles all units in that floor
+            $('.select-all-floor').change(function() {
+                var floor = $(this).data('floor');
+                var isChecked = $(this).is(':checked');
+                $('.unit-checkbox[data-floor="' + floor + '"]').prop('checked', isChecked);
+            });
+            
+            // Bulk Edit Submit
+            $('#btnSubmitBulkEdit').click(function() {
+                var selectedIds = [];
+                $('.unit-checkbox:checked').each(function() {
+                    selectedIds.push($(this).val());
+                });
+                
+                if (selectedIds.length === 0) {
+                    alert('Lütfen düzenlemek için en az bir daire seçin.');
+                    return;
+                }
+                
+                $('#bulkUnitIds').val(selectedIds.join(','));
+                
+                // Set action and submit form
+                $('#bulkEditForm').attr('action', '/ConstructionProject/BulkUpdateUnits?buildingId=@Model.Id');
+                $('#bulkEditForm').submit();
+            });
+        });
+    </script>
+}
+
+

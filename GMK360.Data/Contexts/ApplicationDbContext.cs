@@ -1,4 +1,4 @@
-﻿using GMK360.Core.Entities;
+using GMK360.Core.Entities;
 using GMK360.Core.Entities.Construction;
 using GMK360.Core.Entities.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -161,6 +161,11 @@ namespace GMK360.Data.Contexts
         // Bina ve Site Yönetim Modülü
         public DbSet<Building> Buildings { get; set; }
         public DbSet<BuildingUnit> BuildingUnits { get; set; }
+        public DbSet<UnitSpace> UnitSpaces { get; set; }
+        public DbSet<UnitTemplate> UnitTemplates { get; set; }
+        public DbSet<UnitTemplateSpace> UnitTemplateSpaces { get; set; }
+        public DbSet<ProjectAmenity> ProjectAmenities { get; set; }
+        public DbSet<ProjectAssignment> ProjectAssignments { get; set; }
         public DbSet<BuildingExpense> BuildingExpenses { get; set; }
         public DbSet<BuildingIncome> BuildingIncomes { get; set; }
         public DbSet<BuildingContract> BuildingContracts { get; set; }
@@ -181,6 +186,7 @@ namespace GMK360.Data.Contexts
         public DbSet<ProjectMaterialCatalog> ProjectMaterialCatalogs { get; set; }
         public DbSet<UnitMaterialSelection> UnitMaterialSelections { get; set; }
         public DbSet<ConstructionTask> ConstructionTasks { get; set; }
+        public DbSet<ConstructionTaskInvite> ConstructionTaskInvites { get; set; }
         public DbSet<TaskProgressLog> TaskProgressLogs { get; set; }
 
         // B2B ve Pazaryeri (Marketplace)

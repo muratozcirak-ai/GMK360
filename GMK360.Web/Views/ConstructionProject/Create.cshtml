@@ -1,9 +1,13 @@
-@model GMK360.Web.Models.CreateProjectWizardViewModel
+﻿@model GMK360.Web.Models.CreateProjectWizardViewModel
 
 @{
     ViewData["Title"] = "Yeni Proje Sihirbazı";
     Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
 }
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
 
 <style>
     .wizard-step { display: none; }
@@ -62,6 +66,36 @@
                                 <label class="form-label fw-bold">Kısa Açıklama / Proje Vizyonu</label>
                                 <textarea asp-for="Description" class="form-control rounded-3" rows="2" placeholder="Projenin konseptini buraya yazabilirsiniz..."></textarea>
                             </div>
+                            
+                            
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">İl</label>
+                                <select asp-for="CityId" class="form-select rounded-3" asp-items="ViewBag.Cities" required><option value="">Seçiniz</option></select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">İlçe</label>
+                                <select asp-for="DistrictId" class="form-select rounded-3" asp-items="ViewBag.Districts" required><option value="">Seçiniz</option></select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">Mahalle</label>
+                                <select asp-for="NeighborhoodId" class="form-select rounded-3" asp-items="ViewBag.Neighborhoods" required><option value="">Seçiniz</option></select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">Sokak</label>
+                                <select asp-for="StreetId" class="form-select rounded-3" asp-items="ViewBag.Streets" required><option value="">Seçiniz</option></select>
+                            </div>
+<div class="col-md-2">
+                                <label class="form-label fw-bold">Bina / Kapı No</label>
+                                <input asp-for="Address" id="fullAddress" class="form-control rounded-3" placeholder="Örn: 16/A" required />
+                            </div>
+                            <div class="col-md-10">
+                                <label class="form-label fw-bold">Harita Konumu</label>
+                                <div class="input-group">
+                                    <input type="text" asp-for="Latitude" id="latInput" class="form-control bg-light" placeholder="Enlem" readonly />
+                                    <input type="text" asp-for="Longitude" id="lngInput" class="form-control bg-light" placeholder="Boylam" readonly />
+                                    <button class="btn btn-outline-secondary" type="button" onclick="openMapModal()"><i class="ph ph-map-pin"></i> Haritadan Seç</button>
+                                </div>
+                            </div>
                             <div class="col-md-6">
                                 <label class="form-label fw-bold">Planlanan Başlangıç Tarihi</label>
                                 <input asp-for="StartDate" type="date" class="form-control rounded-3" required />
@@ -71,9 +105,27 @@
                                 <input asp-for="EndDate" type="date" class="form-control rounded-3" required />
                             </div>
                             <div class="col-md-12">
-                                <label class="form-label fw-bold">Mimari Çizim / Proje Görseli (URL)</label>
-                                <input asp-for="CoverImageFile" type="file" class="form-control rounded-3" accept="image/jpeg,image/png,application/pdf" />
-                                <div class="form-text text-muted">Mimari resim veya 3D render görselini bilgisayarınızdan seçin (JPG/PNG).</div>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold">Toplam Arazi Alanı (m²)</label>
+                                        <div class="input-group">
+                                            <input type="number" asp-for="TotalLandArea" class="form-control rounded-start-3" placeholder="Örn: 2500" min="1" required />
+                                            <span class="input-group-text rounded-end-3">m²</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold">Mevcut Durum Görseli (İlk Hali)</label>
+                                        <input asp-for="CurrentStateImageFile" type="file" class="form-control rounded-3" accept="image/jpeg,image/png,application/pdf" />
+                                        <div class="form-text text-muted">Şantiyenin/arazinin şu anki hali (JPG/PNG).</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold">Proje Görseli (Geleceği Hali)</label>
+                                        <input asp-for="CoverImageFile" type="file" class="form-control rounded-3" accept="image/jpeg,image/png,application/pdf" />
+                                        <div class="form-text text-muted">Mimari 3D render görselini seçin (JPG/PNG).</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="text-end mt-5">
@@ -144,6 +196,26 @@
                     </div>
 
                 </form>
+
+<!-- Map Modal -->
+<div class="modal fade" id="mapModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Haritadan Konum Seç</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="projectMap" style="height: 400px; width: 100%;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-primary" onclick="saveMapLocation()">Konumu Onayla</button>
+            </div>
+        </div>
+    </div>
+</div>
+
             </div>
         </div>
     </div>
@@ -151,6 +223,82 @@
 
 @section Scripts {
     <script>
+        
+        let map, marker;
+        function openMapModal() {
+            var mapModal = new bootstrap.Modal(document.getElementById('mapModal'));
+            mapModal.show();
+            
+            setTimeout(() => {
+                if(!map) {
+                    map = L.map('projectMap').setView([41.0082, 28.9784], 13);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors'
+                    }).addTo(map);
+                    
+                    marker = L.marker([41.0082, 28.9784], {draggable: true}).addTo(map);
+                    
+                    map.on('click', function(e) {
+                        marker.setLatLng(e.latlng);
+                    });
+                } else {
+                    map.invalidateSize();
+                }
+
+                // Harita açıldığında seçili adrese odaklan (Geocoding)
+                var cityName = $('#CityId option:selected').text();
+                var distName = $('#DistrictId option:selected').text();
+                var neighName = $('#NeighborhoodId option:selected').text();
+                var streetName = $('#StreetId option:selected').text();
+                
+                if (cityName && cityName !== 'Seçiniz') {
+                    // Mümkün olan en detaylı adresi oluştur
+                    var query = '';
+                    if (neighName && neighName !== 'Seçiniz' && neighName !== 'Yükleniyor...') {
+                        if (streetName && streetName !== 'Seçiniz' && streetName !== 'Yükleniyor...') {
+                            query = `${streetName}, ${neighName}, ${distName}, ${cityName}, Turkey`;
+                        } else {
+                            // Sokak yoksa mahalleye odaklan (Kullanıcı talebi)
+                            query = `${neighName}, ${distName}, ${cityName}, Turkey`;
+                        }
+                    } else if (distName && distName !== 'Seçiniz') {
+                        query = `${distName}, ${cityName}, Turkey`;
+                    } else {
+                        query = `${cityName}, Turkey`;
+                    }
+
+                    var tryGeocode = function(searchQuery, zoomLvl) {
+                        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`)
+                        .then(res => res.json())
+                        .then(data => {
+                            if(data && data.length > 0) {
+                                var lat = parseFloat(data[0].lat);
+                                var lon = parseFloat(data[0].lon);
+                                map.setView([lat, lon], zoomLvl);
+                                marker.setLatLng([lat, lon]);
+                            } else {
+                                // Bulamazsa bir üste geç
+                                if (searchQuery.includes(streetName) && streetName) {
+                                    tryGeocode(`${neighName}, ${distName}, ${cityName}, Turkey`, 15);
+                                } else if (searchQuery.includes(neighName) && neighName) {
+                                    tryGeocode(`${distName}, ${cityName}, Turkey`, 13);
+                                }
+                            }
+                        });
+                    };
+                    
+                    tryGeocode(query, 16);
+                }
+            }, 300);
+        }
+        
+        function saveMapLocation() {
+            var pos = marker.getLatLng();
+            document.getElementById('latInput').value = pos.lat.toFixed(6);
+            document.getElementById('lngInput').value = pos.lng.toFixed(6);
+            bootstrap.Modal.getInstance(document.getElementById('mapModal')).hide();
+        }
+
         function nextStep(step) {
             document.querySelectorAll('.wizard-step').forEach(el => el.classList.remove('active'));
             document.getElementById('step' + step).classList.add('active');
@@ -195,34 +343,179 @@
                 
                 const html = `
                     <div class="card border border-2 border-light shadow-sm rounded-4 mb-3 block-item">
-                        <div class="card-body p-4">
-                            <h5 class="fw-bold text-navy border-bottom pb-2 mb-3"><i class="ph ph-building me-2 text-orange"></i> ${i+1}. Blok Tanımı</h5>
-                            <div class="row g-3">
-                                <div class="col-md-3">
-                                    <label class="form-label small fw-bold">Blok Adı</label>
-                                    <input type="text" name="Blocks[${i}].BlockName" class="form-control b-name" value="${defaultName}" required />
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label small fw-bold">Kat Sayısı</label>
-                                    <input type="number" name="Blocks[${i}].TotalFloors" class="form-control b-floors" value="5" required />
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label small fw-bold">Daire Sayısı</label>
-                                    <input type="number" name="Blocks[${i}].TotalApartments" class="form-control b-apts" value="10" required />
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label small fw-bold">Dükkan Sayısı</label>
-                                    <input type="number" name="Blocks[${i}].TotalShops" class="form-control b-shops" value="0" required />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                container.innerHTML += html;
+                          <div class="card-body p-4">
+                              <h5 class="fw-bold text-navy border-bottom pb-2 mb-3"><i class="ph ph-building me-2 text-orange"></i> ${i+1}. Blok / Yapı Tanımı</h5>
+                              <div class="row g-3">
+                                  <div class="col-md-12 col-lg-3">
+                                        <label class="form-label small fw-bold">Blok / Yapı Adı</label>
+                                        <input type="text" name="Blocks[${i}].BlockName" class="form-control b-name" value="${defaultName}" onkeyup="updatePodiumDropdowns()" required ${count === 1 ? 'readonly' : ''} />
+                                        
+                                        <label class="form-label small fw-bold mt-2 text-primary">Yapı Karakteri</label>
+                                        <select name="Blocks[${i}].StructureType" class="form-select b-type border-primary" onchange="toggleParent(this)">
+                                            <option value="independent">Müstakil (Kendi Temeli)</option>
+                                            <option value="podium">Ortak Baza (Alt Yapı / Otopark)</option>
+                                            <option value="tower">Baza Üzerinde Kule</option>
+                                        </select>
+                                        
+                                        <select name="Blocks[${i}].ParentIndex" class="form-select b-parent mt-2 border-warning" style="display:none;">
+                                            <option value="">Hangi Bazaya Bağlı?</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12 col-lg-2">
+                                        <label class="form-label small fw-bold">Taban (m²)</label>
+                                        <input type="number" name="Blocks[${i}].BaseArea" class="form-control" placeholder="Örn: 200" min="1" required />
+                                    </div>
+                                  <div class="col-6 col-lg-2">
+                                      <label class="form-label small fw-bold">Normal Kat Sayısı</label>
+                                      <input type="number" name="Blocks[${i}].TotalFloors" class="form-control b-floors" value="5" min="0" required />
+                                  </div>
+                                  <div class="col-6 col-lg-2">
+                                        <label class="form-label small fw-bold">Bodrum Kat Sayısı</label>
+                                        <input type="number" name="Blocks[${i}].BasementFloors" class="form-control b-basements" value="1" min="0" required />
+                                        <div class="form-check mt-2">
+                                            <input class="form-check-input" type="checkbox" name="Blocks[${i}].HasGroundFloor" value="true" id="ground_${i}" checked>
+                                            <label class="form-check-label small fw-bold" for="ground_${i}">Zemin Kat Var</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="Blocks[${i}].HasRoof" value="true" id="roof_${i}">
+                                            <label class="form-check-label small fw-bold" for="roof_${i}">Çatı Katı Var</label>
+                                        </div>
+                                    </div>
+                              </div>
+                          </div>
+                      </div>
+                  `;
+                  container.innerHTML += html;
             }
         }
 
-        function prepareSummary() {
+        
+          
+        // Adres Formatlayıcı
+        document.getElementById('fullAddress').addEventListener('input', function(e) {
+            let val = e.target.value;
+            // 1. Türkçe karakter ve noktalama kalsın, garip sembolleri uçur.
+            val = val.replace(/[^a-zA-Z0-9çÇğĞıİöÖşŞüÜ\s\.,:\/-]/g, '');
+            
+            // 2. 16a veya 16A yazılırsa 16/A'ya çevir
+            val = val.replace(/(\d+)([a-zA-ZçÇğĞıİöÖşŞüÜ])/g, '$1/$2');
+            
+            // 3. / yanındaki harfi BÜYÜT
+            val = val.replace(/\/([a-zçğıöşü])/g, function(match, p1) {
+                return '/' + p1.toLocaleUpperCase('tr-TR');
+            });
+            
+            if(e.target.value !== val) {
+                const start = e.target.selectionStart;
+                const end = e.target.selectionEnd;
+                e.target.value = val;
+                e.target.setSelectionRange(start, end);
+            }
+        });
+        
+        
+        $(document).ready(function() {
+            // Sehir degisince ilceyi doldur
+            $('#CityId').change(function() {
+                var cityId = $(this).val();
+                $('#DistrictId').empty().append('<option value="">Yükleniyor...</option>');
+                $('#NeighborhoodId').empty().append('<option value="">Seçiniz</option>');
+                $('#StreetId').empty().append('<option value="">Seçiniz</option>');
+                
+                if (cityId) {
+                    $.get('/api/Location/Districts/' + cityId, function(data) {
+                        $('#DistrictId').empty().append('<option value="">Seçiniz</option>');
+                        if(data && data.length > 0) {
+                            data.forEach(function(d) {
+                                $('#DistrictId').append('<option value="' + d.id + '">' + d.name + '</option>');
+                            });
+                        }
+                    });
+                } else {
+                    $('#DistrictId').empty().append('<option value="">Seçiniz</option>');
+                }
+            });
+
+            if ($('#CityId').val()) { $('#CityId').trigger('change'); }
+
+            // Ilce degisince mahalleyi doldur
+            $('#DistrictId').change(function() {
+                var districtId = $(this).val();
+                $('#NeighborhoodId').empty().append('<option value="">Yükleniyor...</option>');
+                $('#StreetId').empty().append('<option value="">Seçiniz</option>');
+                
+                if (districtId) {
+                    $.get('/api/Location/Neighborhoods/' + districtId, function(data) {
+                        $('#NeighborhoodId').empty().append('<option value="">Seçiniz</option>');
+                        if(data && data.length > 0) {
+                            data.forEach(function(n) {
+                                $('#NeighborhoodId').append('<option value="' + n.id + '">' + n.name + '</option>');
+                            });
+                        }
+                    });
+                } else {
+                    $('#NeighborhoodId').empty().append('<option value="">Seçiniz</option>');
+                }
+            });
+
+            // Mahalle degisince sokagi doldur
+            $('#NeighborhoodId').change(function() {
+                var neighborhoodId = $(this).val();
+                $('#StreetId').empty().append('<option value="">Yükleniyor...</option>');
+                
+                if (neighborhoodId) {
+                    $.get('/api/Location/Streets/' + neighborhoodId, function(data) {
+                        $('#StreetId').empty().append('<option value="">Seçiniz</option>');
+                        if(data && data.length > 0) {
+                            data.forEach(function(s) {
+                                $('#StreetId').append('<option value="' + s.id + '">' + s.name + '</option>');
+                            });
+                        }
+                    });
+                } else {
+                    $('#StreetId').empty().append('<option value="">Seçiniz</option>');
+                }
+            });
+        });
+        
+        function toggleParent(sel) {
+              var val = $(sel).val();
+              var parentSel = $(sel).siblings('.b-parent');
+              if(val === 'tower') {
+                  parentSel.show();
+                  parentSel.attr('required', true);
+              } else {
+                  parentSel.hide();
+                  parentSel.removeAttr('required');
+                  parentSel.val('');
+              }
+              updatePodiumDropdowns();
+          }
+
+          function updatePodiumDropdowns() {
+              var podiums = [];
+              $('.block-item').each(function(index) {
+                  var type = $(this).find('.b-type').val();
+                  var name = $(this).find('.b-name').val();
+                  if(type === 'podium' && name.trim() !== '') {
+                      podiums.push({ idx: index, name: name });
+                  }
+              });
+              
+              $('.b-parent').each(function() {
+                  var currentVal = $(this).val();
+                  $(this).empty();
+                  $(this).append('<option value="">Hangi Bazaya Bağlı?</option>');
+                  var sel = $(this);
+                  podiums.forEach(function(p) {
+                      sel.append('<option value="' + p.idx + '">' + p.name + '</option>');
+                  });
+                  $(this).val(currentVal); 
+              });
+          }
+
+
+          function prepareSummary() {
             // Get values from Step 1
             const name = document.querySelector('input[name="Name"]').value;
             const desc = document.querySelector('textarea[name="Description"]').value;
@@ -233,8 +526,8 @@
             let totalShops = 0;
             
             blocks.forEach(b => {
-                totalApts += parseInt(b.querySelector('.b-apts').value) || 0;
-                totalShops += parseInt(b.querySelector('.b-shops').value) || 0;
+                
+                
             });
 
             // Set Summary
@@ -248,3 +541,4 @@
         }
     </script>
 }
+

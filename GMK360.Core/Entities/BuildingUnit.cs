@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using System.ComponentModel.DataAnnotations.Schema;
 
 namespace GMK360.Core.Entities
 {
@@ -15,6 +15,9 @@ namespace GMK360.Core.Entities
         
         [NotMapped]
         public string UnitNumber { get => DoorNumber; set => DoorNumber = value; }
+        public double? GrossSquareMeters { get; set; }
+        public double? NetSquareMeters { get; set; }
+        public string FacadeDirection { get; set; }
         
         public string? RoomLayout { get; set; } // Eski UnitType - Örn: "3+1", "2+1"
         
@@ -45,6 +48,10 @@ namespace GMK360.Core.Entities
         public int? PropertyId { get; set; }
         public virtual Property Property { get; set; }
 
+                public int? UnitTemplateId { get; set; }
+        public virtual GMK360.Core.Entities.UnitTemplate UnitTemplate { get; set; }
+
+        public virtual System.Collections.Generic.ICollection<GMK360.Core.Entities.UnitSpace> Spaces { get; set; } = new System.Collections.Generic.List<GMK360.Core.Entities.UnitSpace>();
         public virtual System.Collections.Generic.ICollection<UnitDebt> Debts { get; set; } = new System.Collections.Generic.List<UnitDebt>();
     }
 }

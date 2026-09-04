@@ -15,7 +15,7 @@ namespace GMK360.Web.Routing
             }
 
             var city = cityObj?.ToString();
-            var knownControllers = new[] { "DigitalHome", "Admin", "Home", "Property", "Account", "Subscription", "Blog", "AgencyStore", "Auth" };
+            var knownControllers = new[] { "DigitalHome", "Admin", "Home", "Property", "Account", "Subscription", "Blog", "AgencyStore", "Auth", "ConstructionProject", "BuildingManager", "CustomerDashboard", "Usta" };
             if (city != null && knownControllers.Contains(city, System.StringComparer.OrdinalIgnoreCase))
             {
                 return ValueTask.FromResult(values);
