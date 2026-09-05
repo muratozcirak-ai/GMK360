@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using GMK360.Core.Entities.Enums;
 
 namespace GMK360.Core.Entities.Construction
 {
@@ -12,7 +13,14 @@ namespace GMK360.Core.Entities.Construction
         public Agency Agency { get; set; }
 
         public string? CoverImageUrl { get; set; }
+        public string? CurrentStateImageUrl { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
         public string Address { get; set; }
+        public int? CityId { get; set; }
+        public int? DistrictId { get; set; }
+        public int? NeighborhoodId { get; set; }
+        public int? StreetId { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime? EndDate { get; set; }
         
@@ -23,6 +31,7 @@ namespace GMK360.Core.Entities.Construction
 
         public virtual ICollection<ProjectPhase> Phases { get; set; }
         public virtual ICollection<ProjectMaterialCatalog> MaterialCatalogs { get; set; }
+        public ProjectLifecycleStatus LifecycleStatus { get; set; } = ProjectLifecycleStatus.UnderConstruction;
         public virtual ICollection<ConstructionTask> Tasks { get; set; }
         
         // Arsa ve Peyzaj Bilgileri
@@ -38,5 +47,8 @@ namespace GMK360.Core.Entities.Construction
 
         // Proje Çalışanları (Şantiye İzolasyonu için)
         public virtual ICollection<ProjectAssignment> Assignments { get; set; } = new List<ProjectAssignment>();
+
+        public int? TargetTotalApartments { get; set; }
+        public int? TargetTotalShops { get; set; }
     }
 }

@@ -6,7 +6,31 @@
 }
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="">            // On page load: if we have a draft id (either from server model or URL), open step 2
+            document.addEventListener('DOMContentLoaded', function() {
+                try {
+                    const draftIdField = document.getElementById('DraftProjectId');
+                    const draftId = parseInt(draftIdField?.value || new URLSearchParams(window.location.search).get('id') || '0');
+                    if (draftId > 0) {
+                        // ensure hidden field is set (in case it was only in URL)
+                        if (draftIdField && !draftIdField.value) draftIdField.value = draftId;
+
+                        // if blocks not rendered, try to generate from server-rendered model (server fills model.Blocks)
+                        setTimeout(() => {
+                            if (document.getElementById('blocksContainer') && document.getElementById('blocksContainer').children.length === 0) {
+                                // If there are server-side rendered blocks they would already be present; otherwise leave generation to user
+                                // We still switch to step 2 so the user can continue
+                                nextStep(2);
+                            } else {
+                                nextStep(2);
+                            }
+                        }, 50);
+                    }
+                } catch (e) {
+                    console.warn('Draft load check failed', e);
+                }
+            });
+    </script>
 
 
 <style>
@@ -53,6 +77,7 @@
 
             <div class="card-body p-5 pt-0">
                 <form id="wizardForm" asp-action="CreateWizard" asp-controller="ConstructionProject" method="post" enctype="multipart/form-data">
+                    <input type="hidden" asp-for="DraftProjectId" id="DraftProjectId" />
                     
                     <!-- STEP 1: Basic Info -->
                     <div class="wizard-step active" id="step1">
@@ -91,9 +116,13 @@
                             <div class="col-md-10">
                                 <label class="form-label fw-bold">Harita Konumu</label>
                                 <div class="input-group">
-                                    <input type="text" asp-for="Latitude" id="latInput" class="form-control bg-light" placeholder="Enlem" readonly />
-                                    <input type="text" asp-for="Longitude" id="lngInput" class="form-control bg-light" placeholder="Boylam" readonly />
+                                    <input type="text" name="Latitude" id="latInput" class="form-control bg-light" placeholder="Enlem" value="@Model.Latitude" readonly />
+                                    <input type="text" name="Longitude" id="lngInput" class="form-control bg-light" placeholder="Boylam" value="@Model.Longitude" readonly />
                                     <button class="btn btn-outline-secondary" type="button" onclick="openMapModal()"><i class="ph ph-map-pin"></i> Haritadan Seç</button>
+                                      @if (Model.Latitude.HasValue && Model.Longitude.HasValue)
+                                      {
+                                          <a href="https://maps.google.com/?q=@Model.Latitude,@Model.Longitude" target="_blank" class="btn btn-outline-primary"><i class="ph ph-map-trifold"></i> Haritada Göster</a>
+                                      }
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -106,30 +135,48 @@
                             </div>
                             <div class="col-md-12">
                                 <div class="row g-3">
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-bold">Toplam Arazi Alanı (m²)</label>
-                                        <div class="input-group">
-                                            <input type="number" asp-for="TotalLandArea" class="form-control rounded-start-3" placeholder="Örn: 2500" min="1" required />
-                                            <span class="input-group-text rounded-end-3">m²</span>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                    </div>
+                                    <div class="col-md-4">
+                                          <label class="form-label fw-bold">Toplam Arazi Alanı (m²)</label>
+                                          <div class="input-group">
+                                              <input type="number" asp-for="TotalLandArea" class="form-control rounded-start-3" placeholder="Örn: 2500" min="1" required />
+                                              <span class="input-group-text rounded-end-3">m²</span>
+                                          </div>
+                                      </div>
+                                      <div class="col-md-4">
+                                          <label class="form-label fw-bold">Tahmini Toplam Daire</label>
+                                          <input type="number" asp-for="TargetTotalApartments" class="form-control rounded-3" placeholder="Örn: 40" min="0" required />
+                                      </div>
+                                      <div class="col-md-4">
+                                          <label class="form-label fw-bold">Tahmini Toplam Dükkan</label>
+                                          <input type="number" asp-for="TargetTotalShops" class="form-control rounded-3" placeholder="Örn: 5" min="0" required />
+                                      </div>
                                     <div class="col-md-6">
                                         <label class="form-label fw-bold">Mevcut Durum Görseli (İlk Hali)</label>
-                                        <input asp-for="CurrentStateImageFile" type="file" class="form-control rounded-3" accept="image/jpeg,image/png,application/pdf" />
-                                        <div class="form-text text-muted">Şantiyenin/arazinin şu anki hali (JPG/PNG).</div>
+                                        <div class="input-group">
+                                              <input asp-for="CurrentStateImageFile" type="file" class="form-control bg-light" accept="image/jpeg,image/png,application/pdf" />
+                                              @if (!string.IsNullOrEmpty((string)ViewBag.CurrentStateImageUrl))
+                                              {
+                                                  <a href="@ViewBag.CurrentStateImageUrl" target="_blank" class="btn btn-outline-primary"><i class="ph ph-image"></i> Kayıtlı Görsel</a>
+                                              }
+                                          </div>
+                                          <div class="form-text text-muted">Şantiyenin/arazinin şu anki hali (JPG/PNG).</div>
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label fw-bold">Proje Görseli (Geleceği Hali)</label>
-                                        <input asp-for="CoverImageFile" type="file" class="form-control rounded-3" accept="image/jpeg,image/png,application/pdf" />
-                                        <div class="form-text text-muted">Mimari 3D render görselini seçin (JPG/PNG).</div>
+                                        <div class="input-group">
+                                              <input asp-for="CoverImageFile" type="file" class="form-control bg-light" accept="image/jpeg,image/png,application/pdf" />
+                                              @if (!string.IsNullOrEmpty((string)ViewBag.CoverImageUrl))
+                                              {
+                                                  <a href="@ViewBag.CoverImageUrl" target="_blank" class="btn btn-outline-primary"><i class="ph ph-image"></i> Kayıtlı Görsel</a>
+                                              }
+                                          </div>
+                                          <div class="form-text text-muted">Mimari 3D render görselini seçin (JPG/PNG).</div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         <div class="text-end mt-5">
-                            <button type="button" class="btn btn-orange btn-lg rounded-pill px-5 fw-bold" onclick="nextStep(2)">Devam Et <i class="ph ph-arrow-right ms-2"></i></button>
+                            <button type="button" class="btn btn-orange btn-lg rounded-pill px-5 fw-bold" onclick="saveStep1AndContinue()">Devam Et <i class="ph ph-arrow-right ms-2"></i></button>
                         </div>
                     </div>
 
@@ -139,22 +186,68 @@
                         <p class="text-muted mb-4">Temel kazısı, kaba inşaat gibi aşamaları blok bazlı takip edebilmeniz için projenizdeki blokları tanımlayın.</p>
                         
                         <div class="row mb-4 align-items-end bg-light p-4 rounded-4">
-                            <div class="col-md-8">
-                                <label class="form-label fw-bold">Projenizde Kaç Blok (Bina) Var?</label>
-                                <input type="number" id="blockCount" class="form-control form-control-lg rounded-3" min="1" max="20" value="1" />
-                            </div>
-                            <div class="col-md-4">
-                                <button type="button" class="btn btn-dark btn-lg w-100 rounded-3" onclick="generateBlocks()">Blokları Oluştur</button>
-                            </div>
+                            <div class="col-md-12">
+                                  <label class="form-label fw-bold">Projenizde Kaç Blok (Bina) Var?</label>
+                                  <input type="number" id="blockCount" class="form-control form-control-lg rounded-3" min="1" max="20" value="@(Model.Blocks != null && Model.Blocks.Any() ? Model.Blocks.Count : 1)" oninput="generateBlocks()" />
+                              </div>
+                            
                         </div>
 
                         <div id="blocksContainer">
-                            <!-- Blocks will be injected here via JS -->
-                        </div>
+                            @if (Model.Blocks != null && Model.Blocks.Any())
+                            {
+                                int i = 0;
+                                foreach (var b in Model.Blocks)
+                                {
+                                    <div class="card border border-2 border-light shadow-sm rounded-4 mb-3 block-item">
+                                        <div class="card-body p-4">
+                                            <h5 class="fw-bold text-navy border-bottom pb-2 mb-3"><i class="ph ph-building me-2 text-orange"></i> @(i+1). Blok / Yapı Tanımı</h5>
+                                            <div class="row g-3">
+                                                <div class="col-md-12 col-lg-3">
+                                                    <label class="form-label small fw-bold">Blok / Yapı Adı</label>
+                                                    <input type="text" name="Blocks[@i].BlockName" class="form-control b-name" value="@b.BlockName" onkeyup="updatePodiumDropdowns()" required  />
+                                                    <input type="hidden" name="Blocks[@i].StructureType" value="independent" />
+                                                    <input type="hidden" name="Blocks[@i].ParentIndex" value="" />
+                                                </div>
+                                                <div class="col-12 col-lg-2">
+                                                    <label class="form-label small fw-bold">Taban (m²)</label>
+                                                    <input type="number" name="Blocks[@i].BaseArea" class="form-control" value="@b.BaseArea" min="1" required />
+                                                </div>
+                                                <div class="col-6 col-lg-2">
+                                                    <label class="form-label small fw-bold">Normal Kat Sayısı</label>
+                                                    <input type="number" name="Blocks[@i].TotalFloors" class="form-control b-floors" value="@b.TotalFloors" min="0" required />
+                                                </div>
+                                                <div class="col-6 col-lg-1">
+                                                    <label class="form-label small fw-bold">Daire</label>
+                                                    <input type="number" name="Blocks[@i].TotalApartments" class="form-control" value="@b.TotalApartments" min="0" required />
+                                                </div>
+                                                <div class="col-6 col-lg-1">
+                                                    <label class="form-label small fw-bold">Dükkan</label>
+                                                    <input type="number" name="Blocks[@i].TotalShops" class="form-control" value="@b.TotalShops" min="0" required />
+                                                </div>
+                                                <div class="col-6 col-lg-2">
+                                                    <label class="form-label small fw-bold">Bodrum Kat Sayısı</label>
+                                                    <input type="number" name="Blocks[@i].BasementFloors" class="form-control b-basements" value="@b.BasementFloors" min="0" required />
+                                                    <div class="form-check mt-2">
+                                                        <input class="form-check-input" type="checkbox" name="Blocks[@i].HasGroundFloor" value="true" id="ground_@i" @(b.HasGroundFloor ? "checked" : "")>
+                                                        <label class="form-check-label small fw-bold" for="ground_@i">Zemin Kat Var</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="Blocks[@i].HasRoof" value="true" id="roof_@i" @(b.HasRoof ? "checked" : "")>
+                                                        <label class="form-check-label small fw-bold" for="roof_@i">Çatı Katı Var</label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    i++;
+                                }
+                            }
+                          </div>
 
                         <div class="d-flex justify-content-between mt-5">
                             <button type="button" class="btn btn-outline-secondary btn-lg rounded-pill px-4" onclick="nextStep(1)"><i class="ph ph-arrow-left me-2"></i> Geri</button>
-                            <button type="button" class="btn btn-orange btn-lg rounded-pill px-5 fw-bold" onclick="prepareSummary()">Devam Et <i class="ph ph-arrow-right ms-2"></i></button>
+                            <button type="button" class="btn btn-orange btn-lg rounded-pill px-5 fw-bold" onclick="saveStep2AndContinue()">Devam Et <i class="ph ph-arrow-right ms-2"></i></button>
                         </div>
                     </div>
 
@@ -299,6 +392,56 @@
             bootstrap.Modal.getInstance(document.getElementById('mapModal')).hide();
         }
 
+        
+        function saveStep1AndContinue() {
+            var form = document.getElementById('wizardForm');
+            var step = document.getElementById('step1');
+            var invalidElements = step.querySelectorAll(':invalid');
+            if(invalidElements.length > 0) {
+                  var msg = "Eksik veya hatalı alanlar var:\\n";
+                  invalidElements.forEach(el => {
+                      var name = el.name || el.id || 'Bilinmeyen Alan';
+                      msg += "- " + name + "\\n";
+                  });
+                  alert(msg);
+                  invalidElements[0].reportValidity();
+                  return;
+              }
+
+            // AJAX POST
+            var formData = new FormData(form);
+            fetch('/ConstructionProject/SaveStep1', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    // Persist draft id in the hidden field
+                    document.getElementById('DraftProjectId').value = data.projectId;
+
+                    // Update the URL so that a page refresh keeps the draft id
+                    // This ensures the Create(id) GET loads the same draft on F5
+                    try {
+                        const newUrl = new URL(window.location.href);
+                        newUrl.searchParams.set('id', data.projectId);
+                        window.history.replaceState({}, document.title, newUrl.toString());
+                    } catch (e) {
+                        // fallback
+                        window.location.hash = '#draft-' + data.projectId;
+                    }
+
+                    nextStep(2);
+                } else {
+                    alert('Kayıt sırasında bir hata oluştu: ' + (data.message || 'Bilinmeyen hata'));
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Bağlantı hatası.');
+            });
+        }
+
         function nextStep(step) {
             document.querySelectorAll('.wizard-step').forEach(el => el.classList.remove('active'));
             document.getElementById('step' + step).classList.add('active');
@@ -334,11 +477,19 @@
         function generateBlocks() {
             const count = parseInt(document.getElementById('blockCount').value) || 1;
             const container = document.getElementById('blocksContainer');
-            container.innerHTML = '';
-            
             const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-            
-            for(let i = 0; i < count; i++) {
+              
+              const currentBlocks = container.querySelectorAll('.block-item');
+              const currentCount = currentBlocks.length;
+              
+              if (count < currentCount) {
+                  // Remove excess blocks from the end
+                  for (let i = currentCount - 1; i >= count; i--) {
+                      currentBlocks[i].remove();
+                  }
+              } else if (count > currentCount) {
+                  // Add new blocks
+                  for (let i = currentCount; i < count; i++) {
                 const defaultName = count === 1 ? "Tek Blok" : letters[i] + " Blok";
                 
                 const html = `
@@ -348,7 +499,7 @@
                               <div class="row g-3">
                                   <div class="col-md-12 col-lg-3">
                                         <label class="form-label small fw-bold">Blok / Yapı Adı</label>
-                                        <input type="text" name="Blocks[${i}].BlockName" class="form-control b-name" value="${defaultName}" onkeyup="updatePodiumDropdowns()" required ${count === 1 ? 'readonly' : ''} />
+                                        <input type="text" name="Blocks[${i}].BlockName" class="form-control b-name" value="${defaultName}" onkeyup="updatePodiumDropdowns()" required  />
                                         
                                         <label class="form-label small fw-bold mt-2 text-primary">Yapı Karakteri</label>
                                         <select name="Blocks[${i}].StructureType" class="form-select b-type border-primary" onchange="toggleParent(this)">
@@ -368,7 +519,15 @@
                                   <div class="col-6 col-lg-2">
                                       <label class="form-label small fw-bold">Normal Kat Sayısı</label>
                                       <input type="number" name="Blocks[${i}].TotalFloors" class="form-control b-floors" value="5" min="0" required />
-                                  </div>
+                                    </div>
+                                    <div class="col-6 col-lg-1">
+                                        <label class="form-label small fw-bold">Daire</label>
+                                        <input type="number" name="Blocks[${i}].TotalApartments" class="form-control" value="20" min="0" required />
+                                    </div>
+                                    <div class="col-6 col-lg-1">
+                                        <label class="form-label small fw-bold">Dükkan</label>
+                                        <input type="number" name="Blocks[${i}].TotalShops" class="form-control" value="2" min="0" required />
+                                    </div>
                                   <div class="col-6 col-lg-2">
                                         <label class="form-label small fw-bold">Bodrum Kat Sayısı</label>
                                         <input type="number" name="Blocks[${i}].BasementFloors" class="form-control b-basements" value="1" min="0" required />
@@ -385,13 +544,11 @@
                           </div>
                       </div>
                   `;
-                  container.innerHTML += html;
+                  container.insertAdjacentHTML('beforeend', html);
+              }
             }
-        }
-
-        
-          
-        // Adres Formatlayıcı
+          }
+// Adres Formatlayıcı
         document.getElementById('fullAddress').addEventListener('input', function(e) {
             let val = e.target.value;
             // 1. Türkçe karakter ve noktalama kalsın, garip sembolleri uçur.
@@ -415,6 +572,15 @@
         
         
         $(document).ready(function() {
+
+        // Enter tuşunun formu otomatik göndermesini engelle
+        $(window).keydown(function(event){
+            if(event.keyCode == 13) {
+                event.preventDefault();
+                return false;
+            }
+        });
+
             // Sehir degisince ilceyi doldur
             $('#CityId').change(function() {
                 var cityId = $(this).val();
@@ -436,7 +602,7 @@
                 }
             });
 
-            if ($('#CityId').val()) { $('#CityId').trigger('change'); }
+            // if ($('#CityId').val()) { $('#CityId').trigger('change'); }
 
             // Ilce degisince mahalleyi doldur
             $('#DistrictId').change(function() {
@@ -515,6 +681,40 @@
           }
 
 
+        function saveStep2AndContinue() {
+            var form = document.getElementById('wizardForm');
+            var step = document.getElementById('step1');
+            var invalidElements = step.querySelectorAll(':invalid');
+            if(invalidElements.length > 0) {
+                  var msg = "Eksik veya hatalı alanlar var:\\n";
+                  invalidElements.forEach(el => {
+                      var name = el.name || el.id || 'Bilinmeyen Alan';
+                      msg += "- " + name + "\\n";
+                  });
+                  alert(msg);
+                  invalidElements[0].reportValidity();
+                  return;
+              }
+
+            var formData = new FormData(form);
+            fetch('/ConstructionProject/SaveStep2', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    prepareSummary();
+                } else {
+                    alert('Kayıt sırasında bir hata oluştu: ' + data.message);
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Bağlantı hatası.');
+            });
+        }
+
           function prepareSummary() {
             // Get values from Step 1
             const name = document.querySelector('input[name="Name"]').value;
@@ -526,9 +726,12 @@
             let totalShops = 0;
             
             blocks.forEach(b => {
-                
-                
+                let aptsInput = b.querySelector('input[name*="TotalApartments"]');
+                let shopsInput = b.querySelector('input[name*="TotalShops"]');
+                if (aptsInput) totalApts += (parseInt(aptsInput.value) || 0);
+                if (shopsInput) totalShops += (parseInt(shopsInput.value) || 0);
             });
+
 
             // Set Summary
             document.getElementById('summaryName').innerText = name || "İsimsiz Proje";
@@ -539,6 +742,30 @@
             
             nextStep(3);
         }
+                // On page load: if we have a draft id (either from server model or URL), open step 2
+            document.addEventListener('DOMContentLoaded', function() {
+                try {
+                    const draftIdField = document.getElementById('DraftProjectId');
+                    const draftId = parseInt(draftIdField?.value || new URLSearchParams(window.location.search).get('id') || '0');
+                    if (draftId > 0) {
+                        // ensure hidden field is set (in case it was only in URL)
+                        if (draftIdField && !draftIdField.value) draftIdField.value = draftId;
+
+                        // if blocks not rendered, try to generate from server-rendered model (server fills model.Blocks)
+                        setTimeout(() => {
+                            if (document.getElementById('blocksContainer') && document.getElementById('blocksContainer').children.length === 0) {
+                                // If there are server-side rendered blocks they would already be present; otherwise leave generation to user
+                                // We still switch to step 2 so the user can continue
+                                nextStep(2);
+                            } else {
+                                nextStep(2);
+                            }
+                        }, 50);
+                    }
+                } catch (e) {
+                    console.warn('Draft load check failed', e);
+                }
+            });
     </script>
 }
 

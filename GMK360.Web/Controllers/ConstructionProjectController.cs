@@ -87,12 +87,160 @@ namespace GMK360.Web.Controllers
         }
 
         // GET: ConstructionProject/Create
-        public async Task<IActionResult> Create() { var cities = await _context.Cities.OrderBy(c => c.Name).ToListAsync(); ViewBag.Cities = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(cities, "Id", "Name"); ViewBag.Districts = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(new System.Collections.Generic.List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>()); ViewBag.Neighborhoods = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(new System.Collections.Generic.List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>()); ViewBag.Streets = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(new System.Collections.Generic.List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>()); return View(); }
+        public async Task<IActionResult> Create(int? id = null) { 
+            int? projectId = id; 
+            var cities = await _context.Cities.OrderBy(c => c.Name).ToListAsync(); 
+            ViewBag.Cities = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(cities, "Id", "Name"); 
+            ViewBag.Districts = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(new System.Collections.Generic.List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>()); 
+            ViewBag.Neighborhoods = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(new System.Collections.Generic.List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>()); 
+            ViewBag.Streets = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(new System.Collections.Generic.List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>()); 
+            
+            var model = new GMK360.Web.Models.CreateProjectWizardViewModel();
+
+            if (projectId.HasValue) {
+                var draft = await _context.ConstructionProjects.Include(p => p.Blocks).FirstOrDefaultAsync(p => p.Id == projectId.Value);
+                if (draft != null) {
+                    model.DraftProjectId = draft.Id;
+                    model.Name = draft.Name;
+                    model.Description = draft.Description;
+                    model.Address = draft.Address;
+                    model.TotalLandArea = draft.TotalLandArea;
+                    model.TargetTotalApartments = draft.TargetTotalApartments;
+                    model.TargetTotalShops = draft.TargetTotalShops;
+                    model.Latitude = draft.Latitude;
+                    model.Longitude = draft.Longitude;
+                    model.CityId = draft.CityId ?? 0;
+                    model.DistrictId = draft.DistrictId ?? 0;
+                    model.NeighborhoodId = draft.NeighborhoodId ?? 0;
+                    model.StreetId = draft.StreetId;
+
+                    if (draft.Blocks != null && draft.Blocks.Any()) {
+                        model.Blocks = draft.Blocks.Select(b => new GMK360.Web.Models.WizardBlockItem {
+                            BlockName = b.BlockName,
+                            BaseArea = b.BaseArea,
+                            TotalFloors = b.TotalFloors ?? 0,
+                            BasementFloors = b.BasementFloors,
+                            TotalApartments = b.TotalUnits,
+                            TotalShops = 0,
+                            HasGroundFloor = b.HasGroundFloor,
+                            HasRoof = b.HasRoof
+                        }).ToList();
+                    }
+
+                    if (draft.CityId.HasValue) {
+                        var districts = await _context.Districts.Where(d => d.CityId == draft.CityId).ToListAsync();
+                        ViewBag.Districts = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(districts, "Id", "Name", draft.DistrictId);
+                    }
+                    if (draft.DistrictId.HasValue) {
+                        var hoods = await _context.Neighborhoods.Where(n => n.DistrictId == draft.DistrictId).ToListAsync();
+                        ViewBag.Neighborhoods = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(hoods, "Id", "Name", draft.NeighborhoodId);
+                    }
+                    if (draft.NeighborhoodId.HasValue) {
+                        var streets = await _context.Streets.Where(s => s.NeighborhoodId == draft.NeighborhoodId).ToListAsync();
+                        ViewBag.Streets = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(streets, "Id", "Name", draft.StreetId);
+                    }
+                }
+            }
+
+            return View(model); 
+        }
 
         // POST: ConstructionProject/Create
         // WIZARD CREATE ACTION
         [HttpPost]
         [ValidateAntiForgeryToken]
+        
+        [HttpPost]
+        public async Task<IActionResult> SaveStep1([FromForm] GMK360.Web.Models.CreateProjectWizardViewModel model)
+        {
+            try {
+                var agencyId = await GetUserAgencyIdAsync();
+                if (agencyId == null) return Json(new { success = false, message = "Yetkisiz erişim." });
+
+                GMK360.Core.Entities.Construction.ConstructionProject project;
+                if (model.DraftProjectId > 0)
+                {
+                    project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == model.DraftProjectId);
+                    if (project == null) return Json(new { success = false, message = "Proje bulunamadı." });
+                }
+                else
+                {
+                    project = new GMK360.Core.Entities.Construction.ConstructionProject { AgencyId = agencyId.Value, Status = 0, CreatedAt = DateTime.UtcNow };
+                    _context.ConstructionProjects.Add(project);
+                }
+
+                project.Name = model.Name;
+                project.Description = model.Description;
+                project.Address = model.Address ?? "Adres belirtilmedi";
+                project.StartDate = model.StartDate;
+                project.EndDate = model.EndDate;
+                project.TotalLandArea = model.TotalLandArea;
+                project.CityId = model.CityId;
+                project.DistrictId = model.DistrictId;
+                project.NeighborhoodId = model.NeighborhoodId;
+                project.StreetId = model.StreetId;
+                project.TargetTotalApartments = model.TargetTotalApartments;
+                project.TargetTotalShops = model.TargetTotalShops;
+                project.Latitude = model.Latitude;
+                project.Longitude = model.Longitude;
+
+                await _context.SaveChangesAsync();
+                return Json(new { success = true, draftId = project.Id, projectId = project.Id });
+            } catch (Exception ex) {
+                return Json(new { success = false, message = ex.Message + (ex.InnerException != null ? " - " + ex.InnerException.Message : "") });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> SaveStep2([FromForm] GMK360.Web.Models.CreateProjectWizardViewModel model)
+        {
+            try {
+                if (model.DraftProjectId == 0) return Json(new { success = false, message = "Proje ID bulunamadı." });
+                var project = await _context.ConstructionProjects.Include(p => p.Blocks).FirstOrDefaultAsync(p => p.Id == model.DraftProjectId);
+                if (project == null) return Json(new { success = false, message = "Proje bulunamadı." });
+
+                if (project.Blocks != null && project.Blocks.Any())
+                {
+                    _context.Buildings.RemoveRange(project.Blocks);
+                }
+
+                if (model.Blocks != null)
+                {
+                    int blockCounter = 1;
+                    foreach (var b in model.Blocks)
+                    {
+                        var building = new GMK360.Core.Entities.Building
+                        {
+                            Name = project.Name + " - " + b.BlockName,
+                            BlockName = b.BlockName,
+                            BuildingNumber = blockCounter.ToString(),
+                            StreetName = "Belirtilmedi",
+                            BaseArea = b.BaseArea,
+                            BasementFloors = b.BasementFloors,
+                            TotalFloors = b.TotalFloors,
+                            TotalUnits = b.TotalApartments + b.TotalShops,
+                            HasBlock = true,
+                            HasRoof = b.HasRoof,
+                            HasGroundFloor = b.HasGroundFloor,
+                            ConstructionProjectId = project.Id,
+                            CityId = project.CityId ?? 34,
+                            DistrictId = project.DistrictId ?? 1,
+                            NeighborhoodId = project.NeighborhoodId ?? 1,
+                            StreetId = project.StreetId,
+                            CreatedAt = DateTime.UtcNow,
+                            ManagerUserId = _userManager.GetUserId(User) ?? ""
+                        };
+                        _context.Buildings.Add(building);
+                        blockCounter++;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                return Json(new { success = true });
+            } catch (Exception ex) {
+                return Json(new { success = false, message = ex.Message + (ex.InnerException != null ? " - " + ex.InnerException.Message : "") });
+            }
+        }
         public async Task<IActionResult> CreateWizard([FromForm] GMK360.Web.Models.CreateProjectWizardViewModel model)
         {
             
@@ -230,6 +378,7 @@ namespace GMK360.Web.Controllers
                             Name = project.Name + " - " + b.BlockName,
                             BlockName = b.BlockName,
                             BuildingNumber = blockCounter.ToString(),
+                            StreetName = "Belirtilmedi",
                             HasBlock = true,
                             BasementFloors = b.BasementFloors,
                             TotalFloors = b.TotalFloors,
@@ -241,7 +390,6 @@ namespace GMK360.Web.Controllers
                             DistrictId = model.DistrictId > 0 ? model.DistrictId : 1,
                             NeighborhoodId = model.NeighborhoodId > 0 ? model.NeighborhoodId : 1,
                             StreetId = model.StreetId,
-                            StreetName = "-",
                             Address = project.Address ?? "Belirtilmedi",
                             Latitude = model.Latitude ?? 0,
                             Longitude = model.Longitude ?? 0,

@@ -8,12 +8,16 @@ namespace GMK360.Web.Models
     public class CreateProjectWizardViewModel
     {
         [Required(ErrorMessage = "Proje adı zorunludur.")]
+        public int DraftProjectId { get; set; }
+
+        [Required(ErrorMessage = "Proje adı zorunludur.")]
         public string Name { get; set; }
 
         public string Description { get; set; }
         
         [Required(ErrorMessage = "Adres zorunludur.")]
         public string Address { get; set; }
+
         
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
@@ -35,6 +39,8 @@ namespace GMK360.Web.Models
         public double? Longitude { get; set; }
 
         public double? TotalLandArea { get; set; }
+        public int? TargetTotalApartments { get; set; }
+        public int? TargetTotalShops { get; set; }
 
         public List<WizardBlockItem> Blocks { get; set; } = new List<WizardBlockItem>();
     }

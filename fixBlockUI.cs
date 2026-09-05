@@ -7,67 +7,88 @@ class Program
 {
     static void Main()
     {
-        string path = @"c:\Users\murat\source\repos\GMK360\GMK360.Web\Views\ConstructionProject\ManageBlock.cshtml";
-        string text = File.ReadAllText(path, Encoding.UTF8);
+        string path = @"c:\Users\murat\source\repos\GMK360\GMK360.Web\Views\ConstructionProject\Create.cshtml";
+        string code = File.ReadAllText(path, Encoding.UTF8);
 
-        // 1. Remove the "Hızlı Kat/Daire Üretici" Side Panel
-        string quickGenPattern = @"<!-- Otomatik Üretim Sihirbazı -->\s*<div class=""card border-0 shadow-sm rounded-4 mb-4"">.*?</div>\s*</div>\s*</div>\s*<!-- Blok Dış Cephe Renderları -->";
+        string find = @"<input type=""number"" name=""Blocks\[\$\{i\}\]\.TotalFloors"" class=""form-control b-floors"" value=""5"" min=""0"" required />\s*</div>";
         
-        text = Regex.Replace(text, quickGenPattern, "<!-- Blok Dış Cephe Renderları -->", RegexOptions.Singleline);
-        Console.WriteLine("Removed Quick Generator");
+        string replace = @"<input type=""number"" name=""Blocks[${i}].TotalFloors"" class=""form-control b-floors"" value=""5"" min=""0"" required />
+                                    </div>
+                                    <div class=""col-6 col-lg-1"">
+                                        <label class=""form-label small fw-bold"">Daire</label>
+                                        <input type=""number"" name=""Blocks[${i}].TotalApartments"" class=""form-control"" value=""20"" min=""0"" required />
+                                    </div>
+                                    <div class=""col-6 col-lg-1"">
+                                        <label class=""form-label small fw-bold"">Dükkan</label>
+                                        <input type=""number"" name=""Blocks[${i}].TotalShops"" class=""form-control"" value=""2"" min=""0"" required />
+                                    </div>";
 
-        // 2. Fix the Block Features Sidebar display
-        string sidebarPattern = @"<div class=""mb-3"">\s*<span class=""text-muted small d-block"">Cephe</span>.*?<span class=""fw-bold text-dark"">@\(string\.IsNullOrEmpty\(Model\.TechnicalFeatures\) \? ""Belirtilmedi"" \: Model\.TechnicalFeatures\)</span>\s*</div>";
+        if (!code.Contains("Blocks[${i}].TotalApartments"))
+        {
+            code = Regex.Replace(code, find, replace);
+            File.WriteAllText(path, code, new UTF8Encoding(true));
+            Console.WriteLine("Fixed Block UI fields in Javascript");
+        }
         
-        string newSidebarFeatures = @"<div class=""mb-3"">
-                    <span class=""text-muted small d-block"">Otopark</span>
-                    <span class=""fw-bold text-dark"">@(string.IsNullOrEmpty(Model.ParkingType) ? ""Belirtilmedi"" : Model.ParkingType)</span>
-                </div>
-                <div class=""mb-3"">
-                    <span class=""text-muted small d-block"">Asansör</span>
-                    <span class=""fw-bold text-dark"">@(Model.ElevatorCount.HasValue ? Model.ElevatorCount + "" Adet"" : ""Belirtilmedi"")</span>
-                </div>
-                <div class=""mb-3"">
-                    <span class=""text-muted small d-block"">Mantolama / Yalıtım</span>
-                    <span class=""fw-bold text-dark"">@(string.IsNullOrEmpty(Model.InsulationType) ? ""Belirtilmedi"" : Model.InsulationType)</span>
-                </div>";
-                
-        text = Regex.Replace(text, sidebarPattern, newSidebarFeatures, RegexOptions.Singleline);
-        Console.WriteLine("Updated Sidebar Features");
-
-
-        // 3. Fix the editBlockDetailsModal
-        string modalPattern = @"<div class=""col-md-6 mb-3"">\s*<label class=""form-label fw-bold small"">Cephe</label>.*?<textarea name=""TechnicalFeatures"" class=""form-control"" rows=""3"">@Model\.TechnicalFeatures</textarea>\s*</div>";
-        
-        string newModalFeatures = @"<div class=""col-md-6 mb-3"">
-                            <label class=""form-label fw-bold small"">Asansör Sayısı</label>
-                            <input type=""number"" name=""ElevatorCount"" class=""form-control"" value=""@Model.ElevatorCount"" placeholder=""Örn: 2"" />
-                        </div>
-                    </div>
-                    <div class=""row"">
-                        <div class=""col-md-6 mb-3"">
-                            <label class=""form-label fw-bold small"">Otopark</label>
-                            <select name=""ParkingType"" class=""form-select"">
-                                <option value="""" selected=""@(string.IsNullOrEmpty(Model.ParkingType))"">Seçiniz...</option>
-                                <option value=""Kapalı Otopark"" selected=""@(Model.ParkingType == ""Kapalı Otopark"")"">Kapalı Otopark</option>
-                                <option value=""Açık Otopark"" selected=""@(Model.ParkingType == ""Açık Otopark"")"">Açık Otopark</option>
-                                <option value=""Açık ve Kapalı Otopark"" selected=""@(Model.ParkingType == ""Açık ve Kapalı Otopark"")"">Açık ve Kapalı Otopark</option>
-                                <option value=""Yok"" selected=""@(Model.ParkingType == ""Yok"")"">Yok</option>
-                            </select>
-                        </div>
-                        <div class=""col-md-6 mb-3"">
-                            <label class=""form-label fw-bold small"">Mantolama / Yalıtım</label>
-                            <input type=""text"" name=""InsulationType"" class=""form-control"" placeholder=""Örn: Taş Yünü"" value=""@Model.InsulationType"" />
-                        </div>
-                    </div>
-                    <div class=""mb-3"">
-                        <label class=""form-label fw-bold small"">Diğer Teknik Özellikler (Sığınak, Su Deposu vb.)</label>
-                        <textarea name=""TechnicalFeatures"" class=""form-control"" rows=""2"">@Model.TechnicalFeatures</textarea>
-                    </div>";
-                    
-        text = Regex.Replace(text, modalPattern, newModalFeatures, RegexOptions.Singleline);
-        Console.WriteLine("Updated Modal Features");
-
-        File.WriteAllText(path, text, new UTF8Encoding(true));
+        // Also inject C# rendering block for existing blocks
+        string blocksContainerFind = @"<div id=""blocksContainer"">\s*<!-- Blocks will be injected here via JS -->\s*</div>";
+        string csharpRender = @"<div id=""blocksContainer"">
+                            @if (Model.Blocks != null && Model.Blocks.Any())
+                            {
+                                int i = 0;
+                                foreach (var b in Model.Blocks)
+                                {
+                                    <div class=""card border border-2 border-light shadow-sm rounded-4 mb-3 block-item"">
+                                        <div class=""card-body p-4"">
+                                            <h5 class=""fw-bold text-navy border-bottom pb-2 mb-3""><i class=""ph ph-building me-2 text-orange""></i> @(i+1). Blok / Yapı Tanımı</h5>
+                                            <div class=""row g-3"">
+                                                <div class=""col-md-12 col-lg-3"">
+                                                    <label class=""form-label small fw-bold"">Blok / Yapı Adı</label>
+                                                    <input type=""text"" name=""Blocks[@i].BlockName"" class=""form-control b-name"" value=""@b.BlockName"" onkeyup=""updatePodiumDropdowns()"" required  />
+                                                    <input type=""hidden"" name=""Blocks[@i].StructureType"" value=""independent"" />
+                                                    <input type=""hidden"" name=""Blocks[@i].ParentIndex"" value="""" />
+                                                </div>
+                                                <div class=""col-12 col-lg-2"">
+                                                    <label class=""form-label small fw-bold"">Taban (m²)</label>
+                                                    <input type=""number"" name=""Blocks[@i].BaseArea"" class=""form-control"" value=""@b.BaseArea"" min=""1"" required />
+                                                </div>
+                                                <div class=""col-6 col-lg-2"">
+                                                    <label class=""form-label small fw-bold"">Normal Kat Sayısı</label>
+                                                    <input type=""number"" name=""Blocks[@i].TotalFloors"" class=""form-control b-floors"" value=""@b.TotalFloors"" min=""0"" required />
+                                                </div>
+                                                <div class=""col-6 col-lg-1"">
+                                                    <label class=""form-label small fw-bold"">Daire</label>
+                                                    <input type=""number"" name=""Blocks[@i].TotalApartments"" class=""form-control"" value=""@b.TotalApartments"" min=""0"" required />
+                                                </div>
+                                                <div class=""col-6 col-lg-1"">
+                                                    <label class=""form-label small fw-bold"">Dükkan</label>
+                                                    <input type=""number"" name=""Blocks[@i].TotalShops"" class=""form-control"" value=""@b.TotalShops"" min=""0"" required />
+                                                </div>
+                                                <div class=""col-6 col-lg-2"">
+                                                    <label class=""form-label small fw-bold"">Bodrum Kat Sayısı</label>
+                                                    <input type=""number"" name=""Blocks[@i].BasementFloors"" class=""form-control b-basements"" value=""@b.BasementFloors"" min=""0"" required />
+                                                    <div class=""form-check mt-2"">
+                                                        <input class=""form-check-input"" type=""checkbox"" name=""Blocks[@i].HasGroundFloor"" value=""true"" id=""ground_@i"" @(b.HasGroundFloor ? ""checked"" : """")>
+                                                        <label class=""form-check-label small fw-bold"" for=""ground_@i"">Zemin Kat Var</label>
+                                                    </div>
+                                                    <div class=""form-check"">
+                                                        <input class=""form-check-input"" type=""checkbox"" name=""Blocks[@i].HasRoof"" value=""true"" id=""roof_@i"" @(b.HasRoof ? ""checked"" : """")>
+                                                        <label class=""form-check-label small fw-bold"" for=""roof_@i"">Çatı Katı Var</label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    i++;
+                                }
+                            }
+                          </div>";
+                          
+        if (!code.Contains("@foreach (var b in Model.Blocks)"))
+        {
+            code = Regex.Replace(code, blocksContainerFind, csharpRender);
+            File.WriteAllText(path, code, new UTF8Encoding(true));
+            Console.WriteLine("Fixed Server Side Block Rendering");
+        }
     }
 }

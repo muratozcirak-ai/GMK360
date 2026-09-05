@@ -1,4 +1,10 @@
-using GMK360.Core.Entities;
+﻿using GMK360.Core.Entities;
+using GMK360.Core.Entities.Auditing;
+using System.Reflection;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Text.Json;
 using GMK360.Core.Entities.Construction;
 using GMK360.Core.Entities.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -22,6 +28,8 @@ namespace GMK360.Data.Contexts
         public DbSet<NeighborhoodPOI> NeighborhoodPOIs { get; set; }
         public DbSet<LocalProfessional> LocalProfessionals { get; set; }
         public DbSet<NeighboringArea> NeighboringAreas { get; set; }
+
+        public DbSet<AuditLog> AuditLogs { get; set; }
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options)
         {
@@ -254,9 +262,75 @@ namespace GMK360.Data.Contexts
         public DbSet<ServiceOffer> ServiceOffers { get; set; }
         public DbSet<ServiceProviderSubscription> ServiceProviderSubscriptions { get; set; }
 
+        
+        private void SetGlobalQueryFilter<T>(ModelBuilder builder) where T : BaseEntity
+        {
+            builder.Entity<T>().HasQueryFilter(e => !e.IsDeleted);
+        }
+
+        public override int SaveChanges()
+        {
+            HandleSoftDeleteAndAudit();
+            return base.SaveChanges();
+        }
+
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            HandleSoftDeleteAndAudit();
+            return base.SaveChangesAsync(cancellationToken);
+        }
+
+        private void HandleSoftDeleteAndAudit()
+        {
+            var entries = ChangeTracker.Entries().Where(e => e.Entity is BaseEntity && (e.State == EntityState.Added || e.State == EntityState.Modified || e.State == EntityState.Deleted)).ToList();
+            
+            foreach (var entry in entries)
+            {
+                var entity = (BaseEntity)entry.Entity;
+
+                if (entry.State == EntityState.Added)
+                {
+                    entity.CreatedAt = DateTime.UtcNow;
+                }
+                else if (entry.State == EntityState.Modified)
+                {
+                    entity.UpdatedAt = DateTime.UtcNow;
+                }
+                else if (entry.State == EntityState.Deleted)
+                {
+                    entry.State = EntityState.Modified;
+                    entity.IsDeleted = true;
+                    entity.UpdatedAt = DateTime.UtcNow;
+                    
+                    // Simple Audit for Soft Delete
+                    AuditLogs.Add(new AuditLog {
+                        ActionType = "SOFT_DELETE",
+                        EntityName = entry.Entity.GetType().Name,
+                        EntityId = entity.Id.ToString(),
+                        Timestamp = DateTime.UtcNow,
+                        OldValues = "{}",
+                        NewValues = "{\"IsDeleted\": true}",
+                        AffectedColumns = "[\"IsDeleted\"]",
+                        UserId = "SYSTEM"
+                    });
+                }
+            }
+        }
+
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
+
+            // Apply Global Query Filter for Soft Delete
+            foreach (var entityType in builder.Model.GetEntityTypes())
+            {
+                if (typeof(GMK360.Core.Entities.BaseEntity).IsAssignableFrom(entityType.ClrType))
+                {
+                    var method = typeof(ApplicationDbContext).GetMethod(nameof(SetGlobalQueryFilter), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    var genericMethod = method.MakeGenericMethod(entityType.ClrType);
+                    genericMethod.Invoke(this, new object[] { builder });
+                }
+            }
 
             builder.Entity<GMK360.Core.Entities.Construction.ConstructionTimesheet>()
                 .HasOne(t => t.Worker)
