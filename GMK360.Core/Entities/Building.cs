@@ -17,6 +17,8 @@ namespace GMK360.Core.Entities
         
         public string? TaxNumber { get; set; }
         public int TotalUnits { get; set; }
+        public int TotalShops { get; set; } = 0;
+        public int TotalApartments { get; set; } = 0;
         
         public bool HasBlock { get; set; } // "Blok/Giriş var mı?"
         public string BlockName { get; set; } // Örn: "A Blok", "B Girişi"
