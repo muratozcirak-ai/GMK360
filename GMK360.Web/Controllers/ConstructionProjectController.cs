@@ -323,188 +323,34 @@ namespace GMK360.Web.Controllers
         }
         public async Task<IActionResult> CreateWizard([FromForm] GMK360.Web.Models.CreateProjectWizardViewModel model)
         {
-            
-            var agencyId = await GetUserAgencyIdAsync();
-            if (agencyId == null) return Unauthorized();
-
-            string uploadedImageUrl = "";
-            string currentStateImageUrl = "";
-
-            if (model.CoverImageFile != null && model.CoverImageFile.Length > 0)
+            try
             {
-                string uploadsFolder = Path.Combine(_hostEnvironment.WebRootPath, "uploads", "projects", "covers");
-                Directory.CreateDirectory(uploadsFolder);
-                
-                string uniqueFileName = Guid.NewGuid().ToString() + "_" + Path.GetFileName(model.CoverImageFile.FileName);
-                string filePath = Path.Combine(uploadsFolder, uniqueFileName);
-                
-                using (var fileStream = new FileStream(filePath, FileMode.Create))
+                var agencyId = await GetUserAgencyIdAsync();
+                if (agencyId == null) return Unauthorized();
+
+                if (model.DraftProjectId <= 0)
                 {
-                    await model.CoverImageFile.CopyToAsync(fileStream);
+                    TempData["ErrorMessage"] = "Proje ID bulunamadı. Lütfen işleminizi baştan yapın.";
+                    return RedirectToAction(nameof(Index));
                 }
-                
-                uploadedImageUrl = "/uploads/projects/covers/" + uniqueFileName;
-            }
 
-            if (model.CurrentStateImageFile != null && model.CurrentStateImageFile.Length > 0)
-            {
-                string uploadsFolder = Path.Combine(_hostEnvironment.WebRootPath, "uploads", "projects", "current");
-                Directory.CreateDirectory(uploadsFolder);
-                
-                string uniqueFileName = Guid.NewGuid().ToString() + "_" + Path.GetFileName(model.CurrentStateImageFile.FileName);
-                string filePath = Path.Combine(uploadsFolder, uniqueFileName);
-                
-                using (var fileStream = new FileStream(filePath, FileMode.Create))
+                var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == model.DraftProjectId);
+                if (project == null)
                 {
-                    await model.CurrentStateImageFile.CopyToAsync(fileStream);
+                    TempData["ErrorMessage"] = "Proje bulunamadı.";
+                    return RedirectToAction(nameof(Index));
                 }
-                
-                currentStateImageUrl = "/uploads/projects/current/" + uniqueFileName;
-            }
 
-            var project = new GMK360.Core.Entities.Construction.ConstructionProject
-            {
-                Name = model.Name,
-                Description = string.IsNullOrWhiteSpace(model.Description) ? "" : model.Description,
-                Address = string.IsNullOrWhiteSpace(model.Address) ? "Adres belirtilmedi" : model.Address,
-                StartDate = model.StartDate,
-                EndDate = model.EndDate,
-                CoverImageUrl = uploadedImageUrl,
-                AgencyId = agencyId.Value,
-                Status = 0, // 0 = Upcoming
-                TotalLandArea = model.TotalLandArea,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            try 
-            {
-                _context.Add(project);
+                project.Status = 1; // 1 = Devam Ediyor
                 await _context.SaveChangesAsync();
-    
-                // DMS Sistemine Belge Ekleme (Proje Görseli)
-                var defaultFolder = _context.DmsFolders.FirstOrDefault();
-                if (defaultFolder == null)
-                {
-                    var cabinet = _context.DmsCabinets.FirstOrDefault();
-                    if (cabinet == null) {
-                        cabinet = new GMK360.Core.Entities.DmsCabinet { Name = "Genel Evraklar", Description = "Sistem tarafından oluşturuldu", UserId = _userManager.GetUserId(User) ?? "", CreatedAt = DateTime.UtcNow };
-                        _context.DmsCabinets.Add(cabinet);
-                        await _context.SaveChangesAsync();
-                    }
-    
-                    var shelf = _context.DmsShelves.FirstOrDefault();
-                    if (shelf == null) {
-                        shelf = new GMK360.Core.Entities.DmsShelf { Name = "Genel Arşiv", Description = "Sistem tarafından oluşturuldu", CabinetId = cabinet.Id, CreatedAt = DateTime.UtcNow };
-                        _context.DmsShelves.Add(shelf);
-                        await _context.SaveChangesAsync();
-                    }
-    
-                    defaultFolder = new GMK360.Core.Entities.DmsFolder 
-                    { 
-                        Name = "Genel Proje Evrakları", 
-                        Description = "Sistem tarafından oluşturuldu",
-                        ShelfId = shelf.Id,
-                        CreatedAt = DateTime.UtcNow 
-                    };
-                    _context.DmsFolders.Add(defaultFolder);
-                    await _context.SaveChangesAsync();
-                }
-                
-                if (!string.IsNullOrEmpty(uploadedImageUrl))
-                {
-                    var dmsDoc = new GMK360.Core.Entities.DmsDocument
-                    {
-                        Title = "Proje Görseli (Geleceği Hal)",
-                        DocumentUrl = uploadedImageUrl,
-                        FileExtension = model.CoverImageFile != null ? Path.GetExtension(model.CoverImageFile.FileName) : "",
-                        FileSizeBytes = model.CoverImageFile != null ? model.CoverImageFile.Length : 0,
-                        EntityType = "ConstructionProject",
-                        EntityId = project.Id,
-                        UploadDate = DateTime.UtcNow,
-                        UploadedByUserId = _userManager.GetUserId(User) ?? "",
-                        FolderId = defaultFolder.Id,
-                        PhysicalLocationNote = ""
-                    };
-                    _context.DmsDocuments.Add(dmsDoc);
-                }
-    
-                if (!string.IsNullOrEmpty(currentStateImageUrl))
-                {
-                    var dmsDoc = new GMK360.Core.Entities.DmsDocument
-                    {
-                        Title = "Mevcut Durum Görseli (İlk Hali)",
-                        DocumentUrl = currentStateImageUrl,
-                        FileExtension = model.CurrentStateImageFile != null ? Path.GetExtension(model.CurrentStateImageFile.FileName) : "",
-                        FileSizeBytes = model.CurrentStateImageFile != null ? model.CurrentStateImageFile.Length : 0,
-                        EntityType = "ConstructionProject",
-                        EntityId = project.Id,
-                        UploadDate = DateTime.UtcNow,
-                        UploadedByUserId = _userManager.GetUserId(User) ?? "",
-                        FolderId = defaultFolder.Id,
-                        PhysicalLocationNote = ""
-                    };
-                    _context.DmsDocuments.Add(dmsDoc);
-                }
-                
-                await _context.SaveChangesAsync();
-    
-                if (model.Blocks != null && model.Blocks.Count > 0)
-                {
-                    int blockCounter = 1;
-                    foreach (var b in model.Blocks)
-                    {
-                        var building = new GMK360.Core.Entities.Building
-                        {
-                            Name = project.Name + " - " + b.BlockName,
-                            BlockName = b.BlockName,
-                            BuildingNumber = blockCounter.ToString(),
-                            StreetName = "Belirtilmedi",
-                            HasBlock = true,
-                            BasementFloors = b.BasementFloors,
-                            TotalFloors = b.TotalFloors,
-                            TotalUnits = b.TotalApartments + b.TotalShops,
-                            ConstructionProjectId = project.Id,
-                            CreatedAt = DateTime.UtcNow,
-                            ManagerUserId = _userManager.GetUserId(User) ?? "",
-                            CityId = model.CityId > 0 ? model.CityId : 34, 
-                            DistrictId = model.DistrictId > 0 ? model.DistrictId : 1,
-                            NeighborhoodId = model.NeighborhoodId > 0 ? model.NeighborhoodId : 1,
-                            StreetId = model.StreetId,
-                            Address = project.Address ?? "Belirtilmedi",
-                            Latitude = model.Latitude ?? 0,
-                            Longitude = model.Longitude ?? 0,
-                            IsApproved = true,
-                            HasGroundFloor = b.HasGroundFloor,
-                            OnboardingStep = 1
-                        };
-    
-                        _context.Buildings.Add(building);
-                        await _context.SaveChangesAsync(); // Save to get building.Id
-                        
-                        
-                        building.HasRoof = b.HasRoof;
-                        building.BaseArea = b.BaseArea;
-                        await _context.SaveChangesAsync(); // Save updated building
-                        
-                        // Biz otomatik daire oluşturmayı bıraktık! 
-                        // Katlar ve daireler ManageBlock ekranından manuel tablo + kopyalama ile yapılacak.
-                        blockCounter++;
-                    }
-                }
-                
+
                 TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
                 return RedirectToAction(nameof(Details), new { id = project.Id });
             }
             catch (Exception ex)
             {
-                // Hata durumunda Exception'ı yakalayıp kullanıcıya View üzerinden gösteriyoruz
-                ModelState.AddModelError("", "Kayıt sırasında beklenmeyen bir hata oluştu: " + (ex.InnerException?.Message ?? ex.Message));
-                
-                // Dropdownları tekrar doldur
-                ViewBag.Agencies = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.Agencies, "Id", "Name", null);
-                // await LoadLocationViewBags(model); // Assumed method, keeping consistency
-                
-                return View(model);
+                TempData["ErrorMessage"] = "Bir hata oluştu: " + ex.Message;
+                return RedirectToAction(nameof(Index));
             }
         }
 
