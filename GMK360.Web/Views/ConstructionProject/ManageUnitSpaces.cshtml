@@ -1,0 +1,109 @@
+﻿@model GMK360.Core.Entities.BuildingUnit
+@{
+    ViewData["Title"] = "Mahal ve Demirbaş Yönetimi";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    string unitTitle = Model.Category == "OrtakAlan_Blok" ? "Blok Ortak Alanı" : (Model.Category == "Eklenti" ? "Eklenti" : $"Kat {Model.FloorLevel} - No {Model.DoorNumber}");
+}
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1"><i class="bi bi-layers text-primary me-2"></i>Mahal ve Demirbaş Yönetimi</h4>
+            <div class="text-muted small">
+                @Model.Building.ConstructionProject.Name / @Model.Building.BlockName / @unitTitle
+            </div>
+        </div>
+        <a asp-action="ManageBlock" asp-route-id="@Model.BuildingId" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Bloğa Dön
+        </a>
+    </div>
+
+    <div class="row">
+        <!-- Left Panel: Space List -->
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 mb-4">
+                <div class="card-header bg-white border-bottom-0 pt-4 pb-0 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0">İç Mahaller (Odalar)</h6>
+                    <button class="btn btn-sm btn-success rounded-pill" data-bs-toggle="modal" data-bs-target="#addSpaceModal">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                </div>
+                <div class="card-body">
+                    @if (!Model.Spaces.Any())
+                    {
+                        <div class="text-center text-muted small py-4">
+                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                            Henüz mahal eklenmemiş.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var space in Model.Spaces)
+                            {
+                                <a href="#" class="list-group-item list-group-item-action border-0 rounded mb-1 px-3 py-2 bg-light">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="fw-bold text-dark">@space.Name</div>
+                                        <span class="badge bg-secondary rounded-pill">@space.Type</span>
+                                    </div>
+                                    <div class="small text-muted mt-1">
+                                        @(space.Fixtures?.Count ?? 0) Demirbaş, @(space.Measurements?.Count ?? 0) Metraj
+                                    </div>
+                                </a>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Space Details (Fixtures & Measurements) -->
+        <div class="col-md-9">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted">
+                    <i class="bi bi-arrow-left-circle fs-1 mb-3 text-light"></i>
+                    <h5>Soldan bir mahal seçin</h5>
+                    <p class="small">Veya sol üstteki + butonundan yeni bir mahal ekleyin (Örn: Salon, Şaft, Banyo)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Space Modal -->
+<div class="modal fade" id="addSpaceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form asp-action="AddUnitSpace" method="post">
+                <input type="hidden" name="unitId" value="@Model.Id" />
+                
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold">Yeni Mahal Ekle</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Mahal Adı</label>
+                        <input type="text" name="spaceName" class="form-control" placeholder="Örn: Ebeveyn Banyosu, Ana Şaft" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Türü (Grup)</label>
+                        <select name="spaceType" class="form-select">
+                            <option value="Oda">Oda / Yaşam Alanı</option>
+                            <option value="Islak Hacim">Islak Hacim (Banyo/WC)</option>
+                            <option value="Mutfak">Mutfak</option>
+                            <option value="Balkon">Balkon / Teras</option>
+                            <option value="Tesisat">Tesisat / Şaft / Pano</option>
+                            <option value="Dolaşım">Hol / Koridor / Merdiven</option>
+                            <option value="Diğer">Diğer</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4">Ekle</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

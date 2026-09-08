@@ -170,7 +170,11 @@ namespace GMK360.Data.Contexts
         public DbSet<Building> Buildings { get; set; }
         public DbSet<BuildingUnit> BuildingUnits { get; set; }
         public DbSet<UnitSpace> UnitSpaces { get; set; }
-        public DbSet<UnitTemplate> UnitTemplates { get; set; }
+ 
+        public DbSet<SpaceMeasurement> SpaceMeasurements { get; set; }
+        public DbSet<SpaceFixture> SpaceFixtures { get; set; }
+        public DbSet<MaterialOption> MaterialOptions { get; set; }
+       public DbSet<UnitTemplate> UnitTemplates { get; set; }
         public DbSet<UnitTemplateSpace> UnitTemplateSpaces { get; set; }
         public DbSet<ProjectAmenity> ProjectAmenities { get; set; }
         public DbSet<ProjectAssignment> ProjectAssignments { get; set; }
@@ -320,6 +324,13 @@ namespace GMK360.Data.Contexts
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
+
+            builder.Entity<GMK360.Core.Entities.BuildingUnit>()
+                .HasOne(u => u.ParentUnit)
+                .WithMany(u => u.Attachments)
+                .HasForeignKey(u => u.ParentUnitId)
+                .OnDelete(Microsoft.EntityFrameworkCore.DeleteBehavior.Restrict);
+
 
             // Apply Global Query Filter for Soft Delete
             foreach (var entityType in builder.Model.GetEntityTypes())

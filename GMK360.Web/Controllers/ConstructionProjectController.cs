@@ -447,7 +447,7 @@ namespace GMK360.Web.Controllers
 
             var block = await _context.Buildings
                 .Include(b => b.ConstructionProject)
-                .Include(b => b.Units).Include(b => b.ParentBuilding)
+                .Include(b => b.Units).ThenInclude(u => u.ParentUnit).Include(b => b.ParentBuilding)
                 .FirstOrDefaultAsync(b => b.Id == id);
 
             if (block == null) return NotFound();
@@ -693,9 +693,7 @@ namespace GMK360.Web.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        
-        [HttpPost]
-        public async Task<IActionResult> CopyFloor(int buildingId, int sourceFloorLevel, string targetFloorLevels)
+        public async Task<IActionResult> AddBuildingUnit(int buildingId, int FloorLevel, string FloorName, string DoorNumber, string RoomCount, string UnitStructure, double? GrossSquareMeters, string FacadeDirection, string Category, int? ParentUnitId, string OwnerName, int Quantity = 1)
         {
             var agencyId = await GetUserAgencyIdAsync();
             if (agencyId == null) return Unauthorized();
@@ -707,62 +705,6 @@ namespace GMK360.Web.Controllers
             if (building == null || building.ConstructionProject?.AgencyId != agencyId)
                 return NotFound();
 
-            var sourceUnits = await _context.BuildingUnits
-                .Where(u => u.BuildingId == buildingId && u.FloorLevel == sourceFloorLevel)
-                .ToListAsync();
-
-            if (!sourceUnits.Any())
-                return RedirectToAction(nameof(ManageBlock), new { id = buildingId });
-
-            var targetFloorsStr = targetFloorLevels.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
-
-            int copyCount = 0;
-            foreach (var fStr in targetFloorsStr)
-            {
-                if (int.TryParse(fStr.Trim(), out int targetLevel))
-                {
-                    if (targetLevel == sourceFloorLevel) continue; // Don't copy to itself
-
-                    foreach (var u in sourceUnits)
-                    {
-                        var newUnit = new GMK360.Core.Entities.BuildingUnit
-                        {
-                            BuildingId = buildingId,
-                            FloorLevel = targetLevel,
-                            FloorName = targetLevel == 0 ? "Zemin Kat" : (targetLevel < 0 ? $"{targetLevel}. Kat (Bodrum)" : $"{targetLevel}. Kat"),
-                            DoorNumber = u.DoorNumber,
-                            RoomLayout = u.RoomLayout,
-                            GrossSquareMeters = u.GrossSquareMeters,
-                            FacadeDirection = u.FacadeDirection,
-                            UnitTypeId = u.UnitTypeId
-                        };
-                        _context.BuildingUnits.Add(newUnit);
-                        copyCount++;
-                    }
-                }
-            }
-
-            if (copyCount > 0)
-            {
-                await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = $"Seçili kat şablonu, hedef katlara başarıyla uygulandı ve {copyCount} adet yeni birim oluşturuldu.";
-            }
-
-            return RedirectToAction(nameof(ManageBlock), new { id = buildingId });
-        }
-public async Task<IActionResult> AddBuildingUnit(int buildingId, int FloorLevel, string FloorName, string DoorNumber, string RoomCount, string UnitStructure, double? GrossSquareMeters, string FacadeDirection, int Quantity = 1)
-        {
-            var agencyId = await GetUserAgencyIdAsync();
-            if (agencyId == null) return Unauthorized();
-
-            var building = await _context.Buildings
-                .Include(b => b.ConstructionProject)
-                .FirstOrDefaultAsync(b => b.Id == buildingId);
-
-            if (building == null || building.ConstructionProject?.AgencyId != agencyId)
-                return NotFound();
-
-            // We no longer use RoomCount. UnitStructure is exactly what we save as RoomLayout.
             string combinedRoomLayout = UnitStructure;
 
             for(int i = 0; i < Quantity; i++) 
@@ -780,74 +722,161 @@ public async Task<IActionResult> AddBuildingUnit(int buildingId, int FloorLevel,
                     DoorNumber = finalDoorName,
                     RoomLayout = combinedRoomLayout,
                     GrossSquareMeters = GrossSquareMeters,
-                    FacadeDirection = FacadeDirection
+                    FacadeDirection = string.IsNullOrEmpty(FacadeDirection) ? "-" : FacadeDirection,
+                    Category = string.IsNullOrEmpty(Category) ? "Daire" : Category,
+                    ParentUnitId = Category == "Eklenti" ? ParentUnitId : null,
+                    IsCustomizable = Category != null && !Category.StartsWith("OrtakAlan"),
+                    OwnerName = OwnerName
                 };
                 _context.BuildingUnits.Add(newUnit);
             }
             
             await _context.SaveChangesAsync();
-
-            TempData["SuccessMessage"] = Quantity > 1 ? $"{Quantity} adet birim başarıyla eklendi." : $"{DoorNumber} başarıyla eklendi.";
             return RedirectToAction(nameof(ManageBlock), new { id = buildingId });
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> BulkUpdateUnits(int buildingId, string unitIds, string FacadeDirection, double? GrossSquareMeters, double? NetSquareMeters, string RoomLayout)
+        [HttpGet]
+        public async Task<IActionResult> GetFloorUnits(int buildingId, int floorLevel)
         {
             var agencyId = await GetUserAgencyIdAsync();
             if (agencyId == null) return Unauthorized();
 
-            if (string.IsNullOrEmpty(unitIds))
-            {
-                TempData["ErrorMessage"] = "Hiçbir daire seçilmedi.";
-                return RedirectToAction(nameof(ManageBlock), new { id = buildingId });
-            }
-
-            var ids = unitIds.Split(',').Select(id => int.TryParse(id, out int parsed) ? parsed : 0).Where(id => id > 0).ToList();
-            if (!ids.Any())
-            {
-                TempData["ErrorMessage"] = "Geçersiz daire seçimi.";
-                return RedirectToAction(nameof(ManageBlock), new { id = buildingId });
-            }
-
-            var unitsToUpdate = await _context.BuildingUnits
-                .Include(u => u.Building)
-                .ThenInclude(b => b.ConstructionProject)
-                .Where(u => ids.Contains(u.Id) && u.Building.ConstructionProject.AgencyId == agencyId)
+            var units = await _context.BuildingUnits
+                .Where(u => u.BuildingId == buildingId && u.FloorLevel == floorLevel)
+                .Select(u => new {
+                    id = u.Id,
+                    doorNumber = u.DoorNumber,
+                    category = u.Category,
+                    roomLayout = u.RoomLayout
+                })
                 .ToListAsync();
 
-            if (!unitsToUpdate.Any())
-            {
-                TempData["ErrorMessage"] = "Güncellenecek daire bulunamadı veya yetkiniz yok.";
-                return RedirectToAction(nameof(ManageBlock), new { id = buildingId });
-            }
-
-            foreach (var unit in unitsToUpdate)
-            {
-                if (!string.IsNullOrEmpty(FacadeDirection))
-                    unit.FacadeDirection = FacadeDirection;
-                    
-                if (GrossSquareMeters.HasValue)
-                    unit.GrossSquareMeters = GrossSquareMeters;
-                    
-                if (NetSquareMeters.HasValue)
-                    unit.NetSquareMeters = NetSquareMeters;
-                    
-                if (!string.IsNullOrEmpty(RoomLayout))
-                    unit.RoomLayout = RoomLayout;
-            }
-
-            _context.UpdateRange(unitsToUpdate);
-            await _context.SaveChangesAsync();
-
-            TempData["SuccessMessage"] = $"{unitsToUpdate.Count} adet bağımsız bölüm başarıyla güncellendi.";
-            return RedirectToAction(nameof(ManageBlock), new { id = buildingId });
+            return Json(units);
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateUnitProperties(int Id, int BuildingId, string DoorNumber, string RoomLayout, string OwnerName, string OwnerPhone, double? GrossSquareMeters, double? NetSquareMeters, string FacadeDirection)
+        public async Task<IActionResult> CopyFloor(int buildingId, int sourceFloorLevel, string targetFloorLevels, List<int> selectedUnitIds)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var building = await _context.Buildings
+                .Include(b => b.ConstructionProject)
+                .FirstOrDefaultAsync(b => b.Id == buildingId);
+
+            if (building == null || building.ConstructionProject?.AgencyId != agencyId)
+                return NotFound();
+
+            var sourceUnitsQuery = _context.BuildingUnits
+                .Where(u => u.BuildingId == buildingId && u.FloorLevel == sourceFloorLevel);
+                
+            if (selectedUnitIds != null && selectedUnitIds.Any()) {
+                sourceUnitsQuery = sourceUnitsQuery.Where(u => selectedUnitIds.Contains(u.Id));
+            }
+            
+            var sourceUnits = await sourceUnitsQuery.ToListAsync();
+
+            if (!sourceUnits.Any())
+                return RedirectToAction(nameof(ManageBlock), new { id = buildingId });
+
+            var targetFloorsStr = targetFloorLevels.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var fStr in targetFloorsStr)
+            {
+                if (int.TryParse(fStr.Trim(), out int targetLevel))
+                {
+                    if (targetLevel == sourceFloorLevel) continue;
+
+                    // Hedef kattaki mevcut birimleri alalım ki çakışma kontrolü yapabilelim
+                    var existingTargetUnits = await _context.BuildingUnits
+                        .Where(u => u.BuildingId == buildingId && u.FloorLevel == targetLevel)
+                        .ToListAsync();
+
+                    var idMapping = new Dictionary<int, GMK360.Core.Entities.BuildingUnit>();
+                    var clonedUnits = new List<GMK360.Core.Entities.BuildingUnit>();
+
+                    // 1. Aşama: Birimleri kopyala (Çakışma varsa atla)
+                    foreach (var u in sourceUnits)
+                    {
+                        // Çakışma Kontrolü: Aynı isimde ve kategoride birim hedef katta varsa ATLA
+                        bool alreadyExists = existingTargetUnits.Any(tu => 
+                            tu.DoorNumber.ToLower() == u.DoorNumber.ToLower() && 
+                            tu.Category == u.Category);
+                            
+                        if (alreadyExists) continue;
+
+                        var newUnit = new GMK360.Core.Entities.BuildingUnit
+                        {
+                            BuildingId = buildingId,
+                            FloorLevel = targetLevel,
+                            FloorName = targetLevel == 0 ? "Zemin Kat" : (targetLevel < 0 ? $"{targetLevel}. Bodrum" : $"{targetLevel}. Kat"),
+                            DoorNumber = u.DoorNumber,
+                            RoomLayout = u.RoomLayout,
+                            GrossSquareMeters = u.GrossSquareMeters,
+                            FacadeDirection = u.FacadeDirection,
+                            UnitTypeId = u.UnitTypeId,
+                            Category = u.Category,
+                            IsCustomizable = u.IsCustomizable,
+                            OwnerName = null // Sahiplik boş kalır
+                        };
+                        
+                        clonedUnits.Add(newUnit);
+                        idMapping.Add(u.Id, newUnit);
+                    }
+
+                    // Önce veritabanına kaydedelim ki yeni ID'ler oluşsun
+                    _context.BuildingUnits.AddRange(clonedUnits);
+                    await _context.SaveChangesAsync();
+
+                    // 2. Aşama: Eklentilerin ParentUnitId'lerini (Bağlı olduğu daireyi) AKILLICA eşleştir!
+                    foreach (var u in sourceUnits)
+                    {
+                        if (u.Category == "Eklenti" && u.ParentUnitId.HasValue)
+                        {
+                            // Eğer bu eklentinin bağlı olduğu ana daire aynı kattaysa (kopyalananlar arasındaysa)
+                            if (idMapping.ContainsKey(u.ParentUnitId.Value))
+                            {
+                                // Yeni eklentiyi bul
+                                var newEklenti = idMapping[u.Id];
+                                // Yeni ana daireyi bul
+                                var newParentDaire = idMapping[u.ParentUnitId.Value];
+                                
+                                // Yeni eklentiyi yeni daireye bağla!
+                                newEklenti.ParentUnitId = newParentDaire.Id;
+                            }
+                        }
+                    }
+                    
+                    // Bağlantıları güncelle
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            return RedirectToAction(nameof(ManageBlock), new { id = buildingId });
+        }
+
+        
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EditBuildingUnit(int unitId, string DoorNumber, string OwnerName, string UnitStructure)
+        {
+            var unit = await _context.BuildingUnits.FindAsync(unitId);
+            if (unit == null) return NotFound();
+
+            unit.DoorNumber = string.IsNullOrWhiteSpace(DoorNumber) ? unit.DoorNumber : DoorNumber;
+            unit.OwnerName = string.IsNullOrWhiteSpace(OwnerName) ? null : OwnerName;
+            if (!string.IsNullOrWhiteSpace(UnitStructure))
+            {
+                unit.RoomLayout = UnitStructure;
+            }
+
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(ManageBlock), new { id = unit.BuildingId });
+        }
+[HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteUnit(int unitId, int buildingId)
         {
             var agencyId = await GetUserAgencyIdAsync();
             if (agencyId == null) return Unauthorized();
@@ -855,245 +884,25 @@ public async Task<IActionResult> AddBuildingUnit(int buildingId, int FloorLevel,
             var unit = await _context.BuildingUnits
                 .Include(u => u.Building)
                 .ThenInclude(b => b.ConstructionProject)
-                .FirstOrDefaultAsync(u => u.Id == Id && u.Building.ConstructionProject.AgencyId == agencyId);
+                .FirstOrDefaultAsync(u => u.Id == unitId);
+
+            if (unit != null && unit.Building.ConstructionProject.AgencyId == agencyId)
+            {
+                // Silmeden önce bağlı eklentileri (ParentUnitId'si bu olanlar) boşa çıkaralım veya silelim
+                // Güvenli olması için ParentUnitId'lerini null yapalım
+                var children = await _context.BuildingUnits.Where(u => u.ParentUnitId == unitId).ToListAsync();
+                foreach (var child in children)
+                {
+                    child.ParentUnitId = null;
+                }
                 
-            if (unit != null)
-            {
-                unit.DoorNumber = DoorNumber;
-                unit.RoomLayout = RoomLayout;
-                unit.OwnerName = OwnerName;
-                unit.OwnerPhone = OwnerPhone;
-                unit.GrossSquareMeters = GrossSquareMeters;
-                unit.NetSquareMeters = NetSquareMeters;
-                unit.FacadeDirection = FacadeDirection;
-                unit.IsEmpty = string.IsNullOrEmpty(OwnerName);
-                await _context.SaveChangesAsync();
-                
-                TempData["SuccessMessage"] = "Bağımsız bölüm başarıyla güncellendi.";
-            }
-
-            return RedirectToAction(nameof(ManageBlock), new { id = BuildingId });
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-                        private List<GMK360.Core.Entities.UnitSpace> GetDefaultSpacesForLayout(string layout)
-        {
-            var spaces = new List<GMK360.Core.Entities.UnitSpace>();
-            // SADECE TASLAK - DÜKKAN İÇİ BOŞ (Manuel eklenecek)
-            // KULLANICININ İSTEĞİ: Daire şablonu/örnek altyapısı kurulana kadar içleri manuel girilsin
-            return spaces;
-        }
-
-        public async Task<IActionResult> GenerateUnits(int buildingId, int normalFloors, int basementFloors, bool hasGroundFloor, int unitsPerFloor, int? templateId)
-        {
-            var agencyId = await GetUserAgencyIdAsync();
-            if (agencyId == null) return Unauthorized();
-
-            var block = await _context.Buildings
-                .Include(b => b.ConstructionProject)
-                .Include(b => b.Units).Include(b => b.ParentBuilding)
-                .FirstOrDefaultAsync(b => b.Id == buildingId);
-
-            if (block == null) return NotFound();
-
-            if (!User.IsInRole("Admin") && block.ConstructionProject.AgencyId != agencyId)
-            {
-                return Unauthorized();
-            }
-            
-            // Seçilen şablonu getir
-            GMK360.Core.Entities.UnitTemplate selectedTemplate = null;
-            if (templateId.HasValue && templateId.Value > 0)
-            {
-                selectedTemplate = await _context.UnitTemplates
-                    .Include(t => t.Spaces)
-                    .FirstOrDefaultAsync(t => t.Id == templateId.Value);
-            }
-            
-            // 0. ESKİ BİRİMLERİ TEMİZLE
-            if (block.Units != null && block.Units.Any())
-            {
-                _context.BuildingUnits.RemoveRange(block.Units);
+                _context.BuildingUnits.Remove(unit);
                 await _context.SaveChangesAsync();
             }
 
-            int doorCounter = 1;
-            int totalUnitsCreated = 0;
-
-            // 1. Bodrum Katlar (Sığınak / Otopark)
-            for (int f = basementFloors; f >= 1; f--)
-            {
-                var unit = new GMK360.Core.Entities.BuildingUnit
-                {
-                    BuildingId = buildingId,
-                    DoorNumber = (f == 1) ? "Sığınak" : $"Otopark (-{f})",
-                    FloorLevel = -f,
-                    FloorName = $"-{f}. Kat (Bodrum)",
-                    RoomLayout = "Ortak Alan",
-                    IsEmpty = true
-                };
-                _context.BuildingUnits.Add(unit);
-                totalUnitsCreated++;
-            }
-
-            // 2. Zemin Kat (Dükkan)
-            if (hasGroundFloor)
-            {
-                for (int u = 0; u < unitsPerFloor; u++)
-                {
-                    var unit = new GMK360.Core.Entities.BuildingUnit
-                    {
-                        BuildingId = buildingId,
-                        DoorNumber = $"Dükkan {doorCounter}",
-                        FloorLevel = 0,
-                        FloorName = "Zemin Kat",
-                        RoomLayout = "Ticari Alan",
-                        IsEmpty = true
-                    };
-                    _context.BuildingUnits.Add(unit);
-                    doorCounter++;
-                    totalUnitsCreated++;
-                }
-            }
-
-            // 3. Normal Katlar (Şablon)
-            for (int f = 1; f <= normalFloors; f++)
-            {
-                for (int u = 0; u < unitsPerFloor; u++)
-                {
-                    var layoutName = selectedTemplate?.RoomLayout ?? "Belirsiz";
-                    
-                    var unit = new GMK360.Core.Entities.BuildingUnit
-                    {
-                        BuildingId = buildingId,
-                        DoorNumber = doorCounter.ToString(),
-                        FloorLevel = f,
-                        FloorName = $"{f}. Kat",
-                        RoomLayout = layoutName,
-                        UnitTemplateId = templateId,
-                        IsEmpty = true,
-                        Spaces = new System.Collections.Generic.List<GMK360.Core.Entities.UnitSpace>()
-                    };
-                    
-                    // Şablon odalarını kopyala
-                    if (selectedTemplate != null && selectedTemplate.Spaces != null)
-                    {
-                        foreach(var ts in selectedTemplate.Spaces)
-                        {
-                            unit.Spaces.Add(new GMK360.Core.Entities.UnitSpace
-                            {
-                                Name = ts.Name,
-                                Type = ts.Type,
-                                SquareMeters = ts.SquareMeters,
-                                Description = ts.Description
-                            });
-                        }
-                    }
-
-                    _context.BuildingUnits.Add(unit);
-                    doorCounter++;
-                    totalUnitsCreated++;
-                }
-            }
-            
-            block.TotalFloors = normalFloors;
-            block.BasementFloors = basementFloors;
-            block.HasGroundFloor = hasGroundFloor;
-
-            _context.Buildings.Update(block);
-            await _context.SaveChangesAsync();
-
-            TempData["SuccessMessage"] = $"Eski kayıtlar temizlendi. Şablon baz alınarak toplam {totalUnitsCreated} bağımsız bölüm üretildi.";
             return RedirectToAction(nameof(ManageBlock), new { id = buildingId });
         }
-        public async Task<IActionResult> UploadArchitectureMedia(int buildingId, string entityType, int entityId, string title, string PhysicalLocationNote, IFormFile file)
-        {
-            var agencyId = await GetUserAgencyIdAsync();
-            if (agencyId == null) return Unauthorized();
 
-            var block = await _context.Buildings
-                .Include(b => b.ConstructionProject)
-                .FirstOrDefaultAsync(b => b.Id == buildingId);
-
-            if (block == null || (!User.IsInRole("Admin") && block.ConstructionProject.AgencyId != agencyId))
-            {
-                return Unauthorized();
-            }
-
-            if (file != null && file.Length > 0)
-            {
-                string uploadsFolder = Path.Combine(_hostEnvironment.WebRootPath, "uploads", "architecture");
-                Directory.CreateDirectory(uploadsFolder);
-                
-                string uniqueFileName = Guid.NewGuid().ToString() + "_" + Path.GetFileName(file.FileName);
-                string filePath = Path.Combine(uploadsFolder, uniqueFileName);
-                
-                using (var fileStream = new FileStream(filePath, FileMode.Create))
-                {
-                    await file.CopyToAsync(fileStream);
-                }
-
-                // Default FolderId is 0 or needs to be set to 1 if 1 exists. We'll set it to 1 just in case, but if they had it as 0 before, we'll leave it as default.
-                // Wait, let's just get the first folder, if any, or default to 1.
-                var firstFolder = await _context.DmsFolders.FirstOrDefaultAsync();
-                int folderId = firstFolder != null ? firstFolder.Id : 1;
-
-                var doc = new GMK360.Core.Entities.DmsDocument
-                {
-                    Title = title ?? file.FileName,
-                    DocumentUrl = "/uploads/architecture/" + uniqueFileName,
-                    FileExtension = Path.GetExtension(file.FileName),
-                    FileSizeBytes = file.Length,
-                    EntityType = entityType, 
-                    EntityId = entityId,
-                    UploadedByUserId = _userManager.GetUserId(User) ?? "",
-                    UploadDate = DateTime.UtcNow,
-                    FolderId = folderId,
-                    PhysicalLocationNote = string.IsNullOrWhiteSpace(PhysicalLocationNote) ? "Belirtilmedi" : PhysicalLocationNote
-                };
-
-                _context.DmsDocuments.Add(doc);
-                await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = $"{title} başarıyla yüklendi.";
-            }
-
-            return RedirectToAction("ManageBlock", new { id = buildingId });
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteArchitectureMedia(int documentId, int buildingId)
-        {
-            var agencyId = await GetUserAgencyIdAsync();
-            var block = await _context.Buildings
-                .Include(b => b.ConstructionProject)
-                .FirstOrDefaultAsync(b => b.Id == buildingId);
-
-            if (block == null || (!User.IsInRole("Admin") && block.ConstructionProject.AgencyId != agencyId))
-            {
-                return Unauthorized();
-            }
-
-            var doc = await _context.DmsDocuments.FindAsync(documentId);
-            if (doc != null)
-            {
-                // Dosyayı sunucudan silme (opsiyonel)
-                var filePath = Path.Combine(_hostEnvironment.WebRootPath, doc.DocumentUrl.TrimStart('/'));
-                if (System.IO.File.Exists(filePath))
-                {
-                    System.IO.File.Delete(filePath);
-                }
-
-                _context.DmsDocuments.Remove(doc);
-                await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = "Görsel başarıyla silindi.";
-            }
-
-            return RedirectToAction("ManageBlock", new { id = buildingId });
-        }
-
-        // GET: ConstructionProject/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null) return NotFound();
@@ -1302,7 +1111,7 @@ public async Task<IActionResult> AddBuildingUnit(int buildingId, int FloorLevel,
             return RedirectToAction("Details", new { id = projectId });
         }
             // --- DAIRE ICI ALAN YONETIMI ---
-        public async Task<IActionResult> ManageUnit(int unitId)
+        public async Task<IActionResult> ManageUnitSpaces(int id)
         {
             var agencyId = await GetUserAgencyIdAsync();
             if (agencyId == null) return Unauthorized();
@@ -1311,7 +1120,7 @@ public async Task<IActionResult> AddBuildingUnit(int buildingId, int FloorLevel,
                 .Include(u => u.Building)
                     .ThenInclude(b => b.ConstructionProject)
                 .Include(u => u.Spaces)
-                .FirstOrDefaultAsync(u => u.Id == unitId);
+                .FirstOrDefaultAsync(u => u.Id == id);
 
             if (unit == null) return NotFound();
 
@@ -1349,7 +1158,7 @@ public async Task<IActionResult> AddBuildingUnit(int buildingId, int FloorLevel,
             _context.UnitSpaces.Add(space);
             await _context.SaveChangesAsync();
 
-            return RedirectToAction(nameof(ManageUnit), new { unitId = unitId });
+            return RedirectToAction(nameof(ManageUnitSpaces), new { id = unitId });
         }
     }
 }

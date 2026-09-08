@@ -48,7 +48,16 @@ namespace GMK360.Core.Entities
         public int? PropertyId { get; set; }
         public virtual Property Property { get; set; }
 
-                public int? UnitTemplateId { get; set; }
+                
+        // --- Yeni Mimari: Ortak Alanlar ve Eklentiler ---
+        public string? Category { get; set; } // Daire, Dukkan, OrtakAlan_Kat, OrtakAlan_Blok, Eklenti
+        public int? ParentUnitId { get; set; }
+        public virtual BuildingUnit ParentUnit { get; set; }
+        public virtual System.Collections.Generic.ICollection<BuildingUnit> Attachments { get; set; } = new System.Collections.Generic.List<BuildingUnit>();
+        public bool IsCustomizable { get; set; } = true;
+        // ------------------------------------------------
+
+        public int? UnitTemplateId { get; set; }
         public virtual GMK360.Core.Entities.UnitTemplate UnitTemplate { get; set; }
 
         public virtual System.Collections.Generic.ICollection<GMK360.Core.Entities.UnitSpace> Spaces { get; set; } = new System.Collections.Generic.List<GMK360.Core.Entities.UnitSpace>();

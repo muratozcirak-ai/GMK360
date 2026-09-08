@@ -14,5 +14,10 @@ namespace GMK360.Core.Entities
         public string? PlanImagePath { get; set; } 
 
         public string? Description { get; set; } 
+
+
+        public virtual System.Collections.Generic.ICollection<SpaceMeasurement> Measurements { get; set; } = new System.Collections.Generic.List<SpaceMeasurement>();
+        public virtual System.Collections.Generic.ICollection<SpaceFixture> Fixtures { get; set; } = new System.Collections.Generic.List<SpaceFixture>();
+
     }
 }
