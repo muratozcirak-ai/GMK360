@@ -17,8 +17,156 @@
         <a asp-controller="ProjectMaterial" asp-action="Index" asp-route-projectId="@Model.Id" class="btn btn-primary rounded-pill px-4 shadow-sm">
             <i class="bi bi-palette me-2"></i> Müşteri Malzeme Kataloğu
         </a>
+        <a asp-action="ManagePhases" asp-route-id="@Model.Id" class="btn btn-danger rounded-pill px-4 shadow-sm text-white fw-bold">
+            <i class="bi bi-kanban me-2"></i> Şantiye Aşamaları ve Bütçe (ERP)
+        </a>
+
     </div>
 </div>
+
+
+<!-- BARIYER (FAZ 0) UYARISI YERINE GERCEK TABLO -->
+<div class="accordion mb-4 shadow-sm" id="accordionFaz0">
+    <div class="accordion-item border-0 rounded-4 overflow-hidden">
+        <h2 class="accordion-header d-flex" id="headingFaz0">
+            <button class="accordion-button bg-danger bg-opacity-10 text-dark fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFaz0" aria-expanded="true" aria-controls="collapseFaz0">
+                <i class="bi bi-file-earmark-lock-fill fs-5 text-danger me-2"></i> FAZ 0: Yasal Evrak, İzin ve Sözleşme Takibi
+            </button>
+            <div class="bg-danger bg-opacity-10 d-flex align-items-center pe-3">
+                <button type="button" class="btn btn-sm btn-danger fw-bold rounded-pill text-nowrap shadow-sm" data-bs-toggle="modal" data-bs-target="#addCustomDocModal">
+                    <i class="bi bi-plus-lg"></i> Özel Evrak Ekle
+                </button>
+            </div>
+        </h2>
+        <div id="collapseFaz0" class="accordion-collapse collapse show" aria-labelledby="headingFaz0">
+            <div class="accordion-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">Evrak / Kriter Adı</th>
+                                <th>Kimden Alınır / Makam</th>
+                                <th>Kurum İçi İlgili (Tanıdık)</th>
+                                <th>Sorumlu Takipçi</th>
+                                <th>Durum</th>
+                                <th>Açıklama / Not</th>
+                                <th class="text-end pe-3">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (((List<GMK360.Core.Entities.Construction.ProjectLegalDocument>)ViewBag.Phase0Docs) == null || !((List<GMK360.Core.Entities.Construction.ProjectLegalDocument>)ViewBag.Phase0Docs).Any())
+                            {
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-4">Bu projeye henüz evrak/kriter eklenmemiş.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                foreach (var doc in ((List<GMK360.Core.Entities.Construction.ProjectLegalDocument>)ViewBag.Phase0Docs).OrderByDescending(x => x.IsCustom).ThenBy(x => x.Id))
+                                {
+                                    <tr>
+                                        <td class="fw-bold ps-3">
+                                            @(doc.SystemTemplate?.Name ?? doc.DocumentName)
+                                            @if(doc.IsCustom) { <span class="badge bg-info ms-1" title="Sizin Eklediğiniz Özel Evrak">Özel</span> }
+                                        </td>
+                                        <td><span class="badge bg-light text-dark border"><i class="bi bi-building"></i> @(doc.AppliedTo ?? doc.SystemTemplate?.IssuedBy ?? "Belirtilmedi")</span></td>
+                                        <td>
+                                            @if(!string.IsNullOrEmpty(doc.InstitutionContact)) { <span class="text-primary"><i class="bi bi-person-lines-fill"></i> @doc.InstitutionContact</span> } else { <span class="text-muted fst-italic">Bilinmiyor</span> }
+                                        </td>
+                                        <td>
+                                            @if(string.IsNullOrEmpty(doc.TrackingPerson)) { <span class="text-danger fw-bold"><i class="bi bi-exclamation-circle"></i> Atanmadı</span> } else { <span><i class="bi bi-person-badge text-primary"></i> @doc.TrackingPerson</span> }
+                                        </td>
+                                        <td>
+                                            @if (doc.Status == GMK360.Core.Entities.Construction.LegalDocumentStatus.NotApplied)
+                                            {
+                                                <span class="badge bg-danger rounded-pill px-3 py-2"><i class="bi bi-x-circle"></i> Yok</span>
+                                            }
+                                            else if (doc.Status == GMK360.Core.Entities.Construction.LegalDocumentStatus.Applied)
+                                            {
+                                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2"><i class="bi bi-hourglass-split"></i> Başvuruldu</span>
+                                            }
+                                            else if (doc.Status == GMK360.Core.Entities.Construction.LegalDocumentStatus.Issue)
+                                            {
+                                                <span class="badge bg-secondary rounded-pill px-3 py-2"><i class="bi bi-exclamation-triangle"></i> Sorun Var</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-success rounded-pill px-3 py-2"><i class="bi bi-check-circle"></i> Alındı</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if(!string.IsNullOrEmpty(doc.Notes)) { <small class="text-muted">@doc.Notes</small> } else { <span class="text-muted">-</span> }
+                                        </td>
+                                        <td class="text-end pe-3">
+                                            <button class="btn btn-sm btn-outline-primary rounded-pill" data-bs-toggle="modal" data-bs-target="#editDocModal_@doc.Id">
+                                                <i class="bi bi-pencil-square"></i> Yönet
+                                            </button>
+                                        </td>
+                                    </tr>
+
+                                    <!-- Güncelle Modal -->
+                                    <div class="modal fade" id="editDocModal_@doc.Id" tabindex="-1">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content border-0 shadow">
+                                                <form asp-action="UpdateLegalDocumentStatus" asp-controller="ConstructionProject" method="post">
+                                                    <div class="modal-header bg-light border-0">
+                                                        <h5 class="modal-title text-dark fw-bold"><i class="bi bi-pencil-square text-primary me-2"></i>Evrak / Aşama Yönetimi</h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                    </div>
+                                                    <div class="modal-body p-4">
+                                                        <input type="hidden" name="documentId" value="@doc.Id" />
+                                                        
+                                                        <div class="alert alert-info border-0 rounded-3 mb-4">
+                                                            <strong class="d-block mb-1 fs-5">@(doc.SystemTemplate?.Name ?? doc.DocumentName)</strong>
+                                                            <small>@(doc.SystemTemplate?.TargetModule ?? "Projeye özel eklenmiş evrak.")</small>
+                                                        </div>
+
+                                                        <div class="mb-3">
+                                                            <label class="form-label fw-bold">Nereye Başvuruldu / Kimden Alınır?</label>
+                                                            <input type="text" class="form-control bg-light" name="appliedTo" value="@(doc.AppliedTo ?? doc.SystemTemplate?.IssuedBy)">
+                                                        </div>
+                                                        <div class="mb-3">
+                                                            <label class="form-label fw-bold text-primary"><i class="bi bi-person-lines-fill"></i> Kurum İçi İlgili / Tanıdık (Varsa)</label>
+                                                            <input type="text" class="form-control border-primary" name="institutionContact" value="@doc.InstitutionContact" placeholder="Örn: İmar Md. Ayşe Hanım">
+                                                            <div class="form-text">Devlet veya kurumda işlemleri hızlandıracak temas noktası.</div>
+                                                        </div>
+                                                        <hr/>
+                                                        <div class="mb-3">
+                                                            <label class="form-label fw-bold text-danger"><i class="bi bi-person-badge"></i> Sorumlu Takipçi (Personel Ata)</label>
+                                                            <input type="text" class="form-control border-danger" name="trackingPerson" value="@doc.TrackingPerson" placeholder="Örn: Proje Müdürü Ahmet Bey">
+                                                        </div>
+                                                        <div class="mb-3">
+                                                            <label class="form-label fw-bold">Evrak / Başvuru Durumu</label>
+                                                            <select class="form-select" name="statusId">
+                                                                <option value="0" selected="@(doc.Status == GMK360.Core.Entities.Construction.LegalDocumentStatus.NotApplied)">Alınmadı / Yok</option>
+                                                                <option value="1" selected="@(doc.Status == GMK360.Core.Entities.Construction.LegalDocumentStatus.Applied)">Başvuruldu / Bekliyor</option>
+                                                                <option value="2" selected="@(doc.Status == GMK360.Core.Entities.Construction.LegalDocumentStatus.Issue)">Sorun Çıktı / İptal (Açıklama Giriniz)</option>
+                                                                <option value="3" selected="@(doc.Status == GMK360.Core.Entities.Construction.LegalDocumentStatus.Approved)">Onaylandı / Var</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="mb-3">
+                                                            <label class="form-label fw-bold">Açıklama / Süreç Notları</label>
+                                                            <textarea class="form-control" name="notes" rows="3" placeholder="Örn: Belediye reddetti çünkü projede eksiklik var...">@doc.Notes</textarea>
+                                                        </div>
+                                                    </div>
+                                                    <div class="modal-footer bg-light">
+                                                        <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">İptal</button>
+                                                        <button type="submit" class="btn btn-primary rounded-pill fw-bold">Değişiklikleri Kaydet</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 
 <div class="row g-4 mb-4">
     <div class="col-md-8">
@@ -128,6 +276,159 @@
         </div>
     </div>
 </div>
+
+
+
+<!-- TASLAK / KONU TARTIŞMA BÖLÜMÜ -->
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-header bg-warning bg-opacity-10 border-bottom py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-chat-square-dots text-warning me-2"></i>Açık Konular / Ön Hazırlık Talepleri</h5>
+        <button class="btn btn-sm btn-warning text-dark fw-bold rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#addDraftModal">
+            <i class="bi bi-plus-lg"></i> Yeni Konu Aç
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div class="list-group list-group-flush rounded-bottom-4">
+            @{
+                var drafts = Model.Phases?.Where(p => p.Status == -1).ToList() ?? new List<GMK360.Core.Entities.Construction.ProjectPhase>();
+                if (!drafts.Any())
+                {
+                    <div class="list-group-item p-4 text-center text-muted border-0">
+                        Henüz tartışmaya açılmış bir konu veya ön talep bulunmuyor.
+                    </div>
+                }
+                else
+                {
+                    foreach (var draft in drafts)
+                    {
+                        <a href="@Url.Action("DraftPhaseDetails", new { id = draft.Id })" class="list-group-item list-group-item-action p-3 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="fw-bold text-dark mb-1">@draft.Name</h6>
+                                <small class="text-muted">@draft.Description</small>
+                            </div>
+                            <span class="badge bg-warning text-dark rounded-pill">Tartışma Açık <i class="bi bi-arrow-right ms-1"></i></span>
+                        </a>
+                    }
+                }
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Yeni Talep Modal -->
+<div class="modal fade" id="addDraftModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow">
+            <form asp-action="AddPhase" asp-controller="ConstructionProject" method="post">
+                <div class="modal-header bg-warning border-0">
+                    <h5 class="modal-title text-dark fw-bold"><i class="bi bi-journal-plus me-2"></i>Yeni Ön Çalışma / Konu Aç</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" name="projectId" value="@Model.Id" />
+                    <!-- Status -1 means Draft/Talep -->
+                    <input type="hidden" name="status" value="-1" />
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Konu Başlığı</label>
+                        <input type="text" class="form-control" name="name" placeholder="Örn: Arazi Çevresinin Kapatılması" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Açıklama / İhtiyaç Özeti</label>
+                        <textarea class="form-control" name="description" rows="3" placeholder="Örn: Depoda yeterli trapez sac yok, dışarıdan kiralama veya satın alma yapılacak. Onay bekliyoruz."></textarea>
+                    </div>
+                    <div class="alert alert-info small mb-0">
+                        <i class="bi bi-info-circle me-1"></i> Bu konu bir <strong>Taslak</strong> olarak açılır. Yönetim onayladıktan sonra resmi şantiye fazına dönüşür ve harcamalar başlar.
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-warning fw-bold text-dark">Talebi Oluştur</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+<!-- KOMUTA MERKEZİ (DASHBOARD) -->
+@{
+    var allMessages = Model.Phases?
+        .Where(p => p.PhaseTasks != null)
+        .SelectMany(p => p.PhaseTasks)
+        .Where(t => t.TaskMessages != null)
+        .SelectMany(t => t.TaskMessages)
+        .OrderByDescending(m => m.SentAt)
+        .Take(5)
+        .ToList() ?? new List<GMK360.Core.Entities.Construction.TaskMessage>();
+
+    bool hasMessages = allMessages.Any();
+}
+
+<div class="row g-4 mb-4 mt-2">
+    @if(hasMessages)
+    {
+        <!-- SOL: Canlı Saha Akışı -->
+        <div class="col-12">
+            <div class="card shadow-sm border-0 h-100 rounded-4">
+                <div class="card-header bg-white border-bottom py-3 rounded-top-4">
+                    <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-broadcast text-primary me-2"></i>Canlı Saha Akışı (Radar)</h6>
+                </div>
+                <div class="card-body p-3" style="max-height: 350px; overflow-y: auto;">
+                    @foreach(var msg in allMessages)
+                    {
+                        <div class="d-flex mb-3">
+                            <div class="bg-light border rounded p-2 shadow-sm w-100">
+                                <div class="d-flex justify-content-between">
+                                    <strong class="text-primary small">@msg.SenderName</strong>
+                                    <small class="text-muted">@msg.SentAt.ToString("HH:mm - dd MMM")</small>
+                                </div>
+                                <p class="mb-0 mt-1 small">@msg.Message</p>
+                                <div class="text-end mt-1"><span class="badge bg-secondary" style="font-size: 0.65rem;">@msg.PhaseTask?.Name</span></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    
+
+<!-- Custom Doc Modal at the bottom -->
+<div class="modal fade" id="addCustomDocModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow">
+            <form asp-action="AddCustomLegalDocument" asp-controller="ConstructionProject" method="post">
+                <div class="modal-header bg-danger text-white border-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-plus me-2"></i>Projeye Özel Evrak/Kriter Ekle</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" name="projectId" value="@Model.Id" />
+                    
+                    <div class="alert alert-warning small mb-4">
+                        <i class="bi bi-exclamation-triangle me-1"></i> Bu evrak sadece <strong>bu projeye özel</strong> olarak eklenecektir. Tüm projelerde görünmesini istiyorsanız Sistem Yöneticisi olarak ayarlardan eklemelisiniz.
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Evrak / Kriter Adı</label>
+                        <input type="text" class="form-control" name="customName" placeholder="Örn: X Belediyesi Özel Yıkım İzni" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Kimden Alınır / İlgili Kurum</label>
+                        <input type="text" class="form-control bg-light" name="appliedTo" placeholder="Örn: X Belediyesi İmar Md." required>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-danger fw-bold rounded-pill">Kaydet ve Listeye Ekle</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 
 <h4 class="fw-bold mb-3"><i class="bi bi-grid-1x2 text-orange me-2"></i>Projedeki Bloklar / Binalar</h4>
 

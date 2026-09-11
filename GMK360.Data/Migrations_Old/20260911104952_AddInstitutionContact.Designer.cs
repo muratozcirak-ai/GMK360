@@ -4,6 +4,7 @@ using GMK360.Data.Contexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace GMK360.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260911104952_AddInstitutionContact")]
+    partial class AddInstitutionContact
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -548,156 +551,6 @@ namespace GMK360.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("AuditLogs");
-                });
-
-            modelBuilder.Entity("GMK360.Core.Entities.B2B.B2BNetworkContact", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AddedByUserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("CompanyName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ContactPerson")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("OwnerAgencyId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("PhoneNumber")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int?>("RegisteredAgencyId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("SectorCategory")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OwnerAgencyId");
-
-                    b.HasIndex("RegisteredAgencyId");
-
-                    b.ToTable("B2BNetworkContacts");
-                });
-
-            modelBuilder.Entity("GMK360.Core.Entities.B2B.B2BQuoteInvite", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("NetworkContactId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("OfferNotes")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal?>("OfferedPrice")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int>("QuoteRequestId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("RespondedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("NetworkContactId");
-
-                    b.HasIndex("QuoteRequestId");
-
-                    b.ToTable("B2BQuoteInvites");
-                });
-
-            modelBuilder.Entity("GMK360.Core.Entities.B2B.B2BQuoteRequest", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("Deadline")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("RequesterAgencyId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("RequesterUserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("SourceModule")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("SourceReferenceId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RequesterAgencyId");
-
-                    b.ToTable("B2BQuoteRequests");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.B2BLead", b =>
@@ -1498,7 +1351,7 @@ namespace GMK360.Data.Migrations
                             CountryId = 1,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             IsDeleted = false,
-                            Name = "�stanbul",
+                            Name = "İstanbul",
                             PlateCode = "34"
                         },
                         new
@@ -1516,7 +1369,7 @@ namespace GMK360.Data.Migrations
                             CountryId = 1,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             IsDeleted = false,
-                            Name = "�zmir",
+                            Name = "İzmir",
                             PlateCode = "35"
                         });
                 });
@@ -2833,7 +2686,7 @@ namespace GMK360.Data.Migrations
                             Code = "TR",
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             IsDeleted = false,
-                            Name = "T�rkiye"
+                            Name = "Türkiye"
                         });
                 });
 
@@ -3295,7 +3148,7 @@ namespace GMK360.Data.Migrations
                             CityId = 34,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             IsDeleted = false,
-                            Name = "Kad�k�y"
+                            Name = "Kadıköy"
                         },
                         new
                         {
@@ -3303,7 +3156,7 @@ namespace GMK360.Data.Migrations
                             CityId = 34,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             IsDeleted = false,
-                            Name = "Be�ikta�"
+                            Name = "Beşiktaş"
                         },
                         new
                         {
@@ -3311,7 +3164,7 @@ namespace GMK360.Data.Migrations
                             CityId = 34,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             IsDeleted = false,
-                            Name = "�i�li"
+                            Name = "Şişli"
                         },
                         new
                         {
@@ -3319,7 +3172,7 @@ namespace GMK360.Data.Migrations
                             CityId = 6,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             IsDeleted = false,
-                            Name = "�ankaya"
+                            Name = "Çankaya"
                         },
                         new
                         {
@@ -3327,7 +3180,7 @@ namespace GMK360.Data.Migrations
                             CityId = 6,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             IsDeleted = false,
-                            Name = "Ke�i�ren"
+                            Name = "Keçiören"
                         },
                         new
                         {
@@ -3335,7 +3188,7 @@ namespace GMK360.Data.Migrations
                             CityId = 35,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             IsDeleted = false,
-                            Name = "Kar��yaka"
+                            Name = "Karşıyaka"
                         },
                         new
                         {
@@ -3956,7 +3809,7 @@ namespace GMK360.Data.Migrations
                             FirstInstallmentMonth = 3,
                             IsActive = true,
                             IsDeleted = false,
-                            Name = "Kira Gelir Vergisi (GMS�)",
+                            Name = "Kira Gelir Vergisi (GMSİ)",
                             PaymentFrequency = 3,
                             ResponsibleRole = 1,
                             SecondInstallmentMonth = 7,
@@ -3969,7 +3822,7 @@ namespace GMK360.Data.Migrations
                             FirstInstallmentMonth = 5,
                             IsActive = true,
                             IsDeleted = false,
-                            Name = "�evre Temizlik Vergisi (�TV)",
+                            Name = "Çevre Temizlik Vergisi (ÇTV)",
                             PaymentFrequency = 3,
                             ResponsibleRole = 2,
                             SecondInstallmentMonth = 11,
@@ -3982,7 +3835,7 @@ namespace GMK360.Data.Migrations
                             FirstInstallmentMonth = 5,
                             IsActive = true,
                             IsDeleted = false,
-                            Name = "�lan ve Reklam Vergisi (Tabela)",
+                            Name = "İlan ve Reklam Vergisi (Tabela)",
                             PaymentFrequency = 3,
                             ResponsibleRole = 2,
                             SecondInstallmentMonth = 11,
@@ -3994,7 +3847,7 @@ namespace GMK360.Data.Migrations
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             IsActive = true,
                             IsDeleted = false,
-                            Name = "Kira Stopaj� (Muhtasar Beyanname)",
+                            Name = "Kira Stopajı (Muhtasar Beyanname)",
                             PaymentFrequency = 1,
                             ResponsibleRole = 2,
                             TargetPropertyType = 2
@@ -5158,28 +5011,28 @@ namespace GMK360.Data.Migrations
                         new
                         {
                             Id = 1,
-                            ActionText = "Hemen �lan Ver",
+                            ActionText = "Hemen İlan Ver",
                             ActionUrl = "/Property/Create",
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             DisplayOrder = 1,
                             ImageUrl = "/images/auth_bg.jpg",
                             IsActive = true,
                             IsDeleted = false,
-                            Subtitle = "Yeni nesil emlak platformuna kat�larak ilanlar�n�z� milyonlara ula�t�r�n veya hayalinizdeki evi bulun.",
-                            Title = "Sekt�r�n Zirvesine ��k�n."
+                            Subtitle = "Yeni nesil emlak platformuna katılarak ilanlarınızı milyonlara ulaştırın veya hayalinizdeki evi bulun.",
+                            Title = "Sektörün Zirvesine Çıkın."
                         },
                         new
                         {
                             Id = 2,
-                            ActionText = "Kampanyaya Kat�l",
+                            ActionText = "Kampanyaya Katıl",
                             ActionUrl = "/Account/Register?referralCode=ILK3UYE",
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             DisplayOrder = 2,
                             ImageUrl = "https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
                             IsActive = true,
                             IsDeleted = false,
-                            Subtitle = "Bulundu�unuz ildeki ilk 3 kurumsal �ye aras�na girin, 1 y�ll�k Premium Vitrin paketini an�nda kap�n.",
-                            Title = "�lk 3 �yeye �zel F�rsat!"
+                            Subtitle = "Bulunduğunuz ildeki ilk 3 kurumsal üye arasına girin, 1 yıllık Premium Vitrin paketini anında kapın.",
+                            Title = "İlk 3 Üyeye Özel Fırsat!"
                         });
                 });
 
@@ -5668,7 +5521,7 @@ namespace GMK360.Data.Migrations
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             DistrictId = 1,
                             IsDeleted = false,
-                            Name = "Ac�badem"
+                            Name = "Acıbadem"
                         },
                         new
                         {
@@ -5676,7 +5529,7 @@ namespace GMK360.Data.Migrations
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             DistrictId = 1,
                             IsDeleted = false,
-                            Name = "Bostanc�"
+                            Name = "Bostancı"
                         },
                         new
                         {
@@ -5684,7 +5537,7 @@ namespace GMK360.Data.Migrations
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             DistrictId = 4,
                             IsDeleted = false,
-                            Name = "Bah�elievler"
+                            Name = "Bahçelievler"
                         });
                 });
 
@@ -8065,7 +7918,7 @@ namespace GMK360.Data.Migrations
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             IsActive = true,
                             IsDeleted = false,
-                            Name = "G�l Sokak",
+                            Name = "Gül Sokak",
                             NeighborhoodId = 1
                         },
                         new
@@ -9745,53 +9598,6 @@ namespace GMK360.Data.Migrations
                         .HasForeignKey("AuthorUserId");
 
                     b.Navigation("Author");
-                });
-
-            modelBuilder.Entity("GMK360.Core.Entities.B2B.B2BNetworkContact", b =>
-                {
-                    b.HasOne("GMK360.Core.Entities.Agency", "OwnerAgency")
-                        .WithMany()
-                        .HasForeignKey("OwnerAgencyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GMK360.Core.Entities.Agency", "RegisteredAgency")
-                        .WithMany()
-                        .HasForeignKey("RegisteredAgencyId");
-
-                    b.Navigation("OwnerAgency");
-
-                    b.Navigation("RegisteredAgency");
-                });
-
-            modelBuilder.Entity("GMK360.Core.Entities.B2B.B2BQuoteInvite", b =>
-                {
-                    b.HasOne("GMK360.Core.Entities.B2B.B2BNetworkContact", "NetworkContact")
-                        .WithMany()
-                        .HasForeignKey("NetworkContactId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GMK360.Core.Entities.B2B.B2BQuoteRequest", "QuoteRequest")
-                        .WithMany("Invites")
-                        .HasForeignKey("QuoteRequestId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("NetworkContact");
-
-                    b.Navigation("QuoteRequest");
-                });
-
-            modelBuilder.Entity("GMK360.Core.Entities.B2B.B2BQuoteRequest", b =>
-                {
-                    b.HasOne("GMK360.Core.Entities.Agency", "RequesterAgency")
-                        .WithMany()
-                        .HasForeignKey("RequesterAgencyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("RequesterAgency");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.B2bSupplier", b =>
@@ -12184,11 +11990,6 @@ namespace GMK360.Data.Migrations
                     b.Navigation("AgencyConsultants");
 
                     b.Navigation("Subscriptions");
-                });
-
-            modelBuilder.Entity("GMK360.Core.Entities.B2B.B2BQuoteRequest", b =>
-                {
-                    b.Navigation("Invites");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Building", b =>

@@ -1,0 +1,113 @@
+﻿@model IEnumerable<GMK360.Core.Entities.SystemLegalDocumentTemplate>
+@{
+    ViewData["Title"] = "Global Yasal Evrak Şablonları";
+    Layout = "~/Views/Shared/_AdminLayout.cshtml";
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="mb-1 text-primary fw-bold"><i class="ph ph-file-doc"></i> Global Yasal Evrak Şablonları (Faz 0)</h3>
+            <p class="text-muted mb-0">Tüm modüller (İnşaat, Emlak vs.) için zorunlu evrakları buradan tanımlayın.</p>
+        </div>
+        <button class="btn btn-primary rounded-pill px-4 fw-bold" data-bs-toggle="modal" data-bs-target="#addModal">
+            <i class="ph ph-plus"></i> Yeni Evrak Şablonu
+        </button>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Evrak Adı</th>
+                            <th>Hedef Modül</th>
+                            <th>Kimden Alınır / Makam</th>
+                            <th>Zorunlu Mu?</th>
+                            <th>Yasal Dayanak</th>
+                            <th class="text-end pe-4">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!Model.Any())
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    <i class="ph ph-files fs-1 opacity-50 mb-3 d-block"></i>
+                                    Sistemde henüz tanımlı bir evrak şablonu bulunmuyor.
+                                </td>
+                            </tr>
+                        }
+                        @foreach (var item in Model)
+                        {
+                            <tr>
+                                <td class="ps-4 fw-bold text-dark">@item.Name</td>
+                                <td>
+                                    <span class="badge bg-secondary">@item.TargetModule</span>
+                                </td>
+                                <td>@item.IssuedBy</td>
+                                <td>
+                                    @if(item.IsMandatory) { <span class="badge bg-danger">Zorunlu</span> } else { <span class="badge bg-info">Opsiyonel</span> }
+                                </td>
+                                <td class="text-muted small">@(item.LegalReference ?? "-")</td>
+                                <td class="text-end pe-4">
+                                    <form asp-action="Delete" method="post" class="d-inline" onsubmit="return confirm('Bu evrak şablonunu silmek istediğinize emin misiniz? (Mevcut projelerdeki evraklar silinmez, sadece yeni projelere eklenmez)');">
+                                        <input type="hidden" name="id" value="@item.Id" />
+                                        <button type="submit" class="btn btn-sm btn-outline-danger rounded-circle"><i class="ph ph-trash"></i></button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Ekleme Modalı -->
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form asp-action="Create" method="post">
+                <div class="modal-header border-bottom-0">
+                    <h5 class="modal-title fw-bold text-primary">Yeni Evrak Şablonu Ekle</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Evrak Adı</label>
+                        <input type="text" name="Name" class="form-control" placeholder="Örn: Zemin Etüd Raporu" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Hangi Modül İçin Geçerli?</label>
+                        <select name="TargetModule" class="form-select">
+                            <option value="Construction">İnşaat / Şantiye</option>
+                            <option value="RealEstate">Emlak / Gayrimenkul</option>
+                            <option value="ServiceProvider">Usta / Taşeron / Tedarikçi</option>
+                            <option value="PropertyManagement">Bina / Site Yönetimi</option>
+                            <option value="Identity">Kimlik / Kullanıcı Kaydı</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Kimden Alınır / Başvuru Makamı</label>
+                        <input type="text" name="IssuedBy" class="form-control" placeholder="Örn: Belediye, Çevre Bakanlığı, Özel Firma...">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Yasal Dayanak / Kanun Maddesi (Opsiyonel)</label>
+                        <input type="text" name="LegalReference" class="form-control" placeholder="Örn: İmar Kanunu 32. Madde">
+                    </div>
+                    <div class="mb-3 form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="IsMandatory" value="true" checked id="mand">
+                        <label class="form-check-label fw-bold" for="mand">Zorunlu Evrak (Kırmızı uyarı verir)</label>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top-0 rounded-bottom-4">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

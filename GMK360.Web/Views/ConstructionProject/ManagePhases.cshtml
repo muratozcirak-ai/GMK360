@@ -1,0 +1,554 @@
+@model GMK360.Core.Entities.Construction.ConstructionProject
+@{
+    ViewData["Title"] = "Fazlar, Bütçe ve Şantiye Günlüğü";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-kanban text-primary me-2"></i>Aşamalar ve Bütçe (Şantiye ERP)</h3>
+        <p class="text-muted small mb-0">@Model.Name - A'dan Z'ye Şantiye Takip ve Maliyet Merkezi</p>
+    </div>
+    <div>
+        <a href="@Url.Action("Dashboard", "ConstructionProject", new { id = Model.Id })" class="btn btn-sm btn-light border">
+            <i class="bi bi-arrow-left"></i> Projeye Dön
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <!-- SOL PANEL: Fazlar (Akordeon/Kanban) -->
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0 mb-4 h-100">
+            <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-folder2-open text-warning me-2"></i>Proje Fazları</h6>
+                <button class="btn btn-sm btn-primary rounded-circle" data-bs-toggle="modal" data-bs-target="#newPhaseModal" title="Yeni Ana Faz Ekle">
+                    <i class="bi bi-plus"></i>
+                </button>
+            </div>
+            <div class="card-body p-2" id="phasesList">
+                @if (!Model.Phases.Any(p => p.Status != -1))
+                {
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-clipboard-x fs-1 d-block mb-2"></i>
+                        Henüz hiç aşama eklenmemiş.<br />Örn: Hafriyat, Kaba İnşaat...
+                    </div>
+                }
+                else
+                {
+                    <div class="accordion accordion-flush" id="accordionPhases">
+                        @foreach (var phase in Model.Phases.Where(p => p.Status != -1).OrderBy(p => p.OrderIndex))
+                        {
+                            <div class="accordion-item border rounded mb-2 shadow-sm">
+                                <h2 class="accordion-header" id="heading_@phase.Id">
+                                    <button class="accordion-button collapsed py-2 px-3 fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_@phase.Id">
+                                        <div class="d-flex w-100 justify-content-between align-items-center me-2">
+                                            <span>@phase.OrderIndex. @phase.Name</span>
+                                            <span class="badge bg-light text-dark border"><i class="bi bi-calendar2-week"></i> @(phase.PlannedEndDate?.ToString("dd MMM") ?? "-")</span>
+                                        </div>
+                                    </button>
+                                </h2>
+                                <div id="collapse_@phase.Id" class="accordion-collapse collapse" data-bs-parent="#accordionPhases">
+                                    <div class="accordion-body p-2 bg-light">
+                                        <p class="small text-muted mb-2 px-2">@phase.Description</p>
+                                        <div class="list-group list-group-flush rounded-3">
+                                            @if(phase.PhaseTasks != null && phase.PhaseTasks.Any())
+                                            {
+                                                foreach (var task in phase.PhaseTasks.OrderBy(t => t.OrderIndex))
+                                                {
+                                                    <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2" onclick="openTaskDashboard(@task.Id, '@task.Name')">
+                                                        <span class="small fw-medium">@task.Name</span>
+                                                        <i class="bi bi-chevron-right text-muted small"></i>
+                                                    </button>
+                                                }
+                                            }
+                                        </div>
+                                        <div class="d-grid gap-2 mt-2">
+                                            <button class="btn btn-sm btn-outline-secondary" onclick="openNewTaskModal(@phase.Id)">
+                                                <i class="bi bi-plus-circle me-1"></i>Alt İş / Görev Ekle
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- SAĞ PANEL: Görev / İş Dashboardu (Sohbet, Maliyet, Evrak) -->
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0 h-100" id="taskDashboardEmpty">
+            <div class="card-body d-flex flex-column justify-content-center align-items-center text-muted">
+                <i class="bi bi-card-checklist fs-1 mb-3"></i>
+                <h5>Bir Görev Seçin</h5>
+                <p>Maliyetleri, satın alma onaylarını ve saha sohbetlerini görmek için soldan bir alt işe tıklayın.</p>
+            </div>
+        </div>
+
+        <input type="hidden" id="selectedTaskId" />
+        <div class="card shadow-sm border-0 h-100 d-none" id="taskDashboardContent">
+            <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold text-primary" id="taskDashboardTitle">Görev Adı</h5>
+                <div class="badge bg-success" id="taskDashboardStatus">Devam Ediyor</div>
+            </div>
+            
+            <div class="card-body p-0">
+                <!-- Sekmeler -->
+                <ul class="nav nav-tabs px-3 pt-3" id="taskTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active fw-bold text-dark" id="budget-tab" data-bs-toggle="tab" data-bs-target="#budget" type="button" role="tab">
+                            <i class="bi bi-wallet2 text-success me-1"></i>Maliyet & Bütçe
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold text-dark" id="chat-tab" data-bs-toggle="tab" data-bs-target="#chat" type="button" role="tab">
+                            <i class="bi bi-chat-dots text-primary me-1"></i>Saha Sohbeti
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold text-dark" id="docs-tab" data-bs-toggle="tab" data-bs-target="#docs" type="button" role="tab">
+                            <i class="bi bi-folder-check text-warning me-1"></i>Evraklar (İSG vb.)
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content p-3" id="taskTabContent">
+                    <!-- Maliyet Sekmesi -->
+                    <div class="tab-pane fade show active" id="budget" role="tabpanel">
+                        <div class="d-flex justify-content-between mb-3">
+                            <h6 class="fw-bold">Harcama ve Satın Alma Kalemleri</h6>
+                            <button class="btn btn-sm btn-success" onclick="openNewCostModal()"><i class="bi bi-plus"></i> Masraf / Alım Emri Gir</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Kategori</th>
+                                        <th>Açıklama</th>
+                                        <th>Tutar</th>
+                                        <th>Onay Durumu</th>
+                                        <th>İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="5" class="text-center py-3 text-muted">API bağlantısı bekleniyor...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Sohbet Sekmesi -->
+                    <div class="tab-pane fade" id="chat" role="tabpanel">
+                        <div id="chatBox" class="chat-box bg-light rounded p-3 mb-3" style="height: 300px; overflow-y: auto;">
+                            <!-- Örnek Mesaj -->
+                            <div class="d-flex mb-3">
+                                <div class="bg-white border rounded p-2 shadow-sm w-75">
+                                    <div class="d-flex justify-content-between">
+                                        <strong class="text-primary small">Şantiye Şefi</strong>
+                                        <small class="text-muted">10:45</small>
+                                    </div>
+                                    <p class="mb-0 mt-1 small">Korkuluklar eksik geldi. Firmayı aradım, 2. parti yarın sabah teslim edilecek.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="input-group">
+                            <button class="btn btn-outline-secondary" type="button"><i class="bi bi-camera"></i></button>
+                            <input type="text" class="form-control" id="chatMessageInput" placeholder="Acil durum veya not yazın (@@ ile bahsedin)..." onkeydown="if(event.key==='Enter') sendChatMessage();">
+                            <button class="btn btn-primary" type="button" onclick="sendChatMessage()"><i class="bi bi-send"></i></button>
+                        </div>
+
+                    </div>
+                    
+                    <!-- Evrak Sekmesi -->
+                    <div class="tab-pane fade" id="docs" role="tabpanel">
+                        <div class="alert alert-info small">
+                            <i class="bi bi-info-circle me-1"></i>Zemin etüdü raporu, İSG tutanağı veya ruhsat PDF'lerini buraya yükleyebilirsiniz.
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary mb-3"><i class="bi bi-upload"></i> Yeni Evrak Yükle</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+<!-- Yeni Masraf Ekle Modal -->
+<div class="modal fade" id="newCostModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Masraf / Alım Emri Gir</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="newCostForm">
+                    <div class="mb-3">
+                        <label class="form-label">Başlık (Örn: 2 Usta Yevmiyesi, Çit Kiralama)</label>
+                        <input type="text" class="form-control" id="costTitle" required />
+                    </div>
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Sipariş Edilen</label>
+                            <input type="number" step="0.01" class="form-control" id="costQuantity" placeholder="Örn: 1500" />
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label text-success">Şantiyeye Gelen</label>
+                            <input type="number" step="0.01" class="form-control border-success" id="costDelivered" placeholder="Örn: 350" />
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Birim</label>
+                            <select class="form-select" id="costUnit">
+                                <option value="Adet">Adet</option>
+                                <option value="m²">m²</option>
+                                <option value="m³">m³</option>
+                                <option value="Ton">Ton</option>
+                                <option value="mtül">mtül</option>
+                                <option value="Gün (Yevmiye)">Gün (Yevmiye)</option>
+                                <option value="Ay">Ay</option>
+                                <option value="Löt">Löt (Götürü)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label text-danger fw-bold">Tutar (TL)</label>
+                            <input type="number" step="0.01" class="form-control border-danger" id="costAmount" required />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tedarikçi / Taşeron / Marka</label>
+                        <input type="text" class="form-control" id="costSupplier" />
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-success" onclick="saveCost()"><i class="bi bi-check-circle"></i> Kaydet ve Onaya Gönder</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Yeni Alt İş / Görev Modal -->
+<div class="modal fade" id="newTaskModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Yeni Alt İş / Görev Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="newTaskForm">
+                    <input type="hidden" id="taskPhaseId" />
+                    <div class="mb-3">
+                        <label class="form-label">Görev Adı (Örn: Zemin Etüdü, Çit Kurulumu)</label>
+                        <input type="text" class="form-control" id="taskName" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Kısa Açıklama (Opsiyonel)</label>
+                        <textarea class="form-control" id="taskDesc" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-primary" onclick="saveTask()">Kaydet</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Yeni Faz Modal -->
+<div class="modal fade" id="newPhaseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Yeni Ana Faz Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="newPhaseForm">
+                    <input type="hidden" id="phaseProjectId" value="@Model.Id" />
+                    <div class="mb-3">
+                        <label class="form-label">Faz Adı (Örn: Kaba İnşaat, İnce İşler)</label>
+                        <input type="text" class="form-control" id="phaseName" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Kısa Açıklama</label>
+                        <textarea class="form-control" id="phaseDesc" rows="2"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Planlanan Başlangıç</label>
+                            <input type="date" class="form-control" id="phaseStart" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Planlanan Bitiş (Şaşma Paylı)</label>
+                            <input type="date" class="form-control" id="phaseEnd" />
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-primary" onclick="savePhase()">Kaydet</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function savePhase() {
+            var data = {
+                projectId: $('#phaseProjectId').val(),
+                name: $('#phaseName').val(),
+                description: $('#phaseDesc').val(),
+                startDate: $('#phaseStart').val(),
+                endDate: $('#phaseEnd').val()
+            };
+
+            $.post('/ConstructionProject/AddPhase', data, function(res) {
+                if(res.success) {
+                    location.reload();
+                } else {
+                    alert("Hata oluştu.");
+                }
+            });
+        }
+
+        
+        function openTaskDashboard(taskId, taskName) {
+            $('#selectedTaskId').val(taskId);
+            $('#taskDashboardEmpty').addClass('d-none');
+            $('#taskDashboardContent').removeClass('d-none');
+            $('#taskDashboardTitle').text(taskName);
+            reloadTaskDetails();
+        }
+
+        function reloadTaskDetails() {
+            var taskId = $('#selectedTaskId').val();
+            
+            // Masrafları Çek
+            $('#budget tbody').html('<tr><td colspan="5" class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></td></tr>');
+            
+            $.get('/ConstructionProject/GetTaskDetails', { taskId: taskId }, function(data) {
+                $('#taskDashboardStatus').text(data.status);
+                
+                // Maliyet Tablosu
+                if(data.costs.length === 0) {
+                    $('#budget tbody').html('<tr><td colspan="5" class="text-center text-muted py-4"><i class="bi bi-wallet2 fs-4 d-block mb-2"></i>Bu iş için henüz masraf girilmemiş.</td></tr>');
+                } else {
+                    let costHtml = '';
+                    data.costs.forEach(c => {
+                        let badge = c.approvalStatus === 'Onaylandı' ? 'bg-success' : (c.approvalStatus === 'Onay Bekliyor' ? 'bg-warning text-dark' : 'bg-secondary');
+                        costHtml += `<tr>
+                            <td><span class="badge bg-light text-dark border">${c.categoryName}</span></td>
+                            <td class="fw-bold">${c.title} <br>
+<small class="text-muted fw-normal">
+    ${c.quantity ? `<span class="badge bg-light text-dark border me-1">${c.quantity} ${c.unit} İstenen</span>` : ''} 
+    ${c.deliveredQuantity ? `<span class="badge bg-success text-white me-1">${c.deliveredQuantity} ${c.unit} Gelen</span>` : ''} 
+    ${c.supplier || ''}
+</small></td>
+                            <td class="text-danger fw-bold">₺${c.amount.toLocaleString('tr-TR')}</td>
+                            <td><span class="badge ${badge}">${c.approvalStatus}</span></td>
+                            <td><button class="btn btn-sm btn-light text-danger"><i class="bi bi-trash"></i></button></td>
+                        </tr>`;
+                    });
+                    $('#budget tbody').html(costHtml);
+                }
+                
+                // Sohbet
+                if(data.messages.length === 0) {
+                    $('#chatBox').html('<div class="text-center text-muted mt-5">Henüz mesaj yok.</div>');
+                } else {
+                    let msgHtml = '';
+                    data.messages.forEach(m => {
+                        msgHtml += `<div class="d-flex mb-3">
+                                <div class="bg-white border rounded p-2 shadow-sm w-75">
+                                    <div class="d-flex justify-content-between">
+                                        <strong class="text-primary small">${m.sender || 'Bilinmiyor'}</strong>
+                                        <small class="text-muted">${m.date} ${m.time}</small>
+                                    </div>
+                                    <p class="mb-0 mt-1 small">${m.message}</p>
+                                </div>
+                            </div>`;
+                    });
+                    $('#chatBox').html(msgHtml);
+                    // Scroll to bottom
+                    var chatBox = document.getElementById("chatBox");
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }
+            });
+        }
+
+        function openNewCostModal() {
+            if(!$('#selectedTaskId').val()) { alert('Önce bir görev seçin.'); return; }
+            $('#newCostModal').modal('show');
+        }
+
+        function saveCost() {
+            var data = {
+                taskId: $('#selectedTaskId').val(),
+                title: $('#costTitle').val(),
+                amount: $('#costAmount').val(), quantity: $('#costQuantity').val(), deliveredQuantity: $('#costDelivered').val(), unit: $('#costUnit').val(),
+                supplier: $('#costSupplier').val()
+            };
+            $.post('/ConstructionProject/AddTaskCost', data, function(res) {
+                if(res.success) { 
+                    $('#newCostModal').modal('hide');
+                    $('#newCostForm')[0].reset();
+                    reloadTaskDetails();
+                }
+            });
+        }
+
+        function sendChatMessage() {
+            var input = $('#chatMessageInput');
+            var msg = input.val();
+            var taskId = $('#selectedTaskId').val();
+            if(!msg || !taskId) return;
+
+            $.post('/ConstructionProject/AddTaskMessage', { taskId: taskId, message: msg }, function(res) {
+                if(res.success) {
+                    input.val('');
+                    reloadTaskDetails();
+                }
+            });
+        }
+
+        };
+        }
+        
+        
+        function openTaskDashboard(taskId, taskName) {
+            $('#selectedTaskId').val(taskId);
+            $('#taskDashboardEmpty').addClass('d-none');
+            $('#taskDashboardContent').removeClass('d-none');
+            $('#taskDashboardTitle').text(taskName);
+            reloadTaskDetails();
+        }
+
+        function reloadTaskDetails() {
+            var taskId = $('#selectedTaskId').val();
+            
+            // Masrafları Çek
+            $('#budget tbody').html('<tr><td colspan="5" class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></td></tr>');
+            
+            $.get('/ConstructionProject/GetTaskDetails', { taskId: taskId }, function(data) {
+                $('#taskDashboardStatus').text(data.status);
+                
+                // Maliyet Tablosu
+                if(data.costs.length === 0) {
+                    $('#budget tbody').html('<tr><td colspan="5" class="text-center text-muted py-4"><i class="bi bi-wallet2 fs-4 d-block mb-2"></i>Bu iş için henüz masraf girilmemiş.</td></tr>');
+                } else {
+                    let costHtml = '';
+                    data.costs.forEach(c => {
+                        let badge = c.approvalStatus === 'Onaylandı' ? 'bg-success' : (c.approvalStatus === 'Onay Bekliyor' ? 'bg-warning text-dark' : 'bg-secondary');
+                        costHtml += `<tr>
+                            <td><span class="badge bg-light text-dark border">${c.categoryName}</span></td>
+                            <td class="fw-bold">${c.title} <br>
+<small class="text-muted fw-normal">
+    ${c.quantity ? `<span class="badge bg-light text-dark border me-1">${c.quantity} ${c.unit} İstenen</span>` : ''} 
+    ${c.deliveredQuantity ? `<span class="badge bg-success text-white me-1">${c.deliveredQuantity} ${c.unit} Gelen</span>` : ''} 
+    ${c.supplier || ''}
+</small></td>
+                            <td class="text-danger fw-bold">₺${c.amount.toLocaleString('tr-TR')}</td>
+                            <td><span class="badge ${badge}">${c.approvalStatus}</span></td>
+                            <td><button class="btn btn-sm btn-light text-danger"><i class="bi bi-trash"></i></button></td>
+                        </tr>`;
+                    });
+                    $('#budget tbody').html(costHtml);
+                }
+                
+                // Sohbet
+                if(data.messages.length === 0) {
+                    $('#chatBox').html('<div class="text-center text-muted mt-5">Henüz mesaj yok.</div>');
+                } else {
+                    let msgHtml = '';
+                    data.messages.forEach(m => {
+                        msgHtml += `<div class="d-flex mb-3">
+                                <div class="bg-white border rounded p-2 shadow-sm w-75">
+                                    <div class="d-flex justify-content-between">
+                                        <strong class="text-primary small">${m.sender || 'Bilinmiyor'}</strong>
+                                        <small class="text-muted">${m.date} ${m.time}</small>
+                                    </div>
+                                    <p class="mb-0 mt-1 small">${m.message}</p>
+                                </div>
+                            </div>`;
+                    });
+                    $('#chatBox').html(msgHtml);
+                    // Scroll to bottom
+                    var chatBox = document.getElementById("chatBox");
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }
+            });
+        }
+
+        function openNewCostModal() {
+            if(!$('#selectedTaskId').val()) { alert('Önce bir görev seçin.'); return; }
+            $('#newCostModal').modal('show');
+        }
+
+        function saveCost() {
+            var data = {
+                taskId: $('#selectedTaskId').val(),
+                title: $('#costTitle').val(),
+                amount: $('#costAmount').val(), quantity: $('#costQuantity').val(), deliveredQuantity: $('#costDelivered').val(), unit: $('#costUnit').val(),
+                supplier: $('#costSupplier').val()
+            };
+            $.post('/ConstructionProject/AddTaskCost', data, function(res) {
+                if(res.success) { 
+                    $('#newCostModal').modal('hide');
+                    $('#newCostForm')[0].reset();
+                    reloadTaskDetails();
+                }
+            });
+        }
+
+        function sendChatMessage() {
+            var input = $('#chatMessageInput');
+            var msg = input.val();
+            var taskId = $('#selectedTaskId').val();
+            if(!msg || !taskId) return;
+
+            $.post('/ConstructionProject/AddTaskMessage', { taskId: taskId, message: msg }, function(res) {
+                if(res.success) {
+                    input.val('');
+                    reloadTaskDetails();
+                }
+            });
+        }
+
+        };
+                    $('#budget tbody').html(costHtml);
+                }
+                
+                // Sohbet
+                if(data.messages.length === 0) {
+                    $('#chatBox').html('<div class="text-center text-muted mt-5">Henüz mesaj yok.</div>');
+                } else {
+                    let msgHtml = '';
+                    data.messages.forEach(m => {
+                        msgHtml += `<div class="d-flex mb-3">
+                                <div class="bg-white border rounded p-2 shadow-sm w-75">
+                                    <div class="d-flex justify-content-between">
+                                        <strong class="text-primary small">${m.sender || 'Bilinmiyor'}</strong>
+                                        <small class="text-muted">${m.date} ${m.time}</small>
+                                    </div>
+                                    <p class="mb-0 mt-1 small">${m.message}</p>
+                                </div>
+                            </div>`;
+                    });
+                    $('#chatBox').html(msgHtml);
+                }
+            });
+        }
+    </script>
+}

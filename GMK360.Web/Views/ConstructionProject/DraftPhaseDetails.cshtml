@@ -1,0 +1,117 @@
+﻿@model GMK360.Core.Entities.Construction.ProjectPhase
+@{
+    ViewData["Title"] = "Konu ve Karar Odasi";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var currentUserId = ViewBag.CurrentUserId as string;
+}
+
+<div class="container-fluid py-4">
+    <div class="row mb-4 align-items-center">
+        <div class="col-auto">
+            <a href="/ConstructionProject/Details/@Model.ConstructionProjectId" class="btn btn-outline-secondary rounded-circle p-2 lh-1"><i class="bi bi-arrow-left fs-5"></i></a>
+        </div>
+        <div class="col">
+            <h3 class="mb-0 fw-bold text-dark"><i class="bi bi-chat-square-text text-primary me-2"></i> @Model.Name</h3>
+            <p class="text-muted mb-0">Ön Çalışma / Karar Odası (Taslak)</p>
+        </div>
+        <div class="col-auto">
+            <div class="bg-light border rounded-pill px-4 py-2 text-center shadow-sm d-flex align-items-center gap-3">
+                <span class="text-muted fw-bold small">YÖNETİM KURULU ONAYI:</span>
+                <span class="fs-5 fw-bold @(Model.PhaseApprovals.Count >= Model.RequiredApprovals ? "text-success" : "text-warning")">
+                    @Model.PhaseApprovals.Count / @Model.RequiredApprovals
+                </span>
+                
+                @if (ViewBag.CanApprove == true)
+                {
+                    if (ViewBag.HasApproved == true)
+                    {
+                        <button class="btn btn-sm btn-success rounded-pill px-3" disabled><i class="bi bi-check-circle-fill"></i> İmzaladın</button>
+                    }
+                    else
+                    {
+                        <form asp-action="ApproveDraftPhase" asp-controller="ConstructionProject" method="post" class="d-inline">
+                            <input type="hidden" name="phaseId" value="@Model.Id" />
+                            <button type="submit" class="btn btn-sm btn-primary fw-bold rounded-pill shadow-sm px-3"><i class="bi bi-pen-fill"></i> KARARI ONAYLA (İMZA)</button>
+                        </form>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Sol: Tartisma Tahtasi -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h5 class="mb-0 fw-bold"><i class="bi bi-chat-dots-fill text-warning me-2"></i> Konu Tartışması ve Fikirler</h5>
+                </div>
+                <div class="card-body bg-light p-4" style="height: 500px; overflow-y: auto;">
+                    
+                    @if(!Model.PhaseMessages.Any())
+                    {
+                        <div class="text-center py-5">
+                            <i class="bi bi-chat-square-quote fs-1 text-muted opacity-50 mb-3"></i>
+                            <h5 class="text-muted">Bu konu hakkında henüz bir yorum yapılmamış.</h5>
+                            <p class="text-muted small">Sorunları, eldeki malzemeleri veya fikirlerinizi aşağıdan yazarak tartışmayı başlatın.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        foreach (var msg in Model.PhaseMessages.OrderBy(m => m.CreatedAt))
+                        {
+                            bool isMe = msg.SenderUserId == currentUserId;
+                            <div class="d-flex mb-4 @(isMe ? "justify-content-end" : "justify-content-start")">
+                                <div class="message-bubble p-3 rounded-4 shadow-sm @(isMe ? "bg-primary text-white" : "bg-white border")" style="max-width: 75%;">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <small class="fw-bold @(isMe ? "text-light" : "text-dark")"><i class="bi bi-person-circle"></i> @(isMe ? "Ben" : "Ekip Üyesi")</small>
+                                        <small class="ms-3 @(isMe ? "text-white-50" : "text-muted")" style="font-size: 0.75rem;">@msg.CreatedAt.ToString("g")</small>
+                                    </div>
+                                    <p class="mb-0">@msg.Content</p>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="card-footer bg-white p-3">
+                    <form asp-action="AddPhaseMessage" method="post" class="d-flex gap-2">
+                        <input type="hidden" name="phaseId" value="@Model.Id" />
+                        <input type="text" name="content" class="form-control rounded-pill bg-light border-0 px-4" placeholder="Fikrini veya bilgini yaz..." required autocomplete="off">
+                        <button type="submit" class="btn btn-primary rounded-pill px-4"><i class="bi bi-send-fill"></i></button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sag: Konu Detaylari -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body">
+                    <h6 class="fw-bold text-uppercase text-muted mb-3">Konu Detayları</h6>
+                    <p class="mb-3">@Model.Description</p>
+                    
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                            <span class="text-muted"><i class="bi bi-calendar-event me-2"></i> Hedeflenen Başlangıç</span>
+                            <span class="fw-bold">@Model.PlannedStartDate?.ToString("dd.MM.yyyy")</span>
+                        </li>
+                        <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                            <span class="text-muted"><i class="bi bi-calendar-check me-2"></i> Hedeflenen Bitiş</span>
+                            <span class="fw-bold">@Model.PlannedEndDate?.ToString("dd.MM.yyyy")</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="alert alert-info border-0 shadow-sm rounded-4">
+                <div class="d-flex">
+                    <i class="bi bi-info-circle-fill fs-3 text-info me-3"></i>
+                    <div>
+                        <h6 class="fw-bold text-dark">Nasıl Çalışır?</h6>
+                        <p class="mb-0 small text-dark">Burada sadece fikirler tartışılır ve mevcut malzemeler değerlendirilir. Yönetim gerekli imzaları attığında bu konu resmi bir <strong>Şantiye Fazı'na</strong> dönüşür ve malzeme teklifi isteme (satın alma) aşaması başlar.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

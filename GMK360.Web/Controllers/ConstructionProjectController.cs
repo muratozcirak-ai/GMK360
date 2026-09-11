@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +12,24 @@ using GMK360.Core.Entities;
 
 namespace GMK360.Web.Controllers
 {
+    public class SmartTemplateItem
+    {
+        public string Type { get; set; }
+        public string Category { get; set; }
+        public string Name { get; set; }
+        public string Unit { get; set; }
+    }
+
+    public class SmartTemplateSubmitModel
+    {
+        public int SpaceId { get; set; }
+        public List<string> Types { get; set; }
+        public List<string> Categories { get; set; }
+        public List<string> Names { get; set; }
+        public List<double> Quantities { get; set; }
+        public List<string> Units { get; set; }
+    }
+
     [Authorize(Roles = "InsaatFirmasi,Admin,Corporate")]
     public class ConstructionProjectController : Controller
     {
@@ -67,8 +85,41 @@ namespace GMK360.Web.Controllers
         {
             if (id == null) return NotFound();
 
+                        // Faz 0 Evraklari kontrol et ve otomatik ekle
+            var existingDocs = await _context.ProjectLegalDocuments.Where(d => d.ConstructionProjectId == id).Select(d => d.SystemTemplateId).ToListAsync();
+            var globalTemplates = await _context.SystemLegalDocumentTemplates.Where(t => t.TargetModule == "Construction").ToListAsync();
+            
+            bool addedNew = false;
+            foreach(var template in globalTemplates)
+            {
+                if(!existingDocs.Contains(template.Id))
+                {
+                    _context.ProjectLegalDocuments.Add(new GMK360.Core.Entities.Construction.ProjectLegalDocument {
+                        ConstructionProjectId = id.Value,
+                        DocumentName = template.Name,
+                        SystemTemplateId = template.Id,
+                        AppliedTo = template.IssuedBy,
+                        Status = GMK360.Core.Entities.Construction.LegalDocumentStatus.NotApplied
+                    });
+                    addedNew = true;
+                }
+            }
+            if(addedNew) await _context.SaveChangesAsync();
+
+            ViewBag.Phase0Docs = await _context.ProjectLegalDocuments
+                .Include(d => d.SystemTemplate)
+                .Where(d => d.ConstructionProjectId == id)
+                .ToListAsync();
+
             var project = await _context.ConstructionProjects
                 .Include(c => c.Phases)
+                    .ThenInclude(p => p.PhaseTasks)
+                        .ThenInclude(t => t.TaskMessages)
+                .Include(c => c.Phases)
+                    .ThenInclude(p => p.PhaseApprovals)
+                .Include(c => c.Phases)
+                    .ThenInclude(p => p.PhaseTasks)
+                        .ThenInclude(t => t.TaskCosts)
                 .Include(c => c.Amenities)
                 .Include(c => c.Tasks)
                 .Include(c => c.Blocks)
@@ -388,7 +439,7 @@ namespace GMK360.Web.Controllers
             {
                 ConstructionProjectId = projectId,
                 Title = title,
-                Description = description,
+                Description = string.IsNullOrWhiteSpace(description) ? "-" : description,
                 Status = 0,
                 CreatedAt = DateTime.UtcNow
             };
@@ -1111,6 +1162,364 @@ namespace GMK360.Web.Controllers
             return RedirectToAction("Details", new { id = projectId });
         }
             // --- DAIRE ICI ALAN YONETIMI ---
+        
+        // --- PROJE FAZLARI VE AŞAMALAR ---
+        
+
+        [HttpPost]
+        
+        [HttpPost]
+        
+        [HttpPost]
+        public async Task<IActionResult> AddCustomLegalDocument(int projectId, string documentName, string appliedTo, string institutionPhone, string trackingPerson)
+        {
+            var project = await _context.ConstructionProjects.FindAsync(projectId);
+            if(project == null) return NotFound();
+
+            var doc = new GMK360.Core.Entities.Construction.ProjectLegalDocument
+            {
+                ConstructionProjectId = projectId,
+                DocumentName = documentName,
+                AppliedTo = appliedTo,
+                InstitutionPhone = institutionPhone,
+                TrackingPerson = trackingPerson,
+                IsCustom = true,
+                Status = GMK360.Core.Entities.Construction.LegalDocumentStatus.Applied
+            };
+
+            _context.ProjectLegalDocuments.Add(doc);
+            await _context.SaveChangesAsync();
+
+            // Istihbarat / Bildirim loglamasi eklenebilir
+            
+            return RedirectToAction(nameof(Details), new { id = projectId });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> UpdateLegalDocumentStatus(int documentId, int statusId, string appliedTo, string trackingPerson, string institutionContact, string notes)
+        {
+            var doc = await _context.ProjectLegalDocuments.FindAsync(documentId);
+            if(doc == null) return NotFound();
+            
+            doc.Status = (GMK360.Core.Entities.Construction.LegalDocumentStatus)statusId;
+            if(appliedTo != null) doc.AppliedTo = appliedTo;
+            if(trackingPerson != null) doc.TrackingPerson = trackingPerson;
+            if(institutionContact != null) doc.InstitutionContact = institutionContact;
+            if(notes != null) doc.Notes = notes;
+            
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Details), new { id = doc.ConstructionProjectId });
+        }
+
+        public async Task<IActionResult> DraftPhaseDetails(int id)
+        {
+            var phase = await _context.ProjectPhases
+                .Include(p => p.ConstructionProject)
+                .Include(p => p.PhaseApprovals)
+                .Include(p => p.PhaseMessages)
+                .FirstOrDefaultAsync(p => p.Id == id && p.Status == -1);
+
+            if(phase == null) return NotFound();
+
+            // Sadece ajans kullanicilari mesaj atabilir / onaylayabilir
+            string currentUserId = _userManager.GetUserId(User);
+            ViewBag.CurrentUserId = currentUserId;
+            
+            var agencyId = await _context.AgencyConsultants
+                .Where(a => a.UserId == currentUserId)
+                .Select(a => a.AgencyId)
+                .FirstOrDefaultAsync();
+
+            var approvers = await _context.AgencyConsultants
+                .Where(a => a.AgencyId == agencyId && a.UserId != null)
+                .Select(a => a.UserId)
+                .ToListAsync();
+
+            ViewBag.HasApproved = phase.PhaseApprovals.Any(a => a.ApprovedByUserId == currentUserId);
+            ViewBag.CanApprove = approvers.Contains(ViewBag.CurrentUserId);
+
+            return View(phase);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> AddPhaseMessage(int phaseId, string content)
+        {
+            var phase = await _context.ProjectPhases.FindAsync(phaseId);
+            if(phase == null || string.IsNullOrWhiteSpace(content)) return BadRequest();
+
+            var userId = _userManager.GetUserId(User);
+            _context.PhaseMessages.Add(new GMK360.Core.Entities.Construction.PhaseMessage
+            {
+                ProjectPhaseId = phaseId,
+                SenderUserId = userId,
+                Content = content
+            });
+            await _context.SaveChangesAsync();
+
+            return RedirectToAction(nameof(DraftPhaseDetails), new { id = phaseId });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ApproveDraftPhase(int phaseId)
+        {
+            var phase = await _context.ProjectPhases
+                .Include(p => p.PhaseApprovals)
+                .FirstOrDefaultAsync(p => p.Id == phaseId);
+                
+            if (phase == null) return NotFound();
+            
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+
+            // Check if user already approved
+            if (phase.PhaseApprovals.Any(a => a.ApprovedByUserId == user.Id))
+            {
+                TempData["ErrorMessage"] = "Bu talebi zaten onayladınız!";
+                return RedirectToAction(nameof(Details), new { id = phase.ConstructionProjectId });
+            }
+
+            // Create Approval
+            var approval = new GMK360.Core.Entities.Construction.PhaseApproval
+            {
+                ProjectPhaseId = phaseId,
+                ApprovedByUserId = user.Id,
+                ApprovedAt = DateTime.UtcNow
+            };
+            
+            _context.PhaseApprovals.Add(approval);
+            phase.PhaseApprovals.Add(approval);
+            
+            // Check if enough approvals
+            if (phase.PhaseApprovals.Count >= phase.RequiredApprovals)
+            {
+                phase.Status = 1; // Active!
+                phase.PlannedStartDate = DateTime.Now;
+                TempData["SuccessMessage"] = "Yönetim kurulu imzaları tamamlandı. Taslak resmi olarak başlatıldı!";
+            }
+            else
+            {
+                TempData["SuccessMessage"] = $"İmzanız alındı. {phase.PhaseApprovals.Count}/{phase.RequiredApprovals} onay tamamlandı.";
+            }
+
+            await _context.SaveChangesAsync();
+            
+            return RedirectToAction(nameof(Details), new { id = phase.ConstructionProjectId });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> AddPhaseTask(int phaseId, string name, string description)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var phase = await _context.ProjectPhases
+                .Include(p => p.ConstructionProject)
+                .FirstOrDefaultAsync(p => p.Id == phaseId && (User.IsInRole("Admin") || p.ConstructionProject.AgencyId == agencyId));
+            
+            if (phase == null) return NotFound();
+
+            var task = new GMK360.Core.Entities.Construction.PhaseTask
+            {
+                ProjectPhaseId = phaseId,
+                Name = name,
+                Description = description ?? "",
+                Status = "Devam Ediyor",
+                OrderIndex = await _context.PhaseTasks.CountAsync(t => t.ProjectPhaseId == phaseId) + 1
+            };
+
+            _context.PhaseTasks.Add(task);
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true, id = task.Id });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetTaskDetails(int taskId)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var task = await _context.PhaseTasks
+                .Include(t => t.ProjectPhase)
+                    .ThenInclude(p => p.ConstructionProject)
+                .Include(t => t.TaskCosts)
+                    .ThenInclude(c => c.CostCategory)
+                .Include(t => t.TaskMessages)
+                .FirstOrDefaultAsync(t => t.Id == taskId);
+
+            if (task == null || (!User.IsInRole("Admin") && task.ProjectPhase.ConstructionProject.AgencyId != agencyId))
+                return NotFound();
+
+            var result = new {
+                id = task.Id,
+                name = task.Name,
+                status = task.Status,
+                costs = task.TaskCosts.Select(c => new {
+                    id = c.Id,
+                    title = c.Title,
+                    categoryName = c.CostCategory?.Name ?? "Diğer",
+                    amount = c.Amount, quantity = c.Quantity, deliveredQuantity = c.DeliveredQuantity, unit = c.Unit,
+                    supplier = c.SupplierName,
+                    approvalStatus = c.ApprovalStatus
+                }),
+                messages = task.TaskMessages.OrderBy(m => m.SentAt).Select(m => new {
+                    sender = m.SenderName,
+                    message = m.Message,
+                    time = m.SentAt.ToString("HH:mm"),
+                    date = m.SentAt.ToString("dd MMM yyyy")
+                })
+            };
+
+            return Json(result);
+        }
+
+        
+        [HttpPost]
+        public async Task<IActionResult> AddTaskMessage(int taskId, string message)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var task = await _context.PhaseTasks
+                .Include(t => t.ProjectPhase)
+                    .ThenInclude(p => p.ConstructionProject)
+                .FirstOrDefaultAsync(t => t.Id == taskId && (User.IsInRole("Admin") || t.ProjectPhase.ConstructionProject.AgencyId == agencyId));
+            
+            if (task == null) return NotFound();
+
+            var user = await _userManager.GetUserAsync(User);
+            
+            var msg = new GMK360.Core.Entities.Construction.TaskMessage
+            {
+                PhaseTaskId = taskId,
+                Message = message,
+                SenderId = user.Id,
+                SenderName = user.FirstName + " " + user.LastName,
+                PhotoUrl = "",
+                SentAt = DateTime.UtcNow
+            };
+
+            _context.TaskMessages.Add(msg);
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> AddTaskCost(int taskId, string title, decimal amount, decimal? quantity, decimal? deliveredQuantity, string unit, string supplier)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var task = await _context.PhaseTasks
+                .Include(t => t.ProjectPhase)
+                    .ThenInclude(p => p.ConstructionProject)
+                .FirstOrDefaultAsync(t => t.Id == taskId && (User.IsInRole("Admin") || t.ProjectPhase.ConstructionProject.AgencyId == agencyId));
+            
+            if (task == null) return NotFound();
+
+            // Sadece test için rastgele CostCategory seçelim, gerçek senaryoda dropdown'dan gelecek
+            
+            var firstCategory = await _context.CostCategories.FirstOrDefaultAsync(c => c.AgencyId == agencyId) 
+                                ?? await _context.CostCategories.FirstOrDefaultAsync();
+
+            if (firstCategory == null)
+            {
+                firstCategory = new GMK360.Core.Entities.Construction.CostCategory { Name = "Genel Gider", Description = "Genel", Icon = "bi-cash", AgencyId = agencyId };
+                _context.CostCategories.Add(firstCategory);
+                await _context.SaveChangesAsync();
+            }
+
+            var cost = new GMK360.Core.Entities.Construction.TaskCost
+            {
+                PhaseTaskId = taskId,
+                CostCategoryId = firstCategory.Id,
+
+                Title = title,
+                Amount = amount,
+                Quantity = quantity,
+                DeliveredQuantity = deliveredQuantity,
+                Unit = unit ?? "",
+                SupplierName = supplier ?? "",
+                ApprovalStatus = "Onay Bekliyor",
+                Notes = "",
+                LogDate = DateTime.UtcNow
+            };
+
+            // Eğer DB'de CostCategory hiç yoksa EF hata verir, o yüzden fallback olarak 1 atıyoruz
+            // Gerçek projede bunu Seed ile doldurmalıyız.
+
+            _context.TaskCosts.Add(cost);
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true });
+        }
+
+        public async Task<IActionResult> ManagePhases(int id)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return RedirectToAction("Login", "Account");
+
+            var project = await _context.ConstructionProjects
+                .Include(p => p.Phases)
+                    .ThenInclude(p => p.PhaseTasks)
+                .FirstOrDefaultAsync(p => p.Id == id && (User.IsInRole("Admin") || p.AgencyId == agencyId));
+
+            if (project == null) return NotFound();
+
+            return View(project);
+        }
+        
+        [HttpPost]
+        public async Task<IActionResult> AddPhase(int projectId, string name, string description, DateTime? startDate, DateTime? endDate, int? status)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId);
+            if (project == null) return NotFound();
+
+            // Kac adet Yonetici (Partner) var bulalim
+            var consultantUserIds = await _context.AgencyConsultants
+                .Where(a => a.AgencyId == agencyId)
+                .Select(a => a.UserId)
+                .ToListAsync();
+                
+            var agencyUsers = await _context.Users.Where(u => consultantUserIds.Contains(u.Id)).ToListAsync();
+            var adminCount = 0;
+            foreach(var u in agencyUsers)
+            {
+                if(await _userManager.IsInRoleAsync(u, "Admin") || await _userManager.IsInRoleAsync(u, "AgencyAdmin") || await _userManager.IsInRoleAsync(u, "AgencyOwner")) 
+                    adminCount++;
+            }
+            
+            // Eğer kimse Admin değilse bile en az 1 kişi onaylamalı
+            if(adminCount == 0) adminCount = 1;
+
+            int required = adminCount > 1 ? 2 : 1; // 1 admin varsa 1 imza, 2 veya daha fazlaysa 2 imza cift dunya
+
+            var phase = new GMK360.Core.Entities.Construction.ProjectPhase
+            {
+                ConstructionProjectId = projectId,
+                Name = name,
+                Description = description,
+                PlannedStartDate = startDate,
+                PlannedEndDate = endDate,
+                Status = status ?? 0,
+                RequiredApprovals = required,
+                OrderIndex = await _context.ProjectPhases.CountAsync(p => p.ConstructionProjectId == projectId) + 1
+            };
+
+            _context.ProjectPhases.Add(phase);
+            await _context.SaveChangesAsync();
+
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return Json(new { success = true, id = phase.Id });
+            }
+            return RedirectToAction("Details", new { id = projectId });
+        }
+
         public async Task<IActionResult> ManageUnitSpaces(int id)
         {
             var agencyId = await GetUserAgencyIdAsync();
@@ -1134,7 +1543,387 @@ namespace GMK360.Web.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddUnitSpace(int unitId, string name, string spaceType, double? squareMeters)
+
+        [HttpGet]
+
+        [HttpGet]
+                public IActionResult GetSmartTemplate(string spaceType)
+        {
+            var items = new List<SmartTemplateItem>();
+            if (string.IsNullOrEmpty(spaceType)) return Json(items);
+            
+            spaceType = spaceType.Trim().ToLower();
+
+            if (spaceType.Contains("oda") || spaceType == "salon" || spaceType == "mutfak" || spaceType.Contains("dolaşım") || spaceType.Contains("hol") || spaceType.Contains("koridor") || spaceType.Contains("giriş") || spaceType.Contains("antre"))
+            {
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Zemin", Name = "Zemin Alanı", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Tavan", Name = "Tavan Alanı", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Duvar", Name = "Net Duvar Alanı", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Süpürgelik", Name = "Süpürgelik", Unit = "mt" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Duvar", Name = "İç Kapı Boşluğu", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Duvar", Name = "Pencere Boşluğu", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Diğer", Name = "Pencere Mermeri (Denizlik)", Unit = "mt" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Tavan", Name = "Perdelik", Unit = "mt" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Tavan", Name = "Kartonpiyer / Stropiyer", Unit = "mt" });
+            }
+            else if (spaceType == "balkon" || spaceType.Contains("teras"))
+            {
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Zemin", Name = "Zemin Alanı", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Tavan", Name = "Tavan Alanı", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Süpürgelik", Name = "Balkon Süpürgeliği", Unit = "mt" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Duvar", Name = "Korkuluk / Küpeşte", Unit = "mt" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Diğer", Name = "Parapet / Damlalık Mermeri", Unit = "mt" });
+            }
+            else if (spaceType.Contains("ıslak") || spaceType.Contains("banyo") || spaceType.Contains("wc"))
+            {
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Zemin", Name = "Zemin Seramik / Fayans", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Duvar", Name = "Duvar Seramik / Fayans", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Tavan", Name = "Asma Tavan Alanı", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Duvar", Name = "İç Kapı Boşluğu", Unit = "m2" });
+                
+                if (spaceType.Contains("banyo") || spaceType.Contains("ıslak"))
+                {
+                    items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Zemin", Name = "Duş / Küvet Alanı (İzolasyon)", Unit = "m2" });
+                }
+            }
+
+            return Json(items);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveSmartTemplate(SmartTemplateSubmitModel model)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var space = await _context.UnitSpaces
+                .Include(s => s.BuildingUnit)
+                .FirstOrDefaultAsync(s => s.Id == model.SpaceId);
+
+            if (space == null) return Unauthorized();
+
+            for (int i = 0; i < model.Quantities.Count; i++)
+            {
+                if (model.Quantities[i] > 0)
+                {
+                    if (model.Types[i] == "Measurement")
+                    {
+                        _context.SpaceMeasurements.Add(new GMK360.Core.Entities.SpaceMeasurement
+                        {
+                            UnitSpaceId = model.SpaceId,
+                            Category = model.Categories[i],
+                            Description = model.Names[i],
+                            Quantity = model.Quantities[i],
+                            Unit = model.Units[i]
+                        });
+                    }
+                    else if (model.Types[i] == "Fixture")
+                    {
+                        _context.SpaceFixtures.Add(new GMK360.Core.Entities.SpaceFixture
+                        {
+                            UnitSpaceId = model.SpaceId,
+                            Category = model.Categories[i],
+                            ItemName = model.Names[i],
+                            Quantity = model.Quantities[i],
+                            Unit = model.Units[i],
+                            IsCustomizable = false // Binaya ait sabitler genelde değiştirilemez
+                        });
+                    }
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = "Akıllı Şablon ile ölçüler başarıyla kaydedildi.";
+            
+            return RedirectToAction(nameof(ManageUnitSpaces), new { id = space.BuildingUnitId });
+        }
+
+        public async Task<IActionResult> GetSpaceMeasurements(int spaceId)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var measurements = await _context.SpaceMeasurements
+                .Where(m => m.UnitSpaceId == spaceId)
+                .Select(m => new {
+                    id = m.Id,
+                    category = m.Category,
+                    description = m.Description,
+                    quantity = m.Quantity,
+                    unit = m.Unit,
+                    width = m.Width,
+                    length = m.Length,
+                    height = m.Height
+                })
+                .ToListAsync();
+
+            return Json(measurements);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+                public async Task<IActionResult> AddSpaceMeasurement(int spaceId, string category, string description, double quantity, string unit)
+        {
+            try
+            {
+                var agencyId = await GetUserAgencyIdAsync();
+                if (agencyId == null) return Unauthorized();
+
+                var space = await _context.UnitSpaces
+                    .Include(s => s.BuildingUnit)
+                    .FirstOrDefaultAsync(s => s.Id == spaceId);
+
+                if (space == null) return Unauthorized();
+
+                var measurement = new GMK360.Core.Entities.SpaceMeasurement
+                {
+                    UnitSpaceId = spaceId,
+                    Category = category,
+                    Description = string.IsNullOrWhiteSpace(description) ? "-" : description,
+                    Quantity = quantity,
+                    Unit = unit
+                };
+
+                _context.SpaceMeasurements.Add(measurement);
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Ölçü başarıyla eklendi.";
+                return RedirectToAction(nameof(ManageUnitSpaces), new { id = space.BuildingUnitId });
+            }
+            catch (Exception ex)
+            {
+                // Hata yakalama
+                TempData["ErrorMessage"] = "Ölçü kaydedilirken bir hata oluştu: " + ex.Message;
+                var spaceFallback = await _context.UnitSpaces.FindAsync(spaceId);
+                if (spaceFallback != null)
+                    return RedirectToAction(nameof(ManageUnitSpaces), new { id = spaceFallback.BuildingUnitId });
+                return RedirectToAction(nameof(Index));
+            }
+        }
+
+        [HttpGet]
+        
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateSpaceMeasurement(int id, double quantity, double? width, double? length, double? height)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var measurement = await _context.SpaceMeasurements.FindAsync(id);
+            if (measurement == null) return NotFound();
+
+            measurement.Width = width;
+            measurement.Length = length;
+            measurement.Height = height;
+
+            if (width.HasValue && width > 0 && length.HasValue && length > 0)
+            {
+                measurement.Quantity = width.Value * length.Value;
+                if (height.HasValue && height > 0) measurement.Quantity *= height.Value;
+            }
+            else
+            {
+                measurement.Quantity = quantity;
+            }
+
+            await _context.SaveChangesAsync();
+
+            // Zekâ 1: Zemin değişirse Tavanı da eşitle
+            if ((measurement.Category != null && measurement.Category.ToLower().Contains("zemin")) || 
+                (measurement.Description != null && measurement.Description.ToLower().Contains("zemin")))
+            {
+                var tavan = _context.SpaceMeasurements.FirstOrDefault(x => x.UnitSpaceId == measurement.UnitSpaceId && 
+                    ((x.Category != null && x.Category.ToLower().Contains("tavan")) || (x.Description != null && x.Description.ToLower().Contains("tavan"))));
+                if (tavan != null)
+                {
+                    tavan.Quantity = measurement.Quantity;
+                }
+            }
+
+            // Zekâ 2: Pencere değişirse Denizlik/Mermer'i ve Perdelik'i TÜM pencereleri toplayarak hesapla
+            if (measurement.Description != null && measurement.Description.ToLower().Contains("pencere"))
+            {
+                // O mahalde adında 'pencere' geçen ve 'mermer' GEÇMEYEN tüm boşlukları bul
+                var pencereler = _context.SpaceMeasurements
+                    .Where(x => x.UnitSpaceId == measurement.UnitSpaceId && 
+                                x.Description.ToLower().Contains("pencere") && 
+                                !x.Description.ToLower().Contains("mermer"))
+                    .ToList();
+
+                double totalWidth = pencereler.Sum(x => x.Width ?? 0);
+                int windowCount = pencereler.Count(x => (x.Width ?? 0) > 0);
+
+                var mermer = _context.SpaceMeasurements.FirstOrDefault(x => x.UnitSpaceId == measurement.UnitSpaceId && x.Description.ToLower().Contains("mermer"));
+                if (mermer != null)
+                {
+                    mermer.Quantity = totalWidth;
+                }
+                
+                var perdelik = _context.SpaceMeasurements.FirstOrDefault(x => x.UnitSpaceId == measurement.UnitSpaceId && x.Description.ToLower().Contains("perdelik"));
+                if (perdelik != null)
+                {
+                    // Her pencere için 40 cm (0.40) pay ekliyoruz
+                    perdelik.Quantity = totalWidth + (windowCount * 0.40);
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            return Ok(new { quantity = measurement.Quantity });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateSpaceFixture(int id, double quantity)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var fixture = await _context.SpaceFixtures.FindAsync(id);
+            if (fixture == null) return NotFound();
+
+            fixture.Quantity = quantity;
+            await _context.SaveChangesAsync();
+            return Ok();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteUnitSpace(int id)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var space = await _context.UnitSpaces
+                .Include(s => s.Measurements)
+                .Include(s => s.Fixtures)
+                .FirstOrDefaultAsync(s => s.Id == id);
+
+            if (space == null) return NotFound();
+
+            var unitId = space.BuildingUnitId;
+            
+            _context.SpaceMeasurements.RemoveRange(space.Measurements);
+            _context.SpaceFixtures.RemoveRange(space.Fixtures);
+            _context.UnitSpaces.Remove(space);
+            
+            await _context.SaveChangesAsync();
+
+            return RedirectToAction(nameof(ManageUnitSpaces), new { id = unitId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteSpaceFixture(int id)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var fixture = await _context.SpaceFixtures.FindAsync(id);
+            if (fixture == null) return NotFound();
+
+            _context.SpaceFixtures.Remove(fixture);
+            await _context.SaveChangesAsync();
+
+            return Ok();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteSpaceMeasurement(int id)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var measurement = await _context.SpaceMeasurements.FindAsync(id);
+            if (measurement == null) return NotFound();
+
+            _context.SpaceMeasurements.Remove(measurement);
+            await _context.SaveChangesAsync();
+
+            return Ok();
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetSpaceFixtures(int spaceId)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var space = await _context.UnitSpaces
+                .Include(s => s.BuildingUnit)
+                    .ThenInclude(u => u.Building)
+                        .ThenInclude(b => b.ConstructionProject)
+                .FirstOrDefaultAsync(s => s.Id == spaceId);
+
+            if (space == null || (!User.IsInRole("Admin") && space.BuildingUnit.Building.ConstructionProject.AgencyId != agencyId))
+                return Unauthorized();
+
+            var fixtures = await _context.SpaceFixtures
+                .Include(f => f.Supplier)
+                .Include(f => f.TechnicalService)
+                .Where(f => f.UnitSpaceId == spaceId)
+                .Select(f => new {
+                    id = f.Id,
+                    itemName = f.ItemName,
+                    category = f.Category,
+                    quantity = f.Quantity,
+                    unit = f.Unit,
+                    supplierName = f.SupplierId != null ? f.Supplier.BusinessName : f.SupplierName,
+                    technicalServiceName = f.TechnicalServiceId != null ? f.TechnicalService.BusinessName : f.TechnicalServiceName,
+                    supplierId = f.SupplierId,
+                    technicalServiceId = f.TechnicalServiceId,
+                    warrantyExpiryDate = f.WarrantyExpiryDate,
+                    maintenanceNotes = f.MaintenanceNotes,
+                    isCustomizable = f.IsCustomizable
+                })
+                .ToListAsync();
+
+            return Json(fixtures);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddSpaceFixture(int spaceId, string itemName, string category, double quantity, string unit, string supplierName, string technicalServiceName, string maintenanceNotes, bool isCustomizable = false)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var space = await _context.UnitSpaces
+                .Include(s => s.BuildingUnit)
+                    .ThenInclude(u => u.Building)
+                        .ThenInclude(b => b.ConstructionProject)
+                .FirstOrDefaultAsync(s => s.Id == spaceId);
+
+            if (space == null || (!User.IsInRole("Admin") && space.BuildingUnit.Building.ConstructionProject.AgencyId != agencyId))
+                return Unauthorized();
+
+            // Check if supplier is registered (Shadow / CRM Logic) - for now just saving names
+            // Later we will implement full Shadow Account creation here if needed.
+            
+            var fixture = new GMK360.Core.Entities.SpaceFixture
+            {
+                UnitSpaceId = spaceId,
+                ItemName = itemName,
+                Category = category,
+                Quantity = quantity,
+                Unit = unit,
+                SupplierName = supplierName,
+                TechnicalServiceName = technicalServiceName,
+                MaintenanceNotes = maintenanceNotes,
+                IsCustomizable = isCustomizable
+            };
+
+            _context.SpaceFixtures.Add(fixture);
+            await _context.SaveChangesAsync();
+
+            return RedirectToAction(nameof(ManageUnitSpaces), new { id = space.BuildingUnitId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddUnitSpace(int unitId, string spaceName, string spaceType, double? squareMeters)
         {
             var agencyId = await GetUserAgencyIdAsync();
             if (agencyId == null) return Unauthorized();
@@ -1150,17 +1939,76 @@ namespace GMK360.Web.Controllers
             var space = new GMK360.Core.Entities.UnitSpace
             {
                 BuildingUnitId = unitId,
-                Name = name,
+                Name = spaceName,
                 Type = spaceType,
                 SquareMeters = squareMeters
             };
 
+
             _context.UnitSpaces.Add(space);
             await _context.SaveChangesAsync();
 
+            // Auto-Seed Smart Template
+            try
+            {
+                var templateResult = GetSmartTemplate(spaceType) as JsonResult;
+                if (templateResult != null && templateResult.Value is List<SmartTemplateItem> items && items.Count > 0)
+                {
+                    foreach (var item in items)
+                    {
+                        if (item.Type == "Measurement")
+                        {
+                            _context.SpaceMeasurements.Add(new GMK360.Core.Entities.SpaceMeasurement
+                            {
+                                UnitSpaceId = space.Id,
+                                Category = item.Category,
+                                Description = item.Name,
+                                Quantity = 0, // Starts at 0
+                                Unit = item.Unit
+                            });
+                        }
+                        else if (item.Type == "Fixture")
+                        {
+                            _context.SpaceFixtures.Add(new GMK360.Core.Entities.SpaceFixture
+                            {
+                                UnitSpaceId = space.Id,
+                                Category = item.Category,
+                                ItemName = item.Name,
+                                Quantity = 0, // Starts at 0
+                                Unit = item.Unit,
+                                IsCustomizable = false
+                            });
+                        }
+                    }
+                    await _context.SaveChangesAsync();
+                }
+            }
+            catch { /* Ignore seeding errors */ }
+
             return RedirectToAction(nameof(ManageUnitSpaces), new { id = unitId });
+
         }
-    }
+    
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CleanEmptyMeasurements(int spaceId)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var empties = await _context.SpaceMeasurements
+                .Where(m => m.UnitSpaceId == spaceId && (m.Quantity == 0))
+                .ToListAsync();
+
+            if (empties.Any())
+            {
+                _context.SpaceMeasurements.RemoveRange(empties);
+                await _context.SaveChangesAsync();
+            }
+
+            return Ok(new { deletedCount = empties.Count });
+        }
+}
 }
 
 

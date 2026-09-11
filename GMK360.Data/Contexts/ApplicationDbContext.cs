@@ -14,7 +14,7 @@ namespace GMK360.Data.Contexts
 {
     public class ApplicationDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, string>
     {
-        // Konum (Lokasyon) Tabloları
+        // Konum (Lokasyon) Tablolar�
         // Financial Settings
         public DbSet<PaymentSetting> PaymentSettings { get; set; }
 
@@ -57,7 +57,7 @@ namespace GMK360.Data.Contexts
         public DbSet<GuestCheckInRecord> GuestCheckInRecords { get; set; }
         public DbSet<Partner> Partners { get; set; }
         
-        // Emlakçı Profil (EİDS & Yetki Belgesi)
+        // Emlak�� Profil (E�DS & Yetki Belgesi)
         public DbSet<AgentProfile> AgentProfiles { get; set; }
         
         // CRM / B2B Lead Tablosu
@@ -67,27 +67,27 @@ namespace GMK360.Data.Contexts
         public DbSet<SubscriptionPackage> SubscriptionPackages { get; set; }
         public DbSet<AgentSubscription> AgentSubscriptions { get; set; }
 
-        // Cüzdan & Vitrin Modülü
+        // C�zdan & Vitrin Mod�l�
         public DbSet<UserWalletTransaction> UserWalletTransactions { get; set; }
         public DbSet<GMK360.Core.Entities.Marketing.ShowcasePackage> ShowcasePackages { get; set; }
 
-        // Dinamik Kampanyalar (Kayıt ve Giriş Ekranı)
+        // Dinamik Kampanyalar (Kay�t ve Giri� Ekran�)
         public DbSet<GMK360.Core.Entities.Marketing.AuthScreenBanner> AuthScreenBanners { get; set; }
 
-        // Sistem Hata/Uyarı Bildirimleri (Admin Onayı Gereken Durumlar)
+        // Sistem Hata/Uyar� Bildirimleri (Admin Onay� Gereken Durumlar)
         public DbSet<SystemIssueTicket> SystemIssueTickets { get; set; }
         public DbSet<SupportTicket> SupportTickets { get; set; }
         
         // Yeni Mimaride Eklenenler
         public DbSet<AgencyConsultant> AgencyConsultants { get; set; }
         
-        // --- KAMPANYA VE İSKONTO MOTORU (FAZ 23) ---
+        // --- KAMPANYA VE �SKONTO MOTORU (FAZ 23) ---
         public DbSet<GMK360.Core.Entities.Marketing.DiscountPolicy> DiscountPolicies { get; set; }
         public DbSet<GMK360.Core.Entities.Marketing.UserDiscount> UserDiscounts { get; set; }
         
         public DbSet<WalletCredit> WalletCredits { get; set; }
 
-        // Genel Sistem Logları (Merge, Kritik Silmeler vb.)
+        // Genel Sistem Loglar� (Merge, Kritik Silmeler vb.)
         public DbSet<SystemAuditLog> SystemAuditLogs { get; set; }
         public DbSet<ContactMessage> ContactMessages { get; set; }
         public DbSet<SeoSetting> SeoSettings { get; set; }
@@ -97,7 +97,7 @@ namespace GMK360.Data.Contexts
         public DbSet<TenancyContract> TenancyContracts { get; set; }
         public DbSet<ApiCredential> ApiCredentials { get; set; }
         
-        // Yeni Eklenen Dinamik Vergi ve Ödeme Kuralları Modülü
+        // Yeni Eklenen Dinamik Vergi ve �deme Kurallar� Mod�l�
         public DbSet<FinancialObligationType> FinancialObligationTypes { get; set; }
         public DbSet<PropertyFinancialSchedule> PropertyFinancialSchedules { get; set; }
         public DbSet<IncomeTaxDeclaration> IncomeTaxDeclarations { get; set; }
@@ -105,15 +105,20 @@ namespace GMK360.Data.Contexts
         public DbSet<PropertyExpense> PropertyExpenses { get; set; }
         public DbSet<BuildingExpenseShare> BuildingExpenseShares { get; set; }
         public DbSet<InvitationToken> InvitationTokens { get; set; }        
-        // Arama Motoru ve İzolasyon Modeli
+        // Arama Motoru ve �zolasyon Modeli
         public DbSet<UserFavorite> UserFavorites { get; set; }
         public DbSet<SavedSearch> SavedSearches { get; set; }
+        // B2B Network ve Evrensel İhale
+        public DbSet<GMK360.Core.Entities.B2B.B2BNetworkContact> B2BNetworkContacts { get; set; }
+        public DbSet<GMK360.Core.Entities.B2B.B2BQuoteRequest> B2BQuoteRequests { get; set; }
+        public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInvite> B2BQuoteInvites { get; set; }
+
         public DbSet<ScrapedProperty> ScrapedProperties { get; set; }
         public DbSet<MarketAnalytics> MarketAnalytics { get; set; }
         public DbSet<ContactLog> ContactLogs { get; set; }
         public DbSet<ConsultantRating> ConsultantRatings { get; set; }
 
-        // Usta/Esnaf ve Cüzdan
+        // Usta/Esnaf ve C�zdan
         public DbSet<ServiceProvider> ServiceProviders { get; set; }
         public DbSet<ServiceCategory> ServiceCategories { get; set; }
         public DbSet<ServiceProviderService> ServiceProviderServices { get; set; }
@@ -139,7 +144,7 @@ namespace GMK360.Data.Contexts
         public DbSet<CrmAppointment> CrmAppointments { get; set; }
         public DbSet<CrmRentalTracking> CrmRentalTrackings { get; set; }
 
-        // B2B Nalbur ve Tedarikçi Teklif Sistemi
+        // B2B Nalbur ve Tedarik�i Teklif Sistemi
         public DbSet<B2bSupplier> B2bSuppliers { get; set; }
         public DbSet<MaterialList> MaterialLists { get; set; }
         public DbSet<MaterialListItem> MaterialListItems { get; set; }
@@ -150,7 +155,7 @@ namespace GMK360.Data.Contexts
         public DbSet<UserNotification> UserNotifications { get; set; }
         public DbSet<EidsValidationLog> EidsValidationLogs { get; set; }
         
-        // Mülk Muhasebesi ve Gider Takibi Modülü
+        // M�lk Muhasebesi ve Gider Takibi Mod�l�
         public DbSet<LiabilityType> LiabilityTypes { get; set; }
         public DbSet<PropertyPayment> PropertyPayments { get; set; }
         public DbSet<DigitalDocument> DigitalDocuments { get; set; }
@@ -159,14 +164,14 @@ namespace GMK360.Data.Contexts
 
         public DbSet<UserSubscription> UserSubscriptions { get; set; }
         
-        // Tadilat ve İhale Modülü (Renovation Marketplace)
+        // Tadilat ve �hale Mod�l� (Renovation Marketplace)
         public DbSet<RenovationRequest> RenovationRequests { get; set; }
         public DbSet<RenovationOffer> RenovationOffers { get; set; }
 
-        // Dijital Sözleşmeler Merkezi
+        // Dijital S�zle�meler Merkezi
         public DbSet<DigitalContract> DigitalContracts { get; set; }
 
-        // Bina ve Site Yönetim Modülü
+        // Bina ve Site Y�netim Mod�l�
         public DbSet<Building> Buildings { get; set; }
         public DbSet<BuildingUnit> BuildingUnits { get; set; }
         public DbSet<UnitSpace> UnitSpaces { get; set; }
@@ -187,14 +192,23 @@ namespace GMK360.Data.Contexts
         public DbSet<Meeting> Meetings { get; set; }
         public DbSet<DocumentArchive> DocumentArchives { get; set; }
 
-        // Kurumsal Yönetim Şirketi ve Siteler
+        // Kurumsal Y�netim �irketi ve Siteler
         public DbSet<ManagementCompany> ManagementCompanies { get; set; }
         public DbSet<HousingComplex> HousingComplexes { get; set; }
 
-        // İnşaat ve Şantiye Yönetimi (Kentsel Dönüşüm ERP)
+        // �n�aat ve �antiye Y�netimi (Kentsel D�n���m ERP)
         public DbSet<ConstructionProject> ConstructionProjects { get; set; }
         public DbSet<ConstructionTimesheet> ConstructionTimesheets { get; set; }
         public DbSet<ProjectPhase> ProjectPhases { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.CostCategory> CostCategories { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.PhaseTask> PhaseTasks { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.PhaseApproval> PhaseApprovals { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.PhaseMessage> PhaseMessages { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.ProjectLegalDocument> ProjectLegalDocuments { get; set; }
+        public DbSet<GMK360.Core.Entities.SystemLegalDocumentTemplate> SystemLegalDocumentTemplates { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.TaskCost> TaskCosts { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.TaskDocument> TaskDocuments { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.TaskMessage> TaskMessages { get; set; }
         public DbSet<ProjectMaterialCatalog> ProjectMaterialCatalogs { get; set; }
         public DbSet<UnitMaterialSelection> UnitMaterialSelections { get; set; }
         public DbSet<ConstructionTask> ConstructionTasks { get; set; }
@@ -208,12 +222,12 @@ namespace GMK360.Data.Contexts
         public DbSet<UniversalSurvey> UniversalSurveys { get; set; }
         public DbSet<SupplierCampaign> SupplierCampaigns { get; set; }
 
-        // Evrensel Finans ve Ödeme Altyapısı
+        // Evrensel Finans ve �deme Altyap�s�
         public DbSet<FinancialAccount> FinancialAccounts { get; set; }
         public DbSet<PaymentTransaction> PaymentTransactions { get; set; }
         public DbSet<PlatformCommissionRate> PlatformCommissionRates { get; set; }
 
-        // Günlük Kiralama
+        // G�nl�k Kiralama
         public DbSet<Reservation> Reservations { get; set; }
         public DbSet<GuestIdentity> GuestIdentities { get; set; }
         public DbSet<FiatTransaction> FiatTransactions { get; set; }
@@ -221,7 +235,7 @@ namespace GMK360.Data.Contexts
 
         // Davet Sistemi
         
-        // --- PHASE 7 BİNA YÖNETİM ROLLERİ ---
+        // --- PHASE 7 B�NA Y�NET�M ROLLER� ---
         public DbSet<BuildingManager> BuildingManagers { get; set; }
         
         // --- PHASE 8 GENERIC MEETINGS & SURVEYS ---
@@ -230,7 +244,7 @@ namespace GMK360.Data.Contexts
         public DbSet<MeetingSurvey> MeetingSurveys { get; set; }
         public DbSet<SurveyOption> SurveyOptions { get; set; }
         public DbSet<SurveyVote> SurveyVotes { get; set; }
-        // --- PHASE 4 & PHASE 7 (YASAL YÖNETİM & DİJİTAL KARAR DEFTERİ) ---
+        // --- PHASE 4 & PHASE 7 (YASAL Y�NET�M & D�J�TAL KARAR DEFTER�) ---
         public DbSet<LegalAgreement> LegalAgreements { get; set; }
         public DbSet<UserAgreementAcceptance> UserAgreementAcceptances { get; set; }
         public DbSet<SmsTemplate> SmsTemplates { get; set; }
@@ -261,7 +275,7 @@ namespace GMK360.Data.Contexts
         public DbSet<DmsFolder> DmsFolders { get; set; }
         public DbSet<DmsDocument> DmsDocuments { get; set; }
 
-        // Akıllı Hizmet ve Usta Modülü
+        // Ak�ll� Hizmet ve Usta Mod�l�
         public DbSet<ServiceRequest> ServiceRequests { get; set; }
         public DbSet<ServiceOffer> ServiceOffers { get; set; }
         public DbSet<ServiceProviderSubscription> ServiceProviderSubscriptions { get; set; }
@@ -355,7 +369,7 @@ namespace GMK360.Data.Contexts
                 .HasForeignKey(t => t.RecordedById)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Usta - Hizmet Çoka Çok İlişkisi
+            // Usta - Hizmet �oka �ok �li�kisi
             builder.Entity<ServiceProviderService>()
                 .HasKey(sps => new { sps.ServiceProviderId, sps.ServiceCategoryId });
 
@@ -371,7 +385,7 @@ namespace GMK360.Data.Contexts
                 .HasForeignKey(sps => sps.ServiceCategoryId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Usta - Bölge Çoka Çok İlişkisi
+            // Usta - B�lge �oka �ok �li�kisi
             builder.Entity<ServiceProviderArea>()
                 .HasKey(spa => new { spa.ServiceProviderId, spa.CityId, spa.DistrictId });
 
@@ -406,7 +420,7 @@ namespace GMK360.Data.Contexts
                 .HasForeignKey(sa => sa.ServiceProviderId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Many-to-Many ilişkisi
+            // Many-to-Many ili�kisi
             builder.Entity<AgencyConsultant>()
                 .HasKey(ac => new { ac.AgencyId, ac.UserId });
 
@@ -420,7 +434,7 @@ namespace GMK360.Data.Contexts
                 .WithMany(u => u.AgencyConsultants)
                 .HasForeignKey(ac => ac.UserId);
 
-            // CRM Rental Tracking Cascade Delete Çözümü
+            // CRM Rental Tracking Cascade Delete ��z�m�
             builder.Entity<CrmRentalTracking>()
                 .HasOne(r => r.Tenant)
                 .WithMany(c => c.TenantContracts)
@@ -433,7 +447,7 @@ namespace GMK360.Data.Contexts
                 .HasForeignKey(r => r.LandlordId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Cascade delete sorunu çözümü (Multiple Cascade Paths)
+            // Cascade delete sorunu ��z�m� (Multiple Cascade Paths)
             builder.Entity<City>()
                 .HasOne(c => c.Country)
                 .WithMany(co => co.Cities)
@@ -468,13 +482,13 @@ namespace GMK360.Data.Contexts
                 .HasOne(p => p.User)
                 .WithMany()
                 .HasForeignKey(p => p.UserId)
-                .OnDelete(DeleteBehavior.Restrict); // İlanı giren kullanıcı silinirse ilanlar silinmesin (Restrict)
+                .OnDelete(DeleteBehavior.Restrict); // �lan� giren kullan�c� silinirse ilanlar silinmesin (Restrict)
 
             builder.Entity<Property>()
                 .HasOne(p => p.OwnerUser)
-                .WithMany() // ApplicationUser modeline ayrı bir koleksiyon eklemeye gerek yok şimdilik
+                .WithMany() // ApplicationUser modeline ayr� bir koleksiyon eklemeye gerek yok �imdilik
                 .HasForeignKey(p => p.OwnerUserId)
-                .OnDelete(DeleteBehavior.SetNull); // Mülk sahibi silinirse, ilandaki OwnerUserId null olsun
+                .OnDelete(DeleteBehavior.SetNull); // M�lk sahibi silinirse, ilandaki OwnerUserId null olsun
 
             builder.Entity<Property>()
                 .HasOne(p => p.Agency)
@@ -482,21 +496,21 @@ namespace GMK360.Data.Contexts
                 .HasForeignKey(p => p.AgencyId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // İlişkileri belirleme
+            // �li�kileri belirleme
             builder.Entity<DefinitionValue>()
                 .HasOne(v => v.Category)
                 .WithMany(c => c.Values)
                 .HasForeignKey(v => v.CategoryId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Kategori Hiyerarşisi (Soru Grubu -> Sorular)
+            // Kategori Hiyerar�isi (Soru Grubu -> Sorular)
             builder.Entity<DefinitionCategory>()
                 .HasOne(dc => dc.ParentCategory)
                 .WithMany(pc => pc.SubCategories)
                 .HasForeignKey(dc => dc.ParentCategoryId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // B2B Tedarikçi (Nalbur) İlişkileri - Cascade Delete Hatalarını Önlemek İçin
+            // B2B Tedarik�i (Nalbur) �li�kileri - Cascade Delete Hatalar�n� �nlemek ��in
             builder.Entity<B2bSupplier>()
                 .HasOne(s => s.City)
                 .WithMany()
@@ -515,7 +529,7 @@ namespace GMK360.Data.Contexts
                 .HasForeignKey(o => o.B2bSupplierId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Komşu Mahalle Self-Referencing İlişkisi (EF Core Configuration)
+            // Kom�u Mahalle Self-Referencing �li�kisi (EF Core Configuration)
             builder.Entity<NeighboringArea>()
                 .HasOne(na => na.BaseNeighborhood)
                 .WithMany()
@@ -528,7 +542,7 @@ namespace GMK360.Data.Contexts
                 .HasForeignKey(na => na.NeighborNeighborhoodId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Cascade delete ayarları
+            // Cascade delete ayarlar�
             builder.Entity<Message>()
                 .HasOne(m => m.Sender)
                 .WithMany()
@@ -612,33 +626,33 @@ namespace GMK360.Data.Contexts
 
             // SEED DATA
             builder.Entity<Country>().HasData(
-                new Country { Id = 1, Name = "Türkiye", Code = "TR", CreatedAt = new System.DateTime(2024, 1, 1) }
+                new Country { Id = 1, Name = "T�rkiye", Code = "TR", CreatedAt = new System.DateTime(2024, 1, 1) }
             );
 
             builder.Entity<City>().HasData(
-                new City { Id = 34, CountryId = 1, Name = "İstanbul", PlateCode = "34", CreatedAt = new System.DateTime(2024, 1, 1) },
+                new City { Id = 34, CountryId = 1, Name = "�stanbul", PlateCode = "34", CreatedAt = new System.DateTime(2024, 1, 1) },
                 new City { Id = 6, CountryId = 1, Name = "Ankara", PlateCode = "06", CreatedAt = new System.DateTime(2024, 1, 1) },
-                new City { Id = 35, CountryId = 1, Name = "İzmir", PlateCode = "35", CreatedAt = new System.DateTime(2024, 1, 1) }
+                new City { Id = 35, CountryId = 1, Name = "�zmir", PlateCode = "35", CreatedAt = new System.DateTime(2024, 1, 1) }
             );
 
             builder.Entity<District>().HasData(
-                new District { Id = 1, CityId = 34, Name = "Kadıköy", CreatedAt = new System.DateTime(2024, 1, 1) },
-                new District { Id = 2, CityId = 34, Name = "Beşiktaş", CreatedAt = new System.DateTime(2024, 1, 1) },
-                new District { Id = 3, CityId = 34, Name = "Şişli", CreatedAt = new System.DateTime(2024, 1, 1) },
-                new District { Id = 4, CityId = 6, Name = "Çankaya", CreatedAt = new System.DateTime(2024, 1, 1) },
-                new District { Id = 5, CityId = 6, Name = "Keçiören", CreatedAt = new System.DateTime(2024, 1, 1) },
-                new District { Id = 6, CityId = 35, Name = "Karşıyaka", CreatedAt = new System.DateTime(2024, 1, 1) },
+                new District { Id = 1, CityId = 34, Name = "Kad�k�y", CreatedAt = new System.DateTime(2024, 1, 1) },
+                new District { Id = 2, CityId = 34, Name = "Be�ikta�", CreatedAt = new System.DateTime(2024, 1, 1) },
+                new District { Id = 3, CityId = 34, Name = "�i�li", CreatedAt = new System.DateTime(2024, 1, 1) },
+                new District { Id = 4, CityId = 6, Name = "�ankaya", CreatedAt = new System.DateTime(2024, 1, 1) },
+                new District { Id = 5, CityId = 6, Name = "Ke�i�ren", CreatedAt = new System.DateTime(2024, 1, 1) },
+                new District { Id = 6, CityId = 35, Name = "Kar��yaka", CreatedAt = new System.DateTime(2024, 1, 1) },
                 new District { Id = 7, CityId = 35, Name = "Bornova", CreatedAt = new System.DateTime(2024, 1, 1) }
             );
 
             builder.Entity<Neighborhood>().HasData(
-                new Neighborhood { Id = 1, DistrictId = 1, Name = "Acıbadem", CreatedAt = new System.DateTime(2024, 1, 1) },
-                new Neighborhood { Id = 2, DistrictId = 1, Name = "Bostancı", CreatedAt = new System.DateTime(2024, 1, 1) },
-                new Neighborhood { Id = 3, DistrictId = 4, Name = "Bahçelievler", CreatedAt = new System.DateTime(2024, 1, 1) }
+                new Neighborhood { Id = 1, DistrictId = 1, Name = "Ac�badem", CreatedAt = new System.DateTime(2024, 1, 1) },
+                new Neighborhood { Id = 2, DistrictId = 1, Name = "Bostanc�", CreatedAt = new System.DateTime(2024, 1, 1) },
+                new Neighborhood { Id = 3, DistrictId = 4, Name = "Bah�elievler", CreatedAt = new System.DateTime(2024, 1, 1) }
             );
 
             builder.Entity<Street>().HasData(
-                new Street { Id = 1, NeighborhoodId = 1, Name = "Gül Sokak", CreatedAt = new System.DateTime(2024, 1, 1) },
+                new Street { Id = 1, NeighborhoodId = 1, Name = "G�l Sokak", CreatedAt = new System.DateTime(2024, 1, 1) },
                 new Street { Id = 2, NeighborhoodId = 1, Name = "Lale Sokak", CreatedAt = new System.DateTime(2024, 1, 1) }
             );
 
@@ -647,10 +661,10 @@ namespace GMK360.Data.Contexts
                 new GMK360.Core.Entities.Marketing.AuthScreenBanner
                 {
                     Id = 1,
-                    Title = "Sektörün Zirvesine Çıkın.",
-                    Subtitle = "Yeni nesil emlak platformuna katılarak ilanlarınızı milyonlara ulaştırın veya hayalinizdeki evi bulun.",
+                    Title = "Sekt�r�n Zirvesine ��k�n.",
+                    Subtitle = "Yeni nesil emlak platformuna kat�larak ilanlar�n�z� milyonlara ula�t�r�n veya hayalinizdeki evi bulun.",
                     ImageUrl = "/images/auth_bg.jpg",
-                    ActionText = "Hemen İlan Ver",
+                    ActionText = "Hemen �lan Ver",
                     ActionUrl = "/Property/Create",
                     IsActive = true,
                     DisplayOrder = 1,
@@ -659,10 +673,10 @@ namespace GMK360.Data.Contexts
                 new GMK360.Core.Entities.Marketing.AuthScreenBanner
                 {
                     Id = 2,
-                    Title = "İlk 3 Üyeye Özel Fırsat!",
-                    Subtitle = "Bulunduğunuz ildeki ilk 3 kurumsal üye arasına girin, 1 yıllık Premium Vitrin paketini anında kapın.",
+                    Title = "�lk 3 �yeye �zel F�rsat!",
+                    Subtitle = "Bulundu�unuz ildeki ilk 3 kurumsal �ye aras�na girin, 1 y�ll�k Premium Vitrin paketini an�nda kap�n.",
                     ImageUrl = "https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
-                    ActionText = "Kampanyaya Katıl",
+                    ActionText = "Kampanyaya Kat�l",
                     ActionUrl = "/Account/Register?referralCode=ILK3UYE",
                     IsActive = true,
                     DisplayOrder = 2,
@@ -670,7 +684,7 @@ namespace GMK360.Data.Contexts
                 }
             );
 
-            // SEED FINANCIAL OBLIGATION TYPES (Vergi ve Yasal Ödemeler)
+            // SEED FINANCIAL OBLIGATION TYPES (Vergi ve Yasal �demeler)
             builder.Entity<FinancialObligationType>().HasData(
                 new FinancialObligationType
                 {
@@ -679,15 +693,15 @@ namespace GMK360.Data.Contexts
                     TargetPropertyType = TargetPropertyType.All,
                     ResponsibleRole = ResponsibleRole.Owner,
                     PaymentFrequency = PaymentFrequency.Biannual,
-                    FirstInstallmentMonth = 5,  // Mayıs
-                    SecondInstallmentMonth = 11, // Kasım
+                    FirstInstallmentMonth = 5,  // May�s
+                    SecondInstallmentMonth = 11, // Kas�m
                     IsActive = true,
                     CreatedAt = new System.DateTime(2024, 1, 1)
                 },
                 new FinancialObligationType
                 {
                     Id = 2,
-                    Name = "Kira Gelir Vergisi (GMSİ)",
+                    Name = "Kira Gelir Vergisi (GMS�)",
                     TargetPropertyType = TargetPropertyType.All,
                     ResponsibleRole = ResponsibleRole.Owner,
                     PaymentFrequency = PaymentFrequency.Biannual,
@@ -699,7 +713,7 @@ namespace GMK360.Data.Contexts
                 new FinancialObligationType
                 {
                     Id = 3,
-                    Name = "Çevre Temizlik Vergisi (ÇTV)",
+                    Name = "�evre Temizlik Vergisi (�TV)",
                     TargetPropertyType = TargetPropertyType.All,
                     ResponsibleRole = ResponsibleRole.Tenant,
                     PaymentFrequency = PaymentFrequency.Biannual,
@@ -711,22 +725,22 @@ namespace GMK360.Data.Contexts
                 new FinancialObligationType
                 {
                     Id = 4,
-                    Name = "İlan ve Reklam Vergisi (Tabela)",
-                    TargetPropertyType = TargetPropertyType.OnlyCommercial, // Sadece İşyeri
+                    Name = "�lan ve Reklam Vergisi (Tabela)",
+                    TargetPropertyType = TargetPropertyType.OnlyCommercial, // Sadece ��yeri
                     ResponsibleRole = ResponsibleRole.Tenant,
                     PaymentFrequency = PaymentFrequency.Biannual,
-                    FirstInstallmentMonth = 5,  // Mayıs
-                    SecondInstallmentMonth = 11, // Kasım
+                    FirstInstallmentMonth = 5,  // May�s
+                    SecondInstallmentMonth = 11, // Kas�m
                     IsActive = true,
                     CreatedAt = new System.DateTime(2024, 1, 1)
                 },
                 new FinancialObligationType
                 {
                     Id = 5,
-                    Name = "Kira Stopajı (Muhtasar Beyanname)",
-                    TargetPropertyType = TargetPropertyType.OnlyCommercial, // Sadece İşyeri
+                    Name = "Kira Stopaj� (Muhtasar Beyanname)",
+                    TargetPropertyType = TargetPropertyType.OnlyCommercial, // Sadece ��yeri
                     ResponsibleRole = ResponsibleRole.Tenant,
-                    PaymentFrequency = PaymentFrequency.Monthly, // Genelde aylık veya 3 aylık beyan edilir, aylık seçiyoruz
+                    PaymentFrequency = PaymentFrequency.Monthly, // Genelde ayl�k veya 3 ayl�k beyan edilir, ayl�k se�iyoruz
                     FirstInstallmentMonth = null,
                     SecondInstallmentMonth = null,
                     IsActive = true,
@@ -812,7 +826,7 @@ namespace GMK360.Data.Contexts
                 .HasForeignKey(e => e.ConsultantId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Mülk Muhasebesi Konfigürasyonları (Masaüstü/Özel İsimlendirmeler)
+            // M�lk Muhasebesi Konfig�rasyonlar� (Masa�st�/�zel �simlendirmeler)
             builder.Entity<LiabilityType>().ToTable("tbl_gmk_YukumlulukTipleri");
             builder.Entity<LiabilityType>().Property(l => l.Name).HasColumnName("TipAdi").HasMaxLength(100);
             builder.Entity<LiabilityType>().Property(l => l.Category).HasColumnName("Kategori").HasMaxLength(50);
@@ -847,7 +861,7 @@ namespace GMK360.Data.Contexts
             builder.Entity<DigitalDocument>().Property(d => d.Extension).HasColumnName("Uzanti").HasMaxLength(10);
             builder.Entity<DigitalDocument>().Property(d => d.CreatedAt).HasColumnName("YuklenmeTarihi");
 
-            // Paket ve Abonelik Konfigürasyonları
+            // Paket ve Abonelik Konfig�rasyonlar�
             builder.Entity<SubscriptionPackage>().ToTable("tbl_gmk_AbonelikPaketleri");
             builder.Entity<UserSubscription>().ToTable("tbl_gmk_KullaniciAbonelikleri");
 
@@ -863,7 +877,7 @@ namespace GMK360.Data.Contexts
                 .HasForeignKey(us => us.PackageId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Dijital Sözleşmeler
+            // Dijital S�zle�meler
             builder.Entity<DigitalContract>().ToTable("tbl_gmk_DijitalSozlesmeler");
             
             builder.Entity<DigitalContract>()
@@ -884,7 +898,7 @@ namespace GMK360.Data.Contexts
                 .HasForeignKey(dc => dc.PropertyId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            // Bina ve Site Yönetim Modülü İlişkileri ve Decimal Hassasiyetleri
+            // Bina ve Site Y�netim Mod�l� �li�kileri ve Decimal Hassasiyetleri
             builder.Entity<BuildingExpense>()
                 .Property(be => be.TotalAmount)
                 .HasPrecision(18, 2);
@@ -975,7 +989,7 @@ namespace GMK360.Data.Contexts
                 .HasOne(ud => ud.BuildingUnit)
                 .WithMany(bu => bu.Debts)
                 .HasForeignKey(ud => ud.BuildingUnitId)
-                .OnDelete(DeleteBehavior.Restrict); // Cascade delete loop'u engellemek için
+                .OnDelete(DeleteBehavior.Restrict); // Cascade delete loop'u engellemek i�in
 
             builder.Entity<UnitDebt>()
                 .HasOne(ud => ud.BuildingExpense)
@@ -983,7 +997,7 @@ namespace GMK360.Data.Contexts
                 .HasForeignKey(ud => ud.BuildingExpenseId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // İnşaat Yönetimi İlişkileri (Cascade Delete Loop Önleme)
+            // �n�aat Y�netimi �li�kileri (Cascade Delete Loop �nleme)
             builder.Entity<UnitMaterialSelection>()
                 .HasOne(ums => ums.SelectedByUser)
                 .WithMany()
@@ -1006,7 +1020,7 @@ namespace GMK360.Data.Contexts
                 .HasForeignKey(b => b.ConstructionProjectId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            // Renovation Relationships (Cascade loop önleme)
+            // Renovation Relationships (Cascade loop �nleme)
             builder.Entity<RenovationRequest>()
                 .HasOne(rr => rr.User)
                 .WithMany()
@@ -1162,6 +1176,10 @@ namespace GMK360.Data.Contexts
         }
     }
 }
+
+
+
+
 
 
 

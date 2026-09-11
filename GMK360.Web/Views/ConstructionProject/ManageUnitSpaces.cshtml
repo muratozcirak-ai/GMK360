@@ -1,4 +1,4 @@
-﻿@model GMK360.Core.Entities.BuildingUnit
+@model GMK360.Core.Entities.BuildingUnit
 @{
     ViewData["Title"] = "Mahal ve Demirbaş Yönetimi";
     Layout = "~/Views/Shared/_Layout.cshtml";
@@ -41,15 +41,20 @@
                         <div class="list-group list-group-flush">
                             @foreach (var space in Model.Spaces)
                             {
-                                <a href="#" class="list-group-item list-group-item-action border-0 rounded mb-1 px-3 py-2 bg-light">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div class="fw-bold text-dark">@space.Name</div>
-                                        <span class="badge bg-secondary rounded-pill">@space.Type</span>
+                                <div id="space-btn-@space.Id" class="list-group-item border-0 rounded mb-2 p-3 bg-light shadow-sm">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <div class="fw-bold fs-6 text-dark cursor-pointer" onclick="loadSpace(@space.Id, '@space.Name', '@space.Type')">@space.Name</div>
+                                        <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-2" onclick="deleteUnitSpace(@space.Id); event.stopPropagation();" title="Mahali Sil"><i class="bi bi-trash fs-5"></i></button>
                                     </div>
-                                    <div class="small text-muted mt-1">
-                                        @(space.Fixtures?.Count ?? 0) Demirbaş, @(space.Measurements?.Count ?? 0) Metraj
+                                    <div class="small text-muted d-flex gap-3">
+                                        <span class="cursor-pointer text-decoration-underline" onclick="loadSpace(@space.Id, '@space.Name', '@space.Type', 'fixtures')">
+                                            <i class="bi bi-box me-1"></i>@space.Fixtures.Count Ürün
+                                        </span>
+                                        <span class="cursor-pointer text-decoration-underline" onclick="loadSpace(@space.Id, '@space.Name', '@space.Type', 'measurements')">
+                                            <i class="bi bi-rulers me-1"></i>@space.Measurements.Count Ölçü
+                                        </span>
                                     </div>
-                                </a>
+                                </div>
                             }
                         </div>
                     }
@@ -57,16 +62,81 @@
             </div>
         </div>
 
+        
         <!-- Right Panel: Space Details (Fixtures & Measurements) -->
         <div class="col-md-9">
-            <div class="card border-0 shadow-sm rounded-4 h-100">
-                <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted">
+            <div class="card border-0 shadow-sm rounded-4 h-100" id="rightPanel">
+                <div class="card-body d-flex flex-column align-items-center justify-content-center text-muted" id="rightPanelEmpty">
                     <i class="bi bi-arrow-left-circle fs-1 mb-3 text-light"></i>
                     <h5>Soldan bir mahal seçin</h5>
                     <p class="small">Veya sol üstteki + butonundan yeni bir mahal ekleyin (Örn: Salon, Şaft, Banyo)</p>
                 </div>
+                <div class="card-body d-none" id="rightPanelContent">
+                    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+                        <h4 class="fw-bold mb-0 text-dark"><span id="spaceTitle">Oda Adı</span> <span id="viewTitle" class="badge bg-light text-primary border ms-2"></span></h4>
+                    </div>
+                    
+                    <div id="fixturesView" style="display:none;">
+                        <div class="d-flex justify-content-end mb-3">
+                            <button class="btn btn-sm btn-primary rounded-pill px-3" onclick="openAddFixtureModal()">
+                                <i class="bi bi-plus-lg me-1"></i> Yeni Ürün Ekle
+                            </button>
+                        </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Ürün / Demirbaş</th>
+                                    <th>Kategori</th>
+                                    <th>Adet / Ölçü</th>
+                                    <th>Tedarikçi</th>
+                                    <th>Teknik Servis</th>
+                                    <th>İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fixturesTableBody">
+                                <!-- Fixtures will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    </div> <!-- end fixturesView -->
+                    
+                    <div id="measurementsView" style="display:none;">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h5 class="fw-bold mb-0 text-dark">Ölçüler ve Metraj (Zemin, Duvar vs.)</h5>
+                        <div>
+                            <button class="btn btn-sm btn-outline-success rounded-pill px-3 me-2" onclick="cleanEmptyMeasurements()">
+                                <i class="bi bi-check2-all me-1"></i> Bitti (Sıfırları Sil)
+                            </button>
+                            <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="openAddMeasurementModal()">
+                                <i class="bi bi-rulers me-1"></i> Yeni Ölçü Ekle
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Kategori</th>
+                                    <th>Açıklama (Örn: Duvar Alanı)</th>
+                                    <th>En x Boy</th>
+                                    <th>Miktar / Ölçü</th>
+                                    <th>İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody id="measurementsTableBody">
+                                <!-- Measurements will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+                    </div> <!-- end measurementsView -->
             </div>
         </div>
+
     </div>
 </div>
 
@@ -107,3 +177,467 @@
         </div>
     </div>
 </div>
+
+
+<!-- Add Measurement Modal -->
+<div class="modal fade" id="addMeasurementModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form id="addMeasurementForm" onsubmit="submitMeasurementForm(event)">
+                <input type="hidden" name="spaceId" id="measurementSpaceId" />
+                
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold">Yeni Ölçü / Metraj Ekle</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Kategori</label>
+                            <select name="category" class="form-select" required>
+                                <option value="Zemin">Zemin Alanı</option>
+                                <option value="Duvar">Duvar Alanı</option>
+                                <option value="Tavan">Tavan Alanı</option>
+                                <option value="Süpürgelik">Süpürgelik (Çevre Uzunluğu)</option>
+                                <option value="Diğer">Diğer</option>
+                            </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Açıklama</label>
+                        <input type="text" name="description" class="form-control" placeholder="İsteğe bağlı (Boş bırakabilirsiniz)..." />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Miktar ve Birim</label>
+                        <div class="input-group">
+                            <input type="number" step="0.01" name="quantity" class="form-control" placeholder="Örn: 15.5" required />
+                            <select name="unit" class="form-select" style="max-width:100px;">
+                                <option value="m2">m² (Metrekare)</option>
+                                <option value="mt">mt (Metretül)</option>
+                                <option value="m3">m³ (Metreküp)</option>
+                                <option value="Adet">Adet</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+<!-- Smart Template Modal -->
+<div class="modal fade" id="smartTemplateModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form asp-action="SaveSmartTemplate" method="post">
+                <input type="hidden" name="SpaceId" id="templateSpaceId" />
+                
+                <div class="modal-header border-0 pb-0 bg-warning bg-opacity-10 rounded-top-4">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-magic text-warning me-2"></i>Akıllı Şablon Veri Girişi</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body bg-light">
+                    <p class="small text-muted mb-4">Aşağıdaki alanlar bu odanın türüne (<span id="templateSpaceType" class="fw-bold"></span>) göre özel olarak getirilmiştir. Değerini 0 bıraktığınız alanlar kaydedilmez.</p>
+                    
+                    <div id="smartTemplateFields">
+                        <div class="text-center py-4"><div class="spinner-border text-warning" role="status"></div></div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0 bg-light rounded-bottom-4">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-warning rounded-pill px-4 fw-bold text-dark">Toplu Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Fixture Modal -->
+<div class="modal fade" id="addFixtureModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form asp-action="AddSpaceFixture" method="post">
+                <input type="hidden" name="spaceId" id="fixtureSpaceId" />
+                
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold">Yeni Ürün / Demirbaş Ekle</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Ürün Adı (Serbest Metin)</label>
+                            <input type="text" name="itemName" class="form-control" placeholder="Örn: Ranza, Kombi, Asansör Motoru" required />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Kategori</label>
+                            <select name="category" class="form-select">
+                                <option value="Mobilya">Mobilya / Dekorasyon</option>
+                                <option value="Beyaz Eşya">Beyaz Eşya / Ankastre</option>
+                                <option value="Tesisat">Mekanik / Tesisat</option>
+                                <option value="Elektrik">Elektrik / Elektronik</option>
+                                <option value="Diğer">Diğer</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Miktar</label>
+                            <div class="input-group">
+                                <input type="number" step="0.01" name="quantity" class="form-control" value="1" required />
+                                <select name="unit" class="form-select" style="max-width:100px;">
+                                    <option value="Adet">Adet</option>
+                                    <option value="m2">m²</option>
+                                    <option value="Set">Set</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-12 mb-3">
+                            <label class="form-label fw-bold small">Açıklama / Teknik Şartname <span class="text-muted fw-normal">(Teklif isterken firmalara bu açıklama gidecek)</span></label>
+                            <textarea name="maintenanceNotes" class="form-control" rows="2" placeholder="Örn: Demirden, kilitlenebilir, duvara monte edilecek..."></textarea>
+                        </div>
+                        <div class="col-12 mb-2">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="isCustomizable" name="isCustomizable" value="true" checked>
+                                <label class="form-check-label fw-bold" for="isCustomizable">Müşteri Değiştirebilir (Opsiyonel)</label>
+                                <div class="small text-muted">Dış cephe doğraması gibi bina bütünlüğünü etkileyen demirbaşlar için bu tiki kaldırın.</div>
+                            </div>
+                        </div>
+                        <div class="col-12 mb-3">
+                            <hr />
+                            <h6 class="fw-bold text-primary"><i class="bi bi-briefcase me-2"></i>CRM ve Ağ Bağlantıları</h6>
+                            <p class="small text-muted mb-3">İleride bu kısımlar sistemdeki kayıtlı firmalardan (ServiceProvider) otomatik arama yapacaktır. Şimdilik serbest metin olarak ekleyebilirsiniz, numara veya firma adı yazın. Olmayan firmalar "Gölge Kullanıcı" olarak kaydedilecektir.</p>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Tedarikçi / Satıcı Firma</label>
+                            <input type="text" name="supplierName" class="form-control" placeholder="Firma Adı veya Telefon" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Teknik Servis</label>
+                            <input type="text" name="technicalServiceName" class="form-control" placeholder="Servis Adı veya Telefon" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let currentSpaceId = 0;
+        let currentSpaceName = '';
+        let currentSpaceType = '';
+
+        
+        var currentView = 'measurements';
+
+        function switchView(view) {
+            currentView = view;
+            if(currentView === 'fixtures') {
+                $('#viewTitle').html('<i class="bi bi-box"></i> Demirbaşlar');
+                $('#fixturesView').show();
+                $('#measurementsView').hide();
+            } else {
+                $('#viewTitle').html('<i class="bi bi-rulers"></i> Ölçüler');
+                $('#fixturesView').hide();
+                $('#measurementsView').show();
+            }
+        }
+
+        function loadSpace(spaceId, spaceName, spaceType, view = null) {
+            var isSameRoom = (currentSpaceId === spaceId);
+            
+            currentSpaceId = spaceId;
+            currentSpaceName = spaceName;
+            currentSpaceType = spaceType;
+            
+            $('#rightPanelEmpty').addClass('d-none');
+            $('#rightPanelContent').removeClass('d-none');
+            $('#spaceTitle').text(spaceName);
+            
+            switchView(view ? view : 'measurements');
+            
+            if (isSameRoom && view != null) {
+                // Sadece tab değiştir, veriyi tekrar çekme
+                return;
+            }
+            
+            // 1. Load Fixtures
+            $('#fixturesTableBody').html('<tr><td colspan="6" class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></td></tr>');
+            $.ajax({
+                  url: '/ConstructionProject/GetSpaceFixtures',
+                  type: 'GET',
+                  dataType: 'json',
+                  data: { spaceId: spaceId, t: new Date().getTime() },
+                  cache: false
+              })
+              .done(function(data) {
+                  try {
+                      fixturesCount = data.length;
+                      if(data.length === 0) {
+                          $('#fixturesTableBody').html('<tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-inbox fs-4 d-block mb-2"></i>Bu mahalde henüz ürün yok.</td></tr>');
+                      } else {
+                          let html = '';
+                          data.forEach(function(f) {
+                              html += `<tr>
+                                  <td class="fw-bold text-dark">
+                                      ${!f.isCustomizable ? '<i class="bi bi-lock-fill text-danger me-1" title="Müşteri Değiştiremez"></i>' : ''}
+                                      ${f.itemName || f.ItemName}
+                                  </td>
+                                  <td><span class="badge bg-light text-dark border">${f.category || f.Category}</span></td>
+                                  <td>
+                                      <div class="input-group input-group-sm" style="width: 130px;">
+                                          <input type="number" step="0.01" class="form-control fw-bold text-primary" value="${f.quantity || f.Quantity}" onchange="updateFixtureQty(${f.id || f.Id}, this.value)" />
+                                          <span class="input-group-text bg-light">${f.unit || f.Unit}</span>
+                                      </div>
+                                  </td>
+                                  <td>${f.supplierName ? f.supplierName : '-'}</td>
+                                  <td>${f.technicalServiceName ? f.technicalServiceName : '-'}</td>
+                                  <td>
+                                      <div class="btn-group">
+                                          <button class="btn btn-sm btn-outline-success fw-bold" onclick="alert('Teklif Modülü (İhale) yakında!\nAçıklama: ' + (f.maintenanceNotes || 'Yok'))"><i class="bi bi-tag me-1"></i>Fiyat İste</button>
+                                          <button class="btn btn-sm btn-light text-danger" onclick="deleteFixture(${f.id || f.Id})"><i class="bi bi-trash"></i></button>
+                                      </div>
+                                  </td>
+                              </tr>`;
+                          });
+                          $('#fixturesTableBody').html(html);
+                      }
+                  } catch(e) {
+                      $('#fixturesTableBody').html('<tr><td colspan="6" class="text-danger text-center">JS Hatası: ' + e.message + '</td></tr>');
+                  }
+              })
+              .fail(function(jqXHR, textStatus, errorThrown) {
+                  $('#fixturesTableBody').html('<tr><td colspan="6" class="text-danger text-center">Sunucu Yanıt Hatası: Oturumunuz kapanmış olabilir. Lütfen sayfayı yenileyin.</td></tr>');
+              });
+
+            // 2. Load Measurements
+            $('#measurementsTableBody').html('<tr><td colspan="4" class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></td></tr>');
+            $.ajax({
+                  url: '/ConstructionProject/GetSpaceMeasurements',
+                  type: 'GET',
+                  dataType: 'json',
+                  data: { spaceId: spaceId, t: new Date().getTime() },
+                  cache: false
+              })
+              .done(function(data) {
+                  try {
+                      measurementsCount = data.length;
+                      if(data.length === 0) {
+                          $('#measurementsTableBody').html('<tr><td colspan="5" class="text-center text-muted py-4"><i class="bi bi-rulers fs-4 d-block mb-2"></i>Bu mahalde henüz ölçü yok.</td></tr>');
+                      } else {
+                          let html = '';
+                          data.forEach(function(m) {
+                              html += `<tr>
+                                  <td class="text-muted small">${m.category || m.Category || "-"}</td>
+                                  <td class="fw-bold text-dark">${m.description || m.Description || "-"}</td>
+                                  <td>
+                                      <div class="input-group input-group-sm" style="width: 170px;">
+                                          <input type="number" step="0.01" class="form-control text-center" placeholder="En" value="${m.width || ''}" id="w_${m.id || m.Id}" onchange="updateMeasurementQty(${m.id || m.Id})" onkeydown="if(event.key==='Enter') this.blur();" />
+                                          <span class="input-group-text px-1">x</span>
+                                          <input type="number" step="0.01" class="form-control text-center" placeholder="Boy" value="${m.length || ''}" id="l_${m.id || m.Id}" onchange="updateMeasurementQty(${m.id || m.Id})" onkeydown="if(event.key==='Enter') this.blur();" />
+                                      </div>
+                                  </td>
+                                  <td>
+                                      <div class="input-group input-group-sm" style="width: 130px;">
+                                          <input type="number" step="0.01" class="form-control fw-bold text-primary" value="${m.quantity || m.Quantity || 0}" id="q_${m.id || m.Id}" onchange="updateMeasurementQty(${m.id || m.Id})" />
+                                          <span class="input-group-text bg-light">${m.unit || m.Unit || ""}</span>
+                                      </div>
+                                  </td>
+                                  <td>
+                                      <button class="btn btn-sm btn-light text-danger" onclick="deleteMeasurement(${m.id || m.Id})"><i class="bi bi-trash"></i></button>
+                                  </td>
+                              </tr>`;
+                          });
+                          $('#measurementsTableBody').html(html);
+                      }
+                  } catch(e) {
+                      $('#measurementsTableBody').html('<tr><td colspan="5" class="text-danger text-center">JS Hatası: ' + e.message + '</td></tr>');
+                  }
+              })
+              .fail(function(jqXHR, textStatus, errorThrown) {
+                  $('#measurementsTableBody').html('<tr><td colspan="5" class="text-danger text-center">Sunucu Yanıt Hatası: Oturumunuz kapanmış olabilir. Lütfen F5 ile sayfayı yenileyin.</td></tr>');
+              });
+        }
+
+        
+        function openSmartTemplateModal() {
+            if(currentSpaceId === 0) return;
+            $('#templateSpaceId').val(currentSpaceId);
+            $('#templateSpaceType').text(currentSpaceType);
+            
+            $('#smartTemplateFields').html('<div class="text-center py-4"><div class="spinner-border text-warning" role="status"></div></div>');
+            $('#smartTemplateModal').modal('show');
+            
+            $.get('/ConstructionProject/GetSmartTemplate', { spaceType: currentSpaceType }, function(data) {
+                let html = '';
+                if(data.length === 0) {
+                    html = '<div class="alert alert-info">Bu mahal türü için henüz akıllı şablon tanımlanmamış.</div>';
+                } else {
+                    data.forEach(function(item, index) {
+                        html += `
+                            <div class="row mb-2 align-items-center bg-white p-2 rounded shadow-sm">
+                                <div class="col-md-5">
+                                    <input type="hidden" name="Types[${index}]" value="${item.type}" />
+                                    <input type="hidden" name="Categories[${index}]" value="${item.category}" />
+                                    <input type="hidden" name="Names[${index}]" value="${item.name}" />
+                                    <input type="hidden" name="Units[${index}]" value="${item.unit}" />
+                                    <div class="fw-bold text-dark">${item.name}</div>
+                                    <div class="small text-muted">${item.type === 'Fixture' ? 'Demirbaş' : 'Ölçü'} - ${item.category}</div>
+                                </div>
+                                <div class="col-md-7">
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" step="0.01" name="Quantities[${index}]" class="form-control" placeholder="Miktar / Ölçü" value="0" />
+                                        <span class="input-group-text">${item.unit}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+                $('#smartTemplateFields').html(html);
+            });
+        }
+
+        
+        
+        function updateFixtureQty(id, qty) {
+            $.post('/ConstructionProject/UpdateSpaceFixture', { id: id, quantity: qty, __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val() })
+            .done(function() {
+                toastr.success('Miktar güncellendi');
+            }).fail(function() {
+                toastr.error('Güncelleme başarısız');
+            });
+        }
+        function updateMeasurementQty(id) {
+            var q = $('#q_'+id).val() || 0;
+            var w = $('#w_'+id).val() || '';
+            var l = $('#l_'+id).val() || '';
+            var h = '';
+            
+            $.post('/ConstructionProject/UpdateSpaceMeasurement', { 
+                id: id, 
+                quantity: q, 
+                width: w, 
+                length: l, 
+                height: h, 
+                __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val() 
+            })
+            .done(function(resp) {
+                toastr.success('Metraj güncellendi');
+                // Tabloyu yenileyelim ki otomatik hesaplanan alanlar (Zemin -> Tavan veya En -> Denizlik) görünsün
+                loadSpace(currentSpaceId, currentSpaceName, currentSpaceType);
+            }).fail(function() {
+                toastr.error('Güncelleme başarısız');
+            });
+        }
+
+        function deleteFixture(id) {
+            Swal.fire({
+                title: 'Emin misiniz?',
+                text: "Bu demirbaş kaydı tamamen silinecektir!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Evet, Sil!',
+                cancelButtonText: 'İptal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.post('/ConstructionProject/DeleteSpaceFixture', { id: id, __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val() }, function() {
+                        loadSpace(currentSpaceId, currentSpaceName, currentSpaceType);
+                    }).fail(function() {
+                        Swal.fire('Hata', 'Silme işlemi başarısız oldu.', 'error');
+                    });
+                }
+            });
+        }
+
+        function deleteMeasurement(id) {
+            if (confirm('Bu metraj kaydı tamamen silinecektir! Emin misiniz?')) {
+                $.post('/ConstructionProject/DeleteSpaceMeasurement', { id: id, __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val() }, function() {
+                    loadSpace(currentSpaceId, currentSpaceName, currentSpaceType);
+                }).fail(function() {
+                    alert('Hata: Silme işlemi başarısız oldu.');
+                });
+            }
+        }
+
+        
+        function deleteUnitSpace(id) {
+            if (confirm('Bu mahal ve içindeki tüm ürün/ölçüler tamamen silinecektir! Emin misiniz?')) {
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/ConstructionProject/DeleteUnitSpace/' + id;
+                
+                var token = document.createElement('input');
+                token.type = 'hidden';
+                token.name = '__RequestVerificationToken';
+                token.value = $('input[name="__RequestVerificationToken"]').val();
+                form.appendChild(token);
+                
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+
+        function cleanEmptyMeasurements() {
+            if(confirm('Miktarı 0 olan tüm boş metraj kalemleri temizlenecektir. Emin misiniz?')) {
+                $.post('/ConstructionProject/CleanEmptyMeasurements', { spaceId: currentSpaceId, __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val() })
+                .done(function(res) {
+                    toastr.success(res.deletedCount + ' adet boş kayıt silindi.');
+                    loadSpace(currentSpaceId, currentSpaceName, currentSpaceType);
+                }).fail(function() {
+                    toastr.error('Hata oluştu');
+                });
+            }
+        }
+        
+        
+        function submitMeasurementForm(e) {
+            e.preventDefault();
+            var form = $('#addMeasurementForm');
+            $.post('/ConstructionProject/AddSpaceMeasurement', form.serialize())
+            .done(function() {
+                $('#addMeasurementModal').modal('hide');
+                form[0].reset();
+                toastr.success('Ölçü eklendi');
+                loadSpace(currentSpaceId, currentSpaceName, currentSpaceType);
+            }).fail(function() {
+                toastr.error('Ölçü eklenirken hata oluştu');
+            });
+        }
+
+
+        function submitMeasurementForm(e) {
+            e.preventDefault();
+            var form = $('#addMeasurementForm');
+            $.post('/ConstructionProject/AddSpaceMeasurement', form.serialize())
+            .done(function() {
+                $('#addMeasurementModal').modal('hide');
+                form[0].reset();
+                toastr.success('Ölçü eklendi');
+                loadSpace(currentSpaceId, currentSpaceName, currentSpaceType, currentView);
+            }).fail(function() {
+                toastr.error('Ölçü eklenirken hata oluştu');
+            });
+        }
+        function openAddMeasurementModal() {
+            if(currentSpaceId === 0) return;
+            $('#measurementSpaceId').val(currentSpaceId);
+            $('#addMeasurementModal').modal('show');
+        }
+
+        function openAddFixtureModal() {
+            if(currentSpaceId === 0) return;
+            $('#fixtureSpaceId').val(currentSpaceId);
+            $('#addFixtureModal').modal('show');
+        }
+    </script>
+}
