@@ -1,89 +1,16 @@
-﻿using System;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using GMK360.Core.Entities.Construction;
-using GMK360.Data.Contexts;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
+﻿import codecs
 
-namespace GMK360.Web.Controllers
-{
-    [Authorize]
-    public class AgendaController : Controller
-    {
-        private readonly ApplicationDbContext _context;
-        private readonly IWebHostEnvironment _hostEnvironment;
+filepath = r'C:\Users\murat\source\repos\GMK360\GMK360.Web\Controllers\AgendaController.cs'
+with codecs.open(filepath, 'r', 'utf-8-sig') as f:
+    content = f.read()
 
-        public AgendaController(ApplicationDbContext context, IWebHostEnvironment hostEnvironment)
-        {
-            _context = context;
-            _hostEnvironment = hostEnvironment;
-        }
+import re
 
-        private int GetCurrentAgencyId()
-        {
-            var agencyIdClaim = User.FindFirst("AgencyId")?.Value;
-            if (int.TryParse(agencyIdClaim, out int agencyId))
-            {
-                return agencyId;
-            }
-            return 1; // Fallback
-        }
-
-        public async Task<IActionResult> Index(DateTime? selectedDate)
-        {
-            var agencyId = GetCurrentAgencyId();
-            
-            // Get all dates that have an event
-            var eventDates = await _context.AgendaRecords
-                .Where(a => a.AgencyId == agencyId && !a.IsDeleted)
-                .Select(a => a.EventDate.Date)
-                .Distinct()
-                .ToListAsync();
-
-            ViewBag.EventDates = eventDates;
-
-            // Load records for the selected date, or upcoming/all if none selected
-            var query = _context.AgendaRecords
-                .Include(a => a.Project)
-                .Include(a => a.Phonebook)
-                .Where(a => a.AgencyId == agencyId && !a.IsDeleted);
-
-            if (selectedDate.HasValue)
-            {
-                query = query.Where(a => a.EventDate.Date == selectedDate.Value.Date);
-                ViewBag.SelectedDate = selectedDate.Value;
-            }
-            else
-            {
-                query = query.OrderBy(a => a.EventDate).Take(50); // Show recent/upcoming
-            }
-
-            var records = await query.ToListAsync();
-            return View(records);
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> GetDetails(int id)
-        {
-            var agencyId = GetCurrentAgencyId();
-            var record = await _context.AgendaRecords.Include(r => r.Items)
-                .Include(a => a.Project)
-                .Include(a => a.Phonebook)
-                .FirstOrDefaultAsync(a => a.Id == id && a.AgencyId == agencyId);
-
-            if (record == null) return NotFound();
-            
-            return PartialView("_AgendaDetails", record);
-        }
-
-        [HttpPost]
+# Find the Create POST method
+match = re.search(r'\[HttpPost\].*?public async Task<IActionResult> Create.*?return RedirectToAction.*?}', content, re.DOTALL)
+if match:
+    old_create = match.group(0)
+    new_create = """[HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(AgendaRecord record, IFormFile imageFile, List<string> itemTopicTitle, List<string> itemPresentationText)
         {
@@ -144,6 +71,9 @@ namespace GMK360.Web.Controllers
             _context.AgendaRecords.Add(record);
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index), new { selectedDate = record.EventDate.ToString("yyyy-MM-dd") });
-        }
-    }
-}
+        }"""
+    
+    content = content.replace(old_create, new_create)
+
+with codecs.open(filepath, 'w', 'utf-8-sig') as f:
+    f.write(content)

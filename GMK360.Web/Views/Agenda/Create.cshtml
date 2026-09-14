@@ -10,12 +10,12 @@
             <h4 class="mb-0 fw-bold"><i class="fas fa-calendar-plus text-primary me-2"></i> Yeni Toplantı / Not Ekle</h4>
         </div>
         <div class="card-body p-4">
-            <form asp-action="Create" enctype="multipart/form-data">
+            <form asp-action="Create" enctype="multipart/form-data" id="agendaForm">
                 <div class="row">
                     <!-- Sol Kolon: Temel Bilgiler -->
                     <div class="col-md-8">
                         <div class="mb-3">
-                            <label class="form-label fw-bold">Konu / Başlık <span class="text-danger">*</span></label>
+                            <label class="form-label fw-bold">Konu / Başlık (Ana Amaç) <span class="text-danger">*</span></label>
                             <input asp-for="Title" class="form-control form-control-lg" placeholder="Örn: Hasan Bey ile Temel Atma Görüşmesi" required />
                         </div>
                         
@@ -36,9 +36,28 @@
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-bold">Toplantı Notları / Kararlar</label>
-                            <textarea asp-for="Notes" class="form-control" rows="8" placeholder="Buraya uzun uzun notlarınızı, alınacak kararları veya hazırlık detaylarını yazabilirsiniz..."></textarea>
+                            <label class="form-label fw-bold">Genel Toplantı Özeti / Kararlar</label>
+                            <textarea asp-for="Notes" class="form-control" rows="4" placeholder="Toplantının genel amacını veya en genel özetini buraya yazabilirsiniz..."></textarea>
                         </div>
+                        
+                        <hr class="my-4" />
+                        
+                        <!-- ALT GÜNDEM MADDELERİ ALANI -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="fw-bold text-secondary mb-0"><i class="bi bi-list-task me-2"></i> Alt Konular / Slaytlar</h5>
+                            <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="addAgendaItem()">
+                                <i class="bi bi-plus-circle me-1"></i> Yeni Konu Ekle
+                            </button>
+                        </div>
+                        
+                        <div id="agendaItemsContainer">
+                            <!-- JS ile eklenecek -->
+                        </div>
+                        
+                        <div class="text-center mt-3" id="noItemsMsg">
+                            <p class="text-muted small">Bu toplantı için henüz alt konu başlığı eklenmedi.</p>
+                        </div>
+
                     </div>
 
                     <!-- Sağ Kolon: Bağlantılar ve Medya -->
@@ -66,9 +85,9 @@
 
                         <div class="card bg-light border-0">
                             <div class="card-body">
-                                <h6 class="fw-bold mb-3 border-bottom pb-2"><i class="fas fa-paperclip text-secondary me-2"></i> Sunum / Görsel Ekle</h6>
+                                <h6 class="fw-bold mb-3 border-bottom pb-2"><i class="fas fa-paperclip text-secondary me-2"></i> Ana Toplantı Görseli</h6>
                                 <input type="file" name="imageFile" class="form-control" accept="image/*" />
-                                <small class="text-muted d-block mt-2">Toplantıda göstereceğiniz bir sözleşme taslağı, proje çizimi veya sunum görseli yükleyebilirsiniz.</small>
+                                <small class="text-muted d-block mt-2">Genel toplantıyı temsil edecek bir kapak resmi ekleyebilirsiniz (Slaytlara ayrıca resim eklenir).</small>
                             </div>
                         </div>
                     </div>
@@ -83,3 +102,48 @@
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <script>
+        let itemIndex = 0;
+
+        function addAgendaItem() {
+            $('#noItemsMsg').hide();
+            
+            let html = `
+                <div class="card border-0 bg-light shadow-sm mb-3 agenda-item-card" id="item-${itemIndex}">
+                    <div class="card-body position-relative">
+                        <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-2" onclick="removeItem(${itemIndex})"><i class="bi bi-trash"></i></button>
+                        
+                        <h6 class="fw-bold text-primary mb-3">#${itemIndex + 1}. Konu</h6>
+                        
+                        <div class="row">
+                            <div class="col-md-12 mb-2">
+                                <label class="form-label fw-bold small">Konu Başlığı</label>
+                                <input type="text" name="itemTopicTitle" class="form-control" placeholder="Örn: 1. Konu (Hafriyat)" required />
+                            </div>
+                            <div class="col-md-12 mb-2">
+                                <label class="form-label fw-bold small">Sunum / Hazırlık Metni</label>
+                                <textarea name="itemPresentationText" class="form-control" rows="2" placeholder="Konuyla ilgili detaylı açıklama..."></textarea>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold small">Konuya Özel Resim</label>
+                                <input type="file" name="itemImage_${itemIndex}" class="form-control" accept="image/*" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            $('#agendaItemsContainer').append(html);
+            itemIndex++;
+        }
+
+        function removeItem(id) {
+            $('#item-' + id).remove();
+            if($('.agenda-item-card').length === 0) {
+                $('#noItemsMsg').show();
+            }
+        }
+    </script>
+}
