@@ -45,5 +45,7 @@ namespace GMK360.Core.Entities.Construction
         public int? PhonebookId { get; set; }
         [ForeignKey("PhonebookId")]
         public virtual AgencyPhonebook Phonebook { get; set; }
+
+        public virtual System.Collections.Generic.ICollection<AgendaItem> Items { get; set; }
     }
 }

@@ -73,7 +73,7 @@ namespace GMK360.Web.Controllers
         public async Task<IActionResult> GetDetails(int id)
         {
             var agencyId = GetCurrentAgencyId();
-            var record = await _context.AgendaRecords
+            var record = await _context.AgendaRecords.Include(r => r.Items)
                 .Include(a => a.Project)
                 .Include(a => a.Phonebook)
                 .FirstOrDefaultAsync(a => a.Id == id && a.AgencyId == agencyId);
@@ -82,6 +82,19 @@ namespace GMK360.Web.Controllers
             
             return PartialView("_AgendaDetails", record);
         }
+
+        [HttpPost]
+        public async Task<IActionResult> SaveLiveNotes(int itemId, string notes)
+        {
+            var item = await _context.AgendaItems.FindAsync(itemId);
+            if (item == null) return NotFound();
+            
+            item.LiveMeetingNotes = notes;
+            await _context.SaveChangesAsync();
+            return Ok();
+        }
+
+        
 
         public IActionResult Create()
         {

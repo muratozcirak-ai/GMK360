@@ -1,73 +1,79 @@
-﻿@model GMK360.Core.Entities.Construction.AgendaRecord
+﻿@using GMK360.Core.Entities.Construction
+@model AgendaRecord
 
-<div>
-    <div class="d-flex justify-content-between align-items-start mb-4">
-        <div>
-            <h4 class="mb-1 text-dark fw-bold">@Model.Title</h4>
-            <div class="text-muted">
-                <i class="far fa-calendar-alt me-1"></i> @Model.EventDate.ToString("dd MMMM yyyy, HH:mm")
-            </div>
-        </div>
-        <div>
-            @if(Model.StatusId == GMK360.Core.Entities.Construction.AgendaConstants.StatusPlanlandi) { <span class="badge bg-primary fs-6">Planlandı</span> }
-            @if(Model.StatusId == GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi) { <span class="badge bg-success fs-6">Tamamlandı</span> }
-            @if(Model.StatusId == GMK360.Core.Entities.Construction.AgendaConstants.StatusIptal) { <span class="badge bg-danger fs-6">İptal Edildi</span> }
-        </div>
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white">
+        <h4 class="mb-0 text-primary">@Model.Title</h4>
+        <p class="text-muted small mb-0"><i class="bi bi-clock"></i> @Model.EventDate.ToString("dd MMMM yyyy HH:mm")</p>
     </div>
+    <div class="card-body">
+        
+        <div class="mb-4">
+            <h6 class="text-secondary fw-bold text-uppercase" style="font-size:0.85rem;">Genel Toplantı Notu / Konusu</h6>
+            <p style="white-space: pre-wrap;">@Model.Notes</p>
+        </div>
 
-    <div class="row mb-4">
-        @if(Model.Project != null)
+        @if (Model.Items != null && Model.Items.Any())
         {
-            <div class="col-md-6">
-                <div class="p-3 bg-light rounded border">
-                    <small class="text-muted d-block text-uppercase fw-bold mb-1">İlgili Şantiye</small>
-                    <div class="d-flex align-items-center">
-                        <i class="fas fa-building text-primary fs-4 me-3"></i>
-                        <span class="fw-bold">@Model.Project.Name</span>
-                    </div>
-                </div>
-            </div>
-        }
-        @if(Model.Phonebook != null)
-        {
-            <div class="col-md-6">
-                <div class="p-3 bg-light rounded border">
-                    <small class="text-muted d-block text-uppercase fw-bold mb-1">Görüşülen Kişi / Firma</small>
-                    <div class="d-flex align-items-center">
-                        <i class="fas fa-user-tie text-success fs-4 me-3"></i>
-                        <div>
-                            <span class="fw-bold d-block">@Model.Phonebook.Name</span>
-                            
+            <h6 class="text-secondary fw-bold text-uppercase mb-3" style="font-size:0.85rem;">Toplantı Gündem Maddeleri (Slaytlar)</h6>
+            
+            <div class="accordion" id="agendaAccordion">
+                @foreach (var item in Model.Items.OrderBy(i => i.OrderNo))
+                {
+                    var headingId = "heading" + item.Id;
+                    var collapseId = "collapse" + item.Id;
+                    
+                    <div class="accordion-item border-0 mb-3 shadow-sm rounded">
+                        <h2 class="accordion-header" id="@headingId">
+                            <button class="accordion-button collapsed rounded fw-bold text-dark" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId" aria-expanded="false" aria-controls="@collapseId" style="background-color: #f8f9fa;">
+                                @item.OrderNo. @item.TopicTitle
+                            </button>
+                        </h2>
+                        <div id="@collapseId" class="accordion-collapse collapse" aria-labelledby="@headingId" data-bs-parent="#agendaAccordion">
+                            <div class="accordion-body bg-white">
+                                <div class="row">
+                                    <div class="col-md-7">
+                                        <h6 class="text-muted"><i class="bi bi-file-earmark-text"></i> Sunum Metni</h6>
+                                        <p style="white-space: pre-wrap;">@item.PresentationText</p>
+                                    </div>
+                                    <div class="col-md-5 text-center">
+                                        @if (!string.IsNullOrEmpty(item.ImageUrl))
+                                        {
+                                            <a href="@item.ImageUrl" data-lightbox="agenda-gallery-@item.Id" data-title="@item.TopicTitle">
+                                                <img src="@item.ImageUrl" alt="@item.TopicTitle" class="img-fluid rounded shadow-sm" style="max-height: 200px; object-fit: cover; cursor: zoom-in;" />
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <div class="bg-light rounded p-4 text-muted border border-dashed">
+                                                <i class="bi bi-image fs-1"></i>
+                                                <br />Görsel Yok
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                                
+                                <hr class="my-4" />
+                                
+                                <h6 class="text-danger fw-bold"><i class="bi bi-mic"></i> Toplantı Cevapları / Alınan Kararlar</h6>
+                                <p class="small text-muted mb-2">Bu alana yazılan notlar toplantı anında anlık olarak kaydedilir.</p>
+                                <textarea class="form-control live-note-input" data-item-id="@item.Id" rows="4" placeholder="Masada alınan kararları buraya yazın...">@item.LiveMeetingNotes</textarea>
+                                <div class="text-end mt-1">
+                                    <small class="text-success save-status" id="status-@item.Id" style="display:none;"><i class="bi bi-check-circle"></i> Kaydedildi</small>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
+                }
             </div>
         }
-    </div>
+        else
+        {
+            <div class="alert alert-light text-center border-dashed p-4">
+                <i class="bi bi-inbox fs-2 text-muted"></i>
+                <p class="mb-0 mt-2 text-muted">Bu toplantı için henüz bir alt gündem / slayt maddesi eklenmemiş.</p>
+            </div>
+        }
 
-    <div class="mb-4">
-        <h6 class="border-bottom pb-2 mb-3 fw-bold"><i class="fas fa-pen-nib me-2 text-warning"></i> Toplantı Notları & Kararlar</h6>
-        <div class="p-4 bg-light rounded border" style="white-space: pre-line; font-size: 1.05rem; line-height: 1.6;">
-            @if(string.IsNullOrEmpty(Model.Notes)){ 
-                <em class="text-muted">Not girilmemiş.</em> 
-            } else { 
-                @Model.Notes 
-            }
-        </div>
     </div>
-
-    @if (!string.IsNullOrEmpty(Model.ImageUrl))
-    {
-        <div class="mb-4">
-            <h6 class="border-bottom pb-2 mb-3 fw-bold"><i class="fas fa-image me-2 text-info"></i> Sunum / Belge Görseli</h6>
-            <a href="@Model.ImageUrl" data-lightbox="agenda-img" data-title="@Model.Title">
-                <img src="@Model.ImageUrl" class="img-fluid rounded shadow-sm border" style="max-height: 400px; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'" />
-            </a>
-            <small class="d-block text-muted mt-2"><i class="fas fa-search-plus"></i> Tam ekran (Lightbox) için resme tıklayın.</small>
-        </div>
-    }
 </div>
-
-<!-- Lightbox2 -->
-<link href="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.3/css/lightbox.min.css" rel="stylesheet" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.3/js/lightbox.min.js"></script>

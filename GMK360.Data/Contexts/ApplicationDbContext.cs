@@ -205,6 +205,7 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         public DbSet<GMK360.Core.Entities.Construction.AgencyPhonebook> AgencyPhonebooks { get; set; }
         public DbSet<ConstructionProject> ConstructionProjects { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.AgendaRecord> AgendaRecords { get; set; }
+          public DbSet<GMK360.Core.Entities.Construction.AgendaItem> AgendaItems { get; set; }
         public DbSet<ConstructionTimesheet> ConstructionTimesheets { get; set; }
         public DbSet<ProjectPhase> ProjectPhases { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.CostCategory> CostCategories { get; set; }
