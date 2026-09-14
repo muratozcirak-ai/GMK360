@@ -4,6 +4,13 @@ using GMK360.Core.Entities.Enums;
 
 namespace GMK360.Core.Entities.Construction
 {
+        public static class ProjectConstants
+    {
+        public const byte StatusTeklif = 1;
+        public const byte StatusAktif = 2;
+        public const byte StatusTamamlandi = 3;
+    }
+
     public class ConstructionProject : BaseEntity
     {
         public string Name { get; set; }
@@ -25,13 +32,14 @@ namespace GMK360.Core.Entities.Construction
         public DateTime? EndDate { get; set; }
         
         // 0=Upcoming, 1=Ongoing, 2=Completed
-        public int Status { get; set; }
+        public byte StatusId { get; set; } = ProjectConstants.StatusTeklif;
 
         public DateTime SelectionDeadline { get; set; }
 
         public virtual ICollection<ProjectPhase> Phases { get; set; }
         public virtual ICollection<ProjectMaterialCatalog> MaterialCatalogs { get; set; }
         public ProjectLifecycleStatus LifecycleStatus { get; set; } = ProjectLifecycleStatus.UnderConstruction;
+        public bool IsPublishedOnWeb { get; set; } = false;
         public virtual ICollection<ConstructionTask> Tasks { get; set; }
         
         // Arsa ve Peyzaj Bilgileri
@@ -52,3 +60,5 @@ namespace GMK360.Core.Entities.Construction
         public int? TargetTotalShops { get; set; }
     }
 }
+
+

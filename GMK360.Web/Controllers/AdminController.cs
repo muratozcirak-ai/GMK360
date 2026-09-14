@@ -201,7 +201,7 @@ namespace GMK360.Web.Controllers
                     AgencyId = agency.Id,
                     Address = "Üsküdar, İstanbul",
                     StartDate = System.DateTime.UtcNow.AddMonths(1),
-                    Status = 0, // Yakında Başlayacak
+                    StatusId = GMK360.Core.Entities.Construction.ProjectConstants.StatusTeklif, // Yakında Başlayacak
                     CoverImageUrl = "https://dengegrup.net/wp-content/uploads/2016/08/dummy-1.jpg"
                 });
 
@@ -212,7 +212,7 @@ namespace GMK360.Web.Controllers
                     AgencyId = agency.Id,
                     Address = "Kadıköy, İstanbul",
                     StartDate = System.DateTime.UtcNow.AddMonths(-6),
-                    Status = 1, // Devam Eden
+                    StatusId = GMK360.Core.Entities.Construction.ProjectConstants.StatusAktif, // Devam Eden
                     CoverImageUrl = "https://dengegrup.net/wp-content/uploads/2023/01/WhatsApp-Image-2023-01-09-at-09.52.03.jpeg"
                 });
             }
@@ -222,4 +222,6 @@ namespace GMK360.Web.Controllers
         }
     }
 }
+
+
 

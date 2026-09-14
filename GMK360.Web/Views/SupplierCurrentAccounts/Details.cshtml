@@ -1,0 +1,151 @@
+﻿@model GMK360.Core.Entities.Finance.SupplierCurrentAccount
+@{
+    ViewData["Title"] = "Cari Ekstre - " + Model.PhonebookContact.Name;
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <a href="/SupplierCurrentAccounts/Index" class="text-decoration-none mb-2 d-inline-block"><i class="bi bi-arrow-left me-1"></i> Cari Listesine D�n</a>
+        <h2 class="h4 mb-1">Cari Ekstre: @Model.PhonebookContact.Name</h2>
+        <p class="text-muted mb-0">�lgili: @Model.PhonebookContact.Name | Tel: @Model.PhonebookContact.PhoneNumber</p>
+    </div>
+    <div class="text-end">
+        <div class="text-muted small fw-bold text-uppercase">Toplam Borcumuz</div>
+        <div class="fs-2 fw-bold @(Model.CurrentBalance > 0 ? "text-danger" : "text-success")">
+            ₺ @Model.CurrentBalance.ToString("N2")
+        </div>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> @TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white fw-bold py-3">
+                <i class="bi bi-list-columns me-2"></i> Hesap Hareketleri (Ekstre)
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4">Tarih</th>
+                                <th>��lem / A��klama</th>
+                                <th class="text-end">Tutar</th>
+                                <th class="text-end pe-4">Bakiye</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.Transactions != null && Model.Transactions.Any())
+                            {
+                                foreach (var trx in Model.Transactions.OrderByDescending(t => t.TransactionDate))
+                                {
+                                    <tr>
+                                        <td class="ps-4 text-muted small">@trx.TransactionDate.ToString("dd.MM.yyyy HH:mm")</td>
+                                        <td>
+                                            @if (trx.Type == GMK360.Core.Entities.Finance.SupplierTransactionType.PurchaseInvoice)
+                                            {
+                                                <span class="badge bg-danger">Al�� Faturas�</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-success">�deme/��k��</span>
+                                            }
+                                            <div class="small mt-1">@trx.Description</div>
+                                            @if(!string.IsNullOrEmpty(trx.DocumentReference)) { <div class="small text-muted">Belge: @trx.DocumentReference</div> }
+                                        </td>
+                                        <td class="text-end fw-bold">₺ @trx.Amount.ToString("N2")</td>
+                                        <td class="text-end pe-4 text-muted">₺ @trx.BalanceAfterTransaction.ToString("N2")</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="4" class="text-center py-4 text-muted">Hen�z hesap hareketi bulunmuyor.</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0 bg-light">
+            <div class="card-body p-4">
+                <h5 class="fw-bold mb-4"><i class="bi bi-wallet2 me-2"></i> Yeni �deme / �ek Gir</h5>
+                
+                <form asp-action="AddPayment" method="post">
+                    <input type="hidden" name="accountId" value="@Model.Id" />
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Tutar (₺)</label>
+                        <input type="number" step="0.01" name="amount" class="form-control form-control-lg text-end" required placeholder="0.00" />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">�deme Y�ntemi</label>
+                        <select name="method" class="form-select" id="paymentMethodSelect" onchange="toggleCheckFields()" required>
+                            <option value="Cash">Nakit</option>
+                            <option value="BankTransfer">Havale / EFT</option>
+                            <option value="CreditCard">Kredi Kart�</option>
+                            <option value="Check">Firma �eki</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">�deme Tarihi</label>
+                        <input type="date" name="paymentDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                    </div>
+                    
+                    <div id="checkFields" style="display:none;" class="p-3 bg-white border rounded mb-3">
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">�ek / Dekont No</label>
+                            <input type="text" name="checkNumber" class="form-control form-control-sm" />
+                        </div>
+                        <div>
+                            <label class="form-label small fw-bold">�ek Vade Tarihi</label>
+                            <input type="date" name="dueDate" class="form-control form-control-sm" />
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">A��klama</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="�rn: Aslan yap� market hakedi� �demesi"></textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">
+                        <i class="bi bi-check-circle me-1"></i> �demeyi Kaydet
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function toggleCheckFields() {
+            var val = document.getElementById("paymentMethodSelect").value;
+            var fields = document.getElementById("checkFields");
+            if(val === "Check" || val === "BankTransfer") {
+                fields.style.display = "block";
+            } else {
+                fields.style.display = "none";
+            }
+        }
+    </script>
+}
+
+
+

@@ -1,0 +1,106 @@
+﻿@model GMK360.Core.Entities.BuildingUnit
+@{
+    ViewData["Title"] = "İnşaat İlerleme Durumu";
+    var recentPhotos = ViewBag.RecentPhotos as List<GMK360.Core.Entities.Construction.TaskMessage>;
+}
+
+<div class=""container mt-4 mb-5"">
+    <div class=""mb-4"">
+        <a href=""@Url.Action("Index", "CustomerPortal")"" class=""btn btn-sm btn-outline-secondary rounded-pill mb-3"">
+            <i class=""bi bi-arrow-left""></i> Geri Dön
+        </a>
+        <h2 class=""fw-bold text-dark"">@Model.Building?.ConstructionProject?.Name</h2>
+        <p class=""text-muted fs-5"">Blok: @Model.Building?.BlockName | Daire: @Model.UnitNumber - İnşaat Durumu</p>
+    </div>
+
+    <div class=""row g-4"">
+        <!-- Sol: Aşama İlerlemesi -->
+        <div class=""col-lg-8"">
+            <div class=""card border-0 shadow-sm rounded-4 p-4"">
+                <h5 class=""fw-bold border-bottom pb-3 mb-4""><i class=""bi bi-check2-all text-success me-2""></i> Proje Aşamaları</h5>
+                
+                <div class=""position-relative"">
+                    @if (Model.Building?.ConstructionProject?.Phases != null && Model.Building.ConstructionProject.Phases.Any())
+                    {
+                        foreach (var phase in Model.Building.ConstructionProject.Phases)
+                        {
+                            var totalTasks = phase.PhaseTasks.Count;
+                            var completedTasks = phase.PhaseTasks.Count(t => t.Status == "Tamamlandı" || t.Status == "Tamamlandi");
+                            var progressPercent = totalTasks == 0 ? 0 : (int)Math.Round((double)completedTasks / totalTasks * 100);
+                            
+                            string badgeColor = progressPercent == 100 ? "success" : (progressPercent > 0 ? "primary" : "secondary");
+                            string icon = progressPercent == 100 ? "check-circle-fill" : (progressPercent > 0 ? "arrow-repeat" : "circle");
+
+                            <div class=""d-flex mb-4 position-relative"">
+                                <div class=""me-4 text-center"" style=""width: 40px; z-index: 2;"">
+                                    <div class=""bg-white rounded-circle d-flex align-items-center justify-content-center text-@badgeColor"" style=""width: 40px; height: 40px; font-size: 1.5rem; border: 2px solid currentColor;"">
+                                        <i class=""bi bi-@icon""></i>
+                                    </div>
+                                    @if (phase != Model.Building.ConstructionProject.Phases.Last())
+                                    {
+                                        <div class=""bg-light position-absolute"" style=""width: 2px; height: 100%; top: 40px; left: 19px; z-index: -1;""></div>
+                                    }
+                                </div>
+                                <div class=""flex-grow-1"">
+                                    <h6 class=""fw-bold mb-1"">@phase.Name</h6>
+                                    <p class=""text-muted small mb-2"">@phase.Description</p>
+                                    
+                                    <div class=""d-flex align-items-center"">
+                                        <div class=""progress flex-grow-1 me-3"" style=""height: 8px;"">
+                                            <div class=""progress-bar bg-@badgeColor"" role=""progressbar"" style=""width: @progressPercent%;""></div>
+                                        </div>
+                                        <span class=""fw-bold text-@badgeColor small"">%@progressPercent</span>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class=""text-center text-muted py-5"">
+                            <i class=""bi bi-clock-history fs-1 d-block mb-3""></i>
+                            Henüz aşama planlaması yapılmamış.
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Sağ: Sahadan Son Kareler -->
+        <div class=""col-lg-4"">
+            <div class=""card border-0 shadow-sm rounded-4 p-4 sticky-top"" style=""top: 20px;"">
+                <h5 class=""fw-bold border-bottom pb-3 mb-4""><i class=""bi bi-camera text-primary me-2""></i> Sahadan Son Kareler</h5>
+                
+                @if (recentPhotos != null && recentPhotos.Any())
+                {
+                    <div class=""row g-2"">
+                        @foreach (var msg in recentPhotos)
+                        {
+                            <div class=""col-6"">
+                                <div class=""position-relative rounded-3 overflow-hidden"" style=""height: 120px;"">
+                                    <img src=""@msg.PhotoUrl"" class=""w-100 h-100 object-fit-cover"" alt=""Saha Fotoğrafı"">
+                                    <div class=""position-absolute bottom-0 start-0 w-100 bg-dark bg-opacity-75 p-1"">
+                                        <small class=""text-white d-block text-truncate px-1"" style=""font-size: 0.7rem;"">@msg.SentAt.ToString("dd.MM.yyyy")</small>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class=""text-center text-muted py-5 bg-light rounded-3"">
+                        <i class=""bi bi-image fs-1 d-block mb-2 text-secondary""></i>
+                        <small>Sahadan henüz fotoğraf paylaşılmamış.</small>
+                    </div>
+                }
+                
+                <div class=""mt-4 pt-3 border-top"">
+                    <p class=""text-muted small mb-0"">
+                        <i class=""bi bi-info-circle me-1""></i> Bu sayfadaki bilgiler inşaat sahasından eşzamanlı olarak güncellenmektedir.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

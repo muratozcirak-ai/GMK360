@@ -62,7 +62,7 @@ namespace GMK360.Web.Controllers
             var agencyId = await GetUserAgencyIdAsync();
             if (agencyId == null)
             {
-                // Admin tÃ¼mÃ¼nÃ¼ gÃ¶rebilir
+                // Admin tümünü görebilir
                 if (User.IsInRole("Admin"))
                 {
                     return View(await _context.ConstructionProjects.Include(c => c.Phases)
@@ -159,7 +159,7 @@ namespace GMK360.Web.Controllers
                     model.EndDate = draft.EndDate ?? default(DateTime);
                     ViewBag.CoverImageUrl = draft.CoverImageUrl;
                     
-                    var currentStateDoc = _context.DmsDocuments.FirstOrDefault(d => d.EntityType == "ConstructionProject" && d.EntityId == draft.Id && d.Title == "Mevcut Durum GÃ¶rseli (Ä°lk Hali)");
+                    var currentStateDoc = _context.DmsDocuments.FirstOrDefault(d => d.EntityType == "ConstructionProject" && d.EntityId == draft.Id && d.Title == "Mevcut Durum Görseli (Ýlk Hali)");
                     if (currentStateDoc != null) {
                         ViewBag.CurrentStateImageUrl = currentStateDoc.DocumentUrl;
                     }
@@ -180,7 +180,7 @@ namespace GMK360.Web.Controllers
                             BaseArea = b.BaseArea,
                             TotalFloors = b.TotalFloors ?? 0,
                             BasementFloors = b.BasementFloors,
-                            TotalApartments = b.TotalApartments > 0 ? b.TotalApartments : b.TotalUnits, // Geriye dÃ¶nÃ¼k uyumluluk
+                            TotalApartments = b.TotalApartments > 0 ? b.TotalApartments : b.TotalUnits, // Geriye dönük uyumluluk
                               TotalShops = b.TotalShops,
                             HasGroundFloor = b.HasGroundFloor,
                             HasRoof = b.HasRoof
@@ -215,17 +215,17 @@ namespace GMK360.Web.Controllers
         {
             try {
                 var agencyId = await GetUserAgencyIdAsync();
-                if (agencyId == null) return Json(new { success = false, message = "Yetkisiz eriÅŸim." });
+                if (agencyId == null) return Json(new { success = false, message = "Yetkisiz eriþim." });
 
                 GMK360.Core.Entities.Construction.ConstructionProject project;
                 if (model.DraftProjectId > 0)
                 {
                     project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == model.DraftProjectId);
-                    if (project == null) return Json(new { success = false, message = "Proje bulunamadÄ±." });
+                    if (project == null) return Json(new { success = false, message = "Proje bulunamadý." });
                 }
                 else
                 {
-                    project = new GMK360.Core.Entities.Construction.ConstructionProject { AgencyId = agencyId.Value, Status = 0, CreatedAt = DateTime.UtcNow };
+                    project = new GMK360.Core.Entities.Construction.ConstructionProject { AgencyId = agencyId.Value, StatusId = GMK360.Core.Entities.Construction.ProjectConstants.StatusTeklif, CreatedAt = DateTime.UtcNow };
                     _context.ConstructionProjects.Add(project);
                 }
 
@@ -275,7 +275,7 @@ namespace GMK360.Web.Controllers
                     if (defaultFolder != null) {
                         var dmsDoc = new GMK360.Core.Entities.DmsDocument
                         {
-                            Title = "Mevcut Durum GÃ¶rseli (Ä°lk Hali)",
+                            Title = "Mevcut Durum Görseli (Ýlk Hali)",
                             DocumentUrl = "/uploads/projects/current/" + uniqueFileName,
                             FileExtension = Path.GetExtension(model.CurrentStateImageFile.FileName),
                             FileSizeBytes = model.CurrentStateImageFile.Length,
@@ -301,16 +301,16 @@ namespace GMK360.Web.Controllers
         public async Task<IActionResult> SaveStep2([FromForm] GMK360.Web.Models.CreateProjectWizardViewModel model)
         {
             try {
-                if (model.DraftProjectId == 0) return Json(new { success = false, message = "Proje ID bulunamadÄ±." });
+                if (model.DraftProjectId == 0) return Json(new { success = false, message = "Proje ID bulunamadý." });
                 var project = await _context.ConstructionProjects.Include(p => p.Blocks).FirstOrDefaultAsync(p => p.Id == model.DraftProjectId);
-                if (project == null) return Json(new { success = false, message = "Proje bulunamadÄ±." });
+                if (project == null) return Json(new { success = false, message = "Proje bulunamadý." });
 
                 if (model.Blocks != null)
                 {
                     var existingBlocks = project.Blocks?.ToList() ?? new System.Collections.Generic.List<GMK360.Core.Entities.Building>();
                     var currentBlockNames = model.Blocks.Select(b => b.BlockName).ToList();
 
-                    // Sadece formda olmayan eski bloklarÄ± sil
+                    // Sadece formda olmayan eski bloklarý sil
                     var blocksToRemove = existingBlocks.Where(b => !currentBlockNames.Contains(b.BlockName)).ToList();
                     if (blocksToRemove.Any()) {
                         _context.Buildings.RemoveRange(blocksToRemove);
@@ -322,7 +322,7 @@ namespace GMK360.Web.Controllers
                         var existingBlock = existingBlocks.FirstOrDefault(eb => eb.BlockName == b.BlockName);
                         if (existingBlock != null)
                         {
-                            // Varsa SADECE GÃœNCELLE (Lifecycle kuralÄ±)
+                            // Varsa SADECE GÜNCELLE (Lifecycle kuralý)
                             existingBlock.BaseArea = b.BaseArea;
                             existingBlock.BasementFloors = b.BasementFloors;
                             existingBlock.TotalFloors = b.TotalFloors;
@@ -332,11 +332,11 @@ namespace GMK360.Web.Controllers
                             existingBlock.HasRoof = b.HasRoof;
                             existingBlock.HasGroundFloor = b.HasGroundFloor;
                             
-                            // EÄŸer DÃ¼kkan SayÄ±sÄ± kolonu eklenirse buraya da eklenecek
+                            // Eðer Dükkan Sayýsý kolonu eklenirse buraya da eklenecek
                         }
                         else
                         {
-                            // Yoksa YENÄ° EKLE
+                            // Yoksa YENÝ EKLE
                             var building = new GMK360.Core.Entities.Building
                             {
                                 Name = project.Name + " - " + b.BlockName,
@@ -381,26 +381,26 @@ namespace GMK360.Web.Controllers
 
                 if (model.DraftProjectId <= 0)
                 {
-                    TempData["ErrorMessage"] = "Proje ID bulunamadÄ±. LÃ¼tfen iÅŸleminizi baÅŸtan yapÄ±n.";
+                    TempData["ErrorMessage"] = "Proje ID bulunamadý. Lütfen iþleminizi baþtan yapýn.";
                     return RedirectToAction(nameof(Index));
                 }
 
                 var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == model.DraftProjectId);
                 if (project == null)
                 {
-                    TempData["ErrorMessage"] = "Proje bulunamadÄ±.";
+                    TempData["ErrorMessage"] = "Proje bulunamadý.";
                     return RedirectToAction(nameof(Index));
                 }
 
-                project.Status = 1; // 1 = Devam Ediyor
+                // Status is already saved in SaveStep1
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = "Åžantiye baÅŸarÄ±yla baÅŸlatÄ±ldÄ± ve bloklar oluÅŸturuldu.";
+                TempData["SuccessMessage"] = "Þantiye baþarýyla baþlatýldý ve bloklar oluþturuldu.";
                 return RedirectToAction(nameof(Details), new { id = project.Id });
             }
             catch (Exception ex)
             {
-                TempData["ErrorMessage"] = "Bir hata oluÅŸtu: " + ex.Message;
+                TempData["ErrorMessage"] = "Bir hata oluþtu: " + ex.Message;
                 return RedirectToAction(nameof(Index));
             }
         }
@@ -415,7 +415,7 @@ namespace GMK360.Web.Controllers
                 if (agencyId == null) return Unauthorized();
 
                 project.AgencyId = agencyId.Value;
-                project.Status = 0; // 0 = Upcoming
+                project.StatusId = GMK360.Core.Entities.Construction.ProjectConstants.StatusTeklif; // 0 = Upcoming
                 project.CreatedAt = DateTime.UtcNow;
 
                 _context.Add(project);
@@ -447,7 +447,7 @@ namespace GMK360.Web.Controllers
             _context.ConstructionTasks.Add(task);
             await _context.SaveChangesAsync();
             
-            TempData["SuccessMessage"] = "Yeni aÅŸama baÅŸarÄ±yla eklendi.";
+            TempData["SuccessMessage"] = "Yeni aþama baþarýyla eklendi.";
             return RedirectToAction(nameof(Details), new { id = projectId });
         }
 
@@ -470,7 +470,7 @@ namespace GMK360.Web.Controllers
             _context.ConstructionTaskInvites.Add(invite);
             await _context.SaveChangesAsync();
             
-            TempData["SuccessMessage"] = $"{companyName} ({phoneNumber}) firmasÄ±na teklif daveti SMS olarak gÃ¶nderildi!";
+            TempData["SuccessMessage"] = $"{companyName} ({phoneNumber}) firmasýna teklif daveti SMS olarak gönderildi!";
             return RedirectToAction(nameof(Details), new { id = projectId });
         }
 
@@ -486,7 +486,7 @@ namespace GMK360.Web.Controllers
                 building.HasGroundFloor = HasGroundFloor;
                 building.HasRoof = HasRoof;
                 await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = "Bina iskeleti (kat yapÃ„Â±larÃ„Â±) baÃ…Å¸arÃ„Â±yla gÃƒÂ¼ncellendi.";
+                TempData["SuccessMessage"] = "Bina iskeleti (kat yapÄ±larÄ±) baÅŸarÄ±yla gÃ¼ncellendi.";
             }
             return RedirectToAction("ManageBlock", new { id = buildingId });
         }
@@ -508,7 +508,7 @@ namespace GMK360.Web.Controllers
                 return Unauthorized();
             }
 
-            // Mimari gÃ¶rselleri ve kat planlarÄ±nÄ± getir
+            // Mimari görselleri ve kat planlarýný getir
             string floorEntityType = "BuildingFloor_" + id;
             var architectureDocs = await _context.DmsDocuments
                 .Where(d => (d.EntityType == "Building" && d.EntityId == id) ||
@@ -521,7 +521,7 @@ namespace GMK360.Web.Controllers
             return View(block);
         }
 
-                // --- SOSYAL DONATILAR VE DIÃ…Âž ALANLAR (AMENITIES) ---
+                // --- SOSYAL DONATILAR VE DIÅž ALANLAR (AMENITIES) ---
                 [HttpPost]
         public async Task<IActionResult> UpdateProjectLandArea(int projectId, double? totalLandArea, double? landscapeArea)
         {
@@ -581,7 +581,7 @@ namespace GMK360.Web.Controllers
             _context.ProjectAmenities.Add(amenity);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Yeni Sosyal DonatÃ„Â± / AÃƒÂ§Ã„Â±k Alan eklendi.";
+            TempData["SuccessMessage"] = "Yeni Sosyal DonatÄ± / AÃ§Ä±k Alan eklendi.";
             return RedirectToAction(nameof(Amenities), new { projectId = projectId });
         }
 
@@ -593,7 +593,7 @@ namespace GMK360.Web.Controllers
             {
                 _context.ProjectAmenities.Remove(amenity);
                 await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = "AÃƒÂ§Ã„Â±k alan baÃ…Å¸arÃ„Â±yla silindi.";
+                TempData["SuccessMessage"] = "AÃ§Ä±k alan baÅŸarÄ±yla silindi.";
             }
             return RedirectToAction(nameof(Amenities), new { projectId = projectId });
         }
@@ -611,7 +611,7 @@ namespace GMK360.Web.Controllers
             return RedirectToAction(nameof(Amenities), new { projectId = projectId });
         }
 
-        // --- DAIRE TÃ„Â°PLERÃ„Â° (Ã…ÂžABLONLAR) ---
+        // --- DAIRE TÄ°PLERÄ° (ÅžABLONLAR) ---
         
         public async Task<IActionResult> Templates(int projectId)
         {
@@ -646,7 +646,7 @@ namespace GMK360.Web.Controllers
             _context.UnitTemplates.Add(template);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Yeni Daire Tipi Ã…Âžablonu baÃ…Å¸arÃ„Â±yla oluÃ…Å¸turuldu.";
+            TempData["SuccessMessage"] = "Yeni Daire Tipi Åžablonu baÅŸarÄ±yla oluÅŸturuldu.";
             return RedirectToAction(nameof(Templates), new { projectId = projectId });
         }
 
@@ -680,7 +680,7 @@ namespace GMK360.Web.Controllers
             _context.UnitTemplateSpaces.Add(space);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Ã…Âžablona yeni alan eklendi.";
+            TempData["SuccessMessage"] = "Åžablona yeni alan eklendi.";
             return RedirectToAction(nameof(TemplateSpaces), new { templateId = templateId });
         }
 
@@ -692,7 +692,7 @@ namespace GMK360.Web.Controllers
             {
                 _context.UnitTemplateSpaces.Remove(space);
                 await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = "Alan Ã…Å¸ablondan silindi.";
+                TempData["SuccessMessage"] = "Alan ÅŸablondan silindi.";
             }
             return RedirectToAction(nameof(TemplateSpaces), new { templateId = templateId });
         }
@@ -737,7 +737,7 @@ namespace GMK360.Web.Controllers
             _context.Update(building);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Blok Ã¶zellikleri baÅŸarÄ±yla gÃ¼ncellendi.";
+            TempData["SuccessMessage"] = "Blok özellikleri baþarýyla güncellendi.";
             return RedirectToAction(nameof(ManageBlock), new { id = Id });
         }
 
@@ -839,7 +839,7 @@ namespace GMK360.Web.Controllers
                 {
                     if (targetLevel == sourceFloorLevel) continue;
 
-                    // Hedef kattaki mevcut birimleri alalÄ±m ki Ã§akÄ±ÅŸma kontrolÃ¼ yapabilelim
+                    // Hedef kattaki mevcut birimleri alalým ki çakýþma kontrolü yapabilelim
                     var existingTargetUnits = await _context.BuildingUnits
                         .Where(u => u.BuildingId == buildingId && u.FloorLevel == targetLevel)
                         .ToListAsync();
@@ -847,10 +847,10 @@ namespace GMK360.Web.Controllers
                     var idMapping = new Dictionary<int, GMK360.Core.Entities.BuildingUnit>();
                     var clonedUnits = new List<GMK360.Core.Entities.BuildingUnit>();
 
-                    // 1. AÅŸama: Birimleri kopyala (Ã‡akÄ±ÅŸma varsa atla)
+                    // 1. Aþama: Birimleri kopyala (Çakýþma varsa atla)
                     foreach (var u in sourceUnits)
                     {
-                        // Ã‡akÄ±ÅŸma KontrolÃ¼: AynÄ± isimde ve kategoride birim hedef katta varsa ATLA
+                        // Çakýþma Kontrolü: Ayný isimde ve kategoride birim hedef katta varsa ATLA
                         bool alreadyExists = existingTargetUnits.Any(tu => 
                             tu.DoorNumber.ToLower() == u.DoorNumber.ToLower() && 
                             tu.Category == u.Category);
@@ -869,23 +869,23 @@ namespace GMK360.Web.Controllers
                             UnitTypeId = u.UnitTypeId,
                             Category = u.Category,
                             IsCustomizable = u.IsCustomizable,
-                            OwnerName = null // Sahiplik boÅŸ kalÄ±r
+                            OwnerName = null // Sahiplik boþ kalýr
                         };
                         
                         clonedUnits.Add(newUnit);
                         idMapping.Add(u.Id, newUnit);
                     }
 
-                    // Ã–nce veritabanÄ±na kaydedelim ki yeni ID'ler oluÅŸsun
+                    // Önce veritabanýna kaydedelim ki yeni ID'ler oluþsun
                     _context.BuildingUnits.AddRange(clonedUnits);
                     await _context.SaveChangesAsync();
 
-                    // 2. AÅŸama: Eklentilerin ParentUnitId'lerini (BaÄŸlÄ± olduÄŸu daireyi) AKILLICA eÅŸleÅŸtir!
+                    // 2. Aþama: Eklentilerin ParentUnitId'lerini (Baðlý olduðu daireyi) AKILLICA eþleþtir!
                     foreach (var u in sourceUnits)
                     {
                         if (u.Category == "Eklenti" && u.ParentUnitId.HasValue)
                         {
-                            // EÄŸer bu eklentinin baÄŸlÄ± olduÄŸu ana daire aynÄ± kattaysa (kopyalananlar arasÄ±ndaysa)
+                            // Eðer bu eklentinin baðlý olduðu ana daire ayný kattaysa (kopyalananlar arasýndaysa)
                             if (idMapping.ContainsKey(u.ParentUnitId.Value))
                             {
                                 // Yeni eklentiyi bul
@@ -893,13 +893,13 @@ namespace GMK360.Web.Controllers
                                 // Yeni ana daireyi bul
                                 var newParentDaire = idMapping[u.ParentUnitId.Value];
                                 
-                                // Yeni eklentiyi yeni daireye baÄŸla!
+                                // Yeni eklentiyi yeni daireye baðla!
                                 newEklenti.ParentUnitId = newParentDaire.Id;
                             }
                         }
                     }
                     
-                    // BaÄŸlantÄ±larÄ± gÃ¼ncelle
+                    // Baðlantýlarý güncelle
                     await _context.SaveChangesAsync();
                 }
             }
@@ -939,8 +939,8 @@ namespace GMK360.Web.Controllers
 
             if (unit != null && unit.Building.ConstructionProject.AgencyId == agencyId)
             {
-                // Silmeden Ã¶nce baÄŸlÄ± eklentileri (ParentUnitId'si bu olanlar) boÅŸa Ã§Ä±karalÄ±m veya silelim
-                // GÃ¼venli olmasÄ± iÃ§in ParentUnitId'lerini null yapalÄ±m
+                // Silmeden önce baðlý eklentileri (ParentUnitId'si bu olanlar) boþa çýkaralým veya silelim
+                // Güvenli olmasý için ParentUnitId'lerini null yapalým
                 var children = await _context.BuildingUnits.Where(u => u.ParentUnitId == unitId).ToListAsync();
                 foreach (var child in children)
                 {
@@ -995,7 +995,7 @@ namespace GMK360.Web.Controllers
                     existingProject.Address = project.Address;
                     existingProject.StartDate = project.StartDate;
                     existingProject.EndDate = project.EndDate;
-                    existingProject.Status = project.Status;
+                    existingProject.StatusId = project.StatusId;
                     
                     if (!string.IsNullOrEmpty(project.CoverImageUrl))
                     {
@@ -1041,7 +1041,7 @@ namespace GMK360.Web.Controllers
             var relatedDocs = await _context.DmsDocuments.Where(d => d.EntityType == "ConstructionProject" && d.EntityId == id).ToListAsync();
             _context.DmsDocuments.RemoveRange(relatedDocs);
 
-            // BinalarÄ± ve Ã¼niteleri sil
+            // Binalarý ve üniteleri sil
             if (project.Blocks != null)
             {
                 foreach(var block in project.Blocks)
@@ -1077,8 +1077,8 @@ namespace GMK360.Web.Controllers
                 Name = blockName,
                 BlockName = blockName,
                 TotalFloors = totalFloors,
-                ManagerUserId = _userManager.GetUserId(User), // Yetkili atamasÄ± (ÅŸimdilik ekleyen kiÅŸi)
-                CityId = 1, // GeÃ§ici varsayÄ±lan
+                ManagerUserId = _userManager.GetUserId(User), // Yetkili atamasý (þimdilik ekleyen kiþi)
+                CityId = 1, // Geçici varsayýlan
                 DistrictId = 1,
                 NeighborhoodId = 1,
                 StreetName = "-",
@@ -1089,7 +1089,7 @@ namespace GMK360.Web.Controllers
             _context.Buildings.Add(building);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = $"{blockName} baÅŸarÄ±yla eklendi.";
+            TempData["SuccessMessage"] = $"{blockName} baþarýyla eklendi.";
             return RedirectToAction(nameof(Details), new { id = projectId });
         }
 
@@ -1124,7 +1124,7 @@ namespace GMK360.Web.Controllers
             return RedirectToAction(nameof(Details), new { id = projectId });
         }
 
-        // --- PUANTAJ (TIMESHEET) BÃ–LÃœMÃœ ---
+        // --- PUANTAJ (TIMESHEET) BÖLÜMÜ ---
         [HttpPost]
         public async Task<IActionResult> AddTimesheet(int projectId, string workerId, DateTime workDate, string shiftType, decimal? hours)
         {
@@ -1152,18 +1152,18 @@ namespace GMK360.Web.Controllers
             _context.ConstructionTimesheets.Add(timesheet);
             await _context.SaveChangesAsync();
 
-            // SMS GÃ¶nderim SimÃ¼lasyonu
+            // SMS Gönderim Simülasyonu
             var worker = await _userManager.FindByIdAsync(workerId);
-            var phone = worker?.PhoneNumber ?? "BelirtilmemiÅŸ";
+            var phone = worker?.PhoneNumber ?? "Belirtilmemiþ";
             var approvalLink = Url.Action("TimesheetApprove", "Pwa", new { token = token }, Request.Scheme);
             
-            TempData["SuccessMessage"] = $"Puantaj eklendi. {phone} numarasÄ±na onay SMS'i gÃ¶nderiliyor: {approvalLink}";
+            TempData["SuccessMessage"] = $"Puantaj eklendi. {phone} numarasýna onay SMS'i gönderiliyor: {approvalLink}";
 
             return RedirectToAction("Details", new { id = projectId });
         }
             // --- DAIRE ICI ALAN YONETIMI ---
         
-        // --- PROJE FAZLARI VE AÅžAMALAR ---
+        // --- PROJE FAZLARI VE AÞAMALAR ---
         
 
         [HttpPost]
@@ -1196,7 +1196,7 @@ namespace GMK360.Web.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> UpdateLegalDocumentStatus(int documentId, int statusId, string appliedTo, string trackingPerson, string institutionContact, string notes)
+        public async Task<IActionResult> UpdateLegalDocumentStatus(int documentId, int statusId, string appliedTo, string trackingPerson, string institutionContact, string notes, DateTime? expiryDate)
         {
             var doc = await _context.ProjectLegalDocuments.FindAsync(documentId);
             if(doc == null) return NotFound();
@@ -1206,6 +1206,7 @@ namespace GMK360.Web.Controllers
             if(trackingPerson != null) doc.TrackingPerson = trackingPerson;
             if(institutionContact != null) doc.InstitutionContact = institutionContact;
             if(notes != null) doc.Notes = notes;
+            if(expiryDate.HasValue) doc.ExpiryDate = expiryDate.Value;
             
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Details), new { id = doc.ConstructionProjectId });
@@ -1274,7 +1275,7 @@ namespace GMK360.Web.Controllers
             // Check if user already approved
             if (phase.PhaseApprovals.Any(a => a.ApprovedByUserId == user.Id))
             {
-                TempData["ErrorMessage"] = "Bu talebi zaten onayladÄ±nÄ±z!";
+                TempData["ErrorMessage"] = "Bu talebi zaten onayladýnýz!";
                 return RedirectToAction(nameof(Details), new { id = phase.ConstructionProjectId });
             }
 
@@ -1294,11 +1295,11 @@ namespace GMK360.Web.Controllers
             {
                 phase.Status = 1; // Active!
                 phase.PlannedStartDate = DateTime.Now;
-                TempData["SuccessMessage"] = "YÃ¶netim kurulu imzalarÄ± tamamlandÄ±. Taslak resmi olarak baÅŸlatÄ±ldÄ±!";
+                TempData["SuccessMessage"] = "Yönetim kurulu imzalarý tamamlandý. Taslak resmi olarak baþlatýldý!";
             }
             else
             {
-                TempData["SuccessMessage"] = $"Ä°mzanÄ±z alÄ±ndÄ±. {phase.PhaseApprovals.Count}/{phase.RequiredApprovals} onay tamamlandÄ±.";
+                TempData["SuccessMessage"] = $"Ýmzanýz alýndý. {phase.PhaseApprovals.Count}/{phase.RequiredApprovals} onay tamamlandý.";
             }
 
             await _context.SaveChangesAsync();
@@ -1357,7 +1358,7 @@ namespace GMK360.Web.Controllers
                 costs = task.TaskCosts.Select(c => new {
                     id = c.Id,
                     title = c.Title,
-                    categoryName = c.CostCategory?.Name ?? "DiÄŸer",
+                    categoryName = c.CostCategory?.Name ?? "Diðer",
                     amount = c.Amount, quantity = c.Quantity, deliveredQuantity = c.DeliveredQuantity, unit = c.Unit,
                     supplier = c.SupplierName,
                     approvalStatus = c.ApprovalStatus
@@ -1400,6 +1401,60 @@ namespace GMK360.Web.Controllers
             };
 
             _context.TaskMessages.Add(msg);
+            
+            // --- @Mention ve Acil Durum Bildirimi Mantigi ---
+            if (!string.IsNullOrEmpty(message) && message.Contains("@"))
+            {
+                // Tum santiyedeki kullanicilari getir
+                var projectAssignments = await _context.ProjectAssignments
+                    .Include(a => a.User)
+                    .Where(a => a.ConstructionProjectId == task.ProjectPhase.ConstructionProjectId && a.IsActive)
+                    .ToListAsync();
+
+                var words = message.Split(new[] { ' ', '\n', '\r', ',', '.', '!', '?' }, StringSplitOptions.RemoveEmptyEntries);
+                var mentionedUsers = new List<GMK360.Core.Entities.Identity.ApplicationUser>();
+
+                foreach (var word in words)
+                {
+                    if (word.StartsWith("@") && word.Length > 1)
+                    {
+                        var mention = word.Substring(1).ToLower();
+                        
+                        if (mention == "acil" || mention == "herkes" || mention == "all")
+                        {
+                            // Herkese acil durum bildirimi
+                            mentionedUsers.AddRange(projectAssignments.Select(a => a.User).Where(u => u.Id != user.Id));
+                            msg.Message = $"<strong class='text-danger'>?? ACIL DURUM:</strong> {msg.Message}";
+                        }
+                        else
+                        {
+                            // Isim, soyisim veya role gore bul (Orn: @ahmet, @mimar)
+                            var matched = projectAssignments.Where(a => 
+                                (a.User.FirstName?.ToLower().Contains(mention) == true) || 
+                                (a.User.LastName?.ToLower().Contains(mention) == true) || 
+                                (a.RoleInProject?.ToLower().Contains(mention) == true)
+                            ).Select(a => a.User).ToList();
+                            
+                            foreach(var u in matched) {
+                                if (u.Id != user.Id && !mentionedUsers.Any(m => m.Id == u.Id)) mentionedUsers.Add(u);
+                            }
+                        }
+                    }
+                }
+
+                foreach(var mentionedUser in mentionedUsers)
+                {
+                    _context.UserNotifications.Add(new GMK360.Core.Entities.UserNotification
+                    {
+                        ApplicationUserId = mentionedUser.Id,
+                        Title = $"Þantiyeden Mesaj: @{user.FirstName}",
+                        Message = $"{task.ProjectPhase.ConstructionProject.Name} - {task.Name} iþinde sizden bahsedildi: \"{message}\"",
+                        LinkUrl = $"/ConstructionProject/Details/{task.ProjectPhase.ConstructionProjectId}#task-{task.Id}",
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+
             await _context.SaveChangesAsync();
 
             return Json(new { success = true });
@@ -1418,7 +1473,7 @@ namespace GMK360.Web.Controllers
             
             if (task == null) return NotFound();
 
-            // Sadece test iÃ§in rastgele CostCategory seÃ§elim, gerÃ§ek senaryoda dropdown'dan gelecek
+            // Sadece test için rastgele CostCategory seçelim, gerçek senaryoda dropdown'dan gelecek
             
             var firstCategory = await _context.CostCategories.FirstOrDefaultAsync(c => c.AgencyId == agencyId) 
                                 ?? await _context.CostCategories.FirstOrDefaultAsync();
@@ -1446,12 +1501,46 @@ namespace GMK360.Web.Controllers
                 LogDate = DateTime.UtcNow
             };
 
-            // EÄŸer DB'de CostCategory hiÃ§ yoksa EF hata verir, o yÃ¼zden fallback olarak 1 atÄ±yoruz
-            // GerÃ§ek projede bunu Seed ile doldurmalÄ±yÄ±z.
+            // Eðer DB'de CostCategory hiç yoksa EF hata verir, o yüzden fallback olarak 1 atýyoruz
+            // Gerçek projede bunu Seed ile doldurmalýyýz.
 
             _context.TaskCosts.Add(cost);
             await _context.SaveChangesAsync();
 
+            return Json(new { success = true });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetPhaseDiary(int phaseId)
+        {
+            var messages = await _context.PhaseMessages
+                .Include(m => m.SenderUser)
+                .Where(m => m.ProjectPhaseId == phaseId)
+                .OrderBy(m => m.CreatedAt)
+                .Select(m => new {
+                    sender = m.SenderUser != null ? m.SenderUser.FirstName + " " + m.SenderUser.LastName : "Kullanýcý",
+                    date = m.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy"),
+                    time = m.CreatedAt.ToLocalTime().ToString("HH:mm"),
+                    message = m.Content
+                })
+                .ToListAsync();
+
+            return Json(new { messages });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> AddPhaseDiaryMessage(int phaseId, string message)
+        {
+            if (string.IsNullOrWhiteSpace(message)) return BadRequest();
+            var userId = _userManager.GetUserId(User);
+            _context.PhaseMessages.Add(new GMK360.Core.Entities.Construction.PhaseMessage
+            {
+                ProjectPhaseId = phaseId,
+                SenderUserId = userId,
+                Content = message,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
             return Json(new { success = true });
         }
 
@@ -1463,9 +1552,20 @@ namespace GMK360.Web.Controllers
             var project = await _context.ConstructionProjects
                 .Include(p => p.Phases)
                     .ThenInclude(p => p.PhaseTasks)
+                .Include(p => p.Blocks)
                 .FirstOrDefaultAsync(p => p.Id == id && (User.IsInRole("Admin") || p.AgencyId == agencyId));
 
             if (project == null) return NotFound();
+
+            // Kamyon Yolda / Bekleyen Malzemeler
+            var pendingDeliveries = await _context.InventoryReceipts
+                .Include(r => r.Items).ThenInclude(i => i.MaterialCatalog)
+                .Include(r => r.Warehouse).Include(r => r.AssignedUser)
+                .Where(r => r.Warehouse.ConstructionProjectId == id && r.Status == "Draft")
+                .OrderByDescending(r => r.ReceiptDate)
+                .ToListAsync();
+
+            ViewBag.PendingDeliveries = pendingDeliveries;
 
             return View(project);
         }
@@ -1476,12 +1576,12 @@ namespace GMK360.Web.Controllers
             var agencyId = await GetUserAgencyIdAsync();
             if (agencyId == null) return Unauthorized();
 
-            var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId);
+            var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == projectId && (User.IsInRole("Admin") || p.AgencyId == agencyId));
             if (project == null) return NotFound();
 
             // Kac adet Yonetici (Partner) var bulalim
             var consultantUserIds = await _context.AgencyConsultants
-                .Where(a => a.AgencyId == agencyId)
+                .Where(a => a.AgencyId == project.AgencyId)
                 .Select(a => a.UserId)
                 .ToListAsync();
                 
@@ -1493,7 +1593,7 @@ namespace GMK360.Web.Controllers
                     adminCount++;
             }
             
-            // EÄŸer kimse Admin deÄŸilse bile en az 1 kiÅŸi onaylamalÄ±
+            // Eðer kimse Admin deðilse bile en az 1 kiþi onaylamalý
             if(adminCount == 0) adminCount = 1;
 
             int required = adminCount > 1 ? 2 : 1; // 1 admin varsa 1 imza, 2 veya daha fazlaysa 2 imza cift dunya
@@ -1554,36 +1654,36 @@ namespace GMK360.Web.Controllers
             
             spaceType = spaceType.Trim().ToLower();
 
-            if (spaceType.Contains("oda") || spaceType == "salon" || spaceType == "mutfak" || spaceType.Contains("dolaÅŸÄ±m") || spaceType.Contains("hol") || spaceType.Contains("koridor") || spaceType.Contains("giriÅŸ") || spaceType.Contains("antre"))
+            if (spaceType.Contains("oda") || spaceType == "salon" || spaceType == "mutfak" || spaceType.Contains("dolaþým") || spaceType.Contains("hol") || spaceType.Contains("koridor") || spaceType.Contains("giriþ") || spaceType.Contains("antre"))
             {
-                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Zemin", Name = "Zemin AlanÄ±", Unit = "m2" });
-                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Tavan", Name = "Tavan AlanÄ±", Unit = "m2" });
-                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Duvar", Name = "Net Duvar AlanÄ±", Unit = "m2" });
-                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "SÃ¼pÃ¼rgelik", Name = "SÃ¼pÃ¼rgelik", Unit = "mt" });
-                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Duvar", Name = "Ä°Ã§ KapÄ± BoÅŸluÄŸu", Unit = "m2" });
-                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Duvar", Name = "Pencere BoÅŸluÄŸu", Unit = "m2" });
-                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "DiÄŸer", Name = "Pencere Mermeri (Denizlik)", Unit = "mt" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Zemin", Name = "Zemin Alaný", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Tavan", Name = "Tavan Alaný", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Duvar", Name = "Net Duvar Alaný", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Süpürgelik", Name = "Süpürgelik", Unit = "mt" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Duvar", Name = "Ýç Kapý Boþluðu", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Duvar", Name = "Pencere Boþluðu", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Diðer", Name = "Pencere Mermeri (Denizlik)", Unit = "mt" });
                 items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Tavan", Name = "Perdelik", Unit = "mt" });
                 items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Tavan", Name = "Kartonpiyer / Stropiyer", Unit = "mt" });
             }
             else if (spaceType == "balkon" || spaceType.Contains("teras"))
             {
-                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Zemin", Name = "Zemin AlanÄ±", Unit = "m2" });
-                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Tavan", Name = "Tavan AlanÄ±", Unit = "m2" });
-                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "SÃ¼pÃ¼rgelik", Name = "Balkon SÃ¼pÃ¼rgeliÄŸi", Unit = "mt" });
-                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Duvar", Name = "Korkuluk / KÃ¼peÅŸte", Unit = "mt" });
-                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "DiÄŸer", Name = "Parapet / DamlalÄ±k Mermeri", Unit = "mt" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Zemin", Name = "Zemin Alaný", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Tavan", Name = "Tavan Alaný", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Süpürgelik", Name = "Balkon Süpürgeliði", Unit = "mt" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Duvar", Name = "Korkuluk / Küpeþte", Unit = "mt" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Diðer", Name = "Parapet / Damlalýk Mermeri", Unit = "mt" });
             }
-            else if (spaceType.Contains("Ä±slak") || spaceType.Contains("banyo") || spaceType.Contains("wc"))
+            else if (spaceType.Contains("ýslak") || spaceType.Contains("banyo") || spaceType.Contains("wc"))
             {
                 items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Zemin", Name = "Zemin Seramik / Fayans", Unit = "m2" });
                 items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Duvar", Name = "Duvar Seramik / Fayans", Unit = "m2" });
-                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Tavan", Name = "Asma Tavan AlanÄ±", Unit = "m2" });
-                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Duvar", Name = "Ä°Ã§ KapÄ± BoÅŸluÄŸu", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Tavan", Name = "Asma Tavan Alaný", Unit = "m2" });
+                items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Duvar", Name = "Ýç Kapý Boþluðu", Unit = "m2" });
                 
-                if (spaceType.Contains("banyo") || spaceType.Contains("Ä±slak"))
+                if (spaceType.Contains("banyo") || spaceType.Contains("ýslak"))
                 {
-                    items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Zemin", Name = "DuÅŸ / KÃ¼vet AlanÄ± (Ä°zolasyon)", Unit = "m2" });
+                    items.Add(new SmartTemplateItem { Type = "Measurement", Category = "Zemin", Name = "Duþ / Küvet Alaný (Ýzolasyon)", Unit = "m2" });
                 }
             }
 
@@ -1627,14 +1727,14 @@ namespace GMK360.Web.Controllers
                             ItemName = model.Names[i],
                             Quantity = model.Quantities[i],
                             Unit = model.Units[i],
-                            IsCustomizable = false // Binaya ait sabitler genelde deÄŸiÅŸtirilemez
+                            IsCustomizable = false // Binaya ait sabitler genelde deðiþtirilemez
                         });
                     }
                 }
             }
 
             await _context.SaveChangesAsync();
-            TempData["SuccessMessage"] = "AkÄ±llÄ± Åžablon ile Ã¶lÃ§Ã¼ler baÅŸarÄ±yla kaydedildi.";
+            TempData["SuccessMessage"] = "Akýllý Þablon ile ölçüler baþarýyla kaydedildi.";
             
             return RedirectToAction(nameof(ManageUnitSpaces), new { id = space.BuildingUnitId });
         }
@@ -1688,13 +1788,13 @@ namespace GMK360.Web.Controllers
                 _context.SpaceMeasurements.Add(measurement);
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = "Ã–lÃ§Ã¼ baÅŸarÄ±yla eklendi.";
+                TempData["SuccessMessage"] = "Ölçü baþarýyla eklendi.";
                 return RedirectToAction(nameof(ManageUnitSpaces), new { id = space.BuildingUnitId });
             }
             catch (Exception ex)
             {
                 // Hata yakalama
-                TempData["ErrorMessage"] = "Ã–lÃ§Ã¼ kaydedilirken bir hata oluÅŸtu: " + ex.Message;
+                TempData["ErrorMessage"] = "Ölçü kaydedilirken bir hata oluþtu: " + ex.Message;
                 var spaceFallback = await _context.UnitSpaces.FindAsync(spaceId);
                 if (spaceFallback != null)
                     return RedirectToAction(nameof(ManageUnitSpaces), new { id = spaceFallback.BuildingUnitId });
@@ -1730,7 +1830,7 @@ namespace GMK360.Web.Controllers
 
             await _context.SaveChangesAsync();
 
-            // ZekÃ¢ 1: Zemin deÄŸiÅŸirse TavanÄ± da eÅŸitle
+            // Zekâ 1: Zemin deðiþirse Tavaný da eþitle
             if ((measurement.Category != null && measurement.Category.ToLower().Contains("zemin")) || 
                 (measurement.Description != null && measurement.Description.ToLower().Contains("zemin")))
             {
@@ -1742,10 +1842,10 @@ namespace GMK360.Web.Controllers
                 }
             }
 
-            // ZekÃ¢ 2: Pencere deÄŸiÅŸirse Denizlik/Mermer'i ve Perdelik'i TÃœM pencereleri toplayarak hesapla
+            // Zekâ 2: Pencere deðiþirse Denizlik/Mermer'i ve Perdelik'i TÜM pencereleri toplayarak hesapla
             if (measurement.Description != null && measurement.Description.ToLower().Contains("pencere"))
             {
-                // O mahalde adÄ±nda 'pencere' geÃ§en ve 'mermer' GEÃ‡MEYEN tÃ¼m boÅŸluklarÄ± bul
+                // O mahalde adýnda 'pencere' geçen ve 'mermer' GEÇMEYEN tüm boþluklarý bul
                 var pencereler = _context.SpaceMeasurements
                     .Where(x => x.UnitSpaceId == measurement.UnitSpaceId && 
                                 x.Description.ToLower().Contains("pencere") && 
@@ -1764,7 +1864,7 @@ namespace GMK360.Web.Controllers
                 var perdelik = _context.SpaceMeasurements.FirstOrDefault(x => x.UnitSpaceId == measurement.UnitSpaceId && x.Description.ToLower().Contains("perdelik"));
                 if (perdelik != null)
                 {
-                    // Her pencere iÃ§in 40 cm (0.40) pay ekliyoruz
+                    // Her pencere için 40 cm (0.40) pay ekliyoruz
                     perdelik.Quantity = totalWidth + (windowCount * 0.40);
                 }
             }
@@ -2010,6 +2110,20 @@ namespace GMK360.Web.Controllers
         }
 }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

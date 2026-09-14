@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace GMK360.Core.Entities.Construction
 {
@@ -14,13 +14,10 @@ namespace GMK360.Core.Entities.Construction
         
         public decimal Amount { get; set; } // Toplam Tutar (Maliyet)
         
-
         // --- KABA İNŞAAT VE METRAJ TAKİBİ ---
         public decimal? Quantity { get; set; } // Sipariş/Talep Edilen Miktar (Örn: 1500)
         public decimal? DeliveredQuantity { get; set; } // Şantiyeye Teslim Alınan Miktar (Örn: 350)
         public string Unit { get; set; } // Birim (Örn: m3, m2, Ton, Adet, mtül)
-
-
         
         public DateTime LogDate { get; set; } = DateTime.UtcNow;
         public string SupplierName { get; set; } // Kime ödendi
@@ -32,5 +29,8 @@ namespace GMK360.Core.Entities.Construction
         public DateTime? ApprovedAt { get; set; }
         public int? LinkedSystemMeetingId { get; set; } // Eğer bu alım için özel bir toplantı/karar açıldıysa
 
+        // --- B2B ve ACİL ALIM BAĞLANTISI ---
+        public int? LinkedB2BQuoteRequestId { get; set; } // Hangi B2B Teklif İsteğinden geldi?
+        public bool IsUrgentMissingOrder { get; set; } = false; // Acil alım yapılmış ama sistemde henüz alım emri yok (uyarı verecek)
     }
 }

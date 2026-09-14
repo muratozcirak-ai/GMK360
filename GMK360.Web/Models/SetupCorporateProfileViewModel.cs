@@ -19,7 +19,7 @@ namespace GMK360.Web.Models
         public string Subdomain { get; set; }
 
         [Display(Name = "Firma Logosu (Maks. 2MB, JPG/PNG)")]
-        public IFormFile LogoFile { get; set; }
+        public IFormFile? LogoFile { get; set; }
 
         [Required(ErrorMessage = "İletişim numarası zorunludur.")]
         [Display(Name = "İletişim Numarası")]

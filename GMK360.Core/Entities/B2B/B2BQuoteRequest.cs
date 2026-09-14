@@ -20,8 +20,11 @@ namespace GMK360.Core.Entities.B2B
         
         public DateTime Deadline { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public string Status { get; set; } = "Draft";
 
         // Teklif Davetleri
         public virtual ICollection<B2BQuoteInvite> Invites { get; set; } = new List<B2BQuoteInvite>();
+        public virtual ICollection<B2BQuoteItem> Items { get; set; } = new List<B2BQuoteItem>();
     }
 }
+

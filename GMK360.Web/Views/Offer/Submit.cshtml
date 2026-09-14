@@ -1,0 +1,223 @@
+﻿@model GMK360.Core.Entities.B2B.B2BQuoteInvite
+@{
+    Layout = null; // Public page
+}
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Malzeme / Fiyat Teklifi - GMK360</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <style>
+        body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .invoice-card { border: none; border-top: 5px solid #0d6efd; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15); border-radius: 0.5rem; }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                
+                @if (TempData["SuccessMessage"] != null)
+                {
+                    <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+                        <i class="bi bi-check-circle-fill me-2"></i> @TempData["SuccessMessage"]
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                }
+
+                @if(Model == null)
+                {
+                    <div class="alert alert-danger shadow-sm">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> Bu teklif daveti bulunamadı veya süresi dolmuş.
+                    </div>
+                }
+                else
+                {
+                    <div class="card invoice-card mb-4">
+                        <div class="card-body p-4 p-md-5">
+                            <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+                                <div>
+                                    <h2 class="h3 fw-bold mb-0 text-primary">Fiyat Teklif Talebi</h2>
+                                    <p class="text-muted mb-0 small">Ref: #RQ-@Model.QuoteRequest?.Id.ToString("D5")</p>
+                                </div>
+                                <div class="text-end">
+                                    <h5 class="fw-bold mb-0">@Model.QuoteRequest?.RequesterAgency?.CompanyName</h5>
+                                    <span class="badge bg-light text-dark border">B2B Satın Alma</span>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-info bg-info bg-opacity-10 border-info border-opacity-25 mb-4">
+                                <i class="bi bi-info-circle me-2 text-info"></i> Sayın <strong>@Model.NetworkContact?.CompanyName</strong>,
+                                <br/>Aşağıda detayları belirtilen malzeme/hizmet için kurumumuzun fiyat talebi bulunmaktadır. Lütfen teklifinizi iletiniz.
+                            </div>
+
+                            <h5 class="fw-bold mb-3 border-bottom pb-2">Talep Detayları</h5>
+                            
+                            <div class="row mb-4">
+                                <div class="col-sm-6 mb-3 mb-sm-0">
+                                    <div class="text-muted small fw-bold text-uppercase">Talep Başlığı</div>
+                                    <div class="fs-5">@Model.QuoteRequest?.Title</div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="text-muted small fw-bold text-uppercase">Son Teklif Tarihi</div>
+                                    <div class="fs-5 text-danger"><i class="bi bi-calendar-x"></i> @Model.QuoteRequest?.Deadline.ToString("dd MMM yyyy")</div>
+                                </div>
+                            </div>
+
+                            <div class="text-muted small fw-bold text-uppercase mb-2">İstenen Malzemeler (Sepet)</div>
+                            
+                            @if(Model.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Pending)
+                            {
+                                <form method="post" action="/Offer/SubmitPrice" id="offerForm">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@Model.Id" />
+                                    
+                                    <div class="table-responsive mb-4">
+                                        <table class="table table-bordered table-striped align-middle">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>Malzeme Adı</th>
+                                                    <th class="text-end">Miktar</th>
+                                                    <th>Birim</th>
+                                                    <th style="width: 150px;">Birim Fiyat (₺)</th>
+                                                    <th class="text-end" style="width: 120px;">Toplam (₺)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @if(Model.QuoteRequest?.Items != null)
+                                                {
+                                                    int i = 0;
+                                                    foreach(var item in Model.QuoteRequest.Items)
+                                                    {
+                                                        <tr>
+                                                            <td class="fw-bold">@item.MaterialCatalog?.Name</td>
+                                                            <td class="text-end" id="qty_@i">@item.Quantity</td>
+                                                            <td>@item.MaterialCatalog?.DefaultUnit</td>
+                                                            <td>
+                                                                <input type="hidden" name="itemIds" value="@item.Id" />
+                                                                <input type="number" step="0.01" name="unitPrices" class="form-control form-control-sm text-end unit-price-input" data-index="@i" required placeholder="0.00" />
+                                                            </td>
+                                                            <td class="text-end fw-bold row-total" id="rowTotal_@i">0.00</td>
+                                                        </tr>
+                                                        i++;
+                                                    }
+                                                }
+                                            </tbody>
+                                            <tfoot>
+                                                <tr class="table-light">
+                                                    <td colspan="4" class="text-end fw-bold">Genel Toplam:</td>
+                                                    <td class="text-end fw-bold text-primary fs-5" id="grandTotal">0.00</td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <div class="text-muted small fw-bold text-uppercase mb-2">Ek Açıklama (Talebi Yapanın)</div>
+                                        <div class="bg-light p-3 rounded text-muted">
+                                            @(string.IsNullOrEmpty(Model.QuoteRequest?.Description) ? "Belirtilmedi" : Model.QuoteRequest?.Description)
+                                        </div>
+                                    </div>
+                                    
+                                    <h5 class="fw-bold mb-3 border-bottom pb-2">Teklifinizi İletin</h5>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-12">
+                                            <div class="form-check form-switch form-check-inline fs-5">
+                                                <input class="form-check-input" type="checkbox" name="isVatIncluded" id="isVatIncluded" value="true">
+                                                <label class="form-check-label fw-bold" for="isVatIncluded">Fiyatlarıma KDV Dahildir</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-4">
+                                        <label class="form-label fw-bold">Notlarınız & Teslimat Bilgisi</label>
+                                        <textarea name="offerNotes" class="form-control" rows="3" placeholder="Örn: Nakliye firmamıza aittir. 2 gün içinde teslim edilir. Kredi kartı geçerlidir."></textarea>
+                                    </div>
+                                    
+                                    <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold shadow-sm mb-4">
+                                        <i class="bi bi-send-fill me-2"></i> Teklifimi Gönder
+                                    </button>
+                                    
+                                    <div class="bg-light p-3 rounded border text-muted small">
+                                        <strong><i class="bi bi-shield-lock me-1"></i> GMK360 Tedarikçi Ağına Hoş Geldiniz</strong><br/>
+                                        Bu ücretsiz kaydınız <strong>@(Model.QuoteRequest?.RequesterAgency?.CompanyName ?? "İnşaat Firması")</strong> tarafından oluşturulmuştur. Sisteme giriş yapıp diğer kurumsal ihaleleri görmek isterseniz, size atanan şifre: <strong>123456</strong>
+                                    </div>
+                                </form>
+                            }
+                            else
+                            {
+                                <div class="table-responsive mb-4">
+                                    <table class="table table-bordered table-striped align-middle">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Malzeme Adı</th>
+                                                <th class="text-end">Miktar</th>
+                                                <th>Birim</th>
+                                                <th class="text-end">Birim Fiyat</th>
+                                                <th class="text-end">Toplam</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @if(Model.InviteItems != null)
+                                            {
+                                                foreach(var invItem in Model.InviteItems)
+                                                {
+                                                    <tr>
+                                                        <td>@invItem.QuoteItem?.MaterialCatalog?.Name</td>
+                                                        <td class="text-end">@invItem.QuoteItem?.Quantity</td>
+                                                        <td>@invItem.QuoteItem?.MaterialCatalog?.DefaultUnit</td>
+                                                        <td class="text-end">@invItem.OfferedUnitPrice.ToString("N2") ₺</td>
+                                                        <td class="text-end fw-bold">@((invItem.OfferedUnitPrice * (invItem.QuoteItem?.Quantity ?? 0)).ToString("N2")) ₺</td>
+                                                    </tr>
+                                                }
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="alert alert-success mt-3">
+                                    <i class="bi bi-check-circle me-2"></i> Teklifinizi <strong>@Model.OfferedPrice?.ToString("N2") ₺</strong> (@(Model.IsVatIncludedGlobally ? "KDV Dahil" : "KDV Hariç")) olarak ilettiniz.
+                                    @if(!string.IsNullOrEmpty(Model.OfferNotes))
+                                    {
+                                        <div class="mt-2 pt-2 border-top border-success opacity-75 small">
+                                            <strong>Notunuz:</strong> @Model.OfferNotes
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            function calculateTotals() {
+                let grandTotal = 0;
+                $('.unit-price-input').each(function() {
+                    let index = $(this).data('index');
+                    let price = parseFloat($(this).val()) || 0;
+                    let qty = parseFloat($('#qty_' + index).text().replace(',','.')) || 0;
+                    let rowTotal = price * qty;
+                    
+                    $('#rowTotal_' + index).text(rowTotal.toFixed(2));
+                    grandTotal += rowTotal;
+                });
+                $('#grandTotal').text(grandTotal.toFixed(2));
+            }
+
+            $('.unit-price-input').on('input', calculateTotals);
+        });
+    </script>
+</body>
+</html>
+

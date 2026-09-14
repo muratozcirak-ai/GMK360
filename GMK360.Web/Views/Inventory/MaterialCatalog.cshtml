@@ -1,0 +1,132 @@
+﻿@model IEnumerable<GMK360.Core.Entities.Construction.MaterialCatalog>
+@{
+    ViewData["Title"] = "Şirket Malzeme Kataloğu";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0 text-gray-800">
+        <i class="bi bi-journal-text me-2"></i> @ViewData["Title"]
+    </h1>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMaterialModal">
+        <i class="bi bi-plus-lg me-1"></i> Yeni Malzeme Ekle
+    </button>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> @TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Malzeme Adı</th>
+                        <th>Tür</th>
+                        <th>Varsayılan Birim</th>
+                        <th>Varsayılan Marka</th>
+                        <th>Kayıt Tarihi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Any())
+                    {
+                        <tr>
+                            <td colspan="5" class="text-center py-4 text-muted">
+                                <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+                                Henüz kataloğunuza malzeme eklenmemiş.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        foreach (var item in Model)
+                        {
+                            <tr>
+                                <td class="fw-bold">@item.Name</td>
+                                <td>
+                                    @if (item.Type == GMK360.Core.Entities.Construction.InventoryItemType.Demirbas)
+                                    {
+                                        <span class="badge bg-warning text-dark"><i class="bi bi-tools me-1"></i> Demirbaş</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-info text-dark"><i class="bi bi-box-seam me-1"></i> Sarf Malzeme</span>
+                                    }
+                                </td>
+                                <td>@item.DefaultUnit</td>
+                                <td>@(string.IsNullOrEmpty(item.DefaultBrand) ? "-" : item.DefaultBrand)</td>
+                                <td>@item.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add Material Modal -->
+<div class="modal fade" id="addMaterialModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i> Kataloğa Yeni Malzeme Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form asp-action="AddMaterial" method="post">
+                <div class="modal-body">
+                    <p class="text-muted small mb-4">
+                        Buraya eklediğiniz malzemeler; devir işlemlerinde ve satın alma (ihale) oluştururken açılır listede standart olarak görünecektir.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Malzeme Adı <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="form-control" required placeholder="Örn: Kürek Sapı, 50kg Çimento, Hilti..." />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Malzeme Türü <span class="text-danger">*</span></label>
+                        <select name="type" class="form-select" required>
+                            <option value="1">Sarf Malzeme (Tüketilen)</option>
+                            <option value="2">Demirbaş (Kullanılan/Demirbaş)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Varsayılan Ölçü Birimi</label>
+                        <select name="defaultUnit" class="form-select">
+                            <option value="Adet">Adet</option>
+                            <option value="Kg">Kilogram (Kg)</option>
+                            <option value="Ton">Ton</option>
+                            <option value="Metre">Metre</option>
+                            <option value="m2">Metrekare (m2)</option>
+                            <option value="m3">Metreküp (m3)</option>
+                            <option value="Paket">Paket</option>
+                            <option value="Kutu">Kutu</option>
+                            <option value="Litre">Litre</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Varsayılan Marka (Opsiyonel)</label>
+                        <input type="text" name="defaultBrand" class="form-control" placeholder="Örn: Çanakkale Seramik, Bosch..." />
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary">Kataloğa Ekle</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

@@ -93,6 +93,16 @@
                                             {
                                                 <span class="badge bg-success rounded-pill px-3 py-2"><i class="bi bi-check-circle"></i> Alındı</span>
                                             }
+                                            @if(doc.ExpiryDate.HasValue && doc.Status == GMK360.Core.Entities.Construction.LegalDocumentStatus.Approved) {
+                                                var days = (doc.ExpiryDate.Value - DateTime.UtcNow).TotalDays;
+                                                string color = days > 30 ? "success" : (days > 7 ? "warning" : "danger");
+                                                string icon = days > 30 ? "check-circle" : (days > 7 ? "exclamation-triangle" : "exclamation-octagon-fill");
+                                                <div class="mt-2">
+                                                    <span class="badge bg-@color rounded-pill text-@(color == "warning" ? "dark" : "white")" title="Bitiş Tarihi">
+                                                        <i class="bi bi-@icon"></i> Kalan: @((int)days) gün
+                                                    </span>
+                                                </div>
+                                            }
                                         </td>
                                         <td>
                                             @if(!string.IsNullOrEmpty(doc.Notes)) { <small class="text-muted">@doc.Notes</small> } else { <span class="text-muted">-</span> }
@@ -148,6 +158,11 @@
                                                             <label class="form-label fw-bold">Açıklama / Süreç Notları</label>
                                                             <textarea class="form-control" name="notes" rows="3" placeholder="Örn: Belediye reddetti çünkü projede eksiklik var...">@doc.Notes</textarea>
                                                         </div>
+                                                        <div class="mb-3">
+                                                            <label class="form-label fw-bold text-warning"><i class="bi bi-calendar-x"></i> Geçerlilik Bitiş Tarihi</label>
+                                                            <input type="date" class="form-control" name="expiryDate" value="@(doc.ExpiryDate?.ToString("yyyy-MM-dd"))">
+                                                            <small class="text-muted">Evrakın bir geçerlilik süresi varsa (örn: SGK dosyası, Yapı Ruhsatı süresi) giriniz. Yaklaşınca uyarı verilecektir.</small>
+                                                        </div>
                                                     </div>
                                                     <div class="modal-footer bg-light">
                                                         <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">İptal</button>
@@ -168,6 +183,66 @@
 </div>
 
 
+
+<!-- ŞANTİYE ÖZEL MAL KABUL BÖLÜMÜ -->
+@if(ViewBag.PendingDeliveries != null)
+{
+    var pending = (IEnumerable<GMK360.Core.Entities.Construction.InventoryReceipt>)ViewBag.PendingDeliveries;
+    if(pending.Any())
+    {
+        <div class="card border-0 shadow-sm rounded-4 mb-4 border-warning border-start border-5">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold text-dark mb-0"><i class="bi bi-truck text-warning me-2 fs-4"></i> Kamyon Yolda / Bekleyen Malzemeler</h5>
+                    <span class="badge bg-warning text-dark fs-6 rounded-pill">@pending.Count() İrsaliye/Sipariş</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Tarih</th>
+                                <th>Tedarikçi</th>
+                                <th>Evrak No</th>
+                                <th>İnecek Depo</th>
+                                <th>Sorumlu Personel</th>
+                                <th class="text-end">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach(var rec in pending)
+                            {
+                                <tr>
+                                    <td>@rec.ReceiptDate.ToString("dd.MM.yyyy HH:mm")</td>
+                                    <td class="fw-bold">@rec.SupplierName</td>
+                                    <td>@rec.DocumentNumber</td>
+                                    <td><i class="bi bi-geo-alt text-muted"></i> @rec.Warehouse.Name</td>
+                                    <td>
+                                        @if(rec.AssignedUser != null)
+                                        {
+                                            <span class="badge bg-primary bg-opacity-10 text-primary">
+                                                <i class="bi bi-person me-1"></i> @rec.AssignedUser.DisplayName
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted fst-italic">Atanmadı</span>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <!-- Burada mobilde veya webde basılacak sayım ekranı butonu var -->
+                                        <a href="/InventoryReceipts/Details/@rec.Id" class="btn btn-sm btn-success fw-bold px-3 rounded-pill shadow-sm">
+                                            <i class="bi bi-box-seam me-1"></i> Sayım Yap & Teslim Al
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+}
 <div class="row g-4 mb-4">
     <div class="col-md-8">
         <div class="card border-0 shadow-sm rounded-4 h-100">
@@ -470,3 +545,7 @@
         </div>
     }
 </div>
+
+
+
+

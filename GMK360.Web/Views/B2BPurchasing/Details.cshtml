@@ -1,0 +1,402 @@
+﻿@model GMK360.Core.Entities.B2B.B2BQuoteRequest
+
+@{
+    ViewData["Title"] = Model.Title;
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <a href="/B2BPurchasing/Index" class="text-decoration-none text-muted mb-2 d-inline-block"><i class="bi bi-arrow-left"></i> İhalelere Dön</a>
+            <h3 class="fw-bold mb-0">@Model.Title</h3>
+            <div class="text-muted small">Alım Emri #@Model.Id | Oluşturulma: @Model.CreatedAt.ToString("dd MMM yyyy")</div>
+        </div>
+        <div>
+            @if(Model.Status == "Draft" || Model.Status == "Published")
+            {
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#inviteSupplierModal">
+                    <i class="bi bi-person-plus me-1"></i> Yeni Tedarikçi Davet Et
+                </button>
+            }
+            else
+            {
+                <span class="badge bg-success p-2 fs-6"><i class="bi bi-check-all"></i> Alım Tamamlandı</span>
+            }
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white fw-bold py-3">
+                    İhtiyaç Detayları
+                </div>
+                <div class="card-body">
+                    <p>@Model.Description</p>
+                    <hr />
+                    <div class="row text-muted small">
+                        <div class="col-6">
+                            <strong><i class="bi bi-calendar-x"></i> Son Teklif:</strong> @Model.Deadline.ToString("dd MMM yyyy")
+                        </div>
+                        <div class="col-6">
+                            <strong><i class="bi bi-info-circle"></i> Durum:</strong> @Model.Status
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white fw-bold py-3 d-flex justify-content-between align-items-center">
+                    <span>İstenilen Malzemeler (Kalemler)</span>
+                    @if(Model.Status == "Draft" || Model.Status == "Published")
+                    {
+                        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addQuoteItemModal">
+                            <i class="bi bi-plus"></i> Yeni Kalem Ekle
+                        </button>
+                    }
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Malzeme (Katalog)</th>
+                                <th>Miktar</th>
+                                <th>Birim</th>
+                                <th>Açıklama</th>
+                                <th>İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach(var item in Model.Items)
+                            {
+                                <tr>
+                                    <td class="fw-bold text-primary">@item.MaterialCatalog?.Name</td>
+                                    <td><strong>@item.Quantity</strong></td>
+                                    <td>@item.MaterialCatalog?.DefaultUnit</td>
+                                    <td class="small text-muted">@item.Description</td>
+                                    <td>
+                                        @if(Model.Status == "Draft" || Model.Status == "Published")
+                                        {
+                                            <a href="#" class="text-danger"><i class="bi bi-trash"></i></a>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white fw-bold py-3 d-flex justify-content-between align-items-center">
+                    <span>Alınan Teklifler (Gölge Tedarikçiler)</span>
+                </div>
+                <div class="card-body p-0">
+                    @if (Model.Invites != null && Model.Invites.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Firma</th>
+                                        <th>İletişim</th>
+                                        <th>Teklif Fiyatı</th>
+                                        <th>Durum</th>
+                                        <th class="text-end">İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var invite in Model.Invites)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>@invite.NetworkContact?.CompanyName</strong>
+                                                <div class="small text-muted">@invite.NetworkContact?.ContactPerson</div>
+                                            </td>
+                                            <td>
+                                                <div class="small">
+                                                    @if(!string.IsNullOrEmpty(invite.NetworkContact?.PhoneNumber)){ <div><i class="bi bi-telephone"></i> @invite.NetworkContact.PhoneNumber</div> }
+                                                    @if(!string.IsNullOrEmpty(invite.NetworkContact?.Email)){ <div><i class="bi bi-envelope"></i> @invite.NetworkContact.Email</div> }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @if (invite.OfferedPrice.HasValue)
+                                                {
+                                                    <strong class="fs-5 text-success">@invite.OfferedPrice.Value.ToString("N2") ₺</strong>
+                                                    <div class="small text-muted">@(invite.IsVatIncludedGlobally ? "KDV Dahil" : "KDV Hariç")</div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (invite.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Pending)
+                                                {
+                                                    <span class="badge bg-secondary">Bekliyor</span>
+                                                }
+                                                else if (invite.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Submitted)
+                                                {
+                                                    <span class="badge bg-info">Fiyat Verildi</span>
+                                                }
+                                                else if (invite.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Accepted)
+                                                {
+                                                    <span class="badge bg-success">Onaylandı / Kazanıldı</span>
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                <a href="/Offer/Submit/@invite.Id" target="_blank" class="btn btn-sm btn-outline-secondary me-2" title="Giden Teklif Formunu Aç">
+                                                    <i class="bi bi-box-arrow-up-right"></i> Formu Aç
+                                                </a>
+                                                
+                                                @if(invite.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Submitted && (Model.Status == "Draft" || Model.Status == "Published"))
+                                                {
+                                                    <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#acceptQuoteModal_@invite.Id">
+                                                        <i class="bi bi-check-circle"></i> Kabul Et ve Siparişi Tamamla
+                                                    </button>
+                                                    
+                                                    <!-- Accept Modal for this Invite -->
+                                                    <div class="modal fade text-start" id="acceptQuoteModal_@invite.Id" tabindex="-1">
+                                                        <div class="modal-dialog modal-lg">
+                                                            <div class="modal-content">
+                                                                <div class="modal-header bg-success text-white">
+                                                                    <h5 class="modal-title fw-bold">Teklifi Kabul Et & Alımı Tamamla</h5>
+                                                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                                                </div>
+                                                                <form method="post" action="/B2BPurchasing/AcceptAndComplete">
+                                                                    @Html.AntiForgeryToken()
+                                                                    <input type="hidden" name="quoteRequestId" value="@Model.Id" />
+                                                                    <input type="hidden" name="inviteId" value="@invite.Id" />
+                                                                    
+                                                                    <div class="modal-body">
+                                                                        <div class="alert alert-info small mb-3">
+                                                                            <strong>@invite.NetworkContact?.CompanyName</strong> firmasının teklifini onaylıyorsunuz. Sistem otomatik olarak:
+                                                                            <ul class="mb-0">
+                                                                                <li>Firma için Cari Hesap (yoksa) oluşturacak.</li>
+                                                                                <li><strong>@invite.OfferedPrice?.ToString("N2") ₺</strong> tutarını borç faturası olarak cariye işleyecek.</li>
+                                                                                <li>Şantiyede mal kabulü yapılabilmesi için bir irsaliye/sipariş taslağı (Yolda) oluşturacak.</li>
+                                                                            </ul>
+                                                                        </div>
+                                                                        
+                                                                        <h6 class="fw-bold border-bottom pb-2">Tedarikçi Kalem Fiyatları (Özet)</h6>
+                                                                        <table class="table table-sm table-bordered align-middle">
+    <thead class="table-light small">
+        <tr>
+            <th>Malzeme</th>
+            <th class="text-end" style="width: 120px;">İstenen</th>
+            <th class="text-end" style="width: 120px;">Alınacak Miktar</th>
+            <th class="text-end">Birim Fiyat</th>
+            <th class="text-end">Ara Toplam</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if(invite.InviteItems != null)
+        {
+            int i = 0;
+            foreach(var invItem in invite.InviteItems)
+            {
+                <tr id="row_@invite.Id\_@i">
+                    <td class="small">
+                        @invItem.QuoteItem?.MaterialCatalog?.Name
+                        <input type="hidden" name="inviteItemIds" value="@invItem.Id" />
+                        <input type="hidden" id="price_@invite.Id\_@i" value="@invItem.OfferedUnitPrice" />
+                    </td>
+                    <td class="small text-end text-muted">@invItem.QuoteItem?.Quantity @invItem.QuoteItem?.MaterialCatalog?.DefaultUnit</td>
+                    <td class="small text-end">
+                        <input type="number" step="0.01" min="0" name="acceptedQuantities" class="form-control form-control-sm text-end qty-input" data-invite="@invite.Id" data-index="@i" value="@invItem.QuoteItem?.Quantity" />
+                    </td>
+                    <td class="small text-end">@invItem.OfferedUnitPrice.ToString("N2") ₺</td>
+                    <td class="small text-end fw-bold row-total-@invite.Id" id="rowTotal_@invite.Id\_@i">@((invItem.OfferedUnitPrice * (invItem.QuoteItem?.Quantity ?? 0)).ToString("N2")) ₺</td>
+                </tr>
+                i++;
+            }
+        }
+    </tbody>
+    <tfoot class="table-light">
+        <tr>
+            <td colspan="4" class="text-end fw-bold">Yeni Genel Toplam:</td>
+            <td class="text-end fw-bold text-success fs-6" id="grandTotal_@invite.Id">@invite.OfferedPrice?.ToString("N2") ₺</td>
+        </tr>
+    </tfoot>
+</table>
+                                                                        
+                                                                        <div class="mb-3 mt-4">
+                                                                            <label class="form-label fw-bold">Malzemeler Hangi Şantiyeye / Depoya İnecek?</label>
+                                    <select name="warehouseId" class="form-select" required>
+                                        <option value="">-- Depo Seçiniz --</option>
+                                        @foreach(var wh in ViewBag.Warehouses)
+                                        {
+                                            <option value="@wh.Id">@wh.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Şantiyede Malzemeleri Kim Teslim Alacak?</label>
+                                    <select name="assignedUserId" class="form-select" required>
+                                        <option value="">-- Sorumlu Personel Seçiniz --</option>
+                                        @foreach(var cons in ViewBag.Consultants)
+                                        {
+                                            <option value="@cons.UserId">@cons.User.DisplayName (@cons.User.PhoneNumber)</option>
+                                        }
+                                    </select>
+                                </div>
+                                                                    </div>
+                                                                    <div class="modal-footer bg-light">
+                                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                                                                        <button type="submit" class="btn btn-success fw-bold"><i class="bi bi-check-circle"></i> Teklifi Kabul Et & Tamamla</button>
+                                                                    </div>
+                                                                </form>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-5 text-muted">
+                            <i class="bi bi-people fs-1 text-light mb-2 d-block"></i>
+                            <h6 class="fw-bold">Henüz Tedarikçi Eklenmemiş</h6>
+                            <p class="small mb-3">Fiyat almak istediğiniz firmaları gölge hesap olarak buraya ekleyebilirsiniz.</p>
+                            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#inviteSupplierModal">
+                                İlk Tedarikçiyi Davet Et
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="alert alert-info border-0 shadow-sm">
+                <h6 class="fw-bold"><i class="bi bi-lightbulb"></i> İpucu: Vergiden Düşme</h6>
+                <p class="small mb-0">Demirbaşlarınızı depoya ekledikten sonra, kullanılamaz duruma geldiklerinde "Hurda/Zayi" olarak işaretleyebilirsiniz. Bu işlem yıl sonu kurumlar vergisinde gider/amortisman olarak muhasebeleşir.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Yeni Kalem Ekle -->
+    <div class="modal fade" id="addQuoteItemModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Yeni Kalem Ekle</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="post" action="/B2BPurchasing/AddQuoteItem">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="quoteRequestId" value="@Model.Id" />
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Katalogdan Malzeme Seçiniz</label>
+                            <select name="materialCatalogId" class="form-select" required>
+                                <option value="">-- Malzeme Seçiniz --</option>
+                                <option value="1">Çimento (50kg)</option>
+                                <option value="2">Demir (12mm)</option>
+                                <option value="3">El Arabası</option>
+                                <option value="4">Kürek</option>
+                                <option value="5">Kürek Sapı</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Miktar</label>
+                            <input type="number" step="0.01" name="quantity" class="form-control" required />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Özel Açıklama (Opsiyonel)</label>
+                            <textarea name="description" class="form-control" rows="2"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                        <button type="submit" class="btn btn-primary">Sepete Ekle</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Tedarikçi Davet Et -->
+    <div class="modal fade" id="inviteSupplierModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold">Gölge Tedarikçi Ekle (Davet)</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="post" action="/B2BPurchasing/InviteSupplier">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="quoteId" value="@Model.Id" />
+                    <div class="modal-body">
+                        <div class="alert alert-info small">
+                            Bu firmaya teklif isteği oluşturulacak. İlerleyen aşamalarda SMS ile link gönderip kendi teklifini doğrudan girmesini sağlayabiliriz.
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Firma Adı <span class="text-danger">*</span></label>
+                            <input type="text" name="companyName" class="form-control" placeholder="Örn: Aslan Yapı Market" required />
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Yetkili Kişi</label>
+                            <input type="text" name="contactPerson" class="form-control" placeholder="Örn: Ahmet Bey" />
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Telefon</label>
+                            <input type="text" name="phoneNumber" class="form-control" placeholder="05XX XXX XX XX" />
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">E-Posta</label>
+                            <input type="email" name="email" class="form-control" placeholder="ornek@firma.com" />
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                        <button type="submit" class="btn btn-primary">Davet Oluştur</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('.qty-input').on('input', function() {
+                var inviteId = $(this).data('invite');
+                
+                var grandTotal = 0;
+                
+                $('.qty-input[data-invite="' + inviteId + '"]').each(function() {
+                    var idx = $(this).data('index');
+                    var qty = parseFloat($(this).val()) || 0;
+                    var priceStr = $('#price_' + inviteId + '_' + idx).val();
+                    var price = parseFloat(priceStr.replace(',', '.')) || 0;
+                    
+                    var rowTotal = qty * price;
+                    $('#rowTotal_' + inviteId + '_' + idx).text(rowTotal.toFixed(2).replace('.', ',') + ' ₺');
+                    
+                    if(qty === 0) {
+                        $('#row_' + inviteId + '_' + idx).addClass('opacity-50 text-decoration-line-through');
+                    } else {
+                        $('#row_' + inviteId + '_' + idx).removeClass('opacity-50 text-decoration-line-through');
+                    }
+                    
+                    grandTotal += rowTotal;
+                });
+                
+                $('#grandTotal_' + inviteId).text(grandTotal.toFixed(2).replace('.', ',') + ' ₺');
+            });
+        });
+    </script>
+}
+
+

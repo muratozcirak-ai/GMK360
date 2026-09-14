@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using GMK360.Core.Entities.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -52,6 +52,7 @@ namespace GMK360.Data.Seeds
                         FirstName = tUser.FirstName,
                         LastName = tUser.LastName,
                         EmailConfirmed = true,
+                        PhoneNumberConfirmed = true,
                         UserType = tUser.UserType,
                         TcIdentityNo = tUser.Tc,
                         BirthYear = 1980,

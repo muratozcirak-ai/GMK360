@@ -1,0 +1,143 @@
+﻿@model GMK360.Core.Entities.Marketplace.MarketplaceJob
+@{
+    ViewData["Title"] = "İlan Detayı";
+    var currentUserId = ViewBag.CurrentUserId as string;
+    bool isOwner = Model.CreatedByUserId == currentUserId;
+    var myBid = Model.Bids.FirstOrDefault(b => b.BidderUserId == currentUserId);
+}
+
+<div class="container mt-4 mb-5">
+    <a asp-action="Index" class="btn btn-sm btn-outline-secondary rounded-pill mb-4">
+        <i class="bi bi-arrow-left me-1"></i> Pazara Dön
+    </a>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm rounded-4 p-4 p-md-5 mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill px-3 py-2">@Model.JobType</span>
+                    <span class="text-muted small">@Model.CreatedAt.ToString("dd MMMM yyyy HH:mm")</span>
+                </div>
+                
+                <h2 class="fw-bold mb-4">@Model.Title</h2>
+                
+                <div class="row mb-4">
+                    <div class="col-md-6 mb-3">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-light rounded-circle p-3 me-3 text-danger">
+                                <i class="bi bi-geo-alt-fill fs-5"></i>
+                            </div>
+                            <div>
+                                <small class="text-muted d-block">Konum</small>
+                                <span class="fw-bold">@Model.Location</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-light rounded-circle p-3 me-3 text-success">
+                                <i class="bi bi-wallet2 fs-5"></i>
+                            </div>
+                            <div>
+                                <small class="text-muted d-block">Bütçe</small>
+                                <span class="fw-bold">@(Model.EstimatedBudget.HasValue ? Model.EstimatedBudget.Value.ToString("N0") + " ₺" : "Belirtilmedi")</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <h5 class="fw-bold mb-3">İşin Detayları</h5>
+                <div class="bg-light p-4 rounded-4">
+                    <p class="mb-0" style="white-space: pre-wrap;">@Model.Description</p>
+                </div>
+            </div>
+
+            @if (isOwner)
+            {
+                <h4 class="fw-bold mb-4">Gelen Teklifler (@Model.Bids.Count)</h4>
+                @if(!Model.Bids.Any())
+                {
+                    <div class="alert alert-light text-center p-4 rounded-4">Henüz teklif veren olmamış.</div>
+                }
+                else
+                {
+                    <div class="row g-3">
+                        @foreach(var bid in Model.Bids.OrderByDescending(b => b.CreatedAt))
+                        {
+                            <div class="col-12">
+                                <div class="card border-0 shadow-sm rounded-4">
+                                    <div class="card-body p-4">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <div class="fw-bold"><i class="bi bi-person-badge text-primary me-2"></i>@(bid.BidderUser?.FirstName) @(bid.BidderUser?.LastName)</div>
+                                            <strong class="text-success fs-5">@bid.OfferedPrice.ToString("N0") ₺</strong>
+                                        </div>
+                                        <p class="text-muted bg-light p-3 rounded-3 small mb-2">"@bid.Message"</p>
+                                        <div class="text-end small text-muted">@bid.CreatedAt.ToString("dd.MM.yyyy HH:mm")</div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+
+        <div class="col-lg-4">
+            @if (TempData["SuccessMessage"] != null)
+            {
+                <div class="alert alert-success rounded-4 border-0 mb-4">
+                    <i class="bi bi-check-circle-fill me-2"></i> @TempData["SuccessMessage"]
+                </div>
+            }
+
+            <div class="card border-0 shadow-sm rounded-4 p-4 sticky-top" style="top: 20px;">
+                <div class="text-center mb-4">
+                    <div class="bg-light rounded-circle d-inline-flex p-4 mb-3">
+                        <i class="bi bi-person fs-1 text-primary"></i>
+                    </div>
+                    <h5 class="fw-bold mb-1">@(Model.CreatedByUser?.FirstName ?? "Anonim Kullanıcı")</h5>
+                    <p class="text-muted small">İlan Sahibi</p>
+                </div>
+
+                <hr />
+
+                @if (isOwner)
+                {
+                    <div class="alert alert-info text-center rounded-3 border-0 mt-3">
+                        Bu ilan size ait.
+                    </div>
+                }
+                else if (myBid != null)
+                {
+                    <h6 class="fw-bold text-success mb-3"><i class="bi bi-check-circle me-1"></i> Teklif Verdiniz</h6>
+                    <div class="bg-light p-3 rounded-3 mb-3">
+                        <div class="small text-muted mb-1">Teklifiniz:</div>
+                        <strong class="d-block mb-2">@myBid.OfferedPrice.ToString("N0") ₺</strong>
+                        <div class="small text-muted mb-1">Mesajınız:</div>
+                        <p class="small mb-0 fst-italic">@myBid.Message</p>
+                    </div>
+                }
+                else
+                {
+                    <h5 class="fw-bold mb-3">Teklif Ver</h5>
+                    <form asp-action="SubmitBid" method="post">
+                        <input type="hidden" name="jobId" value="@Model.Id" />
+                        
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Fiyat Teklifiniz (₺)</label>
+                            <input type="number" name="offeredPrice" class="form-control rounded-3" required placeholder="0.00" />
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Mesajınız</label>
+                            <textarea name="message" class="form-control rounded-3" rows="4" required placeholder="Kaç günde bitirirsiniz? Malzeme dahil mi?"></textarea>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary w-100 rounded-pill">Gönder</button>
+                    </form>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+

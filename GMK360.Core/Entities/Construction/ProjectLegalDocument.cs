@@ -30,6 +30,8 @@ namespace GMK360.Core.Entities.Construction
         public string? InstitutionPhone { get; set; } // Istihbarat RFQ asamasina tasinacak ama veritabaninda kalabilir
         public string? InstitutionContact { get; set; } // YENI: Kurum Ici Ilgili / Tanidik / Memur Adi
         
+        public DateTime? ExpiryDate { get; set; }
         public bool IsCustom { get; set; } // Globalde olmayan, firmanin kendi ekledigi evrak mi?
     }
 }
+

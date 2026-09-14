@@ -1,0 +1,210 @@
+﻿@model IEnumerable<GMK360.Core.Entities.B2B.B2BQuoteRequest>
+@{
+    ViewData["Title"] = "B2B Satın Alma ve İhaleler";
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml"; // Construction layout since it's closely tied, or standard Dashboard layout.
+}
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle me-2"></i> @TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle me-2"></i> @TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-cart4 text-primary me-2"></i>Satın Alma & İhaleler (B2B)</h3>
+        <p class="text-muted small mb-0">Malzeme alımları, kiralama talepleri ve tedarikçi teklifleri</p>
+    </div>
+    <div>
+        <button class="btn btn-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#newQuoteModal">
+            <i class="bi bi-plus-lg me-1"></i> Yeni Teklif/Alım İste
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow-sm border-0">
+            <div class="card-body">
+                @if (!Model.Any())
+                {
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                        <h5>Henüz Hiç Alım Emri/İhale Yok</h5>
+                        <p>Şantiyeleriniz veya kiralama ihtiyaçlarınız için hemen yeni bir alım talebi oluşturun.</p>
+                        <button class="btn btn-outline-primary mt-2" data-bs-toggle="modal" data-bs-target="#newQuoteModal">İlk Alım Talebini Aç</button>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#ID</th>
+                                    <th>Talep Başlığı</th>
+                                    <th>Son Tarih</th>
+                                    <th>Durum</th>
+                                    
+                                    <th>İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in Model)
+                                {
+                                    <tr>
+                                        <td><span class="badge bg-light text-dark border">#@item.Id</span></td>
+                                        <td class="fw-bold">
+                                            @item.Title
+                                            <br>
+                                            <small class="text-muted fw-normal">@item.CreatedAt.ToString("dd MMM yyyy")</small>
+                                        </td>
+                                        <td>
+                                            @if(true) {
+                                                <span class="text-@(item.Deadline < DateTime.UtcNow ? "danger" : "dark")">
+                                                    <i class="bi bi-clock"></i> @item.Deadline.ToString("dd MMM yyyy")
+                                                </span>
+                                            } else {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if(item.Status == "Draft") { <span class="text-secondary fw-bold">Taslak</span> }
+                                            else if(item.Status == "Published") { <span class="text-primary fw-bold">Yayında (Teklif Bekliyor)</span> }
+                                            else if(item.Status == "Completed") { <span class="text-success fw-bold">Bitti (Alım Onaylandı)</span> }
+                                            else { <span class="badge bg-dark">@item.Status</span> }
+                                        </td>
+                                        
+                                        <td>
+                                            <a href="/B2BPurchasing/Details/@item.Id" class="btn btn-sm btn-light border"><i class="bi bi-eye"></i> Detay</a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Yeni Teklif -->
+<div class="modal fade" id="newQuoteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Yeni Alım Emri / Teklif İsteği</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="/B2BPurchasing/CreateQuote">
+                @Html.AntiForgeryToken()
+                                                                                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Alım Başlığı (Opsiyonel)</label>
+                        <input type="text" name="title" class="form-control" placeholder="Örn: A Blok Elektrik Malzemeleri (Boş bırakılırsa otomatik oluşur)" />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Son Teklif Verme Tarihi <span class="text-danger">*</span></label>
+                        <input type="date" name="deadline" class="form-control" required />
+                    </div>
+
+                    <hr />
+                    <h6 class="fw-bold mb-3">İstenilen Malzemeler</h6>
+                    <div id="materialRowsContainer">
+                        <div class="row mb-2 material-row">
+                            <div class="col-md-7">
+                                <select name="materialCatalogIds" class="form-select select2-material" required>
+                                    <option value="">-- Katalogdan Malzeme Seçin --</option>
+                                    @if (ViewBag.Catalogs != null)
+                                    {
+                                        foreach(var cat in (IEnumerable<GMK360.Core.Entities.Construction.MaterialCatalog>)ViewBag.Catalogs)
+                                        {
+                                            <option value="@cat.Id">@cat.Name (@cat.DefaultUnit)</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <input type="number" step="0.01" name="quantities" class="form-control" placeholder="Miktar" required />
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-outline-danger w-100 remove-row-btn" disabled><i class="bi bi-trash"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="addMaterialRowBtn" onclick="addMaterialRow()">
+                            <i class="bi bi-plus-circle me-1"></i> Yeni Kalem Ekle
+                        </button>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Genel Açıklama (Opsiyonel)</label>
+                        <textarea name="description" class="form-control" rows="2" placeholder="Tedarikçilere iletilecek genel notlar..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary">Taslağı Oluştur</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+
+
+
+
+
+<script>
+    function addMaterialRow() {
+        var container = document.getElementById('materialRowsContainer');
+        var rows = container.getElementsByClassName('material-row');
+        if (rows.length > 0) {
+            var newRow = rows[0].cloneNode(true);
+            
+            // clear inputs
+            var inputs = newRow.getElementsByTagName('input');
+            for(var i=0; i<inputs.length; i++) {
+                inputs[i].value = '';
+            }
+            
+            var selects = newRow.getElementsByTagName('select');
+            for(var i=0; i<selects.length; i++) {
+                selects[i].value = '';
+            }
+            
+            var btns = newRow.getElementsByClassName('remove-row-btn');
+            for(var i=0; i<btns.length; i++) {
+                btns[i].removeAttribute('disabled');
+                btns[i].setAttribute('onclick', 'removeMaterialRow(this)');
+            }
+            
+            container.appendChild(newRow);
+        }
+    }
+
+    function removeMaterialRow(btn) {
+        var container = document.getElementById('materialRowsContainer');
+        var rows = container.getElementsByClassName('material-row');
+        if (rows.length > 1) {
+            btn.closest('.material-row').remove();
+        }
+    }
+</script>
+
+
+

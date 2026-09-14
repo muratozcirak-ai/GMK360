@@ -1,0 +1,270 @@
+﻿@model GMK360.Core.Entities.AgencyConsultant
+@{
+    ViewData["Title"] = "Personel Detayı - " + Model.User.FirstName + " " + Model.User.LastName;
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+    
+    var payrolls = ViewBag.Payrolls as IEnumerable<GMK360.Core.Entities.Finance.AgencyStaffPayroll>;
+    var advances = ViewBag.Advances as IEnumerable<GMK360.Core.Entities.Finance.AgencyStaffAdvance>;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <a href="/AgencyStaff/Index" class="text-decoration-none mb-2 d-inline-block"><i class="bi bi-arrow-left me-1"></i> Personel Listesine Dön</a>
+        <h2 class="h4 mb-1">Personel Detayı: @Model.User.FirstName @Model.User.LastName</h2>
+        <p class="text-muted mb-0"><i class="bi bi-person-badge me-1"></i> Rol: @Model.Role.ToString() | Durum: @(Model.IsActive ? "Aktif" : "Ayrıldı")</p>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> @TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white border-bottom-0 pt-4 pb-0">
+        <ul class="nav nav-tabs card-header-tabs" id="staffTabs" role="tablist">
+            <li class="nav-item">
+                <a class="nav-link active" id="profile-tab" data-bs-toggle="tab" href="#profile" role="tab" aria-controls="profile" aria-selected="true">
+                    <i class="bi bi-person-lines-fill me-1"></i> Temel Bilgiler
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="finance-tab" data-bs-toggle="tab" href="#finance" role="tab" aria-controls="finance" aria-selected="false">
+                    <i class="bi bi-wallet2 me-1"></i> Finans & Maaş
+                </a>
+            </li>
+        </ul>
+    </div>
+    <div class="card-body p-4">
+        <div class="tab-content" id="staffTabsContent">
+            
+            <!-- Profil Sekmesi -->
+            <div class="tab-pane fade show active" id="profile" role="tabpanel" aria-labelledby="profile-tab">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label text-muted small">Ad Soyad</label>
+                        <div class="fw-bold">@Model.User.FirstName @Model.User.LastName</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label text-muted small">E-Posta</label>
+                        <div class="fw-bold">@Model.User.Email</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label text-muted small">Telefon</label>
+                        <div class="fw-bold">@(string.IsNullOrEmpty(Model.User.PhoneNumber) ? "-" : Model.User.PhoneNumber)</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label text-muted small">İşe Başlama Tarihi</label>
+                        <div class="fw-bold">@Model.StartDate.ToString("dd.MM.yyyy")</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Finans & Maaş Sekmesi -->
+            <div class="tab-pane fade" id="finance" role="tabpanel" aria-labelledby="finance-tab">
+                
+                <form asp-action="UpdateFinance" method="post" class="mb-4 bg-light p-3 rounded border">
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <h6 class="mb-3 text-primary"><i class="bi bi-pencil-square me-1"></i> Maaş ve Banka Bilgilerini Güncelle</h6>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Aylık Net Maaş (₺)</label>
+                            <input type="number" step="0.01" name="monthlySalary" class="form-control form-control-sm" value="@Model.MonthlySalary.ToString("0.00")" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">IBAN</label>
+                            <input type="text" name="iban" class="form-control form-control-sm" value="@Model.IBAN" placeholder="TR..." />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">TC Kimlik / Pasaport</label>
+                            <input type="text" name="identityNumber" class="form-control form-control-sm" value="@Model.IdentityNumber" />
+                        </div>
+                        <div class="col-12 text-end mt-3">
+                            <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-save me-1"></i> Kaydet</button>
+                        </div>
+                    </div>
+                </form>
+
+                <div class="row">
+                    <!-- AVANS GECMISI -->
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold mb-0">Avans Geçmişi</h6>
+                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#advanceModal">
+                                <i class="bi bi-plus-circle me-1"></i> Yeni Avans Talebi
+                            </button>
+                        </div>
+                        
+                        @if (advances != null && advances.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover border align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Tarih</th>
+                                            <th>Tutar</th>
+                                            <th>Durum</th>
+                                            <th>İşlem</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var adv in advances)
+                                        {
+                                            <tr>
+                                                <td>@adv.RequestDate.ToString("dd.MM.yyyy")</td>
+                                                <td class="fw-bold">₺ @adv.Amount.ToString("N2")</td>
+                                                <td>
+                                                    @if (adv.Status == GMK360.Core.Entities.Finance.AdvanceStatus.Pending)
+                                                    {
+                                                        <span class="badge bg-warning text-dark">Bekliyor</span>
+                                                    }
+                                                    else if (adv.Status == GMK360.Core.Entities.Finance.AdvanceStatus.Approved)
+                                                    {
+                                                        <span class="badge bg-primary">Onaylandı</span>
+                                                    }
+                                                    else if (adv.Status == GMK360.Core.Entities.Finance.AdvanceStatus.Paid)
+                                                    {
+                                                        <span class="badge bg-success">Maaştan Kesildi</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-danger">Red</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if(adv.Status == GMK360.Core.Entities.Finance.AdvanceStatus.Pending)
+                                                    {
+                                                        <form action="/AgencyStaffFinance/ApproveAdvance" method="post" class="d-inline">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="advanceId" value="@adv.Id" />
+                                                            <button type="submit" class="btn btn-xs btn-success py-0 px-2" style="font-size: 0.7rem;">Onayla</button>
+                                                        </form>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-secondary small text-center py-2">Henüz avans kaydı bulunmuyor.</div>
+                        }
+                    </div>
+
+                    <!-- MAAS BORDROLARI -->
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold mb-0">Maaş Bordroları</h6>
+                            <!-- Toplu Bordro Testi İcin Modal Aç -->
+                            <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#payrollModal">
+                                <i class="bi bi-gear-fill me-1"></i> Toplu Tahakkuk
+                            </button>
+                        </div>
+                        
+                        @if (payrolls != null && payrolls.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover border">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Dönem</th>
+                                            <th>Net Ödenecek</th>
+                                            <th>Durum</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var pay in payrolls)
+                                        {
+                                            <tr>
+                                                <td><i class="bi bi-calendar-event me-1 text-muted"></i> @pay.Period</td>
+                                                <td class="fw-bold text-success">
+                                                    ₺ @pay.NetPayableAmount.ToString("N2")
+                                                    @if(pay.DeductionAmount > 0)
+                                                    {
+                                                        <br/><small class="text-danger fw-normal">(- @pay.DeductionAmount.ToString("N2") Avans Kesintisi)</small>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (pay.IsPaid)
+                                                    {
+                                                        <span class="badge bg-success"><i class="bi bi-check"></i> Ödendi</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-danger">Ödeme Bekliyor</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-secondary small text-center py-2">Henüz maaş bordrosu oluşturulmamış.</div>
+                        }
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Yeni Avans Modalı -->
+<div class="modal fade" id="advanceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form action="/AgencyStaffFinance/RequestAdvance" method="post" class="modal-content">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="consultantId" value="@Model.Id" />
+            <div class="modal-header">
+                <h5 class="modal-title">Yeni Avans Talebi</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Tutar (₺)</label>
+                    <input type="number" step="0.01" name="amount" class="form-control" required />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Açıklama</label>
+                    <textarea name="description" class="form-control" rows="2" placeholder="Örn: Ev taşıma masrafı..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-primary">Talep Et</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Toplu Maaş Tahakkuku Modalı -->
+<div class="modal fade" id="payrollModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form action="/AgencyStaffFinance/GenerateMonthlyPayroll" method="post" class="modal-content">
+            @Html.AntiForgeryToken()
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">Tüm Personele Maaş Tahakkuku Yap</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">Bu işlem, maaşı sisteme girilmiş <strong>TÜM AKTİF BEYAZ YAKA PERSONELİN</strong> o ayki bordrosunu oluşturur ve onaylanmış avanslarını otomatik olarak keser.</p>
+                <div class="mb-3">
+                    <label class="form-label">Dönem (Yıl-Ay)</label>
+                    <input type="text" name="period" class="form-control" value="@DateTime.Now.ToString("yyyy-MM")" required />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-success"><i class="bi bi-gear-fill me-1"></i> Bordroları Oluştur</button>
+            </div>
+        </form>
+    </div>
+</div>

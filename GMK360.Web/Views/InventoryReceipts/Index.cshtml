@@ -1,0 +1,355 @@
+@model IEnumerable<GMK360.Core.Entities.Construction.InventoryReceipt>
+@{
+    ViewData["Title"] = "Aktif Siparişler & Mal Kabul";
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="h4 mb-1">Aktif Siparişler & Mal Kabul</h2>
+        <p class="text-muted mb-0">Tedarikçiye verilen siparişler ve şantiye teslimat (Mal Kabul) işlemleri</p>
+    </div>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newReceiptModal">
+        <i class="bi bi-plus-lg me-2"></i> Yeni İrsaliye (Mal Kabul)
+    </button>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> @TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">İrsaliye No</th>
+                        <th>Tedarikçi</th>
+                        <th>Teslim Yeri</th>
+                        <th>Sorumlu Personel</th>
+                        <th>Tarih</th>
+                        <th>Kalem Sayısı</th>
+                        <th>Durum</th>
+                        <th class="text-end pe-4">İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var receipt in Model)
+                    {
+                        <tr>
+                            <td class="ps-4 fw-bold">@receipt.DocumentNumber</td>
+                            <td>@receipt.SupplierName</td>
+                            <td>
+                                @if (receipt.Warehouse != null)
+                                {
+                                    if (receipt.Warehouse.Type == GMK360.Core.Entities.Construction.WarehouseType.Santiye)
+                                    {
+                                        <span class="text-warning fw-bold"><i class="bi bi-cone-striped me-1"></i> @receipt.Warehouse.Name</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-primary fw-bold"><i class="bi bi-building-fill me-1"></i> @receipt.Warehouse.Name</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-danger fw-bold"><i class="bi bi-exclamation-circle me-1"></i> Depo Atanmamış</span>
+                                }
+                            </td>
+                            <td>
+                                @if (receipt.AssignedUser != null)
+                                {
+                                    <span class="text-info fw-bold"><i class="bi bi-person-badge me-1"></i> @receipt.AssignedUser.DisplayName</span>
+                                }
+                                else
+                                {
+                                    <span class="text-secondary fw-bold"><i class="bi bi-person-x me-1"></i> Atanmamış</span>
+                                }
+                            </td>
+                            <td>@receipt.ReceiptDate.ToString("dd.MM.yyyy")</td>
+                            <td>
+                                <span class="text-secondary fw-bold">@(receipt.Items != null ? receipt.Items.Count : 0) Kalem</span>
+                            </td>
+                            <td>
+                                @if (receipt.Status == "Approved")
+                                {
+                                    <span class="text-success fw-bold"><i class="bi bi-check2-all me-1"></i> Stoğa İşlendi</span>
+                                }
+                                else
+                                {
+                                    <span class="text-secondary fw-bold"><i class="bi bi-truck me-1"></i> Yolda / Bekliyor</span>
+                                }
+                            </td>
+                            <td class="text-end pe-4">
+                                <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#details-@receipt.Id">
+                                    Detay
+                                </button>
+                                @if (receipt.Status != "Approved")
+                                {
+                                    <form asp-action="Approve" asp-route-id="@receipt.Id" method="post" class="d-inline" onsubmit="return confirm('Bu irsaliyedeki ürünler kalıcı olarak şantiye stoğuna eklenecektir. Onaylıyor musunuz?');">
+                                        <button type="submit" class="btn btn-sm btn-success">
+                                            <i class="bi bi-box-arrow-in-down me-1"></i> Kabul Et
+                                        </button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                        <tr class="collapse" id="details-@receipt.Id">
+                            <td colspan="8" class="p-0 border-0">
+                                <div class="bg-light p-4 border-bottom">
+                                    <div class="row">
+                                        <div class="col-md-8">
+                                            <table class="table table-sm table-bordered bg-white mb-0">
+                                                <thead class="table-secondary">
+                                                    <tr>
+                                                        <th>Malzeme</th>
+                                                        <th>Birim</th>
+                                                        <th class="text-end">Miktar</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @if(receipt.Items != null)
+                                                    {
+                                                        foreach (var item in receipt.Items)
+                                                        {
+                                                            <tr>
+                                                                <td>@(item.MaterialCatalog != null ? item.MaterialCatalog.Name : "Bilinmeyen")</td>
+                                                                <td>@(item.MaterialCatalog != null ? item.MaterialCatalog.DefaultUnit : "")</td>
+                                                                <td class="text-end fw-bold">@item.Quantity.ToString("0.##")</td>
+                                                            </tr>
+                                                        }
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="card border-0 shadow-sm">
+                                                <div class="card-body py-2">
+                                                    <small class="text-muted d-block">Teslim Alan Notu:</small>
+                                                    <span>@(string.IsNullOrEmpty(receipt.Notes) ? "Not girilmemiş." : receipt.Notes)</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    @if (!Model.Any())
+                    {
+                        <tr>
+                            <td colspan="8" class="text-center py-4 text-muted">
+                                Henüz hiç mal kabul işlemi / irsaliye kaydı bulunmuyor.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Yeni İrsaliye Modal -->
+<div class="modal fade" id="newReceiptModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white border-0">
+                <h5 class="modal-title"><i class="bi bi-truck me-2"></i> Yeni İrsaliye (Mal Kabul)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="Create" method="post">
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Teslim Yeri (Depo / Şantiye) <span class="text-danger">*</span></label>
+                            <select name="warehouseId" class="form-select" required>
+                                <option value="">-- Şantiye Seçin --</option>
+                                @if (ViewBag.Warehouses != null)
+                                {
+                                    foreach(var wh in (IEnumerable<GMK360.Core.Entities.Construction.Warehouse>)ViewBag.Warehouses)
+                                    {
+                                        <option value="@wh.Id">@wh.Name (@(wh.Type == GMK360.Core.Entities.Construction.WarehouseType.Santiye ? "Şantiye" : "Merkez"))</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Tedarikçi / Cari Hesap <span class="text-danger">*</span></label>
+                            <select name="supplierCurrentAccountId" class="form-select" required>
+                                <option value="">-- Cari Hesap Seçin --</option>
+                                @if (ViewBag.SupplierAccounts != null)
+                                {
+                                    foreach(var acc in (IEnumerable<GMK360.Core.Entities.Finance.SupplierCurrentAccount>)ViewBag.SupplierAccounts)
+                                    {
+                                        <option value="@acc.Id">@acc.PhonebookContact.Name</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-12 mb-3">
+                            <label class="form-label fw-bold">Sorumlu Personel (Teslim Alacak Kişi) <span class="text-danger">*</span></label>
+                            <select name="assignedUserId" class="form-select" required>
+                                <option value="">-- Personel Seçin --</option>
+                                @if (ViewBag.Consultants != null)
+                                {
+                                    foreach(var cons in (IEnumerable<GMK360.Core.Entities.AgencyConsultant>)ViewBag.Consultants)
+                                    {
+                                        <option value="@cons.UserId">@cons.User.DisplayName</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                                        </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">�rsaliye / Fatura No <span class="text-danger">*</span></label>
+                            <input type="text" name="documentNumber" class="form-control" placeholder="�rn: IRS-2026-001" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Teslimat Tarihi <span class="text-danger">*</span></label>
+                            <input type="date" name="receiptDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3 bg-light p-3 rounded-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">�deme Y�ntemi</label>
+                            <select name="paymentMethod" class="form-select">
+                                <option value="">-- Se�iniz (Finansa ��lenir) --</option>
+                                <option value="Cash">Pe�in �dendi (Nakit)</option>
+                                <option value="CreditCard">Kredi Kart�</option>
+                                <option value="BankTransfer">Havale/EFT Yap�ld�</option>
+                                <option value="OpenAccount">A��k Hesap (Sonra �denecek)</option>
+                                <option value="Check">�ek Verildi</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Vade / �deme Tarihi</label>
+                            <input type="date" name="dueDate" class="form-control" />
+                        </div>
+                    </div>
+
+                    <hr />
+                    <h6 class="fw-bold mb-3 text-primary">Gelen Malzemeler (Kalemler)</h6>
+                    <div id="receiptRowsContainer">
+                        <div class="row mb-2 receipt-row">
+                            <div class="col-md-7">
+                                <select name="materialCatalogIds" class="form-select select2-material" required>
+                                    <option value="">-- Katalogdan Malzeme Seçin --</option>
+                                    @if (ViewBag.Catalogs != null)
+                                    {
+                                        foreach(var cat in (IEnumerable<GMK360.Core.Entities.Construction.MaterialCatalog>)ViewBag.Catalogs)
+                                        {
+                                            <option value="@cat.Id">@cat.Name (@cat.DefaultUnit)</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <input type="number" step="0.01" name="quantities" class="form-control" placeholder="Miktar" required />
+                            </div>
+                            <div class="col-md-2">
+                                <input type="number" step="0.01" name="unitPrices" class="form-control" placeholder="B.Fiyat (Opsiyonel)" />
+                            </div>
+                            <div class="col-md-1">
+                                <button type="button" class="btn btn-outline-danger w-100 remove-row-btn" disabled><i class="bi bi-trash"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addReceiptRow()">
+                            <i class="bi bi-plus-circle me-1"></i> Yeni Satır Ekle
+                        </button>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Notlar / Eksikler (Opsiyonel)</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="Teslim alırken fark edilen kırık, eksik veya hatalı ürünleri buraya not düşebilirsiniz..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i> İrsaliyeyi Kaydet (Taslak)</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+        function initSelect2() {
+            $('.select2-material').select2({
+                dropdownParent: $('#newReceiptModal'),
+                placeholder: "-- Katalogdan Malzeme Seçin --",
+                width: '100%'
+            });
+        }
+
+        $(document).ready(function() {
+            initSelect2();
+        });
+
+        function addReceiptRow() {
+            $('.select2-material').select2('destroy');
+
+            var container = document.getElementById('receiptRowsContainer');
+            var rows = container.getElementsByClassName('receipt-row');
+            if (rows.length > 0) {
+                var newRow = rows[0].cloneNode(true);
+                
+                var inputs = newRow.getElementsByTagName('input');
+                for(var i=0; i<inputs.length; i++) inputs[i].value = '';
+                
+                var selects = newRow.getElementsByTagName('select');
+                for(var i=0; i<selects.length; i++) selects[i].value = '';
+                
+                var btns = newRow.getElementsByClassName('remove-row-btn');
+                for(var i=0; i<btns.length; i++) {
+                    btns[i].removeAttribute('disabled');
+                    btns[i].setAttribute('onclick', 'removeReceiptRow(this)');
+                }
+                
+                container.appendChild(newRow);
+            }
+            
+            initSelect2();
+        }
+
+        function removeReceiptRow(btn) {
+            var container = document.getElementById('receiptRowsContainer');
+            var rows = container.getElementsByClassName('receipt-row');
+            if (rows.length > 1) {
+                btn.closest('.receipt-row').remove();
+            }
+        }
+    </script>
+}
+
+
+
+
+
+
+
+
+

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.AspNetCore.Routing;
 using System.Threading.Tasks;
@@ -15,7 +15,7 @@ namespace GMK360.Web.Routing
             }
 
             var city = cityObj?.ToString();
-            var knownControllers = new[] { "DigitalHome", "Admin", "Home", "Property", "Account", "Subscription", "Blog", "AgencyStore", "Auth", "ConstructionProject", "BuildingManager", "CustomerDashboard", "Usta" };
+            var knownControllers = new[] { "Account", "Admin", "AdminCRM", "AdminFinance", "AdminLegalDocument", "AdminLocation", "AdminSeo", "AdminTeam", "AgencyStore", "AgencyWorkers", "Agreement", "AiAssistant", "B2BPurchasing", "Blog", "BuildingManager", "Campaign", "Commission", "ConstructionProject", "Contact", "Contract", "Crm", "CustomerDashboard", "CustomerPortal", "DailyRentalAgenda", "DailyRental", "DailyTimesheets", "Dashboard", "Definition", "DigitalHome", "DocumentArchive", "Export", "FeatureManager", "Financial", "Home", "Inventory", "InventoryReceipts", "Location", "MaterialList", "Meeting", "Message", "MobileTask", "Notifications", "Offer", "Payment", "PhaseWorkerDemands", "Profile", "ProjectMaterial", "Property", "Pwa", "Realtor", "Reservation", "ResidentPortal", "Sandbox", "Search", "Seed", "Service", "ServiceProvider", "Sitemap", "Solutions", "SupplierCurrentAccounts", "TaxAssistant", "Usta", "Valuation", "Wallet", "Auth", "Subscription" };;
             if (city != null && knownControllers.Contains(city, System.StringComparer.OrdinalIgnoreCase))
             {
                 return ValueTask.FromResult(values);
@@ -51,3 +51,5 @@ namespace GMK360.Web.Routing
         }
     }
 }
+
+

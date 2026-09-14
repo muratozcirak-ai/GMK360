@@ -1,0 +1,180 @@
+@model IEnumerable<GMK360.Core.Entities.Construction.AgencyWorker>
+@{
+    ViewData["Title"] = "Usta Havuzu (Mavi Yaka)";
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="h4 mb-1">Usta Havuzu (Mavi Yaka)</h2>
+        <p class="text-muted mb-0">Þirketiniz bünyesindeki tüm ustalar, kalfalar ve mavi yaka çalýþan havuzunuz.</p>
+    </div>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newWorkerModal">
+        <i class="bi bi-person-plus-fill me-2"></i> Yeni Ýþçi / Usta Ekle
+    </button>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> @TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Ad Soyad</th>
+                        <th>TC / Pasaport</th>
+                        <th>Meslek / Uzmanlýk</th>
+                        <th>Çalýþma Tipi</th>
+                        <th>Taþeron Firma</th>
+                        <th>Standart Yevmiye</th>
+                        <th class="text-end pe-4">Ýþlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var worker in Model)
+                    {
+                        <tr>
+                            <td class="ps-4 fw-bold">@worker.FullName</td>
+                            <td>@(string.IsNullOrEmpty(worker.IdentityNumber) ? "-" : worker.IdentityNumber)</td>
+                            <td><span class="badge bg-info text-dark">@worker.Profession</span></td>
+                            <td>
+                                @if(worker.WorkerType == "Taþeron")
+                                {
+                                    <span class="badge bg-secondary">Taþeron Elemaný</span>
+                                }
+                                else if(worker.WorkerType == "Yevmiyeci")
+                                {
+                                    <span class="badge bg-warning text-dark">Günlük Yevmiyeci</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-primary">Firma Personeli</span>
+                                }
+                            </td>
+                            <td>@(string.IsNullOrEmpty(worker.SubcontractorName) ? "-" : worker.SubcontractorName)</td>
+                            <td class="fw-bold text-success">@worker.DefaultDailyWage.ToString("C2")</td>
+                            <td class="text-end pe-4">
+                                <a asp-action="Details" asp-route-id="@worker.Id" class="btn btn-sm btn-outline-info rounded-pill px-3 me-2"><i class="bi bi-wallet2 me-1"></i> Cari & Avans Kartý</a>
+                                            <form asp-action="Delete" asp-route-id="@worker.Id" method="post" class="d-inline" onsubmit="return confirm('Bu personeli havuzdan çýkarmak istediðinize emin misiniz? (Geçmiþ puantajlarý silinmez)');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    @if (!Model.Any())
+                    {
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">
+                                Henüz iþçi havuzuna kimse eklenmemiþ.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Yeni Ýþçi Modal -->
+<div class="modal fade" id="newWorkerModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white border-0">
+                <h5 class="modal-title"><i class="bi bi-person-plus-fill me-2"></i> Yeni Ýþçi / Usta Kaydý</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="Create" method="post">
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Ad <span class="text-danger">*</span></label>
+                            <input type="text" name="FirstName" class="form-control" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Soyad <span class="text-danger">*</span></label>
+                            <input type="text" name="LastName" class="form-control" required />
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">TC Kimlik No (Opsiyonel)</label>
+                            <input type="text" name="IdentityNumber" class="form-control" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Telefon Numarasý</label>
+                            <input type="text" name="PhoneNumber" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Meslek / Uzmanlýk <span class="text-danger">*</span></label>
+                            <select name="Profession" class="form-select" required>
+                                <option value="">-- Seçiniz --</option>
+                                <option value="Düz Ýþçi">Düz Ýþçi</option>
+                                <option value="Kalýp Ustasý">Kalýp Ustasý</option>
+                                <option value="Demir Ustasý">Demir Ustasý</option>
+                                <option value="Duvar Ustasý">Duvar Ustasý</option>
+                                <option value="Elektrik Ustasý">Elektrik Ustasý</option>
+                                <option value="Tesisat Ustasý">Tesisat Ustasý</option>
+                                <option value="Boya/Sýva Ustasý">Boya/Sýva Ustasý</option>
+                                <option value="Operatör (Kepçe/Vinç)">Operatör (Kepçe/Vinç)</option>
+                                <option value="Þoför">Þoför</option>
+                                <option value="Formen">Formen</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Çalýþma Tipi <span class="text-danger">*</span></label>
+                            <select name="WorkerType" class="form-select" id="workerTypeSelect" onchange="toggleSubcontractor()" required>
+                                <option value="Firma Personeli">Firma (Kendi) Personelimiz</option>
+                                <option value="Yevmiyeci">Günlük Yevmiyeci (Serbest)</option>
+                                <option value="Taþeron">Taþeron Elemaný</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6" id="subcontractorDiv" style="display:none;">
+                            <label class="form-label fw-bold">Taþeron Firma Adý <span class="text-danger">*</span></label>
+                            <input type="text" name="SubcontractorName" class="form-control" id="subcontractorInput" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Standart Günlük Yevmiye (?) <span class="text-danger">*</span></label>
+                            <input type="number" step="0.01" name="DefaultDailyWage" class="form-control" required />
+                            <small class="text-muted">Puantaj girilirken varsayýlan olarak bu tutar gelir, sonradan deðiþtirilebilir.</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Ýptal</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i> Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function toggleSubcontractor() {
+        var type = document.getElementById('workerTypeSelect').value;
+        var div = document.getElementById('subcontractorDiv');
+        var input = document.getElementById('subcontractorInput');
+        
+        if (type === 'Taþeron') {
+            div.style.display = 'block';
+            input.setAttribute('required', 'required');
+        } else {
+            div.style.display = 'none';
+            input.removeAttribute('required');
+            input.value = '';
+        }
+    }
+</script>
+
+
+

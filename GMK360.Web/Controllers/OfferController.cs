@@ -1,89 +1,84 @@
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
-using GMK360.Data.Contexts;
-using GMK360.Core.Entities;
-using GMK360.Core.Entities.Identity;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using GMK360.Data.Contexts;
+using GMK360.Core.Entities.B2B;
 
 namespace GMK360.Web.Controllers
 {
-    [Authorize]
     public class OfferController : Controller
     {
         private readonly ApplicationDbContext _context;
-        private readonly UserManager<ApplicationUser> _userManager;
 
-        public OfferController(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
+        public OfferController(ApplicationDbContext context)
         {
             _context = context;
-            _userManager = userManager;
         }
 
-        public async Task<IActionResult> Inbox()
+        [HttpGet]
+        public async Task<IActionResult> Submit(int id)
         {
-            var user = await _userManager.GetUserAsync(User);
-            // Gelen teklifler (İlanın sahibi olduğum)
-            var receivedOffers = await _context.Offers
-                                         .Include(o => o.Property)
-                                         .Include(o => o.Buyer)
-                                         .Where(o => o.SellerId == user.Id)
-                                         .OrderByDescending(o => o.CreatedAt)
-                                         .ToListAsync();
+            var invite = await _context.B2BQuoteInvites
+                .Include(i => i.NetworkContact)
+                .Include(i => i.QuoteRequest)
+                    .ThenInclude(qr => qr.RequesterAgency)
+                .Include(i => i.QuoteRequest)
+                    .ThenInclude(qr => qr.Items)
+                        .ThenInclude(item => item.MaterialCatalog)
+                .Include(i => i.InviteItems)
+                .FirstOrDefaultAsync(i => i.Id == id);
 
-            ViewBag.SentOffers = await _context.Offers
-                                         .Include(o => o.Property)
-                                         .Include(o => o.Seller)
-                                         .Where(o => o.BuyerId == user.Id)
-                                         .OrderByDescending(o => o.CreatedAt)
-                                         .ToListAsync();
+            if (invite == null) return NotFound();
 
-            return View(receivedOffers);
+            return View(invite);
         }
 
         [HttpPost]
-        public async Task<IActionResult> MakeOffer(int propertyId, decimal offeredPrice)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SubmitPrice(int id, decimal[] unitPrices, int[] itemIds, bool isVatIncluded, string offerNotes)
         {
-            var buyer = await _userManager.GetUserAsync(User);
-            var property = await _context.Properties.FindAsync(propertyId);
+            var invite = await _context.B2BQuoteInvites
+                .Include(i => i.QuoteRequest)
+                    .ThenInclude(qr => qr.Items)
+                .FirstOrDefaultAsync(i => i.Id == id);
+                
+            if (invite == null) return NotFound();
 
-            if (property == null || buyer.Id == property.UserId)
+            decimal grandTotal = 0;
+
+            for (int i = 0; i < itemIds.Length; i++)
             {
-                // Kendi ilanına teklif veremez
-                return RedirectToAction("Detail", "Property", new { id = propertyId });
+                var reqItem = invite.QuoteRequest.Items.FirstOrDefault(qi => qi.Id == itemIds[i]);
+                if (reqItem != null)
+                {
+                    var price = unitPrices[i];
+                    grandTotal += (price * reqItem.Quantity);
+
+                    var inviteItem = new B2BQuoteInviteItem
+                    {
+                        B2BQuoteInviteId = invite.Id,
+                        B2BQuoteItemId = reqItem.Id,
+                        OfferedUnitPrice = price,
+                        IsVatIncluded = isVatIncluded,
+                        VatRate = 20
+                    };
+                    _context.B2BQuoteInviteItems.Add(inviteItem);
+                }
             }
 
-            var offer = new Offer
-            {
-                PropertyId = propertyId,
-                BuyerId = buyer.Id,
-                SellerId = property.UserId,
-                OfferedPrice = offeredPrice,
-                Status = OfferStatus.Pending
-            };
+            invite.OfferedPrice = grandTotal;
+            invite.IsVatIncludedGlobally = isVatIncluded;
+            invite.OfferNotes = offerNotes ?? "";
+            invite.Status = QuoteInviteStatus.Submitted;
+            invite.RespondedAt = DateTime.UtcNow;
 
-            _context.Offers.Add(offer);
             await _context.SaveChangesAsync();
 
-            TempData["Success"] = "Teklifiniz başarıyla satıcıya iletildi.";
-            return RedirectToAction("Detail", "Property", new { id = propertyId });
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> UpdateStatus(int offerId, OfferStatus status)
-        {
-            var user = await _userManager.GetUserAsync(User);
-            var offer = await _context.Offers.FindAsync(offerId);
-
-            if (offer != null && offer.SellerId == user.Id)
-            {
-                offer.Status = status;
-                await _context.SaveChangesAsync();
-            }
-
-            return RedirectToAction(nameof(Inbox));
+            TempData["SuccessMessage"] = "Teklifiniz başarıyla iletildi! Teşekkür ederiz.";
+            return RedirectToAction("Submit", new { id = id });
         }
     }
 }
+

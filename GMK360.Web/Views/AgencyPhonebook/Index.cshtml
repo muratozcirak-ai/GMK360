@@ -1,0 +1,155 @@
+﻿@model IEnumerable<GMK360.Core.Entities.Construction.AgencyPhonebook>
+
+@{
+    ViewData["Title"] = "Firma & Usta Rehberi";
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+    int activeFilter = ViewBag.ActiveFilter ?? 0;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold"><i class="bi bi-book text-primary me-2"></i> Firma & Usta Rehberi</h2>
+    <button class="btn btn-primary shadow-sm rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#addContactModal">
+        <i class="bi bi-person-plus-fill me-2"></i> Yeni Kişi/Firma Ekle
+    </button>
+</div>
+
+<!-- Filtreler -->
+<div class="nav nav-pills nav-fill bg-white p-2 rounded-pill shadow-sm mb-4">
+    <a href="/AgencyPhonebook/Index" class="nav-link rounded-pill fw-bold @(activeFilter == 0 ? "active" : "")">
+        Tümü
+    </a>
+    <a href="/AgencyPhonebook/Index?type=1" class="nav-link rounded-pill fw-bold @(activeFilter == 1 ? "active" : "")">
+        Ustalar (Mavi Yaka)
+    </a>
+    <a href="/AgencyPhonebook/Index?type=2" class="nav-link rounded-pill fw-bold @(activeFilter == 2 ? "active" : "")">
+        Taşeron Firmalar
+    </a>
+    <a href="/AgencyPhonebook/Index?type=3" class="nav-link rounded-pill fw-bold @(activeFilter == 3 ? "active" : "")">
+        Malzeme Tedarikçileri
+    </a>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Kişi / Firma Adı</th>
+                        <th>Tür / Branş</th>
+                        <th>Telefon / İletişim</th>
+                        <th>Durum</th>
+                        <th class="text-end pe-4">İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Any())
+                    {
+                        <tr>
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                Rehberinizde henüz kayıt yok. Sağ üstten yeni kişi ekleyebilirsiniz.
+                            </td>
+                        </tr>
+                    }
+                    @foreach (var item in Model)
+                    {
+                        <tr>
+                            <td class="ps-4">
+                                <div class="fw-bold">@item.Name</div>
+                                <div class="small text-muted">@item.Notes</div>
+                            </td>
+                            <td>
+                                @if(item.ContactType == 1) { <span class="badge bg-info text-dark me-1">Usta</span> }
+                                else if(item.ContactType == 2) { <span class="badge bg-primary me-1">Taşeron</span> }
+                                else if(item.ContactType == 3) { <span class="badge bg-success me-1">Tedarikçi</span> }
+                                
+                                @if(!string.IsNullOrEmpty(item.Tags))
+                                {
+                                    foreach(var tag in item.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                                    {
+                                        <span class="badge bg-light text-dark border me-1">@tag.Trim()</span>
+                                    }
+                                }
+                            </td>
+                            <td>
+                                <div class="fw-bold">@item.PhoneNumber</div>
+                                <div class="small text-muted">@item.Email</div>
+                            </td>
+                            <td>
+                                @if(item.IsRegistered)
+                                {
+                                    <span class="text-success fw-bold"><i class="bi bi-check-circle-fill me-1"></i> Sisteme Kayıtlı</span>
+                                }
+                                else
+                                {
+                                    <span class="text-warning fw-bold"><i class="bi bi-clock me-1"></i> Yalnızca Rehberde</span>
+                                }
+                            </td>
+                            <td class="text-end pe-4">
+                                @if(!item.IsRegistered)
+                                {
+                                    <form asp-action="SendInvite" method="post" class="d-inline">
+                                        <input type="hidden" name="id" value="@item.Id" />
+                                        <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill" title="Sisteme Davet Et">
+                                            <i class="bi bi-envelope-paper"></i> Davet Gönder
+                                        </button>
+                                    </form>
+                                }
+                                <form asp-action="Delete" method="post" class="d-inline" onsubmit="return confirm('Silmek istediğinize emin misiniz?');">
+                                    <input type="hidden" name="id" value="@item.Id" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill ms-1" title="Sil">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add Contact Modal -->
+<div class="modal fade" id="addContactModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-light border-0 rounded-top-4">
+                <h5 class="modal-title fw-bold">Yeni Kişi/Firma Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <form asp-action="Create" method="post">
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Tipi</label>
+                        <select name="ContactType" class="form-select" required>
+                            <option value="1">Usta / Mavi Yaka</option>
+                            <option value="2">Taşeron Firma</option>
+                            <option value="3">Malzeme Tedarikçisi</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Ad Soyad / Firma Adı</label>
+                        <input type="text" name="Name" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Telefon Numarası</label>
+                        <input type="text" name="PhoneNumber" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Etiketler / Branş (Virgülle ayırın)</label>
+                        <input type="text" name="Tags" class="form-control" placeholder="Örn: Boya, Alçı, İzolasyon" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Notlar</label>
+                        <textarea name="Notes" class="form-control" rows="2" placeholder="Fiyat teklifi alındı, vb..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

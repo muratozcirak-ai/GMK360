@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using GMK360.Core.Entities.Identity;
 
 namespace GMK360.Core.Entities
@@ -9,7 +9,12 @@ namespace GMK360.Core.Entities
         Manager,      // Yönetici (Yetkili)
         Consultant,   // Danışman (Kendi ilanları)
         Secretary,    // Sekreter (Randevular, ön ofis)
-        PublicRelations // Halkla İlişkiler
+        PublicRelations,
+        SiteManager,
+        Architect,
+        Engineer,
+        Accountant,
+        Purchasing
     }
 
     public class AgencyConsultant : BaseEntity
@@ -25,5 +30,10 @@ namespace GMK360.Core.Entities
         public DateTime? EndDate { get; set; }
 
         public AgencyRole Role { get; set; } = AgencyRole.Consultant;
+        
+        // Finans / Bordro (Beyaz Yaka Maaş Sistemi)
+        public decimal MonthlySalary { get; set; } = 0;
+        public string? IBAN { get; set; }
+        public string? IdentityNumber { get; set; } // TC Kimlik vb.
     }
 }

@@ -20,10 +20,15 @@ namespace GMK360.Core.Entities.B2B
         public B2BNetworkContact NetworkContact { get; set; }
 
         public QuoteInviteStatus Status { get; set; } = QuoteInviteStatus.Pending;
+        public string AccessToken { get; set; } = Guid.NewGuid().ToString("N");
 
-        public decimal? OfferedPrice { get; set; }
+public decimal? OfferedPrice { get; set; } // Bu artık genel toplam (KDV Hariç vb) olarak kullanılabilir
+        public bool IsVatIncludedGlobally { get; set; } = false; // Tüm teklif için KDV dahil/hariç
+        
+        public ICollection<B2BQuoteInviteItem> InviteItems { get; set; }
         public string OfferNotes { get; set; }
 
         public DateTime? RespondedAt { get; set; }
     }
 }
+

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using GMK360.Data;
@@ -24,13 +24,62 @@ namespace GMK360.Web.Controllers
             _userManager = userManager;
         }
 
+        // GET: CustomerPortal/Index
+        public async Task<IActionResult> Index()
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+
+            // Kullanicinin sahip oldugu daireleri bul
+            var myUnits = await _context.BuildingUnits
+                .Include(u => u.Building)
+                    .ThenInclude(b => b.ConstructionProject)
+                .Where(u => u.OwnerUserId == user.Id || u.TenantUserId == user.Id)
+                .ToListAsync();
+
+            return View(myUnits);
+        }
+
+        // GET: CustomerPortal/MyUnitProgress/5
+        public async Task<IActionResult> MyUnitProgress(int unitId)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+
+            var unit = await _context.BuildingUnits
+                .Include(u => u.Building)
+                    .ThenInclude(b => b.ConstructionProject)
+                        .ThenInclude(p => p.Phases)
+                            .ThenInclude(ph => ph.PhaseTasks)
+                .FirstOrDefaultAsync(u => u.Id == unitId);
+
+            if (unit == null) return NotFound();
+
+            if (!User.IsInRole("Admin") && unit.OwnerUserId != user.Id && unit.TenantUserId != user.Id)
+            {
+                return Unauthorized("Sadece bu dairenin sahibi ilerleme durumunu görebilir.");
+            }
+
+            // Insaattan son fotograflar (Task Messages icerisindeki fotograflar)
+            var recentPhotos = await _context.TaskMessages
+                .Include(m => m.PhaseTask)
+                .Where(m => m.PhaseTask.ProjectPhase.ConstructionProjectId == unit.Building.ConstructionProjectId 
+                            && !string.IsNullOrEmpty(m.PhotoUrl))
+                .OrderByDescending(m => m.SentAt)
+                .Take(10)
+                .ToListAsync();
+
+            ViewBag.RecentPhotos = recentPhotos;
+
+            return View(unit);
+        }
+
         // GET: CustomerPortal/MyUnitMaterials/5
         public async Task<IActionResult> MyUnitMaterials(int unitId)
         {
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Unauthorized();
 
-            // Find the unit and ensure the user owns it (or is admin)
             var unit = await _context.BuildingUnits
                 .Include(u => u.Building)
                     .ThenInclude(b => b.ConstructionProject)
@@ -42,9 +91,6 @@ namespace GMK360.Web.Controllers
 
             if (!User.IsInRole("Admin") && unit.OwnerUserId != user.Id && unit.TenantUserId != user.Id)
             {
-                // In a real app, maybe allow only OwnerUserId. We'll allow owner for now.
-                // Just for testing flexibility, if it's not the owner, we might block them, 
-                // but let's assume they can view it. We'll enforce owner.
                 return Unauthorized("Sadece bu dairenin sahibi malzeme seçimi yapabilir.");
             }
 
@@ -76,7 +122,6 @@ namespace GMK360.Web.Controllers
                 return BadRequest();
             }
 
-            // Remove any existing selection for this category for this unit
             var existingSelections = await _context.UnitMaterialSelections
                 .Include(s => s.ProjectMaterialCatalog)
                 .Where(s => s.BuildingUnitId == unitId && s.ProjectMaterialCatalog.Category == catalog.Category)
@@ -87,7 +132,6 @@ namespace GMK360.Web.Controllers
                 _context.UnitMaterialSelections.RemoveRange(existingSelections);
             }
 
-            // Save new selection
             var selection = new UnitMaterialSelection
             {
                 BuildingUnitId = unitId,
@@ -105,3 +149,5 @@ namespace GMK360.Web.Controllers
         }
     }
 }
+
+

@@ -1,0 +1,215 @@
+﻿@{
+    ViewData["Title"] = "CRM & Ajanda Yönetimi";
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+    var selectedDate = ViewBag.SelectedDate as DateTime?;
+    var eventDates = ViewBag.EventDates as List<DateTime> ?? new List<DateTime>();
+}
+
+<!-- FullCalendar CSS -->
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet" />
+
+<style>
+    .agenda-container {
+        display: flex;
+        height: calc(100vh - 120px);
+        gap: 20px;
+        background: #f8f9fa;
+        padding: 20px;
+    }
+    
+    .left-panel {
+        width: 350px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .calendar-card {
+        background: white;
+        border-radius: 12px;
+        padding: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    
+    .timeline-card {
+        background: white;
+        border-radius: 12px;
+        padding: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    .right-panel {
+        flex: 1;
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        overflow-y: auto;
+    }
+
+    .timeline-item {
+        padding: 12px;
+        border-left: 3px solid #007bff;
+        background: #fdfdfd;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+        border-radius: 0 8px 8px 0;
+    }
+    
+    .timeline-item:hover, .timeline-item.active {
+        background: #eef5ff;
+        border-left-color: #0056b3;
+    }
+
+    .timeline-time {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-bottom: 4px;
+    }
+
+    .timeline-title {
+        font-weight: 600;
+        color: #333;
+        font-size: 0.95rem;
+    }
+
+    #agendaDetailsPlaceholder {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .empty-state {
+        margin: auto;
+        text-align: center;
+        color: #adb5bd;
+    }
+    .empty-state i {
+        font-size: 3rem;
+        margin-bottom: 15px;
+    }
+
+    /* Takvim Nokta Stili */
+    .fc-daygrid-dot-event {
+        background: #007bff;
+        border: none;
+        border-radius: 50%;
+        width: 8px;
+        height: 8px;
+        margin: 2px auto;
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3 px-3 mt-3">
+    <h3 class="m-0"><i class="fas fa-calendar-alt text-primary me-2"></i> Yönetici Ajandası & CRM</h3>
+    <a href="/Agenda/Create" class="btn btn-primary rounded-pill shadow-sm">
+        <i class="fas fa-plus"></i> Yeni Kayıt Ekle
+    </a>
+</div>
+
+<div class="agenda-container">
+    <!-- Sol Panel: Takvim ve Zaman Akışı -->
+    <div class="left-panel">
+        
+        <div class="calendar-card">
+            <div id="miniCalendar"></div>
+        </div>
+
+        <div class="timeline-card">
+            <h6 class="mb-3 border-bottom pb-2">
+                <i class="fas fa-list-ul me-2"></i> 
+                @(selectedDate.HasValue ? selectedDate.Value.ToString("dd MMM yyyy") + " Akışı" : "Yaklaşan Gündem")
+            </h6>
+            
+            <div id="timelineList">
+                @if (!Model.Any())
+                {
+                    <p class="text-muted small text-center mt-4">Bu güne ait kayıt bulunamadı.</p>
+                }
+                else
+                {
+                    foreach (var item in Model)
+                    {
+                        <div class="timeline-item" onclick="loadDetails(@item.Id, this)">
+                            <div class="timeline-time">
+                                <i class="far fa-clock"></i> @item.EventDate.ToString("HH:mm")
+                            </div>
+                            <div class="timeline-title">@item.Title</div>
+                            <small class="text-muted mt-1 d-block">
+                                @if(item.RecordTypeId == GMK360.Core.Entities.Construction.AgendaConstants.TypeMusteriGorusmesi) { <span class="badge bg-success">Müşteri</span> }
+                                @if(item.RecordTypeId == GMK360.Core.Entities.Construction.AgendaConstants.TypeTaseronToplantisi) { <span class="badge bg-warning text-dark">Taşeron</span> }
+                                @if(item.RecordTypeId == GMK360.Core.Entities.Construction.AgendaConstants.TypeSantiyeDenetimi) { <span class="badge bg-danger">Şantiye</span> }
+                                @if(item.RecordTypeId == GMK360.Core.Entities.Construction.AgendaConstants.TypeGenelNot) { <span class="badge bg-secondary">Not</span> }
+                            </small>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Sağ Panel: Detay ve Sunum -->
+    <div class="right-panel" id="agendaDetailsPlaceholder">
+        <div class="empty-state">
+            <i class="far fa-calendar-check"></i>
+            <h5>Bir Kayıt Seçin</h5>
+            <p>Detayları, alınan kararları ve sunumları görüntülemek için sol taraftaki listeden bir öğeye tıklayın.</p>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/tr.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var calendarEl = document.getElementById('miniCalendar');
+            
+            var eventDates = @Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(eventDates.Select(d => d.ToString("yyyy-MM-dd"))));
+            
+            var calendarEvents = eventDates.map(function(dateStr) {
+                return {
+                    start: dateStr,
+                    display: 'list-item', // Nokta görünümü
+                    color: '#007bff'
+                };
+            });
+
+            var calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'tr',
+                headerToolbar: {
+                    left: 'prev',
+                    center: 'title',
+                    right: 'next'
+                },
+                height: 320,
+                events: calendarEvents,
+                dateClick: function(info) {
+                    window.location.href = '/Agenda/Index?selectedDate=' + info.dateStr;
+                }
+            });
+            calendar.render();
+            
+            @if(selectedDate.HasValue)
+            {
+                <text>calendar.gotoDate('@selectedDate.Value.ToString("yyyy-MM-dd")');</text>
+            }
+        });
+
+        function loadDetails(id, element) {
+            $('.timeline-item').removeClass('active');
+            $(element).addClass('active');
+
+            $('#agendaDetailsPlaceholder').html('<div class="empty-state"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Yükleniyor...</p></div>');
+            
+            $.get('/Agenda/GetDetails/' + id, function(data) {
+                $('#agendaDetailsPlaceholder').html(data);
+            });
+        }
+    </script>
+}

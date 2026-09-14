@@ -1,8 +1,8 @@
-ï»¿using System.Security.Claims;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Identity;
-using GMK360.Core.Entities.Identity; // UserType enum iÃ§in
+using GMK360.Core.Entities.Identity; // UserType enum için
 using GMK360.Data.Contexts;
 using Microsoft.EntityFrameworkCore;
 
@@ -44,13 +44,13 @@ namespace GMK360.Web.Controllers
             return BadRequest();
         }
 
-        // YÃ¶nlendirici
+        // Yönlendirici
         public IActionResult Index()
         {
             return RedirectToAction(nameof(Hub));
         }
 
-        // --- ROL BAZLI Ã–ZEL ANA SAYFALAR (Admin hepsine girebilir) ---
+        // --- ROL BAZLI ÖZEL ANA SAYFALAR (Admin hepsine girebilir) ---
 
         [Authorize(Roles = "Individual,Admin")]
         public IActionResult Individual()
@@ -64,13 +64,13 @@ namespace GMK360.Web.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return NotFound();
 
-            // Sadece bu kullanÄ±cÄ±ya ait ve "PrivateTracking" durumundaki (ilan olmayan) mÃ¼lkleri Ã§ek
+            // Sadece bu kullanýcýya ait ve "PrivateTracking" durumundaki (ilan olmayan) mülkleri çek
             var properties = await _context.Properties
                 .Where(p => p.UserId == user.Id && p.State == GMK360.Core.Entities.ListingState.PrivateTracking && !p.IsDeleted)
                 .OrderByDescending(p => p.CreatedAt)
                 .ToListAsync();
 
-            // KullanÄ±cÄ±ya ait bekleyen (Ã¶denmemiÅŸ) finansal kayÄ±tlar
+            // Kullanýcýya ait bekleyen (ödenmemiþ) finansal kayýtlar
             var pendingInvoicesCount = await _context.PropertyFinancialRecords
                 .Include(f => f.Property)
                 .Where(f => f.Property.UserId == user.Id && !f.IsCompleted)
@@ -81,14 +81,14 @@ namespace GMK360.Web.Controllers
                 .Where(r => r.UserId == user.Id && r.Status == GMK360.Core.Entities.RenovationStatus.Open)
                 .CountAsync();
 
-            // Ã–rnek basit bir gelir gider hesabÄ± (Kira giderleri vb.)
-            // Ä°leride daha detaylÄ± finansal modÃ¼le baÄŸlanabilir
+            // Örnek basit bir gelir gider hesabý (Kira giderleri vb.)
+            // Ýleride daha detaylý finansal modüle baðlanabilir
             decimal totalIncome = 0;
             decimal totalExpense = 0;
 
             foreach (var prop in properties)
             {
-                // EÄŸer kullanÄ±cÄ± "Ev Sahibi" ise kiradan gelir bekliyor varsayalÄ±m (Ã–rnek)
+                // Eðer kullanýcý "Ev Sahibi" ise kiradan gelir bekliyor varsayalým (Örnek)
                 if (prop.ManagementRole == GMK360.Core.Entities.ManagementRole.Owner)
                 {
                     totalIncome += prop.Price; // Temsili kira geliri
@@ -106,15 +106,38 @@ namespace GMK360.Web.Controllers
                 TotalMonthlyExpense = totalExpense,
                 PendingInvoices = pendingInvoicesCount,
                 ActiveRenovationRequests = activeRenovationsCount,
-                RecentProperties = properties.Take(5).ToList() // Son 5 mÃ¼lk
+                RecentProperties = properties.Take(5).ToList() // Son 5 mülk
             };
 
             return View(viewModel);
         }
 
         [Authorize(Roles = "InsaatFirmasi,Admin,Corporate")]
-        public IActionResult Construction()
+        public async Task<IActionResult> Construction()
         {
+            var userId = _userManager.GetUserId(User);
+            var consultant = await _context.AgencyConsultants.Include(c => c.Agency).FirstOrDefaultAsync(c => c.UserId == userId && c.IsActive);
+            if (consultant == null) return View();
+
+            var agency = consultant.Agency;
+            ViewBag.Agency = agency;
+
+            // Dynamic Counts
+            var activeProjects = await _context.ConstructionProjects.CountAsync(p => p.AgencyId == agency.Id && p.StatusId == GMK360.Core.Entities.Construction.ProjectConstants.StatusAktif && !p.IsDeleted);
+            var delayedPhases = await _context.ContractPhases.Include(p => p.Contract).CountAsync(p => p.Contract.AgencyId == agency.Id && !p.IsCompleted && p.TargetDate < DateTime.UtcNow);
+            var firstDayOfMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+            var totalPaymentsThisMonth = await _context.ProgressPayments.Include(p => p.Contract).Where(p => p.Contract.AgencyId == agency.Id && p.Status == GMK360.Core.Entities.Finance.ProgressPaymentStatus.Paid && p.ApprovalDate >= firstDayOfMonth).SumAsync(p => p.ApprovedAmount);
+
+            ViewBag.ActiveProjects = activeProjects;
+            ViewBag.DelayedPhases = delayedPhases;
+            ViewBag.TotalPaymentsThisMonth = totalPaymentsThisMonth;
+            var teklifProjeler = await _context.ConstructionProjects
+                .Where(p => p.AgencyId == agency.Id && p.StatusId == GMK360.Core.Entities.Construction.ProjectConstants.StatusTeklif && !p.IsDeleted)
+                .OrderByDescending(p => p.CreatedAt)
+                .Take(5)
+                .ToListAsync();
+            ViewBag.TeklifProjeler = teklifProjeler;
+
             return View();
         }
 
@@ -137,7 +160,7 @@ namespace GMK360.Web.Controllers
             var agency = user?.AgencyConsultants?.FirstOrDefault()?.Agency;
             if (agency == null)
             {
-                return NotFound("KullanÄ±cÄ±ya ait bir emlak ofisi bulunamadÄ±.");
+                return NotFound("Kullanýcýya ait bir emlak ofisi bulunamadý.");
             }
 
             var model = new ThemeSettingsViewModel
@@ -174,7 +197,7 @@ namespace GMK360.Web.Controllers
             var agency = user?.AgencyConsultants?.FirstOrDefault()?.Agency;
             if (agency == null || agency.Id != model.AgencyId)
             {
-                return NotFound("GeÃ§ersiz emlak ofisi iÅŸlemi.");
+                return NotFound("Geçersiz emlak ofisi iþlemi.");
             }
 
             agency.CustomDomain = model.CustomDomain;
@@ -190,7 +213,7 @@ namespace GMK360.Web.Controllers
             _context.Update(agency);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Tema ayarlarÄ± baÅŸarÄ±yla gÃ¼ncellendi.";
+            TempData["SuccessMessage"] = "Tema ayarlarý baþarýyla güncellendi.";
             return RedirectToAction(nameof(ThemeSettings));
         }
 
@@ -215,10 +238,10 @@ namespace GMK360.Web.Controllers
         [Authorize(Roles = "Supplier,Admin")]
         public IActionResult Supplier()
         {
-            return View(); // Åžimdilik basitÃ§e dÃ¶ndÃ¼rÃ¼yoruz
+            return View(); // Þimdilik basitçe döndürüyoruz
         }
 
-        // --- ORTAK MODÃœLLER (Ä°leride taÅŸÄ±nabilir veya burada kalabilir) ---
+        // --- ORTAK MODÜLLER (Ýleride taþýnabilir veya burada kalabilir) ---
 
         public IActionResult Mesajlar() => View();
 
@@ -253,5 +276,9 @@ namespace GMK360.Web.Controllers
         public IActionResult SiteYonetimi() => View();
     }
 }
+
+
+
+
 
 

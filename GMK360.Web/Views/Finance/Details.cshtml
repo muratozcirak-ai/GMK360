@@ -1,0 +1,206 @@
+@model GMK360.Core.Entities.Finance.SupplierCurrentAccount
+@{
+    ViewData["Title"] = Model.PhonebookContact.Name + " - Cari Ekstre";
+}
+
+<div class=""container-fluid px-4 py-5"">
+    <!-- Üst Bilgiler -->
+    <div class=""d-flex justify-content-between align-items-center mb-4"">
+        <div class=""d-flex align-items-center"">
+            <a href=""/Finance/Index"" class=""btn btn-light rounded-circle me-3""><i class=""bi bi-arrow-left""></i></a>
+            <div>
+                <h3 class=""fw-bold mb-0"">@Model.PhonebookContact.Name</h3>
+                <p class=""text-muted mb-0"">Kategori: @Model.PhonebookContact.Tags | Yetkili: @Model.PhonebookContact.Name</p>
+            </div>
+        </div>
+        <div class=""text-end bg-white p-3 rounded-4 shadow-sm border border-light"">
+            <small class=""text-muted d-block"">Güncel Bakiye</small>
+            @if(Model.CurrentBalance > 0)
+            {
+                <h3 class=""fw-bold text-danger mb-0"">@Model.CurrentBalance.ToString("N2") ?</h3>
+                <span class=""badge bg-danger bg-opacity-10 text-danger rounded-pill"">Biz Borçluyuz</span>
+            }
+            else if(Model.CurrentBalance < 0)
+            {
+                <h3 class=""fw-bold text-success mb-0"">@Math.Abs(Model.CurrentBalance).ToString("N2") ?</h3>
+                <span class=""badge bg-success bg-opacity-10 text-success rounded-pill"">Biz Alacaklýyýz</span>
+            }
+            else
+            {
+                <h3 class=""fw-bold text-dark mb-0"">0.00 ?</h3>
+                <span class=""badge bg-secondary bg-opacity-10 text-secondary rounded-pill"">Hesap Kapalý</span>
+            }
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class=""alert alert-success rounded-4 border-0 shadow-sm"">
+            <i class=""bi bi-check-circle-fill me-2""></i> @TempData["SuccessMessage"]
+        </div>
+    }
+
+    <div class=""row g-4"">
+        <!-- Hareket Ekle & Ödeme Formlarý -->
+        <div class=""col-lg-4"">
+            <div class=""card border-0 shadow-sm rounded-4 mb-4"">
+                <div class=""card-header bg-white border-bottom p-4"">
+                    <h5 class=""fw-bold mb-0""><i class=""bi bi-file-earmark-plus text-primary me-2""></i>Fatura / Hakediþ Ýþle</h5>
+                </div>
+                <div class=""card-body p-4"">
+                    <form action=""/Finance/AddTransaction"" method=""post"">
+                        @Html.AntiForgeryToken()
+                        <input type=""hidden"" name=""accountId"" value=""@Model.Id"" />
+                        
+                        <div class=""mb-3"">
+                            <label class=""form-label small fw-bold"">Ýþlem Tipi</label>
+                            <select name=""type"" class=""form-select rounded-3"" required>
+                                <option value=""PurchaseInvoice"">Alýþ Faturasý / Taþeron Hakediþi (Bize Borç Yazar)</option>
+                                <option value=""RefundReceived"">Hurda Satýþý / Ýade (Bize Alacak Yazar)</option>
+                                <option value=""Adjustment"">Bakiye Düzeltme / Virman</option>
+                            </select>
+                        </div>
+                        <div class=""mb-3"">
+                            <label class=""form-label small fw-bold"">Tutar (?)</label>
+                            <input type=""number"" name=""amount"" class=""form-control rounded-3"" required step=""0.01"" />
+                        </div>
+                        <div class=""mb-3"">
+                            <label class=""form-label small fw-bold"">Açýklama</label>
+                            <input type=""text"" name=""description"" class=""form-control rounded-3"" required placeholder=""Örn: 1. Hak ediþ bedeli"" />
+                        </div>
+                        <div class=""mb-3"">
+                            <label class=""form-label small fw-bold"">Belge / Fatura No</label>
+                            <input type=""text"" name=""documentReference"" class=""form-control rounded-3"" />
+                        </div>
+                        <button type=""submit"" class=""btn btn-primary w-100 rounded-pill"">Hareket Ekle</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class=""card border-0 shadow-sm rounded-4"">
+                <div class=""card-header bg-white border-bottom p-4"">
+                    <h5 class=""fw-bold mb-0""><i class=""bi bi-cash-coin text-success me-2""></i>Ödeme / Tahsilat Yap</h5>
+                </div>
+                <div class=""card-body p-4"">
+                    <form action=""/Finance/AddPayment"" method=""post"">
+                        @Html.AntiForgeryToken()
+                        <input type=""hidden"" name=""accountId"" value=""@Model.Id"" />
+                        
+                        <div class=""mb-3"">
+                            <label class=""form-label small fw-bold"">Ödeme Türü</label>
+                            <select name=""method"" class=""form-select rounded-3"" required id=""paymentMethodSelect"">
+                                <option value=""Cash"">Nakit</option>
+                                <option value=""BankTransfer"">Banka Havalesi / EFT</option>
+                                <option value=""Check"">Çek</option>
+                                <option value=""PromissoryNote"">Senet</option>
+                                <option value=""OpenAccount"">Açýk Hesap (Vade Tanýmla)</option>
+                            </select>
+                        </div>
+                        <div class=""mb-3"">
+                            <label class=""form-label small fw-bold"">Tutar (?)</label>
+                            <input type=""number"" name=""amount"" class=""form-control rounded-3"" required step=""0.01"" />
+                        </div>
+                        <div class=""mb-3"">
+                            <label class=""form-label small fw-bold"">Vade / Ödeme Tarihi</label>
+                            <input type=""date"" name=""dueDate"" class=""form-control rounded-3"" />
+                        </div>
+                        <div id=""checkDetails"" style=""display:none;"">
+                            <div class=""mb-3"">
+                                <label class=""form-label small fw-bold"">Banka Adý</label>
+                                <input type=""text"" name=""bankName"" class=""form-control rounded-3"" />
+                            </div>
+                            <div class=""mb-3"">
+                                <label class=""form-label small fw-bold"">Çek/Dekont No</label>
+                                <input type=""text"" name=""checkNumber"" class=""form-control rounded-3"" />
+                            </div>
+                        </div>
+                        <div class=""mb-3"">
+                            <label class=""form-label small fw-bold"">Notlar</label>
+                            <input type=""text"" name=""notes"" class=""form-control rounded-3"" />
+                        </div>
+                        <button type=""submit"" class=""btn btn-success w-100 rounded-pill"">Ödemeyi Ýþle</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ekstre Tablosu -->
+        <div class=""col-lg-8"">
+            <div class=""card border-0 shadow-sm rounded-4 h-100"">
+                <div class=""card-header bg-white border-bottom p-4"">
+                    <h5 class=""fw-bold mb-0"">Cari Ekstre (Hareket Geçmiþi)</h5>
+                </div>
+                <div class=""card-body p-0"">
+                    <div class=""table-responsive"">
+                        <table class=""table table-hover align-middle mb-0"">
+                            <thead class=""bg-light"">
+                                <tr>
+                                    <th class=""px-4 py-3"">Tarih</th>
+                                    <th class=""py-3"">Ýþlem Türü / Açýklama</th>
+                                    <th class=""py-3"">Belge No</th>
+                                    <th class=""py-3 text-end"">Tutar</th>
+                                    <th class=""px-4 py-3 text-end"">Kalan Bakiye</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if(!Model.Transactions.Any())
+                                {
+                                    <tr>
+                                        <td colspan=""5"" class=""text-center py-5 text-muted"">
+                                            Hesapta henüz bir hareket bulunmuyor.
+                                        </td>
+                                    </tr>
+                                }
+                                @foreach (var trx in Model.Transactions.OrderByDescending(t => t.TransactionDate))
+                                {
+                                    <tr>
+                                        <td class=""px-4"">@trx.TransactionDate.ToString("dd.MM.yyyy HH:mm")</td>
+                                                                                <td>
+                                            @if(trx.FinanceCategory != null)
+                                            {
+                                                <span class=""d-block fw-bold text-dark"">@trx.FinanceCategory.Name</span>
+                                            }
+                                            @if(trx.Type == GMK360.Core.Entities.Finance.SupplierTransactionType.PurchaseInvoice)
+                                            {
+                                                <span class=""badge bg-danger bg-opacity-10 text-danger rounded-pill me-2"">Fatura/Hakediþ</span>
+                                            }
+                                            else if(trx.Type == GMK360.Core.Entities.Finance.SupplierTransactionType.PaymentMade)
+                                            {
+                                                <span class=""badge bg-success bg-opacity-10 text-success rounded-pill me-2"">Ödeme</span>
+                                            }
+                                            else
+                                            {
+                                                <span class=""badge bg-secondary bg-opacity-10 text-secondary rounded-pill me-2"">Tahsilat/Düzeltme</span>
+                                            }
+                                            <br/>
+                                            <small class=""text-muted"">@trx.Description</small>
+                                        </td>
+                                        <td><small class=""text-muted"">@trx.DocumentReference</small></td>
+                                        <td class=""text-end fw-bold @(trx.Type == GMK360.Core.Entities.Finance.SupplierTransactionType.PaymentMade || trx.Type == GMK360.Core.Entities.Finance.SupplierTransactionType.RefundReceived ? "text-success" : "text-danger")"">
+                                            @trx.Amount.ToString("N2") ?
+                                        </td>
+                                        <td class=""px-4 text-end text-muted"">@trx.BalanceAfterTransaction.ToString("N2") ?</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('paymentMethodSelect').addEventListener('change', function() {
+        var val = this.value;
+        if(val === 'Check' || val === 'BankTransfer' || val === 'PromissoryNote') {
+            document.getElementById('checkDetails').style.display = 'block';
+        } else {
+            document.getElementById('checkDetails').style.display = 'none';
+        }
+    });
+</script>
+
+
+

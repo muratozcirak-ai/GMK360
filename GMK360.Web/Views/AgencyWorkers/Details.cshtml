@@ -1,0 +1,121 @@
+@model GMK360.Core.Entities.Construction.AgencyWorker
+@{
+    ViewData["Title"] = "Personel Cari & Avans Kartý";
+    Layout = "_ConstructionLayout";
+    
+    var timesheets = ViewBag.Timesheets as List<GMK360.Core.Entities.Construction.DailyTimesheet> ?? new List<GMK360.Core.Entities.Construction.DailyTimesheet>();
+    decimal totalEarned = ViewBag.TotalEarned ?? 0m;
+    decimal totalAdvance = ViewBag.TotalAdvance ?? 0m;
+    decimal balance = ViewBag.CurrentBalance ?? 0m;
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0"><i class="bi bi-person-badge text-primary me-2"></i>Personel Cari Kartý: @Model.FirstName @Model.LastName</h2>
+            <p class="text-muted mb-0">Meslek/Branþ: @Model.Profession | Telefon: @Model.PhoneNumber</p>
+        </div>
+        <a asp-action="Index" class="btn btn-light border rounded-pill"><i class="bi bi-arrow-left me-1"></i> Usta/Ýþçi Havuzuna Dön</a>
+    </div>
+
+    <!-- MAVÝ YAKA AVANS & MAAÞ ÖZETÝ -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-light border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body text-center py-4">
+                    <h6 class="text-muted text-uppercase">Güncel Bakiye (Alacaðý)</h6>
+                    @if (balance > 0)
+                    {
+                        <h2 class="text-success fw-bold mb-0">@balance.ToString("N2") TL</h2>
+                        <span class="badge bg-success mt-1">Ödenecek Maaþ</span>
+                    }
+                    else if (balance < 0)
+                    {
+                        <h2 class="text-danger fw-bold mb-0">@Math.Abs(balance).ToString("N2") TL</h2>
+                        <span class="badge bg-danger mt-1">Ýçeride Avans Fazlasý (Borçlu)</span>
+                    }
+                    else
+                    {
+                        <h2 class="text-dark fw-bold mb-0">0.00 TL</h2>
+                        <span class="badge bg-secondary mt-1">Hesap Sýfýr (Borç/Alacak Yok)</span>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body text-center py-4">
+                    <h6 class="text-muted text-uppercase">Toplam Hak Ediþ (Yevmiye)</h6>
+                    <h3 class="text-primary fw-bold mb-0">@totalEarned.ToString("N2") TL</h3>
+                    <small class="text-muted">Puantajdan gelen toplam maaþ hak ediþi</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body text-center py-4">
+                    <h6 class="text-muted text-uppercase">Toplam Verilen Avans/Nakit</h6>
+                    <h3 class="text-warning text-dark fw-bold mb-0">@totalAdvance.ToString("N2") TL</h3>
+                    <small class="text-muted">Bugüne kadar verilen elden/bankadan avanslar</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PUANTAJ VE AVANS HAREKETLERÝ -->
+    <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-header bg-white border-bottom-0 pt-4 d-flex justify-content-between align-items-center">
+            <h5 class="fw-bold mb-0"><i class="bi bi-calendar-check me-2"></i>Puantaj ve Avans Geçmiþi</h5>
+            <a href="/DailyTimesheets/Index" class="btn btn-sm btn-outline-primary rounded-pill"><i class="bi bi-plus-lg me-1"></i>Yeni Puantaj/Avans Gir</a>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tarih</th>
+                            <th>Proje / Aþama</th>
+                            <th>Durum (Tam/Yarým)</th>
+                            <th class="text-end">Kazanýlan Yevmiye (Hak Ediþ)</th>
+                            <th class="text-end">Verilen Avans (Nakit Ödeme)</th>
+                            <th>Açýklama / Not</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!timesheets.Any())
+                        {
+                            <tr><td colspan="6" class="text-center py-5 text-muted">Bu personelin henüz puantaj veya avans kaydý yok.</td></tr>
+                        }
+                        @foreach(var t in timesheets)
+                        {
+                            <tr>
+                                <td>@t.WorkDate.ToString("dd.MM.yyyy")</td>
+                                <td>
+                                    @if(t.ProjectPhase != null && t.ProjectPhase.ConstructionProject != null)
+                                    {
+                                        <span class="fw-bold">@t.ProjectPhase.ConstructionProject.Name</span><br/>
+                                        <small class="text-muted">@t.ProjectPhase.Name</small>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">- Baðýmsýz -</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark border">@t.AttendanceStatus</span>
+                                </td>
+                                <td class="text-end">
+                                    @if(t.EarnedWage > 0) { <span class="text-success fw-bold">+@t.EarnedWage.ToString("N2")</span> } else { <span>-</span> }
+                                </td>
+                                <td class="text-end">
+                                    @if(t.AdvancePayment > 0) { <span class="text-danger fw-bold">-@t.AdvancePayment.ToString("N2")</span> } else { <span>-</span> }
+                                </td>
+                                <td>@t.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

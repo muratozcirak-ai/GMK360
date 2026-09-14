@@ -1,0 +1,114 @@
+@model IEnumerable<GMK360.Core.Entities.Finance.SupplierCurrentAccount>
+@{
+    ViewData["Title"] = "Cari Takip (Taþeron & Tedarikçi)";
+    decimal totalDebt = Model.Where(m => m.CurrentBalance > 0).Sum(m => m.CurrentBalance);
+    decimal totalCredit = Model.Where(m => m.CurrentBalance < 0).Sum(m => Math.Abs(m.CurrentBalance));
+}
+
+<div class=""container-fluid px-4 py-5"">
+    <div class=""d-flex justify-content-between align-items-center mb-4"">
+        <div>
+            <h2 class=""fw-bold text-dark mb-0""><i class=""bi bi-wallet2 text-primary me-2""></i>Cari Takip</h2>
+            <p class=""text-muted"">Tedarikçi ve Taþeronlarýnýzýn borç/alacak durumlarý</p>
+        </div>
+        <button class=""btn btn-primary rounded-pill px-4""><i class=""bi bi-plus-lg me-2""></i>Yeni Cari Hesap Aç</button>
+    </div>
+
+    <!-- Özet Kartlarý -->
+    <div class=""row g-4 mb-4"">
+        <div class=""col-md-4"">
+            <div class=""card border-0 shadow-sm rounded-4 bg-danger bg-opacity-10"">
+                <div class=""card-body p-4"">
+                    <h6 class=""text-danger fw-bold mb-2"">Toplam Borcumuz (Ödenecekler)</h6>
+                    <h3 class=""fw-bold mb-0 text-dark"">@totalDebt.ToString("N2") ?</h3>
+                </div>
+            </div>
+        </div>
+        <div class=""col-md-4"">
+            <div class=""card border-0 shadow-sm rounded-4 bg-success bg-opacity-10"">
+                <div class=""card-body p-4"">
+                    <h6 class=""text-success fw-bold mb-2"">Toplam Alacaðýmýz (Hurda/Avans vb.)</h6>
+                    <h3 class=""fw-bold mb-0 text-dark"">@totalCredit.ToString("N2") ?</h3>
+                </div>
+            </div>
+        </div>
+        <div class=""col-md-4"">
+            <div class=""card border-0 shadow-sm rounded-4 bg-primary bg-opacity-10"">
+                <div class=""card-body p-4"">
+                    <h6 class=""text-primary fw-bold mb-2"">Net Durum</h6>
+                    <h3 class=""fw-bold mb-0 text-dark"">@((totalDebt - totalCredit).ToString("N2")) ?</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class=""card border-0 shadow-sm rounded-4"">
+        <div class=""card-body p-0"">
+            <div class=""table-responsive"">
+                <table class=""table table-hover align-middle mb-0"">
+                    <thead class=""bg-light"">
+                        <tr>
+                            <th class=""px-4 py-3"">Cari Ünvan</th>
+                            <th class=""py-3"">Tip</th>
+                            <th class=""py-3"">Kategori</th>
+                            <th class=""py-3 text-end"">Bakiye</th>
+                            <th class=""px-4 py-3 text-end"">Ýþlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if(!Model.Any())
+                        {
+                            <tr>
+                                <td colspan=""5"" class=""text-center py-5 text-muted"">
+                                    <i class=""bi bi-journal-x fs-1 d-block mb-3""></i>
+                                    Henüz aktif cari hesap bulunmuyor.
+                                </td>
+                            </tr>
+                        }
+                        @foreach (var item in Model)
+                        {
+                            <tr>
+                                <td class=""px-4"">
+                                    <div class=""d-flex align-items-center"">
+                                        <div class=""bg-primary bg-opacity-10 text-primary rounded-circle p-2 me-3"">
+                                            <i class=""bi bi-building""></i>
+                                        </div>
+                                        <div>
+                                            <h6 class=""mb-0 fw-bold"">@item.PhonebookContact.Name</h6>
+                                            <small class=""text-muted"">@item.PhonebookContact.Name</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class=""badge bg-secondary bg-opacity-10 text-secondary rounded-pill"">Tedarikçi / Taþeron</span>
+                                </td>
+                                <td>@item.PhonebookContact.Tags</td>
+                                <td class=""text-end"">
+                                    @if(item.CurrentBalance > 0)
+                                    {
+                                        <span class=""fw-bold text-danger"">@item.CurrentBalance.ToString("N2") ? <br/><small class=""text-muted"">(Borçluyuz)</small></span>
+                                    }
+                                    else if(item.CurrentBalance < 0)
+                                    {
+                                        <span class=""fw-bold text-success"">@Math.Abs(item.CurrentBalance).ToString("N2") ? <br/><small class=""text-muted"">(Alacaklýyýz)</small></span>
+                                    }
+                                    else
+                                    {
+                                        <span class=""fw-bold text-muted"">0.00 ?</span>
+                                    }
+                                </td>
+                                <td class=""px-4 text-end"">
+                                    <a href=""/Finance/Details/@item.Id"" class=""btn btn-sm btn-outline-primary rounded-pill px-3"">
+                                        Cari Ekstre
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+

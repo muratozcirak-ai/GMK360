@@ -9,7 +9,9 @@ namespace GMK360.Core.Entities.Construction
         public ProjectPhase ProjectPhase { get; set; }
 
         public string SenderUserId { get; set; }
+        public ApplicationUser SenderUser { get; set; }
         
         public string Content { get; set; }
     }
 }
+

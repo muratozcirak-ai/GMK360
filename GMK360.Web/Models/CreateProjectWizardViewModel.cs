@@ -1,4 +1,4 @@
-ï»¿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
@@ -7,13 +7,14 @@ namespace GMK360.Web.Models
 {
     public class CreateProjectWizardViewModel
     {
-        [Required(ErrorMessage = "Proje adÄ± zorunludur.")]
+        [Required(ErrorMessage = "Proje adý zorunludur.")]
         public int DraftProjectId { get; set; }
 
-        [Required(ErrorMessage = "Proje adÄ± zorunludur.")]
+        [Required(ErrorMessage = "Proje adý zorunludur.")]
         public string Name { get; set; }
 
         public string Description { get; set; }
+        public byte StatusId { get; set; } = 1; // 0: Aday/Görüþmede, 1: Aktif Þantiye, 2: Tamamlandý (Referans)
         
         [Required(ErrorMessage = "Adres zorunludur.")]
         public string Address { get; set; }
@@ -25,16 +26,16 @@ namespace GMK360.Web.Models
         public IFormFile CoverImageFile { get; set; }
         public IFormFile CurrentStateImageFile { get; set; }
         
-        // Lokasyon HiyerarÅŸisi
-        [Required(ErrorMessage = "Ä°l seÃ§imi zorunludur.")]
+        // Lokasyon Hiyerarþisi
+        [Required(ErrorMessage = "Ýl seçimi zorunludur.")]
         public int CityId { get; set; }
-        [Required(ErrorMessage = "Ä°lÃ§e seÃ§imi zorunludur.")]
+        [Required(ErrorMessage = "Ýlçe seçimi zorunludur.")]
         public int DistrictId { get; set; }
-        [Required(ErrorMessage = "Mahalle seÃ§imi zorunludur.")]
+        [Required(ErrorMessage = "Mahalle seçimi zorunludur.")]
         public int NeighborhoodId { get; set; }
         public int? StreetId { get; set; }
         
-        // Harita KoordinatlarÄ±
+        // Harita Koordinatlarý
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
 
@@ -57,4 +58,6 @@ namespace GMK360.Web.Models
         public bool HasGroundFloor { get; set; } = true;
     }
 }
+
+
 

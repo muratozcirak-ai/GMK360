@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -221,7 +221,7 @@ namespace GMK360.Web.Controllers
             await _context.SaveChangesAsync();
 
             // Firma kurulumu bittiğinde yönlendir
-            return RedirectToAction("Index", "ConstructionProject");
+            return RedirectToAction("Construction", "Dashboard");
         }
 
         public async Task<IActionResult> Referrals()
@@ -261,3 +261,4 @@ namespace GMK360.Web.Controllers
         }
     }
 }
+

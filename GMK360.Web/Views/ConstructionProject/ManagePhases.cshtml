@@ -1,17 +1,17 @@
 @model GMK360.Core.Entities.Construction.ConstructionProject
 @{
-    ViewData["Title"] = "Fazlar, BÃ¼tÃ§e ve Åžantiye GÃ¼nlÃ¼ÄŸÃ¼";
-    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Fazlar, Bütçe ve Þantiye Günlüðü";
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-kanban text-primary me-2"></i>AÅŸamalar ve BÃ¼tÃ§e (Åžantiye ERP)</h3>
-        <p class="text-muted small mb-0">@Model.Name - A'dan Z'ye Åžantiye Takip ve Maliyet Merkezi</p>
+        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-kanban text-primary me-2"></i>Aþamalar ve Bütçe (Þantiye ERP)</h3>
+        <p class="text-muted small mb-0">@Model.Name - A'dan Z'ye Þantiye Takip ve Maliyet Merkezi</p>
     </div>
     <div>
-        <a href="@Url.Action("Dashboard", "ConstructionProject", new { id = Model.Id })" class="btn btn-sm btn-light border">
-            <i class="bi bi-arrow-left"></i> Projeye DÃ¶n
+        <a href="@Url.Action("Details", "ConstructionProject", new { id = Model.Id })" class="btn btn-sm btn-light border">
+            <i class="bi bi-arrow-left"></i> Projeye Dön
         </a>
     </div>
 </div>
@@ -21,7 +21,7 @@
     <div class="col-md-4">
         <div class="card shadow-sm border-0 mb-4 h-100">
             <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
-                <h6 class="mb-0 fw-bold"><i class="bi bi-folder2-open text-warning me-2"></i>Proje FazlarÄ±</h6>
+                <h6 class="mb-0 fw-bold"><i class="bi bi-folder2-open text-warning me-2"></i>Proje Fazlarý</h6>
                 <button class="btn btn-sm btn-primary rounded-circle" data-bs-toggle="modal" data-bs-target="#newPhaseModal" title="Yeni Ana Faz Ekle">
                     <i class="bi bi-plus"></i>
                 </button>
@@ -31,7 +31,7 @@
                 {
                     <div class="text-center py-5 text-muted">
                         <i class="bi bi-clipboard-x fs-1 d-block mb-2"></i>
-                        HenÃ¼z hiÃ§ aÅŸama eklenmemiÅŸ.<br />Ã–rn: Hafriyat, Kaba Ä°nÅŸaat...
+                        Henüz hiç aþama eklenmemiþ.<br />Örn: Hafriyat, Kaba Ýnþaat...
                     </div>
                 }
                 else
@@ -65,7 +65,7 @@
                                         </div>
                                         <div class="d-grid gap-2 mt-2">
                                             <button class="btn btn-sm btn-outline-secondary" onclick="openNewTaskModal(@phase.Id)">
-                                                <i class="bi bi-plus-circle me-1"></i>Alt Ä°ÅŸ / GÃ¶rev Ekle
+                                                <i class="bi bi-plus-circle me-1"></i>Alt Ýþ / Görev Ekle
                                             </button>
                                         </div>
                                     </div>
@@ -78,20 +78,42 @@
         </div>
     </div>
 
-    <!-- SAÄž PANEL: GÃ¶rev / Ä°ÅŸ Dashboardu (Sohbet, Maliyet, Evrak) -->
+    <!-- SAÐ PANEL: Görev / Ýþ Dashboardu (Sohbet, Maliyet, Evrak) -->
     <div class="col-md-8">
         <div class="card shadow-sm border-0 h-100" id="taskDashboardEmpty">
             <div class="card-body d-flex flex-column justify-content-center align-items-center text-muted">
                 <i class="bi bi-card-checklist fs-1 mb-3"></i>
-                <h5>Bir GÃ¶rev SeÃ§in</h5>
-                <p>Maliyetleri, satÄ±n alma onaylarÄ±nÄ± ve saha sohbetlerini gÃ¶rmek iÃ§in soldan bir alt iÅŸe tÄ±klayÄ±n.</p>
+                <h5>Bir Görev Seçin</h5>
+                <p>Maliyetleri, satýn alma onaylarýný ve saha sohbetlerini görmek için soldan bir alt iþe týklayýn.</p>
+            </div>
+        </div>
+
+        <!-- Faz Günlüðü Paneli -->
+        <input type="hidden" id="selectedPhaseDiaryId" />
+        <div class="card shadow-sm border-0 h-100 d-none" id="phaseDiaryContent">
+            <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold text-success"><i class="bi bi-journal-text me-2"></i><span id="phaseDiaryTitle">Faz Adý</span> Günlüðü</h5>
+            </div>
+            <div class="card-body d-flex flex-column p-0">
+                <div class="alert alert-info rounded-0 mb-0 border-0 border-bottom">
+                    <i class="bi bi-info-circle-fill me-2"></i>Buraya <b>"Beton döküldü", "Numune alýndý", "Hava yaðmurlu"</b> gibi þantiye notlarýnýzý tarihli olarak girebilirsiniz.
+                </div>
+                <div id="phaseDiaryBox" class="p-3 bg-light flex-grow-1" style="overflow-y: auto; max-height: 500px;">
+                    <!-- Mesajlar Buraya Gelecek -->
+                </div>
+                <div class="p-3 border-top bg-white">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="phaseDiaryInput" placeholder="Günlük notunuzu yazýn..." onkeydown="if(event.key==='Enter') sendPhaseDiary();">
+                        <button class="btn btn-success" type="button" onclick="sendPhaseDiary()"><i class="bi bi-send"></i> Kaydet</button>
+                    </div>
+                </div>
             </div>
         </div>
 
         <input type="hidden" id="selectedTaskId" />
         <div class="card shadow-sm border-0 h-100 d-none" id="taskDashboardContent">
             <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
-                <h5 class="mb-0 fw-bold text-primary" id="taskDashboardTitle">GÃ¶rev AdÄ±</h5>
+                <h5 class="mb-0 fw-bold text-primary" id="taskDashboardTitle">Görev Adý</h5>
                 <div class="badge bg-success" id="taskDashboardStatus">Devam Ediyor</div>
             </div>
             
@@ -100,7 +122,7 @@
                 <ul class="nav nav-tabs px-3 pt-3" id="taskTabs" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active fw-bold text-dark" id="budget-tab" data-bs-toggle="tab" data-bs-target="#budget" type="button" role="tab">
-                            <i class="bi bi-wallet2 text-success me-1"></i>Maliyet & BÃ¼tÃ§e
+                            <i class="bi bi-wallet2 text-success me-1"></i>Maliyet & Bütçe
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
@@ -110,7 +132,7 @@
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link fw-bold text-dark" id="docs-tab" data-bs-toggle="tab" data-bs-target="#docs" type="button" role="tab">
-                            <i class="bi bi-folder-check text-warning me-1"></i>Evraklar (Ä°SG vb.)
+                            <i class="bi bi-folder-check text-warning me-1"></i>Evraklar (ÝSG vb.)
                         </button>
                     </li>
                 </ul>
@@ -119,23 +141,23 @@
                     <!-- Maliyet Sekmesi -->
                     <div class="tab-pane fade show active" id="budget" role="tabpanel">
                         <div class="d-flex justify-content-between mb-3">
-                            <h6 class="fw-bold">Harcama ve SatÄ±n Alma Kalemleri</h6>
-                            <button class="btn btn-sm btn-success" onclick="openNewCostModal()"><i class="bi bi-plus"></i> Masraf / AlÄ±m Emri Gir</button>
+                            <h6 class="fw-bold">Harcama ve Satýn Alma Kalemleri</h6>
+                            <button class="btn btn-sm btn-success" onclick="openNewCostModal()"><i class="bi bi-plus"></i> Masraf / Alým Emri Gir</button>
                         </div>
                         <div class="table-responsive">
                             <table class="table table-sm table-hover align-middle">
                                 <thead class="table-light">
                                     <tr>
                                         <th>Kategori</th>
-                                        <th>AÃ§Ä±klama</th>
+                                        <th>Açýklama</th>
                                         <th>Tutar</th>
                                         <th>Onay Durumu</th>
-                                        <th>Ä°ÅŸlem</th>
+                                        <th>Ýþlem</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
-                                        <td colspan="5" class="text-center py-3 text-muted">API baÄŸlantÄ±sÄ± bekleniyor...</td>
+                                        <td colspan="5" class="text-center py-3 text-muted">API baðlantýsý bekleniyor...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -145,21 +167,21 @@
                     <!-- Sohbet Sekmesi -->
                     <div class="tab-pane fade" id="chat" role="tabpanel">
                         <div id="chatBox" class="chat-box bg-light rounded p-3 mb-3" style="height: 300px; overflow-y: auto;">
-                            <!-- Ã–rnek Mesaj -->
+                            <!-- Örnek Mesaj -->
                             <div class="d-flex mb-3">
                                 <div class="bg-white border rounded p-2 shadow-sm w-75">
                                     <div class="d-flex justify-content-between">
-                                        <strong class="text-primary small">Åžantiye Åžefi</strong>
+                                        <strong class="text-primary small">Þantiye Þefi</strong>
                                         <small class="text-muted">10:45</small>
                                     </div>
-                                    <p class="mb-0 mt-1 small">Korkuluklar eksik geldi. FirmayÄ± aradÄ±m, 2. parti yarÄ±n sabah teslim edilecek.</p>
+                                    <p class="mb-0 mt-1 small">Korkuluklar eksik geldi. Firmayý aradým, 2. parti yarýn sabah teslim edilecek.</p>
                                 </div>
                             </div>
                         </div>
                         
                         <div class="input-group">
                             <button class="btn btn-outline-secondary" type="button"><i class="bi bi-camera"></i></button>
-                            <input type="text" class="form-control" id="chatMessageInput" placeholder="Acil durum veya not yazÄ±n (@@ ile bahsedin)..." onkeydown="if(event.key==='Enter') sendChatMessage();">
+                            <input type="text" class="form-control" id="chatMessageInput" placeholder="Acil durum veya not yazýn (@@ ile bahsedin)..." onkeydown="if(event.key==='Enter') sendChatMessage();">
                             <button class="btn btn-primary" type="button" onclick="sendChatMessage()"><i class="bi bi-send"></i></button>
                         </div>
 
@@ -168,9 +190,9 @@
                     <!-- Evrak Sekmesi -->
                     <div class="tab-pane fade" id="docs" role="tabpanel">
                         <div class="alert alert-info small">
-                            <i class="bi bi-info-circle me-1"></i>Zemin etÃ¼dÃ¼ raporu, Ä°SG tutanaÄŸÄ± veya ruhsat PDF'lerini buraya yÃ¼kleyebilirsiniz.
+                            <i class="bi bi-info-circle me-1"></i>Zemin etüdü raporu, ÝSG tutanaðý veya ruhsat PDF'lerini buraya yükleyebilirsiniz.
                         </div>
-                        <button class="btn btn-sm btn-outline-primary mb-3"><i class="bi bi-upload"></i> Yeni Evrak YÃ¼kle</button>
+                        <button class="btn btn-sm btn-outline-primary mb-3"><i class="bi bi-upload"></i> Yeni Evrak Yükle</button>
                     </div>
                 </div>
             </div>
@@ -185,35 +207,35 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title fw-bold">Masraf / AlÄ±m Emri Gir</h5>
+                <h5 class="modal-title fw-bold">Masraf / Alým Emri Gir</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <form id="newCostForm">
                     <div class="mb-3">
-                        <label class="form-label">BaÅŸlÄ±k (Ã–rn: 2 Usta Yevmiyesi, Ã‡it Kiralama)</label>
+                        <label class="form-label">Baþlýk (Örn: 2 Usta Yevmiyesi, Çit Kiralama)</label>
                         <input type="text" class="form-control" id="costTitle" required />
                     </div>
                     <div class="row">
                         <div class="col-md-3 mb-3">
-                            <label class="form-label">SipariÅŸ Edilen</label>
-                            <input type="number" step="0.01" class="form-control" id="costQuantity" placeholder="Ã–rn: 1500" />
+                            <label class="form-label">Sipariþ Edilen</label>
+                            <input type="number" step="0.01" class="form-control" id="costQuantity" placeholder="Örn: 1500" />
                         </div>
                         <div class="col-md-3 mb-3">
-                            <label class="form-label text-success">Åžantiyeye Gelen</label>
-                            <input type="number" step="0.01" class="form-control border-success" id="costDelivered" placeholder="Ã–rn: 350" />
+                            <label class="form-label text-success">Þantiyeye Gelen</label>
+                            <input type="number" step="0.01" class="form-control border-success" id="costDelivered" placeholder="Örn: 350" />
                         </div>
                         <div class="col-md-3 mb-3">
                             <label class="form-label">Birim</label>
                             <select class="form-select" id="costUnit">
                                 <option value="Adet">Adet</option>
-                                <option value="mÂ²">mÂ²</option>
-                                <option value="mÂ³">mÂ³</option>
+                                <option value="m²">m²</option>
+                                <option value="m³">m³</option>
                                 <option value="Ton">Ton</option>
-                                <option value="mtÃ¼l">mtÃ¼l</option>
-                                <option value="GÃ¼n (Yevmiye)">GÃ¼n (Yevmiye)</option>
+                                <option value="mtül">mtül</option>
+                                <option value="Gün (Yevmiye)">Gün (Yevmiye)</option>
                                 <option value="Ay">Ay</option>
-                                <option value="LÃ¶t">LÃ¶t (GÃ¶tÃ¼rÃ¼)</option>
+                                <option value="Löt">Löt (Götürü)</option>
                             </select>
                         </div>
                         <div class="col-md-3 mb-3">
@@ -222,42 +244,42 @@
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">TedarikÃ§i / TaÅŸeron / Marka</label>
+                        <label class="form-label">Tedarikçi / Taþeron / Marka</label>
                         <input type="text" class="form-control" id="costSupplier" />
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Ä°ptal</button>
-                <button type="button" class="btn btn-success" onclick="saveCost()"><i class="bi bi-check-circle"></i> Kaydet ve Onaya GÃ¶nder</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Ýptal</button>
+                <button type="button" class="btn btn-success" onclick="saveCost()"><i class="bi bi-check-circle"></i> Kaydet ve Onaya Gönder</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Yeni Alt Ä°ÅŸ / GÃ¶rev Modal -->
+<!-- Yeni Alt Ýþ / Görev Modal -->
 <div class="modal fade" id="newTaskModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title fw-bold">Yeni Alt Ä°ÅŸ / GÃ¶rev Ekle</h5>
+                <h5 class="modal-title fw-bold">Yeni Alt Ýþ / Görev Ekle</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <form id="newTaskForm">
                     <input type="hidden" id="taskPhaseId" />
                     <div class="mb-3">
-                        <label class="form-label">GÃ¶rev AdÄ± (Ã–rn: Zemin EtÃ¼dÃ¼, Ã‡it Kurulumu)</label>
+                        <label class="form-label">Görev Adý (Örn: Zemin Etüdü, Çit Kurulumu)</label>
                         <input type="text" class="form-control" id="taskName" required />
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">KÄ±sa AÃ§Ä±klama (Opsiyonel)</label>
+                        <label class="form-label">Kýsa Açýklama (Opsiyonel)</label>
                         <textarea class="form-control" id="taskDesc" rows="2"></textarea>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Ä°ptal</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Ýptal</button>
                 <button type="button" class="btn btn-primary" onclick="saveTask()">Kaydet</button>
             </div>
         </div>
@@ -276,27 +298,27 @@
                 <form id="newPhaseForm">
                     <input type="hidden" id="phaseProjectId" value="@Model.Id" />
                     <div class="mb-3">
-                        <label class="form-label">Faz AdÄ± (Ã–rn: Kaba Ä°nÅŸaat, Ä°nce Ä°ÅŸler)</label>
+                        <label class="form-label">Faz Adý (Örn: Kaba Ýnþaat, Ýnce Ýþler)</label>
                         <input type="text" class="form-control" id="phaseName" required />
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">KÄ±sa AÃ§Ä±klama</label>
+                        <label class="form-label">Kýsa Açýklama</label>
                         <textarea class="form-control" id="phaseDesc" rows="2"></textarea>
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Planlanan BaÅŸlangÄ±Ã§</label>
+                            <label class="form-label">Planlanan Baþlangýç</label>
                             <input type="date" class="form-control" id="phaseStart" />
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Planlanan BitiÅŸ (ÅžaÅŸma PaylÄ±)</label>
+                            <label class="form-label">Planlanan Bitiþ (Þaþma Paylý)</label>
                             <input type="date" class="form-control" id="phaseEnd" />
                         </div>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Ä°ptal</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Ýptal</button>
                 <button type="button" class="btn btn-primary" onclick="savePhase()">Kaydet</button>
             </div>
         </div>
@@ -304,7 +326,70 @@
 </div>
 
 @section Scripts {
+    @Html.AntiForgeryToken()
     <script>
+        $(function () {
+            var token = $('input[name="__RequestVerificationToken"]').val();
+            if (token) {
+                $.ajaxSetup({
+                    headers: { 'RequestVerificationToken': token }
+                });
+            }
+        });
+
+        function openPhaseDiary(phaseId, phaseName) {
+            #selectedTaskId.val('');
+            #selectedPhaseDiaryId.val(phaseId);
+            
+            #taskDashboardEmpty.addClass('d-none');
+            #taskDashboardContent.addClass('d-none');
+            #phaseDiaryContent.removeClass('d-none');
+            
+            #phaseDiaryTitle.text(phaseName);
+            reloadPhaseDiary();
+        }
+
+        function reloadPhaseDiary() {
+            var phaseId = #selectedPhaseDiaryId.val();
+            #phaseDiaryBox.html('<div class="text-center py-4"><div class="spinner-border text-success"></div></div>');
+            
+            $.get('/ConstructionProject/GetPhaseDiary', { phaseId: phaseId }, function(data) {
+                if(!data.messages || data.messages.length === 0) {
+                    #phaseDiaryBox.html('<div class="text-center text-muted mt-5">Bu faz için henüz günlük notu girilmemiþ.</div>');
+                } else {
+                    let msgHtml = '';
+                    data.messages.forEach(m => {
+                        msgHtml += <div class="d-flex mb-3">
+                                <div class="bg-white border border-success border-opacity-25 rounded p-3 shadow-sm w-100">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <strong class="text-success small"><i class="bi bi-person-circle me-1"></i></strong>
+                                        <small class="text-muted"><i class="bi bi-clock me-1"></i> </small>
+                                    </div>
+                                    <p class="mb-0 mt-2"></p>
+                                </div>
+                            </div>;
+                    });
+                    #phaseDiaryBox.html(msgHtml);
+                    var box = document.getElementById("phaseDiaryBox");
+                    box.scrollTop = box.scrollHeight;
+                }
+            });
+        }
+
+        function sendPhaseDiary() {
+            var input = #phaseDiaryInput;
+            var msg = input.val();
+            var phaseId = #selectedPhaseDiaryId.val();
+            if(!msg || !phaseId) return;
+
+            $.post('/ConstructionProject/AddPhaseDiaryMessage', { phaseId: phaseId, message: msg }, function(res) {
+                if(res.success) {
+                    input.val('');
+                    reloadPhaseDiary();
+                }
+            });
+        }
+
         function savePhase() {
             var data = {
                 projectId: $('#phaseProjectId').val(),
@@ -318,12 +403,31 @@
                 if(res.success) {
                     location.reload();
                 } else {
-                    alert("Hata oluÅŸtu.");
+                    alert("Hata oluþtu.");
                 }
+            }).fail(function(xhr) {
+                alert("Sunucu Hatasý (" + xhr.status + "): " + xhr.responseText);
             });
         }
 
-        
+        function saveTask() {
+            var data = {
+                phaseId: $('#taskPhaseId').val(),
+                name: $('#taskName').val(),
+                description: $('#taskDesc').val()
+            };
+            $.post('/ConstructionProject/AddPhaseTask', data, function(res) {
+                if(res.success) { location.reload(); }
+            }).fail(function(xhr) {
+                alert("Hata: " + xhr.responseText);
+            });
+        }
+
+        function openNewTaskModal(phaseId) {
+            $('#taskPhaseId').val(phaseId);
+            $('#newTaskModal').modal('show');
+        }
+
         function openTaskDashboard(taskId, taskName) {
             $('#selectedTaskId').val(taskId);
             $('#taskDashboardEmpty').addClass('d-none');
@@ -335,7 +439,7 @@
         function reloadTaskDetails() {
             var taskId = $('#selectedTaskId').val();
             
-            // MasraflarÄ± Ã‡ek
+            // Masraflarý çek
             $('#budget tbody').html('<tr><td colspan="5" class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></td></tr>');
             
             $.get('/ConstructionProject/GetTaskDetails', { taskId: taskId }, function(data) {
@@ -343,20 +447,20 @@
                 
                 // Maliyet Tablosu
                 if(data.costs.length === 0) {
-                    $('#budget tbody').html('<tr><td colspan="5" class="text-center text-muted py-4"><i class="bi bi-wallet2 fs-4 d-block mb-2"></i>Bu iÅŸ iÃ§in henÃ¼z masraf girilmemiÅŸ.</td></tr>');
+                    $('#budget tbody').html('<tr><td colspan="5" class="text-center text-muted py-4"><i class="bi bi-wallet2 fs-4 d-block mb-2"></i>Bu iþ için henüz masraf girilmemiþ.</td></tr>');
                 } else {
                     let costHtml = '';
                     data.costs.forEach(c => {
-                        let badge = c.approvalStatus === 'OnaylandÄ±' ? 'bg-success' : (c.approvalStatus === 'Onay Bekliyor' ? 'bg-warning text-dark' : 'bg-secondary');
+                        let badge = c.approvalStatus === 'Onaylandý' ? 'bg-success' : (c.approvalStatus === 'Onay Bekliyor' ? 'bg-warning text-dark' : 'bg-secondary');
                         costHtml += `<tr>
                             <td><span class="badge bg-light text-dark border">${c.categoryName}</span></td>
                             <td class="fw-bold">${c.title} <br>
 <small class="text-muted fw-normal">
-    ${c.quantity ? `<span class="badge bg-light text-dark border me-1">${c.quantity} ${c.unit} Ä°stenen</span>` : ''} 
+    ${c.quantity ? `<span class="badge bg-light text-dark border me-1">${c.quantity} ${c.unit} Ýstenen</span>` : ''} 
     ${c.deliveredQuantity ? `<span class="badge bg-success text-white me-1">${c.deliveredQuantity} ${c.unit} Gelen</span>` : ''} 
     ${c.supplier || ''}
 </small></td>
-                            <td class="text-danger fw-bold">â‚º${c.amount.toLocaleString('tr-TR')}</td>
+                            <td class="text-danger fw-bold">?${c.amount.toLocaleString('tr-TR')}</td>
                             <td><span class="badge ${badge}">${c.approvalStatus}</span></td>
                             <td><button class="btn btn-sm btn-light text-danger"><i class="bi bi-trash"></i></button></td>
                         </tr>`;
@@ -366,7 +470,7 @@
                 
                 // Sohbet
                 if(data.messages.length === 0) {
-                    $('#chatBox').html('<div class="text-center text-muted mt-5">HenÃ¼z mesaj yok.</div>');
+                    $('#chatBox').html('<div class="text-center text-muted mt-5">Henüz mesaj yok.</div>');
                 } else {
                     let msgHtml = '';
                     data.messages.forEach(m => {
@@ -389,7 +493,7 @@
         }
 
         function openNewCostModal() {
-            if(!$('#selectedTaskId').val()) { alert('Ã–nce bir gÃ¶rev seÃ§in.'); return; }
+            if(!$('#selectedTaskId').val()) { alert('Önce bir görev seçin.'); return; }
             $('#newCostModal').modal('show');
         }
 
@@ -419,136 +523,10 @@
                 if(res.success) {
                     input.val('');
                     reloadTaskDetails();
-                }
-            });
-        }
-
-        };
-        }
-        
-        
-        function openTaskDashboard(taskId, taskName) {
-            $('#selectedTaskId').val(taskId);
-            $('#taskDashboardEmpty').addClass('d-none');
-            $('#taskDashboardContent').removeClass('d-none');
-            $('#taskDashboardTitle').text(taskName);
-            reloadTaskDetails();
-        }
-
-        function reloadTaskDetails() {
-            var taskId = $('#selectedTaskId').val();
-            
-            // MasraflarÄ± Ã‡ek
-            $('#budget tbody').html('<tr><td colspan="5" class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></td></tr>');
-            
-            $.get('/ConstructionProject/GetTaskDetails', { taskId: taskId }, function(data) {
-                $('#taskDashboardStatus').text(data.status);
-                
-                // Maliyet Tablosu
-                if(data.costs.length === 0) {
-                    $('#budget tbody').html('<tr><td colspan="5" class="text-center text-muted py-4"><i class="bi bi-wallet2 fs-4 d-block mb-2"></i>Bu iÅŸ iÃ§in henÃ¼z masraf girilmemiÅŸ.</td></tr>');
-                } else {
-                    let costHtml = '';
-                    data.costs.forEach(c => {
-                        let badge = c.approvalStatus === 'OnaylandÄ±' ? 'bg-success' : (c.approvalStatus === 'Onay Bekliyor' ? 'bg-warning text-dark' : 'bg-secondary');
-                        costHtml += `<tr>
-                            <td><span class="badge bg-light text-dark border">${c.categoryName}</span></td>
-                            <td class="fw-bold">${c.title} <br>
-<small class="text-muted fw-normal">
-    ${c.quantity ? `<span class="badge bg-light text-dark border me-1">${c.quantity} ${c.unit} Ä°stenen</span>` : ''} 
-    ${c.deliveredQuantity ? `<span class="badge bg-success text-white me-1">${c.deliveredQuantity} ${c.unit} Gelen</span>` : ''} 
-    ${c.supplier || ''}
-</small></td>
-                            <td class="text-danger fw-bold">â‚º${c.amount.toLocaleString('tr-TR')}</td>
-                            <td><span class="badge ${badge}">${c.approvalStatus}</span></td>
-                            <td><button class="btn btn-sm btn-light text-danger"><i class="bi bi-trash"></i></button></td>
-                        </tr>`;
-                    });
-                    $('#budget tbody').html(costHtml);
-                }
-                
-                // Sohbet
-                if(data.messages.length === 0) {
-                    $('#chatBox').html('<div class="text-center text-muted mt-5">HenÃ¼z mesaj yok.</div>');
-                } else {
-                    let msgHtml = '';
-                    data.messages.forEach(m => {
-                        msgHtml += `<div class="d-flex mb-3">
-                                <div class="bg-white border rounded p-2 shadow-sm w-75">
-                                    <div class="d-flex justify-content-between">
-                                        <strong class="text-primary small">${m.sender || 'Bilinmiyor'}</strong>
-                                        <small class="text-muted">${m.date} ${m.time}</small>
-                                    </div>
-                                    <p class="mb-0 mt-1 small">${m.message}</p>
-                                </div>
-                            </div>`;
-                    });
-                    $('#chatBox').html(msgHtml);
-                    // Scroll to bottom
-                    var chatBox = document.getElementById("chatBox");
-                    chatBox.scrollTop = chatBox.scrollHeight;
-                }
-            });
-        }
-
-        function openNewCostModal() {
-            if(!$('#selectedTaskId').val()) { alert('Ã–nce bir gÃ¶rev seÃ§in.'); return; }
-            $('#newCostModal').modal('show');
-        }
-
-        function saveCost() {
-            var data = {
-                taskId: $('#selectedTaskId').val(),
-                title: $('#costTitle').val(),
-                amount: $('#costAmount').val(), quantity: $('#costQuantity').val(), deliveredQuantity: $('#costDelivered').val(), unit: $('#costUnit').val(),
-                supplier: $('#costSupplier').val()
-            };
-            $.post('/ConstructionProject/AddTaskCost', data, function(res) {
-                if(res.success) { 
-                    $('#newCostModal').modal('hide');
-                    $('#newCostForm')[0].reset();
-                    reloadTaskDetails();
-                }
-            });
-        }
-
-        function sendChatMessage() {
-            var input = $('#chatMessageInput');
-            var msg = input.val();
-            var taskId = $('#selectedTaskId').val();
-            if(!msg || !taskId) return;
-
-            $.post('/ConstructionProject/AddTaskMessage', { taskId: taskId, message: msg }, function(res) {
-                if(res.success) {
-                    input.val('');
-                    reloadTaskDetails();
-                }
-            });
-        }
-
-        };
-                    $('#budget tbody').html(costHtml);
-                }
-                
-                // Sohbet
-                if(data.messages.length === 0) {
-                    $('#chatBox').html('<div class="text-center text-muted mt-5">HenÃ¼z mesaj yok.</div>');
-                } else {
-                    let msgHtml = '';
-                    data.messages.forEach(m => {
-                        msgHtml += `<div class="d-flex mb-3">
-                                <div class="bg-white border rounded p-2 shadow-sm w-75">
-                                    <div class="d-flex justify-content-between">
-                                        <strong class="text-primary small">${m.sender || 'Bilinmiyor'}</strong>
-                                        <small class="text-muted">${m.date} ${m.time}</small>
-                                    </div>
-                                    <p class="mb-0 mt-1 small">${m.message}</p>
-                                </div>
-                            </div>`;
-                    });
-                    $('#chatBox').html(msgHtml);
                 }
             });
         }
     </script>
 }
+
+

@@ -1,0 +1,188 @@
+@model GMK360.Core.Entities.Finance.SubcontractorContract
+@using GMK360.Core.Entities.Finance
+@{
+    ViewData["Title"] = "Sözleþme & Hakediþ Detayý";
+    Layout = "_ConstructionProjectLayout";
+    var payments = ViewBag.Payments as List<ProgressPayment> ?? new List<ProgressPayment>();
+    decimal totalPaid = ViewBag.TotalPaid ?? 0m;
+    decimal totalApproved = ViewBag.TotalApproved ?? 0m;
+    decimal remainingAmount = Model.TotalAmount - totalApproved;
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0"><i class="bi bi-file-earmark-text text-primary me-2"></i>Sözleþme Detayý</h2>
+            <p class="text-muted mb-0">@Model.PhonebookContact.Name - @Model.Title</p>
+        </div>
+        <a asp-action="ProjectContracts" asp-route-id="@Model.ProjectId" class="btn btn-light border">
+            <i class="bi bi-arrow-left me-2"></i> Sözleþmelere Dön
+        </a>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 rounded-4 bg-primary text-white h-100">
+                <div class="card-body">
+                    <h6 class="text-white-50 text-uppercase">Sözleþme Toplam Bedeli</h6>
+                    <h3 class="fw-bold mb-0">@Model.TotalAmount.ToString("N2") @Model.Currency</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 rounded-4 bg-success text-white h-100">
+                <div class="card-body">
+                    <h6 class="text-white-50 text-uppercase">Onaylanan Toplam Hakediþ</h6>
+                    <h3 class="fw-bold mb-0">@totalApproved.ToString("N2") @Model.Currency</h3>
+                    <small>Ödenen: @totalPaid.ToString("N2") @Model.Currency</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 rounded-4 bg-light h-100">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase">Kalan (Ýçerideki) Bakiye</h6>
+                    <h3 class="fw-bold mb-0 text-dark">@remainingAmount.ToString("N2") @Model.Currency</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+        <div class="card-header bg-white border-bottom-0 pt-4 pb-0 d-flex justify-content-between align-items-center">
+            <h5 class="fw-bold mb-0"><i class="bi bi-list-check me-2"></i>Serbest Hakediþler (Ödeme Talepleri)</h5>
+            <button class="btn btn-primary btn-sm rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#newPaymentModal">
+                <i class="bi bi-plus-lg me-1"></i> Yeni Hakediþ Ekle
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info border-0 bg-info bg-opacity-10 mb-4">
+                <i class="bi bi-info-circle-fill me-2"></i> <b>Esnek Hakediþ Yapýsý:</b> Þantiyedeki duruma göre (örn: Kat çýkýldýðýnda, Kalýp çakýldýðýnda vb.) istediðiniz tutarda serbest hakediþ talebi oluþturabilirsiniz. Fazlara baðýmlý olmak zorunda deðilsiniz.
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tarih</th>
+                            <th>Hakediþ / Talep Adý</th>
+                            <th class="text-end">Talep Edilen</th>
+                            <th class="text-end">Onaylanan (Hakediþ)</th>
+                            <th class="text-center">Durum</th>
+                            <th class="text-end">Ýþlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!payments.Any())
+                        {
+                            <tr><td colspan="6" class="text-center py-4 text-muted">Henüz bu sözleþme için hakediþ girilmemiþ.</td></tr>
+                        }
+                        @foreach(var p in payments)
+                        {
+                            <tr>
+                                <td>@p.RequestDate.ToShortDateString()</td>
+                                <td>
+                                    <strong>@p.PaymentTitle</strong>
+                                    @if(!string.IsNullOrEmpty(p.Notes)) { <br/><small class="text-muted">@p.Notes</small> }
+                                </td>
+                                <td class="text-end">@p.RequestedAmount.ToString("N2")</td>
+                                <td class="text-end fw-bold text-success">@p.ApprovedAmount.ToString("N2")</td>
+                                <td class="text-center">
+                                    @if(p.Status == ProgressPaymentStatus.Draft) { <span class="badge bg-secondary">Taslak</span> }
+                                    else if(p.Status == ProgressPaymentStatus.PendingApproval) { <span class="badge bg-warning text-dark">Onay Bekliyor</span> }
+                                    else if(p.Status == ProgressPaymentStatus.Approved) { <span class="badge bg-success">Onaylandý</span> }
+                                    else if(p.Status == ProgressPaymentStatus.Paid) { <span class="badge bg-primary">Ödendi</span> }
+                                    else { <span class="badge bg-danger">Reddedildi</span> }
+                                </td>
+                                <td class="text-end">
+                                    @if(p.Status == ProgressPaymentStatus.Draft || p.Status == ProgressPaymentStatus.PendingApproval) {
+                                        <button class="btn btn-sm btn-success rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#approveModal-@p.Id">
+                                            <i class="bi bi-check-circle me-1"></i> Onayla
+                                        </button>
+
+                                        <!-- Approve Modal -->
+                                        <div class="modal fade text-start" id="approveModal-@p.Id" tabindex="-1">
+                                            <div class="modal-dialog modal-dialog-centered">
+                                                <div class="modal-content border-0 shadow-lg">
+                                                    <div class="modal-header bg-success text-white border-0">
+                                                        <h5 class="modal-title">Hakediþi Onayla</h5>
+                                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                                    </div>
+                                                    <form asp-action="ApprovePayment" method="post">
+                                                        <input type="hidden" name="paymentId" value="@p.Id" />
+                                                        <div class="modal-body p-4">
+                                                            <div class="alert alert-warning border-0">
+                                                                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                                                Bu hakediþi onayladýðýnýzda, tutar taþeronun <b>Cari Hesabýna</b> otomatik olarak borç/alacak olarak iþlenecektir.
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <label class="form-label fw-bold">Onaylanan Tutar (TL)</label>
+                                                                <input type="number" step="0.01" name="approvedAmount" class="form-control form-control-lg text-end fw-bold text-success" value="@p.RequestedAmount.ToString("0.00")" required />
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <label class="form-label fw-bold">Onay Notu</label>
+                                                                <textarea name="approvalNotes" class="form-control" rows="2"></textarea>
+                                                            </div>
+                                                        </div>
+                                                        <div class="modal-footer border-0">
+                                                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Ýptal</button>
+                                                            <button type="submit" class="btn btn-success fw-bold px-4">Onayla ve Cari'ye Ýþle</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Yeni Hakediþ Modalý -->
+<div class="modal fade" id="newPaymentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white border-0">
+                <h5 class="modal-title"><i class="bi bi-cash-coin me-2"></i>Yeni Hakediþ (Ödeme Talebi)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="AddPayment" method="post">
+                <input type="hidden" name="contractId" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Hakediþ Adý / Açýklamasý <span class="text-danger">*</span></label>
+                        <input type="text" name="title" class="form-control" placeholder="Örn: 1. Kat Tabliye Betonu Hakediþi" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Talep Edilen / Hak Edilen Tutar (@Model.Currency) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" name="requestedAmount" class="form-control form-control-lg text-end" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Ek Notlar (Opsiyonel)</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="Þantiye þefinin notlarý..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Ýptal</button>
+                    <button type="submit" class="btn btn-primary fw-bold px-4">Talebi Oluþtur</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+

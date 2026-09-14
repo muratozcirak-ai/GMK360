@@ -1,4 +1,4 @@
-using GMK360.Data.Contexts;
+﻿using GMK360.Data.Contexts;
 using GMK360.Core.Entities.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
@@ -34,17 +34,17 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
 
 builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options => {
-    // DEV: Kolay test için Email Onayı geçici olarak kapatıldı
+    // DEV: Kolay test iÃ§in Email OnayÄ± geÃ§ici olarak kapatÄ±ldÄ±
     options.SignIn.RequireConfirmedAccount = false;
     
-    // Güvenlik: Şifre Zorunlulukları
+    // GÃ¼venlik: Åifre ZorunluluklarÄ±
     options.Password.RequireDigit = true;
     options.Password.RequireLowercase = true;
     options.Password.RequireNonAlphanumeric = true;
     options.Password.RequireUppercase = true;
     options.Password.RequiredLength = 8;
     
-    // Güvenlik: Hesap Kilitleme (Brute-Force Koruması)
+    // GÃ¼venlik: Hesap Kilitleme (Brute-Force KorumasÄ±)
     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     options.Lockout.MaxFailedAccessAttempts = 5;
     options.Lockout.AllowedForNewUsers = true;
@@ -52,10 +52,10 @@ builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options => {
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
-// Alt Domain (Subdomain) SSO için Cookie Ayarları
+// Alt Domain (Subdomain) SSO iÃ§in Cookie AyarlarÄ±
 builder.Services.ConfigureApplicationCookie(options =>
 {
-    // DEV: Localhost'ta giriş yapabilmek için Cookie.Domain sadece canlı (Production) ortamda set edilmelidir.
+    // DEV: Localhost'ta giriÅŸ yapabilmek iÃ§in Cookie.Domain sadece canlÄ± (Production) ortamda set edilmelidir.
     // options.Cookie.Domain = ".gmk360.com"; // Ana ve alt domainlerde ortak oturum
     options.Cookie.Name = "GMK360.AuthCookie";
 });
@@ -83,10 +83,10 @@ if (!string.IsNullOrEmpty(builder.Configuration["Authentication:Apple:ClientId"]
     });
 }
 
-// Güvenlik: Rate Limiting (DDoS ve Kaba Kuvvet Koruması)
+// GÃ¼venlik: Rate Limiting (DDoS ve Kaba Kuvvet KorumasÄ±)
 builder.Services.AddRateLimiter(options =>
 {
-    // Genel site trafiği (Saniyede 100 istek)
+    // Genel site trafiÄŸi (Saniyede 100 istek)
     options.AddFixedWindowLimiter("GlobalLimiter", opt =>
     {
         opt.PermitLimit = 100;
@@ -95,7 +95,7 @@ builder.Services.AddRateLimiter(options =>
         opt.QueueLimit = 2;
     });
 
-    // Login ve kritik işlemler (Dakikada 5 istek)
+    // Login ve kritik iÅŸlemler (Dakikada 5 istek)
     options.AddFixedWindowLimiter("LoginLimiter", opt =>
     {
         opt.PermitLimit = 5;
@@ -155,29 +155,29 @@ builder.Services.AddLocalization(options => options.ResourcesPath = "Resources")
 // Add CORS Policy for Chrome Extension and Subdomains
 builder.Services.AddCors(options =>
 {
-    // Chrome Extension için (SADECE gerçek extension ID'niz varsa)
+    // Chrome Extension iÃ§in (SADECE gerÃ§ek extension ID'niz varsa)
     options.AddPolicy("AllowExtension", policy =>
     {
         policy.WithOrigins(
-                "chrome-extension://YOUR_ACTUAL_EXTENSION_ID_HERE", // Gerçek ID
-                "https://localhost:7001",      // Development için
+                "chrome-extension://YOUR_ACTUAL_EXTENSION_ID_HERE", // GerÃ§ek ID
+                "https://localhost:7001",      // Development iÃ§in
                 "https://localhost:5001",      // Development HTTP
                 "https://gmk360.com",          // Production domain
                 "https://www.gmk360.com"       // Production www
               )
               .WithMethods("GET", "POST", "PUT", "DELETE")
               .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
-              .AllowCredentials();  // Cookie için gerekli
+              .AllowCredentials();  // Cookie iÃ§in gerekli
     });
 
-    // Alt domainler için (kurumsal.gmk360.com gibi)
+    // Alt domainler iÃ§in (kurumsal.gmk360.com gibi)
     options.AddPolicy("SubdomainPolicy", policy =>
     {
         policy.WithOrigins(
                 "https://gmk360.com",
                 "https://www.gmk360.com",
                 "https://kurumsal.gmk360.com",
-                "https://*.gmk360.com"  // Tüm alt domainler
+                "https://*.gmk360.com"  // TÃ¼m alt domainler
               )
               .SetIsOriginAllowedToAllowWildcardSubdomains()
               .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH")
@@ -185,7 +185,7 @@ builder.Services.AddCors(options =>
               .AllowCredentials();
     });
 
-    // Development için
+    // Development iÃ§in
     if (builder.Environment.IsDevelopment())
     {
         options.AddPolicy("AllowDevelopment", policy =>
@@ -200,10 +200,10 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddControllersWithViews(options => 
     {
-        // Güvenlik: CSRF (Cross-Site Request Forgery) Koruması tüm POST istekleri için zorunlu
+        // GÃ¼venlik: CSRF (Cross-Site Request Forgery) KorumasÄ± tÃ¼m POST istekleri iÃ§in zorunlu
         options.Filters.Add(new Microsoft.AspNetCore.Mvc.AutoValidateAntiforgeryTokenAttribute());
         
-        // Zorunlu Kayıt Tamamlama (Onboarding) Filtresi
+        // Zorunlu KayÄ±t Tamamlama (Onboarding) Filtresi
         options.Filters.Add(typeof(GMK360.Web.Filters.OnboardingRequirementFilter));
     })
     .AddRazorRuntimeCompilation()
@@ -264,7 +264,7 @@ app.UseMiddleware<GMK360.Web.Middleware.SubdomainRoutingMiddleware>();
 app.UseMiddleware<GMK360.Web.Middleware.AgencySubdomainMiddleware>();
 app.UseRouting();
 app.UseCors("AllowExtension");
-app.UseCors("SubdomainPolicy"); // Alt domain CORS politikası aktif edildi
+app.UseCors("SubdomainPolicy"); // Alt domain CORS politikasÄ± aktif edildi
 
 // Enable Localization Middleware
 var locOptions = app.Services.GetService<Microsoft.Extensions.Options.IOptions<RequestLocalizationOptions>>();
@@ -273,8 +273,8 @@ if (locOptions != null)
     app.UseRequestLocalization(locOptions.Value);
 }
 
-// Güvenlik Middleware'leri
-app.UseRateLimiter(); // Rate limiter devreye alınıyor
+// GÃ¼venlik Middleware'leri
+app.UseRateLimiter(); // Rate limiter devreye alÄ±nÄ±yor
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -286,16 +286,17 @@ using (var scope = app.Services.CreateScope())
     {
         await GMK360.Data.Seeds.RoleAndUserSeeder.SeedRolesAndAdminAsync(services);
         await GMK360.Data.Seeds.DefinitionSeeder.SeedDefinitionsAsync(services);
+        await GMK360.Data.Seeds.DemoSeeder.SeedDemoDataAsync(services);
     }
     catch (Exception ex)
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Roller ve Admin hesabı oluşturulurken bir hata meydana geldi.");
+        logger.LogError(ex, "Roller ve Admin hesabÄ± oluÅŸturulurken bir hata meydana geldi.");
     }
 }
 
 
-// SEO Dostu Yönlendirmeler (Slug tabanlı)
+// SEO Dostu YÃ¶nlendirmeler (Slug tabanlÄ±)
 
 app.MapDynamicControllerRoute<GMK360.Web.Routing.SeoRouteTransformer>(
     "{city}/{district}/{seoSlug}");
@@ -316,6 +317,9 @@ app.MapControllerRoute(
 
 
 app.Run();
+
+
+
 
 
 

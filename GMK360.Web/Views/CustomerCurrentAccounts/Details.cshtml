@@ -1,0 +1,171 @@
+@model GMK360.Core.Entities.Finance.CustomerCurrentAccount
+@{
+    ViewData["Title"] = "Müþteri Cari Detayý";
+    Layout = "_ConstructionLayout";
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0"><i class="bi bi-person-lines-fill text-primary me-2"></i>Açýk Hesap: @Model.CustomerUser?.FirstName @Model.CustomerUser?.LastName</h2>
+            <p class="text-muted mb-0">Tel: @Model.CustomerUser?.PhoneNumber | Üye: Evet (Sistemden bildirim alýr)</p>
+        </div>
+        <a asp-action="Index" class="btn btn-light border rounded-pill"><i class="bi bi-arrow-left me-1"></i> Tüm Defterlere Dön</a>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-light border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body text-center py-4">
+                    <h6 class="text-muted text-uppercase">Güncel Borç Bakiyesi</h6>
+                    @if (Model.CurrentBalance > 0)
+                    {
+                        <h2 class="text-danger fw-bold mb-0">@Model.CurrentBalance.ToString("N2") TL</h2>
+                    }
+                    else if (Model.CurrentBalance < 0)
+                    {
+                        <h2 class="text-success fw-bold mb-0">Alacaklý: @Math.Abs(Model.CurrentBalance).ToString("N2") TL</h2>
+                    }
+                    else
+                    {
+                        <h2 class="text-dark fw-bold mb-0">0.00 TL</h2>
+                        <span class="badge bg-success mt-2">Borcu Yok</span>
+                    }
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-8">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body d-flex flex-column justify-content-center">
+                    <div class="d-flex gap-3">
+                        <button class="btn btn-danger btn-lg rounded-pill flex-grow-1 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#addDebtModal">
+                            <i class="bi bi-cart-plus me-2"></i> Mal/Hizmet Verdim (Borçlandýr)
+                        </button>
+                        <button class="btn btn-success btn-lg rounded-pill flex-grow-1 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#addPaymentModal">
+                            <i class="bi bi-cash-stack me-2"></i> Para Aldým (Tahsilat Düþ)
+                        </button>
+                    </div>
+                    <div class="mt-3 text-center text-muted small">
+                        <i class="bi bi-info-circle me-1"></i> Bu iþlemleri yaptýðýnýzda müþterinize SMS/Bildirim gidecektir.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ýþlem Geçmiþi (Defter) -->
+    <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-header bg-white border-bottom-0 pt-4">
+            <h5 class="fw-bold mb-0"><i class="bi bi-clock-history me-2"></i>Hesap Hareketleri (Defter Kaydý)</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tarih</th>
+                            <th>Açýklama / Ýþlem Tipi</th>
+                            <th class="text-end">Borç (Mal Verildi)</th>
+                            <th class="text-end">Alacak (Para Alýndý)</th>
+                            <th class="text-end">Kalan Bakiye</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Transactions == null || !Model.Transactions.Any())
+                        {
+                            <tr><td colspan="5" class="text-center py-5 text-muted">Henüz hesap hareketi yok.</td></tr>
+                        }
+                        @foreach(var t in Model.Transactions ?? new List<GMK360.Core.Entities.Finance.CustomerAccountTransaction>())
+                        {
+                            <tr>
+                                <td>@t.TransactionDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                <td>
+                                    <strong>@t.Description</strong>
+                                    @if(t.IsDebtToUs) { <span class="badge bg-danger bg-opacity-10 text-danger ms-2">Mal/Hizmet Fiþi</span> }
+                                    else { <span class="badge bg-success bg-opacity-10 text-success ms-2">Tahsilat Makbuzu</span> }
+                                </td>
+                                <td class="text-end">
+                                    @if(t.IsDebtToUs) { <span class="text-danger fw-bold">+@t.Amount.ToString("N2")</span> } else { <span>-</span> }
+                                </td>
+                                <td class="text-end">
+                                    @if(!t.IsDebtToUs) { <span class="text-success fw-bold">+@t.Amount.ToString("N2")</span> } else { <span>-</span> }
+                                </td>
+                                <td class="text-end fw-bold text-dark">@t.BalanceAfterTransaction.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Borçlandýr Modal -->
+<div class="modal fade" id="addDebtModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-danger text-white border-0">
+                <h5 class="modal-title"><i class="bi bi-cart-plus me-2"></i>Yeni Borç (Veresiye Mal/Hizmet)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="AddTransaction" method="post">
+                <input type="hidden" name="accountId" value="@Model.Id" />
+                <input type="hidden" name="isDebtToUs" value="true" />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Açýklama (Örn: 20 Torba Çimento)</label>
+                        <input type="text" name="description" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Tutar (TL) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" name="amount" class="form-control form-control-lg text-end" required />
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Ýptal</button>
+                    <button type="submit" class="btn btn-danger fw-bold px-4">Borç Yaz</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Tahsilat Modal -->
+<div class="modal fade" id="addPaymentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-success text-white border-0">
+                <h5 class="modal-title"><i class="bi bi-cash-stack me-2"></i>Tahsilat (Para Alýndý)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="AddTransaction" method="post">
+                <input type="hidden" name="accountId" value="@Model.Id" />
+                <input type="hidden" name="isDebtToUs" value="false" />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Açýklama (Örn: Nakit Ödeme, IBAN Havale)</label>
+                        <input type="text" name="description" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Alýnan Tutar (TL) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" name="amount" class="form-control form-control-lg text-end" required />
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Ýptal</button>
+                    <button type="submit" class="btn btn-success fw-bold px-4">Hesaptan Düþ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
