@@ -88,9 +88,24 @@ namespace GMK360.Web.Controllers
         {
             var agencyId = GetCurrentAgencyId();
             ViewBag.ProjectId = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.ConstructionProjects.Where(p => p.AgencyId == agencyId), "Id", "Name");
-            ViewBag.PhonebookId = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.AgencyPhonebooks.Where(p => p.AgencyId == agencyId), "Id", "Name");
-            // Also multiselect for participants
-            ViewBag.ParticipantsList = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.AgencyPhonebooks.Where(p => p.AgencyId == agencyId), "Id", "Name");
+            
+            var phonebooks = _context.AgencyPhonebooks
+                .Where(p => p.AgencyId == agencyId)
+                .Select(p => new {
+                    Id = p.Id,
+                    // Eğer Tags alanı doluysa, parantez içinde sonuna ekliyoruz ki Select2 aramasında (örn: Betoncu, Kalıpçı) çıksın.
+                    Name = string.IsNullOrEmpty(p.Tags) ? p.Name : p.Name + " [" + p.Tags + "]",
+                    GroupName = p.ContactType == 1 ? "Ustalar / Ekipler" :
+                                p.ContactType == 2 ? "Taşeron Firmalar" :
+                                p.ContactType == 3 ? "Tedarikçiler" : "Müşavir / Ofis / Diğer"
+                })
+                .OrderBy(p => p.GroupName)
+                .ThenBy(p => p.Name)
+                .ToList();
+
+            ViewBag.PhonebookId = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(phonebooks, "Id", "Name", null, "GroupName");
+            ViewBag.ParticipantsList = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(phonebooks, "Id", "Name", null, "GroupName");
+            
             return View(new AgendaRecord { EventDate = DateTime.Now });
         }
 
