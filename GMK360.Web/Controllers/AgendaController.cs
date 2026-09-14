@@ -83,6 +83,15 @@ namespace GMK360.Web.Controllers
             return PartialView("_AgendaDetails", record);
         }
 
+        
+        public IActionResult Create()
+        {
+            var agencyId = GetCurrentAgencyId();
+            ViewBag.ProjectId = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.ConstructionProjects.Where(p => p.AgencyId == agencyId), "Id", "Name");
+            ViewBag.PhonebookId = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.AgencyPhonebooks.Where(p => p.AgencyId == agencyId), "Id", "Name");
+            return View(new AgendaRecord { EventDate = DateTime.Now });
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(AgendaRecord record, IFormFile imageFile, List<string> itemTopicTitle, List<string> itemPresentationText)
@@ -145,5 +154,17 @@ namespace GMK360.Web.Controllers
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index), new { selectedDate = record.EventDate.ToString("yyyy-MM-dd") });
         }
+
+        [HttpPost]
+        public async Task<IActionResult> SaveLiveNotes(int itemId, string notes)
+        {
+            var item = await _context.AgendaItems.FindAsync(itemId);
+            if (item == null) return NotFound();
+            
+            item.LiveMeetingNotes = notes;
+            await _context.SaveChangesAsync();
+            return Ok();
+        }
     }
 }
+
