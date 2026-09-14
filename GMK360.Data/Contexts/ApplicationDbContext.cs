@@ -206,6 +206,7 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         public DbSet<ConstructionProject> ConstructionProjects { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.AgendaRecord> AgendaRecords { get; set; }
           public DbSet<GMK360.Core.Entities.Construction.AgendaItem> AgendaItems { get; set; }
+          public DbSet<GMK360.Core.Entities.Construction.AgendaParticipant> AgendaParticipants { get; set; }
         public DbSet<ConstructionTimesheet> ConstructionTimesheets { get; set; }
         public DbSet<ProjectPhase> ProjectPhases { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.CostCategory> CostCategories { get; set; }
@@ -429,6 +430,13 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
                 .OnDelete(DeleteBehavior.Restrict);
 
             base.OnModelCreating(builder);
+
+            builder.Entity<GMK360.Core.Entities.Construction.AgendaParticipant>()
+                .HasOne(ap => ap.Phonebook)
+                .WithMany()
+                .HasForeignKey(ap => ap.PhonebookId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             builder.Entity<GMK360.Core.Entities.Marketplace.MarketplaceBid>()
                 .HasOne(b => b.BidderUser)
                 .WithMany()

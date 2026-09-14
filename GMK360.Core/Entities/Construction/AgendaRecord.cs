@@ -47,5 +47,6 @@ namespace GMK360.Core.Entities.Construction
         public virtual AgencyPhonebook Phonebook { get; set; }
 
         public virtual System.Collections.Generic.ICollection<AgendaItem> Items { get; set; }
+        public virtual System.Collections.Generic.ICollection<AgendaParticipant> Participants { get; set; }
     }
 }

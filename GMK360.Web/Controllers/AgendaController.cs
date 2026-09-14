@@ -89,12 +89,14 @@ namespace GMK360.Web.Controllers
             var agencyId = GetCurrentAgencyId();
             ViewBag.ProjectId = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.ConstructionProjects.Where(p => p.AgencyId == agencyId), "Id", "Name");
             ViewBag.PhonebookId = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.AgencyPhonebooks.Where(p => p.AgencyId == agencyId), "Id", "Name");
+            // Also multiselect for participants
+            ViewBag.ParticipantsList = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.AgencyPhonebooks.Where(p => p.AgencyId == agencyId), "Id", "Name");
             return View(new AgendaRecord { EventDate = DateTime.Now });
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(AgendaRecord record, IFormFile imageFile, List<string> itemTopicTitle, List<string> itemPresentationText)
+        public async Task<IActionResult> Create(AgendaRecord record, IFormFile imageFile, List<string> itemTopicTitle, List<string> itemPresentationText, List<int> selectedParticipants)
         {
             var agencyId = GetCurrentAgencyId();
             record.AgencyId = agencyId;
@@ -150,7 +152,32 @@ namespace GMK360.Web.Controllers
                 }
             }
 
+            
+            // Katılımcılar
+            record.Participants = new System.Collections.Generic.List<AgendaParticipant>();
+            if (selectedParticipants != null && selectedParticipants.Count > 0)
+            {
+                foreach(var pId in selectedParticipants)
+                {
+                    var phonebook = _context.AgencyPhonebooks.FirstOrDefault(p => p.Id == pId);
+                    if (phonebook != null)
+                    {
+                        var participant = new AgendaParticipant { PhonebookId = pId };
+                        if (!string.IsNullOrEmpty(phonebook.LinkedUserId))
+                        {
+                            participant.UserId = phonebook.LinkedUserId;
+                        }
+                        else
+                        {
+                            participant.AccessToken = Guid.NewGuid().ToString("N");
+                        }
+                        record.Participants.Add(participant);
+                    }
+                }
+            }
+            
             _context.AgendaRecords.Add(record);
+
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index), new { selectedDate = record.EventDate.ToString("yyyy-MM-dd") });
         }
@@ -165,6 +192,67 @@ namespace GMK360.Web.Controllers
             await _context.SaveChangesAsync();
             return Ok();
         }
+
+        [AllowAnonymous]
+        public async Task<IActionResult> Guest(string token)
+        {
+            if (string.IsNullOrEmpty(token)) return NotFound();
+
+            var participant = await _context.AgendaParticipants
+                .Include(p => p.AgendaRecord)
+                .ThenInclude(r => r.Items)
+                .FirstOrDefaultAsync(p => p.AccessToken == token);
+
+            if (participant == null) return NotFound();
+            
+            // Mark as viewed
+            if (!participant.IsViewed)
+            {
+                participant.IsViewed = true;
+                await _context.SaveChangesAsync();
+            }
+
+            ViewBag.ParticipantId = participant.Id;
+            ViewBag.ParticipantNotes = participant.ParticipantNotes;
+            return View("GuestView", participant.AgendaRecord);
+        }
+
+        [AllowAnonymous]
+        [HttpPost]
+        public async Task<IActionResult> SaveParticipantNotes(int participantId, string notes)
+        {
+            var p = await _context.AgendaParticipants.FindAsync(participantId);
+            if (p != null)
+            {
+                p.ParticipantNotes = notes;
+                await _context.SaveChangesAsync();
+            }
+            return Ok();
+        }
+
+
+        [HttpGet]
+        public async Task<IActionResult> View(int id)
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var participant = await _context.AgendaParticipants
+                .Include(p => p.AgendaRecord)
+                .ThenInclude(r => r.Items)
+                .FirstOrDefaultAsync(p => p.AgendaRecordId == id && p.UserId == userId);
+
+            if (participant == null) return NotFound("Bu toplantıya katılma yetkiniz yok veya böyle bir toplantı bulunamadı.");
+
+            if (!participant.IsViewed)
+            {
+                participant.IsViewed = true;
+                await _context.SaveChangesAsync();
+            }
+
+            ViewBag.ParticipantId = participant.Id;
+            ViewBag.ParticipantNotes = participant.ParticipantNotes;
+            return View("GuestView", participant.AgendaRecord);
+        }
+
     }
 }
 
