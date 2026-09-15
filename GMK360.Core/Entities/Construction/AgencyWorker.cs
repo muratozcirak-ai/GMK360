@@ -18,7 +18,13 @@ namespace GMK360.Core.Entities.Construction
         public string WorkerType { get; set; } = "Firma Personeli"; // Taşeron, Firma Personeli, Yevmiyeci
         public string SubcontractorName { get; set; } // Eğer taşeron ise firma adı
 
-        public decimal DefaultDailyWage { get; set; } // Standart yevmiyesi
+        // Taşeronun rehber kaydı (Gölge kullanıcı bağlantısı için)
+        public int? SubcontractorContactId { get; set; }
+        public AgencyPhonebook SubcontractorContact { get; set; }
+
+        public decimal DefaultDailyWage { get; set; }
+        public decimal NetDailyWage { get; set; } // İşçinin Cebine Giren
+        public decimal DailySgkCost { get; set; } // Şirketin SGK Yükü // Standart yevmiyesi
         public bool IsActive { get; set; } = true;
 
         public ICollection<DailyTimesheet> Timesheets { get; set; }

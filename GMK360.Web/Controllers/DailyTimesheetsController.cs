@@ -1,4 +1,4 @@
-using GMK360.Core.Entities.Construction;
+ï»¿using GMK360.Core.Entities.Construction;
 using GMK360.Data.Contexts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -38,7 +38,7 @@ namespace GMK360.Web.Controllers
             return consultant?.AgencyId;
         }
 
-                public async Task<IActionResult> Index(DateTime? date)
+        public async Task<IActionResult> Index(DateTime? date)
         {
             var agencyId = await GetUserAgencyIdAsync();
             if (agencyId == null) return Unauthorized();
@@ -46,7 +46,6 @@ namespace GMK360.Web.Controllers
             DateTime targetDate = date ?? DateTime.Today;
             ViewBag.TargetDate = targetDate;
             
-            // Sadece özet verileri getir
             var timesheets = await _context.DailyTimesheets
                 .Include(t => t.AgencyWorker)
                 .Include(t => t.ProjectPhase).ThenInclude(p => p.ConstructionProject)
@@ -71,85 +70,118 @@ namespace GMK360.Web.Controllers
             ViewBag.TargetDate = targetDate;
             ViewBag.Project = project;
 
-            // Projeye atanmýþ iþçiler (þimdilik tüm aktif iþçileri getiriyoruz)
             var workers = await _context.AgencyWorkers
                 .Where(w => w.AgencyId == agencyId.Value && w.IsActive)
                 .OrderBy(w => w.FirstName).ThenBy(w => w.LastName)
                 .ToListAsync();
 
-            // Sadece BU PROJEYE (fazlarýna) yazýlmýþ mevcut puantajlarý getir
             var existingTimesheets = await _context.DailyTimesheets
-                .Where(t => t.AgencyId == agencyId.Value && t.WorkDate.Date == targetDate.Date && t.ProjectPhase != null && t.ProjectPhase.ConstructionProjectId == id)
+                .Where(t => t.AgencyId == agencyId.Value && t.WorkDate.Date == targetDate.Date)
                 .ToDictionaryAsync(t => t.AgencyWorkerId);
 
             ViewBag.Workers = workers;
             ViewBag.ExistingTimesheets = existingTimesheets;
 
+            var projects = await _context.ConstructionProjects
+                .Where(p => p.AgencyId == agencyId.Value && p.Status == GMK360.Core.Entities.Construction.ProjectStatus.Aktif_Santiye && !p.IsDeleted)
+                .OrderBy(p => p.Name)
+                .ToListAsync();
+            ViewBag.Projects = projects;
+
             return View();
         }
 
         [HttpPost]
-        public async Task<IActionResult> SaveTimesheets(DateTime targetDate, int[] workerIds, int[] phaseIds, string[] statuses, decimal[] wages, decimal[] advances, string[] notes, int? sourceProjectId)
+        public async Task<IActionResult> SaveTimesheets(int? sourceProjectId, DateTime targetDate, int[] workerIds, int[] phaseIds, string[] statuses, string[] notesList)
         {
             var agencyId = await GetUserAgencyIdAsync();
             if (agencyId == null) return Unauthorized();
 
-            var userId = _userManager.GetUserId(User) ?? "";
+            if (workerIds == null || workerIds.Length == 0)
+                return RedirectToAction(nameof(ProjectTimesheet), new { id = sourceProjectId, date = targetDate.ToString("yyyy-MM-dd") });
 
-            // Mevcut kayýtlarý al
-            var existingTimesheets = await _context.DailyTimesheets
-                .Where(t => t.AgencyId == agencyId.Value && t.WorkDate.Date == targetDate.Date)
-                .ToListAsync();
+            var workers = await _context.AgencyWorkers.Where(w => workerIds.Contains(w.Id)).ToDictionaryAsync(w => w.Id);
 
             for (int i = 0; i < workerIds.Length; i++)
             {
-                var workerId = workerIds[i];
-                var status = statuses[i];
-                var phaseId = phaseIds[i] > 0 ? (int?)phaseIds[i] : null;
-                var wage = wages[i];
-                var advance = advances[i];
-                var note = notes[i];
+                var wId = workerIds[i];
+                var status = statuses != null && i < statuses.Length ? statuses[i] : "Gelmedi";
+                var note = notesList != null && i < notesList.Length ? notesList[i] : "";
+                var pId = phaseIds != null && i < phaseIds.Length ? phaseIds[i] : 0; 
+                
+                var worker = workers.ContainsKey(wId) ? workers[wId] : null;
+                if(worker == null) continue;
 
-                var existing = existingTimesheets.FirstOrDefault(t => t.AgencyWorkerId == workerId);
+                var existing = await _context.DailyTimesheets
+                    .FirstOrDefaultAsync(t => t.AgencyWorkerId == wId && t.WorkDate.Date == targetDate.Date);
 
-                // Eðer "Gelmedi" dýþýnda bir þeyse veya not/avans varsa kaydet (Gelmedi seçilince de kaydedilebilir)
+                decimal calculatedWage = 0;
+                if(status == "Tam GÃ¼n" || status == "Tam Gn") calculatedWage = worker.NetDailyWage;
+                else if(status == "YarÄ±m GÃ¼n" || status == "Yarm Gn") calculatedWage = worker.NetDailyWage / 2;
+
                 if (existing != null)
                 {
                     existing.AttendanceStatus = status;
-                    existing.ProjectPhaseId = phaseId;
-                    existing.EarnedWage = wage;
-                    existing.AdvancePayment = advance;
                     existing.Notes = note;
-                    existing.RecordedByUserId = userId;
+                    existing.EarnedWage = calculatedWage;
+                    
+                    if (pId > 0) existing.ProjectPhaseId = pId;
+                    else existing.ProjectPhaseId = null;
                 }
                 else
                 {
-                    if (status != "Gelmedi" || advance > 0 || !string.IsNullOrEmpty(note))
+                    var newTimesheet = new DailyTimesheet
                     {
-                        var newTimesheet = new DailyTimesheet
-                        {
-                            AgencyId = agencyId.Value,
-                            AgencyWorkerId = workerId,
-                            WorkDate = targetDate,
-                            ProjectPhaseId = phaseId,
-                            AttendanceStatus = status,
-                            EarnedWage = wage,
-                            AdvancePayment = advance,
-                            Notes = note,
-                            RecordedByUserId = userId
-                        };
-                        _context.DailyTimesheets.Add(newTimesheet);
-                    }
+                        AgencyId = agencyId.Value,
+                        AgencyWorkerId = wId,
+                        WorkDate = targetDate.Date,
+                        ProjectPhaseId = pId > 0 ? pId : null,
+                        AttendanceStatus = status,
+                        EarnedWage = calculatedWage,
+                        AdvancePayment = 0,
+                        Notes = note
+                    };
+                    _context.DailyTimesheets.Add(newTimesheet);
                 }
             }
 
             await _context.SaveChangesAsync();
-            TempData["SuccessMessage"] = $"{targetDate:dd.MM.yyyy} tarihi için puantaj kayýtlarý baþarýyla güncellendi.";
-            if (sourceProjectId.HasValue) return RedirectToAction(nameof(ProjectTimesheet), new { id = sourceProjectId.Value, date = targetDate.ToString("yyyy-MM-dd") });
-            return RedirectToAction(nameof(Index), new { date = targetDate.ToString("yyyy-MM-dd") });
+            TempData["SuccessMessage"] = "Puantaj basariyla kaydedildi. (Maliyet ve hakedisler merkeze iletildi)";
+
+            if (sourceProjectId.HasValue)
+                return RedirectToAction(nameof(ProjectTimesheet), new { id = sourceProjectId.Value, date = targetDate.ToString("yyyy-MM-dd") });
+            else
+                return RedirectToAction(nameof(Index), new { date = targetDate.ToString("yyyy-MM-dd") });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> RequestAdvance(int AgencyWorkerId, decimal Amount, int sourceProjectId)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var worker = await _context.AgencyWorkers.FindAsync(AgencyWorkerId);
+            if (worker == null) return NotFound();
+
+            var advance = new GMK360.Core.Entities.Finance.AgencyCashTransaction
+            {
+                AgencyId = agencyId.Value,
+                AgencyWorkerId = AgencyWorkerId,
+                Amount = Amount,
+                TransactionType = GMK360.Core.Entities.Finance.AgencyCashTransactionType.WorkerAdvance,
+                Method = GMK360.Core.Entities.Finance.PaymentMethod.Cash,
+                Status = GMK360.Core.Entities.Finance.PaymentStatus.Pending, // KASA ONAYI BEKLÄ°YOR
+                Description = $"{worker.FullName} iÃ§in avans/harÃ§lÄ±k talebi (Åžantiye OnaylÄ±)",
+                PaymentDate = System.DateTime.UtcNow,
+                HandledByUserId = _userManager.GetUserId(User)
+            };
+
+            _context.AgencyCashTransactions.Add(advance);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"{worker.FullName} iÃ§in {Amount.ToString("C2")} avans talebi oluÅŸturuldu. Merkez onayÄ±ndan sonra kasadan dÃ¼ÅŸÃ¼lecektir.";
+            return RedirectToAction("ProjectTimesheet", new { id = sourceProjectId });
         }
     }
 }
-
-
 

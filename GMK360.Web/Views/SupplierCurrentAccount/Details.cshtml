@@ -1,0 +1,248 @@
+﻿@model GMK360.Core.Entities.Finance.SupplierCurrentAccount
+@using GMK360.Core.Entities.Finance
+
+@{
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+    ViewData["Title"] = Model.PhonebookContact.Name + " Cari Ekstresi";
+    var transactions = Model.Transactions.OrderByDescending(t => t.TransactionDate).ToList();
+}
+
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <a asp-action="Index" class="btn btn-sm btn-light border mb-2"><i class="bi bi-arrow-left"></i> Carilere Dön</a>
+            <h2 class="fw-bold mb-0">@Model.PhonebookContact.Name <span class="fs-5 text-muted fw-normal">| Cari Ekstre</span></h2>
+            <p class="text-muted">Tedarikçiye ait tüm açık hesap (veresiye), resmi fatura ve banka/kasa ödemeleri.</p>
+        </div>
+        <div class="text-end">
+            <h6 class="text-muted mb-1">Güncel Bakiye (Bize Kalan Borç)</h6>
+            <h2 class="fw-bold text-danger mb-0">@Model.CurrentBalance.ToString("N2") ₺</h2>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="d-flex gap-2 mb-4">
+        <button type="button" class="btn btn-outline-dark" data-bs-toggle="modal" data-bs-target="#openAccountModal">
+            <i class="bi bi-pencil-square me-1"></i> Şantiye Veresiye (Açık Hesap) Ekle
+        </button>
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#paymentModal">
+            <i class="bi bi-wallet2 me-1"></i> Ödeme Çık (Kasa/Banka/Çek)
+        </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body py-2 px-3 bg-light rounded d-flex justify-content-between align-items-center">
+            <span class="fw-semibold text-secondary"><i class="bi bi-funnel me-1"></i> Filtrele:</span>
+            <div class="btn-group btn-group-sm" role="group">
+                <input type="radio" class="btn-check" name="btnradio" id="btnAll" autocomplete="off" checked onchange="filterTx('all')">
+                <label class="btn btn-outline-secondary" for="btnAll">Tümü</label>
+
+                <input type="radio" class="btn-check" name="btnradio" id="btnOfficial" autocomplete="off" onchange="filterTx('official')">
+                <label class="btn btn-outline-secondary" for="btnOfficial">Resmi Alımlar</label>
+
+                <input type="radio" class="btn-check" name="btnradio" id="btnOpen" autocomplete="off" onchange="filterTx('open')">
+                <label class="btn btn-outline-secondary" for="btnOpen">Açık Hesap (Veresiye)</label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ledger Table -->
+    <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4 py-3">Tarih</th>
+                            <th class="py-3">İşlem Türü / Kaynak</th>
+                            <th class="py-3">Açıklama & Detay</th>
+                            <th class="text-end py-3">Tutar</th>
+                            <th class="text-end pe-4 py-3">İşlem Sonrası Bakiye</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var tx in transactions)
+                        {
+                            var rowClass = "";
+                            var icon = "";
+                            var typeLabel = "";
+                            var amountClass = "";
+                            var filterType = "all";
+
+                            if(tx.Type == SupplierTransactionType.PurchaseInvoice)
+                            {
+                                icon = "bi-receipt text-primary";
+                                typeLabel = "Resmi Fatura / Alım";
+                                amountClass = "text-danger"; // Borç artırır
+                                filterType = "official";
+                            }
+                            else if(tx.Type == SupplierTransactionType.OpenAccountPurchase)
+                            {
+                                icon = "bi-pencil text-warning";
+                                typeLabel = "Şantiye Veresiye";
+                                amountClass = "text-danger";
+                                filterType = "open";
+                            }
+                            else if(tx.Type == SupplierTransactionType.PaymentMade)
+                            {
+                                icon = "bi-cash-coin text-success";
+                                typeLabel = "Yapılan Ödeme";
+                                amountClass = "text-success"; // Borç düşürür
+                                filterType = "payment";
+                            }
+
+                            <tr class="tx-row" data-f-type="@filterType">
+                                <td class="ps-4">@tx.TransactionDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi @icon fs-5 me-2"></i>
+                                        <span class="fw-semibold">@typeLabel</span>
+                                    </div>
+                                    @if(tx.Project != null)
+                                    {
+                                        <small class="text-muted d-block mt-1"><i class="bi bi-geo-alt me-1"></i>@tx.Project.Name</small>
+                                    }
+                                </td>
+                                <td>
+                                    @tx.Description
+                                    @if(!string.IsNullOrEmpty(tx.DocumentReference))
+                                    {
+                                        <span class="badge bg-light text-dark border ms-2">Ref: @tx.DocumentReference</span>
+                                    }
+                                </td>
+                                <td class="text-end fw-bold @amountClass">
+                                    @(tx.Type == SupplierTransactionType.PaymentMade ? "-" : "+") @tx.Amount.ToString("N2") ₺
+                                </td>
+                                <td class="text-end pe-4 text-muted fw-semibold">
+                                    @tx.BalanceAfterTransaction.ToString("N2") ₺
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Açık Hesap / Veresiye -->
+<div class="modal fade" id="openAccountModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form asp-action="AddOpenAccount" method="post" class="modal-content">
+            <input type="hidden" name="SupplierCurrentAccountId" value="@Model.Id" />
+            
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square text-warning me-2"></i>Şantiye Veresiye / Açık Hesap</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Bağlı Proje/Şantiye</label>
+                    <select name="ProjectId" class="form-select">
+                        <option value="">-- Proje Bağımsız --</option>
+                        @foreach(var proj in ViewBag.Projects)
+                        {
+                            <option value="@proj.Id">@proj.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Serbest Açıklama (Malzeme/Not)</label>
+                    <textarea name="Description" class="form-control" rows="3" required placeholder="Örn: 3 top branda, 5 torba çimento (Hasan usta teslim aldı)"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Tutar (₺)</label>
+                    <input type="number" step="0.01" name="Amount" class="form-control form-control-lg text-end" required placeholder="0.00" />
+                    <small class="text-danger mt-1 d-block"><i class="bi bi-info-circle"></i> Bu tutar firmaya olan borcunuza Bakiye(+) olarak yansıyacaktır.</small>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-dark">Borca İşle / Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Ödeme (Kasa/Banka/Çek) -->
+<div class="modal fade" id="paymentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form asp-action="AddPayment" method="post" class="modal-content">
+            <input type="hidden" name="SupplierCurrentAccountId" value="@Model.Id" />
+            
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-wallet2 me-2"></i>Ödeme Çıkışı (Banka/Kasa)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Ödeme Tipi</label>
+                    <select name="Method" class="form-select" id="paymentMethodSelect" onchange="togglePaymentDetails()" required>
+                        <option value="Cash">Nakit (Kasa)</option>
+                        <option value="BankTransfer">Havale / EFT</option>
+                        <option value="CreditCard">Kredi Kartı</option>
+                        <option value="Check">Çek / Senet</option>
+                    </select>
+                </div>
+                
+                <!-- Vadeli Kısım (Gizli/Açık) -->
+                <div id="termDetails" class="p-3 bg-light border rounded mb-3" style="display:none;">
+                    <div class="mb-2">
+                        <label class="form-label fw-bold">Vade / Son Ödeme Tarihi</label>
+                        <input type="date" name="DueDate" class="form-control" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-bold">Banka Adı</label>
+                        <input type="text" name="BankName" class="form-control" placeholder="Örn: Garanti Bankası" />
+                    </div>
+                    <div>
+                        <label class="form-label fw-bold">Referans / Çek No / Kart Son 4 Hane</label>
+                        <input type="text" name="ReferenceNumber" class="form-control" />
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Ödeme Notu / Açıklama</label>
+                    <input type="text" name="Description" class="form-control" required placeholder="Örn: Mart ayı açık hesap kapatması" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Ödenen Tutar (₺)</label>
+                    <input type="number" step="0.01" name="Amount" class="form-control form-control-lg text-end text-success" required placeholder="0.00" />
+                    <small class="text-success mt-1 d-block"><i class="bi bi-info-circle"></i> Bu tutar firmaya olan toplam borcunuzdan Bakiye(-) olarak düşülecektir.</small>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-success">Ödemeyi Düş / Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function filterTx(type) {
+            const rows = document.querySelectorAll('.tx-row');
+            rows.forEach(row => {
+                if(type === 'all' || row.dataset.fType === type || (type !== 'official' && type !== 'open' && row.dataset.fType === 'payment')) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        function togglePaymentDetails() {
+            var method = document.getElementById('paymentMethodSelect').value;
+            var termDetails = document.getElementById('termDetails');
+            
+            if(method === 'Check' || method === 'CreditCard') {
+                termDetails.style.display = 'block';
+            } else {
+                termDetails.style.display = 'none';
+            }
+        }
+    </script>
+}

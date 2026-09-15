@@ -189,6 +189,9 @@ namespace GMK360.Data.Migrations
                     b.Property<decimal>("MonthlySalary")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal>("MonthlySgkCost")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int>("Role")
                         .HasColumnType("int");
 
@@ -1944,6 +1947,9 @@ namespace GMK360.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal>("DailySgkCost")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal>("DefaultDailyWage")
                         .HasColumnType("decimal(18,2)");
 
@@ -1965,6 +1971,9 @@ namespace GMK360.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<decimal>("NetDailyWage")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("PhoneNumber")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -1972,6 +1981,9 @@ namespace GMK360.Data.Migrations
                     b.Property<string>("Profession")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("SubcontractorContactId")
+                        .HasColumnType("int");
 
                     b.Property<string>("SubcontractorName")
                         .IsRequired()
@@ -1987,6 +1999,8 @@ namespace GMK360.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AgencyId");
+
+                    b.HasIndex("SubcontractorContactId");
 
                     b.ToTable("AgencyWorkers");
                 });
@@ -2161,6 +2175,9 @@ namespace GMK360.Data.Migrations
                     b.Property<DateTime?>("EndDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("GoogleMapsUrl")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -2186,14 +2203,17 @@ namespace GMK360.Data.Migrations
                     b.Property<int?>("NeighborhoodId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PublicDescription")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("SelectionDeadline")
                         .HasColumnType("datetime2");
 
                     b.Property<DateTime>("StartDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<byte>("StatusId")
-                        .HasColumnType("tinyint");
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
 
                     b.Property<int?>("StreetId")
                         .HasColumnType("int");
@@ -2202,6 +2222,9 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<int?>("TargetTotalShops")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TotalFloors")
                         .HasColumnType("int");
 
                     b.Property<double?>("TotalLandArea")
@@ -2496,6 +2519,45 @@ namespace GMK360.Data.Migrations
                     b.HasIndex("ProjectPhaseId");
 
                     b.ToTable("DailyTimesheets");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.DocumentTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AgencyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("HtmlContent")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("TemplateName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgencyId");
+
+                    b.ToTable("DocumentTemplates");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.InventoryItem", b =>
@@ -4436,10 +4498,45 @@ namespace GMK360.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("BuildingId")
+                    b.Property<int?>("AgencyId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("BuildingId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("DocumentUrl")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FileExtension")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceModule")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("SourceRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
@@ -4447,12 +4544,22 @@ namespace GMK360.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime>("UploadDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("Year")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
+                    b.HasIndex("AgencyId");
+
                     b.HasIndex("BuildingId");
+
+                    b.HasIndex("ProjectId");
 
                     b.ToTable("DocumentArchives");
                 });
@@ -4748,6 +4855,79 @@ namespace GMK360.Data.Migrations
                     b.ToTable("FiatTransactions");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.Finance.AgencyCashTransaction", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AgencyConsultantId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("AgencyId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("AgencyWorkerId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("BankName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("HandledByUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Method")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("PaymentDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReferenceNumber")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SupplierCurrentAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TransactionType")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgencyConsultantId");
+
+                    b.HasIndex("AgencyId");
+
+                    b.HasIndex("AgencyWorkerId");
+
+                    b.HasIndex("SupplierCurrentAccountId");
+
+                    b.ToTable("AgencyCashTransactions");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.Finance.AgencyStaffAdvance", b =>
                 {
                     b.Property<int>("Id")
@@ -4756,7 +4936,10 @@ namespace GMK360.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("AgencyConsultantId")
+                    b.Property<int?>("AgencyConsultantId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("AgencyWorkerId")
                         .HasColumnType("int");
 
                     b.Property<decimal>("Amount")
@@ -4789,6 +4972,8 @@ namespace GMK360.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AgencyConsultantId");
+
+                    b.HasIndex("AgencyWorkerId");
 
                     b.HasIndex("DeductedFromPayrollId");
 
@@ -5086,7 +5271,7 @@ namespace GMK360.Data.Migrations
 
                     b.HasIndex("SubcontractorContractId");
 
-                    b.ToTable("ProgressPayments");
+                    b.ToTable("Hakedisler");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Finance.SubcontractorContract", b =>
@@ -5155,6 +5340,55 @@ namespace GMK360.Data.Migrations
                     b.ToTable("SubcontractorContracts");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.Finance.SubcontractorHakedis", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("ClaimAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("ContractId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("DeductionAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("DeductionReason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("HakedisDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("HakedisNo")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsApproved")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContractId");
+
+                    b.ToTable("SubcontractorHakedisler");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.Finance.SupplierAccountTransaction", b =>
                 {
                     b.Property<int>("Id")
@@ -5190,6 +5424,9 @@ namespace GMK360.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<int?>("ProjectId")
+                        .HasColumnType("int");
+
                     b.Property<int>("SupplierCurrentAccountId")
                         .HasColumnType("int");
 
@@ -5205,6 +5442,8 @@ namespace GMK360.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("FinanceCategoryId");
+
+                    b.HasIndex("ProjectId");
 
                     b.HasIndex("SupplierCurrentAccountId");
 
@@ -5771,6 +6010,9 @@ namespace GMK360.Data.Migrations
                     b.Property<decimal>("GiftBalance")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<bool>("HasMapConsent")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsEDevletVerified")
                         .HasColumnType("bit");
 
@@ -5794,6 +6036,9 @@ namespace GMK360.Data.Migrations
 
                     b.Property<DateTimeOffset?>("LockoutEnd")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTime?>("MapConsentDate")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
@@ -11761,7 +12006,13 @@ namespace GMK360.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("GMK360.Core.Entities.Construction.AgencyPhonebook", "SubcontractorContact")
+                        .WithMany()
+                        .HasForeignKey("SubcontractorContactId");
+
                     b.Navigation("Agency");
+
+                    b.Navigation("SubcontractorContact");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.AgendaItem", b =>
@@ -11923,6 +12174,17 @@ namespace GMK360.Data.Migrations
                     b.Navigation("PhaseTask");
 
                     b.Navigation("ProjectPhase");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.DocumentTemplate", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Agency", "Agency")
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Agency");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.InventoryItem", b =>
@@ -12472,13 +12734,23 @@ namespace GMK360.Data.Migrations
 
             modelBuilder.Entity("GMK360.Core.Entities.DocumentArchive", b =>
                 {
+                    b.HasOne("GMK360.Core.Entities.Agency", "Agency")
+                        .WithMany()
+                        .HasForeignKey("AgencyId");
+
                     b.HasOne("GMK360.Core.Entities.Building", "Building")
                         .WithMany()
-                        .HasForeignKey("BuildingId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("BuildingId");
+
+                    b.HasOne("GMK360.Core.Entities.Construction.ConstructionProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId");
+
+                    b.Navigation("Agency");
 
                     b.Navigation("Building");
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.DocumentRegistry", b =>
@@ -12544,13 +12816,45 @@ namespace GMK360.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.Finance.AgencyCashTransaction", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.AgencyConsultant", "AgencyConsultant")
+                        .WithMany()
+                        .HasForeignKey("AgencyConsultantId");
+
+                    b.HasOne("GMK360.Core.Entities.Agency", "Agency")
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GMK360.Core.Entities.Construction.AgencyWorker", "AgencyWorker")
+                        .WithMany()
+                        .HasForeignKey("AgencyWorkerId");
+
+                    b.HasOne("GMK360.Core.Entities.Finance.SupplierCurrentAccount", "SupplierCurrentAccount")
+                        .WithMany()
+                        .HasForeignKey("SupplierCurrentAccountId");
+
+                    b.Navigation("Agency");
+
+                    b.Navigation("AgencyConsultant");
+
+                    b.Navigation("AgencyWorker");
+
+                    b.Navigation("SupplierCurrentAccount");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.Finance.AgencyStaffAdvance", b =>
                 {
                     b.HasOne("GMK360.Core.Entities.AgencyConsultant", "Consultant")
                         .WithMany()
                         .HasForeignKey("AgencyConsultantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("GMK360.Core.Entities.Construction.AgencyWorker", "Worker")
+                        .WithMany()
+                        .HasForeignKey("AgencyWorkerId");
 
                     b.HasOne("GMK360.Core.Entities.Finance.AgencyStaffPayroll", "DeductedFromPayroll")
                         .WithMany("DeductedAdvances")
@@ -12560,6 +12864,8 @@ namespace GMK360.Data.Migrations
                     b.Navigation("Consultant");
 
                     b.Navigation("DeductedFromPayroll");
+
+                    b.Navigation("Worker");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Finance.AgencyStaffPayroll", b =>
@@ -12638,9 +12944,9 @@ namespace GMK360.Data.Migrations
                         .HasForeignKey("ContractPhaseId");
 
                     b.HasOne("GMK360.Core.Entities.Finance.SubcontractorContract", "Contract")
-                        .WithMany("ProgressPayments")
+                        .WithMany()
                         .HasForeignKey("SubcontractorContractId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Contract");
@@ -12675,11 +12981,26 @@ namespace GMK360.Data.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.Finance.SubcontractorHakedis", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Finance.SubcontractorContract", "Contract")
+                        .WithMany("Hakedisler")
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Contract");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.Finance.SupplierAccountTransaction", b =>
                 {
                     b.HasOne("GMK360.Core.Entities.Finance.FinanceCategory", "FinanceCategory")
                         .WithMany()
                         .HasForeignKey("FinanceCategoryId");
+
+                    b.HasOne("GMK360.Core.Entities.Construction.ConstructionProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId");
 
                     b.HasOne("GMK360.Core.Entities.Finance.SupplierCurrentAccount", "SupplierCurrentAccount")
                         .WithMany("Transactions")
@@ -12688,6 +13009,8 @@ namespace GMK360.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("FinanceCategory");
+
+                    b.Navigation("Project");
 
                     b.Navigation("SupplierCurrentAccount");
                 });
@@ -14425,9 +14748,9 @@ namespace GMK360.Data.Migrations
 
             modelBuilder.Entity("GMK360.Core.Entities.Finance.SubcontractorContract", b =>
                 {
-                    b.Navigation("Phases");
+                    b.Navigation("Hakedisler");
 
-                    b.Navigation("ProgressPayments");
+                    b.Navigation("Phases");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Finance.SupplierCurrentAccount", b =>

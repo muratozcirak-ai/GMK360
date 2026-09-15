@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using GMK360.Data.Contexts;
@@ -23,152 +23,82 @@ namespace GMK360.Web.Controllers
             _userManager = userManager;
         }
 
-        // GET: Finance
-        public async Task<IActionResult> Index()
+        private async Task<int?> GetUserAgencyIdAsync()
         {
-            var accounts = await _context.SupplierCurrentAccounts
-                .Include(a => a.PhonebookContact)
-                .OrderByDescending(a => Math.Abs(a.CurrentBalance))
+            if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin")) 
+                return 1;
+                
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return null;
+
+            var consultant = await _context.AgencyConsultants
+                .FirstOrDefaultAsync(c => c.UserId == user.Id && c.IsActive);
+                
+            return consultant?.AgencyId;
+        }
+
+        // Ortak Kasa ve Banka AkÄ±ÅŸÄ±
+        public async Task<IActionResult> Cashflow()
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var cashTransactions = await _context.Set<AgencyCashTransaction>()
+                .Include(c => c.SupplierCurrentAccount).ThenInclude(s => s.PhonebookContact)
+                .Include(c => c.AgencyWorker)
+                .Include(c => c.AgencyConsultant).ThenInclude(ac => ac.User)
+                .Where(c => c.AgencyId == agencyId.Value)
+                .OrderByDescending(c => c.PaymentDate)
                 .ToListAsync();
 
-            return View(accounts);
+            // Hesaplamalar
+            ViewBag.TotalCashOut = cashTransactions.Where(c => c.TransactionType == AgencyCashTransactionType.WorkerAdvance || 
+                                                               c.TransactionType == AgencyCashTransactionType.ConsultantAdvance ||
+                                                               c.TransactionType == AgencyCashTransactionType.SupplierPayment ||
+                                                               c.TransactionType == AgencyCashTransactionType.GeneralExpense)
+                                                   .Sum(c => c.Amount); // VarsayÄ±lan olarak hep Ã§Ä±kÄ±ÅŸ kabul ediyoruz basitlik iÃ§in, ama eÄŸer gelir varsa Ã§Ä±kartÄ±lÄ±r.
+
+            return View(cashTransactions);
         }
 
-        // GET: Finance/Details/5
-        public async Task<IActionResult> Details(int id)
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null) return Unauthorized();
-
-            var account = await _context.SupplierCurrentAccounts
-                .Include(a => a.PhonebookContact)
-                .Include(a => a.Transactions).ThenInclude(t => t.FinanceCategory)
-                .Include(a => a.Payments)
-                .FirstOrDefaultAsync(a => a.Id == id);
-
-            if (account == null) return NotFound();
-
-                        var consultant = await _context.Set<GMK360.Core.Entities.AgencyConsultant>().FirstOrDefaultAsync(a => a.UserId == user.Id);
-            if(consultant != null) {
-                ViewBag.Categories = await _context.FinanceCategories.Where(c => c.AgencyId == consultant.AgencyId).ToListAsync();
-            }
-
-            return View(account);
-        }
-
-        // POST: Finance/AddTransaction
         [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddTransaction(int accountId, SupplierTransactionType type, decimal amount, string description, string documentReference, int? financeCategoryId)
+        public async Task<IActionResult> AddExpense(decimal amount, string description, PaymentMethod method)
         {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null) return Unauthorized();
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
 
-            var account = await _context.SupplierCurrentAccounts.FindAsync(accountId);
-            if (account == null) return NotFound();
-
-            var transaction = new SupplierAccountTransaction
+            var expense = new AgencyCashTransaction
             {
-                SupplierCurrentAccountId = accountId,
-                Type = type,
-                FinanceCategoryId = financeCategoryId,
+                AgencyId = agencyId.Value,
+                TransactionType = AgencyCashTransactionType.GeneralExpense,
                 Amount = amount,
                 Description = description,
-                DocumentReference = documentReference,
-                TransactionDate = DateTime.UtcNow,
-                CreatedByUserId = user.Id
+                Method = method,
+                PaymentDate = DateTime.UtcNow,
+                Status = PaymentStatus.Completed,
+                HandledByUserId = _userManager.GetUserId(User)
             };
 
-            // Bakiye güncelleme mantýðý
-            // Pozitif bakiye = Biz borçluyuz. Negatif bakiye = Biz alacaklýyýz (Karþý taraf bize borçlu).
-            if (type == SupplierTransactionType.PurchaseInvoice)
-            {
-                // Mal/Hizmet aldýk, borcumuz arttý
-                account.CurrentBalance += amount;
-            }
-            else if (type == SupplierTransactionType.RefundReceived)
-            {
-                // Hurda sattýk veya iade aldýk (Bizim alacaðýmýz doðdu, borcumuz azaldý)
-                account.CurrentBalance -= amount;
-            }
-            else if (type == SupplierTransactionType.Adjustment)
-            {
-                // Düzeltme (Formdan +/- girilebilir, ama standart olarak borç artýrýr diyelim, 
-                // ya da amount'un iþaretine göre)
-                account.CurrentBalance += amount;
-            }
-            // PaymentMade (Ödeme Yapýldý) burada deðil, AddPayment tarafýnda iþlenecek ama manuel girilirse:
-            else if (type == SupplierTransactionType.PaymentMade)
-            {
-                account.CurrentBalance -= amount; // Borcumuz azaldý
-            }
-
-            transaction.BalanceAfterTransaction = account.CurrentBalance;
-            
-            _context.SupplierAccountTransactions.Add(transaction);
+            _context.Set<AgencyCashTransaction>().Add(expense);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Ýþlem baþarýyla eklendi.";
-            return RedirectToAction(nameof(Details), new { id = accountId });
+            TempData["SuccessMessage"] = "Gider kasaya iÅŸlendi.";
+            return RedirectToAction(nameof(Cashflow));
         }
 
-        // POST: Finance/AddPayment
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddPayment(int accountId, PaymentMethod method, decimal amount, DateTime? dueDate, string checkNumber, string bankName, string notes)
+        public async Task<IActionResult> UpcomingPayments()
         {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null) return Unauthorized();
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
 
-            var account = await _context.SupplierCurrentAccounts.FindAsync(accountId);
-            if (account == null) return NotFound();
+            // Sadece vadesi gelmiÅŸ ve henÃ¼z Ã¶denmemiÅŸ tedarikÃ§i Ã¶demeleri (Ã§ek/senet vb.)
+            var payments = await _context.SupplierPayments
+                .Include(p => p.SupplierCurrentAccount).ThenInclude(s => s.PhonebookContact)
+                .Where(p => p.SupplierCurrentAccount.AgencyId == agencyId.Value && p.Status == PaymentStatus.Pending)
+                .OrderBy(p => p.DueDate)
+                .ToListAsync();
 
-            var payment = new SupplierPayment
-            {
-                SupplierCurrentAccountId = accountId,
-                Method = method,
-                Amount = amount,
-                DueDate = dueDate,
-                CheckNumber = checkNumber,
-                BankName = bankName,
-                Notes = notes,
-                PaymentDate = DateTime.UtcNow,
-                HandledByUserId = user.Id,
-                // Çek ileri tarihliyse Pending, nakitse Completed varsayýyoruz
-                Status = (method == PaymentMethod.Check || method == PaymentMethod.PromissoryNote || method == PaymentMethod.OpenAccount) ? PaymentStatus.Pending : PaymentStatus.Completed
-            };
-
-            _context.SupplierPayments.Add(payment);
-
-            // Eðer ödeme tamamlanmýþsa (Nakit/Havale) hemen bakiyeden düþ.
-            // Çek ise, tahsil edildiðinde düþmesi gerekebilir ama piyasada çek verildiðinde borçtan düþülür.
-            // Basitlik adýna çek de verilse borcumuz kapandý sayalým (Risk takibi ayrý).
-            if(method != PaymentMethod.OpenAccount)
-            {
-                account.CurrentBalance -= amount;
-                
-                // Cari hareketi de oluþtur
-                var transaction = new SupplierAccountTransaction
-                {
-                    SupplierCurrentAccountId = accountId,
-                    Type = SupplierTransactionType.PaymentMade,
-                    Amount = amount,
-                    Description = method.ToString() + " ile Ödeme: " + notes,
-                    DocumentReference = checkNumber,
-                    TransactionDate = DateTime.UtcNow,
-                    CreatedByUserId = user.Id,
-                    BalanceAfterTransaction = account.CurrentBalance
-                };
-                _context.SupplierAccountTransactions.Add(transaction);
-            }
-
-            await _context.SaveChangesAsync();
-
-            TempData["SuccessMessage"] = "Ödeme/Tahsilat baþarýyla iþlendi.";
-            return RedirectToAction(nameof(Details), new { id = accountId });
+            return View(payments);
         }
     }
 }
-
-
-

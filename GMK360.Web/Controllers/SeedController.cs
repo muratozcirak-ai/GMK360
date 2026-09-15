@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -107,10 +107,7 @@ namespace GMK360.Web.Controllers
                 return Content("SQL dosyası bulunamadı.");
 
             // Clear old data to prevent conflicts (except Country)
-            _context.Neighborhoods.RemoveRange(_context.Neighborhoods);
-            _context.Districts.RemoveRange(_context.Districts);
-            _context.Cities.RemoveRange(_context.Cities);
-            await _context.SaveChangesAsync();
+            await _context.Database.ExecuteSqlRawAsync("DELETE FROM Neighborhoods; DELETE FROM Districts; DELETE FROM Cities;"); _context.ChangeTracker.Clear();
 
             string[] lines = await System.IO.File.ReadAllLinesAsync(sqlFilePath);
             

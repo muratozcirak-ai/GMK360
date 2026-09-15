@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Identity;
 
 namespace GMK360.Core.Entities.Identity
 {
@@ -28,6 +28,10 @@ namespace GMK360.Core.Entities.Identity
         public string? ActiveModules { get; set; }
 
         public string? RecoveryQuestion { get; set; }
+
+        public bool HasMapConsent { get; set; } = false;
+        public System.DateTime? MapConsentDate { get; set; }
+
         public string? RecoveryAnswer { get; set; }
         
         public bool IsEDevletVerified { get; set; } = false;

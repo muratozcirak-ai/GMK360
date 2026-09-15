@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+ï»¿using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using GMK360.Data.Contexts;
 using Microsoft.AspNetCore.Identity;
@@ -49,7 +49,7 @@ namespace GMK360.Web.Controllers
 
             var warehouses = await query.ToListAsync();
             
-            // Otomatik Merkez Depo Oluþturma
+            // Otomatik Merkez Depo Oluï¿½turma
             if (!warehouses.Any(w => w.Type == WarehouseType.Merkez) && agencyId.HasValue)
             {
                 var merkezDepo = new Warehouse
@@ -67,11 +67,11 @@ namespace GMK360.Web.Controllers
                 warehouses.Add(merkezDepo);
             }
 
-            // Geriye dönük: Þantiyeler için otomatik depo kontrolü
+            // Geriye dï¿½nï¿½k: ï¿½antiyeler iï¿½in otomatik depo kontrolï¿½
             if (agencyId.HasValue)
             {
                 var projects = await _context.ConstructionProjects
-                    .Where(p => p.AgencyId == agencyId.Value && p.StatusId == 1) // Devam eden projeler
+                    .Where(p => p.AgencyId == agencyId.Value && p.Status == GMK360.Core.Entities.Construction.ProjectStatus.Aktif_Santiye) // Devam eden projeler
                     .ToListAsync();
 
                 foreach (var proj in projects)
@@ -82,10 +82,10 @@ namespace GMK360.Web.Controllers
                         {
                             AgencyId = agencyId.Value,
                             ConstructionProjectId = proj.Id,
-                            Name = proj.Name + " Þantiyesi Deposu",
+                            Name = proj.Name + " ï¿½antiyesi Deposu",
                             Type = WarehouseType.Santiye,
                             Address = proj.Address ?? "",
-                            Description = proj.Name + " þantiye sahasý genel deposu (Konteyner).",
+                            Description = proj.Name + " ï¿½antiye sahasï¿½ genel deposu (Konteyner).",
                             CreatedAt = System.DateTime.UtcNow
                         };
                         _context.Warehouses.Add(santiyeDepo);
@@ -111,7 +111,7 @@ namespace GMK360.Web.Controllers
                 var warehouse = await _context.Warehouses.FirstOrDefaultAsync(w => w.Id == warehouseId && (w.AgencyId == agencyId || User.IsInRole("Admin")));
                 if (warehouse == null)
                 {
-                    TempData["ErrorMessage"] = "Depo bulunamadý veya yetkiniz yok.";
+                    TempData["ErrorMessage"] = "Depo bulunamadï¿½ veya yetkiniz yok.";
                     return RedirectToAction(nameof(Index));
                 }
 
@@ -137,26 +137,26 @@ namespace GMK360.Web.Controllers
 
                 var user = await _userManager.GetUserAsync(User);
 
-                // Transaction (Ýlk Giriþ)
+                // Transaction (ï¿½lk Giriï¿½)
                 var transaction = new InventoryTransaction
                 {
                     InventoryItemId = item.Id,
                     Type = TransactionType.Giris,
                     Quantity = quantity,
                     TransactionDate = System.DateTime.UtcNow,
-                    Description = "Geçmiþten Devir (Faturasýz Stok Giriþi)",
+                    Description = "Geï¿½miï¿½ten Devir (Faturasï¿½z Stok Giriï¿½i)",
                     HandledByUserId = user?.Id ?? ""
                 };
                 
                 _context.InventoryTransactions.Add(transaction);
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = $"{name} baþarýyla {warehouse.Name} adlý depoya Devir olarak eklendi.";
+                TempData["SuccessMessage"] = $"{name} baï¿½arï¿½yla {warehouse.Name} adlï¿½ depoya Devir olarak eklendi.";
                 return RedirectToAction(nameof(Index));
             }
             catch (System.Exception ex)
             {
-                TempData["ErrorMessage"] = "Demirbaþ/Sarf eklenirken hata oluþtu: " + ex.Message;
+                TempData["ErrorMessage"] = "Demirbaï¿½/Sarf eklenirken hata oluï¿½tu: " + ex.Message;
                 return RedirectToAction(nameof(Index));
             }
         }
@@ -186,7 +186,7 @@ namespace GMK360.Web.Controllers
 
                 var exists = await _context.MaterialCatalogs.AnyAsync(m => m.AgencyId == agencyId.Value && m.Name.ToLower() == name.ToLower());
                 if(exists){
-                    TempData["ErrorMessage"] = "Bu malzeme zaten kataloðunuzda mevcut.";
+                    TempData["ErrorMessage"] = "Bu malzeme zaten kataloï¿½unuzda mevcut.";
                     return RedirectToAction(nameof(MaterialCatalog));
                 }
 
@@ -203,12 +203,12 @@ namespace GMK360.Web.Controllers
                 _context.MaterialCatalogs.Add(mat);
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = $"{name} baþarýyla malzeme kataloðuna eklendi.";
+                TempData["SuccessMessage"] = $"{name} baï¿½arï¿½yla malzeme kataloï¿½una eklendi.";
                 return RedirectToAction(nameof(MaterialCatalog));
             }
             catch (System.Exception ex)
             {
-                TempData["ErrorMessage"] = "Hata oluþtu: " + ex.Message;
+                TempData["ErrorMessage"] = "Hata oluï¿½tu: " + ex.Message;
                 return RedirectToAction(nameof(MaterialCatalog));
             }
         }
@@ -229,24 +229,24 @@ namespace GMK360.Web.Controllers
 
                 if (sourceItem == null)
                 {
-                    TempData["ErrorMessage"] = "Kaynak malzeme bulunamadý.";
+                    TempData["ErrorMessage"] = "Kaynak malzeme bulunamadï¿½.";
                     return RedirectToAction(nameof(Index));
                 }
 
                 if (quantity <= 0 || quantity > sourceItem.Quantity)
                 {
-                    TempData["ErrorMessage"] = "Geçersiz miktar. Stoktan fazla transfer yapýlamaz.";
+                    TempData["ErrorMessage"] = "Geï¿½ersiz miktar. Stoktan fazla transfer yapï¿½lamaz.";
                     return RedirectToAction(nameof(Index));
                 }
 
                 var targetWarehouse = await _context.Warehouses.FirstOrDefaultAsync(w => w.Id == targetWarehouseId && w.AgencyId == agencyId.Value);
                 if (targetWarehouse == null)
                 {
-                    TempData["ErrorMessage"] = "Hedef depo bulunamadý.";
+                    TempData["ErrorMessage"] = "Hedef depo bulunamadï¿½.";
                     return RedirectToAction(nameof(Index));
                 }
 
-                // 1. Kaynak depodan düþ
+                // 1. Kaynak depodan dï¿½ï¿½
                 sourceItem.Quantity -= quantity;
                 sourceItem.UpdatedAt = System.DateTime.UtcNow;
                 _context.InventoryItems.Update(sourceItem);
@@ -257,7 +257,7 @@ namespace GMK360.Web.Controllers
                     Type = GMK360.Core.Entities.Construction.TransactionType.Cikis,
                     Quantity = quantity,
                     TransactionDate = System.DateTime.UtcNow,
-                    Description = $"{targetWarehouse.Name} deposuna transfer (Çýkýþ).",
+                    Description = $"{targetWarehouse.Name} deposuna transfer (ï¿½ï¿½kï¿½ï¿½).",
                     HandledByUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
                 };
                 _context.InventoryTransactions.Add(sourceTxn);
@@ -303,19 +303,19 @@ namespace GMK360.Web.Controllers
                     Type = GMK360.Core.Entities.Construction.TransactionType.Giris,
                     Quantity = quantity,
                     TransactionDate = System.DateTime.UtcNow,
-                    Description = $"{sourceItem.Warehouse.Name} deposundan transfer (Giriþ).",
+                    Description = $"{sourceItem.Warehouse.Name} deposundan transfer (Giriï¿½).",
                     HandledByUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
                 };
                 _context.InventoryTransactions.Add(targetTxn);
 
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = $"{sourceItem.Name} ({quantity} {sourceItem.Unit}), {targetWarehouse.Name} deposuna baþarýyla sevk edildi.";
+                TempData["SuccessMessage"] = $"{sourceItem.Name} ({quantity} {sourceItem.Unit}), {targetWarehouse.Name} deposuna baï¿½arï¿½yla sevk edildi.";
                 return RedirectToAction(nameof(Index));
             }
             catch (System.Exception ex)
             {
-                TempData["ErrorMessage"] = "Transfer sýrasýnda hata oluþtu: " + ex.Message;
+                TempData["ErrorMessage"] = "Transfer sï¿½rasï¿½nda hata oluï¿½tu: " + ex.Message;
                 return RedirectToAction(nameof(Index));
             }
         }
@@ -356,3 +356,4 @@ namespace GMK360.Web.Controllers
         }
 }
 }
+

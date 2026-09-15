@@ -1,12 +1,13 @@
-import codecs
+﻿import codecs
 
 filepath = r'C:\Users\murat\source\repos\GMK360\GMK360.Data\Contexts\ApplicationDbContext.cs'
+
 with codecs.open(filepath, 'r', 'utf-8-sig') as f:
     content = f.read()
 
-if 'public DbSet<GMK360.Core.Entities.Construction.AgendaItem> AgendaItems { get; set; }' not in content:
-    content = content.replace('public DbSet<GMK360.Core.Entities.Construction.AgendaRecord> AgendaRecords { get; set; }', 
-                              'public DbSet<GMK360.Core.Entities.Construction.AgendaRecord> AgendaRecords { get; set; }\r\n          public DbSet<GMK360.Core.Entities.Construction.AgendaItem> AgendaItems { get; set; }')
+if 'public DbSet<GMK360.Core.Entities.Finance.PaymentTransaction> PaymentTransactions' not in content:
+    content = content.replace('public DbSet<GMK360.Core.Entities.Finance.AgencyStaffAdvance> AgencyStaffAdvances { get; set; }', 
+                              'public DbSet<GMK360.Core.Entities.Finance.AgencyStaffAdvance> AgencyStaffAdvances { get; set; }\n        public DbSet<GMK360.Core.Entities.Finance.PaymentTransaction> PaymentTransactions { get; set; }')
     
-with codecs.open(filepath, 'w', 'utf-8-sig') as f:
-    f.write(content)
+    with codecs.open(filepath, 'w', 'utf-8-sig') as f:
+        f.write(content)

@@ -1,86 +1,261 @@
-@model IEnumerable<GMK360.Core.Entities.Finance.SubcontractorContract>
+﻿@model IEnumerable<GMK360.Core.Entities.Finance.SubcontractorContract>
 @{
-    ViewData["Title"] = "Ta�eron S�zle�meleri";
+    ViewData["Title"] = "Taşeron Sözleşmeleri & Hakedişler";
     Layout = "_ConstructionLayout";
 }
 
-<div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="fw-bold mb-0"><i class="ph ph-handshake text-orange me-2"></i>Ta�eron S�zle�meleri</h2>
-            <p class="text-muted mb-0">�antiyelerinizdeki ta�eron s�zle�melerini ve hakedi�lerini y�netin.</p>
-        </div>
-        <a asp-action="Create" class="btn btn-orange rounded-pill px-4">
-            <i class="ph ph-plus fw-bold me-1"></i> Yeni S�zle�me Ekle
-        </a>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold text-dark mb-1"><i class="bi bi-wallet2 text-primary me-2"></i> Taşeron Hakedişleri</h3>
+        <p class="text-muted mb-0">Sözleşme bütçelerini takip edin ve esnek hakediş girişleri yapın.</p>
     </div>
+    <a asp-action="Create" class="btn btn-primary shadow-sm rounded-pill px-4">
+        <i class="bi bi-plus-lg me-1"></i> Yeni Sözleşme
+    </a>
+</div>
 
-    <div class="card shadow-sm border-0 rounded-4">
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="bg-light">
-                        <tr>
-                            <th class="px-4 py-3">S�zle�me Ad�</th>
-                            <th class="py-3">�antiye</th>
-                            <th class="py-3">Ta�eron</th>
-                            <th class="py-3">Tip</th>
-                            <th class="py-3 text-end">Toplam Bedel</th>
-                            <th class="px-4 py-3 text-center">��lemler</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if (!Model.Any())
-                        {
-                            <tr>
-                                <td colspan="6" class="text-center py-5 text-muted">
-                                    <i class="ph ph-file-dashed display-4 mb-2 d-block"></i>
-                                    Hen�z kay�tl� bir ta�eron s�zle�mesi bulunmuyor.
-                                </td>
-                            </tr>
-                        }
-                        @foreach (var item in Model)
-                        {
-                            <tr>
-                                <td class="px-4">
-                                    <h6 class="mb-0 fw-bold">@item.Title</h6>
-                                    <small class="text-muted">@item.ContractDate.ToShortDateString()</small>
-                                </td>
-                                <td>
-                                    <span class="badge bg-light text-dark border">
-                                        <i class="ph ph-buildings me-1"></i> @item.Project.Name
-                                    </span>
-                                </td>
-                                <td>
-                                    <strong>@item.PhonebookContact.Name</strong><br />
-                                    <small class="text-muted">@item.PhonebookContact.Name</small>
-                                </td>
-                                <td>
-                                    @if(item.IsExpenseContract)
-                                    {
-                                        <span class="badge bg-danger bg-opacity-10 text-danger"><i class="ph ph-arrow-down-right"></i> Gider (Biz �deyece�iz)</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-success bg-opacity-10 text-success"><i class="ph ph-arrow-up-right"></i> Gelir (Hurda/Tahsilat)</span>
-                                    }
-                                </td>
-                                <td class="text-end fw-bold">
-                                    @item.TotalAmount.ToString("N2") @item.Currency
-                                </td>
-                                <td class="px-4 text-center">
-                                    <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-light border" title="S�zle�me Detay� ve Fazlar">
-                                        <i class="ph ph-magnifying-glass"></i> Detay
-                                    </a>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> @TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="card shadow-sm border-0 rounded-4">
+    <div class="card-body p-0">
+        <div class="accordion accordion-flush" id="accordionContracts">
+            @if (!Model.Any())
+            {
+                <div class="text-center py-5">
+                    <div class="d-inline-flex align-items-center justify-content-center bg-light rounded-circle mb-3" style="width: 80px; height: 80px;">
+                        <i class="bi bi-file-earmark-text text-secondary fs-1"></i>
+                    </div>
+                    <h5 class="fw-bold text-dark">Henüz Taşeron Sözleşmesi Eklenmemiş</h5>
+                    <p class="text-muted mx-auto" style="max-width: 500px;">
+                        Hakediş işlemlerine başlayabilmek için öncelikle bir taşeron sözleşmesi oluşturmanız gerekmektedir.
+                        <br><br>
+                        Sözleşmenizi ekledikten sonra, listedeki sözleşme satırına tıklayarak <strong>Hakediş (Ödeme) Geçmişini</strong> görüntüleyebilir ve esnek hakediş girişleri yapabilirsiniz.
+                    </p>
+                    <a href="/SubcontractorContract/Create" class="btn btn-outline-primary mt-2">
+                        <i class="bi bi-plus-lg me-1"></i> İlk Sözleşmeyi Oluştur
+                    </a>
+                </div>
+            }
+            
+            @{ int index = 0; }
+            @foreach (var contract in Model)
+            {
+                index++;
+                var hakedisler = contract.Hakedisler?.OrderByDescending(h => h.HakedisNo).ToList() ?? new List<GMK360.Core.Entities.Finance.SubcontractorHakedis>();
+                var totalClaim = hakedisler.Sum(h => h.ClaimAmount);
+                var totalDeduction = hakedisler.Sum(h => h.DeductionAmount);
+                var totalNet = totalClaim - totalDeduction;
+                var remaining = contract.TotalAmount - totalClaim;
+                var percentage = contract.TotalAmount > 0 ? (totalClaim / contract.TotalAmount) * 100 : 0;
+
+                <div class="accordion-item border-bottom">
+                    <h2 class="accordion-header" id="heading-@contract.Id">
+                        <button class="accordion-button collapsed px-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-@contract.Id">
+                            <div class="d-flex w-100 align-items-center me-3">
+                                <div class="col-3">
+                                    <h6 class="mb-0 fw-bold text-dark">@contract.Title</h6>
+                                    <small class="text-muted"><i class="bi bi-person-fill"></i> @(contract.PhonebookContact?.Name)</small>
+                                </div>
+                                <div class="col-2 text-center">
+                                    <small class="text-muted d-block">Sözleşme Bedeli</small>
+                                    <strong class="text-primary">@contract.TotalAmount.ToString("N2") @contract.Currency</strong>
+                                </div>
+                                <div class="col-2 text-center">
+                                    <small class="text-muted d-block">Kesilen Top. Hakediş (Brüt)</small>
+                                    <strong class="text-success">@totalClaim.ToString("N2") @contract.Currency</strong>
+                                </div>
+                                <div class="col-2 text-center">
+                                    <small class="text-muted d-block">Kalan (Brüt)</small>
+                                    <strong class="text-danger">@remaining.ToString("N2") @contract.Currency</strong>
+                                </div>
+                                <div class="col-2 ps-3 pe-3">
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar @(percentage >= 100 ? "bg-danger" : "bg-success")" role="progressbar" style="width: @percentage%"></div>
+                                    </div>
+                                    <small class="text-muted text-end d-block mt-1">%@percentage.ToString("N0") Tamamlandı</small>
+                                </div>
+                            </div>
+                        </button>
+                    </h2>
+                    
+                    <div id="collapse-@contract.Id" class="accordion-collapse collapse" data-bs-parent="#accordionContracts">
+                        <div class="accordion-body bg-light border-top p-4">
+                            
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="fw-bold mb-0">Hakediş Geçmişi</h6>
+                                <div class="d-flex gap-2">
+                                    <a href="/SubcontractorContract/Details/@contract.Id" class="btn btn-sm btn-outline-secondary">Sözleşme Detayı & Yazdır</a>
+                                    <button class="btn btn-sm btn-success fw-bold" onclick="openHakedisModal(@contract.Id, @contract.TotalAmount, @remaining)">
+                                        <i class="bi bi-plus-circle me-1"></i> Yeni Hakediş Ekle
+                                    </button>
+                                </div>
+                            </div>
+
+                            @if (!hakedisler.Any())
+                            {
+                                <div class="alert alert-secondary text-center">Henüz hakediş girilmemiş.</div>
+                            }
+                            else
+                            {
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered bg-white text-center align-middle mb-0">
+                                        <thead class="table-secondary">
+                                            <tr>
+                                                <th>No</th>
+                                                <th>Tarih</th>
+                                                <th>Açıklama</th>
+                                                <th class="text-end">Brüt Hakediş</th>
+                                                <th class="text-end text-danger">Kesinti (Avans)</th>
+                                                <th class="text-end text-success">Ödenecek Net</th>
+                                                <th>Durum</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach(var h in hakedisler)
+                                            {
+                                                <tr>
+                                                    <td><strong>#@h.HakedisNo</strong></td>
+                                                    <td>@h.HakedisDate.ToString("dd.MM.yyyy")</td>
+                                                    <td class="text-start">@h.Description <br><small class="text-muted">@h.DeductionReason</small></td>
+                                                    <td class="text-end fw-bold">@h.ClaimAmount.ToString("N2")</td>
+                                                    <td class="text-end text-danger fw-bold">- @h.DeductionAmount.ToString("N2")</td>
+                                                    <td class="text-end text-success fw-bold">@((h.ClaimAmount - h.DeductionAmount).ToString("N2"))</td>
+                                                    <td>
+                                                        @if(h.IsApproved) { <span class="badge bg-success">Onaylı</span> } else { <span class="badge bg-warning text-dark">Bekliyor</span> }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                        <tfoot class="table-light fw-bold">
+                                            <tr>
+                                                <td colspan="3" class="text-end">TOPLAM:</td>
+                                                <td class="text-end text-primary">@totalClaim.ToString("N2")</td>
+                                                <td class="text-end text-danger">- @totalDeduction.ToString("N2")</td>
+                                                <td class="text-end text-success">@totalNet.ToString("N2")</td>
+                                                <td></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
         </div>
     </div>
 </div>
 
+<!-- Yeni Hakediş Ekle Modal -->
+<div class="modal fade" id="hakedisModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form asp-action="AddHakedis" asp-controller="SubcontractorContract" method="post">
+            <input type="hidden" name="contractId" id="h_contractId" />
+            <input type="hidden" id="h_totalAmount" />
+            
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-success text-white border-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-cash-coin me-2"></i> Yeni Hakediş Ekle</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-info">
+                        <strong>Kalan Bütçe: </strong> <span id="h_remainingBudget" class="fs-5">0.00</span>
+                    </div>
 
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Hakediş Açıklaması (İşin Kapsamı)</label>
+                        <input type="text" name="description" class="form-control" placeholder="Örn: 1. Kat Tabliye Kalıbı" required />
+                    </div>
 
+                    <div class="row">
+                        <div class="col-md-5 mb-3">
+                            <label class="form-label fw-bold">Yüzde (%) ile hesapla</label>
+                            <div class="input-group">
+                                <input type="number" id="h_percentage" class="form-control" placeholder="10" step="0.01" max="100" />
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div class="col-md-7 mb-3">
+                            <label class="form-label fw-bold text-primary">Brüt Hak Edilen Tutar</label>
+                            <input type="number" name="claimAmount" id="h_claimAmount" class="form-control" step="0.01" required />
+                        </div>
+                    </div>
+
+                    <hr />
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold text-danger">Kesinti (Avans vb.)</label>
+                            <input type="number" name="deductionAmount" id="h_deductionAmount" class="form-control" step="0.01" value="0" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Kesinti Nedeni</label>
+                            <input type="text" name="deductionReason" class="form-control" placeholder="Pazartesi nakit avans..." />
+                        </div>
+                    </div>
+
+                    <div class="alert alert-success d-flex justify-content-between mb-0">
+                        <span class="fw-bold">Ödenecek Net Tutar:</span>
+                        <span id="h_netAmount" class="fw-bold fs-5">0.00</span>
+                    </div>
+
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-success fw-bold"><i class="bi bi-check-lg me-1"></i> Kaydet</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openHakedisModal(contractId, totalAmount, remaining) {
+            $('#h_contractId').val(contractId);
+            $('#h_totalAmount').val(totalAmount);
+            $('#h_remainingBudget').text(remaining.toLocaleString('tr-TR', { minimumFractionDigits: 2 }) + ' TRY');
+            
+            // Clear inputs
+            $('#h_percentage').val('');
+            $('#h_claimAmount').val('');
+            $('#h_deductionAmount').val('0');
+            $('#h_netAmount').text('0.00');
+            
+            new bootstrap.Modal(document.getElementById('hakedisModal')).show();
+        }
+
+        // Percentage auto-calc
+        $('#h_percentage').on('input', function() {
+            let perc = parseFloat($(this).val()) || 0;
+            let total = parseFloat($('#h_totalAmount').val()) || 0;
+            let claim = (total * perc) / 100;
+            $('#h_claimAmount').val(claim.toFixed(2));
+            calcNet();
+        });
+
+        // Net calc
+        $('#h_claimAmount, #h_deductionAmount').on('input', calcNet);
+
+        function calcNet() {
+            let claim = parseFloat($('#h_claimAmount').val()) || 0;
+            let ded = parseFloat($('#h_deductionAmount').val()) || 0;
+            let net = claim - ded;
+            $('#h_netAmount').text(net.toLocaleString('tr-TR', { minimumFractionDigits: 2 }));
+        }
+    </script>
+}

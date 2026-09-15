@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -201,7 +201,7 @@ namespace GMK360.Web.Controllers
                     AgencyId = agency.Id,
                     Address = "Üsküdar, İstanbul",
                     StartDate = System.DateTime.UtcNow.AddMonths(1),
-                    StatusId = GMK360.Core.Entities.Construction.ProjectConstants.StatusTeklif, // Yakında Başlayacak
+                    Status = GMK360.Core.Entities.Construction.ProjectStatus.Projelendirme_Teklif, // Yakında Başlayacak
                     CoverImageUrl = "https://dengegrup.net/wp-content/uploads/2016/08/dummy-1.jpg"
                 });
 
@@ -212,7 +212,7 @@ namespace GMK360.Web.Controllers
                     AgencyId = agency.Id,
                     Address = "Kadıköy, İstanbul",
                     StartDate = System.DateTime.UtcNow.AddMonths(-6),
-                    StatusId = GMK360.Core.Entities.Construction.ProjectConstants.StatusAktif, // Devam Eden
+                    Status = GMK360.Core.Entities.Construction.ProjectStatus.Aktif_Santiye, // Devam Eden
                     CoverImageUrl = "https://dengegrup.net/wp-content/uploads/2023/01/WhatsApp-Image-2023-01-09-at-09.52.03.jpeg"
                 });
             }
@@ -222,6 +222,7 @@ namespace GMK360.Web.Controllers
         }
     }
 }
+
 
 
 

@@ -1,8 +1,8 @@
-using System.Security.Claims;
+Ôªøusing System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Identity;
-using GMK360.Core.Entities.Identity; // UserType enum iÁin
+using GMK360.Core.Entities.Identity; // UserType enum i√ßin
 using GMK360.Data.Contexts;
 using Microsoft.EntityFrameworkCore;
 
@@ -44,13 +44,13 @@ namespace GMK360.Web.Controllers
             return BadRequest();
         }
 
-        // Yˆnlendirici
+        // Y√∂nlendirici
         public IActionResult Index()
         {
             return RedirectToAction(nameof(Hub));
         }
 
-        // --- ROL BAZLI ÷ZEL ANA SAYFALAR (Admin hepsine girebilir) ---
+        // --- ROL BAZLI √ñZEL ANA SAYFALAR (Admin hepsine girebilir) ---
 
         [Authorize(Roles = "Individual,Admin")]
         public IActionResult Individual()
@@ -64,13 +64,13 @@ namespace GMK360.Web.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return NotFound();
 
-            // Sadece bu kullan˝c˝ya ait ve "PrivateTracking" durumundaki (ilan olmayan) m¸lkleri Áek
+            // Sadece bu kullanƒ±cƒ±ya ait ve "PrivateTracking" durumundaki (ilan olmayan) m√ºlkleri √ßek
             var properties = await _context.Properties
                 .Where(p => p.UserId == user.Id && p.State == GMK360.Core.Entities.ListingState.PrivateTracking && !p.IsDeleted)
                 .OrderByDescending(p => p.CreatedAt)
                 .ToListAsync();
 
-            // Kullan˝c˝ya ait bekleyen (ˆdenmemi˛) finansal kay˝tlar
+            // Kullanƒ±cƒ±ya ait bekleyen (√∂denmemi≈ü) finansal kayƒ±tlar
             var pendingInvoicesCount = await _context.PropertyFinancialRecords
                 .Include(f => f.Property)
                 .Where(f => f.Property.UserId == user.Id && !f.IsCompleted)
@@ -81,14 +81,14 @@ namespace GMK360.Web.Controllers
                 .Where(r => r.UserId == user.Id && r.Status == GMK360.Core.Entities.RenovationStatus.Open)
                 .CountAsync();
 
-            // ÷rnek basit bir gelir gider hesab˝ (Kira giderleri vb.)
-            // ›leride daha detayl˝ finansal mod¸le balanabilir
+            // √ñrnek basit bir gelir gider hesabƒ± (Kira giderleri vb.)
+            // ƒ∞leride daha detaylƒ± finansal mod√ºle baƒülanabilir
             decimal totalIncome = 0;
             decimal totalExpense = 0;
 
             foreach (var prop in properties)
             {
-                // Eer kullan˝c˝ "Ev Sahibi" ise kiradan gelir bekliyor varsayal˝m (÷rnek)
+                // Eƒüer kullanƒ±cƒ± "Ev Sahibi" ise kiradan gelir bekliyor varsayalƒ±m (√ñrnek)
                 if (prop.ManagementRole == GMK360.Core.Entities.ManagementRole.Owner)
                 {
                     totalIncome += prop.Price; // Temsili kira geliri
@@ -106,7 +106,7 @@ namespace GMK360.Web.Controllers
                 TotalMonthlyExpense = totalExpense,
                 PendingInvoices = pendingInvoicesCount,
                 ActiveRenovationRequests = activeRenovationsCount,
-                RecentProperties = properties.Take(5).ToList() // Son 5 m¸lk
+                RecentProperties = properties.Take(5).ToList() // Son 5 m√ºlk
             };
 
             return View(viewModel);
@@ -123,20 +123,38 @@ namespace GMK360.Web.Controllers
             ViewBag.Agency = agency;
 
             // Dynamic Counts
-            var activeProjects = await _context.ConstructionProjects.CountAsync(p => p.AgencyId == agency.Id && p.StatusId == GMK360.Core.Entities.Construction.ProjectConstants.StatusAktif && !p.IsDeleted);
+            var activeProjects = await _context.ConstructionProjects.CountAsync(p => p.AgencyId == agency.Id && p.Status == GMK360.Core.Entities.Construction.ProjectStatus.Aktif_Santiye && !p.IsDeleted);
             var delayedPhases = await _context.ContractPhases.Include(p => p.Contract).CountAsync(p => p.Contract.AgencyId == agency.Id && !p.IsCompleted && p.TargetDate < DateTime.UtcNow);
             var firstDayOfMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
-            var totalPaymentsThisMonth = await _context.ProgressPayments.Include(p => p.Contract).Where(p => p.Contract.AgencyId == agency.Id && p.Status == GMK360.Core.Entities.Finance.ProgressPaymentStatus.Paid && p.ApprovalDate >= firstDayOfMonth).SumAsync(p => p.ApprovedAmount);
+            var totalPaymentsThisMonth = await _context.SubcontractorHakedisler
+                .Include(p => p.Contract)
+                .Where(p => p.Contract.AgencyId == agency.Id && p.IsApproved == true && p.HakedisDate >= firstDayOfMonth)
+                .SumAsync(p => p.ClaimAmount - p.DeductionAmount);
 
             ViewBag.ActiveProjects = activeProjects;
             ViewBag.DelayedPhases = delayedPhases;
             ViewBag.TotalPaymentsThisMonth = totalPaymentsThisMonth;
             var teklifProjeler = await _context.ConstructionProjects
-                .Where(p => p.AgencyId == agency.Id && p.StatusId == GMK360.Core.Entities.Construction.ProjectConstants.StatusTeklif && !p.IsDeleted)
+                .Where(p => p.AgencyId == agency.Id && p.Status == GMK360.Core.Entities.Construction.ProjectStatus.Projelendirme_Teklif && !p.IsDeleted)
                 .OrderByDescending(p => p.CreatedAt)
                 .Take(5)
                 .ToListAsync();
             ViewBag.TeklifProjeler = teklifProjeler;
+            
+            // Yakla≈üan √ñdemeler (Gelecek 15 G√ºn i√ßinde vadesi dolan √áek ve Kredi Kartƒ± √∂demeleri)
+            var in15Days = DateTime.UtcNow.AddDays(15);
+            var upcomingPayments = await _context.Set<GMK360.Core.Entities.Finance.SupplierPayment>()
+                .Include(p => p.SupplierCurrentAccount)
+                    .ThenInclude(c => c.PhonebookContact)
+                .Where(p => p.SupplierCurrentAccount.AgencyId == agency.Id 
+                       && p.DueDate.HasValue 
+                       && p.DueDate.Value <= in15Days 
+                       && p.Status == GMK360.Core.Entities.Finance.PaymentStatus.Pending)
+                .OrderBy(p => p.DueDate)
+                .Take(5)
+                .ToListAsync();
+            
+            ViewBag.UpcomingPayments = upcomingPayments;
 
             return View();
         }
@@ -160,7 +178,7 @@ namespace GMK360.Web.Controllers
             var agency = user?.AgencyConsultants?.FirstOrDefault()?.Agency;
             if (agency == null)
             {
-                return NotFound("Kullan˝c˝ya ait bir emlak ofisi bulunamad˝.");
+                return NotFound("Kullanƒ±cƒ±ya ait bir emlak ofisi bulunamadƒ±.");
             }
 
             var model = new ThemeSettingsViewModel
@@ -197,7 +215,7 @@ namespace GMK360.Web.Controllers
             var agency = user?.AgencyConsultants?.FirstOrDefault()?.Agency;
             if (agency == null || agency.Id != model.AgencyId)
             {
-                return NotFound("GeÁersiz emlak ofisi i˛lemi.");
+                return NotFound("Ge√ßersiz emlak ofisi i≈ülemi.");
             }
 
             agency.CustomDomain = model.CustomDomain;
@@ -213,7 +231,7 @@ namespace GMK360.Web.Controllers
             _context.Update(agency);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Tema ayarlar˝ ba˛ar˝yla g¸ncellendi.";
+            TempData["SuccessMessage"] = "Tema ayarlarƒ± ba≈üarƒ±yla g√ºncellendi.";
             return RedirectToAction(nameof(ThemeSettings));
         }
 
@@ -238,10 +256,10 @@ namespace GMK360.Web.Controllers
         [Authorize(Roles = "Supplier,Admin")]
         public IActionResult Supplier()
         {
-            return View(); // ﬁimdilik basitÁe dˆnd¸r¸yoruz
+            return View(); // ≈ûimdilik basit√ße d√∂nd√ºr√ºyoruz
         }
 
-        // --- ORTAK MOD‹LLER (›leride ta˛˝nabilir veya burada kalabilir) ---
+        // --- ORTAK MOD√úLLER (ƒ∞leride ta≈üƒ±nabilir veya burada kalabilir) ---
 
         public IActionResult Mesajlar() => View();
 
@@ -276,6 +294,7 @@ namespace GMK360.Web.Controllers
         public IActionResult SiteYonetimi() => View();
     }
 }
+
 
 
 

@@ -1,5 +1,5 @@
-@{
-    ViewData["Title"] = "Proje Puantaj Defteri";
+ï»¿@{
+    ViewData["Title"] = "Puantaj Defteri";
     Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
     
     var targetDate = (DateTime)ViewBag.TargetDate;
@@ -10,45 +10,53 @@
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h2 class="h4 mb-1">Günlük Puantaj Defteri</h2>
-        <p class="text-muted mb-0">Ýþçilerin günlük devam durumu ve faz bazlý görevlendirmeleri</p>
+        <h2 class="h4 mb-1">Gemi / Åžantiye PuantajÄ± (Yoklama)</h2>
+        <p class="text-muted mb-0">Ä°ÅŸÃ§ilerin gÃ¼nlÃ¼k devam durumu ve saha gÃ¶revlendirmeleri</p>
+    </div>
+    <div>
+        <!-- Avans Talep Butonu -->
+        <button type="button" class="btn btn-warning shadow-sm" data-bs-toggle="modal" data-bs-target="#advanceModal">
+            <i class="bi bi-cash me-2"></i>Personele Avans Talep Et
+        </button>
     </div>
 </div>
 
 @if (TempData["SuccessMessage"] != null)
 {
     <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
-        <i class="bi bi-check-circle-fill me-2"></i> @TempData["SuccessMessage"]
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <i class="bi bi-check-circle me-2"></i> @TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 }
 
-<div class="card shadow-sm border-0 mb-4 bg-light">
-    <div class="card-body py-3">
-        <form method="get" class="row align-items-end g-3">
-            <div class="col-md-3">
-                <label class="form-label fw-bold">Puantaj Tarihi</label>
-                <input type="date" name="date" class="form-control" value="@targetDate.ToString("yyyy-MM-dd")" />
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        <form method="get" class="row gx-2 gy-2 align-items-center">
+            <div class="col-auto">
+                <label class="col-form-label fw-bold">Tarih:</label>
             </div>
-            <div class="col-md-3">
-                <label class="form-label fw-bold">Sadece Þu Proje Ýçin (Opsiyonel)</label>
-                <select name="projectId" class="form-select">
-                    <option value="">-- Tüm Projeler --</option>
+            <div class="col-auto">
+                <input type="date" name="targetDate" class="form-control" value="@targetDate.ToString("yyyy-MM-dd")" onchange="this.form.submit()" />
+            </div>
+            <div class="col-auto ms-3">
+                <label class="col-form-label fw-bold">Proje:</label>
+            </div>
+            <div class="col-auto">
+                <select name="projectId" class="form-select" onchange="this.form.submit()">
+                    <option value="">-- TÃ¼m Projeler --</option>
                     @foreach (var proj in projects)
                     {
-                        <!option value="@proj.Id" @(ViewBag.SelectedProjectId == proj.Id ? "selected" : "")>@proj.Name</!option>
+                        var isSel = ViewBag.Project?.Id == proj.Id ? "selected" : "";
+                        <option value="@proj.Id" selected="@isSel">@proj.Name</option>
                     }
                 </select>
-            </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search me-1"></i> Getir</button>
             </div>
         </form>
     </div>
 </div>
 
 <form asp-action="SaveTimesheets" method="post">
-        <input type="hidden" name="sourceProjectId" value="@ViewBag.Project?.Id" />
+    <input type="hidden" name="sourceProjectId" value="@ViewBag.Project?.Id" />
     <input type="hidden" name="targetDate" value="@targetDate.ToString("yyyy-MM-dd")" />
     
     <div class="card shadow-sm border-0 mb-3">
@@ -58,11 +66,9 @@
                     <thead class="table-dark">
                         <tr>
                             <th class="ps-4">Personel / Usta</th>
-                            <th>Çalýþtýðý Yer (Faz)</th>
-                            <th style="width: 150px;">Durum</th>
-                            <th style="width: 120px;">Hak Ediþ (?)</th>
-                            <th style="width: 120px;">Avans (?)</th>
-                            <th>Notlar</th>
+                            <th>Meslek / Tipi</th>
+                            <th style="width: 200px;">Durum (Yoklama)</th>
+                            <th>Saha / Notlar</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -70,51 +76,39 @@
                         {
                             var t = existingTimesheets.ContainsKey(worker.Id) ? existingTimesheets[worker.Id] : null;
                             var status = t != null ? t.AttendanceStatus : "Gelmedi";
-                            var phaseId = t?.ProjectPhaseId ?? 0;
-                            var wage = t?.EarnedWage ?? (status == "Tam Gün" ? worker.DefaultDailyWage : 0);
-                            var advance = t?.AdvancePayment ?? 0;
                             var notes = t?.Notes ?? "";
 
                             <tr>
                                 <td class="ps-4">
                                     <input type="hidden" name="workerIds" value="@worker.Id" />
                                     <div class="fw-bold">@worker.FullName</div>
-                                    <div class="small text-muted">@worker.Profession</div>
                                 </td>
                                 <td>
-                                    <select name="phaseIds" class="form-select form-select-sm phase-select">
-                                        <option value="0">-- Yok / Boþta --</option>
-                                        @foreach(var p in projects)
-                                        {
-                                            <optgroup label="@p.Name">
-                                                @if(p.Phases != null)
-                                                {
-                                                    foreach(var phase in p.Phases)
-                                                    {
-                                                        <!option value="@phase.Id" @(phase.Id == phaseId ? "selected" : "")>@phase.Name</!option>
-                                                    }
-                                                }
-                                            </optgroup>
-                                        }
+                                    <span class="badge bg-light text-dark border">@worker.Profession</span>
+                                    <small class="text-muted d-block mt-1">@worker.WorkerType</small>
+                                </td>
+                                <td>
+                                    <select name="statuses" class="form-select status-select">
+                                        <option value="Gelmedi" selected="@(status == "Gelmedi" ? "selected" : null)">Gelmedi</option>
+                                        <option value="Tam GÃ¼n" selected="@(status == "Tam GÃ¼n" ? "selected" : null)">Tam GÃ¼n (Ã‡alÄ±ÅŸtÄ±)</option>
+                                        <option value="YarÄ±m GÃ¼n" selected="@(status == "YarÄ±m GÃ¼n" ? "selected" : null)">YarÄ±m GÃ¼n</option>
+                                        <option value="Ä°zinli" selected="@(status == "Ä°zinli" ? "selected" : null)">Ä°zinli / Raporlu</option>
                                     </select>
                                 </td>
                                 <td>
-                                    <select name="statuses" class="form-select form-select-sm status-select" data-default-wage="@worker.DefaultDailyWage">
-                                        <!option value="Gelmedi" @(status == "Gelmedi" ? "selected" : "")>Gelmedi</!option>
-                                        <!option value="Tam Gün" @(status == "Tam Gün" ? "selected" : "")>Tam Gün</!option>
-                                        <!option value="Yarým Gün" @(status == "Yarým Gün" ? "selected" : "")>Yarým Gün</!option>
-                                        <!option value="Ýzinli" @(status == "Ýzinli" ? "selected" : "")>Ýzinli (Ücretli)</!option>
-                                        <!option value="Raporlu" @(status == "Raporlu" ? "selected" : "")>Raporlu</!option>
-                                    </select>
+                                    <!-- Yevmiye ve Avans alanlarÄ± kÃ¶r puantaj mantÄ±ÄŸÄ± gereÄŸi Åžantiyeden gizlendi -->
+                                    <input type="hidden" name="wages" value="0" />
+                                    <input type="hidden" name="advances" value="0" />
+                                    <input type="text" name="notesList" class="form-control" value="@notes" placeholder="Sahadaki gÃ¶revi, notlar..." />
+                                    <input type="hidden" name="phaseIds" value="0" /> <!-- BasitleÅŸtirildi -->
                                 </td>
-                                <td>
-                                    <input type="number" step="0.01" name="wages" class="form-control form-control-sm wage-input" value="@wage.ToString("0.##")" />
-                                </td>
-                                <td>
-                                    <input type="number" step="0.01" name="advances" class="form-control form-control-sm text-danger fw-bold" value="@advance.ToString("0.##")" placeholder="0" />
-                                </td>
-                                <td>
-                                    <input type="text" name="notes" class="form-control form-control-sm" value="@notes" placeholder="Ek açýklama..." />
+                            </tr>
+                        }
+                        @if (!workers.Any())
+                        {
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">
+                                    Bu projeye atanmÄ±ÅŸ personel bulunmuyor.
                                 </td>
                             </tr>
                         }
@@ -122,39 +116,48 @@
                 </table>
             </div>
         </div>
-    </div>
-    
-    <div class="d-flex justify-content-end mb-5">
-        <button type="submit" class="btn btn-success btn-lg px-5 shadow">
-            <i class="bi bi-save2-fill me-2"></i> Puantajlarý Kaydet
-        </button>
+        <div class="card-footer bg-white text-end py-3">
+            <button type="submit" class="btn btn-primary px-4">YoklamayÄ± Kaydet</button>
+        </div>
     </div>
 </form>
 
-@section Scripts {
-    <script>
-        $(document).ready(function() {
-            $('.status-select').change(function() {
-                var $row = $(this).closest('tr');
-                var status = $(this).val();
-                var defaultWage = parseFloat($(this).data('default-wage')) || 0;
-                var $wageInput = $row.find('.wage-input');
-                var $phaseSelect = $row.find('.phase-select');
-
-                if (status === 'Tam Gün') {
-                    $wageInput.val(defaultWage);
-                } else if (status === 'Yarým Gün') {
-                    $wageInput.val(defaultWage / 2);
-                } else if (status === 'Ýzinli') {
-                    $wageInput.val(defaultWage);
-                    $phaseSelect.val('0'); // Fazda çalýþmýyor
-                } else {
-                    $wageInput.val(0);
-                    $phaseSelect.val('0');
-                }
-            });
-        });
-    </script>
-}
-
-
+<!-- Modal: Avans Talebi -->
+<div class="modal fade" id="advanceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form asp-controller="DailyTimesheets" asp-action="RequestAdvance" method="post" class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title fw-bold text-dark"><i class="bi bi-cash me-2"></i>Avans Talebi OluÅŸtur</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info py-2 small">
+                    OluÅŸturduÄŸunuz avans talepleri direkt Kasa'dan dÃ¼ÅŸmez. Merkezin onayÄ±na sunulur.
+                </div>
+                <input type="hidden" name="sourceProjectId" value="@ViewBag.Project?.Id" />
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Personel / Usta SeÃ§in</label>
+                    <select name="AgencyWorkerId" class="form-select" required>
+                        <option value="">-- SeÃ§iniz --</option>
+                        @foreach (var worker in workers)
+                        {
+                            <option value="@worker.Id">@worker.FullName</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Talep Edilen Tutar (â‚º)</label>
+                    <input type="number" name="Amount" class="form-control form-control-lg text-end" required placeholder="0.00" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">AÃ§Ä±klama / Sebep</label>
+                    <textarea name="Description" class="form-control" rows="3" required placeholder="Ã–rn: Hafta sonu memlekete gideceÄŸi iÃ§in yol parasÄ± avansÄ±"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Ä°ptal</button>
+                <button type="submit" class="btn btn-dark">Talebi Merkeze Ä°let</button>
+            </div>
+        </form>
+    </div>
+</div>

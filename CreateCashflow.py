@@ -1,0 +1,154 @@
+﻿import codecs
+
+filepath = r'C:\Users\murat\source\repos\GMK360\GMK360.Web\Views\Finance\Cashflow.cshtml'
+
+content = '''@model IEnumerable<GMK360.Core.Entities.Finance.AgencyCashTransaction>
+@{
+    ViewData["Title"] = "Ortak Kasa (Nakit Akışı)";
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+    decimal totalOut = ViewBag.TotalCashOut ?? 0;
+}
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+        <div>
+            <h2 class="fw-bold mb-0 text-dark"><i class="bi bi-bank text-primary me-2"></i> Ortak Kasa ve Banka Hareketi</h2>
+            <p class="text-muted mb-0">Şirket genelindeki tüm tedarikçi ödemeleri, personel avansları ve genel gider çıkışları.</p>
+        </div>
+        <div>
+            <button class="btn btn-primary rounded-pill shadow-sm px-4" data-bs-toggle="modal" data-bs-target="#expenseModal">
+                <i class="bi bi-plus-circle me-1"></i> Manuel Gider İşle
+            </button>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success shadow-sm">
+            <i class="bi bi-check-circle me-1"></i> @TempData["SuccessMessage"]
+        </div>
+    }
+
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 bg-danger text-white rounded-4 h-100">
+                <div class="card-body p-4">
+                    <h6 class="text-white-50 text-uppercase fw-bold mb-3"><i class="bi bi-arrow-down-right-circle me-2"></i> Toplam Nakit Çıkışı</h6>
+                    <h2 class="display-6 fw-bold mb-0">@totalOut.ToString("N2") ₺</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4 py-3">Tarih</th>
+                            <th class="py-3">İşlem Tipi</th>
+                            <th class="py-3">Açıklama / İlgili Kişi</th>
+                            <th class="py-3">Ödeme Yöntemi</th>
+                            <th class="text-end pe-4 py-3">Tutar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var tx in Model)
+                        {
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="fw-semibold">@tx.PaymentDate.ToLocalTime().ToString("dd.MM.yyyy")</div>
+                                    <small class="text-muted">@tx.PaymentDate.ToLocalTime().ToString("HH:mm")</small>
+                                </td>
+                                <td>
+                                    @if(tx.TransactionType == GMK360.Core.Entities.Finance.AgencyCashTransactionType.WorkerAdvance)
+                                    {
+                                        <span class="badge bg-warning text-dark"><i class="bi bi-person-badge me-1"></i> Mavi Yaka Avans</span>
+                                    }
+                                    else if(tx.TransactionType == GMK360.Core.Entities.Finance.AgencyCashTransactionType.ConsultantAdvance)
+                                    {
+                                        <span class="badge bg-info text-dark"><i class="bi bi-person-workspace me-1"></i> Beyaz Yaka Avans</span>
+                                    }
+                                    else if(tx.TransactionType == GMK360.Core.Entities.Finance.AgencyCashTransactionType.SupplierPayment)
+                                    {
+                                        <span class="badge bg-primary"><i class="bi bi-shop me-1"></i> Tedarikçi/Taşeron Ödemesi</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary"><i class="bi bi-receipt me-1"></i> Genel Gider</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="fw-bold">
+                                        @if (tx.AgencyWorker != null) { @tx.AgencyWorker.FullName }
+                                        else if (tx.AgencyConsultant != null) { @tx.AgencyConsultant.FirstName }
+                                        else if (tx.SupplierCurrentAccount != null) { @tx.SupplierCurrentAccount.PhonebookContact.Name }
+                                        else { @tx.Description }
+                                    </div>
+                                    @if(tx.AgencyWorker != null || tx.AgencyConsultant != null || tx.SupplierCurrentAccount != null)
+                                    {
+                                        <small class="text-muted d-block mt-1">@tx.Description</small>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark border">@tx.Method.ToString()</span>
+                                </td>
+                                <td class="text-end pe-4 fw-bold text-danger fs-5">
+                                    - @tx.Amount.ToString("N2") ₺
+                                </td>
+                            </tr>
+                        }
+
+                        @if (!Model.Any())
+                        {
+                            <tr>
+                                <td colspan="5" class="text-center py-5 text-muted">
+                                    <i class="bi bi-cash fs-1 text-secondary opacity-50 mb-3 d-block"></i>
+                                    Kasa hareketi bulunmuyor.
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Manuel Gider Ekle Modal -->
+<div class="modal fade" id="expenseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form asp-action="AddExpense" method="post" class="modal-content border-0 shadow">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle me-2"></i>Manuel Gider İşle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Tutar (₺)</label>
+                    <input type="number" name="amount" class="form-control" required placeholder="Örn: 1500" step="0.01" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Ödeme Yöntemi</label>
+                    <select name="method" class="form-select" required>
+                        <option value="0">Nakit</option>
+                        <option value="1">Kredi Kartı</option>
+                        <option value="2">Havale/EFT</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Açıklama</label>
+                    <input type="text" name="description" class="form-control" required placeholder="Örn: Şantiye ofis malzemesi alımı" />
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-primary">Kaydet ve Kasadan Düş</button>
+            </div>
+        </form>
+    </div>
+</div>
+'''
+with codecs.open(filepath, 'w', 'utf-8-sig') as f:
+    f.write(content)

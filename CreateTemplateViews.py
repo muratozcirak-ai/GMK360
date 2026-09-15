@@ -1,0 +1,81 @@
+﻿import codecs
+
+filepath_c = r'C:\Users\murat\source\repos\GMK360\GMK360.Web\Views\DocumentTemplate\Create.cshtml'
+content_c = '''@model GMK360.Core.Entities.Construction.DocumentTemplate
+@{
+    ViewData["Title"] = "Yeni Şablon Ekle";
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+}
+
+<div class="mb-4">
+    <h3 class="fw-bold text-dark"><i class="bi bi-file-earmark-plus text-primary me-2"></i> Yeni Şablon Oluştur</h3>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body">
+        <form asp-action="Create" method="post">
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label fw-bold">Kategori</label>
+                    <select asp-for="Category" class="form-select" required>
+                        <option value="Taşeron Sözleşmesi">Taşeron Sözleşmesi</option>
+                        <option value="Tedarik Sözleşmesi">Tedarik Sözleşmesi</option>
+                        <option value="Müşteri Sözleşmesi">Müşteri Sözleşmesi</option>
+                        <option value="Tutanak / Form">Tutanak / Form</option>
+                        <option value="Diğer">Diğer</option>
+                    </select>
+                </div>
+                <div class="col-md-8 mb-3">
+                    <label class="form-label fw-bold">Şablon Adı</label>
+                    <input asp-for="TemplateName" class="form-control" placeholder="Örn: Standart Kaba İnşaat Sözleşmesi" required />
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <div class="d-flex justify-content-between">
+                    <label class="form-label fw-bold">Sözleşme İçeriği (HTML)</label>
+                    <small class="text-primary fw-bold">Değişkenler: {{FirmaAdi}}, {{ProjeAdi}}, {{Tutar}} vb.</small>
+                </div>
+                <textarea asp-for="HtmlContent" class="form-control editor" rows="20"></textarea>
+            </div>
+
+            <div class="text-end">
+                <a href="/DocumentTemplate/Index" class="btn btn-secondary">İptal</a>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i> Şablonu Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('.editor').summernote({
+                height: 500,
+                placeholder: 'Sözleşme metnini buraya yazın veya HTML olarak yapıştırın...',
+                toolbar: [
+                    ['style', ['style', 'bold', 'italic', 'underline', 'clear']],
+                    ['font', ['strikethrough', 'superscript', 'subscript']],
+                    ['fontsize', ['fontsize']],
+                    ['color', ['color']],
+                    ['para', ['ul', 'ol', 'paragraph']],
+                    ['table', ['table']],
+                    ['view', ['fullscreen', 'codeview', 'help']]
+                ]
+            });
+        });
+    </script>
+}
+'''
+with codecs.open(filepath_c, 'w', 'utf-8-sig') as f:
+    f.write(content_c)
+
+
+filepath_e = r'C:\Users\murat\source\repos\GMK360\GMK360.Web\Views\DocumentTemplate\Edit.cshtml'
+content_e = content_c.replace("Yeni Şablon Ekle", "Şablon Düzenle").replace("Yeni Şablon Oluştur", "Şablonu Düzenle").replace('asp-action="Create"', 'asp-action="Edit"').replace('<form asp-action="Edit" method="post">', '<form asp-action="Edit" method="post">\n<input type="hidden" asp-for="Id" />')
+
+with codecs.open(filepath_e, 'w', 'utf-8-sig') as f:
+    f.write(content_e)

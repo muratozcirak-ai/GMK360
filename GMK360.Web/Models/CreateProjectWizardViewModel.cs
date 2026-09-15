@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
@@ -7,14 +7,14 @@ namespace GMK360.Web.Models
 {
     public class CreateProjectWizardViewModel
     {
-        [Required(ErrorMessage = "Proje adý zorunludur.")]
+        [Required(ErrorMessage = "Proje ad zorunludur.")]
         public int DraftProjectId { get; set; }
 
-        [Required(ErrorMessage = "Proje adý zorunludur.")]
+        [Required(ErrorMessage = "Proje ad zorunludur.")]
         public string Name { get; set; }
 
         public string Description { get; set; }
-        public byte StatusId { get; set; } = 1; // 0: Aday/Görüþmede, 1: Aktif Þantiye, 2: Tamamlandý (Referans)
+        public byte StatusId { get; set; } = 1; // 0: Aday/Grmede, 1: Aktif antiye, 2: Tamamland (Referans)
         
         [Required(ErrorMessage = "Adres zorunludur.")]
         public string Address { get; set; }
@@ -26,18 +26,18 @@ namespace GMK360.Web.Models
         public IFormFile CoverImageFile { get; set; }
         public IFormFile CurrentStateImageFile { get; set; }
         
-        // Lokasyon Hiyerarþisi
-        [Required(ErrorMessage = "Ýl seçimi zorunludur.")]
+        // Lokasyon Hiyerarisi
+        [Required(ErrorMessage = "l seimi zorunludur.")]
         public int CityId { get; set; }
-        [Required(ErrorMessage = "Ýlçe seçimi zorunludur.")]
+        [Required(ErrorMessage = "le seimi zorunludur.")]
         public int DistrictId { get; set; }
-        [Required(ErrorMessage = "Mahalle seçimi zorunludur.")]
+        [Required(ErrorMessage = "Mahalle seimi zorunludur.")]
         public int NeighborhoodId { get; set; }
         public int? StreetId { get; set; }
         
-        // Harita Koordinatlarý
-        public double? Latitude { get; set; }
-        public double? Longitude { get; set; }
+        // Harita Koordinatlar
+        public string Latitude { get; set; }
+        public string Longitude { get; set; }
 
         public double? TotalLandArea { get; set; }
         public int? TargetTotalApartments { get; set; }

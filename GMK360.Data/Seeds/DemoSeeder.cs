@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using GMK360.Core.Entities;
@@ -27,7 +27,7 @@ namespace GMK360.Data.Seeds
             var adminUser = await userManager.FindByEmailAsync("admin@gmk360.com");
             if (adminUser == null)
             {
-                adminUser = new ApplicationUser { UserName = "admin@gmk360.com", Email = "admin@gmk360.com", FirstName = "Sistem", LastName = "Yöneticisi", EmailConfirmed = true };
+                adminUser = new ApplicationUser { UserName = "admin@gmk360.com", Email = "admin@gmk360.com", FirstName = "Sistem", LastName = "Yï¿½neticisi", EmailConfirmed = true };
                 await userManager.CreateAsync(adminUser, "123456");
                 await userManager.AddToRoleAsync(adminUser, "Admin");
             }
@@ -35,7 +35,7 @@ namespace GMK360.Data.Seeds
             var customerUser = await userManager.FindByEmailAsync("musteri@gmk360.com");
             if (customerUser == null)
             {
-                customerUser = new ApplicationUser { UserName = "musteri@gmk360.com", Email = "musteri@gmk360.com", FirstName = "Ahmet", LastName = "Müþteri", EmailConfirmed = true };
+                customerUser = new ApplicationUser { UserName = "musteri@gmk360.com", Email = "musteri@gmk360.com", FirstName = "Ahmet", LastName = "Mï¿½ï¿½teri", EmailConfirmed = true };
                 await userManager.CreateAsync(customerUser, "123456");
                 await userManager.AddToRoleAsync(customerUser, "Customer");
             }
@@ -43,34 +43,34 @@ namespace GMK360.Data.Seeds
             var agency = await context.Agencies.FirstOrDefaultAsync();
             if (agency == null)
             {
-                agency = new Agency { CompanyName = "GMK Mimarlýk ve Ýnþaat" };
+                agency = new Agency { CompanyName = "GMK Mimarlï¿½k ve ï¿½nï¿½aat" };
                 context.Agencies.Add(agency);
                 await context.SaveChangesAsync();
             }
 
-            var project = await context.ConstructionProjects.FirstOrDefaultAsync(p => p.Name == "GMK Yaþam Evleri");
+            var project = await context.ConstructionProjects.FirstOrDefaultAsync(p => p.Name == "GMK Yaï¿½am Evleri");
             if (project == null)
             {
                 project = new ConstructionProject
                 {
                     AgencyId = agency.Id,
-                    Name = "GMK Yaþam Evleri",
+                    Name = "GMK Yaï¿½am Evleri",
                     StartDate = DateTime.UtcNow.AddMonths(-2),
-                    StatusId = GMK360.Core.Entities.Construction.ProjectConstants.StatusAktif,
-                    Address = "Merkez Mah. Ýnþaat Sk.",
+                    Status = GMK360.Core.Entities.Construction.ProjectStatus.Aktif_Santiye,
+                    Address = "Merkez Mah. ï¿½nï¿½aat Sk.",
                     CoverImageUrl = "https://images.unsplash.com/photo-1541888086225-f64069811c7f?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"
                 };
                 context.ConstructionProjects.Add(project);
                 await context.SaveChangesAsync();
                 
-                var phase1 = new ProjectPhase { ConstructionProjectId = project.Id, Name = "Hafriyat ve Temel", Description = "Kazý ve temel beton", PlannedStartDate = DateTime.UtcNow.AddMonths(-2), Status = 2, OrderIndex = 1 };
-                var phase2 = new ProjectPhase { ConstructionProjectId = project.Id, Name = "Kaba Ýnþaat", Description = "Kolon ve tabliyeler", PlannedStartDate = DateTime.UtcNow.AddMonths(-1), Status = 1, OrderIndex = 2 };
-                var phase3 = new ProjectPhase { ConstructionProjectId = project.Id, Name = "Ýnce Ýþçilik", Description = "Duvar, sýva, elektrik", PlannedStartDate = DateTime.UtcNow.AddMonths(1), Status = 0, OrderIndex = 3 };
+                var phase1 = new ProjectPhase { ConstructionProjectId = project.Id, Name = "Hafriyat ve Temel", Description = "Kazï¿½ ve temel beton", PlannedStartDate = DateTime.UtcNow.AddMonths(-2), Status = 2, OrderIndex = 1 };
+                var phase2 = new ProjectPhase { ConstructionProjectId = project.Id, Name = "Kaba ï¿½nï¿½aat", Description = "Kolon ve tabliyeler", PlannedStartDate = DateTime.UtcNow.AddMonths(-1), Status = 1, OrderIndex = 2 };
+                var phase3 = new ProjectPhase { ConstructionProjectId = project.Id, Name = "ï¿½nce ï¿½ï¿½ï¿½ilik", Description = "Duvar, sï¿½va, elektrik", PlannedStartDate = DateTime.UtcNow.AddMonths(1), Status = 0, OrderIndex = 3 };
                 context.ProjectPhases.AddRange(phase1, phase2, phase3);
                 await context.SaveChangesAsync();
 
-                context.PhaseTasks.Add(new PhaseTask { ProjectPhaseId = phase1.Id, Name = "Temel Kazýsý", Status = "Tamamlandý", OrderIndex = 1 });
-                context.PhaseTasks.Add(new PhaseTask { ProjectPhaseId = phase2.Id, Name = "1. Kat Kolon Betonlarý", Status = "Devam Ediyor", OrderIndex = 1 });
+                context.PhaseTasks.Add(new PhaseTask { ProjectPhaseId = phase1.Id, Name = "Temel Kazï¿½sï¿½", Status = "Tamamlandï¿½", OrderIndex = 1 });
+                context.PhaseTasks.Add(new PhaseTask { ProjectPhaseId = phase2.Id, Name = "1. Kat Kolon Betonlarï¿½", Status = "Devam Ediyor", OrderIndex = 1 });
                 await context.SaveChangesAsync();
 
                 var building = new Building { ConstructionProjectId = project.Id, BlockName = "A Blok", TotalFloors = 5 };
@@ -84,17 +84,17 @@ namespace GMK360.Data.Seeds
 
                 var materials = new[]
                 {
-                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Banyo Zemin", MaterialName = "Koyu Gri Mat Seramik (Vitra)", Description = "Kaydýrmaz, þýk görünümlü modern seramik.", ImageUrl = "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=400&q=80", PriceDifference = 0 },
-                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Banyo Zemin", MaterialName = "Bej Mermer Desen (Çanakkale)", Description = "Klasik banyolar için ferah görünüm.", ImageUrl = "https://images.unsplash.com/photo-1620626011761-996317b8d101?auto=format&fit=crop&w=400&q=80", PriceDifference = 0 },
-                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Banyo Zemin", MaterialName = "Ahþap Görünümlü Seramik (Kütahya)", Description = "Doðal ahþap sýcaklýðýný banyoya taþýr.", ImageUrl = "https://images.unsplash.com/photo-1597405436665-2748259db813?auto=format&fit=crop&w=400&q=80", PriceDifference = 2500 },
-                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Banyo Zemin", MaterialName = "Siyah Parlak Granit (Bien)", Description = "Lüks ve prestijli görünüm.", ImageUrl = "https://images.unsplash.com/photo-1518599904199-0ca897819ddb?auto=format&fit=crop&w=400&q=80", PriceDifference = 5000 },
+                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Banyo Zemin", MaterialName = "Koyu Gri Mat Seramik (Vitra)", Description = "Kaydï¿½rmaz, ï¿½ï¿½k gï¿½rï¿½nï¿½mlï¿½ modern seramik.", ImageUrl = "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=400&q=80", PriceDifference = 0 },
+                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Banyo Zemin", MaterialName = "Bej Mermer Desen (ï¿½anakkale)", Description = "Klasik banyolar iï¿½in ferah gï¿½rï¿½nï¿½m.", ImageUrl = "https://images.unsplash.com/photo-1620626011761-996317b8d101?auto=format&fit=crop&w=400&q=80", PriceDifference = 0 },
+                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Banyo Zemin", MaterialName = "Ahï¿½ap Gï¿½rï¿½nï¿½mlï¿½ Seramik (Kï¿½tahya)", Description = "Doï¿½al ahï¿½ap sï¿½caklï¿½ï¿½ï¿½nï¿½ banyoya taï¿½ï¿½r.", ImageUrl = "https://images.unsplash.com/photo-1597405436665-2748259db813?auto=format&fit=crop&w=400&q=80", PriceDifference = 2500 },
+                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Banyo Zemin", MaterialName = "Siyah Parlak Granit (Bien)", Description = "Lï¿½ks ve prestijli gï¿½rï¿½nï¿½m.", ImageUrl = "https://images.unsplash.com/photo-1518599904199-0ca897819ddb?auto=format&fit=crop&w=400&q=80", PriceDifference = 5000 },
 
-                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Banyo Duvar", MaterialName = "Beyaz Dalgalý Çini", Description = "Standart duvar döþemesi, ferah gösterir.", ImageUrl = "https://images.unsplash.com/photo-1616486029423-aaa4789e8c9a?auto=format&fit=crop&w=400&q=80", PriceDifference = 0 },
-                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Banyo Duvar", MaterialName = "Antrasit Gri Dikdörtgen Seramik", Description = "Koyu renk zeminlerle mükemmel uyum.", ImageUrl = "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?auto=format&fit=crop&w=400&q=80", PriceDifference = 0 },
-                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Banyo Duvar", MaterialName = "Altýn Damarlý Calacatta Mermer", Description = "Premium duvar döþemesi.", ImageUrl = "https://images.unsplash.com/photo-1551000676-4767bd86fc38?auto=format&fit=crop&w=400&q=80", PriceDifference = 7500 },
+                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Banyo Duvar", MaterialName = "Beyaz Dalgalï¿½ ï¿½ini", Description = "Standart duvar dï¿½ï¿½emesi, ferah gï¿½sterir.", ImageUrl = "https://images.unsplash.com/photo-1616486029423-aaa4789e8c9a?auto=format&fit=crop&w=400&q=80", PriceDifference = 0 },
+                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Banyo Duvar", MaterialName = "Antrasit Gri Dikdï¿½rtgen Seramik", Description = "Koyu renk zeminlerle mï¿½kemmel uyum.", ImageUrl = "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?auto=format&fit=crop&w=400&q=80", PriceDifference = 0 },
+                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Banyo Duvar", MaterialName = "Altï¿½n Damarlï¿½ Calacatta Mermer", Description = "Premium duvar dï¿½ï¿½emesi.", ImageUrl = "https://images.unsplash.com/photo-1551000676-4767bd86fc38?auto=format&fit=crop&w=400&q=80", PriceDifference = 7500 },
 
-                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Laminat Parke", MaterialName = "Açýk Meþe (Çamsan)", Description = "Standart salon ve oda parkesi.", ImageUrl = "https://images.unsplash.com/photo-1581858726788-75bc0f6a952d?auto=format&fit=crop&w=400&q=80", PriceDifference = 0 },
-                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Laminat Parke", MaterialName = "Koyu Ceviz Derzli (AGT)", Description = "Kalýn ve suya dayanýklý lüks parke.", ImageUrl = "https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=400&q=80", PriceDifference = 4000 }
+                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Laminat Parke", MaterialName = "Aï¿½ï¿½k Meï¿½e (ï¿½amsan)", Description = "Standart salon ve oda parkesi.", ImageUrl = "https://images.unsplash.com/photo-1581858726788-75bc0f6a952d?auto=format&fit=crop&w=400&q=80", PriceDifference = 0 },
+                    new ProjectMaterialCatalog { ConstructionProjectId = project.Id, Category = "Laminat Parke", MaterialName = "Koyu Ceviz Derzli (AGT)", Description = "Kalï¿½n ve suya dayanï¿½klï¿½ lï¿½ks parke.", ImageUrl = "https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=400&q=80", PriceDifference = 4000 }
                 };
                 context.ProjectMaterialCatalogs.AddRange(materials);
                 await context.SaveChangesAsync();
@@ -102,6 +102,7 @@ namespace GMK360.Data.Seeds
         }
     }
 }
+
 
 
 

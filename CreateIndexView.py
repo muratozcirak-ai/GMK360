@@ -1,0 +1,92 @@
+﻿import codecs
+
+filepath = r'C:\Users\murat\source\repos\GMK360\GMK360.Web\Views\SupplierCurrentAccount\Index.cshtml'
+
+content = '''@model IEnumerable<GMK360.Core.Entities.Finance.SupplierCurrentAccount>
+
+@{
+    ViewData["Title"] = "Tedarikçi Cari Hesapları";
+}
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0">Tedarikçi / Taşeron Cari Hesapları</h2>
+            <p class="text-muted mb-0">Tüm açık hesap, ödeme ve fatura işlemlerini buradan takip edebilirsiniz.</p>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4 py-3">Firma/Kişi Adı</th>
+                            <th class="py-3">Telefon</th>
+                            <th class="py-3">Güncel Bakiye (Borcumuz)</th>
+                            <th class="text-end pe-4 py-3">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model)
+                        {
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="d-flex align-items-center">
+                                        <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-2 me-3">
+                                            <i class="bi bi-building fs-5"></i>
+                                        </div>
+                                        <div>
+                                            <h6 class="mb-0 fw-bold">@item.PhonebookContact.Name</h6>
+                                            <small class="text-muted">@(item.PhonebookContact.Tags ?? "Tedarikçi/Taşeron")</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>@item.PhonebookContact.PhoneNumber</td>
+                                <td>
+                                    @if(item.CurrentBalance > 0)
+                                    {
+                                        <span class="badge bg-danger bg-opacity-10 text-danger fs-6 px-3 py-2">
+                                            @item.CurrentBalance.ToString("N2") ₺ Borcumuz Var
+                                        </span>
+                                    }
+                                    else if(item.CurrentBalance < 0)
+                                    {
+                                        <span class="badge bg-success bg-opacity-10 text-success fs-6 px-3 py-2">
+                                            @Math.Abs(item.CurrentBalance).ToString("N2") ₺ Avans/Alacak
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary bg-opacity-10 text-secondary fs-6 px-3 py-2">
+                                            0.00 ₺ (Kapalı)
+                                        </span>
+                                    }
+                                </td>
+                                <td class="text-end pe-4">
+                                    <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                                        <i class="bi bi-file-earmark-text me-1"></i> Ekstre Gör
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                        
+                        @if (!Model.Any())
+                        {
+                            <tr>
+                                <td colspan="4" class="text-center py-5 text-muted">
+                                    <i class="bi bi-journal-x fs-1 d-block mb-3"></i>
+                                    Kayıtlı cari hesap bulunamadı. Lütfen önce Rehberden bir firmayı Tedarikçi olarak ekleyin.
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+'''
+with codecs.open(filepath, 'w', 'utf-8-sig') as f:
+    f.write(content)

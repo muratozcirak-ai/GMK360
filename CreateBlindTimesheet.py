@@ -1,0 +1,170 @@
+﻿import codecs
+
+filepath = r'C:\Users\murat\source\repos\GMK360\GMK360.Web\Views\DailyTimesheets\ProjectTimesheet.cshtml'
+
+content = '''@{
+    ViewData["Title"] = "Puantaj Defteri";
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+    
+    var targetDate = (DateTime)ViewBag.TargetDate;
+    var workers = ViewBag.Workers as IEnumerable<GMK360.Core.Entities.Construction.AgencyWorker>;
+    var existingTimesheets = ViewBag.ExistingTimesheets as Dictionary<int, GMK360.Core.Entities.Construction.DailyTimesheet>;
+    var projects = ViewBag.Projects as IEnumerable<GMK360.Core.Entities.Construction.ConstructionProject>;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="h4 mb-1">Gemi / Şantiye Puantajı (Yoklama)</h2>
+        <p class="text-muted mb-0">İşçilerin günlük devam durumu ve saha görevlendirmeleri</p>
+    </div>
+    <div>
+        <!-- Avans Talep Butonu -->
+        <button type="button" class="btn btn-warning shadow-sm" data-bs-toggle="modal" data-bs-target="#advanceModal">
+            <i class="bi bi-cash me-2"></i>Personele Avans Talep Et
+        </button>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+        <i class="bi bi-check-circle me-2"></i> @TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        <form method="get" class="row gx-2 gy-2 align-items-center">
+            <div class="col-auto">
+                <label class="col-form-label fw-bold">Tarih:</label>
+            </div>
+            <div class="col-auto">
+                <input type="date" name="targetDate" class="form-control" value="@targetDate.ToString("yyyy-MM-dd")" onchange="this.form.submit()" />
+            </div>
+            <div class="col-auto ms-3">
+                <label class="col-form-label fw-bold">Proje:</label>
+            </div>
+            <div class="col-auto">
+                <select name="projectId" class="form-select" onchange="this.form.submit()">
+                    <option value="">-- Tüm Projeler --</option>
+                    @foreach (var proj in projects)
+                    {
+                        var isSel = ViewBag.Project?.Id == proj.Id ? "selected" : "";
+                        <option value="@proj.Id" selected="@isSel">@proj.Name</option>
+                    }
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+<form asp-action="SaveTimesheets" method="post">
+    <input type="hidden" name="sourceProjectId" value="@ViewBag.Project?.Id" />
+    <input type="hidden" name="targetDate" value="@targetDate.ToString("yyyy-MM-dd")" />
+    
+    <div class="card shadow-sm border-0 mb-3">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th class="ps-4">Personel / Usta</th>
+                            <th>Meslek / Tipi</th>
+                            <th style="width: 200px;">Durum (Yoklama)</th>
+                            <th>Saha / Notlar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var worker in workers)
+                        {
+                            var t = existingTimesheets.ContainsKey(worker.Id) ? existingTimesheets[worker.Id] : null;
+                            var status = t != null ? t.AttendanceStatus : "Gelmedi";
+                            var notes = t?.Notes ?? "";
+
+                            <tr>
+                                <td class="ps-4">
+                                    <input type="hidden" name="workerIds" value="@worker.Id" />
+                                    <div class="fw-bold">@worker.FullName</div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark border">@worker.Profession</span>
+                                    <small class="text-muted d-block mt-1">@worker.WorkerType</small>
+                                </td>
+                                <td>
+                                    <select name="statuses" class="form-select status-select">
+                                        <option value="Gelmedi" selected="@(status == "Gelmedi" ? "selected" : null)">Gelmedi</option>
+                                        <option value="Tam Gün" selected="@(status == "Tam Gün" ? "selected" : null)">Tam Gün (Çalıştı)</option>
+                                        <option value="Yarım Gün" selected="@(status == "Yarım Gün" ? "selected" : null)">Yarım Gün</option>
+                                        <option value="İzinli" selected="@(status == "İzinli" ? "selected" : null)">İzinli / Raporlu</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <!-- Yevmiye ve Avans alanları kör puantaj mantığı gereği Şantiyeden gizlendi -->
+                                    <input type="hidden" name="wages" value="0" />
+                                    <input type="hidden" name="advances" value="0" />
+                                    <input type="text" name="notesList" class="form-control" value="@notes" placeholder="Sahadaki görevi, notlar..." />
+                                    <input type="hidden" name="phaseIds" value="0" /> <!-- Basitleştirildi -->
+                                </td>
+                            </tr>
+                        }
+                        @if (!workers.Any())
+                        {
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">
+                                    Bu projeye atanmış personel bulunmuyor.
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer bg-white text-end py-3">
+            <button type="submit" class="btn btn-primary px-4">Yoklamayı Kaydet</button>
+        </div>
+    </div>
+</form>
+
+<!-- Modal: Avans Talebi -->
+<div class="modal fade" id="advanceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form asp-controller="Timesheet" asp-action="RequestAdvance" method="post" class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title fw-bold text-dark"><i class="bi bi-cash me-2"></i>Avans Talebi Oluştur</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info py-2 small">
+                    Oluşturduğunuz avans talepleri direkt Kasa'dan düşmez. Merkezin onayına sunulur.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Personel / Usta Seçin</label>
+                    <select name="AgencyWorkerId" class="form-select" required>
+                        <option value="">-- Seçiniz --</option>
+                        @foreach (var worker in workers)
+                        {
+                            <option value="@worker.Id">@worker.FullName</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Talep Edilen Tutar (₺)</label>
+                    <input type="number" name="Amount" class="form-control form-control-lg text-end" required placeholder="0.00" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Açıklama / Sebep</label>
+                    <textarea name="Description" class="form-control" rows="3" required placeholder="Örn: Hafta sonu memlekete gideceği için yol parası avansı"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-dark">Talebi Merkeze İlet</button>
+            </div>
+        </form>
+    </div>
+</div>
+'''
+
+with codecs.open(filepath, 'w', 'utf-8-sig') as f:
+    f.write(content)

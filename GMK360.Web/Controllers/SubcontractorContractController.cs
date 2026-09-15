@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using GMK360.Data.Contexts;
 using GMK360.Core.Entities.Identity;
 using GMK360.Core.Entities.Finance;
+using GMK360.Core.Entities.Construction;
 
 namespace GMK360.Web.Controllers
 {
@@ -27,14 +28,10 @@ namespace GMK360.Web.Controllers
         {
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return null;
-
-            var consultant = await _context.AgencyConsultants
-                .FirstOrDefaultAsync(c => c.UserId == user.Id && c.IsActive);
-                
+            var consultant = await _context.AgencyConsultants.FirstOrDefaultAsync(c => c.UserId == user.Id);
             return consultant?.AgencyId;
         }
 
-        [HttpGet]
         public async Task<IActionResult> ProjectContracts(int id)
         {
             var agencyId = await GetCurrentAgencyId();
@@ -64,68 +61,59 @@ namespace GMK360.Web.Controllers
 
             if (contract == null) return NotFound();
 
-            var payments = await _context.ProgressPayments
-                .Where(p => p.SubcontractorContractId == id)
-                .OrderByDescending(p => p.RequestDate)
+            var hakedisler = await _context.SubcontractorHakedisler
+                .Where(h => h.ContractId == id)
+                .OrderByDescending(h => h.HakedisNo)
                 .ToListAsync();
 
-            ViewBag.Payments = payments;
-            ViewBag.TotalPaid = payments.Where(p => p.Status == ProgressPaymentStatus.Paid).Sum(p => p.ApprovedAmount);
-            ViewBag.TotalApproved = payments.Where(p => p.Status == ProgressPaymentStatus.Approved || p.Status == ProgressPaymentStatus.Paid).Sum(p => p.ApprovedAmount);
+            ViewBag.Hakedisler = hakedisler;
+            var totalClaim = hakedisler.Sum(h => h.ClaimAmount);
+            var totalDeduction = hakedisler.Sum(h => h.DeductionAmount);
+            ViewBag.TotalPaid = totalClaim - totalDeduction;
+            ViewBag.TotalApproved = totalClaim - totalDeduction;
+
+            ViewBag.Templates = await _context.DocumentTemplates.Where(t => t.AgencyId == agencyId.Value && !t.IsDeleted).ToListAsync();
 
             return View(contract);
         }
 
         [HttpPost]
-        public async Task<IActionResult> AddPayment(int contractId, string title, decimal requestedAmount, string notes)
+        public async Task<IActionResult> AddHakedis(int contractId, decimal claimAmount, decimal deductionAmount, string deductionReason, string description)
         {
             var agencyId = await GetCurrentAgencyId();
             if (agencyId == null) return Unauthorized();
 
-            var contract = await _context.SubcontractorContracts.FirstOrDefaultAsync(c => c.Id == contractId && c.AgencyId == agencyId);
+            var contract = await _context.SubcontractorContracts
+                .Include(c => c.Hakedisler)
+                .FirstOrDefaultAsync(c => c.Id == contractId && c.AgencyId == agencyId.Value);
+
             if (contract == null) return NotFound();
 
-            var payment = new ProgressPayment
+            var pastClaimsTotal = contract.Hakedisler.Sum(h => h.ClaimAmount);
+            if (pastClaimsTotal + claimAmount > contract.TotalAmount)
             {
-                SubcontractorContractId = contractId,
-                PaymentTitle = title,
-                RequestedAmount = requestedAmount,
-                ApprovedAmount = requestedAmount, // By default, suggest the requested amount
-                Notes = notes,
-                RequestDate = DateTime.UtcNow,
-                Status = ProgressPaymentStatus.Draft
-            };
-
-            _context.ProgressPayments.Add(payment);
-            await _context.SaveChangesAsync();
-
-            TempData["SuccessMessage"] = "Yeni Hakedi� / �deme Talebi ba�ar�yla olu�turuldu.";
-            return RedirectToAction(nameof(Details), new { id = contractId });
-        }
-
-
-        [HttpPost]
-        public async Task<IActionResult> ApprovePayment(int paymentId, decimal approvedAmount, string approvalNotes)
-        {
-            var agencyId = await GetCurrentAgencyId();
-            if (agencyId == null) return Unauthorized();
-
-            var payment = await _context.ProgressPayments
-                .Include(p => p.Contract)
-                .FirstOrDefaultAsync(p => p.Id == paymentId && p.Contract.AgencyId == agencyId);
-
-            if (payment == null || payment.Status != ProgressPaymentStatus.Draft)
-                return NotFound();
-
-            payment.ApprovedAmount = approvedAmount;
-            payment.Status = ProgressPaymentStatus.Approved;
-            if (!string.IsNullOrEmpty(approvalNotes))
-            {
-                payment.Notes += $"\n[Onay Notu]: {approvalNotes}";
+                TempData["ErrorMessage"] = $"Dikkat: Bu hakediş ile sözleşme bedeli aşılmaktadır! Maksimum eklenebilir brüt tutar: {(contract.TotalAmount - pastClaimsTotal).ToString("N2")}";
+                return RedirectToAction("Index");
             }
 
-            // Hakedi� onayland���nda, ilgili ta�eronun cari hesab�na 'Bor�' olarak yans�t!
-            var contactId = payment.Contract.PhonebookContactId;
+            var nextNo = contract.Hakedisler.Any() ? contract.Hakedisler.Max(h => h.HakedisNo) + 1 : 1;
+
+            var hakedis = new SubcontractorHakedis
+            {
+                ContractId = contract.Id,
+                HakedisNo = nextNo,
+                HakedisDate = DateTime.Now,
+                Description = description,
+                ClaimAmount = claimAmount,
+                DeductionAmount = deductionAmount,
+                DeductionReason = deductionReason,
+                IsApproved = true // Otomatik onaylı varsayıyoruz
+            };
+
+            _context.SubcontractorHakedisler.Add(hakedis);
+            
+            // Cari hesaba yansit
+            var contactId = contract.PhonebookContactId;
             var currentAccount = await _context.SupplierCurrentAccounts
                 .FirstOrDefaultAsync(a => a.AgencyId == agencyId && a.PhonebookContactId == contactId);
 
@@ -141,28 +129,27 @@ namespace GMK360.Web.Controllers
                 await _context.SaveChangesAsync();
             }
 
-            // M�teahhit olarak biz bor�lan�yoruz. Bakiye art�yor.
-            currentAccount.CurrentBalance += approvedAmount;
+            decimal net = claimAmount - deductionAmount;
+            currentAccount.CurrentBalance += net;
 
             var transaction = new SupplierAccountTransaction
             {
                 SupplierCurrentAccountId = currentAccount.Id,
-                TransactionDate = DateTime.UtcNow,
-                Type = SupplierTransactionType.PurchaseInvoice, // Hakedi� faturas� mahiyetinde
-                Amount = approvedAmount,
+                TransactionDate = DateTime.Now,
+                Type = SupplierTransactionType.PurchaseInvoice, 
+                Amount = net,
                 BalanceAfterTransaction = currentAccount.CurrentBalance,
-                Description = $"Hakedi� Onay�: {payment.Contract.Title} - {payment.PaymentTitle}",
-                DocumentReference = $"Hakedi� #{payment.Id}",
+                Description = $"{nextNo}. Hakediş: {contract.Title}",
                 CreatedByUserId = _userManager.GetUserId(User) ?? ""
             };
             
             _context.SupplierAccountTransactions.Add(transaction);
-            
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = $"{approvedAmount:N2} TL'lik Hakedi� onayland� ve Cari Hesaba aktar�ld�.";
-            return RedirectToAction(nameof(Details), new { id = payment.SubcontractorContractId });
+            TempData["SuccessMessage"] = $"{nextNo}. Hakediş başarıyla eklendi.";
+            return RedirectToAction("Index");
         }
+
         public async Task<IActionResult> Index()
         {
             var agencyId = await GetCurrentAgencyId();
@@ -171,6 +158,7 @@ namespace GMK360.Web.Controllers
             var contracts = await _context.SubcontractorContracts
                 .Include(c => c.Project)
                 .Include(c => c.PhonebookContact)
+                .Include(c => c.Hakedisler)
                 .Where(c => c.AgencyId == agencyId && c.IsActive && !c.IsDeleted)
                 .OrderByDescending(c => c.CreatedAt)
                 .ToListAsync();
@@ -202,12 +190,11 @@ namespace GMK360.Web.Controllers
             var agencyId = await GetCurrentAgencyId();
             if (agencyId == null) return Unauthorized();
 
-            // Sadece gerekli alanları validate etmek için clear navigation properties
             ModelState.Remove("Agency");
             ModelState.Remove("Project");
             ModelState.Remove("PhonebookContact");
             ModelState.Remove("Phases");
-            ModelState.Remove("ProgressPayments");
+            ModelState.Remove("Hakedisler");
 
             if (ModelState.IsValid)
             {
@@ -229,11 +216,44 @@ namespace GMK360.Web.Controllers
 
             return View(model);
         }
+
+        [HttpGet]
+        public async Task<IActionResult> PrintContract(int contractId, int templateId)
+        {
+            var agencyId = await GetCurrentAgencyId();
+            if (agencyId == null) return Unauthorized();
+
+            var contract = await _context.SubcontractorContracts
+                .Include(c => c.Project)
+                .Include(c => c.PhonebookContact)
+                .FirstOrDefaultAsync(c => c.Id == contractId && c.AgencyId == agencyId.Value);
+            
+            if (contract == null) return NotFound("Sözleşme bulunamadı.");
+
+            var template = await _context.DocumentTemplates
+                .FirstOrDefaultAsync(t => t.Id == templateId && t.AgencyId == agencyId.Value);
+
+            if (template == null) return NotFound("Şablon bulunamadı.");
+
+            // Replace variables
+            string finalHtml = template.HtmlContent ?? "";
+            
+            string companyName = contract.PhonebookContact?.Name ?? "_______________";
+            string projectName = contract.Project?.Name ?? "_______________";
+            string totalAmount = contract.TotalAmount.ToString("N2") + " " + contract.Currency;
+            string jobDesc = contract.Description ?? "_______________";
+            string contractDate = contract.ContractDate.ToString("dd.MM.yyyy");
+
+            finalHtml = finalHtml.Replace("{{FirmaAdi}}", companyName)
+                                 .Replace("{{ProjeAdi}}", projectName)
+                                 .Replace("{{Tutar}}", totalAmount)
+                                 .Replace("{{IsTanimi}}", jobDesc)
+                                 .Replace("{{Tarih}}", contractDate);
+
+            ViewBag.PrintContent = finalHtml;
+            ViewBag.Title = $"{companyName} - {template.TemplateName}";
+            
+            return View("PrintPreview", contract);
+        }
     }
 }
-
-
-
-
-
-

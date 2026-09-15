@@ -12,8 +12,11 @@ namespace GMK360.Core.Entities.Finance
 
     public class AgencyStaffAdvance : BaseEntity
     {
-        public int AgencyConsultantId { get; set; }
-        public AgencyConsultant Consultant { get; set; }
+        public int? AgencyConsultantId { get; set; }
+        public AgencyConsultant? Consultant { get; set; }
+
+        public int? AgencyWorkerId { get; set; }
+        public GMK360.Core.Entities.Construction.AgencyWorker? Worker { get; set; }
 
         public DateTime RequestDate { get; set; } = DateTime.UtcNow;
         public decimal Amount { get; set; }

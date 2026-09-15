@@ -1,62 +1,113 @@
+ï»¿@model IEnumerable<GMK360.Core.Entities.Construction.ConstructionProject>
+@using GMK360.Core.Entities.Construction
 @{
-    ViewData["Title"] = "Ýnþaat Projelerim";
-    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
-    var aktifProjeler = ViewBag.AktifProjeler as List<GMK360.Core.Entities.Construction.ConstructionProject> ?? new List<GMK360.Core.Entities.Construction.ConstructionProject>();
-    var teklifler = ViewBag.Teklifler as List<GMK360.Core.Entities.Construction.ConstructionProject> ?? new List<GMK360.Core.Entities.Construction.ConstructionProject>();
-    var tamamlananlar = ViewBag.Tamamlananlar as List<GMK360.Core.Entities.Construction.ConstructionProject> ?? new List<GMK360.Core.Entities.Construction.ConstructionProject>();
+    ViewData["Title"] = "Åžantiyelerimiz (Projeler)";
+    Layout = "_ConstructionLayout";
+
+    var aktifler = Model.Where(x => x.Status == ProjectStatus.Aktif_Santiye).ToList();
+    var teklifler = Model.Where(x => x.Status == ProjectStatus.Projelendirme_Teklif).ToList();
+    var satistakiler = Model.Where(x => x.Status == ProjectStatus.Satista_Topraktan).ToList();
+    var tamamlananlar = Model.Where(x => x.Status == ProjectStatus.Tamamlandi_Teslim).ToList();
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="fw-bold"><i class="bi bi-buildings text-primary me-2"></i>Ýnþaat Projelerim</h2>
-    <a asp-action="Create" class="btn btn-primary shadow-sm rounded-pill px-4">
-        <i class="bi bi-plus-lg me-2"></i> Yeni Proje Ekle
-    </a>
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0 text-dark"><i class="bi bi-building text-primary me-2"></i> Åžantiyelerimiz</h2>
+            <p class="text-muted mb-0">FirmanÄ±zÄ±n geÃ§miÅŸ, gÃ¼ncel ve gelecek tÃ¼m projelerini buradan yÃ¶netin.</p>
+        </div>
+        <a href="/ConstructionProject/Create" class="btn btn-primary rounded-pill px-4 shadow-sm">
+            <i class="bi bi-plus-lg me-1"></i> Yeni Proje (Åžantiye) AÃ§
+        </a>
+    </div>
+
+    <!-- Filtre Sekmeleri -->
+    <ul class="nav nav-pills mb-4 gap-2" id="projectTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active rounded-pill px-4" id="aktif-tab" data-bs-toggle="pill" data-bs-target="#aktif" type="button" role="tab">
+                <i class="bi bi-cone-striped me-1"></i> Aktif Åžantiyeler <span class="badge bg-white text-primary ms-1">@aktifler.Count</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link rounded-pill px-4 bg-light text-dark" id="teklif-tab" data-bs-toggle="pill" data-bs-target="#teklif" type="button" role="tab">
+                <i class="bi bi-pencil-square me-1"></i> Teklif AÅŸamasÄ±ndakiler <span class="badge bg-secondary ms-1">@teklifler.Count</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link rounded-pill px-4 bg-light text-dark" id="satis-tab" data-bs-toggle="pill" data-bs-target="#satis" type="button" role="tab">
+                <i class="bi bi-cash-coin me-1"></i> SatÄ±ÅŸta Olanlar <span class="badge bg-secondary ms-1">@satistakiler.Count</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link rounded-pill px-4 bg-light text-dark" id="tamamlanan-tab" data-bs-toggle="pill" data-bs-target="#tamamlanan" type="button" role="tab">
+                <i class="bi bi-trophy me-1"></i> Tamamlananlar <span class="badge bg-secondary ms-1">@tamamlananlar.Count</span>
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="projectTabsContent">
+        <!-- Aktif Åžantiyeler -->
+        <div class="tab-pane fade show active" id="aktif" role="tabpanel">
+            <div class="row g-4">
+                @foreach(var p in aktifler)
+                {
+                    <div class="col-xl-3 col-lg-4 col-md-6">
+                        @await Html.PartialAsync("_ProjectCardPartial", p)
+                    </div>
+                }
+                @if(!aktifler.Any()){ <div class="col-12"><div class="alert alert-light text-center py-5 border text-muted"><i class="bi bi-info-circle fs-1 d-block mb-3"></i>Åžu an devam eden aktif ÅŸantiyeniz bulunmuyor.</div></div> }
+            </div>
+        </div>
+
+        <!-- Teklif / Projelendirme -->
+        <div class="tab-pane fade" id="teklif" role="tabpanel">
+            <div class="row g-4">
+                @foreach(var p in teklifler)
+                {
+                    <div class="col-xl-3 col-lg-4 col-md-6">
+                        @await Html.PartialAsync("_ProjectCardPartial", p)
+                    </div>
+                }
+                @if(!teklifler.Any()){ <div class="col-12"><div class="alert alert-light text-center py-5 border text-muted">Teklif aÅŸamasÄ±nda proje bulunmuyor.</div></div> }
+            </div>
+        </div>
+
+        <!-- SatÄ±ÅŸta Olanlar -->
+        <div class="tab-pane fade" id="satis" role="tabpanel">
+            <div class="row g-4">
+                @foreach(var p in satistakiler)
+                {
+                    <div class="col-xl-3 col-lg-4 col-md-6">
+                        @await Html.PartialAsync("_ProjectCardPartial", p)
+                    </div>
+                }
+                @if(!satistakiler.Any()){ <div class="col-12"><div class="alert alert-light text-center py-5 border text-muted">SatÄ±ÅŸta olan projeniz bulunmuyor.</div></div> }
+            </div>
+        </div>
+
+        <!-- Tamamlananlar -->
+        <div class="tab-pane fade" id="tamamlanan" role="tabpanel">
+            <div class="row g-4">
+                @foreach(var p in tamamlananlar)
+                {
+                    <div class="col-xl-3 col-lg-4 col-md-6">
+                        @await Html.PartialAsync("_ProjectCardPartial", p)
+                    </div>
+                }
+                @if(!tamamlananlar.Any()){ <div class="col-12"><div class="alert alert-light text-center py-5 border text-muted">HenÃ¼z tamamlanmÄ±ÅŸ projeniz bulunmuyor.</div></div> }
+            </div>
+        </div>
+    </div>
 </div>
 
-<!-- Sekme Baþlýklarý -->
-<ul class="nav nav-pills nav-fill bg-white p-2 rounded-pill shadow-sm mb-4" id="projectTabs" role="tablist">
-  <li class="nav-item" role="presentation">
-    <button class="nav-link active rounded-pill fw-bold" data-bs-toggle="pill" data-bs-target="#aktif" type="button" role="tab">
-        <i class="bi bi-cone-striped me-2"></i>Aktif Þantiyeler <span class="badge bg-light text-primary ms-2">@aktifProjeler.Count</span>
-    </button>
-  </li>
-  <li class="nav-item" role="presentation">
-    <button class="nav-link rounded-pill fw-bold" data-bs-toggle="pill" data-bs-target="#teklif" type="button" role="tab">
-        <i class="bi bi-file-earmark-text me-2"></i>Teklif & Hazýrlýk <span class="badge bg-light text-primary ms-2">@teklifler.Count</span>
-    </button>
-  </li>
-  <li class="nav-item" role="presentation">
-    <button class="nav-link rounded-pill fw-bold" data-bs-toggle="pill" data-bs-target="#tamamlanan" type="button" role="tab">
-        <i class="bi bi-check-circle me-2"></i>Tamamlananlar (Referans) <span class="badge bg-light text-primary ms-2">@tamamlananlar.Count</span>
-    </button>
-  </li>
-</ul>
-
-<!-- Sekme Ýçerikleri -->
-<div class="tab-content" id="projectTabsContent">
-  
-  <!-- Aktif Þantiyeler -->
-  <div class="tab-pane fade show active" id="aktif" role="tabpanel">
-      <div class="row g-4">
-          @if (!aktifProjeler.Any()) { <div class="col-12 text-center py-5 text-muted">Kayýtlý aktif þantiye bulunmuyor.</div> }
-          @foreach (var item in aktifProjeler) { @await Html.PartialAsync("_ProjectCardPartial", item) }
-      </div>
-  </div>
-
-  <!-- Teklifler -->
-  <div class="tab-pane fade" id="teklif" role="tabpanel">
-      <div class="row g-4">
-          @if (!teklifler.Any()) { <div class="col-12 text-center py-5 text-muted">Görüþmesi devam eden proje bulunmuyor.</div> }
-          @foreach (var item in teklifler) { @await Html.PartialAsync("_ProjectCardPartial", item) }
-      </div>
-  </div>
-
-  <!-- Tamamlananlar -->
-  <div class="tab-pane fade" id="tamamlanan" role="tabpanel">
-      <div class="row g-4">
-          @if (!tamamlananlar.Any()) { <div class="col-12 text-center py-5 text-muted">Tamamlanan referans proje bulunmuyor.</div> }
-          @foreach (var item in tamamlananlar) { @await Html.PartialAsync("_ProjectCardPartial", item) }
-      </div>
-  </div>
-  
-</div>
+<style>
+    /* Tab pill active durumunu ezmek iÃ§in */
+    .nav-pills .nav-link.active {
+        background-color: #0d6efd !important;
+        color: white !important;
+    }
+    .nav-pills .nav-link.active .badge {
+        background-color: white !important;
+        color: #0d6efd !important;
+    }
+</style>

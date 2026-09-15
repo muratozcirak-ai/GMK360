@@ -1,48 +1,69 @@
-@model GMK360.Core.Entities.Construction.ConstructionProject
-<div class="col-md-6 col-lg-4">
-    <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden">
-        @if (!string.IsNullOrEmpty(Model.CoverImageUrl))
+﻿@model GMK360.Core.Entities.Construction.ConstructionProject
+@using GMK360.Core.Entities.Construction
+
+@{
+    var imgUrl = !string.IsNullOrEmpty(Model.CoverImageUrl) ? Model.CoverImageUrl : "/img/default-project.jpg";
+    var statusText = Model.Status switch {
+        ProjectStatus.Projelendirme_Teklif => "Teklif / Planlama",
+        ProjectStatus.Aktif_Santiye => "Aktif Şantiye",
+        ProjectStatus.Satista_Topraktan => "Satışta (Topraktan)",
+        ProjectStatus.Tamamlandi_Teslim => "Tamamlandı",
+        _ => "Bilinmiyor"
+    };
+    
+    var statusColor = Model.Status switch {
+        ProjectStatus.Projelendirme_Teklif => "bg-secondary",
+        ProjectStatus.Aktif_Santiye => "bg-primary",
+        ProjectStatus.Satista_Topraktan => "bg-warning text-dark",
+        ProjectStatus.Tamamlandi_Teslim => "bg-success",
+        _ => "bg-dark"
+    };
+
+    // İlerleme simülasyonu (gerçek veriye bağlanabilir)
+    int progress = Model.Status == ProjectStatus.Tamamlandi_Teslim ? 100 : (Model.Status == ProjectStatus.Aktif_Santiye ? 45 : 0);
+}
+
+<div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden" style="transition: transform 0.2s; cursor:pointer;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'" onclick="location.href='/ConstructionProject/Details/@Model.Id'">
+    
+    <!-- Proje Görseli -->
+    <div class="position-relative" style="height: 180px;">
+        <img src="@imgUrl" class="w-100 h-100 object-fit-cover" alt="@Model.Name" onerror="this.src='/img/bg1.jpg'">
+        <div class="position-absolute top-0 start-0 w-100 h-100 bg-dark bg-opacity-25"></div>
+        <div class="position-absolute top-0 end-0 p-2">
+            <span class="badge @statusColor shadow-sm rounded-pill px-3 py-2"><i class="bi bi-circle-fill small me-1"></i> @statusText</span>
+        </div>
+    </div>
+
+    <div class="card-body p-4 d-flex flex-column">
+        <h5 class="fw-bold text-dark text-truncate mb-1" title="@Model.Name">@Model.Name</h5>
+        <p class="text-muted small mb-3"><i class="bi bi-geo-alt-fill text-danger me-1"></i> @(string.IsNullOrEmpty(Model.Address) ? "Konum Belirtilmedi" : Model.Address)</p>
+        
+        <div class="mt-auto">
+            <div class="d-flex justify-content-between small text-muted mb-1">
+                <span>Başlangıç</span>
+                <span class="fw-bold text-dark">@Model.StartDate.ToString("MMM yyyy")</span>
+            </div>
+            @if(Model.Status == ProjectStatus.Aktif_Santiye || Model.Status == ProjectStatus.Tamamlandi_Teslim)
+            {
+                <div class="d-flex justify-content-between small text-muted mb-2">
+                    <span>Tamamlanma</span>
+                    <span class="fw-bold text-success">@progress%</span>
+                </div>
+                <div class="progress" style="height: 6px;">
+                    <div class="progress-bar @statusColor" role="progressbar" style="width: @progress%" aria-valuenow="@progress" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+            }
+        </div>
+    </div>
+    <div class="card-footer bg-white border-top-0 p-3 pt-0 text-center">
+        @if(Model.Status == ProjectStatus.Tamamlandi_Teslim)
         {
-            <img src="@Model.CoverImageUrl" class="card-img-top" alt="@Model.Name" style="height: 200px; object-fit: cover;">
+            <button class="btn btn-warning btn-sm rounded-pill w-100 fw-bold mb-2 shadow-sm text-dark" onclick="event.stopPropagation(); alert('Bu binanın (Dijital İkiz) davet linki yöneticiye SMS olarak gönderilecek. Bina yönetimi modülü aktif olduğunda devreye girecektir.');"><i class="bi bi-person-plus-fill me-1"></i> 👑 Bina Yöneticisini Davet Et</button>
+            <a href="/ConstructionProject/Details/@Model.Id" class="btn btn-outline-secondary btn-sm rounded-pill w-100 fw-bold">Geçmiş Şantiye Arşivi <i class="bi bi-archive"></i></a>
         }
         else
         {
-            <div class="bg-secondary text-white d-flex align-items-center justify-content-center" style="height: 200px;">
-                <i class="bi bi-image fs-1 opacity-50"></i>
-            </div>
+            <a href="/ConstructionProject/Details/@Model.Id" class="btn btn-outline-primary btn-sm rounded-pill w-100 fw-bold">Şantiye Panosuna Git <i class="bi bi-arrow-right"></i></a>
         }
-        <div class="card-body p-4">
-            <div class="d-flex justify-content-between align-items-start mb-2">
-                <h5 class="card-title fw-bold mb-0">@Model.Name</h5>
-                @if (Model.StatusId == GMK360.Core.Entities.Construction.ProjectConstants.StatusTeklif)
-                {
-                    <span class="badge bg-warning text-dark">G�r��mede / Teklif</span>
-                }
-                else if (Model.StatusId == GMK360.Core.Entities.Construction.ProjectConstants.StatusAktif)
-                {
-                    <span class="badge bg-primary">Aktif �antiye</span>
-                }
-                else
-                {
-                    <span class="badge bg-success">Tamamland�</span>
-                }
-            </div>
-            <p class="text-muted small mb-3"><i class="bi bi-geo-alt me-1"></i>@Model.Address</p>
-            
-            <div class="d-flex justify-content-between text-muted small mb-4">
-                <div>
-                    <i class="bi bi-calendar-event me-1"></i> Ba�lang��: <br>
-                    <strong>@(Model.StartDate.Year > 1 ? Model.StartDate.ToString("dd.MM.yyyy") : "-")</strong>
-                </div>
-                <div class="text-end">
-                    <i class="bi bi-calendar-check me-1"></i> Teslim: <br>
-                    <strong>@(Model.EndDate.HasValue && Model.EndDate.Value.Year > 1 ? Model.EndDate.Value.ToString("dd.MM.yyyy") : "-")</strong>
-                </div>
-            </div>
-            
-            <a asp-action="Details" asp-controller="ConstructionProject" asp-route-id="@Model.Id" class="btn btn-outline-primary w-100 rounded-pill fw-bold">
-                <i class="bi bi-arrow-right-circle me-2"></i> Proje Panosuna Git
-            </a>
-        </div>
     </div>
 </div>

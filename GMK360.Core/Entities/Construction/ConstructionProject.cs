@@ -32,7 +32,9 @@ namespace GMK360.Core.Entities.Construction
         public DateTime? EndDate { get; set; }
         
         // 0=Upcoming, 1=Ongoing, 2=Completed
-        public byte StatusId { get; set; } = ProjectConstants.StatusTeklif;
+        public ProjectStatus Status { get; set; } = ProjectStatus.Projelendirme_Teklif;
+        public string? PublicDescription { get; set; }
+        public string? GoogleMapsUrl { get; set; }
 
         public DateTime SelectionDeadline { get; set; }
 
@@ -58,6 +60,8 @@ namespace GMK360.Core.Entities.Construction
 
         public int? TargetTotalApartments { get; set; }
         public int? TargetTotalShops { get; set; }
+        public int? TotalFloors { get; set; } // Bina Kaç Katlı
+
     }
 }
 

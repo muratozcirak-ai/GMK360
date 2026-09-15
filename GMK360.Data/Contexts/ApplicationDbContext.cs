@@ -207,6 +207,10 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         public DbSet<GMK360.Core.Entities.Construction.AgendaRecord> AgendaRecords { get; set; }
           public DbSet<GMK360.Core.Entities.Construction.AgendaItem> AgendaItems { get; set; }
           public DbSet<GMK360.Core.Entities.Construction.AgendaParticipant> AgendaParticipants { get; set; }
+
+        
+        public DbSet<GMK360.Core.Entities.Construction.DocumentTemplate> DocumentTemplates { get; set; }
+
         public DbSet<ConstructionTimesheet> ConstructionTimesheets { get; set; }
         public DbSet<ProjectPhase> ProjectPhases { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.CostCategory> CostCategories { get; set; }
@@ -240,8 +244,9 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         public DbSet<GMK360.Core.Entities.Finance.SupplierPayment> SupplierPayments { get; set; }
 
         public DbSet<GMK360.Core.Entities.Finance.SubcontractorContract> SubcontractorContracts { get; set; }
+        public DbSet<GMK360.Core.Entities.Finance.SubcontractorHakedis> SubcontractorHakedisler { get; set; }
         public DbSet<GMK360.Core.Entities.Finance.ContractPhase> ContractPhases { get; set; }
-        public DbSet<GMK360.Core.Entities.Finance.ProgressPayment> ProgressPayments { get; set; }
+        public DbSet<GMK360.Core.Entities.Finance.ProgressPayment> Hakedisler { get; set; }
 
 
         public DbSet<GMK360.Core.Entities.Construction.MaterialCatalog> MaterialCatalogs { get; set; }
@@ -309,6 +314,7 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         // Ak?ll? Hizmet ve Usta Mod?l?
                 public DbSet<GMK360.Core.Entities.Finance.FinanceCategory> FinanceCategories { get; set; }
                 public DbSet<GMK360.Core.Entities.Finance.AgencyStaffAdvance> AgencyStaffAdvances { get; set; }
+        public DbSet<GMK360.Core.Entities.Finance.AgencyCashTransaction> AgencyCashTransactions { get; set; }
         public DbSet<GMK360.Core.Entities.Finance.AgencyStaffPayroll> AgencyStaffPayrolls { get; set; }
         public DbSet<GMK360.Core.Entities.Finance.CustomerCurrentAccount> CustomerCurrentAccounts { get; set; }
         public DbSet<GMK360.Core.Entities.Finance.CustomerAccountTransaction> CustomerAccountTransactions { get; set; }
@@ -395,7 +401,7 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
 
             builder.Entity<GMK360.Core.Entities.Finance.SubcontractorContract>().HasOne(c => c.Project).WithMany().HasForeignKey(c => c.ProjectId).OnDelete(DeleteBehavior.Restrict);
             builder.Entity<GMK360.Core.Entities.Finance.SubcontractorContract>().HasOne(c => c.PhonebookContact).WithMany().HasForeignKey(c => c.PhonebookContactId).OnDelete(DeleteBehavior.Restrict);
-            builder.Entity<GMK360.Core.Entities.Finance.ProgressPayment>().HasOne(p => p.Contract).WithMany(c => c.ProgressPayments).HasForeignKey(p => p.SubcontractorContractId).OnDelete(DeleteBehavior.Restrict);
+            builder.Entity<GMK360.Core.Entities.Finance.SubcontractorHakedis>().HasOne(p => p.Contract).WithMany(c => c.Hakedisler).HasForeignKey(p => p.ContractId).OnDelete(DeleteBehavior.Restrict);
             builder.Entity<GMK360.Core.Entities.B2B.B2BQuoteItem>().ToTable("B2BQuoteItem");
             builder.Entity<GMK360.Core.Entities.B2B.B2BQuoteItem>()
                 .HasOne(i => i.MaterialCatalog)

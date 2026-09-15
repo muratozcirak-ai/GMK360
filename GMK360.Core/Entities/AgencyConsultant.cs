@@ -33,6 +33,7 @@ namespace GMK360.Core.Entities
         
         // Finans / Bordro (Beyaz Yaka Maaş Sistemi)
         public decimal MonthlySalary { get; set; } = 0;
+        public decimal MonthlySgkCost { get; set; } = 0; // Şirketin SGK Yükü
         public string? IBAN { get; set; }
         public string? IdentityNumber { get; set; } // TC Kimlik vb.
     }

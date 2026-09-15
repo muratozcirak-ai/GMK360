@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
@@ -112,5 +112,22 @@ namespace GMK360.Web.Controllers
 
             return View(model);
         }
+
+        [HttpPost("Profile/AcceptMapConsent")]
+        [Authorize]
+        [IgnoreAntiforgeryToken] // Layout'tan ajax ile gelirken token uyuşmazlığı olmaması için
+        public async Task<IActionResult> AcceptMapConsent()
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user != null)
+            {
+                user.HasMapConsent = true;
+                user.MapConsentDate = System.DateTime.UtcNow;
+                await _userManager.UpdateAsync(user);
+                return Ok();
+            }
+            return Unauthorized();
+        }
+
     }
 }

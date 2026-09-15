@@ -1,0 +1,136 @@
+﻿import codecs
+import re
+
+# 1. Read _Layout.cshtml
+layout_path = r'C:\Users\murat\source\repos\GMK360\GMK360.Web\Views\Shared\_Layout.cshtml'
+with codecs.open(layout_path, 'r', 'utf-8', errors='ignore') as f:
+    layout_content = f.read()
+
+# Remove the broken @if(ViewData["ProjectName"] == null) we accidentally left in _Layout.cshtml
+layout_content = re.sub(r'@if\(ViewData\["ProjectName"\] != null\)\s*\{\s*<span class="fs-3 text-muted mx-3">\|</span>\s*<i class="bi bi-building-check fs-4 text-primary me-2"></i>\s*<span class="fw-bold fs-4 text-uppercase text-dark" style="letter-spacing: 0px;">@ViewData\["ProjectName"\] ŞANTİYESİ</span>\s*\}', '', layout_content)
+layout_content = layout_content.replace('@if(ViewData["ProjectName"] == null)\r\n                {', '')
+layout_content = layout_content.replace('@if(ViewData["ProjectName"] == null)\n                {', '')
+
+with codecs.open(layout_path, 'w', 'utf-8') as f:
+    f.write(layout_content)
+
+
+# 2. Build the ultimate _ProjectLayout.cshtml
+project_layout_content = '''@using Microsoft.AspNetCore.Identity
+@using GMK360.Core.Entities.Identity
+@inject UserManager<ApplicationUser> UserManager
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Şantiye Modu</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        body { background-color: #f8f9fa; }
+        .hover-orange:hover { color: #FF6B00 !important; }
+        .text-orange { color: #FF6B00; }
+        .bg-orange { background-color: #FF6B00; }
+        .text-navy { color: #1e3a8a; }
+        .bg-navy { background-color: #1e3a8a; }
+    </style>
+    @await RenderSectionAsync("SEO", required: false)
+</head>
+<body class="d-flex flex-column min-vh-100 bg-light">
+    
+    <!-- TOP BAR (SADECE PROJE ADI VE LOGO) -->
+    <header class="fixed-top bg-white border-bottom shadow-sm">
+        <div class="container-fluid px-4 d-flex justify-content-between align-items-center py-3">
+            
+            <!-- SOL: LOGO VE PROJE ADI -->
+            <div class="d-flex align-items-center">
+                <a asp-controller="ConstructionProject" asp-action="Index" class="text-decoration-none d-flex align-items-center gap-2">
+                    <i class="ph-fill ph-infinity text-orange" style="font-size: 2.2rem;"></i>
+                    <span class="fs-3 fw-bold text-navy" style="letter-spacing:-1px;">GMK<span class="text-orange">360</span></span>
+                </a>
+                
+                @if(ViewData["ProjectName"] != null)
+                {
+                    <span class="fs-3 text-muted mx-3">|</span>
+                    <i class="bi bi-building-check fs-4 text-primary me-2"></i>
+                    <span class="fw-bold fs-4 text-uppercase text-dark" style="letter-spacing: 0px;">@ViewData["ProjectName"] ŞANTİYESİ</span>
+                }
+            </div>
+            
+            <!-- SAĞ: PROFİL MENÜSÜ -->
+            <div class="d-flex gap-3 align-items-center">
+                <partial name="_LoginPartial" />
+            </div>
+            
+        </div>
+    </header>
+
+    <!-- ANA İÇERİK (SİDEBAR + CONTENT) -->
+    <main class="flex-grow-1" style="margin-top: 80px;">
+        <div class="container-fluid px-4 mt-4">
+            <div class="row">
+                
+                <!-- BAĞLAMSAL SOL MENÜ -->
+                <div class="col-xl-2 col-lg-3 col-md-4 mb-4">
+                    <div class="card shadow-sm border-0 h-100 rounded-4">
+                        <div class="list-group list-group-flush" style="font-size: 0.95rem;">
+                            
+                            <!-- KAÇIŞ BUTONU -->
+                            <div class="px-3 mb-3 mt-3">
+                                <a href="/ConstructionProject/Index" class="btn btn-outline-danger w-100 rounded-pill fw-bold shadow-sm d-flex justify-content-center align-items-center">
+                                    <i class="bi bi-arrow-left-circle-fill me-2 fs-5"></i> Tüm Projelere Dön
+                                </a>
+                            </div>
+
+                            <hr class="text-muted mx-3 my-1">
+
+                            <a href="/ConstructionProject/Details/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-3 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Details" ? "active fw-bold" : "")">
+                                <i class="bi bi-bar-chart-fill me-2 fs-5 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Details" ? "text-white" : "text-primary")"></i> Şantiye Panosu
+                            </a>
+                            
+                            <a href="#" class="list-group-item list-group-item-action py-3 text-muted" title="Yakında">
+                                <i class="bi bi-people-fill me-2 fs-5 text-secondary"></i> Şantiye Puantajı
+                            </a>
+                            
+                            <a href="/Inventory/Index/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-3 text-muted" title="Yakında">
+                                <i class="bi bi-boxes me-2 fs-5 text-secondary"></i> Şantiye Deposu
+                            </a>
+                            
+                            <a href="/ConstructionProject/ManagePhases/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-3 @(ViewContext.RouteData.Values["Action"]?.ToString() == "ManagePhases" ? "active fw-bold" : "")">
+                                <i class="bi bi-cash-coin me-2 fs-5 @(ViewContext.RouteData.Values["Action"]?.ToString() == "ManagePhases" ? "text-white" : "text-success")"></i> Şantiye Bütçesi
+                            </a>
+                            
+                            <a href="/ConstructionProject/Details/@ViewData["ProjectId"]#collapseFaz0" class="list-group-item list-group-item-action py-3">
+                                <i class="bi bi-folder-fill me-2 fs-5 text-warning"></i> Evrak Yönetimi
+                            </a>
+                            
+                            <div class="list-group-item bg-light fw-bold mt-4 text-uppercase text-center text-muted" style="font-size: 0.75rem;">
+                                SADECE BU PROJEYİ GÖRÜYORSUNUZ
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SAYFA İÇERİĞİ -->
+                <div class="col-xl-10 col-lg-9 col-md-8">
+                    @RenderBody()
+                </div>
+                
+            </div>
+        </div>
+    </main>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>'''
+
+project_layout_path = r'C:\Users\murat\source\repos\GMK360\GMK360.Web\Views\Shared\_ProjectLayout.cshtml'
+with codecs.open(project_layout_path, 'w', 'utf-8') as f:
+    f.write(project_layout_content)
+
