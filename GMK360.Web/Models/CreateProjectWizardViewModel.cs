@@ -14,10 +14,32 @@ namespace GMK360.Web.Models
         public string Name { get; set; }
 
         public string Description { get; set; }
-        public byte StatusId { get; set; } = 1; // 0: Aday/Grmede, 1: Aktif antiye, 2: Tamamland (Referans)
+        public string? ProjectType { get; set; }
+        public int StatusId { get; set; } = 1;
+        
+        // Kentsel Dönüşüm / Aday Proje Kayıtları
+        public int? ProjectOriginId { get; set; }
+        public string? ProjectOwnerContact { get; set; }
+        public int? EskiKatSayisi { get; set; }
+        public int? EskiDaireSayisi { get; set; }
+        public double? EskiToplamMetrekare { get; set; }
+        public int? EskiDukkanSayisi { get; set; }
+        public int? EskiBodrumKatSayisi { get; set; }
+        public bool EskiCatiKatiVarMi { get; set; }
+        public int? BinaYoneticisiId { get; set; }
+        
+        public string? TemsilciAd { get; set; }
+        public string? TemsilciSoyad { get; set; }
+        public string? TemsilciTelefon { get; set; }
         
         [Required(ErrorMessage = "Adres zorunludur.")]
         public string Address { get; set; }
+
+        public string Ada { get; set; }
+        public string Parsel { get; set; }
+        public bool IsNewDesignForExisting { get; set; }
+        public Microsoft.AspNetCore.Http.IFormFile TapuDocumentFile { get; set; }
+
 
         
         public DateTime StartDate { get; set; }
@@ -44,6 +66,19 @@ namespace GMK360.Web.Models
         public int? TargetTotalShops { get; set; }
 
         public List<WizardBlockItem> Blocks { get; set; } = new List<WizardBlockItem>();
+        public List<WizardOwnerItem> Owners { get; set; } = new List<WizardOwnerItem>();
+    }
+    
+    public class WizardOwnerItem
+    {
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string PhoneNumber { get; set; }
+        public string FlatNumber { get; set; }
+          public string? BlockName { get; set; }
+          public string? Email { get; set; }
+          public string? UnitType { get; set; }
+        public bool IsRepresentative { get; set; }
     }
 
     public class WizardBlockItem

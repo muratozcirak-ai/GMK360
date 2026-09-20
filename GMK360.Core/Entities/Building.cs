@@ -35,7 +35,10 @@ namespace GMK360.Core.Entities
         public string? InsulationType { get; set; } // Mantolama/Yalıtım
         public int? ElevatorCount { get; set; } // Asansör Sayısı
         public string? ParkingType { get; set; } // Otopark (Açık, Kapalı, Yok)
- // Örn: 2 Asansör, Yük Asansörü, vs.
+
+        // Nizam (Layout) ve Bitişiklik Mantığı
+        public string? LayoutPattern { get; set; } // Ayrık Nizam, Bitişik Nizam, İkiz Nizam, Blok Nizam
+        public string? AttachedToBlock { get; set; } // Eğer Bitişik Nizam ise hangi bloğa bitişik? (Örn: A Blok)
         
         // Bu bina eğer bir inşaat projesinin parçası (Blok) ise
                 public int? ConstructionProjectId { get; set; }

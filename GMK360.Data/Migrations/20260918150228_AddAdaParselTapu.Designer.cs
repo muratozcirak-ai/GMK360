@@ -4,6 +4,7 @@ using GMK360.Data.Contexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace GMK360.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260918150228_AddAdaParselTapu")]
+    partial class AddAdaParselTapu
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1082,9 +1085,6 @@ namespace GMK360.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("AttachedToBlock")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<double?>("BaseArea")
                         .HasColumnType("float");
 
@@ -1143,9 +1143,6 @@ namespace GMK360.Data.Migrations
 
                     b.Property<double?>("Latitude")
                         .HasColumnType("float");
-
-                    b.Property<string>("LayoutPattern")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<double?>("Longitude")
                         .HasColumnType("float");
@@ -2153,6 +2150,7 @@ namespace GMK360.Data.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Ada")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Address")
@@ -2187,16 +2185,7 @@ namespace GMK360.Data.Migrations
                     b.Property<DateTime?>("EndDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<int?>("EskiBodrumKatSayisi")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("EskiCatiKatiVarMi")
-                        .HasColumnType("bit");
-
                     b.Property<int?>("EskiDaireSayisi")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("EskiDukkanSayisi")
                         .HasColumnType("int");
 
                     b.Property<int?>("EskiKatSayisi")
@@ -2212,9 +2201,6 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsNewDesignForExisting")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsPublishedOnWeb")
@@ -2240,15 +2226,13 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("Parsel")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("ProjectOriginId")
                         .HasColumnType("int");
 
                     b.Property<string>("ProjectOwnerContact")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ProjectType")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PublicDescription")
@@ -3296,9 +3280,6 @@ namespace GMK360.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("BlockName")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<int>("ConstructionProjectId")
                         .HasColumnType("int");
 
@@ -3319,9 +3300,6 @@ namespace GMK360.Data.Migrations
 
                     b.Property<double?>("LandShare")
                         .HasColumnType("float");
-
-                    b.Property<string>("UnitType")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -4031,12 +4009,14 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ContactType")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Email")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("FirstName")
@@ -4047,12 +4027,15 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("bit");
 
                     b.Property<string>("LastName")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Notes")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PhoneNumber")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("UpdatedAt")

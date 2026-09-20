@@ -6,33 +6,9 @@
 }
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script>
-    // On page load: if we have a draft id (either from server model or URL), open step 2
-            document.addEventListener('DOMContentLoaded', function() {
-                try {
-                    const draftIdField = document.getElementById('DraftProjectId');
-                    const draftId = parseInt(draftIdField?.value || new URLSearchParams(window.location.search).get('id') || '0');
-                    if (draftId > 0) {
-                        // ensure hidden field is set (in case it was only in URL)
-                        if (draftIdField && !draftIdField.value) draftIdField.value = draftId;
 
-                        // if blocks not rendered, try to generate from server-rendered model (server fills model.Blocks)
-                        setTimeout(() => {
-                            if (document.getElementById('blocksContainer') && document.getElementById('blocksContainer').children.length === 0) {
-                                // If there are server-side rendered blocks they would already be present; otherwise leave generation to user
-                                // We still switch to step 2 so the user can continue
-                                nextStep(2);
-                            } else {
-                                nextStep(2);
-                            }
-                        }, 50);
-                    }
-                } catch (e) {
-                    console.warn('Draft load check failed', e);
-                }
-            });
-    </script>
+
+
 
 
 <style>
@@ -68,17 +44,22 @@
                         <div class="step-indicator" id="ind-2">2</div>
                         <span class="small mt-2 text-muted">Blok ve Dağılım</span>
                     </div>
-                    <div class="step-line" id="line-2"></div>
-                    
+                    <div class="step-line" id="line-1b"></div>
                     <div class="step-wrapper text-center d-flex flex-column align-items-center">
-                        <div class="step-indicator" id="ind-3"><i class="ph ph-check"></i></div>
+                        <div class="step-indicator" id="ind-3">3</div>
+                        <span class="small mt-2 text-muted">Kat Malikleri</span>
+                    </div>
+                    <div class="step-line" id="line-2"></div>
+                    <div class="step-wrapper text-center d-flex flex-column align-items-center">
+                        <div class="step-indicator" id="ind-4"><i class="ph ph-check"></i></div>
                         <span class="small mt-2 text-muted">Özet & Onay</span>
                     </div>
                 </div>
             </div>
 
             <div class="card-body p-5 pt-0">
-                <form id="wizardForm" asp-action="CreateWizard" asp-controller="ConstructionProject" method="post" enctype="multipart/form-data">
+                <form id="wizardForm" action="/ConstructionProject/CreateWizard" method="post" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
                     <input type="hidden" asp-for="DraftProjectId" id="DraftProjectId" />
                     
                     <!-- STEP 1: Basic Info -->
@@ -87,21 +68,40 @@
                         <div class="row g-4">
                                                         <div class="col-md-12 mb-2">
                                 <label class="form-label fw-bold">Proje Durumu / Tipi</label>
-                                <select asp-for="StatusId" class="form-select form-select-lg rounded-3 border-primary" onchange="handleStatusChange()">
+                                <select asp-for="StatusId" style="pointer-events: none; background-color: #e9ecef;" tabindex="-1" readonly class="form-select form-select-lg rounded-3 border-primary" onchange="handleStatusChange()">
                                     <option value="2">Devam Eden Proje (Aktif Şantiye)</option>
-                                    <option value="1">Görüşmesi Devam Eden (Sözleşmesiz / Aday Proje)</option>
+                                    <option value="0">Aday Proje / Fizibilite (Kentsel Dönüşüm)</option>
+                                    
                                     <option value="3">Tamamlanmış Proje (Referans / Portföy, Bina Yönetimi)</option>
                                 </select>
                                 <div class="form-text text-muted" id="statusHelpText">Aktif olarak inşaatı süren, puantaj ve maliyet takibi yapacağınız projedir.</div>
                             </div>
-                            <div class="col-md-12">
-                                <label class="form-label fw-bold">Proje Adı</label>
-                                <input asp-for="Name" class="form-control form-control-lg rounded-3" placeholder="Örn: Vadi Konakları" required />
+                                                          <div class="col-md-12">
+                                  <label class="form-label fw-bold">Ana Yapı Türü (Proje Tipi)</label>
+                                  <select asp-for="ProjectType" style="pointer-events: none; background-color: #e9ecef;" tabindex="-1" readonly class="form-select form-select-lg rounded-3 border-primary" required>
+                                      <option value="">Lütfen Projenin Türünü Seçiniz...</option>
+                                      <option value="Apartman">Apartman</option>
+                                      <option value="Site / Karma Proje">Site / Karma Proje</option>
+                                      <option value="Müstakil / Villa">Müstakil / Villa</option>
+                                      <option value="İş Merkezi / Ofis">İş Merkezi / Ofis</option>
+                                      <option value="AVM / Ticari">AVM / Ticari Proje</option>
+                                      <option value="Sanayi / Fabrika">Sanayi / Fabrika Tesisi</option>
+                                      <option value="Altyapı / Taahhüt">Altyapı / Taahhüt İşi</option>
+                                  </select>
+                              </div>
+                              <div class="col-md-12">
+                                  <label class="form-label fw-bold">Proje Adı</label>
+                                <input asp-for="Name" readonly class="form-control form-control-lg rounded-3" style="pointer-events: none; background-color: #e9ecef;" tabindex="-1" placeholder="Örn: Vadi Konakları" required />
                             </div>
                             <div class="col-md-12">
                                 <label class="form-label fw-bold">Kısa Açıklama / Proje Vizyonu</label>
                                 <textarea asp-for="Description" class="form-control rounded-3" rows="2" placeholder="Projenin konseptini buraya yazabilirsiniz..."></textarea>
                             </div>
+                            <hr/>
+                            
+                            
+                            
+                            
                             
                             
                             <div class="col-md-3">
@@ -110,7 +110,7 @@
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label fw-bold">İlçe</label>
-                                <select asp-for="DistrictId" class="form-select rounded-3" asp-items="ViewBag.Districts"><option value="">Seçiniz</option></select>
+                                <select asp-for="DistrictId" class="form-select rounded-3" asp-items="ViewBag.Districts"><option value="">İlçe Seçin</option></select>
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label fw-bold">Mahalle</label>
@@ -123,7 +123,23 @@
 <div class="col-md-2">
                                 <label class="form-label fw-bold">Bina / Kapı No</label>
                                 <input asp-for="Address" id="fullAddress" class="form-control rounded-3" placeholder="Örn: 16/A" required />
-                            </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small fw-bold">Ada</label>
+                                    <input asp-for="Ada" class="form-control rounded-3" placeholder="Örn: 145" />
+                                </div>
+                                                                <div class="col-md-2">
+                                    <label class="form-label small fw-bold">Parsel</label>
+                                    <input asp-for="Parsel" class="form-control rounded-3" placeholder="Örn: 12" />
+                                </div>
+                                <div class="col-md-12 mt-2">
+                                    <div class="form-check form-switch border p-3 rounded-3 bg-light">
+                                        <input class="form-check-input ms-0 me-2" type="checkbox" asp-for="IsNewDesignForExisting" id="IsNewDesignForExisting">
+                                        <label class="form-check-label fw-bold text-primary" for="IsNewDesignForExisting">
+                                            Mevcut Arsaya Alternatif Tasarım (Aynı Ada/Parsele birden fazla teklif çizimi eklemek için işaretleyin)
+                                        </label>
+                                    </div>
+                                </div>
                             <div class="col-md-10">
                                 <label class="form-label fw-bold">Harita Konumu</label>
                                 <div class="input-group">
@@ -136,15 +152,18 @@
                                       }
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold">Planlanan Başlangıç Tarihi</label>
-                                <input name="StartDate" id="StartDate" type="date" value="@(Model.StartDate.Year > 1 ? Model.StartDate.ToString("yyyy-MM-dd") : "")" class="form-control rounded-3" required />
+                            <div id="projectDatesContainer" class="row g-3 m-0 p-0 w-100">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">Planlanan Başlangıç Tarihi</label>
+                                    <input name="StartDate" id="StartDate" type="date" value="@(Model.StartDate.Year > 1 ? Model.StartDate.ToString("yyyy-MM-dd") : "")" class="form-control rounded-3" required />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">Hedeflenen Teslim</label>
+                                    <input name="EndDate" id="EndDate" type="date" value="@(Model.EndDate.Year > 1 ? Model.EndDate.ToString("yyyy-MM-dd") : "")" class="form-control rounded-3" />
+                                </div>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold">Hedeflenen Teslim</label>
-                                <input name="EndDate" id="EndDate" type="date" value="@(Model.EndDate.Year > 1 ? Model.EndDate.ToString("yyyy-MM-dd") : "")" class="form-control rounded-3" required />
-                            </div>
-                            <div class="col-md-12">
+                            
+<div class="col-md-12">
                                 <div class="row g-3">
                                     <div class="col-md-6">
                                             <label class="form-label fw-bold">Toplam Arazi Alanı (m²)</label>
@@ -174,16 +193,29 @@
                                               }
                                           </div>
                                           <div class="form-text text-muted">Mimari 3D render görselini seçin (JPG/PNG).</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold">Tapu Belgesi</label>
+                                    <input type="file" name="TapuDocumentFile" class="form-control rounded-3 border-primary" accept="image/*,.pdf" @(string.IsNullOrEmpty((string)ViewBag.TapuDocumentUrl) ? "required" : "") />
+                                    @if (!string.IsNullOrEmpty((string)ViewBag.TapuDocumentUrl))
+                                    {
+                                        <div class="mt-2"><a href="@ViewBag.TapuDocumentUrl" target="_blank" class="btn btn-sm btn-outline-success"><i class="bi bi-check-circle"></i> Yüklü Belgeyi Gör</a> <small class="text-muted">(Değiştirmek isterseniz yeni dosya seçin)</small></div>
+                                    }
+                                    else
+                                    {
+                                        <div class="form-text text-primary"><i class="bi bi-shield-check"></i> Tapu belgesi (PDF/Görsel) zorunludur.</div>
+                                    }
                                     </div>
                                 </div>
                             </div>
                         </div>
                         <div class="text-end mt-5">
-                            <button id="btnStep1Next" type="button" class="btn btn-orange btn-lg rounded-pill px-5 fw-bold" onclick="saveStep1AndContinue()">Blok/Aşama Tanımla <i class="ph ph-arrow-right ms-2"></i></button>
+                            <button id="btnStep1Next" type="button" class="btn btn-orange btn-lg rounded-pill px-5 fw-bold" onclick="saveStep1AndContinue()">Blok Tanımları <i class="ph ph-arrow-right ms-2"></i></button>
                         </div>
                     </div>
 
                     <!-- STEP 2: Blocks -->
+
                     <div class="wizard-step" id="step2">
                         <h4 class="fw-bold text-navy mb-4"><i class="ph ph-squares-four text-orange me-2"></i> Blok ve Aşama Dağılımı</h4>
                         <p class="text-muted mb-4">Temel kazısı, kaba inşaat gibi aşamaları blok bazlı takip edebilmeniz için projenizdeki blokları tanımlayın.</p>
@@ -208,7 +240,7 @@
                                             <div class="row g-3">
                                                 <div class="col-md-12 col-lg-3">
                                                     <label class="form-label small fw-bold">Blok / Yapı Adı</label>
-                                                    <input type="text" name="Blocks[@i].BlockName" class="form-control b-name" value="@b.BlockName" onkeyup="updatePodiumDropdowns()" required  />
+                                                    <input type="text" name="Blocks[@i].BlockName" class="form-control b-name" value="@b.BlockName" onkeyup="updatePodiumDropdowns(); updateAttachedDropdowns();" required  />
                                                     <input type="hidden" name="Blocks[@i].StructureType" value="independent" />
                                                     <input type="hidden" name="Blocks[@i].ParentIndex" value="" />
                                                 </div>
@@ -250,12 +282,113 @@
 
                         <div class="d-flex justify-content-between mt-5">
                             <button type="button" class="btn btn-outline-secondary btn-lg rounded-pill px-4" onclick="nextStep(1)"><i class="ph ph-arrow-left me-2"></i> Geri</button>
-                            <button type="button" class="btn btn-orange btn-lg rounded-pill px-5 fw-bold" onclick="saveStep2AndContinue()">Devam Et <i class="ph ph-arrow-right ms-2"></i></button>
+                            <button type="button" class="btn btn-orange btn-lg rounded-pill px-5 fw-bold" onclick="saveBlocksAndContinue()">Kat Malikleri <i class="ph ph-arrow-right ms-2"></i></button>
                         </div>
                     </div>
 
-                    <!-- STEP 3: Summary -->
+                    <!-- STEP 3: Kat Malikleri -->
+
                     <div class="wizard-step" id="step3">
+                        <h4 class="fw-bold text-navy mb-4"><i class="ph ph-users text-orange me-2"></i> Kat Malikleri (Opsiyonel)</h4>
+                        <p class="text-muted mb-4">Arsa veya eski bina sahiplerini sisteme şimdiden ekleyebilirsiniz. Girdiğiniz her isim arka planda otomatik olarak Rehberinize 'Kat Maliki' olarak kaydedilecektir. Bu adımı sonradan da tamamlayabilirsiniz.</p>
+
+<div class="col-12 mt-3" id="eskiBinaContainer" style="display: none;">
+                                
+                            </div>
+
+                          <div class="bg-light p-4 rounded-4 mb-4">
+                            <div id="ownersList">
+                                @if (Model.Owners != null && Model.Owners.Any())
+                                {
+                                    int oIdx = 0;
+                                    foreach (var o in Model.Owners)
+                                    {
+                                        <div class="row g-2 align-items-end mb-2 pb-2 border-bottom owner-item">
+                                            <div class="col-md-2">
+                                                <label class="form-label small text-muted mb-1">Ad Soyad</label>
+                                                <div class="input-group input-group-sm">
+                                                    <input type="text" name="Owners[@oIdx].FirstName" class="form-control" value="@o.FirstName" placeholder="Ad" required />
+                                                    <input type="text" name="Owners[@oIdx].LastName" class="form-control" value="@o.LastName" placeholder="Soyad" required />
+                                                </div>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small text-muted mb-1">İletişim</label>
+                                                <input type="tel" name="Owners[@oIdx].PhoneNumber" class="form-control form-control-sm" value="@o.PhoneNumber" placeholder="Telefon" />
+                                                <input type="hidden" name="Owners[@oIdx].Email" value="@o.Email" />
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small text-muted mb-1">Blok Seçimi</label>
+                                                <select name="Owners[@oIdx].BlockName" class="form-select form-select-sm">
+                                                    <option value="">Tümü / Belirsiz</option>
+                                                    @if(Model.Blocks != null)
+                                                    {
+                                                        foreach(var mb in Model.Blocks)
+                                                        {
+                                                            if(mb.BlockName == o.BlockName)
+                                                            {
+                                                                <option value="@mb.BlockName" selected>@mb.BlockName</option>
+                                                            }
+                                                            else
+                                                            {
+                                                                <option value="@mb.BlockName">@mb.BlockName</option>
+                                                            }
+                                                        }
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small text-muted mb-1">Ünite Tipi</label>
+                                                <select name="Owners[@oIdx].UnitType" class="form-select form-select-sm">
+                                                    <option value="">Tümü</option>
+                                                    @{
+                                                        var utypes = new string[] { "Daire", "Dükkan", "Dubleks", "Ofis" };
+                                                        foreach(var ut in utypes)
+                                                        {
+                                                            if(ut == o.UnitType)
+                                                            {
+                                                                <option value="@ut" selected>@ut</option>
+                                                            }
+                                                            else
+                                                            {
+                                                                <option value="@ut">@ut</option>
+                                                            }
+                                                        }
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small text-muted mb-1 text-primary">Adet / Miktar</label>
+                                                <input type="text" name="Owners[@oIdx].FlatNumber" class="form-control form-control-sm border-primary" value="@o.FlatNumber" placeholder="Örn: 4 Adet veya %50" />
+                                            </div>
+                                            <div class="col-md-1 text-center pb-1">
+                                                <div class="form-check form-switch d-inline-block" title="Temsilci / Takipçi mi?">
+                                                    <input class="form-check-input" type="checkbox" name="Owners[@oIdx].IsRepresentative" value="true" id="repSwitch_@oIdx" @(o.IsRepresentative ? "checked" : "")>
+                                                    <label class="form-check-label" style="font-size:0.7rem;" for="repSwitch_@oIdx">Temsilci</label>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-1 d-flex gap-1">
+                                                <button type="button" class="btn btn-sm btn-outline-success w-100 save-row-btn" onclick="saveSingleOwner(this)" title="Anında Kaydet"><i class="bi bi-check-lg"></i></button>
+                                                <button type="button" class="btn btn-sm btn-outline-danger w-100" onclick="this.closest('.owner-item').remove()" title="Sil"><i class="bi bi-trash"></i></button>
+                                            </div>
+                                        </div>
+                                        oIdx++;
+                                    }
+                                }
+                            </div>
+                            <button type="button" class="btn btn-outline-primary rounded-pill mt-3 fw-bold" onclick="addOwnerRow()">
+                                <i class="bi bi-person-plus me-1"></i> Yeni Kat Maliki Ekle
+                            </button>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between mt-5">
+                            <button type="button" class="btn btn-light btn-lg rounded-pill px-4" onclick="nextStep(2)"><i class="ph ph-arrow-left me-2"></i> Geri</button>
+                            <button type="button" class="btn btn-orange btn-lg rounded-pill px-5 fw-bold" onclick="saveStep3AndContinue()">Özet ve Onay <i class="ph ph-arrow-right ms-2"></i></button>
+                        </div>
+                    </div>
+                    
+                    <!-- STEP 4: Summary -->
+
+                    <div class="wizard-step" id="step4">
                         <h4 class="fw-bold text-navy mb-4"><i class="ph ph-check-circle text-success me-2"></i> Proje Özeti ve Onay</h4>
                         
                         <div class="bg-light p-4 rounded-4 mb-4">
@@ -286,8 +419,8 @@
                         </div>
 
                         <div class="d-flex justify-content-between mt-5">
-                            <button type="button" class="btn btn-outline-secondary btn-lg rounded-pill px-4" onclick="nextStep(2)"><i class="ph ph-arrow-left me-2"></i> Geri</button>
-                            <button type="submit" class="btn btn-success btn-lg rounded-pill px-5 fw-bold"><i class="ph ph-rocket-launch me-2"></i> Projeyi Oluştur</button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg rounded-pill px-4" onclick="nextStep(3)"><i class="ph ph-arrow-left me-2"></i> Geri</button>
+                            <button type="button" class="btn btn-success btn-lg rounded-pill px-5 fw-bold" onclick="submitWizard();"><i class="ph ph-rocket-launch me-2"></i> Projeyi Oluştur</button>
                         </div>
                     </div>
 
@@ -318,9 +451,225 @@
 </div>
 
 @section Scripts {
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+    function handleOriginChange(sel) {
+            var eskiBina = document.getElementById('eskiBinaContainer');
+            if(sel.value == "1") {
+                eskiBina.style.display = 'block';
+            } else {
+                eskiBina.style.display = 'none';
+            }
+        }
+        
+        document.addEventListener("DOMContentLoaded", function() { handleStatusChange(); });
+</script>
+<script>
+    
+    </script>
+
+
+<script>
+window.onerror = function(message, source, lineno, colno, error) {
+    alert("JAVASCRIPT HATASI:\n" + message + "\nSatır: " + lineno);
+};
+</script>
+
     <script>
         
         let map, marker;
+        
+        
+        let ownerIndex = @(Model.Owners?.Count ?? 0);
+        function addOwnerRow() {
+            const container = document.getElementById('ownersList');
+            
+            // Get block options dynamically from Step 2 inputs
+            let blockOptions = '<option value="">Seçiniz</option>';
+            const blockInputs = document.querySelectorAll('#blocksContainer .block-item input[name$=".BlockName"]');
+            blockInputs.forEach(input => {
+                if(input.value.trim() !== '') {
+                    blockOptions += `<option value="${input.value.trim()}">${input.value.trim()}</option>`;
+                }
+            });
+
+            // Definition'dan gelecek statik (şimdilik) liste
+            const unitTypeOptions = `
+                <option value="">Seçiniz</option>
+                <option value="Daire">Daire</option>
+                <option value="Dükkan">Dükkan</option>
+                <option value="Dubleks">Dubleks</option>
+                <option value="Ofis">Ofis</option>
+            `;
+
+            const html = `
+                <div class="row g-2 align-items-end mb-2 pb-2 border-bottom owner-item bg-light p-2 rounded">
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted mb-1">Ad Soyad</label>
+                        <div class="input-group input-group-sm">
+                            <input type="text" name="Owners[${ownerIndex}].FirstName" class="form-control" placeholder="Ad" required />
+                            <input type="text" name="Owners[${ownerIndex}].LastName" class="form-control" placeholder="Soyad" required />
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted mb-1">İletişim</label>
+                        <input type="tel" name="Owners[${ownerIndex}].PhoneNumber" class="form-control form-control-sm" placeholder="Telefon" />
+                        <input type="hidden" name="Owners[${ownerIndex}].Email" value="" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted mb-1">Blok Seçimi</label>
+                        <select name="Owners[${ownerIndex}].BlockName" class="form-select form-select-sm">
+                            ${blockOptions.replace('value=""', 'value="" selected').replace('Seçiniz', 'Tümü / Belirsiz')}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted mb-1">Ünite Tipi</label>
+                        <select name="Owners[${ownerIndex}].UnitType" class="form-select form-select-sm">
+                            ${unitTypeOptions.replace('value=""', 'value="" selected').replace('Seçiniz', 'Tümü')}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted mb-1 text-primary">Adet / Miktar</label>
+                        <input type="text" name="Owners[${ownerIndex}].FlatNumber" class="form-control form-control-sm border-primary" placeholder="Örn: 4 Adet veya %50" />
+                    </div>
+                    <div class="col-md-1 text-center pb-1">
+                        <div class="form-check form-switch d-inline-block" title="Sadece Temsilci mi?">
+                            <input class="form-check-input" type="checkbox" name="Owners[${ownerIndex}].IsRepresentative" value="true" id="repSwitch_${ownerIndex}">
+                            <label class="form-check-label" style="font-size:0.7rem;" for="repSwitch_${ownerIndex}">Temsilci</label>
+                        </div>
+                    </div>
+                    <div class="col-md-1 d-flex gap-1">
+                        <button type="button" class="btn btn-sm btn-outline-success w-100 save-row-btn" onclick="saveSingleOwner(this)" title="Anında Kaydet"><i class="bi bi-check-lg"></i></button>
+                        <button type="button" class="btn btn-sm btn-outline-danger w-100" onclick="this.closest('.owner-item').remove()" title="Sil"><i class="bi bi-trash"></i></button>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
+            ownerIndex++;
+        }
+
+        function saveSingleOwner(btn) {
+            const row = btn.closest('.owner-item');
+            const projectId = document.querySelector('input[name="DraftProjectId"]').value;
+            
+            // Collect data
+            const firstName = row.querySelector('input[name$=".FirstName"]').value;
+            const lastName = row.querySelector('input[name$=".LastName"]').value;
+            const phone = row.querySelector('input[name$=".PhoneNumber"]').value;
+            const email = row.querySelector('input[name$=".Email"]').value;
+            const blockName = row.querySelector('select[name$=".BlockName"]').value;
+            const unitType = row.querySelector('select[name$=".UnitType"]').value;
+            const flatNumber = row.querySelector('input[name$=".FlatNumber"]').value;
+            const isRep = row.querySelector('input[name$=".IsRepresentative"]').checked;
+
+            if(!firstName || !lastName) {
+                alert("Lütfen en azından Ad ve Soyad giriniz.");
+                return;
+            }
+
+            const formData = new FormData();
+            // Get anti-forgery token
+            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+            formData.append('__RequestVerificationToken', token);
+            formData.append('projectId', projectId);
+            formData.append('firstName', firstName);
+            formData.append('lastName', lastName);
+            formData.append('phone', phone);
+            formData.append('email', email);
+            formData.append('blockName', blockName);
+            formData.append('unitType', unitType);
+            formData.append('flatNumber', flatNumber);
+            formData.append('isRep', isRep);
+
+            // Visual feedback
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+            btn.disabled = true;
+
+            fetch('/ConstructionProject/SaveSingleOwner', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    btn.classList.replace('btn-outline-success', 'btn-success');
+                    btn.innerHTML = '<i class="bi bi-check-all"></i>';
+                    alert(firstName + " " + lastName + " başarıyla kaydedildi!");
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.classList.replace('btn-success', 'btn-outline-success');
+                        btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+                    }, 2000);
+                } else {
+                    alert("Kayıt hatası: " + data.message);
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            })
+            .catch(err => {
+                alert("Bağlantı hatası: " + err.message);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            });
+        }
+
+        function submitWizard() {
+            // Fix Owner indices so ASP.NET MVC binding doesn't break on gaps
+            const ownerItems = document.querySelectorAll('#ownersList .owner-item');
+            ownerItems.forEach((item, index) => {
+                const inputs = item.querySelectorAll('input, select');
+                inputs.forEach(input => {
+                    if(input.name && input.name.startsWith('Owners[')) {
+                        input.name = input.name.replace(/Owners\[\d+\]/, `Owners[${index}]`);
+                    }
+                });
+            });
+            document.getElementById('wizardForm').submit();
+        }
+
+        function saveStep3AndContinue() {
+            prepareSummary();
+        }
+        
+        // ==========================================
+
+        // DİKKAT: AŞAMA 2 KAYDETME KODLARIDIR. 
+        // KUSURSUZ ÇALIŞMAKTADIR. HİÇBİR ZAMAN BU KODLARA DOKUNMA/SİLME/DEĞİŞTİRME!
+        // ==========================================
+        function saveBlocksAndContinue() {
+            var form = document.getElementById('wizardForm');
+            var step = document.getElementById('step2');
+            var invalidElements = step.querySelectorAll(':invalid');
+            if(invalidElements.length > 0) {
+                alert("Lütfen tüm blok tanımlarını eksiksiz doldurun.");
+                invalidElements[0].reportValidity();
+                return;
+            }
+
+            var formData = new FormData(form);
+            fetch('/ConstructionProject/SaveStep2', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    nextStep(3);
+                } else {
+                    alert('Kayıt Hatası: ' + (data.message || 'Bilinmeyen Hata'));
+                }
+            })
+            .catch(err => {
+                alert('Beklenmeyen bir sunucu hatası oluştu.');
+            });
+        }
+        
+        // ==========================================
+
+        // DİKKAT: AŞAMA 1 HARİTA (MAP) KODLARIDIR. 
+        // KUSURSUZ ÇALIŞMAKTADIR. HİÇBİR ZAMAN BU KODLARA DOKUNMA/DEĞİŞTİRME!
+        // ==========================================
         function openMapModal() {
             var mapModal = new bootstrap.Modal(document.getElementById('mapModal'));
             mapModal.show();
@@ -341,20 +690,30 @@
                     map.invalidateSize();
                 }
 
-                // Harita açıldığında seçili adrese odaklan (Geocoding)
                 var cityName = $('#CityId option:selected').text();
                 var distName = $('#DistrictId option:selected').text();
                 var neighName = $('#NeighborhoodId option:selected').text();
                 var streetName = $('#StreetId option:selected').text();
                 
                 if (cityName && cityName !== 'Seçiniz') {
-                    // Mümkün olan en detaylı adresi oluştur
                     var query = '';
                     if (neighName && neighName !== 'Seçiniz' && neighName !== 'Yükleniyor...') {
                         if (streetName && streetName !== 'Seçiniz' && streetName !== 'Yükleniyor...') {
                             query = `${streetName}, ${neighName}, ${distName}, ${cityName}, Turkey`;
                         } else {
-                            // Sokak yoksa mahalleye odaklan (Kullanıcı talebi)
+                            query = `${neighName}, ${distName}, ${cityName}, Turkey`;
+                        }
+                    } else if (distName && distName !== 'Seçiniz') {
+                        query = `${distName}, ${cityName}, Turkey`;
+                    } else {
+                        query = `${cityName}, Turkey`;
+                    }
+
+                    var query = '';
+                    if (neighName && neighName !== 'Seçiniz' && neighName !== 'Yükleniyor...') {
+                        if (streetName && streetName !== 'Seçiniz' && streetName !== 'Yükleniyor...') {
+                            query = `${streetName}, ${neighName}, ${distName}, ${cityName}, Turkey`;
+                        } else {
                             query = `${neighName}, ${distName}, ${cityName}, Turkey`;
                         }
                     } else if (distName && distName !== 'Seçiniz') {
@@ -385,34 +744,24 @@
                     
                     tryGeocode(query, 16);
                 }
-            }, 300);
+            }, 500);
         }
-        
+
         function saveMapLocation() {
-            var pos = marker.getLatLng();
-            document.getElementById('latInput').value = pos.lat.toFixed(6);
-            document.getElementById('lngInput').value = pos.lng.toFixed(6);
-            bootstrap.Modal.getInstance(document.getElementById('mapModal')).hide();
+            if(marker) {
+                var pos = marker.getLatLng();
+                document.getElementById('latInput').value = pos.lat.toFixed(6);
+                document.getElementById('lngInput').value = pos.lng.toFixed(6);
+            }
+            var mapModal = bootstrap.Modal.getInstance(document.getElementById('mapModal'));
+            if(mapModal) mapModal.hide();
         }
 
         
-                function handleStatusChange() {
-            var status = document.getElementById('StatusId').value;
-            var btnNext = document.getElementById('btnStep1Next');
-            var helpText = document.getElementById('statusHelpText');
-            
-            if (status == "2") { // Aktif Şantiye
-                btnNext.innerHTML = 'Blok/Aşama Tanımla <i class="ph ph-arrow-right ms-2"></i>';
-                helpText.innerText = 'Aktif olarak inşaatı süren, puantaj ve maliyet takibi yapacağınız projedir.';
-            } else if (status == "1") { // Aday/Görüşmede
-                btnNext.innerHTML = 'Projeyi Kaydet (Detayları Atla) <i class="ph ph-check ms-2"></i>';
-                helpText.innerText = 'Görüşmeleri süren, henüz sözleşmesi imzalanmamış projedir. Blok/aşama detayları atlanır.';
-            } else if (status == "3") { // Tamamlanmış (Referans)
-                btnNext.innerHTML = 'Projeyi Kaydet (Detayları Atla) <i class="ph ph-check ms-2"></i>';
-                helpText.innerText = 'Tamamlanmış, arşiv/portföy amacıyla sisteme eklenecek projedir. Blok/aşama detayları atlanır.';
-            }
-        }
-
+        // ==========================================
+        // DİKKAT: AŞAMA 1 KAYDETME KODLARIDIR. 
+        // KUSURSUZ ÇALIŞMAKTADIR. HİÇBİR ZAMAN BU KODLARA DOKUNMA/DEĞİŞTİRME!
+        // ==========================================
         function saveStep1AndContinue() {
             var form = document.getElementById('wizardForm');
             var step = document.getElementById('step1');
@@ -494,6 +843,10 @@
             }
         }
 
+        // ==========================================
+        // DİKKAT: AŞAMA 2 (BLOK OLUŞTURMA) KODLARIDIR. 
+        // KUSURSUZ ÇALIŞMAKTADIR. HİÇBİR ZAMAN BU KODLARA DOKUNMA/SİLME/DEĞİŞTİRME!
+        // ==========================================
         function generateBlocks() {
             const count = parseInt(document.getElementById('blockCount').value) || 1;
             const container = document.getElementById('blocksContainer');
@@ -519,7 +872,7 @@
                               <div class="row g-3">
                                   <div class="col-md-12 col-lg-3">
                                         <label class="form-label small fw-bold">Blok / Yapı Adı</label>
-                                        <input type="text" name="Blocks[${i}].BlockName" class="form-control b-name" value="${defaultName}" onkeyup="updatePodiumDropdowns()" required  />
+                                        <input type="text" name="Blocks[${i}].BlockName" class="form-control b-name" value="${defaultName}" onkeyup="updatePodiumDropdowns(); updateAttachedDropdowns();" required  />
                                         
                                         <label class="form-label small fw-bold mt-2 text-primary">Yapı Karakteri</label>
                                         <select name="Blocks[${i}].StructureType" class="form-select b-type border-primary" onchange="toggleParent(this)">
@@ -568,7 +921,11 @@
               }
             }
           }
-// Adres Formatlayıcı
+// ==========================================
+        // DİKKAT: AŞAMA 1 (STEP 1) KODLARIDIR. 
+        // KUSURSUZ ÇALIŞMAKTADIR. HİÇBİR ZAMAN BU KODLARA DOKUNMA/DEĞİŞTİRME!
+        // ==========================================
+        // Adres Formatlayıcı
         document.getElementById('fullAddress').addEventListener('input', function(e) {
             let val = e.target.value;
             // 1. Türkçe karakter ve noktalama kalsın, garip sembolleri uçur.
@@ -591,38 +948,57 @@
         });
         
         
+        
+        
         $(document).ready(function() {
-
-        // Enter tuşunun formu otomatik göndermesini engelle
-        $(window).keydown(function(event){
-            if(event.keyCode == 13) {
-                event.preventDefault();
-                return false;
+            var originSel = document.getElementById('ProjectOriginId');
+            if (originSel) {
+                handleOriginChange(originSel);
             }
-        });
+
+    
+
+            // Enter tuşunun formu otomatik göndermesini engelle
+            $(window).keydown(function(event){
+                if(event.keyCode == 13) {
+                    event.preventDefault();
+                    return false;
+                }
+            });
 
             // Sehir degisince ilceyi doldur
-            $('#CityId').change(function() {
+                        $('#CityId').change(function() {
                 var cityId = $(this).val();
                 $('#DistrictId').empty().append('<option value="">Yükleniyor...</option>');
                 $('#NeighborhoodId').empty().append('<option value="">Seçiniz</option>');
                 $('#StreetId').empty().append('<option value="">Seçiniz</option>');
                 
                 if (cityId) {
-                    $.get('/api/Location/Districts/' + cityId, function(data) {
-                        $('#DistrictId').empty().append('<option value="">Seçiniz</option>');
-                        if(data && data.length > 0) {
-                            data.forEach(function(d) {
-                                $('#DistrictId').append('<option value="' + d.id + '">' + d.name + '</option>');
-                            });
+                    $.ajax({
+                        url: '/api/Location/Districts/' + cityId,
+                        method: 'GET',
+                        dataType: 'json',
+                        success: function(data) {
+                            $('#DistrictId').empty().append('<option value="">İlçe Seçin</option>');
+                            if(data && data.length > 0) {
+                                data.forEach(function(d) {
+                                    var optId = d.id !== undefined ? d.id : d.Id;
+                                    var optName = d.name !== undefined ? d.name : d.Name;
+                                    $('#DistrictId').append('<option value="' + optId + '">' + optName + '</option>');
+                                });
+                            } else {
+                                alert("Sistem Uyarısı: API ilçeleri boş getirdi! Veritabanında ilçeler bulunamıyor olabilir.");
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            alert("Sistem Uyarısı: API çağrısı çöktü!\nHata Kodu: " + xhr.status + "\nMesaj: " + error);
+                            $('#DistrictId').empty().append('<option value="">Hata!</option>');
                         }
                     });
                 } else {
-                    $('#DistrictId').empty().append('<option value="">Seçiniz</option>');
+                    $('#DistrictId').empty().append('<option value="">İlçe Seçin</option>');
                 }
             });
-
-            // if ($('#CityId').val()) { $('#CityId').trigger('change'); }
 
             // Ilce degisince mahalleyi doldur
             $('#DistrictId').change(function() {
@@ -631,12 +1007,22 @@
                 $('#StreetId').empty().append('<option value="">Seçiniz</option>');
                 
                 if (districtId) {
-                    $.get('/api/Location/Neighborhoods/' + districtId, function(data) {
-                        $('#NeighborhoodId').empty().append('<option value="">Seçiniz</option>');
-                        if(data && data.length > 0) {
-                            data.forEach(function(n) {
-                                $('#NeighborhoodId').append('<option value="' + n.id + '">' + n.name + '</option>');
-                            });
+                    $.ajax({
+                        url: '/api/Location/Neighborhoods/' + districtId,
+                        method: 'GET',
+                        dataType: 'json',
+                        success: function(data) {
+                            $('#NeighborhoodId').empty().append('<option value="">Seçiniz</option>');
+                            if(data && data.length > 0) {
+                                data.forEach(function(d) {
+                                    var optId = d.id !== undefined ? d.id : d.Id;
+                                    var optName = d.name !== undefined ? d.name : d.Name;
+                                    $('#NeighborhoodId').append('<option value="' + optId + '">' + optName + '</option>');
+                                });
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            alert("Sistem Uyarısı: Mahalle çağrısı çöktü!\nHata Kodu: " + xhr.status + "\nMesaj: " + error);
                         }
                     });
                 } else {
@@ -650,12 +1036,22 @@
                 $('#StreetId').empty().append('<option value="">Yükleniyor...</option>');
                 
                 if (neighborhoodId) {
-                    $.get('/api/Location/Streets/' + neighborhoodId, function(data) {
-                        $('#StreetId').empty().append('<option value="">Seçiniz</option>');
-                        if(data && data.length > 0) {
-                            data.forEach(function(s) {
-                                $('#StreetId').append('<option value="' + s.id + '">' + s.name + '</option>');
-                            });
+                    $.ajax({
+                        url: '/api/Location/Streets/' + neighborhoodId,
+                        method: 'GET',
+                        dataType: 'json',
+                        success: function(data) {
+                            $('#StreetId').empty().append('<option value="">Seçiniz</option>');
+                            if(data && data.length > 0) {
+                                data.forEach(function(d) {
+                                    var optId = d.id !== undefined ? d.id : d.Id;
+                                    var optName = d.name !== undefined ? d.name : d.Name;
+                                    $('#StreetId').append('<option value="' + optId + '">' + optName + '</option>');
+                                });
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            alert("Sistem Uyarısı: Sokak çağrısı çöktü!\nHata Kodu: " + xhr.status + "\nMesaj: " + error);
                         }
                     });
                 } else {
@@ -663,7 +1059,6 @@
                 }
             });
         });
-        
         function toggleParent(sel) {
               var val = $(sel).val();
               var parentSel = $(sel).siblings('.b-parent');
@@ -701,39 +1096,7 @@
           }
 
 
-        function saveStep2AndContinue() {
-            var form = document.getElementById('wizardForm');
-            var step = document.getElementById('step1');
-            var invalidElements = step.querySelectorAll(':invalid');
-            if(invalidElements.length > 0) {
-                  var msg = "Eksik veya hatalı alanlar var:\\n";
-                  invalidElements.forEach(el => {
-                      var name = el.name || el.id || 'Bilinmeyen Alan';
-                      msg += "- " + name + "\\n";
-                  });
-                  alert(msg);
-                  invalidElements[0].reportValidity();
-                  return;
-              }
 
-            var formData = new FormData(form);
-            fetch('/ConstructionProject/SaveStep2', {
-                method: 'POST',
-                body: formData
-            })
-            .then(res => res.json())
-            .then(data => {
-                if(data.success) {
-                    prepareSummary();
-                } else {
-                    alert('Kayıt sırasında bir hata oluştu: ' + data.message);
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                alert('Bağlantı hatası.');
-            });
-        }
 
           function prepareSummary() {
             // Get values from Step 1
@@ -760,33 +1123,27 @@
             document.getElementById('summaryTotalApts').innerText = totalApts;
             document.getElementById('summaryTotalShops').innerText = totalShops;
             
-            nextStep(3);
+            nextStep(4);
         }
-                // On page load: if we have a draft id (either from server model or URL), open step 2
-            document.addEventListener('DOMContentLoaded', function() {
-                try {
-                    const draftIdField = document.getElementById('DraftProjectId');
-                    const draftId = parseInt(draftIdField?.value || new URLSearchParams(window.location.search).get('id') || '0');
-                    if (draftId > 0) {
-                        // ensure hidden field is set (in case it was only in URL)
-                        if (draftIdField && !draftIdField.value) draftIdField.value = draftId;
+        
+    
 
-                        // if blocks not rendered, try to generate from server-rendered model (server fills model.Blocks)
-                        setTimeout(() => {
-                            if (document.getElementById('blocksContainer') && document.getElementById('blocksContainer').children.length === 0) {
-                                // If there are server-side rendered blocks they would already be present; otherwise leave generation to user
-                                // We still switch to step 2 so the user can continue
-                                nextStep(2);
-                            } else {
-                                nextStep(2);
-                            }
-                        }, 50);
-                    }
-                } catch (e) {
-                    console.warn('Draft load check failed', e);
-                }
-            });
-    </script>
+function handleStatusChange() {
+    var statusSel = document.getElementById('StatusId');
+    var helpText = document.getElementById('statusHelpText');
+    if (!statusSel || !helpText) return;
+    
+    var val = statusSel.value;
+    if (val === '2') {
+        helpText.innerText = 'Aktif olarak inşaatı süren, puantaj ve maliyet takibi yapacağınız projedir.';
+    } else if (val === '0') {
+        helpText.innerText = 'Fizibilite, teklif veya kentsel dönüşüm sürecindeki aday projelerdir.';
+    } else if (val === '3') {
+        helpText.innerText = 'Tamamlanmış referans proje veya sadece bina yönetimi (aidat) yapılacak mülktür.';
+    }
+}
+
+</script>
 }
 
 
