@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using GMK360.Core.Entities.Enums;
+using GMK360.Core.Entities;
 
 namespace GMK360.Core.Entities.Construction
 {
@@ -15,6 +16,7 @@ namespace GMK360.Core.Entities.Construction
     {
         public string Name { get; set; }
         public string Description { get; set; }
+        public string? ProjectType { get; set; }
         
         public int AgencyId { get; set; }
         public Agency Agency { get; set; }
@@ -24,10 +26,32 @@ namespace GMK360.Core.Entities.Construction
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
         public string Address { get; set; }
+
+        public string? Ada { get; set; }
+        
+        public string? Parsel { get; set; }
+
         public int? CityId { get; set; }
         public int? DistrictId { get; set; }
         public int? NeighborhoodId { get; set; }
         public int? StreetId { get; set; }
+        // Eski Bina / Kentsel Dönüşüm Fizibilite Bilgileri
+        public int? EskiKatSayisi { get; set; }
+        public int? EskiDaireSayisi { get; set; }
+        public double? EskiToplamMetrekare { get; set; }
+        public int? EskiDukkanSayisi { get; set; }
+        public int? EskiBodrumKatSayisi { get; set; }
+        public bool EskiCatiKatiVarMi { get; set; }
+        public bool IsNewDesignForExisting { get; set; }
+        
+        // Rehber (CRM) Entegrasyonu
+        public int? BinaYoneticisiId { get; set; }
+        public CrmContact? BinaYoneticisi { get; set; }
+        
+        public virtual ICollection<ProjectOwner> KatMalikleri { get; set; }
+        
+        public int? ProjectOriginId { get; set; } // 1: Kentsel Donusum, 2: Kat Karsiligi, 3: Ozmal, 4: Ihale
+        public string? ProjectOwnerContact { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime? EndDate { get; set; }
         
@@ -42,6 +66,7 @@ namespace GMK360.Core.Entities.Construction
         public virtual ICollection<ProjectMaterialCatalog> MaterialCatalogs { get; set; }
         public ProjectLifecycleStatus LifecycleStatus { get; set; } = ProjectLifecycleStatus.UnderConstruction;
         public bool IsPublishedOnWeb { get; set; } = false;
+        public bool IsDataLocked { get; set; } = false;
         public virtual ICollection<ConstructionTask> Tasks { get; set; }
         
         // Arsa ve Peyzaj Bilgileri

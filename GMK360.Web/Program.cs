@@ -1,4 +1,4 @@
-﻿using GMK360.Data.Contexts;
+using GMK360.Data.Contexts;
 using GMK360.Core.Entities.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
@@ -155,20 +155,9 @@ builder.Services.AddLocalization(options => options.ResourcesPath = "Resources")
 // Add CORS Policy for Chrome Extension and Subdomains
 builder.Services.AddCors(options =>
 {
-    // Chrome Extension iÃ§in (SADECE gerÃ§ek extension ID'niz varsa)
-    options.AddPolicy("AllowExtension", policy =>
-    {
-        policy.WithOrigins(
-                "chrome-extension://YOUR_ACTUAL_EXTENSION_ID_HERE", // GerÃ§ek ID
-                "https://localhost:7001",      // Development iÃ§in
-                "https://localhost:5001",      // Development HTTP
-                "https://gmk360.com",          // Production domain
-                "https://www.gmk360.com"       // Production www
-              )
-              .WithMethods("GET", "POST", "PUT", "DELETE")
-              .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-CSRF-TOKEN")
-              .AllowCredentials();  // Cookie iÃ§in gerekli
-    });
+    // Not: Chrome Extension CORS politikasi, gercek extension ID alindiginda buraya eklenecektir.
+    // options.AddPolicy("AllowExtension", policy => { ... });
+
 
     // Alt domainler iÃ§in (kurumsal.gmk360.com gibi)
     options.AddPolicy("SubdomainPolicy", policy =>
@@ -240,12 +229,15 @@ builder.Services.AddResponseCompression(options =>
 
 var app = builder.Build();
 
-// Enable Swagger UI
-app.UseSwagger();
-app.UseSwaggerUI(c =>
+// Enable Swagger UI (sadece Development ortaminda)
+if (app.Environment.IsDevelopment())
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "GMK360 API v1");
-});
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "GMK360 API v1");
+    });
+}
 
 app.UseResponseCompression();
 // Configure the HTTP request pipeline.
@@ -263,8 +255,10 @@ app.UseStaticFiles();
 app.UseMiddleware<GMK360.Web.Middleware.SubdomainRoutingMiddleware>();
 app.UseMiddleware<GMK360.Web.Middleware.AgencySubdomainMiddleware>();
 app.UseRouting();
-app.UseCors("AllowExtension");
-app.UseCors("SubdomainPolicy"); // Alt domain CORS politikasÄ± aktif edildi
+
+// CORS: Tek middleware cagrisi ile tum politikalari yonet
+// Not: Controller/endpoint bazinda [EnableCors("PolicyName")] attribute ile ayrica politika atanabilir
+app.UseCors("SubdomainPolicy");
 
 // Enable Localization Middleware
 var locOptions = app.Services.GetService<Microsoft.Extensions.Options.IOptions<RequestLocalizationOptions>>();
@@ -286,7 +280,12 @@ using (var scope = app.Services.CreateScope())
     {
         await GMK360.Data.Seeds.RoleAndUserSeeder.SeedRolesAndAdminAsync(services);
         await GMK360.Data.Seeds.DefinitionSeeder.SeedDefinitionsAsync(services);
-        await GMK360.Data.Seeds.DemoSeeder.SeedDemoDataAsync(services);
+        
+        // Demo verileri sadece Development ortaminda yuklenir
+        if (app.Environment.IsDevelopment())
+        {
+            await GMK360.Data.Seeds.DemoSeeder.SeedDemoDataAsync(services);
+        }
     }
     catch (Exception ex)
     {

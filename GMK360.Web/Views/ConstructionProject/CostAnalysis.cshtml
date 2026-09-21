@@ -1,0 +1,107 @@
+@model GMK360.Core.Entities.Construction.ConstructionProject
+@{
+    ViewData["Title"] = "Bütçe ve Sapma Analizi";
+    Layout = "~/Views/Shared/_ProjectLayout.cshtml";
+    
+    decimal totalEstimated = 0;
+    decimal totalActual = 0;
+}
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0 text-dark"><i class="bi bi-graph-down-arrow text-danger me-2"></i> Bütçe Sapma Analizi</h2>
+            <p class="text-muted mb-0">@Model.Name - Planlanan (Keşif) vs. Gerçekleşen Maliyetler</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-warning rounded-pill shadow-sm px-4 fw-bold" onclick="showComingSoon('E-Fatura')">
+                <i class="bi bi-receipt me-1"></i> E-Fatura Kes / Gönder
+            </button>
+            @if (Model.IsDataLocked)
+            {
+                <span class="badge bg-danger rounded-pill px-3 py-2 fs-6"><i class="bi bi-lock-fill me-1"></i> Bütçe Kilitli</span>
+            }
+            else
+            {
+                <span class="badge bg-warning text-dark rounded-pill px-3 py-2 fs-6"><i class="bi bi-unlock-fill me-1"></i> Bütçe Revizyona Açık</span>
+            }
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Faz / Aşama</th>
+                            <th>İş Kalemi</th>
+                            <th class="text-end">Planlanan Bütçe</th>
+                            <th class="text-end">Gerçekleşen Harcama</th>
+                            <th class="text-end pe-4">Sapma (Fark)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var phase in Model.Phases.OrderBy(p => p.OrderIndex))
+                        {
+                            <tr class="table-secondary">
+                                <td colspan="5" class="fw-bold ps-4"><i class="bi bi-layers me-2"></i>@phase.Name</td>
+                            </tr>
+                            @foreach (var task in phase.PhaseTasks.OrderBy(t => t.OrderIndex))
+                            {
+                                var estimated = task.EstimatedBudget ?? 0;
+                                var actual = task.TaskCosts != null ? task.TaskCosts.Sum(c => c.Amount) : 0;
+                                var diff = actual - estimated;
+                                
+                                totalEstimated += estimated;
+                                totalActual += actual;
+
+                                string diffClass = diff > 0 ? "text-danger fw-bold" : (diff < 0 ? "text-success fw-bold" : "text-muted");
+                                string rowClass = diff > 0 ? "table-danger" : "";
+
+                                <tr class="@rowClass">
+                                    <td class="ps-4 text-muted small">Faz @phase.OrderIndex</td>
+                                    <td class="fw-bold">@task.Name</td>
+                                    <td class="text-end">@estimated.ToString("N2") ₺</td>
+                                    <td class="text-end fw-bold">@actual.ToString("N2") ₺</td>
+                                    <td class="text-end pe-4 @diffClass">
+                                        @if(diff > 0) { <span>+</span> }
+                                        @diff.ToString("N2") ₺
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                    <tfoot class="table-dark">
+                        <tr>
+                            <td colspan="2" class="text-end fw-bold">GENEL TOPLAM:</td>
+                            <td class="text-end fw-bold fs-5">@totalEstimated.ToString("N2") ₺</td>
+                            <td class="text-end fw-bold fs-5 text-warning">@totalActual.ToString("N2") ₺</td>
+                            <td class="text-end fw-bold pe-4 fs-5 @(totalActual > totalEstimated ? "text-danger" : "text-success")">
+                                @((totalActual - totalEstimated).ToString("N2")) ₺
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function showComingSoon(featureName) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Çok Yakında!',
+                    text: 'Ekim ayında aktif edilecektir.',
+                    confirmButtonColor: '#3085d6',
+                    confirmButtonText: 'Anladım'
+                });
+            } else {
+                alert('Ekim ayında aktif edilecektir.');
+            }
+        }
+    </script>
+}

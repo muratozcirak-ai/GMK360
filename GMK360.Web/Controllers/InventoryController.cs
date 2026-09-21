@@ -35,7 +35,7 @@ namespace GMK360.Web.Controllers
             return consultant?.AgencyId;
         }
 
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(int? id)
         {
             var agencyId = await GetUserAgencyIdAsync();
             if (agencyId == null && !User.IsInRole("Admin")) return Unauthorized();
@@ -45,6 +45,17 @@ namespace GMK360.Web.Controllers
             if (!User.IsInRole("Admin"))
             {
                 query = query.Where(w => w.AgencyId == agencyId);
+            }
+
+            if (id.HasValue)
+            {
+                query = query.Where(w => w.ConstructionProjectId == id.Value);
+                var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == id.Value);
+                if (project != null)
+                {
+                    ViewData["ProjectId"] = project.Id;
+                    ViewData["ProjectName"] = project.Name;
+                }
             }
 
             var warehouses = await query.ToListAsync();

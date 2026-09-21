@@ -31,6 +31,11 @@ namespace GMK360.Core.Entities.Construction
         public string? InstitutionContact { get; set; } // YENI: Kurum Ici Ilgili / Tanidik / Memur Adi
         
         public DateTime? ExpiryDate { get; set; }
+                public DateTime? ApplicationDate { get; set; } // Başvuru Tarihi
+        public DateTime? AcquiredDate { get; set; } // Alındığı Tarih
+        public string? FilePath { get; set; } // Yüklenen PDF/Görsel dosya yolu
+        public decimal? DocumentCost { get; set; } // Harç / Masraf Tutarı
+        
         public bool IsCustom { get; set; } // Globalde olmayan, firmanin kendi ekledigi evrak mi?
     }
 }

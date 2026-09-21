@@ -10,13 +10,13 @@ namespace GMK360.Core.Entities
         public ApplicationUser ApplicationUser { get; set; }
 
         public string FirstName { get; set; }
-        public string LastName { get; set; }
-        public string PhoneNumber { get; set; }
-        public string Email { get; set; }
+        public string? LastName { get; set; }
+        public string? PhoneNumber { get; set; }
+        public string? Email { get; set; }
 
-        public string ContactType { get; set; } // Alici, Satici, Kiraci, EvSahibi
+        public string? ContactType { get; set; } // Alici, Satici, Kiraci, EvSahibi
 
-        public string Notes { get; set; }
+        public string? Notes { get; set; }
 
         // İlişkiler
         public ICollection<CrmDemand> Demands { get; set; }

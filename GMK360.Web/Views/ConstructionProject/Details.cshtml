@@ -3,17 +3,42 @@
 @{
     ViewData["Title"] = "Proje Detayı: " + Model.Name;
     Layout = "~/Views/Shared/_ProjectLayout.cshtml";
+    ViewData["ProjectId"] = Model.Id;
+    ViewData["ProjectName"] = Model.Name;
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h2 class="fw-bold mb-1"><i class="bi bi-building-check text-primary me-2"></i>@Model.Name</h2>
+        <h2 class="fw-bold mb-1">
+            <i class="bi bi-building-check text-primary me-2"></i>@Model.Name
+            @if(Model.IsDataLocked)
+            {
+                <span class="badge bg-danger ms-2 shadow-sm fs-6 align-middle"><i class="bi bi-lock-fill"></i> SİSTEM KİLİTLİ (Baseline)</span>
+            }
+        </h2>
         <p class="text-muted mb-0"><i class="bi bi-geo-alt me-1"></i>@Model.Address</p>
     </div>
     <div>
         <a asp-action="Index" class="btn btn-outline-secondary rounded-pill px-3 me-2">
             <i class="bi bi-arrow-left me-1"></i> Projelere Dön
-        </a> <a href="/ConstructionProject/Create/@Model.Id" class="btn btn-warning text-dark fw-bold ms-2"><i class="bi bi-magic"></i> Sihirbaza Dön / Düzenle</a>
+        </a> 
+        <div class="dropdown d-inline-block ms-2">
+            <button class="btn btn-outline-secondary rounded-pill px-4 shadow-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                Durum: @Model.Status.ToString().Replace("_", " ")
+            </button>
+            <ul class="dropdown-menu shadow">
+                <li><form asp-action="ChangeProjectStatus" method="post"><input type="hidden" name="id" value="@Model.Id" /><input type="hidden" name="newStatus" value="Aktif_Santiye" /><button type="submit" class="dropdown-item fw-bold text-primary"><i class="bi bi-cone-striped me-2"></i>Aktif Şantiye Yap</button></form></li>
+                <li><form asp-action="ChangeProjectStatus" method="post"><input type="hidden" name="id" value="@Model.Id" /><input type="hidden" name="newStatus" value="Tamamlandi_Teslim" /><button type="submit" class="dropdown-item fw-bold text-success"><i class="bi bi-check-circle-fill me-2"></i>Projeyi Bitir (Biten)</button></form></li>
+                <li><form asp-action="ChangeProjectStatus" method="post"><input type="hidden" name="id" value="@Model.Id" /><input type="hidden" name="newStatus" value="Anlasma_Yapildi" /><button type="submit" class="dropdown-item"><i class="bi bi-handshake me-2"></i>Anlaşma Yapıldı Yap</button></form></li>
+                <li><form asp-action="ChangeProjectStatus" method="post"><input type="hidden" name="id" value="@Model.Id" /><input type="hidden" name="newStatus" value="Projelendirme_Teklif" /><button type="submit" class="dropdown-item"><i class="bi bi-search me-2"></i>Aday Proje Yap</button></form></li>
+                <li><form asp-action="ChangeProjectStatus" method="post"><input type="hidden" name="id" value="@Model.Id" /><input type="hidden" name="newStatus" value="Satista_Topraktan" /><button type="submit" class="dropdown-item"><i class="bi bi-cash-coin me-2"></i>Satışa Çıkar</button></form></li>
+            </ul>
+        </div>
+
+        <a href="/ConstructionProject/Create/@Model.Id" class="btn btn-warning text-dark fw-bold ms-2"><i class="bi bi-magic"></i> Sihirbaza Dön / Düzenle</a>
+        <a asp-action="Feasibility" asp-route-id="@Model.Id" class="btn btn-dark rounded-pill px-4 shadow-sm ms-2">
+            <i class="bi bi-calculator me-1"></i> Aday Fizibilite
+        </a>
         <a asp-controller="ProjectMaterial" asp-action="Index" asp-route-projectId="@Model.Id" class="btn btn-primary rounded-pill px-4 shadow-sm">
             <i class="bi bi-palette me-2"></i> Müşteri Malzeme Kataloğu
         </a>
@@ -73,7 +98,7 @@
                                             @(doc.SystemTemplate?.Name ?? doc.DocumentName)
                                             @if(doc.IsCustom) { <span class="badge bg-info ms-1" title="Sizin Eklediğiniz Özel Evrak">Özel</span> }
                                         </td>
-                                        <td><span class="badge bg-light text-dark border"><i class="bi bi-building"></i> @(doc.AppliedTo ?? doc.SystemTemplate?.IssuedBy ?? "Belirtilmedi")</span></td>
+                                        <td><span class="px-2 py-1 bg-light text-dark border rounded small"><i class="bi bi-building"></i> @(doc.AppliedTo ?? doc.SystemTemplate?.IssuedBy ?? "Belirtilmedi")</span></td>
                                         <td>
                                             @if(!string.IsNullOrEmpty(doc.InstitutionContact)) { <span class="text-primary"><i class="bi bi-person-lines-fill"></i> @doc.InstitutionContact</span> } else { <span class="text-muted fst-italic">Bilinmiyor</span> }
                                         </td>
@@ -83,19 +108,19 @@
                                         <td>
                                             @if (doc.Status == GMK360.Core.Entities.Construction.LegalDocumentStatus.NotApplied)
                                             {
-                                                <span class="badge bg-danger rounded-pill px-3 py-2"><i class="bi bi-x-circle"></i> Yok</span>
+                                                <span class="px-3 py-1 bg-danger text-white rounded-pill small fw-bold"><i class="bi bi-x-circle"></i> Yok</span>
                                             }
                                             else if (doc.Status == GMK360.Core.Entities.Construction.LegalDocumentStatus.Applied)
                                             {
-                                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2"><i class="bi bi-hourglass-split"></i> Başvuruldu</span>
+                                                <span class="px-3 py-1 bg-warning text-dark rounded-pill small fw-bold"><i class="bi bi-hourglass-split"></i> Başvuruldu</span>
                                             }
                                             else if (doc.Status == GMK360.Core.Entities.Construction.LegalDocumentStatus.Issue)
                                             {
-                                                <span class="badge bg-secondary rounded-pill px-3 py-2"><i class="bi bi-exclamation-triangle"></i> Sorun Var</span>
+                                                <span class="px-3 py-1 bg-secondary text-white rounded-pill small fw-bold"><i class="bi bi-exclamation-triangle"></i> Sorun Var</span>
                                             }
                                             else
                                             {
-                                                <span class="badge bg-success rounded-pill px-3 py-2"><i class="bi bi-check-circle"></i> Alındı</span>
+                                                <span class="px-3 py-1 bg-success text-white rounded-pill small fw-bold"><i class="bi bi-check-circle"></i> Alındı</span>
                                             }
                                             @if(doc.ExpiryDate.HasValue && doc.Status == GMK360.Core.Entities.Construction.LegalDocumentStatus.Approved) {
                                                 var days = (doc.ExpiryDate.Value - DateTime.UtcNow).TotalDays;
@@ -111,7 +136,14 @@
                                         <td>
                                             @if(!string.IsNullOrEmpty(doc.Notes)) { <small class="text-muted">@doc.Notes</small> } else { <span class="text-muted">-</span> }
                                         </td>
-                                        <td class="text-end pe-3">
+                                        
+                                            <td class="text-end pe-3">
+                                                @if(!string.IsNullOrEmpty(doc.FilePath))
+                                                {
+                                                    <a href="@doc.FilePath" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill me-1" title="Evrakı Görüntüle">
+                                                        <i class="bi bi-file-earmark-pdf"></i>
+                                                    </a>
+                                                }
                                             <button class="btn btn-sm btn-outline-primary rounded-pill" data-bs-toggle="modal" data-bs-target="#editDocModal_@doc.Id">
                                                 <i class="bi bi-pencil-square"></i> Yönet
                                             </button>
@@ -122,7 +154,7 @@
                                     <div class="modal fade" id="editDocModal_@doc.Id" tabindex="-1">
                                         <div class="modal-dialog">
                                             <div class="modal-content border-0 shadow">
-                                                <form asp-action="UpdateLegalDocumentStatus" asp-controller="ConstructionProject" method="post">
+                                                <form asp-action="UpdateLegalDocumentStatus" asp-controller="ConstructionProject" method="post" enctype="multipart/form-data">
                                                     <div class="modal-header bg-light border-0">
                                                         <h5 class="modal-title text-dark fw-bold"><i class="bi bi-pencil-square text-primary me-2"></i>Evrak / Aşama Yönetimi</h5>
                                                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -144,11 +176,25 @@
                                                             <input type="text" class="form-control border-primary" name="institutionContact" value="@doc.InstitutionContact" placeholder="Örn: İmar Md. Ayşe Hanım">
                                                             <div class="form-text">Devlet veya kurumda işlemleri hızlandıracak temas noktası.</div>
                                                         </div>
+                                                        
                                                         <hr/>
+                                                        
                                                         <div class="mb-3">
                                                             <label class="form-label fw-bold text-danger"><i class="bi bi-person-badge"></i> Sorumlu Takipçi (Personel Ata)</label>
                                                             <input type="text" class="form-control border-danger" name="trackingPerson" value="@doc.TrackingPerson" placeholder="Örn: Proje Müdürü Ahmet Bey">
                                                         </div>
+                                                        
+                                                        <div class="row">
+                                                            <div class="col-md-6 mb-3">
+                                                                <label class="form-label fw-bold text-danger"><i class="bi bi-cash-coin"></i> Belge Maliyeti / Harç (₺)</label>
+                                                                <input type="number" step="0.01" class="form-control" name="documentCost" value="@(doc.DocumentCost?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))" placeholder="Örn: 2500.00">
+                                                            </div>
+                                                            <div class="col-md-6 mb-3">
+                                                                <label class="form-label fw-bold text-info"><i class="bi bi-calendar-plus"></i> Başvuru Tarihi</label>
+                                                                <input type="date" class="form-control" name="applicationDate" value="@(doc.ApplicationDate?.ToString("yyyy-MM-dd"))">
+                                                            </div>
+                                                        </div>
+
                                                         <div class="mb-3">
                                                             <label class="form-label fw-bold">Evrak / Başvuru Durumu</label>
                                                             <select class="form-select" name="statusId">
@@ -162,10 +208,29 @@
                                                             <label class="form-label fw-bold">Açıklama / Süreç Notları</label>
                                                             <textarea class="form-control" name="notes" rows="3" placeholder="Örn: Belediye reddetti çünkü projede eksiklik var...">@doc.Notes</textarea>
                                                         </div>
-                                                        <div class="mb-3">
-                                                            <label class="form-label fw-bold text-warning"><i class="bi bi-calendar-x"></i> Geçerlilik Bitiş Tarihi</label>
-                                                            <input type="date" class="form-control" name="expiryDate" value="@(doc.ExpiryDate?.ToString("yyyy-MM-dd"))">
-                                                            <small class="text-muted">Evrakın bir geçerlilik süresi varsa (örn: SGK dosyası, Yapı Ruhsatı süresi) giriniz. Yaklaşınca uyarı verilecektir.</small>
+                                                        
+                                                        <hr/>
+                                                        
+                                                        <div class="row bg-light rounded p-3 mb-3 border">
+                                                            <h6 class="fw-bold text-success mb-3"><i class="bi bi-check-circle"></i> Onay ve Bitiş Aşaması</h6>
+                                                            <div class="col-md-6 mb-3">
+                                                                <label class="form-label fw-bold text-success"><i class="bi bi-calendar-check"></i> Alındığı Tarih</label>
+                                                                <input type="date" class="form-control" name="acquiredDate" value="@(doc.AcquiredDate?.ToString("yyyy-MM-dd"))">
+                                                            </div>
+                                                            <div class="col-md-6 mb-3">
+                                                                <label class="form-label fw-bold text-warning"><i class="bi bi-calendar-x"></i> Geçerlilik Bitiş Tarihi</label>
+                                                                <input type="date" class="form-control" name="expiryDate" value="@(doc.ExpiryDate?.ToString("yyyy-MM-dd"))">
+                                                            </div>
+                                                            <div class="col-12 mt-2">
+                                                                <label class="form-label fw-bold text-primary"><i class="bi bi-file-earmark-pdf"></i> Evrak/Makbuz Yükle (PDF/Görsel)</label>
+                                                                <input type="file" class="form-control" name="documentFile" accept=".pdf,image/*">
+                                                                @if(!string.IsNullOrEmpty(doc.FilePath))
+                                                                {
+                                                                    <div class="mt-2 small">
+                                                                        <a href="@doc.FilePath" target="_blank" class="text-primary fw-bold"><i class="bi bi-paperclip"></i> Mevcut Dosyayı Görüntüle</a>
+                                                                    </div>
+                                                                }
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     <div class="modal-footer bg-light">
@@ -530,7 +595,7 @@
                     <div class="card-body p-4">
                         <div class="d-flex justify-content-between align-items-start mb-3">
                             <h5 class="fw-bold text-navy mb-0">@block.BlockName</h5>
-                            <span class="badge bg-light text-dark border"><i class="bi bi-layers me-1"></i>@(block.TotalFloors ?? 0) Kat</span>
+                            <span class="px-2 py-1 bg-light text-dark border rounded small"><i class="bi bi-layers me-1"></i>@(block.TotalFloors ?? 0) Kat</span>
                         </div>
                         
                         <div class="d-flex justify-content-between text-muted small mb-4">
@@ -562,3 +627,28 @@
 
 
 
+
+<!-- Unlock Password Modal -->
+<div class="modal fade" id="unlockModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-danger text-white border-0 rounded-top-4">
+                <h5 class="modal-title fw-bold"><i class="bi bi-exclamation-triangle-fill me-2"></i>Kilitli Proje Revizyonu</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="ToggleProjectLock" method="post">
+                <div class="modal-body p-4 text-center">
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <i class="bi bi-shield-lock text-danger" style="font-size: 3rem;"></i>
+                    <h5 class="fw-bold mt-3">Süper Yönetici İzni Gerekiyor</h5>
+                    <p class="text-muted small">Bu projenin keşif ve metraj verileri kesinleştirilmiştir (Baseline). Taşeron sözleşmeleri ve hakedişler bu kilitli listeye bağlıdır. Eğer kesin bir mimari revizyon varsa kilidi açmak için lütfen Sistem Şifresini (Demo için: 1453) giriniz.</p>
+                    <input type="password" name="password" class="form-control text-center fs-4 fw-bold letter-spacing-2" placeholder="****" required />
+                </div>
+                <div class="modal-footer border-0 bg-light rounded-bottom-4">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">Kilidi Aç</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

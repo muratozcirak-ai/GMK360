@@ -22,15 +22,20 @@ namespace GMK360.Web.Controllers
             _context = context;
         }
 
-        private int GetCurrentAgencyId()
+        private async Task<int> GetCurrentAgencyIdAsync()
         {
-            var claim = User.FindFirst("AgencyId");
-            return claim != null ? int.Parse(claim.Value) : 0;
+            var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(currentUserId)) return 0;
+            
+            return await _context.AgencyConsultants
+                .Where(a => a.UserId == currentUserId)
+                .Select(a => a.AgencyId)
+                .FirstOrDefaultAsync();
         }
 
         public async Task<IActionResult> Index(string context = "construction", int? projectId = null, string category = null, int? year = null)
         {
-            var agencyId = GetCurrentAgencyId();
+            var agencyId = await GetCurrentAgencyIdAsync();
             
             var query = _context.DocumentArchives
                 .Include(d => d.Project)
@@ -59,7 +64,16 @@ namespace GMK360.Web.Controllers
             ViewBag.CurrentYear = year ?? DateTime.Now.Year;
 
             // Kategorileri listelemek için
-            ViewBag.Categories = new[] { "Sözleşmeler", "Tutanaklar", "Projeler/Çizimler", "Ruhsatlar/İzinler", "Faturalar/Fişler", "Diğer" };
+            var existingCategories = await _context.DocumentArchives
+                .Where(d => d.AgencyId == agencyId && !d.IsDeleted)
+                .Select(d => d.Category)
+                .Distinct()
+                .ToListAsync();
+            
+            var defaultCategories = new[] { "Sözleşmeler", "Çizimler", "Bina Görselleri", "Resmi Evraklar", "Tutanaklar", "Faturalar/Fişler", "Fazlar", "Diğer" };
+            var allCategories = defaultCategories.Union(existingCategories.Where(c => !string.IsNullOrEmpty(c))).Distinct().ToList();
+            
+            ViewBag.Categories = allCategories.ToArray();
             
             if (context == "construction")
             {
@@ -72,7 +86,7 @@ namespace GMK360.Web.Controllers
         [HttpPost]
         public async Task<IActionResult> UploadManual(IFormFile file, string category, int? year, int? projectId, string notes)
         {
-            var agencyId = GetCurrentAgencyId();
+            var agencyId = await GetCurrentAgencyIdAsync();
 
             if (file != null && file.Length > 0)
             {
@@ -112,7 +126,7 @@ namespace GMK360.Web.Controllers
         [HttpPost]
         public async Task<IActionResult> Delete(int id)
         {
-            var agencyId = GetCurrentAgencyId();
+            var agencyId = await GetCurrentAgencyIdAsync();
             var doc = await _context.DocumentArchives.FirstOrDefaultAsync(d => d.Id == id && d.AgencyId == agencyId);
             
             if (doc != null)

@@ -1,10 +1,13 @@
-﻿namespace GMK360.Core.Entities.Construction
+namespace GMK360.Core.Entities.Construction
 {
     public enum ProjectStatus
     {
-        Projelendirme_Teklif = 1, // Henüz anlaşılmamış, üzerinde çalışılan
-        Aktif_Santiye = 2,        // Anlaşılmış, çarkların döndüğü güncel şantiye
-        Tamamlandi_Teslim = 3,    // Biten, referans olarak web sitesine konacaklar
-        Satista_Topraktan = 4     // Satış ofisi için açık olan / topraktan satış
+        On_Gorusme_Talep = 0,     // İlk temas, Kentsel Dönüşüm / Fizibilite Aşaması
+        Projelendirme_Teklif = 1, // Aday Projeler
+        Aktif_Santiye = 2,        // Aktif Şantiyeler
+        Tamamlandi_Teslim = 3,    // Biten
+        Satista_Topraktan = 4,    // Satışa Çıkanlar
+        Anlasma_Yapildi = 5,      // Anlaşma Yapılanlar
+        Anlasma_Olmayan_Iptal = 6 // Anlaşma Olmayan
     }
 }

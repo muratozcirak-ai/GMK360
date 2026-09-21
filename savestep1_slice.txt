@@ -1,0 +1,40 @@
+                return Json(new { success = true, draftId = project.Id, projectId = project.Id });
+
+            } catch (Exception ex) {
+
+                return Json(new { success = false, message = ex.Message + (ex.InnerException != null ? " - " + ex.InnerException.Message : "") });
+
+            }
+
+        }
+
+
+
+        [HttpPost]
+
+        public async Task<IActionResult> SaveStep2([FromForm] GMK360.Web.Models.CreateProjectWizardViewModel model)
+
+        {
+
+            try {
+
+                if (model.DraftProjectId == 0) return Json(new { success = false, message = "Proje ID bulunamad─▒." });
+
+                var project = await _context.ConstructionProjects.Include(p => p.Blocks).FirstOrDefaultAsync(p => p.Id == model.DraftProjectId);
+
+                if (project == null) return Json(new { success = false, message = "Proje bulunamad─▒." });
+
+
+
+                if (model.Blocks != null)
+
+                {
+
+                    var existingBlocks = project.Blocks?.ToList() ?? new System.Collections.Generic.List<GMK360.Core.Entities.Building>();
+
+                    var currentBlockNames = model.Blocks.Select(b => b.BlockName).ToList();
+
+
+
+                    // Sadece formda olmayan eski bloklar─▒ sil
+

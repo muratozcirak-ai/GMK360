@@ -24,7 +24,14 @@ namespace GMK360.Core.Entities.Construction
         public string Status { get; set; } = "Bekliyor"; // Bekliyor, Devam Ediyor, Tamamland
         public int OrderIndex { get; set; }
 
+        
         public PhaseItemType ItemType { get; set; } = PhaseItemType.Genel;
+
+        // --- KEŞİF / BÜTÇE PLANLAMA (Aday Proje Aşamasında Girilen Veriler) ---
+        public decimal? EstimatedBudget { get; set; } // Planlanan Maliyet
+        public decimal? EstimatedQuantity { get; set; } // Planlanan Miktar (Metraj)
+        public string? Unit { get; set; } // Birim (m2, m3, Adet, kg vb.)
+
 
         public ICollection<TaskCost> TaskCosts { get; set; }
         public ICollection<TaskDocument> TaskDocuments { get; set; }

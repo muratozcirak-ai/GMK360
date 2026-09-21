@@ -1,72 +1,76 @@
-﻿import codecs
+﻿import re
 
-filepath = r'C:\Users\murat\source\repos\GMK360\GMK360.Web\Views\Shared\_ConstructionLayout.cshtml'
-
-with codecs.open(filepath, 'r', 'utf-8-sig') as f:
+with open(r"GMK360.Web\Views\DocumentArchive\Index.cshtml", "r", encoding="utf-8") as f:
     content = f.read()
 
-# Add injection
-if 'UserManager<ApplicationUser>' not in content:
-    content = content.replace('@using Microsoft.AspNetCore.Http', '@using Microsoft.AspNetCore.Identity\n@using GMK360.Core.Entities.Identity\n@inject UserManager<ApplicationUser> UserManager\n@using Microsoft.AspNetCore.Http')
-
-# Add modal logic inside body
-modal_html = '''
-@{
-    var appUser = await UserManager.GetUserAsync(User);
-    bool needsMapConsent = appUser != null && !appUser.HasMapConsent;
-}
-@if(needsMapConsent)
-{
-    <div class="modal fade" id="mapConsentModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 shadow-lg rounded-4">
-                <div class="modal-body p-5 text-center">
-                    <div class="mb-4">
-                        <i class="bi bi-geo-alt-fill text-primary" style="font-size: 3rem;"></i>
+modal_html = """
+<!-- Yeni Belge Yükle Modal -->
+<div class="modal fade" id="uploadDocModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form asp-action="UploadManual" asp-controller="DocumentArchive" method="post" enctype="multipart/form-data">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-primary text-white border-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-cloud-upload me-2"></i> Belge Yükle</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Dosya Seçin</label>
+                        <input type="file" name="file" class="form-control" required />
                     </div>
-                    <h4 class="fw-bold mb-3">Google Haritalar & Lojistik İzni</h4>
-                    <p class="text-muted mb-4">
-                        Şantiyelerimize lojistik erişimi kolaylaştırmak ve operasyonları hızlandırmak amacıyla, proje konumlarının ve firma bilgilerinizin Google Haritalar altyapısında işlenmesine / paylaşılmasına izin veriyor musunuz?
-                    </p>
-                    <div class="d-grid gap-2">
-                        <button type="button" class="btn btn-primary rounded-pill py-2" onclick="acceptMapConsent()">
-                            <i class="bi bi-check2-circle me-1"></i> Okudum, Onaylıyorum
-                        </button>
-                        <button type="button" class="btn btn-light rounded-pill text-muted" data-bs-dismiss="modal">
-                            Daha Sonra
-                        </button>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Kategori (Raf)</label>
+                        <select name="category" class="form-select" required>
+                            @foreach (var cat in categories)
+                            {
+                                <option value="@cat">@cat</option>
+                            }
+                        </select>
                     </div>
-                    <div class="mt-3 small text-muted">
-                        <i class="bi bi-shield-lock me-1"></i> Tüm verileriniz KVKK kapsamında korunmaktadır.
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">İlgili Proje (Dolap)</label>
+                        <select name="projectId" class="form-select">
+                            <option value="">-- Projeden Bağımsız --</option>
+                            @if(projects != null)
+                            {
+                                foreach (var p in projects)
+                                {
+                                    if (selectedProjectId == p.Id)
+                                    {
+                                        <option value="@p.Id" selected>@p.Name</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@p.Id">@p.Name</option>
+                                    }
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">İlgili Yıl</label>
+                        <input type="number" name="year" class="form-control" value="@DateTime.Now.Year" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Açıklama / Not (Opsiyonel)</label>
+                        <textarea name="notes" class="form-control" rows="2"></textarea>
                     </div>
                 </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary px-4"><i class="bi bi-upload me-2"></i> Yükle ve Kaydet</button>
+                </div>
             </div>
-        </div>
+        </form>
     </div>
+</div>
+"""
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var consentModal = new bootstrap.Modal(document.getElementById('mapConsentModal'));
-            consentModal.show();
-        });
+if "id=\"uploadDocModal\"" not in content:
+    content = content + "\n" + modal_html
+    with open(r"GMK360.Web\Views\DocumentArchive\Index.cshtml", "w", encoding="utf-8") as f:
+        f.write(content)
+    print("Added uploadDocModal.")
+else:
+    print("uploadDocModal already exists.")
 
-        function acceptMapConsent() {
-            fetch('/Profile/AcceptMapConsent', {
-                method: 'POST',
-                headers: {
-                    'RequestVerificationToken': document.querySelector('input[name=""__RequestVerificationToken""]')?.value || ''
-                }
-            }).then(res => {
-                var consentModal = bootstrap.Modal.getInstance(document.getElementById('mapConsentModal'));
-                consentModal.hide();
-                window.location.reload();
-            });
-        }
-    </script>
-}
-'''
-
-content = content.replace('<!-- Ana İçerik -->', modal_html + '\n        <!-- Ana İçerik -->')
-
-with codecs.open(filepath, 'w', 'utf-8-sig') as f:
-    f.write(content)

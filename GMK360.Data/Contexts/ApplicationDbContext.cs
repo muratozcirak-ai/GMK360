@@ -204,6 +204,8 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         // ?n?aat ve ?antiye Y?netimi (Kentsel D?n???m ERP)
         public DbSet<GMK360.Core.Entities.Construction.AgencyPhonebook> AgencyPhonebooks { get; set; }
         public DbSet<ConstructionProject> ConstructionProjects { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.ProjectOwner> ProjectOwners { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.ProjectOwnerDebt> ProjectOwnerDebts { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.AgendaRecord> AgendaRecords { get; set; }
           public DbSet<GMK360.Core.Entities.Construction.AgendaItem> AgendaItems { get; set; }
           public DbSet<GMK360.Core.Entities.Construction.AgendaParticipant> AgendaParticipants { get; set; }

@@ -291,7 +291,39 @@ namespace GMK360.Web.Controllers
         public IActionResult Projelerim() => RedirectToAction("Index", "ConstructionProject");
 
         [Authorize(Roles = "InsaatFirmasi,Corporate,Admin")]
-        public IActionResult SiteYonetimi() => View();
+        public async Task<IActionResult> SiteYonetimi()
+        {
+            var user = await _userManager.GetUserAsync(User);
+            var consultant = await _context.AgencyConsultants.FirstOrDefaultAsync(c => c.UserId == user.Id);
+            if (consultant == null) return Unauthorized();
+
+            var agency = await _context.Agencies.FirstOrDefaultAsync(a => a.Id == consultant.AgencyId);
+            var projects = await _context.ConstructionProjects
+                .Where(p => p.AgencyId == consultant.AgencyId)
+                .OrderByDescending(p => p.CreatedAt)
+                .ToListAsync();
+
+            ViewBag.AgencyName = agency?.CompanyName ?? "Firmam";
+            return View(projects);
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "InsaatFirmasi,Corporate,Admin")]
+        public async Task<IActionResult> ToggleWebPublish(int projectId, bool isPublished)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            var consultant = await _context.AgencyConsultants.FirstOrDefaultAsync(c => c.UserId == user.Id);
+            if (consultant == null) return Json(new { success = false });
+
+            var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == consultant.AgencyId);
+            if (project != null)
+            {
+                project.IsPublishedOnWeb = isPublished;
+                await _context.SaveChangesAsync();
+                return Json(new { success = true });
+            }
+            return Json(new { success = false });
+        }
     }
 }
 

@@ -772,6 +772,24 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
                 _context.CrmContacts.Add(crmContact);
                 await _context.SaveChangesAsync();
 
+                // İnşaat Rehberine de ekle (AgencyPhonebook)
+                var agencyId = await GetUserAgencyIdAsync();
+                int actualAgencyId = agencyId ?? 1;
+                  if (true)
+                {
+                    var phonebook = new GMK360.Core.Entities.Construction.AgencyPhonebook
+                    {
+                        AgencyId = actualAgencyId,
+                        Name = $"{crmContact.FirstName} {crmContact.LastName}".Trim(),
+                        PhoneNumber = phone ?? "",
+                        Email = email,
+                        ContactType = 7, // 7 = Müşteri & Kat Maliki
+                        IsRegistered = false
+                    };
+                    _context.AgencyPhonebooks.Add(phonebook);
+                    await _context.SaveChangesAsync();
+                }
+
                 var projectOwner = new GMK360.Core.Entities.Construction.ProjectOwner
                 {
                     ConstructionProjectId = projectId,
@@ -838,8 +856,8 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
                     {
                         var crmContact = new GMK360.Core.Entities.CrmContact
                         {
-                            FirstName = owner.FirstName,
-                            LastName = owner.LastName,
+                            FirstName = owner.FirstName ?? "",
+                            LastName = owner.LastName ?? "",
                             PhoneNumber = owner.PhoneNumber,
                             Email = owner.Email,
                             ContactType = owner.IsRepresentative ? "Proje Temsilcisi" : "Kat Maliki",
@@ -847,6 +865,23 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
                         };
                         _context.CrmContacts.Add(crmContact);
                         await _context.SaveChangesAsync();
+
+                        // İnşaat Rehberine de ekle (AgencyPhonebook)
+                        int actualAgencyId = agencyId ?? 1;
+                  if (true)
+                        {
+                            var phonebook = new GMK360.Core.Entities.Construction.AgencyPhonebook
+                            {
+                                AgencyId = actualAgencyId,
+                                Name = $"{crmContact.FirstName} {crmContact.LastName}".Trim(),
+                                PhoneNumber = owner.PhoneNumber ?? "",
+                                Email = owner.Email,
+                                ContactType = 7, // 7 = Müşteri & Kat Maliki
+                                IsRegistered = false
+                            };
+                            _context.AgencyPhonebooks.Add(phonebook);
+                            await _context.SaveChangesAsync();
+                        }
 
                         var projectOwner = new GMK360.Core.Entities.Construction.ProjectOwner
                         {
@@ -4298,43 +4333,101 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
         }
 
+
+        [HttpGet]
+        public async Task<IActionResult> Feasibility(int id)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var project = await _context.ConstructionProjects
+                .Include(p => p.KatMalikleri)
+                    .ThenInclude(po => po.Contact)
+                .Include(p => p.KatMalikleri)
+                    .ThenInclude(po => po.Debts)
+                .FirstOrDefaultAsync(p => p.Id == id && p.AgencyId == agencyId);
+
+            if (project == null) return NotFound();
+
+            var vm = new GMK360.Web.Models.FeasibilityViewModel
+            {
+                ProjectId = project.Id,
+                ProjectName = project.Name,
+                EskiKatSayisi = project.EskiKatSayisi,
+                EskiDaireSayisi = project.EskiDaireSayisi,
+                EskiToplamMetrekare = project.EskiToplamMetrekare
+            };
+
+            // Calculate sample current debts if they exist
+            foreach (var owner in project.KatMalikleri)
+            {
+                vm.Owners.Add(new GMK360.Web.Models.ProjectOwnerViewModel
+                {
+                    OwnerId = owner.Id,
+                    FullName = owner.Contact != null ? $"{owner.Contact.FirstName} {owner.Contact.LastName}" : "Bilinmiyor",
+                    PhoneNumber = owner.Contact?.PhoneNumber,
+                    FlatNumber = owner.FlatNumber,
+                    LandShare = owner.LandShare ?? 0,
+                    CalculatedDebt = owner.Debts?.Sum(d => d.DebtAmount) ?? 0
+                });
+            }
+
+            return View(vm);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> SaveFeasibility(GMK360.Web.Models.FeasibilityViewModel model)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Json(new { success = false, message = "Yetkisiz erişim." });
+
+            var project = await _context.ConstructionProjects
+                .Include(p => p.KatMalikleri)
+                .FirstOrDefaultAsync(p => p.Id == model.ProjectId && p.AgencyId == agencyId);
+
+            if (project == null) return Json(new { success = false, message = "Proje bulunamadı." });
+
+            try
+            {
+                // Save debts
+                foreach (var ownerVm in model.Owners)
+                {
+                    var owner = project.KatMalikleri.FirstOrDefault(o => o.Id == ownerVm.OwnerId);
+                    if (owner != null)
+                    {
+                        owner.LandShare = ownerVm.LandShare;
+                        
+                        // Overwrite or create debt record
+                        var existingDebt = await _context.ProjectOwnerDebts.FirstOrDefaultAsync(d => d.ProjectOwnerId == owner.Id);
+                        if (existingDebt == null && ownerVm.CalculatedDebt > 0)
+                        {
+                            _context.ProjectOwnerDebts.Add(new GMK360.Core.Entities.Construction.ProjectOwnerDebt
+                            {
+                                ProjectOwnerId = owner.Id,
+                                Description = "Fizibilite - Kentsel Dönüşüm Finansman Açığı",
+                                DebtAmount = ownerVm.CalculatedDebt,
+                                DueDate = DateTime.Now.AddMonths(6),
+                                IsPaid = false
+                            });
+                        }
+                        else if (existingDebt != null)
+                        {
+                            existingDebt.DebtAmount = ownerVm.CalculatedDebt;
+                            if (ownerVm.CalculatedDebt == 0)
+                            {
+                                _context.ProjectOwnerDebts.Remove(existingDebt);
+                            }
+                        }
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+    }
 }
-
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
