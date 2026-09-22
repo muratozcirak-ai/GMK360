@@ -222,6 +222,24 @@ namespace GMK360.Web.Controllers
 
 
 
+            
+            // Fetch images from DocumentArchive dynamically if they exist (in case user uploaded manually)
+            var sahaGorseli = await _context.DocumentArchives
+                .Where(d => d.SourceModule == "Construction" && d.ProjectId == id && d.Category == "Saha Görseli")
+                .OrderByDescending(d => d.Id)
+                .FirstOrDefaultAsync();
+            if (sahaGorseli != null) {
+                ViewBag.CurrentStateImageUrl = sahaGorseli.DocumentUrl;
+            }
+            
+            var projeGorseli = await _context.DocumentArchives
+                .Where(d => d.SourceModule == "Construction" && d.ProjectId == id && (d.Category == "Bina Görselleri" || d.Category == "Proje Görseli"))
+                .OrderByDescending(d => d.Id)
+                .FirstOrDefaultAsync();
+            if (projeGorseli != null) {
+                ViewBag.CoverImageUrl = projeGorseli.DocumentUrl;
+            }
+            
             var project = await _context.ConstructionProjects
 
                 .Include(c => c.Phases)
@@ -649,7 +667,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
                     {
 
-                        var existingBlock = existingBlocks.FirstOrDefault(eb => eb.BlockName == b.BlockName);
+                        var existingBlock = existingBlocks.FirstOrDefault(eb => eb.BlockName == b.BlockName && eb.IsExistingBuilding == b.IsExistingBuilding);
 
                         if (existingBlock != null)
 
@@ -1163,7 +1181,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
                 [HttpPost]
 
-        public async Task<IActionResult> UpdateProjectLandArea(int projectId, double? totalLandArea, double? landscapeArea)
+        public async Task<IActionResult> UpdateProjectLandArea(int projectId, double? totalLandArea, double? landscapeArea, bool isExisting = false)
 
         {
 
@@ -1183,11 +1201,11 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
             }
 
-            return RedirectToAction(nameof(Amenities), new { projectId = projectId });
+            return RedirectToAction(nameof(Amenities), new { projectId = projectId, isExisting = isExisting });
 
         }
 
-        public async Task<IActionResult> Amenities(int projectId)
+        public async Task<IActionResult> Amenities(int projectId, bool isExisting = false)
 
         {
 
@@ -1223,7 +1241,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
                 [HttpPost]
 
-        public async Task<IActionResult> EditAmenity(int projectId, int amenityId, string name, double? squareMeters, string description)
+        public async Task<IActionResult> EditAmenity(int projectId, int amenityId, string name, double? squareMeters, string description, bool isExisting = false)
 
         {
 
@@ -1245,13 +1263,13 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
             }
 
-            return RedirectToAction(nameof(Amenities), new { projectId = projectId });
+            return RedirectToAction(nameof(Amenities), new { projectId = projectId, isExisting = isExisting });
 
         }
 
         [HttpPost]
 
-        public async Task<IActionResult> AddAmenity(int projectId, string name, string type, double? squareMeters, string description)
+        public async Task<IActionResult> AddAmenity(int projectId, string name, string type, double? squareMeters, string description, bool isExisting = false)
 
         {
 
@@ -1281,7 +1299,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
             TempData["SuccessMessage"] = "Yeni Sosyal Donatı / Açık Alan eklendi.";
 
-            return RedirectToAction(nameof(Amenities), new { projectId = projectId });
+            return RedirectToAction(nameof(Amenities), new { projectId = projectId, isExisting = isExisting });
 
         }
 
@@ -1289,7 +1307,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
         [HttpPost]
 
-        public async Task<IActionResult> DeleteAmenity(int amenityId, int projectId)
+        public async Task<IActionResult> DeleteAmenity(int amenityId, int projectId, bool isExisting = false)
 
         {
 
@@ -1307,7 +1325,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
             }
 
-            return RedirectToAction(nameof(Amenities), new { projectId = projectId });
+            return RedirectToAction(nameof(Amenities), new { projectId = projectId, isExisting = isExisting });
 
         }
 
@@ -1315,7 +1333,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
         [HttpPost]
 
-        public async Task<IActionResult> ToggleAmenityStatus(int amenityId, int projectId)
+        public async Task<IActionResult> ToggleAmenityStatus(int amenityId, int projectId, bool isExisting = false)
 
         {
 
@@ -1333,7 +1351,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
             }
 
-            return RedirectToAction(nameof(Amenities), new { projectId = projectId });
+            return RedirectToAction(nameof(Amenities), new { projectId = projectId, isExisting = isExisting });
 
         }
 
@@ -2459,7 +2477,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
         [HttpPost]
 
-        public async Task<IActionResult> AddCustomLegalDocument(int projectId, string documentName, string appliedTo, string institutionPhone, string trackingPerson)
+        public async Task<IActionResult> AddCustomLegalDocument(int projectId, string customName, string appliedTo, string institutionPhone, string trackingPerson, string stage)
 
         {
 
@@ -2475,7 +2493,8 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
                 ConstructionProjectId = projectId,
 
-                DocumentName = documentName,
+                DocumentName = customName,
+                Stage = stage,
 
                 AppliedTo = appliedTo,
 

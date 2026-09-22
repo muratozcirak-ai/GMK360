@@ -1,12 +1,12 @@
 ﻿@model GMK360.Core.Entities.Construction.ConstructionProject
 
 @{
-    ViewData["Title"] = "Sosyal Donatılar ve Dış Alanlar";
+    ViewData["Title"] = ViewBag.IsExisting == true ? "Sosyal Donatılar (Eski Durum)" : "Sosyal Donatılar (Hedef Durum)";
 }
 
 <div class="d-flex justify-content-between align-items-center mb-5">
     <div>
-        <h3 class="fw-bolder text-dark mb-1">Sosyal Donatılar ve Dış Alanlar</h3>
+        <h3 class="fw-bolder text-dark mb-1">Sosyal Donatılar ve Dış Alanlar <span class="badge badge-light-@(ViewBag.IsExisting == true ? "danger" : "primary") ms-2 fs-5">@(ViewBag.IsExisting == true ? "ESKİ (YIKILACAK) DURUM" : "YENİ (HEDEF) DURUM")</span></h3>
         <span class="text-muted fw-bold fs-6">@Model.Name - @Model.Amenities.Count() Alan Bulunuyor</span>
     </div>
     <div>
@@ -55,8 +55,9 @@
                 
                 @{
                     double totalLand = Model.TotalLandArea ?? 0;
-                    double totalBlocksFootprint = Model.Blocks?.Sum(b => b.BaseArea ?? 0) ?? 0;
-                    double totalAmenities = Model.Amenities?.Sum(a => a.SquareMeters ?? 0) ?? 0;
+                    bool isEx = ViewBag.IsExisting == true;
+                      double totalBlocksFootprint = Model.Blocks?.Where(b => b.IsExistingBuilding == isEx).Sum(b => b.BaseArea ?? 0) ?? 0;
+                    double totalAmenities = Model.Amenities?.Where(a => a.IsExisting == isEx).Sum(a => a.SquareMeters ?? 0) ?? 0;
                     double remainingSpace = totalLand - totalBlocksFootprint - totalAmenities;
                     
                     // Progress bar math
@@ -69,10 +70,10 @@
                     <span class="fw-bolder fs-5 text-dark">@totalBlocksFootprint m²</span>
                 </div>
                 <!-- Blok Detayları Listesi -->
-                @if(Model.Blocks != null && Model.Blocks.Any())
+                @if(Model.Blocks != null && Model.Blocks.Any(b => b.IsExistingBuilding == isEx))
                 {
                     <div class="bg-light rounded p-3 mb-3">
-                        @foreach(var block in Model.Blocks)
+                        @foreach(var block in Model.Blocks.Where(b => b.IsExistingBuilding == isEx))
                         {
                             <div class="d-flex justify-content-between text-muted small mb-1">
                                 <span><i class="bi bi-building me-1"></i> @block.Name</span>
@@ -175,7 +176,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var item in Model.Amenities.OrderBy(a => a.Type).ThenBy(a => a.Name))
+                                @foreach (var item in Model.Amenities.Where(a => a.IsExisting == isEx).OrderBy(a => a.Type).ThenBy(a => a.Name))
                                 {
                                     <tr>
                                         <td>
