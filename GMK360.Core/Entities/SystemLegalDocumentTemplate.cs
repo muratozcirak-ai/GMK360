@@ -5,6 +5,7 @@ namespace GMK360.Core.Entities
     public class SystemLegalDocumentTemplate : BaseEntity
     {
         public string Name { get; set; }
+        public string? Stage { get; set; }
         
         // e.g. "Construction", "RealEstate", "ServiceProvider"
         public string TargetModule { get; set; } 

@@ -19,6 +19,7 @@ namespace GMK360.Core.Entities.Construction
         public SystemLegalDocumentTemplate SystemTemplate { get; set; }
 
         public string DocumentName { get; set; }
+        public string? Stage { get; set; }
         
         public LegalDocumentStatus Status { get; set; } = LegalDocumentStatus.NotApplied;
         public string? Notes { get; set; }

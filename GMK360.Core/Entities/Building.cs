@@ -75,6 +75,7 @@ namespace GMK360.Core.Entities
         public ICollection<ComplexFeature> Features { get; set; } = new List<ComplexFeature>();
         
         public bool HasBlocks { get; set; } = false;
+        public bool IsExistingBuilding { get; set; } = false; // Kentsel Dönüşümde yıkılacak bina mı?
         public ICollection<ComplexBlock> Blocks { get; set; } = new List<ComplexBlock>();
         
         public DateTime CreatedAt { get; set; } = DateTime.Now;

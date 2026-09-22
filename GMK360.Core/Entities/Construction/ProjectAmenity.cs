@@ -23,5 +23,6 @@ namespace GMK360.Core.Entities.Construction
         public string? Description { get; set; }
 
         public bool IsCompleted { get; set; } = false;
+        public bool IsExisting { get; set; } = false;
     }
 }

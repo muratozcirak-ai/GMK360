@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
@@ -66,6 +66,8 @@ namespace GMK360.Web.Models
         public int? TargetTotalShops { get; set; }
 
         public List<WizardBlockItem> Blocks { get; set; } = new List<WizardBlockItem>();
+        public List<WizardBlockItem> ExistingBlocks { get; set; } = new List<WizardBlockItem>();
+        public List<WizardBlockItem> TargetBlocks { get; set; } = new List<WizardBlockItem>();
         public List<WizardOwnerItem> Owners { get; set; } = new List<WizardOwnerItem>();
     }
     
@@ -79,6 +81,7 @@ namespace GMK360.Web.Models
           public string? Email { get; set; }
           public string? UnitType { get; set; }
         public bool IsRepresentative { get; set; }
+        public int Quantity { get; set; } = 1;
     }
 
     public class WizardBlockItem
@@ -91,6 +94,8 @@ namespace GMK360.Web.Models
         public int TotalShops { get; set; }
         public bool HasRoof { get; set; }
         public bool HasGroundFloor { get; set; } = true;
+        public bool IsExistingBuilding { get; set; } = false;
+        public string? LayoutPattern { get; set; } // Ortak Baza, Bağımsız (Tek Temel) vb.
     }
 }
 
