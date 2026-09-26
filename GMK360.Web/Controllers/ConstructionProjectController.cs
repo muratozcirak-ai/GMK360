@@ -440,7 +440,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
                             HasGroundFloor = b.HasGroundFloor,
                             HasRoof = b.HasRoof,
                             IsExistingBuilding = true,
-                            LayoutPattern = b.LayoutPattern
+                            LayoutPattern = b.LayoutPattern, BuildingAge = b.BuildingAge
                         }).ToList();
 
                         model.TargetBlocks = draft.Blocks.Where(b => !b.IsExistingBuilding).Select(b => new GMK360.Web.Models.WizardBlockItem {
@@ -529,7 +529,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
                 project.Address = model.Address;
                 project.StartDate = model.StartDate;
                 if (model.EndDate > DateTime.MinValue) project.EndDate = model.EndDate;
-                project.Status = (GMK360.Core.Entities.Construction.ProjectStatus)model.StatusId;
+                // project.Status removed to prevent unwanted status changes.
                 project.ProjectType = model.ProjectType;
                 project.ProjectOriginId = model.ProjectOriginId > 0 ? model.ProjectOriginId : null;
                 project.IsNewDesignForExisting = model.IsNewDesignForExisting;
@@ -923,7 +923,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
                 // If project status is still Aday, leave it. Otherwise set to 1.
                 // Wait, if it was 0, it should remain 0! The form posts StatusId.
-                project.Status = (GMK360.Core.Entities.Construction.ProjectStatus)model.StatusId;
+                // project.Status removed to prevent unwanted status changes.
                 await _context.SaveChangesAsync();
 
 
@@ -4531,4 +4531,5 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
     }
 }
+
 

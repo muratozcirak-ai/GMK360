@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
@@ -17,7 +17,7 @@ namespace GMK360.Web.Models
         public string? ProjectType { get; set; }
         public int StatusId { get; set; } = 1;
         
-        // Kentsel Dönüşüm / Aday Proje Kayıtları
+        // Kentsel DÃ¶nÃ¼ÅŸÃ¼m / Aday Proje KayÄ±tlarÄ±
         public int? ProjectOriginId { get; set; }
         public string? ProjectOwnerContact { get; set; }
         public int? EskiKatSayisi { get; set; }
@@ -95,9 +95,11 @@ namespace GMK360.Web.Models
         public bool HasRoof { get; set; }
         public bool HasGroundFloor { get; set; } = true;
         public bool IsExistingBuilding { get; set; } = false;
-        public string? LayoutPattern { get; set; } // Ortak Baza, Bağımsız (Tek Temel) vb.
+        public int? BuildingAge { get; set; }
+        public string? LayoutPattern { get; set; } // Ortak Baza, BaÄŸÄ±msÄ±z (Tek Temel) vb.
     }
 }
+
 
 
 

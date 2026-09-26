@@ -110,7 +110,7 @@
                                                                                 <div class="modal-body">
                       <div class="mb-3">
                           <label class="form-label fw-bold text-primary">Hangi Proje / Şantiye İçin?</label>
-                          <select name="projectId" class="form-select border-primary" required>
+                          <select name="projectId" id="quoteProjectId" class="form-select border-primary" required>
                               <option value="">-- Lütfen Proje Seçiniz --</option>
                               @if (ViewBag.Projects != null)
                               {
@@ -120,6 +120,20 @@
                                   }
                               }
                           </select>
+                      </div>
+                      <div id="projectStatsCard" class="alert alert-info mt-2 mb-3 d-none">
+                          <div class="d-flex align-items-center mb-2">
+                              <i class="bi bi-building fs-5 me-2"></i>
+                              <h6 class="mb-0 fw-bold">Seçili Proje / Yapı Bilgileri</h6>
+                          </div>
+                          <div class="row g-2 small">
+                              <div class="col-6"><span class="text-muted">Bina Yaşı:</span> <strong id="statBinaYasi">-</strong></div>
+                              <div class="col-6"><span class="text-muted">Kat Sayısı:</span> <strong id="statKatSayisi">-</strong></div>
+                              <div class="col-6"><span class="text-muted">Bodrum:</span> <strong id="statBodrum">-</strong></div>
+                              <div class="col-6"><span class="text-muted">Daire / Dükkan:</span> <strong id="statDaireDukkan">-</strong></div>
+                              <div class="col-6"><span class="text-muted">Arsa (m²):</span> <strong id="statArsa">-</strong></div>
+                              <div class="col-6"><span class="text-muted">Taban (m²):</span> <strong id="statTaban">-</strong></div>
+                          </div>
                       </div>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Alım Başlığı (Opsiyonel)</label>
@@ -182,7 +196,40 @@
 
 
 
+
 <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var projectSelect = document.getElementById('quoteProjectId');
+        if (projectSelect) {
+            projectSelect.addEventListener('change', function() {
+                var projectId = this.value;
+                var statsCard = document.getElementById('projectStatsCard');
+                
+                if (!projectId) {
+                    statsCard.classList.add('d-none');
+                    return;
+                }
+                
+                fetch('/ConstructionProject/GetOldBuildingStats?projectId=' + projectId)
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('statBinaYasi').textContent = data.binaYasi > 0 ? data.binaYasi + ' Yıl' : 'Belirtilmemiş';
+                        document.getElementById('statKatSayisi').textContent = data.toplamKat > 0 ? data.toplamKat : '-';
+                        document.getElementById('statBodrum').textContent = data.bodrumKatSayisi > 0 ? data.bodrumKatSayisi : 'Yok';
+                        document.getElementById('statDaireDukkan').textContent = (data.daireSayisi || 0) + ' / ' + (data.dukkanSayisi || 0);
+                        document.getElementById('statArsa').textContent = data.arsaAlani > 0 ? data.arsaAlani : '-';
+                        document.getElementById('statTaban').textContent = data.tabanOturumu > 0 ? data.tabanOturumu : '-';
+                        
+                        statsCard.classList.remove('d-none');
+                    })
+                    .catch(err => {
+                        console.error("Proje bilgileri çekilemedi:", err);
+                        statsCard.classList.add('d-none');
+                    });
+            });
+        }
+    });
+
     function addMaterialRow() {
         var container = document.getElementById('materialRowsContainer');
         var rows = container.getElementsByClassName('material-row');

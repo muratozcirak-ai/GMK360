@@ -76,6 +76,7 @@ namespace GMK360.Core.Entities
         
         public bool HasBlocks { get; set; } = false;
         public bool IsExistingBuilding { get; set; } = false; // Kentsel Dönüşümde yıkılacak bina mı?
+        public int? BuildingAge { get; set; } // Bina Yaşı / Yapım Yılı
         public ICollection<ComplexBlock> Blocks { get; set; } = new List<ComplexBlock>();
         
         public DateTime CreatedAt { get; set; } = DateTime.Now;
@@ -94,4 +95,5 @@ namespace GMK360.Core.Entities
         public int OnboardingStep { get; set; } = 1;
     }
 }
+
 
