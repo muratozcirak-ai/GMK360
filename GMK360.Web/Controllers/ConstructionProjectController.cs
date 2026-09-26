@@ -225,7 +225,7 @@ namespace GMK360.Web.Controllers
             
             // Fetch images from DocumentArchive dynamically if they exist (in case user uploaded manually)
             var sahaGorseli = await _context.DocumentArchives
-                .Where(d => d.SourceModule == "Construction" && d.ProjectId == id && d.Category == "Saha GÃ¶rseli")
+                .Where(d => d.SourceModule == "Construction" && d.ProjectId == id && (d.Category.Contains("Saha") || d.Title.Contains("Mevcut")))
                 .OrderByDescending(d => d.Id)
                 .FirstOrDefaultAsync();
             if (sahaGorseli != null) {
@@ -233,7 +233,7 @@ namespace GMK360.Web.Controllers
             }
             
             var projeGorseli = await _context.DocumentArchives
-                .Where(d => d.SourceModule == "Construction" && d.ProjectId == id && (d.Category == "Bina GÃ¶rselleri" || d.Category == "Proje GÃ¶rseli"))
+                .Where(d => d.SourceModule == "Construction" && d.ProjectId == id && (d.Category.Contains("Proje") || (d.Category.Contains("Bina") && !d.Title.Contains("Mevcut"))))
                 .OrderByDescending(d => d.Id)
                 .FirstOrDefaultAsync();
             if (projeGorseli != null) {
@@ -385,7 +385,7 @@ namespace GMK360.Web.Controllers
                         var sts = _context.Streets.Where(s => s.NeighborhoodId == draft.NeighborhoodId.Value).OrderBy(s => s.Name).ToList();
                         ViewBag.Streets = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(sts, "Id", "Name", draft.StreetId);
                     }
-var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModule == "Construction" && d.ProjectId == draft.Id && d.Category == "Saha GÃ¶rseli");
+                    var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModule == "Construction" && d.ProjectId == draft.Id && (d.Category.Contains("Saha") || d.Title.Contains("Mevcut")));
                     if (currentStateDoc != null) {
                         ViewBag.CurrentStateImageUrl = currentStateDoc.DocumentUrl;
                     }
