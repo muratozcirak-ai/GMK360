@@ -1,15 +1,12 @@
-﻿using System;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using GMK360.Data.Contexts;
 using GMK360.Core.Entities;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace GMK360.Web.Controllers
 {
-    // Yalnizca Super Adminlerin erisebilecegi global evrak sablonlari yonetimi
-    // [Authorize(Roles = "SuperAdmin")] // Eger rol altyapiniz varsa acabilirsiniz
     public class AdminLegalDocumentController : Controller
     {
         private readonly ApplicationDbContext _context;
@@ -21,35 +18,47 @@ namespace GMK360.Web.Controllers
 
         public async Task<IActionResult> Index()
         {
-            var templates = await _context.SystemLegalDocumentTemplates.OrderBy(t => t.TargetModule).ToListAsync();
+            var templates = await _context.SystemLegalDocumentTemplates
+                .OrderBy(t => t.Name)
+                .ToListAsync();
             return View(templates);
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create(string Name, string TargetModule, string IssuedBy, bool IsMandatory, string LegalReference)
+        public async Task<IActionResult> Create(SystemLegalDocumentTemplate model)
         {
-            var template = new SystemLegalDocumentTemplate
+            if (ModelState.IsValid)
             {
-                Name = Name,
-                TargetModule = TargetModule,
-                IssuedBy = IssuedBy,
-                IsMandatory = IsMandatory,
-                LegalReference = LegalReference
-            };
-            
-            _context.SystemLegalDocumentTemplates.Add(template);
-            await _context.SaveChangesAsync();
+                _context.SystemLegalDocumentTemplates.Add(model);
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = "Evrak şablonu havuza eklendi.";
+            }
+            return RedirectToAction(nameof(Index));
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Edit(SystemLegalDocumentTemplate model)
+        {
+            var existing = await _context.SystemLegalDocumentTemplates.FindAsync(model.Id);
+            if (existing != null)
+            {
+                existing.Name = model.Name;
+                existing.IssuedBy = model.IssuedBy;
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = "Evrak şablonu güncellendi.";
+            }
             return RedirectToAction(nameof(Index));
         }
 
         [HttpPost]
         public async Task<IActionResult> Delete(int id)
         {
-            var template = await _context.SystemLegalDocumentTemplates.FindAsync(id);
-            if(template != null)
+            var existing = await _context.SystemLegalDocumentTemplates.FindAsync(id);
+            if (existing != null)
             {
-                _context.SystemLegalDocumentTemplates.Remove(template);
+                _context.SystemLegalDocumentTemplates.Remove(existing);
                 await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = "Evrak şablonu silindi.";
             }
             return RedirectToAction(nameof(Index));
         }

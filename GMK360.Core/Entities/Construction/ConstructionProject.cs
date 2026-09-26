@@ -42,6 +42,8 @@ namespace GMK360.Core.Entities.Construction
         public int? EskiDukkanSayisi { get; set; }
         public int? EskiBodrumKatSayisi { get; set; }
         public bool EskiCatiKatiVarMi { get; set; }
+        public int? BuildingAge { get; set; } // Eklenen Bina Yaşı alanı
+        public double? EskiBinaOturumAlani { get; set; } // Taban Oturumu
         public bool IsNewDesignForExisting { get; set; }
         
         // Rehber (CRM) Entegrasyonu
@@ -63,6 +65,7 @@ namespace GMK360.Core.Entities.Construction
         public DateTime SelectionDeadline { get; set; }
 
         public virtual ICollection<ProjectPhase> Phases { get; set; }
+        public virtual ICollection<ConstructionBudgetItem> BudgetItems { get; set; }
         public virtual ICollection<ProjectMaterialCatalog> MaterialCatalogs { get; set; }
         public ProjectLifecycleStatus LifecycleStatus { get; set; } = ProjectLifecycleStatus.UnderConstruction;
         public bool IsPublishedOnWeb { get; set; } = false;
@@ -89,5 +92,7 @@ namespace GMK360.Core.Entities.Construction
 
     }
 }
+
+
 
 

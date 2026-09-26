@@ -19,7 +19,6 @@ namespace GMK360.Core.Entities.B2B
         public string Description { get; set; }
         
         public DateTime Deadline { get; set; }
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public string Status { get; set; } = "Draft";
 
         // Teklif Davetleri
@@ -27,4 +26,5 @@ namespace GMK360.Core.Entities.B2B
         public virtual ICollection<B2BQuoteItem> Items { get; set; } = new List<B2BQuoteItem>();
     }
 }
+
 

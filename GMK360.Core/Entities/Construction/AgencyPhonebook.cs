@@ -10,7 +10,7 @@ namespace GMK360.Core.Entities.Construction
 
         [Required]
         [MaxLength(200)]
-        public string Name { get; set; } // Ad Soyad veya Firma Adý
+        public string Name { get; set; } // Ad Soyad veya Firma AdÄ±
 
         [MaxLength(20)]
         public string PhoneNumber { get; set; }
@@ -18,10 +18,10 @@ namespace GMK360.Core.Entities.Construction
         [MaxLength(100)]
         public string? Email { get; set; }
 
-        // 1=Usta/MaviYaka, 2=Taþeron Firma, 3=Malzeme Tedarikçisi
+        // 1=Usta/MaviYaka, 2=TaÅŸeron Firma, 3=Malzeme TedarikÃ§isi
         public byte ContactType { get; set; }
 
-        // Virgülle ayrýlmýþ yetenek/malzeme etiketleri (Boya, Sýva, Seramik vb.)
+        // VirgÃ¼lle ayrÄ±lmÄ±ÅŸ yetenek/malzeme etiketleri (Boya, SÄ±va, Seramik vb.)
         [MaxLength(500)]
         public string? Tags { get; set; }
 
@@ -30,7 +30,31 @@ namespace GMK360.Core.Entities.Construction
 
         public bool IsRegistered { get; set; } = false;
 
-        // Sisteme katýlýrsa eþleþeceði asýl kullanýcýnýn ID'si
+        // Sisteme katÄ±lÄ±rsa eÅŸleÅŸeceÄŸi asÄ±l kullanÄ±cÄ±nÄ±n ID'si
         public string? LinkedUserId { get; set; }
+
+        public virtual System.Collections.Generic.ICollection<AgencyPhonebookBranch> Branches { get; set; } = new System.Collections.Generic.List<AgencyPhonebookBranch>();
+        public virtual System.Collections.Generic.ICollection<AgencyPhonebookContact> Contacts { get; set; } = new System.Collections.Generic.List<AgencyPhonebookContact>();
+
+        // --- ADRES VE KONUM ---
+        public string? Address { get; set; }
+        public string? City { get; set; }
+        public string? District { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public string? GoogleMapsUrl { get; set; }
+
+        // --- ILETISIM DETAYLARI (COKLU) ---
+        public string? MobilePhone2 { get; set; } 
+        public string? LandlinePhone { get; set; } 
+        public string? ExtensionNumber { get; set; } 
+        public string? WebsiteUrl { get; set; }
+
+        // --- KURUMSAL BILGILER ---
+        public string? AuthorizedPerson { get; set; } 
+        public string? AuthorizedPersonRole { get; set; } 
+        public string? TaxOffice { get; set; }
+        public string? TaxNumber { get; set; }
+        public string? Iban { get; set; }
     }
 }

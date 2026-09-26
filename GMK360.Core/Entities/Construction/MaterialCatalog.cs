@@ -15,7 +15,6 @@ namespace GMK360.Core.Entities.Construction
         public string DefaultUnit { get; set; } // Adet, Kg, Ton, m2 vb.
         
         public string DefaultBrand { get; set; } // İsteğe bağlı varsayılan marka
-        
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }
+

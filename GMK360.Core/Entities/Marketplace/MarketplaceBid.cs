@@ -18,3 +18,4 @@ namespace GMK360.Core.Entities.Marketplace
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }
+

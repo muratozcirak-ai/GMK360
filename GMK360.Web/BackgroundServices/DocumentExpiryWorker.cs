@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿﻿﻿using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -54,13 +54,13 @@ namespace GMK360.Web.BackgroundServices
             var expiringDocs = await context.ProjectLegalDocuments
                 .Include(d => d.ConstructionProject)
                 .ThenInclude(p => p.Assignments)
-                .Where(d => d.ExpiryDate.HasValue && d.ExpiryDate.Value <= thirtyDaysFromNow && d.Status == LegalDocumentStatus.Approved)
+                .Where(d => d.CompletedDate.HasValue && d.CompletedDate.Value <= thirtyDaysFromNow && d.Status == "Tamamlandı")
                 .ToListAsync(cancellationToken);
 
             int notifCount = 0;
             foreach (var doc in expiringDocs)
             {
-                var daysLeft = (doc.ExpiryDate.Value - now).TotalDays;
+                var daysLeft = (doc.CompletedDate.Value - now).TotalDays;
                 
                 // Sadece belirli gunlerde gonder (30, 7, 3, 2, 1, 0, -1...)
                 if (daysLeft > 7 && (int)daysLeft != 30 && (int)daysLeft != 15)
@@ -78,7 +78,7 @@ namespace GMK360.Web.BackgroundServices
                     {
                         ApplicationUserId = assignee.UserId,
                         Title = $"[{severity}] Evrak Bitis Uyarisi: {doc.DocumentName}",
-                        Message = $"{doc.ConstructionProject.Name} santiyesindeki '{doc.DocumentName}' adli evrakin bitmesine {(int)daysLeft} gun kaldi! (Bitis: {doc.ExpiryDate.Value:dd.MM.yyyy})",
+                        Message = $"{doc.ConstructionProject.Name} santiyesindeki '{doc.DocumentName}' adli evrakin bitmesine {(int)daysLeft} gun kaldi! (Bitis: {doc.CompletedDate.Value:dd.MM.yyyy})",
                         LinkUrl = $"/ConstructionProject/Details/{doc.ConstructionProjectId}#documents",
                         CreatedAt = DateTime.UtcNow
                     };

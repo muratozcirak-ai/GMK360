@@ -1,0 +1,20 @@
+﻿CREATE TABLE [dbo].[ConstructionBudgetItems] (
+    [Id] INT IDENTITY(1,1) PRIMARY KEY,
+    [ConstructionProjectId] INT NOT NULL,
+    [PhaseCategory] INT NOT NULL,
+    [ItemName] NVARCHAR(255) NOT NULL,
+    [Description] NVARCHAR(MAX) NULL,
+    [Quantity] DECIMAL(18,2) NOT NULL DEFAULT 1,
+    [Unit] NVARCHAR(50) NOT NULL,
+    [SourceType] INT NOT NULL DEFAULT 1,
+    [QuoteStatus] INT NOT NULL DEFAULT 1,
+    [PlannedUnitPrice] DECIMAL(18,2) NOT NULL DEFAULT 0,
+    [ActualTotalCost] DECIMAL(18,2) NOT NULL DEFAULT 0,
+    [IsUnplannedExtra] BIT NOT NULL DEFAULT 0,
+    [AssetDetailsId] INT NULL,
+    [SupplierId] INT NULL,
+    [CreatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    [UpdatedAt] DATETIME2 NULL,
+    [IsDeleted] BIT NOT NULL DEFAULT 0,
+    CONSTRAINT [FK_Budget_Project] FOREIGN KEY ([ConstructionProjectId]) REFERENCES [ConstructionProjects]([Id])
+);

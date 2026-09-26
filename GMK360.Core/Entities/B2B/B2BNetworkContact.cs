@@ -30,3 +30,4 @@ namespace GMK360.Core.Entities.B2B
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }
+

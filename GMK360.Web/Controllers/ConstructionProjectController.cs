@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 
 using Microsoft.AspNetCore.Identity;
 
@@ -174,7 +174,7 @@ namespace GMK360.Web.Controllers
 
             var existingDocs = await _context.ProjectLegalDocuments.Where(d => d.ConstructionProjectId == id).Select(d => d.SystemTemplateId).ToListAsync();
 
-            var globalTemplates = await _context.SystemLegalDocumentTemplates.Where(t => t.TargetModule == "Construction").ToListAsync();
+            var globalTemplates = await _context.SystemLegalDocumentTemplates.ToListAsync();
 
             
 
@@ -196,9 +196,9 @@ namespace GMK360.Web.Controllers
 
                         SystemTemplateId = template.Id,
 
-                        AppliedTo = template.IssuedBy,
+                        InstitutionContact = template.IssuedBy,
 
-                        Status = GMK360.Core.Entities.Construction.LegalDocumentStatus.NotApplied
+                        Status = "Bekliyor"
 
                     });
 
@@ -225,7 +225,7 @@ namespace GMK360.Web.Controllers
             
             // Fetch images from DocumentArchive dynamically if they exist (in case user uploaded manually)
             var sahaGorseli = await _context.DocumentArchives
-                .Where(d => d.SourceModule == "Construction" && d.ProjectId == id && d.Category == "Saha Görseli")
+                .Where(d => d.SourceModule == "Construction" && d.ProjectId == id && d.Category == "Saha GÃ¶rseli")
                 .OrderByDescending(d => d.Id)
                 .FirstOrDefaultAsync();
             if (sahaGorseli != null) {
@@ -233,7 +233,7 @@ namespace GMK360.Web.Controllers
             }
             
             var projeGorseli = await _context.DocumentArchives
-                .Where(d => d.SourceModule == "Construction" && d.ProjectId == id && (d.Category == "Bina Görselleri" || d.Category == "Proje Görseli"))
+                .Where(d => d.SourceModule == "Construction" && d.ProjectId == id && (d.Category == "Bina GÃ¶rselleri" || d.Category == "Proje GÃ¶rseli"))
                 .OrderByDescending(d => d.Id)
                 .FirstOrDefaultAsync();
             if (projeGorseli != null) {
@@ -385,7 +385,7 @@ namespace GMK360.Web.Controllers
                         var sts = _context.Streets.Where(s => s.NeighborhoodId == draft.NeighborhoodId.Value).OrderBy(s => s.Name).ToList();
                         ViewBag.Streets = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(sts, "Id", "Name", draft.StreetId);
                     }
-var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModule == "Construction" && d.ProjectId == draft.Id && d.Category == "Saha Görseli");
+var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModule == "Construction" && d.ProjectId == draft.Id && d.Category == "Saha GÃ¶rseli");
                     if (currentStateDoc != null) {
                         ViewBag.CurrentStateImageUrl = currentStateDoc.DocumentUrl;
                     }
@@ -430,27 +430,31 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
                         }).ToList();
                     }
                     if (draft.Blocks != null && draft.Blocks.Any()) {
-
-                        model.Blocks = draft.Blocks.Select(b => new GMK360.Web.Models.WizardBlockItem {
-
+                        model.ExistingBlocks = draft.Blocks.Where(b => b.IsExistingBuilding).Select(b => new GMK360.Web.Models.WizardBlockItem {
                             BlockName = b.BlockName,
-
                             BaseArea = b.BaseArea,
-
                             TotalFloors = b.TotalFloors ?? 0,
-
                             BasementFloors = b.BasementFloors,
-
-                            TotalApartments = b.TotalApartments > 0 ? b.TotalApartments : b.TotalUnits, // Geriye dnk uyumluluk
-
-                              TotalShops = b.TotalShops,
-
+                            TotalApartments = b.TotalApartments > 0 ? b.TotalApartments : b.TotalUnits,
+                            TotalShops = b.TotalShops,
                             HasGroundFloor = b.HasGroundFloor,
-
-                            HasRoof = b.HasRoof
-
+                            HasRoof = b.HasRoof,
+                            IsExistingBuilding = true,
+                            LayoutPattern = b.LayoutPattern
                         }).ToList();
 
+                        model.TargetBlocks = draft.Blocks.Where(b => !b.IsExistingBuilding).Select(b => new GMK360.Web.Models.WizardBlockItem {
+                            BlockName = b.BlockName,
+                            BaseArea = b.BaseArea,
+                            TotalFloors = b.TotalFloors ?? 0,
+                            BasementFloors = b.BasementFloors,
+                            TotalApartments = b.TotalApartments > 0 ? b.TotalApartments : b.TotalUnits,
+                            TotalShops = b.TotalShops,
+                            HasGroundFloor = b.HasGroundFloor,
+                            HasRoof = b.HasRoof,
+                            IsExistingBuilding = false,
+                            LayoutPattern = b.LayoutPattern
+                        }).ToList();
                     }
 
 
@@ -511,14 +515,14 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
                 var agencyId = await GetUserAgencyIdAsync();
 
-                if (agencyId == null) return Json(new { success = false, message = "Yetkisiz eri┼şim." });
+                if (agencyId == null) return Json(new { success = false, message = "Yetkisiz eriâ”¼ÅŸim." });
 
 
 
-                if (model.DraftProjectId <= 0) return Json(new { success = false, message = "Proje ID bulunamadı. Lütfen önce projeyi başlatın." });
+                if (model.DraftProjectId <= 0) return Json(new { success = false, message = "Proje ID bulunamadÄ±. LÃ¼tfen Ã¶nce projeyi baÅŸlatÄ±n." });
                 var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == model.DraftProjectId);
-                if (project == null) return Json(new { success = false, message = "Proje bulunamadı." });
-                if (project.IsDataLocked) return Json(new { success = false, message = "Bu proje bütçe kontrolü için kilitlenmiştir, veriler değiştirilemez." });
+                if (project == null) return Json(new { success = false, message = "Proje bulunamadÄ±." });
+                if (project.IsDataLocked) return Json(new { success = false, message = "Bu proje bÃ¼tÃ§e kontrolÃ¼ iÃ§in kilitlenmiÅŸtir, veriler deÄŸiÅŸtirilemez." });
 
                 // Update fields
                 project.Description = model.Description;
@@ -571,14 +575,14 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
                     {
                         AgencyId = agencyId.Value,
                         ProjectId = project.Id,
-                        Title = "Mevcut Durum Görseli (İlk Hali)",
-                        Category = "Bina Görselleri",
+                        Title = "Mevcut Durum GÃ¶rseli (Ä°lk Hali)",
+                        Category = "Bina GÃ¶rselleri",
                         SourceModule = "Construction",
                         DocumentUrl = $"/uploads/Agency_{agencyId.Value}/Project_{project.Id}/images/{uniqueFileName}",
                         FileName = Path.GetFileName(model.CurrentStateImageFile.FileName),
                         FileExtension = Path.GetExtension(model.CurrentStateImageFile.FileName),
                         UploadDate = DateTime.UtcNow,
-                        Status = "Tamamlandı"
+                        Status = "TamamlandÄ±"
                     };
                     _context.DocumentArchives.Add(archive);
                     project.CoverImageUrl = archive.DocumentUrl;
@@ -603,7 +607,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
                         FileName = Path.GetFileName(model.TapuDocumentFile.FileName),
                         FileExtension = Path.GetExtension(model.TapuDocumentFile.FileName),
                         UploadDate = DateTime.UtcNow,
-                        Status = "Tamamlandı"
+                        Status = "TamamlandÄ±"
                     };
                     _context.DocumentArchives.Add(archive);
                     project.CoverImageUrl = archive.DocumentUrl;
@@ -631,11 +635,11 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
             try {
 
-                if (model.DraftProjectId == 0) return Json(new { success = false, message = "Proje ID bulunamad─▒." });
+                if (model.DraftProjectId == 0) return Json(new { success = false, message = "Proje ID bulunamadâ”€â–’." });
 
                 var project = await _context.ConstructionProjects.Include(p => p.Blocks).FirstOrDefaultAsync(p => p.Id == model.DraftProjectId);
 
-                if (project == null) return Json(new { success = false, message = "Proje bulunamad─▒." });
+                if (project == null) return Json(new { success = false, message = "Proje bulunamadâ”€â–’." });
 
 
 
@@ -649,7 +653,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
 
 
-                    // Sadece formda olmayan eski bloklar─▒ sil
+                    // Sadece formda olmayan eski bloklarâ”€â–’ sil
 
                     var blocksToRemove = existingBlocks.Where(b => !currentBlockNames.Contains(b.BlockName)).ToList();
 
@@ -673,7 +677,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
                         {
 
-                            // Varsa SADECE G├£NCELLE (Lifecycle kural─▒)
+                            // Varsa SADECE Gâ”œÂ£NCELLE (Lifecycle kuralâ”€â–’)
 
                             existingBlock.BaseArea = b.BaseArea;
 
@@ -693,7 +697,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
                             
 
-                            // E─şer D├╝kkan Say─▒s─▒ kolonu eklenirse buraya da eklenecek
+                            // Eâ”€ÅŸer Dâ”œâ•kkan Sayâ”€â–’sâ”€â–’ kolonu eklenirse buraya da eklenecek
 
                         }
 
@@ -701,7 +705,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
                         {
 
-                            // Yoksa YEN─░ EKLE
+                            // Yoksa YENâ”€â–‘ EKLE
 
                             var building = new GMK360.Core.Entities.Building
 
@@ -790,7 +794,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
                 _context.CrmContacts.Add(crmContact);
                 await _context.SaveChangesAsync();
 
-                // İnşaat Rehberine de ekle (AgencyPhonebook)
+                // Ä°nÅŸaat Rehberine de ekle (AgencyPhonebook)
                 var agencyId = await GetUserAgencyIdAsync();
                 int actualAgencyId = agencyId ?? 1;
                   if (true)
@@ -801,7 +805,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
                         Name = $"{crmContact.FirstName} {crmContact.LastName}".Trim(),
                         PhoneNumber = phone ?? "",
                         Email = email,
-                        ContactType = 7, // 7 = Müşteri & Kat Maliki
+                        ContactType = 7, // 7 = MÃ¼ÅŸteri & Kat Maliki
                         IsRegistered = false
                     };
                     _context.AgencyPhonebooks.Add(phonebook);
@@ -846,7 +850,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
                 {
 
-                    TempData["ErrorMessage"] = "Proje ID bulunamad─▒. L├╝tfen i┼şleminizi ba┼ştan yap─▒n.";
+                    TempData["ErrorMessage"] = "Proje ID bulunamadâ”€â–’. Lâ”œâ•tfen iâ”¼ÅŸleminizi baâ”¼ÅŸtan yapâ”€â–’n.";
 
                     return RedirectToAction(nameof(Index));
 
@@ -857,11 +861,11 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
                 var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == model.DraftProjectId);
                 if (project == null)
                 {
-                    TempData["ErrorMessage"] = "Proje bulunamadı.";
+                    TempData["ErrorMessage"] = "Proje bulunamadÄ±.";
                     return RedirectToAction(nameof(Index));
                 }
 
-                // Mevcut kayıtları temizle (Geri dönüp güncelleyenler için mükemmel senkronizasyon)
+                // Mevcut kayÄ±tlarÄ± temizle (Geri dÃ¶nÃ¼p gÃ¼ncelleyenler iÃ§in mÃ¼kemmel senkronizasyon)
                 var existingOwners = await _context.ProjectOwners.Where(po => po.ConstructionProjectId == project.Id).ToListAsync();
                 if(existingOwners.Any()) {
                     _context.ProjectOwners.RemoveRange(existingOwners);
@@ -884,7 +888,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
                         _context.CrmContacts.Add(crmContact);
                         await _context.SaveChangesAsync();
 
-                        // İnşaat Rehberine de ekle (AgencyPhonebook)
+                        // Ä°nÅŸaat Rehberine de ekle (AgencyPhonebook)
                         int actualAgencyId = agencyId ?? 1;
                   if (true)
                         {
@@ -894,7 +898,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
                                 Name = $"{crmContact.FirstName} {crmContact.LastName}".Trim(),
                                 PhoneNumber = owner.PhoneNumber ?? "",
                                 Email = owner.Email,
-                                ContactType = 7, // 7 = Müşteri & Kat Maliki
+                                ContactType = 7, // 7 = MÃ¼ÅŸteri & Kat Maliki
                                 IsRegistered = false
                             };
                             _context.AgencyPhonebooks.Add(phonebook);
@@ -925,7 +929,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
 
 
-                TempData["SuccessMessage"] = "┼Şantiye ba┼şar─▒yla ba┼şlat─▒ld─▒ ve bloklar olu┼şturuldu.";
+                TempData["SuccessMessage"] = "â”¼Åantiye baâ”¼ÅŸarâ”€â–’yla baâ”¼ÅŸlatâ”€â–’ldâ”€â–’ ve bloklar oluâ”¼ÅŸturuldu.";
 
                 return RedirectToAction(nameof(Details), new { id = project.Id });
 
@@ -935,7 +939,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
             {
 
-                TempData["ErrorMessage"] = "Bir hata olu┼ştu: " + ex.Message;
+                TempData["ErrorMessage"] = "Bir hata oluâ”¼ÅŸtu: " + ex.Message;
 
                 return RedirectToAction(nameof(Index));
 
@@ -1107,7 +1111,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = "Bina iskeleti (kat yapıları) başarıyla güncellendi.";
+                TempData["SuccessMessage"] = "Bina iskeleti (kat yapÄ±larÄ±) baÅŸarÄ±yla gÃ¼ncellendi.";
 
             }
 
@@ -1177,7 +1181,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
 
 
-                // --- SOSYAL DONATILAR VE DIŞ ALANLAR (AMENITIES) ---
+                // --- SOSYAL DONATILAR VE DIÅ ALANLAR (AMENITIES) ---
 
                 [HttpPost]
 
@@ -1297,7 +1301,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
 
 
-            TempData["SuccessMessage"] = "Yeni Sosyal Donatı / Açık Alan eklendi.";
+            TempData["SuccessMessage"] = "Yeni Sosyal DonatÄ± / AÃ§Ä±k Alan eklendi.";
 
             return RedirectToAction(nameof(Amenities), new { projectId = projectId, isExisting = isExisting });
 
@@ -1321,7 +1325,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = "Açık alan başarıyla silindi.";
+                TempData["SuccessMessage"] = "AÃ§Ä±k alan baÅŸarÄ±yla silindi.";
 
             }
 
@@ -1357,7 +1361,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
 
 
-        // --- DAIRE TİPLERİ (ŞABLONLAR) ---
+        // --- DAIRE TÄ°PLERÄ° (ÅABLONLAR) ---
 
         
 
@@ -1427,7 +1431,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
 
 
-            TempData["SuccessMessage"] = "Yeni Daire Tipi Şablonu başarıyla oluşturuldu.";
+            TempData["SuccessMessage"] = "Yeni Daire Tipi Åablonu baÅŸarÄ±yla oluÅŸturuldu.";
 
             return RedirectToAction(nameof(Templates), new { projectId = projectId });
 
@@ -1495,7 +1499,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
 
 
-            TempData["SuccessMessage"] = "Şablona yeni alan eklendi.";
+            TempData["SuccessMessage"] = "Åablona yeni alan eklendi.";
 
             return RedirectToAction(nameof(TemplateSpaces), new { templateId = templateId });
 
@@ -1519,7 +1523,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = "Alan şablondan silindi.";
+                TempData["SuccessMessage"] = "Alan ÅŸablondan silindi.";
 
             }
 
@@ -2496,15 +2500,15 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
                 DocumentName = customName,
                 Stage = stage,
 
-                AppliedTo = appliedTo,
+                
 
-                InstitutionPhone = institutionPhone,
+                InstitutionContact = institutionPhone,
 
-                TrackingPerson = trackingPerson,
+                AssignedUserId = trackingPerson,
 
                 IsCustom = true,
 
-                Status = GMK360.Core.Entities.Construction.LegalDocumentStatus.Applied
+                Status = "Onaylandı"
 
             };
 
@@ -2528,7 +2532,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
         [HttpPost]
 
-        public async Task<IActionResult> UpdateLegalDocumentStatus(int documentId, int statusId, string appliedTo, string trackingPerson, string institutionContact, string notes, DateTime? expiryDate)
+        public async Task<IActionResult> UpdateLegalDocumentStatus(int documentId, string statusStr, string appliedTo, string trackingPerson, string institutionContact, string notes, DateTime? expiryDate)
 
         {
 
@@ -2538,17 +2542,17 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
 
             
 
-            doc.Status = (GMK360.Core.Entities.Construction.LegalDocumentStatus)statusId;
+            doc.Status = statusStr ?? "Bekliyor";
 
-            if(appliedTo != null) doc.AppliedTo = appliedTo;
+            
 
-            if(trackingPerson != null) doc.TrackingPerson = trackingPerson;
+            if(trackingPerson != null) doc.AssignedUserId = trackingPerson;
 
             if(institutionContact != null) doc.InstitutionContact = institutionContact;
 
-            if(notes != null) doc.Notes = notes;
+            if(notes != null) doc.IssueNotes = notes;
 
-            if(expiryDate.HasValue) doc.ExpiryDate = expiryDate.Value;
+            
 
             
 
@@ -4398,13 +4402,13 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
         public async Task<IActionResult> SaveFeasibility(GMK360.Web.Models.FeasibilityViewModel model)
         {
             var agencyId = await GetUserAgencyIdAsync();
-            if (agencyId == null) return Json(new { success = false, message = "Yetkisiz erişim." });
+            if (agencyId == null) return Json(new { success = false, message = "Yetkisiz eriÅŸim." });
 
             var project = await _context.ConstructionProjects
                 .Include(p => p.KatMalikleri)
                 .FirstOrDefaultAsync(p => p.Id == model.ProjectId && p.AgencyId == agencyId);
 
-            if (project == null) return Json(new { success = false, message = "Proje bulunamadı." });
+            if (project == null) return Json(new { success = false, message = "Proje bulunamadÄ±." });
 
             try
             {
@@ -4423,7 +4427,7 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
                             _context.ProjectOwnerDebts.Add(new GMK360.Core.Entities.Construction.ProjectOwnerDebt
                             {
                                 ProjectOwnerId = owner.Id,
-                                Description = "Fizibilite - Kentsel Dönüşüm Finansman Açığı",
+                                Description = "Fizibilite - Kentsel DÃ¶nÃ¼ÅŸÃ¼m Finansman AÃ§Ä±ÄŸÄ±",
                                 DebtAmount = ownerVm.CalculatedDebt,
                                 DueDate = DateTime.Now.AddMonths(6),
                                 IsPaid = false
@@ -4448,5 +4452,83 @@ var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModu
                 return Json(new { success = false, message = ex.Message });
             }
         }
+        [HttpPost]
+        public async Task<IActionResult> ChangeProjectStatus(int id, string newStatus)
+        {
+            var project = await _context.ConstructionProjects.FindAsync(id);
+            if (project != null && Enum.TryParse(typeof(GMK360.Core.Entities.Construction.ProjectStatus), newStatus, out var statusObj))
+            {
+                project.Status = (GMK360.Core.Entities.Construction.ProjectStatus)statusObj;
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = "Proje durumu başarıyla güncellendi.";
+            }
+            return RedirectToAction("Details", new { id = id });
+        }
+        [HttpGet]
+        public async Task<IActionResult> GetOldBuildingStats(int projectId)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var project = await _context.ConstructionProjects
+                .FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId);
+
+            if (project == null) return NotFound();
+
+            return Json(new {
+                toplamKat = project.EskiKatSayisi,
+                bodrumKatSayisi = project.EskiBodrumKatSayisi,
+                daireSayisi = project.EskiDaireSayisi,
+                dukkanSayisi = project.EskiDukkanSayisi,
+                arsaAlani = project.TotalLandArea,
+                tabanOturumu = project.EskiBinaOturumAlani,
+                binaYasi = project.BuildingAge
+            });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> BudgetDashboard(int id)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var project = await _context.ConstructionProjects
+                .Include(p => p.Phases)
+                .Include(p => p.BudgetItems)
+                .FirstOrDefaultAsync(p => p.Id == id && p.AgencyId == agencyId);
+
+            if (project == null) return NotFound();
+
+            // Sadece bütçe sayfasının çökmemesi için temel modeli gönderiyoruz.
+            return View(project);
+        }
+
+        
+        [HttpPost]
+        public async Task<IActionResult> AddBudgetItem(int projectId, string itemName, decimal amount, string description)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var item = new GMK360.Core.Entities.Construction.ConstructionBudgetItem
+            {
+                ConstructionProjectId = projectId,
+                ItemName = itemName ?? "Masraf",
+                ActualTotalCost = amount,
+                Description = description,
+                QuoteStatus = GMK360.Core.Entities.Construction.BudgetQuoteStatus.ActualInvoiced,
+                IsUnplannedExtra = true,
+                CreatedAt = System.DateTime.UtcNow,
+                IsDeleted = false
+            };
+            
+            _context.ConstructionBudgetItems.Add(item);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Fiş/Gider başarıyla bütçeye eklendi.";
+            return RedirectToAction(nameof(BudgetDashboard), new { id = projectId });
+        }
+
     }
 }
+

@@ -1,15 +1,8 @@
 ﻿using System;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace GMK360.Core.Entities.Construction
 {
-    public enum LegalDocumentStatus
-    {
-        NotApplied = 0,    // BaYvurulmad / Yok
-        Applied = 1,       // BaYvuruldu / YanKt Bekleniyor
-        Issue = 2,         // Sorun KTktK / Reddedildi
-        Approved = 3       // OnaylandK / Var
-    }
-
     public class ProjectLegalDocument : BaseEntity
     {
         public int ConstructionProjectId { get; set; }
@@ -21,23 +14,36 @@ namespace GMK360.Core.Entities.Construction
         public string DocumentName { get; set; }
         public string? Stage { get; set; }
         
-        public LegalDocumentStatus Status { get; set; } = LegalDocumentStatus.NotApplied;
-        public string? Notes { get; set; }
+        // ENUM İPTAL EDİLDİ - Düz String
+        public string Status { get; set; } = "Bekliyor"; 
         
-        public string? TrackingPerson { get; set; } 
-        public string? AppliedTo { get; set; } 
+        public string? AssignedUserId { get; set; } 
+        public string? InstitutionContact { get; set; } 
         
-        // Yeniden adlandiriyoruz / Amacini degistiriyoruz
-        public string? InstitutionPhone { get; set; } // Istihbarat RFQ asamasina tasinacak ama veritabaninda kalabilir
-        public string? InstitutionContact { get; set; } // YENI: Kurum Ici Ilgili / Tanidik / Memur Adi
+        public DateTime? StartDate { get; set; }
+        public DateTime? CompletedDate { get; set; }
         
-        public DateTime? ExpiryDate { get; set; }
-                public DateTime? ApplicationDate { get; set; } // Başvuru Tarihi
-        public DateTime? AcquiredDate { get; set; } // Alındığı Tarih
-        public string? FilePath { get; set; } // Yüklenen PDF/Görsel dosya yolu
-        public decimal? DocumentCost { get; set; } // Harç / Masraf Tutarı
+        public decimal? EstimatedCost { get; set; } 
+        public decimal? ActualCost { get; set; } 
         
-        public bool IsCustom { get; set; } // Globalde olmayan, firmanin kendi ekledigi evrak mi?
+        public string? IssueNotes { get; set; }
+
+        public decimal? DocumentFee { get; set; }
+        public decimal? AdditionalCost { get; set; }
+
+        public int? TargetInstitutionId { get; set; }
+        public InstitutionRecord TargetInstitution { get; set; }
+
+        public int? TargetContactId { get; set; }
+        public InstitutionContact TargetContact { get; set; } 
+        public string? FilePath { get; set; } 
+        public bool IsCustom { get; set; } 
+        public int DisplayOrder { get; set; } // YENİ: Sıralama Kolonu
+
+        [NotMapped]
+        public bool IsLocked { get; set; }
+        
+        [NotMapped]
+        public string? MissingPrerequisitesMessage { get; set; }
     }
 }
-

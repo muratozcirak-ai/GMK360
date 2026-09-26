@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+ï»¿using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using GMK360.Data.Contexts;
 using Microsoft.AspNetCore.Identity;
@@ -54,19 +54,23 @@ namespace GMK360.Web.Controllers
                 }
 
                 var quotes = await query.OrderByDescending(q => q.CreatedAt).ToListAsync();
-                if (agencyId.HasValue) ViewBag.Catalogs = await _context.MaterialCatalogs.Where(c => c.AgencyId == agencyId.Value).OrderBy(c => c.Name).ToListAsync();
+                if (agencyId.HasValue) 
+                {
+                    ViewBag.Catalogs = await _context.MaterialCatalogs.Where(c => c.AgencyId == agencyId.Value).OrderBy(c => c.Name).ToListAsync();
+                    ViewBag.Projects = await _context.ConstructionProjects.Where(p => p.AgencyId == agencyId.Value && p.Status != GMK360.Core.Entities.Construction.ProjectStatus.Tamamlandi_Teslim && p.Status != GMK360.Core.Entities.Construction.ProjectStatus.Anlasma_Olmayan_Iptal).OrderBy(p => p.Name).ToListAsync();
+                }
                 return View(quotes);
             }
             catch (Exception ex)
             {
-                TempData["ErrorMessage"] = "Sistem Hatasý: " + ex.Message;
+                TempData["ErrorMessage"] = "Sistem HatasÄ±: " + ex.Message;
                 return View(new System.Collections.Generic.List<B2BQuoteRequest>());
             }
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CreateQuote(string title, string description, DateTime? deadline, int? materialCatalogId, decimal? quantity)
+        public async Task<IActionResult> CreateQuote(string title, string description, DateTime? deadline, int[] materialCatalogIds, decimal[] quantities, int? projectId)
         {
             try 
             {
@@ -76,19 +80,19 @@ namespace GMK360.Web.Controllers
                 var user = await _userManager.GetUserAsync(User);
 
                 string finalTitle = title;
-                if (string.IsNullOrWhiteSpace(finalTitle) && materialCatalogId.HasValue)
+                if (string.IsNullOrWhiteSpace(finalTitle) && materialCatalogIds != null && materialCatalogIds.Length > 0)
                 {
-                    var cat = await _context.MaterialCatalogs.FindAsync(materialCatalogId.Value);
-                    if (cat != null) finalTitle = $"{quantity} {cat.DefaultUnit} {cat.Name} Alýmý";
+                    var firstCat = await _context.MaterialCatalogs.FindAsync(materialCatalogIds[0]);
+                    if (firstCat != null) finalTitle = "Toplu Malzeme AlÄ±mÄ± (" + firstCat.Name + " vb.)";
                 }
 
                 var quote = new B2BQuoteRequest
                 {
                     RequesterAgencyId = agencyId.Value,
                     RequesterUserId = user?.Id ?? "",
-                    SourceModule = "Direct",
-                    SourceReferenceId = 0,
-                    Title = finalTitle ?? "Ýsimsiz Alým",
+                    SourceModule = (projectId.HasValue && projectId.Value > 0) ? "ConstructionProject" : "Direct",
+                    SourceReferenceId = projectId ?? 0,
+                    Title = finalTitle ?? "Ä°simsiz AlÄ±m",
                     Description = description ?? "",
                     Deadline = deadline ?? DateTime.UtcNow.AddDays(7),
                     Status = "Draft",
@@ -98,25 +102,34 @@ namespace GMK360.Web.Controllers
                 _context.B2BQuoteRequests.Add(quote);
                 await _context.SaveChangesAsync();
 
-                if (materialCatalogId.HasValue && quantity.HasValue)
+                if (materialCatalogIds != null && quantities != null)
                 {
-                    var quoteItem = new B2BQuoteItem
+                    for(int i = 0; i < materialCatalogIds.Length; i++)
                     {
-                        B2BQuoteRequestId = quote.Id,
-                        MaterialCatalogId = materialCatalogId.Value,
-                        Quantity = quantity.Value,
-                        Description = ""
-                    };
-                    _context.B2BQuoteItems.Add(quoteItem);
+                        var catId = materialCatalogIds[i];
+                        var qty = i < quantities.Length ? quantities[i] : 0;
+                        
+                        if (catId > 0 && qty > 0)
+                        {
+                            var quoteItem = new B2BQuoteItem
+                            {
+                                B2BQuoteRequestId = quote.Id,
+                                MaterialCatalogId = catId,
+                                Quantity = qty,
+                                Description = ""
+                            };
+                            _context.B2BQuoteItems.Add(quoteItem);
+                        }
+                    }
                     await _context.SaveChangesAsync();
                 }
 
-                TempData["SuccessMessage"] = "Alým Emri / Ýhale baþarýyla oluþturuldu!";
+                TempData["SuccessMessage"] = "AlÄ±m Emri / Ä°hale baÅŸarÄ±yla oluÅŸturuldu!";
                 return RedirectToAction("Index");
             }
             catch (Exception ex)
             {
-                TempData["ErrorMessage"] = "Alým kaydý oluþturulurken hata oluþtu: " + ex.Message + (ex.InnerException != null ? " (" + ex.InnerException.Message + ")" : "");
+                TempData["ErrorMessage"] = "AlÄ±m kaydÄ± oluÅŸturulurken hata oluÅŸtu: " + ex.Message + (ex.InnerException != null ? " (" + ex.InnerException.Message + ")" : "");
                 return RedirectToAction("Index");
             }
         }
@@ -143,7 +156,7 @@ namespace GMK360.Web.Controllers
             _context.B2BQuoteItems.Add(item);
             await _context.SaveChangesAsync();
             
-            TempData["SuccessMessage"] = "Kalem baþarýyla eklendi.";
+            TempData["SuccessMessage"] = "Kalem baÅŸarÄ±yla eklendi.";
             return RedirectToAction(nameof(Details), new { id = quoteRequestId });
         }
         
@@ -160,7 +173,7 @@ namespace GMK360.Web.Controllers
             _context.B2BQuoteItems.Remove(item);
             await _context.SaveChangesAsync();
             
-            TempData["SuccessMessage"] = "Kalem listeden çýkarýldý.";
+            TempData["SuccessMessage"] = "Kalem listeden Ã§Ä±karÄ±ldÄ±.";
             return RedirectToAction(nameof(Details), new { id = item.B2BQuoteRequestId });
         }
 
@@ -191,7 +204,7 @@ namespace GMK360.Web.Controllers
             }
             catch (Exception ex)
             {
-                TempData["ErrorMessage"] = "Detaylar yüklenirken hata oluþtu: " + ex.Message;
+                TempData["ErrorMessage"] = "Detaylar yÃ¼klenirken hata oluÅŸtu: " + ex.Message;
                 return RedirectToAction("Index");
             }
         }
@@ -230,7 +243,7 @@ namespace GMK360.Web.Controllers
                     SupplierName = invite.NetworkContact?.CompanyName ?? "Bilinmiyor",
                     DocumentNumber = "B2B-" + quote.Id.ToString(),
                     ReceiptDate = DateTime.UtcNow,
-                    Notes = "B2B Sipariþi. Proje/Þantiye teslimatý bekleniyor.",
+                    Notes = "B2B SipariÅŸi. Proje/Åžantiye teslimatÄ± bekleniyor.",
                     Status = "Draft",
                     CreatedAt = DateTime.UtcNow,
                     AssignedUserId = assignedUserId,
@@ -293,7 +306,7 @@ namespace GMK360.Web.Controllers
                         Type = GMK360.Core.Entities.Finance.SupplierTransactionType.PurchaseInvoice,
                         Amount = actualInvoiceAmount,
                         BalanceAfterTransaction = currentAccount.CurrentBalance,
-                        Description = $"B2B Kýsmi/Tam Onay - Ýhale #{quote.Id}",
+                        Description = $"B2B KÄ±smi/Tam Onay - Ä°hale #{quote.Id}",
                         DocumentReference = receipt.DocumentNumber,
                         CreatedByUserId = _userManager.GetUserId(User) ?? ""
                     };
@@ -302,12 +315,12 @@ namespace GMK360.Web.Controllers
                 
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = $"Teklif onaylandý! {actualInvoiceAmount.ToString("N2")} ? cari hesaba iþlendi.";
+                TempData["SuccessMessage"] = $"Teklif onaylandÄ±! {actualInvoiceAmount.ToString("N2")} ? cari hesaba iÅŸlendi.";
                 return RedirectToAction("Details", new { id = quote.Id });
             }
             catch (Exception ex)
             {
-                TempData["ErrorMessage"] = "Onaylanýrken hata oluþtu: " + ex.Message;
+                TempData["ErrorMessage"] = "OnaylanÄ±rken hata oluÅŸtu: " + ex.Message;
                 return RedirectToAction("Details", new { id = quoteRequestId });
             }
         }
@@ -335,7 +348,7 @@ namespace GMK360.Web.Controllers
                     ContactPerson = contactPerson ?? "",
                     PhoneNumber = phoneNumber ?? "",
                     Email = email ?? "",
-                    SectorCategory = "Tedarikçi",
+                    SectorCategory = "TedarikÃ§i",
                     CreatedAt = DateTime.UtcNow
                 };
 
@@ -354,17 +367,18 @@ namespace GMK360.Web.Controllers
                 _context.B2BQuoteInvites.Add(invite);
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = companyName + " baþarýyla gölge tedarikçi olarak eklendi ve davet oluþturuldu.";
+                TempData["SuccessMessage"] = companyName + " baÅŸarÄ±yla gÃ¶lge tedarikÃ§i olarak eklendi ve davet oluÅŸturuldu.";
                 return RedirectToAction("Details", new { id = quoteId });
             }
             catch (Exception ex)
             {
-                TempData["ErrorMessage"] = "Davet oluþturulurken hata oluþtu: " + ex.Message + (ex.InnerException != null ? " (" + ex.InnerException.Message + ")" : "");
+                TempData["ErrorMessage"] = "Davet oluÅŸturulurken hata oluÅŸtu: " + ex.Message + (ex.InnerException != null ? " (" + ex.InnerException.Message + ")" : "");
                 return RedirectToAction("Details", new { id = quoteId });
             }
         }
 }
 }
+
 
 
 

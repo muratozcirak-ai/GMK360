@@ -1,0 +1,451 @@
+﻿@model IEnumerable<GMK360.Core.Entities.B2b.B2bCompany>
+@{
+    string listType = ViewBag.ListType as string ?? "firma";
+    ViewData["Title"] = "GMK360 - " + ViewBag.PageTitle;
+    Layout = "~/Views/Shared/_AdminLayout.cshtml";
+    IEnumerable<GMK360.Core.Entities.DefinitionValue> categories = ViewBag.Categories as IEnumerable<GMK360.Core.Entities.DefinitionValue>;
+    IEnumerable<GMK360.Core.Entities.City> cities = ViewBag.Cities as IEnumerable<GMK360.Core.Entities.City>;
+    
+    // UI Renk ve İkon Kararları
+    string btnColor = listType == "usta" ? "btn-warning text-dark" : (listType == "tedarikci" ? "btn-success" : "btn-primary");
+    string iconClass = listType == "usta" ? "ph-helmet text-warning" : (listType == "tedarikci" ? "ph-truck text-success" : "ph-buildings text-primary");
+    string badgeColor = listType == "usta" ? "bg-warning text-dark" : (listType == "tedarikci" ? "bg-success" : "bg-primary");
+}
+
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <div>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-1">
+                        <li class="breadcrumb-item"><a href="@Url.Action("B2bMarketplace", "Admin")" class="text-decoration-none">B2B Pazar Yeri</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">@ViewBag.PageTitle</li>
+                    </ol>
+                </nav>
+                <h2 class="fw-bold text-dark mb-0"><i class="ph-fill @iconClass me-2"></i> @ViewBag.PageTitle</h2>
+            </div>
+            <div>
+                <button class="btn @btnColor rounded-pill px-4 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#addModal">
+                    <i class="ph ph-plus-circle me-1"></i> Yeni @(listType == "usta" ? "Usta" : (listType == "tedarikci" ? "Tedarikçi" : "Firma")) Ekle
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card border-0 shadow-sm mb-4" style="border-radius: 15px;">
+        <div class="card-body p-3">
+            <form method="get" class="row g-3 align-items-end">
+                <input type="hidden" name="type" value="@listType" />
+                <div class="col-md-3">
+                    <label class="form-label text-muted small fw-bold mb-1">Arama</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0 text-muted"><i class="ph ph-magnifying-glass"></i></span>
+                        <input type="text" name="q" class="form-control border-start-0 ps-0" placeholder="İsim, vergi no, telefon..." value="@Context.Request.Query["q"]">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-muted small fw-bold mb-1">Sektör / Ustalık</label>
+                    <select class="form-select border-0 shadow-sm select2-search" style="width: 100%;" data-placeholder="Tüm Sektörler">
+                        <option value="">Tüm Sektörler</option>
+                        @if(categories != null)
+                        {
+                            foreach(var cat in categories)
+                            {
+                                <option value="@cat.Id">@cat.Name</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-muted small fw-bold mb-1">İl</label>
+                    <select class="form-select border-0 shadow-sm select2-search" style="width: 100%;" data-placeholder="Tüm İller">
+                        <option value="">Tüm İller</option>
+                        @if(cities != null)
+                        {
+                            foreach(var city in cities)
+                            {
+                                <option value="@city.Id">@city.Name</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-dark rounded-pill w-100 fw-bold">Filtrele</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Grid -->
+    <div class="card border-0 shadow-sm" style="border-radius: 15px;">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="px-4 py-3 border-0 rounded-top-start">@(listType == "usta" ? "Usta Adı Soyadı" : "Firma Ünvanı")</th>
+                            <th class="px-4 py-3 border-0">Kategoriler / Alanlar</th>
+                            <th class="px-4 py-3 border-0">Kayıt Tarihi</th>
+                            <th class="px-4 py-3 border-0">Hesap Durumu</th>
+                            <th class="px-4 py-3 border-0">Kayıt Eden (Referans)</th>
+                            <th class="px-4 py-3 border-0 text-end rounded-top-end">İşlemler (CRM)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if(!Model.Any()) {
+                            <tr><td colspan="6" class="text-center py-5 text-muted">Bu kategoride henüz kayıt bulunamadı.</td></tr>
+                        }
+                        @foreach(var item in Model)
+                        {
+                            <tr>
+                                <td class="px-4 py-3">
+                                    <div class="fw-bold text-dark mb-1">@item.Name</div>
+                                    <div class="small text-muted"><i class="ph-fill ph-identification-card me-1"></i>@(item.LegalStatus == GMK360.Core.Entities.B2b.LegalEntityType.Individual ? "Bireysel (Şahıs)" : "Tüzel Kişi (Şirket)")</div>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <div class="d-flex flex-wrap gap-1">
+                                        @foreach(var cat in item.CompanyCategories)
+                                        {
+                                            <span class="badge bg-warning bg-opacity-10 text-dark border border-warning border-opacity-25 px-2 py-1">@(cat.DefinitionValue?.Name ?? "-")</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <div class="fw-bold text-dark">@item.CreatedAt.ToString("dd.MM.yyyy")</div>
+                                    <div class="small text-muted">@item.CreatedAt.ToString("HH:mm")</div>
+                                </td>
+                                <td class="px-4 py-3">
+                                    @if(item.InvitationStatus == GMK360.Core.Entities.B2b.B2bInvitationStatus.Shadow)
+                                    {
+                                        <span class="badge bg-dark bg-opacity-10 text-dark border border-dark border-opacity-25"><i class="bi bi-moon-stars-fill text-dark me-1"></i> Gölge Kullanıcı</span>
+                                    }
+                                    else if(item.InvitationStatus == GMK360.Core.Entities.B2b.B2bInvitationStatus.Invited)
+                                    {
+                                        <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25"><i class="bi bi-envelope-paper-fill me-1"></i> Davet Edildi</span>
+                                    }
+                                    else if(item.InvitationStatus == GMK360.Core.Entities.B2b.B2bInvitationStatus.Active)
+                                    {
+                                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25"><i class="bi bi-check-circle-fill me-1"></i> Aktif Üye</span>
+                                    }
+                                    else if(item.InvitationStatus == GMK360.Core.Entities.B2b.B2bInvitationStatus.Pro)
+                                    {
+                                        <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-50"><i class="bi bi-star-fill text-warning me-1"></i> Pro Üye</span>
+                                    }
+                                </td>
+                                <td class="px-4 py-3">
+                                    @if(item.AddedByUserId != null)
+                                    {
+                                        <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 px-2 py-1">
+                                            <i class="bi bi-person-badge-fill me-1"></i> Ana Kullanıcı Eklemesi
+                                        </span>
+                                    }
+                                    else if(item.AddedByAgency != null)
+                                    {
+                                        <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 px-2 py-1">
+                                            <i class="ph-fill ph-handshake me-1"></i> @item.AddedByAgency.CompanyName
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-light text-muted border px-2 py-1">Sistem Yöneticisi</span>
+                                    }
+                                </td>
+                                <td class="px-4 py-3 text-end">
+                                    @if(item.InvitationStatus == GMK360.Core.Entities.B2b.B2bInvitationStatus.Shadow)
+                                    {
+                                        <button class="btn btn-sm btn-primary fw-bold shadow-sm" onclick="alert('SMS/Mail Daveti Gönderilecek')">
+                                            <i class="bi bi-send-fill me-1"></i> Davet Gönder
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-light border text-muted">
+                                            <i class="bi bi-three-dots"></i>
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Yeni Ekle (Mock - UI için hazırlanacak) -->
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 15px;">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold">Yeni @(listType == "usta" ? "Usta" : (listType == "tedarikci" ? "Tedarikçi" : "Firma")) Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="AddB2bCompany" method="post">
+                <input type="hidden" name="listType" value="@listType" />
+                <div class="modal-body">
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Ünvan / İsim</label>
+                        <input type="text" class="form-control" placeholder="Örn: Ahmet Yılmaz veya XYZ İnşaat A.Ş." name="name" required />
+                    </div>
+
+                    <!-- Hukuki Statü -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Hukuki Statü</label>
+                        <div class="d-flex gap-4">
+                            <div class="form-check">
+                                <input class="form-check-input legal-status-radio" type="radio" name="legalStatus" id="legalIndividual" value="1" checked>
+                                <label class="form-check-label" for="legalIndividual">Şahıs (Bireysel)</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input legal-status-radio" type="radio" name="legalStatus" id="legalCorporate" value="2">
+                                <label class="form-check-label" for="legalCorporate">Şirket (Tüzel Kişi)</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Şahıs Alanları -->
+                    <div id="individualFields">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">TC Kimlik No</label>
+                            <input type="text" class="form-control" name="tcKimlik" placeholder="İsteğe Bağlı" />
+                        </div>
+                    </div>
+
+                    <!-- Şirket Alanları -->
+                    <div id="corporateFields" style="display:none;">
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label fw-bold small">Vergi Dairesi</label>
+                                <input type="text" class="form-control" name="taxOffice" />
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label fw-bold small">Vergi No</label>
+                                <input type="text" class="form-control" name="taxNumber" />
+                            </div>
+                        </div>
+                        <div class="mb-3 form-check form-switch bg-light p-3 rounded">
+                            <input class="form-check-input ms-0 me-2" type="checkbox" name="isEnterprise" id="isEnterprise" value="true">
+                            <label class="form-check-label small fw-bold" for="isEnterprise">Bu firmanın şubeleri / alt bayi ağı var (Kurumsal Ağ)</label>
+                        </div>
+                    </div>
+
+                    <!-- Ortak İletişim / Lokasyon -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Telefon Numarası</label>
+                        <input type="text" class="form-control" placeholder="05XX XXX XX XX" name="phone" required />
+                    </div>
+
+                    <div class="row">
+                        <div class="col-4 mb-3">
+                            <label class="form-label fw-bold small">Hizmet İli</label>
+                            <select class="form-select select2-search" id="modalCity" name="cityId" style="width: 100%;" required>
+                                <option value="">İl Seçin</option>
+                                @if(cities != null)
+                                {
+                                    foreach(var c in cities)
+                                    {
+                                        <option value="@c.Id">@c.Name</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-4 mb-3">
+                            <label class="form-label fw-bold small">İlçe</label>
+                            <select class="form-select select2-search" id="modalDistrict" name="districtId" style="width: 100%;">
+                                <option value="">İlçe Seçin</option>
+                            </select>
+                        </div>
+                        <div class="col-4 mb-3">
+                            <label class="form-label fw-bold small">Mahalle</label>
+                            <select class="form-select select2-search" id="modalNeighborhood" name="neighborhoodId" style="width: 100%;">
+                                <option value="">Mahalle Seçin</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">@(listType == "usta" ? "Ustalık Alanları" : "Sektörleri")</label>
+                        <div id="categoryRepeaterContainer">
+                            <div class="category-row d-flex gap-2 mb-2">
+                                <select class="form-select single-select2" name="categoryIds" style="width: 100%;" required>
+                                    <option value="">Seçiniz...</option>
+                                    @if(categories != null)
+                                    {
+                                        foreach(var cat in categories)
+                                        {
+                                            <option value="@cat.Id">@cat.Name</option>
+                                        }
+                                    }
+                                </select>
+                                <button type="button" class="btn btn-outline-danger remove-category-btn" style="display:none;"><i class="bi bi-trash"></i></button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary mt-1" id="addCategoryBtn">
+                            <i class="bi bi-plus-lg"></i> Yanına Ekle (Yeni Satır)
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn @btnColor rounded-pill px-4 fw-bold">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js">
+        
+
+    </script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js">
+        
+
+    </script>
+    <script>
+        $(document).ready(function() {
+            // Select2'yi Modal ile uyumlu balat
+            $('.select2-search').select2({
+                theme: "classic",
+                width: 'resolve',
+                dropdownParent: $('#addModal')
+            });
+
+            // Hukuki Stat Deiimi
+            $('.legal-status-radio').change(function() {
+                if(this.value == '1') {
+                    $('#individualFields').show();
+                    $('#corporateFields').hide();
+                } else {
+                    $('#individualFields').hide();
+                    $('#corporateFields').show();
+                }
+            });
+            
+            // Eer Kurumsal/Tedariki sekmesindeysek varsaylan olarak irket'i se
+            if('@ViewBag.ListType' == 'firma' || '@ViewBag.ListType' == 'tedarikci') {
+                $('#legalCorporate').prop('checked', true).trigger('change');
+            }
+            
+            // ========================================================
+            // B2B KONUM YKLEME ALGORTMASI (Vanilla JS + Fetch)
+            // ========================================================
+            var citySelect = document.getElementById('modalCity');
+            var districtSelect = document.getElementById('modalDistrict');
+            var neighborhoodSelect = document.getElementById('modalNeighborhood');
+            
+            // 1. ehir seildiinde leleri Getir
+            $('#modalCity').on('change', function() {
+                var cityId = this.value;
+                
+                // i boalt ve ykleniyor yaz
+                districtSelect.innerHTML = '<option value="">Ykleniyor...</option>';
+                neighborhoodSelect.innerHTML = '<option value="">nce le Seiniz...</option>';
+                $('#modalDistrict').trigger('change.select2');
+                $('#modalNeighborhood').trigger('change.select2');
+                
+                if(!cityId) {
+                    districtSelect.innerHTML = '<option value="">le Sein</option>';
+                    $('#modalDistrict').trigger('change.select2');
+                    return;
+                }
+                
+                // Veritabanndan ek
+                fetch('/AdminLocation/GetDistricts?cityId=' + cityId)
+                    .then(res => res.json())
+                    .then(data => {
+                        districtSelect.innerHTML = '<option value="">le Sein</option>';
+                        if(data && data.length > 0) {
+                            data.forEach(d => {
+                                districtSelect.innerHTML += `<option value="${d.id}">${d.name}</option>`;
+                            });
+                        } else {
+                            districtSelect.innerHTML = '<option value="">Bu ile ait ile bulunamad</option>';
+                        }
+                        // Grseli yenile
+                        $('#modalDistrict').trigger('change.select2');
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        districtSelect.innerHTML = '<option value="">Balant Hatas</option>';
+                        $('#modalDistrict').trigger('change.select2');
+                    });
+            });
+
+            // 2. le seildiinde Mahalleleri Getir
+            $('#modalDistrict').on('change', function() {
+                var districtId = this.value;
+                
+                neighborhoodSelect.innerHTML = '<option value="">Ykleniyor...</option>';
+                $('#modalNeighborhood').trigger('change.select2');
+                
+                if(!districtId) {
+                    neighborhoodSelect.innerHTML = '<option value="">Mahalle Sein</option>';
+                    $('#modalNeighborhood').trigger('change.select2');
+                    return;
+                }
+                
+                fetch('/AdminLocation/GetNeighborhoods?districtId=' + districtId)
+                    .then(res => res.json())
+                    .then(data => {
+                        neighborhoodSelect.innerHTML = '<option value="">Mahalle Sein</option>';
+                        if(data && data.length > 0) {
+                            data.forEach(n => {
+                                neighborhoodSelect.innerHTML += `<option value="${n.id}">${n.name}</option>`;
+                            });
+                        } else {
+                            neighborhoodSelect.innerHTML = '<option value="">Bu ileye ait mahalle bulunamad</option>';
+                        }
+                        $('#modalNeighborhood').trigger('change.select2');
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        neighborhoodSelect.innerHTML = '<option value="">Balant Hatas</option>';
+                        $('#modalNeighborhood').trigger('change.select2');
+                    });
+            });
+        });
+    
+        
+
+    
+        // --- YENİ EKLENEN: Tekrarlı Kategori (Branş) Seçici Mantığı ---
+        function initCategoryRepeater() {
+            $('.single-select2').select2({
+                dropdownParent: $('#addModal')
+            });
+
+            $('#addCategoryBtn').off('click').on('click', function() {
+                var container = $('#categoryRepeaterContainer');
+                var firstRow = container.find('.category-row').first();
+                
+                firstRow.find('select').select2('destroy');
+                
+                var newRow = firstRow.clone();
+                newRow.find('select').val(''); 
+                newRow.find('.remove-category-btn').show(); 
+                
+                container.append(newRow);
+                
+                container.find('select.single-select2').select2({
+                    dropdownParent: $('#addModal')
+                });
+            });
+
+            $(document).on('click', '.remove-category-btn', function() {
+                $(this).closest('.category-row').remove();
+            });
+        }
+        
+        $('#addModal').on('shown.bs.modal', function () {
+            initCategoryRepeater();
+        });
+
+    </script>
+}

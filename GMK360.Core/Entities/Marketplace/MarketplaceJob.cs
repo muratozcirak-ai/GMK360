@@ -22,3 +22,4 @@ namespace GMK360.Core.Entities.Marketplace
         public ICollection<MarketplaceBid> Bids { get; set; } = new List<MarketplaceBid>();
     }
 }
+

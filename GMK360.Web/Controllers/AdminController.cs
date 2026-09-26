@@ -1,11 +1,12 @@
 ﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GMK360.Web.Controllers
 {
     [Authorize(Roles = "SuperAdmin,Admin")]
-    public class AdminController : Controller
+    public partial class AdminController : Controller
     {
         private readonly GMK360.Data.Contexts.ApplicationDbContext _context;
 
@@ -29,6 +30,28 @@ namespace GMK360.Web.Controllers
 
         // 3. İlan ve Portföy Merkezi
         
+        public async Task<IActionResult> GlobalProviders()
+        {
+            var providers = await _context.B2bCompanies
+                .Include(c => c.AddedByAgency)
+                .Include(c => c.CompanyCategories)
+                    .ThenInclude(cc => cc.DefinitionValue)
+                .Include(c => c.Branches)
+                .Include(c => c.Contacts)
+                .OrderByDescending(c => c.CreatedAt)
+                .ToListAsync();
+                
+            ViewBag.Categories = await _context.DefinitionValues
+                .Include(v => v.Category)
+                .Where(v => v.Category.SystemCode == "B2BSectors")
+                .OrderBy(v => v.Order)
+                .ToListAsync();
+                
+            ViewBag.Cities = await _context.Cities.OrderBy(c => c.Name).ToListAsync();
+            
+            return View(providers);
+        }
+
         public IActionResult Users()
         {
             return RedirectToAction("Index", "AdminCRM");

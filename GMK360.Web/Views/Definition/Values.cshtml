@@ -21,13 +21,15 @@
             <h5 class="card-title fw-bold mb-3"><i class="ph ph-plus-circle me-2 text-primary"></i>Yeni Seçenek Ekle</h5>
             <form asp-action="AddValue" method="post">
                 <input type="hidden" name="categoryId" value="@category?.Id" />
+                <input type="hidden" name="order" value="@(Model.Any() ? Model.Max(x => x.Order) + 1 : 1)" />
                 <div class="row g-3 align-items-center">
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <div class="form-floating">
-                            <input type="text" name="name" id="valName" class="form-control" placeholder="Örn: Asansör" required />
-                            <label for="valName">Seçenek Adı (Örn: Asansör)</label>
+                            <input type="text" name="name" id="valName" class="form-control" placeholder="Seçenek Adı" required />
+                            <label for="valName">Seçenek Adı</label>
                         </div>
                     </div>
+                    @if (category.SystemCode != "B2BSectors" && category.SystemCode != "B2BUstaSectors") {
                     <div class="col-md-2">
                         <div class="form-floating">
                             <input type="text" name="systemCode" id="valSys" class="form-control" placeholder="Opsiyonel" />
@@ -40,16 +42,13 @@
                             <label for="valSub">Alt Seçenekler (Virgülle)</label>
                         </div>
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-md-1">
                         <div class="form-check form-switch mt-2">
                             <input class="form-check-input" type="checkbox" id="valHasCount" name="hasCount" value="true">
-                            <label class="form-check-label fw-bold" for="valHasCount">Adet Sorulsun mu?</label>
-                        </div>
-                        <div class="form-floating mt-2">
-                            <input type="number" name="order" id="valOrd" class="form-control form-control-sm" value="1" required />
-                            <label for="valOrd">Sıra No</label>
+                            <label class="form-check-label fw-bold" for="valHasCount">Adet?</label>
                         </div>
                     </div>
+                    }
                     <div class="col-md-2">
                         <button type="submit" class="btn btn-primary w-100 py-3 fw-bold" style="border-radius: 10px;">
                             <i class="ph ph-plus me-1"></i> Ekle
@@ -69,8 +68,12 @@
                         <tr>
                             <th class="px-4 py-3 border-0 rounded-top-start" style="width:80px;">Sıra</th>
                             <th class="px-4 py-3 border-0">Seçenek (Değer)</th>
+                            @if (category.SystemCode != "B2BSectors" && category.SystemCode != "B2BUstaSectors") {
                             <th class="px-4 py-3 border-0">Matris Ayarları</th>
+                        }
+                            @if (category.SystemCode != "B2BSectors" && category.SystemCode != "B2BUstaSectors") {
                             <th class="px-4 py-3 border-0">Sistem Kodu</th>
+                        }
                             <th class="px-4 py-3 border-0 text-end rounded-top-end">İşlemler</th>
                         </tr>
                     </thead>
@@ -83,10 +86,13 @@
                             <tr>
                                 <td class="px-4 py-3 fw-bold text-muted">@val.Order</td>
                                 <td class="px-4 py-3 fw-bold">@val.Name</td>
+                                @if (category.SystemCode != "B2BSectors" && category.SystemCode != "B2BUstaSectors") {
                                 <td class="px-4 py-3">
                                     @if(val.HasCount) { <span class="badge bg-info me-1">Adet Sorulur</span> }
                                     @if(!string.IsNullOrEmpty(val.SubOptions)) { <span class="badge bg-warning text-dark" title="@val.SubOptions">Alt Seçenekler Var</span> }
                                 </td>
+                                }
+                                @if (category.SystemCode != "B2BSectors" && category.SystemCode != "B2BUstaSectors") {
                                 <td class="px-4 py-3">
                                     @if(!string.IsNullOrEmpty(val.SystemCode)) {
                                         <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 px-2 py-1">@val.SystemCode</span>
@@ -94,6 +100,7 @@
                                         <span class="text-muted">-</span>
                                     }
                                 </td>
+                                }
                                 <td class="px-4 py-3 text-end">
                                     <button type="button" class="btn btn-sm btn-outline-primary me-1" style="border-radius: 6px;" title="Düzenle" data-bs-toggle="modal" data-bs-target="#editModal-@val.Id">
                                         <i class="ph ph-pencil-simple"></i>
@@ -111,37 +118,38 @@
                                         <div class="modal-dialog">
                                             <div class="modal-content">
                                                 <div class="modal-header">
-                                                    <h5 class="modal-title" id="editModalLabel-@val.Id">Seçeneği Düzenle</h5>
+                                                    <h5 class="modal-title fw-bold" id="editModalLabel-@val.Id">Seçeneği Düzenle</h5>
                                                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                                 </div>
                                                 <form asp-action="EditValue" method="post">
                                                     <div class="modal-body">
                                                         <input type="hidden" name="id" value="@val.Id" />
                                                         <input type="hidden" name="categoryId" value="@category.Id" />
+                                                        <input type="hidden" name="order" value="@val.Order" />
+                                                        
                                                         <div class="mb-3">
-                                                            <label class="form-label">Seçenek Adı</label>
+                                                            <label class="form-label fw-bold small">Seçenek Adı</label>
                                                             <input type="text" name="name" class="form-control" value="@val.Name" required />
                                                         </div>
+                                                        
+                                                        @if (category.SystemCode != "B2BSectors" && category.SystemCode != "B2BUstaSectors") {
                                                         <div class="mb-3">
-                                                            <label class="form-label">Sistem Kodu</label>
+                                                            <label class="form-label fw-bold small">Sistem Kodu</label>
                                                             <input type="text" name="systemCode" class="form-control" value="@val.SystemCode" />
                                                         </div>
                                                         <div class="mb-3">
-                                                            <label class="form-label">Alt Seçenekler (Virgülle)</label>
+                                                            <label class="form-label fw-bold small">Alt Seçenekler (Virgülle ayırın)</label>
                                                             <input type="text" name="subOptions" class="form-control" value="@val.SubOptions" />
                                                         </div>
-                                                        <div class="mb-3 form-check form-switch">
-                                                            <input class="form-check-input" type="checkbox" name="hasCount" value="true" @(val.HasCount ? "checked" : "")>
-                                                            <label class="form-check-label">Adet Sorulsun mu?</label>
+                                                        <div class="mb-3 form-check form-switch bg-light p-2 rounded">
+                                                            <input class="form-check-input ms-0 me-2" type="checkbox" name="hasCount" value="true" @(val.HasCount ? "checked" : "")>
+                                                            <label class="form-check-label small fw-bold">Adet Sorulsun mu?</label>
                                                         </div>
-                                                        <div class="mb-3">
-                                                            <label class="form-label">Sıra No</label>
-                                                            <input type="number" name="order" class="form-control" value="@val.Order" required />
-                                                        </div>
+                                                        }
                                                     </div>
-                                                    <div class="modal-footer">
-                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
-                                                        <button type="submit" class="btn btn-primary">Kaydet</button>
+                                                    <div class="modal-footer border-0 pt-0">
+                                                        <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                                                        <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">Kaydet</button>
                                                     </div>
                                                 </form>
                                             </div>
@@ -156,3 +164,4 @@
         </div>
     </div>
 </div>
+

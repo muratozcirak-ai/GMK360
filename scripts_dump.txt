@@ -1,0 +1,694 @@
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+    function handleOriginChange(sel) {
+            var eskiBina = document.getElementById('eskiBinaContainer');
+            if(sel.value == "1") {
+                eskiBina.style.display = 'block';
+            } else {
+                eskiBina.style.display = 'none';
+            }
+        }
+        
+        document.addEventListener("DOMContentLoaded", function() { handleStatusChange(); });
+</script>
+<script>
+    
+    </script>
+
+
+<script>
+window.onerror = function(message, source, lineno, colno, error) {
+    alert("JAVASCRIPT HATASI:\n" + message + "\nSatır: " + lineno);
+};
+</script>
+
+    <script>
+        
+        let map, marker;
+        
+        
+        let ownerIndex = @(Model.Owners?.Count ?? 0);
+        function addOwnerRow() {
+            const container = document.getElementById('ownersList');
+            
+            // Get block options dynamically from Step 2 inputs
+            let blockOptions = '<option value="">Seçiniz</option>';
+            const blockInputs = document.querySelectorAll('#blocksContainer .block-item input[name$=".BlockName"]');
+            blockInputs.forEach(input => {
+                if(input.value.trim() !== '') {
+                    blockOptions += `<option value="${input.value.trim()}">${input.value.trim()}</option>`;
+                }
+            });
+
+            // Definition'dan gelecek statik (şimdilik) liste
+            const unitTypeOptions = `
+                <option value="">Seçiniz</option>
+                <option value="Daire">Daire</option>
+                <option value="Dükkan">Dükkan</option>
+                <option value="Dubleks">Dubleks</option>
+                <option value="Ofis">Ofis</option>
+            `;
+
+            const html = `
+                <div class="row g-2 align-items-end mb-2 pb-2 border-bottom owner-item bg-light p-2 rounded">
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted mb-1">Ad Soyad</label>
+                        <div class="input-group input-group-sm">
+                            <input type="text" name="Owners[${ownerIndex}].FirstName" class="form-control" placeholder="Ad" required />
+                            <input type="text" name="Owners[${ownerIndex}].LastName" class="form-control" placeholder="Soyad" required />
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted mb-1">İletişim</label>
+                        <input type="tel" name="Owners[${ownerIndex}].PhoneNumber" class="form-control form-control-sm" placeholder="Telefon" />
+                        <input type="hidden" name="Owners[${ownerIndex}].Email" value="" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted mb-1">Blok Seçimi</label>
+                        <select name="Owners[${ownerIndex}].BlockName" class="form-select form-select-sm">
+                            ${blockOptions.replace('value=""', 'value="" selected').replace('Seçiniz', 'Tümü / Belirsiz')}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted mb-1">Ünite Tipi</label>
+                        <select name="Owners[${ownerIndex}].UnitType" class="form-select form-select-sm">
+                            ${unitTypeOptions.replace('value=""', 'value="" selected').replace('Seçiniz', 'Tümü')}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted mb-1 text-primary">Adet / Miktar</label>
+                        <input type="text" name="Owners[${ownerIndex}].Quantity" class="form-control form-control-sm border-primary" placeholder="Örn: 4 Adet veya %50" />
+                    </div>
+                    <div class="col-md-1 text-center pb-1">
+                        <div class="form-check form-switch d-inline-block" title="Sadece Temsilci mi?">
+                            <input class="form-check-input" type="checkbox" name="Owners[${ownerIndex}].IsRepresentative" value="true" id="repSwitch_${ownerIndex}">
+                            <label class="form-check-label" style="font-size:0.7rem;" for="repSwitch_${ownerIndex}">Temsilci</label>
+                        </div>
+                    </div>
+                    <div class="col-md-1 d-flex gap-1">
+                        <button type="button" class="btn btn-sm btn-outline-success w-100 save-row-btn" onclick="saveSingleOwner(this)" title="Anında Kaydet"><i class="bi bi-check-lg"></i></button>
+                        <button type="button" class="btn btn-sm btn-outline-danger w-100" onclick="this.closest('.owner-item').remove()" title="Sil"><i class="bi bi-trash"></i></button>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
+            ownerIndex++;
+        }
+
+        function saveSingleOwner(btn) {
+            const row = btn.closest('.owner-item');
+            const projectId = document.querySelector('input[name="DraftProjectId"]').value;
+            
+            // Collect data
+            const firstName = row.querySelector('input[name$=".FirstName"]').value;
+            const lastName = row.querySelector('input[name$=".LastName"]').value;
+            const phone = row.querySelector('input[name$=".PhoneNumber"]').value;
+            const email = row.querySelector('input[name$=".Email"]').value;
+            const blockName = row.querySelector('select[name$=".BlockName"]').value;
+            const unitType = row.querySelector('select[name$=".UnitType"]').value;
+            const flatNumber = row.querySelector('input[name$=".FlatNumber"]').value;
+            const isRep = row.querySelector('input[name$=".IsRepresentative"]').checked;
+
+            if(!firstName || !lastName) {
+                alert("Lütfen en azından Ad ve Soyad giriniz.");
+                return;
+            }
+
+            const formData = new FormData();
+            // Get anti-forgery token
+            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+            formData.append('__RequestVerificationToken', token);
+            formData.append('projectId', projectId);
+            formData.append('firstName', firstName);
+            formData.append('lastName', lastName);
+            formData.append('phone', phone);
+            formData.append('email', email);
+            formData.append('blockName', blockName);
+            formData.append('unitType', unitType);
+            formData.append('flatNumber', flatNumber);
+            formData.append('isRep', isRep);
+
+            // Visual feedback
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+            btn.disabled = true;
+
+            fetch('/ConstructionProject/SaveSingleOwner', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    btn.classList.replace('btn-outline-success', 'btn-success');
+                    btn.innerHTML = '<i class="bi bi-check-all"></i>';
+                    alert(firstName + " " + lastName + " başarıyla kaydedildi!");
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.classList.replace('btn-success', 'btn-outline-success');
+                        btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+                    }, 2000);
+                } else {
+                    alert("Kayıt hatası: " + data.message);
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            })
+            .catch(err => {
+                alert("Bağlantı hatası: " + err.message);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            });
+        }
+
+        function submitWizard() {
+            // Fix Owner indices so ASP.NET MVC binding doesn't break on gaps
+            const ownerItems = document.querySelectorAll('#ownersList .owner-item');
+            ownerItems.forEach((item, index) => {
+                const inputs = item.querySelectorAll('input, select');
+                inputs.forEach(input => {
+                    if(input.name && input.name.startsWith('Owners[')) {
+                        input.name = input.name.replace(/Owners\[\d+\]/, `Owners[${index}]`);
+                    }
+                });
+            });
+            document.getElementById('wizardForm').submit();
+        }
+
+        function saveStep3AndContinue() {
+            prepareSummary();
+        }
+        
+        // ==========================================
+
+        // DİKKAT: AŞAMA 2 KAYDETME KODLARIDIR. 
+        // KUSURSUZ ÇALIŞMAKTADIR. HİÇBİR ZAMAN BU KODLARA DOKUNMA/SİLME/DEĞİŞTİRME!
+        // ==========================================
+        function saveBlocksAndContinue() {
+            var form = document.getElementById('wizardForm');
+            var step = document.getElementById('step2');
+            var invalidElements = step.querySelectorAll(':invalid');
+            if(invalidElements.length > 0) {
+                alert("Lütfen tüm blok tanımlarını eksiksiz doldurun.");
+                invalidElements[0].reportValidity();
+                return;
+            }
+
+            var formData = new FormData(form);
+            fetch('/ConstructionProject/SaveStep2', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    nextStep(3);
+                } else {
+                    alert('Kayıt Hatası: ' + (data.message || 'Bilinmeyen Hata'));
+                }
+            })
+            .catch(err => {
+                alert('Beklenmeyen bir sunucu hatası oluştu.');
+            });
+        }
+        
+        // ==========================================
+
+        // DİKKAT: AŞAMA 1 HARİTA (MAP) KODLARIDIR. 
+        // KUSURSUZ ÇALIŞMAKTADIR. HİÇBİR ZAMAN BU KODLARA DOKUNMA/DEĞİŞTİRME!
+        // ==========================================
+        function openMapModal() {
+            var mapModal = new bootstrap.Modal(document.getElementById('mapModal'));
+            mapModal.show();
+            
+            setTimeout(() => {
+                if(!map) {
+                    map = L.map('projectMap').setView([41.0082, 28.9784], 13);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors'
+                    }).addTo(map);
+                    
+                    marker = L.marker([41.0082, 28.9784], {draggable: true}).addTo(map);
+                    
+                    map.on('click', function(e) {
+                        marker.setLatLng(e.latlng);
+                    });
+                } else {
+                    map.invalidateSize();
+                }
+
+                var cityName = $('#CityId option:selected').text();
+                var distName = $('#DistrictId option:selected').text();
+                var neighName = $('#NeighborhoodId option:selected').text();
+                var streetName = $('#StreetId option:selected').text();
+                
+                if (cityName && cityName !== 'Seçiniz') {
+                    var query = '';
+                    if (neighName && neighName !== 'Seçiniz' && neighName !== 'Yükleniyor...') {
+                        if (streetName && streetName !== 'Seçiniz' && streetName !== 'Yükleniyor...') {
+                            query = `${streetName}, ${neighName}, ${distName}, ${cityName}, Turkey`;
+                        } else {
+                            query = `${neighName}, ${distName}, ${cityName}, Turkey`;
+                        }
+                    } else if (distName && distName !== 'Seçiniz') {
+                        query = `${distName}, ${cityName}, Turkey`;
+                    } else {
+                        query = `${cityName}, Turkey`;
+                    }
+
+                    var query = '';
+                    if (neighName && neighName !== 'Seçiniz' && neighName !== 'Yükleniyor...') {
+                        if (streetName && streetName !== 'Seçiniz' && streetName !== 'Yükleniyor...') {
+                            query = `${streetName}, ${neighName}, ${distName}, ${cityName}, Turkey`;
+                        } else {
+                            query = `${neighName}, ${distName}, ${cityName}, Turkey`;
+                        }
+                    } else if (distName && distName !== 'Seçiniz') {
+                        query = `${distName}, ${cityName}, Turkey`;
+                    } else {
+                        query = `${cityName}, Turkey`;
+                    }
+
+                    var tryGeocode = function(searchQuery, zoomLvl) {
+                        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`)
+                        .then(res => res.json())
+                        .then(data => {
+                            if(data && data.length > 0) {
+                                var lat = parseFloat(data[0].lat);
+                                var lon = parseFloat(data[0].lon);
+                                map.setView([lat, lon], zoomLvl);
+                                marker.setLatLng([lat, lon]);
+                            } else {
+                                // Bulamazsa bir üste geç
+                                if (searchQuery.includes(streetName) && streetName) {
+                                    tryGeocode(`${neighName}, ${distName}, ${cityName}, Turkey`, 15);
+                                } else if (searchQuery.includes(neighName) && neighName) {
+                                    tryGeocode(`${distName}, ${cityName}, Turkey`, 13);
+                                }
+                            }
+                        });
+                    };
+                    
+                    tryGeocode(query, 16);
+                }
+            }, 500);
+        }
+
+        function saveMapLocation() {
+            if(marker) {
+                var pos = marker.getLatLng();
+                document.getElementById('latInput').value = pos.lat.toFixed(6);
+                document.getElementById('lngInput').value = pos.lng.toFixed(6);
+            }
+            var mapModal = bootstrap.Modal.getInstance(document.getElementById('mapModal'));
+            if(mapModal) mapModal.hide();
+        }
+
+        
+        // ==========================================
+        // DİKKAT: AŞAMA 1 KAYDETME KODLARIDIR. 
+        // KUSURSUZ ÇALIŞMAKTADIR. HİÇBİR ZAMAN BU KODLARA DOKUNMA/DEĞİŞTİRME!
+        // ==========================================
+        function saveStep1AndContinue() {
+            var form = document.getElementById('wizardForm');
+            var step = document.getElementById('step1');
+            var invalidElements = step.querySelectorAll(':invalid');
+            if(invalidElements.length > 0) {
+                  var msg = "Eksik veya hatalı alanlar var:\\n";
+                  invalidElements.forEach(el => {
+                      var name = el.name || el.id || 'Bilinmeyen Alan';
+                      msg += "- " + name + "\\n";
+                  });
+                  alert(msg);
+                  invalidElements[0].reportValidity();
+                  return;
+              }
+
+            // AJAX POST
+            var formData = new FormData(form);
+            fetch('/ConstructionProject/SaveStep1', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    // Persist draft id in the hidden field
+                    document.getElementById('DraftProjectId').value = data.projectId;
+
+                    // Update the URL so that a page refresh keeps the draft id
+                    // This ensures the Create(id) GET loads the same draft on F5
+                    try {
+                        const newUrl = new URL(window.location.href);
+                        newUrl.searchParams.set('id', data.projectId);
+                        window.history.replaceState({}, document.title, newUrl.toString());
+                    } catch (e) {
+                        // fallback
+                        window.location.hash = '#draft-' + data.projectId;
+                    }
+
+                    nextStep(2);
+                } else {
+                    alert('Kayıt sırasında bir hata oluştu: ' + (data.message || 'Bilinmeyen hata'));
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Bağlantı hatası.');
+            });
+        }
+
+        function nextStep(step) {
+            document.querySelectorAll('.wizard-step').forEach(el => el.classList.remove('active'));
+            document.getElementById('step' + step).classList.add('active');
+            
+            // Update Indicators
+            if(step == 1) {
+                document.getElementById('ind-1').className = "step-indicator active";
+                document.getElementById('ind-2').className = "step-indicator";
+                document.getElementById('ind-3').className = "step-indicator";
+                document.getElementById('line-1').className = "step-line";
+                document.getElementById('line-2').className = "step-line";
+            }
+            if(step == 2) {
+                document.getElementById('ind-1').className = "step-indicator completed";
+                document.getElementById('ind-2').className = "step-indicator active";
+                document.getElementById('ind-3').className = "step-indicator";
+                document.getElementById('line-1').className = "step-line active";
+                document.getElementById('line-2').className = "step-line";
+                
+                if(document.getElementById('blocksContainer').innerHTML.trim() === '') {
+                    generateBlocks();
+                }
+            }
+            if(step == 3) {
+                document.getElementById('ind-1').className = "step-indicator completed";
+                document.getElementById('ind-2').className = "step-indicator completed";
+                document.getElementById('ind-3').className = "step-indicator active";
+                document.getElementById('line-1').className = "step-line active";
+                document.getElementById('line-2').className = "step-line active";
+            }
+        }
+
+        // ==========================================
+        // DİKKAT: AŞAMA 2 (BLOK OLUŞTURMA) KODLARIDIR. 
+        // KUSURSUZ ÇALIŞMAKTADIR. HİÇBİR ZAMAN BU KODLARA DOKUNMA/SİLME/DEĞİŞTİRME!
+        // ==========================================
+        function generateBlocks() {
+            const count = parseInt(document.getElementById('blockCount').value) || 1;
+            const container = document.getElementById('blocksContainer');
+            const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+              
+              const currentBlocks = container.querySelectorAll('.block-item');
+              const currentCount = currentBlocks.length;
+              
+              if (count < currentCount) {
+                  // Remove excess blocks from the end
+                  for (let i = currentCount - 1; i >= count; i--) {
+                      currentBlocks[i].remove();
+                  }
+              } else if (count > currentCount) {
+                  // Add new blocks
+                  for (let i = currentCount; i < count; i++) {
+                const defaultName = count === 1 ? "Tek Blok" : letters[i] + " Blok";
+                
+                const html = `
+                    <div class="card border border-2 border-light shadow-sm rounded-4 mb-3 block-item">
+                          <div class="card-body p-4">
+                              <h5 class="fw-bold text-navy border-bottom pb-2 mb-3"><i class="ph ph-building me-2 text-orange"></i> ${i+1}. Blok / Yapı Tanımı</h5>
+                              <div class="row g-3">
+                                  <div class="col-md-12 col-lg-3">
+                                        <label class="form-label small fw-bold">Blok / Yapı Adı</label>
+                                        <input type="text" name="Blocks[${i}].BlockName" class="form-control b-name" value="${defaultName}" onkeyup="updatePodiumDropdowns(); updateAttachedDropdowns();" required  />
+                                        
+                                        <label class="form-label small fw-bold mt-2 text-primary">Yapı Karakteri</label>
+                                        <select name="Blocks[${i}].StructureType" class="form-select b-type border-primary" onchange="toggleParent(this)">
+                                            <option value="independent">Müstakil (Kendi Temeli)</option>
+                                            <option value="podium">Ortak Baza (Alt Yapı / Otopark)</option>
+                                            <option value="tower">Baza Üzerinde Kule</option>
+                                        </select>
+                                        
+                                        <select name="Blocks[${i}].ParentIndex" class="form-select b-parent mt-2 border-warning" style="display:none;">
+                                            <option value="">Hangi Bazaya Bağlı?</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12 col-lg-2">
+                                        <label class="form-label small fw-bold">Taban (m²)</label>
+                                        <input type="number" name="Blocks[${i}].BaseArea" class="form-control" placeholder="Örn: 200" min="1" required />
+                                    </div>
+                                  <div class="col-6 col-lg-2">
+                                      <label class="form-label small fw-bold">Normal Kat Sayısı</label>
+                                      <input type="number" name="Blocks[${i}].TotalFloors" class="form-control b-floors" value="5" min="0" required />
+                                    </div>
+                                    <div class="col-6 col-lg-1">
+                                        <label class="form-label small fw-bold">Daire</label>
+                                        <input type="number" name="Blocks[${i}].TotalApartments" class="form-control" value="20" min="0" required />
+                                    </div>
+                                    <div class="col-6 col-lg-1">
+                                        <label class="form-label small fw-bold">Dükkan</label>
+                                        <input type="number" name="Blocks[${i}].TotalShops" class="form-control" value="2" min="0" required />
+                                    </div>
+                                  <div class="col-6 col-lg-2">
+                                        <label class="form-label small fw-bold">Bodrum Kat Sayısı</label>
+                                        <input type="number" name="Blocks[${i}].BasementFloors" class="form-control b-basements" value="1" min="0" required />
+                                        <div class="form-check mt-2">
+                                            <input class="form-check-input" type="checkbox" name="Blocks[${i}].HasGroundFloor" value="true" id="ground_${i}" checked>
+                                            <label class="form-check-label small fw-bold" for="ground_${i}">Zemin Kat Var</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="Blocks[${i}].HasRoof" value="true" id="roof_${i}">
+                                            <label class="form-check-label small fw-bold" for="roof_${i}">Çatı Katı Var</label>
+                                        </div>
+                                    </div>
+                              </div>
+                          </div>
+                      </div>
+                  `;
+                  container.insertAdjacentHTML('beforeend', html);
+              }
+            }
+          }
+// ==========================================
+        // DİKKAT: AŞAMA 1 (STEP 1) KODLARIDIR. 
+        // KUSURSUZ ÇALIŞMAKTADIR. HİÇBİR ZAMAN BU KODLARA DOKUNMA/DEĞİŞTİRME!
+        // ==========================================
+        // Adres Formatlayıcı
+        document.getElementById('fullAddress').addEventListener('input', function(e) {
+            let val = e.target.value;
+            // 1. Türkçe karakter ve noktalama kalsın, garip sembolleri uçur.
+            val = val.replace(/[^a-zA-Z0-9çÇğĞıİöÖşŞüÜ\s\.,:\/-]/g, '');
+            
+            // 2. 16a veya 16A yazılırsa 16/A'ya çevir
+            val = val.replace(/(\d+)([a-zA-ZçÇğĞıİöÖşŞüÜ])/g, '$1/$2');
+            
+            // 3. / yanındaki harfi BÜYÜT
+            val = val.replace(/\/([a-zçğıöşü])/g, function(match, p1) {
+                return '/' + p1.toLocaleUpperCase('tr-TR');
+            });
+            
+            if(e.target.value !== val) {
+                const start = e.target.selectionStart;
+                const end = e.target.selectionEnd;
+                e.target.value = val;
+                e.target.setSelectionRange(start, end);
+            }
+        });
+        
+        
+        
+        
+        $(document).ready(function() {
+            var originSel = document.getElementById('ProjectOriginId');
+            if (originSel) {
+                handleOriginChange(originSel);
+            }
+
+    
+
+            // Enter tuşunun formu otomatik göndermesini engelle
+            $(window).keydown(function(event){
+                if(event.keyCode == 13) {
+                    event.preventDefault();
+                    return false;
+                }
+            });
+
+            // Sehir degisince ilceyi doldur
+                        $('#CityId').change(function() {
+                var cityId = $(this).val();
+                $('#DistrictId').empty().append('<option value="">Yükleniyor...</option>');
+                $('#NeighborhoodId').empty().append('<option value="">Seçiniz</option>');
+                $('#StreetId').empty().append('<option value="">Seçiniz</option>');
+                
+                if (cityId) {
+                    $.ajax({
+                        url: '/api/Location/Districts/' + cityId,
+                        method: 'GET',
+                        dataType: 'json',
+                        success: function(data) {
+                            $('#DistrictId').empty().append('<option value="">İlçe Seçin</option>');
+                            if(data && data.length > 0) {
+                                data.forEach(function(d) {
+                                    var optId = d.id !== undefined ? d.id : d.Id;
+                                    var optName = d.name !== undefined ? d.name : d.Name;
+                                    $('#DistrictId').append('<option value="' + optId + '">' + optName + '</option>');
+                                });
+                            } else {
+                                alert("Sistem Uyarısı: API ilçeleri boş getirdi! Veritabanında ilçeler bulunamıyor olabilir.");
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            alert("Sistem Uyarısı: API çağrısı çöktü!\nHata Kodu: " + xhr.status + "\nMesaj: " + error);
+                            $('#DistrictId').empty().append('<option value="">Hata!</option>');
+                        }
+                    });
+                } else {
+                    $('#DistrictId').empty().append('<option value="">İlçe Seçin</option>');
+                }
+            });
+
+            // Ilce degisince mahalleyi doldur
+            $('#DistrictId').change(function() {
+                var districtId = $(this).val();
+                $('#NeighborhoodId').empty().append('<option value="">Yükleniyor...</option>');
+                $('#StreetId').empty().append('<option value="">Seçiniz</option>');
+                
+                if (districtId) {
+                    $.ajax({
+                        url: '/api/Location/Neighborhoods/' + districtId,
+                        method: 'GET',
+                        dataType: 'json',
+                        success: function(data) {
+                            $('#NeighborhoodId').empty().append('<option value="">Seçiniz</option>');
+                            if(data && data.length > 0) {
+                                data.forEach(function(d) {
+                                    var optId = d.id !== undefined ? d.id : d.Id;
+                                    var optName = d.name !== undefined ? d.name : d.Name;
+                                    $('#NeighborhoodId').append('<option value="' + optId + '">' + optName + '</option>');
+                                });
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            alert("Sistem Uyarısı: Mahalle çağrısı çöktü!\nHata Kodu: " + xhr.status + "\nMesaj: " + error);
+                        }
+                    });
+                } else {
+                    $('#NeighborhoodId').empty().append('<option value="">Seçiniz</option>');
+                }
+            });
+
+            // Mahalle degisince sokagi doldur
+            $('#NeighborhoodId').change(function() {
+                var neighborhoodId = $(this).val();
+                $('#StreetId').empty().append('<option value="">Yükleniyor...</option>');
+                
+                if (neighborhoodId) {
+                    $.ajax({
+                        url: '/api/Location/Streets/' + neighborhoodId,
+                        method: 'GET',
+                        dataType: 'json',
+                        success: function(data) {
+                            $('#StreetId').empty().append('<option value="">Seçiniz</option>');
+                            if(data && data.length > 0) {
+                                data.forEach(function(d) {
+                                    var optId = d.id !== undefined ? d.id : d.Id;
+                                    var optName = d.name !== undefined ? d.name : d.Name;
+                                    $('#StreetId').append('<option value="' + optId + '">' + optName + '</option>');
+                                });
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            alert("Sistem Uyarısı: Sokak çağrısı çöktü!\nHata Kodu: " + xhr.status + "\nMesaj: " + error);
+                        }
+                    });
+                } else {
+                    $('#StreetId').empty().append('<option value="">Seçiniz</option>');
+                }
+            });
+        });
+        function toggleParent(sel) {
+              var val = $(sel).val();
+              var parentSel = $(sel).siblings('.b-parent');
+              if(val === 'tower') {
+                  parentSel.show();
+                  parentSel.attr('required', true);
+              } else {
+                  parentSel.hide();
+                  parentSel.removeAttr('required');
+                  parentSel.val('');
+              }
+              updatePodiumDropdowns();
+          }
+
+          function updatePodiumDropdowns() {
+              var podiums = [];
+              $('.block-item').each(function(index) {
+                  var type = $(this).find('.b-type').val();
+                  var name = $(this).find('.b-name').val();
+                  if(type === 'podium' && name.trim() !== '') {
+                      podiums.push({ idx: index, name: name });
+                  }
+              });
+              
+              $('.b-parent').each(function() {
+                  var currentVal = $(this).val();
+                  $(this).empty();
+                  $(this).append('<option value="">Hangi Bazaya Bağlı?</option>');
+                  var sel = $(this);
+                  podiums.forEach(function(p) {
+                      sel.append('<option value="' + p.idx + '">' + p.name + '</option>');
+                  });
+                  $(this).val(currentVal); 
+              });
+          }
+
+
+
+
+          function prepareSummary() {
+            // Get values from Step 1
+            const name = document.querySelector('input[name="Name"]').value;
+            const desc = document.querySelector('textarea[name="Description"]').value;
+            
+            // Get values from Step 2
+            const blocks = document.querySelectorAll('.block-item');
+            let totalApts = 0;
+            let totalShops = 0;
+            
+            blocks.forEach(b => {
+                let aptsInput = b.querySelector('input[name*="TotalApartments"]');
+                let shopsInput = b.querySelector('input[name*="TotalShops"]');
+                if (aptsInput) totalApts += (parseInt(aptsInput.value) || 0);
+                if (shopsInput) totalShops += (parseInt(shopsInput.value) || 0);
+            });
+
+
+            // Set Summary
+            document.getElementById('summaryName').innerText = name || "İsimsiz Proje";
+            document.getElementById('summaryDesc').innerText = desc;
+            document.getElementById('summaryBlockCount').innerText = blocks.length;
+            document.getElementById('summaryTotalApts').innerText = totalApts;
+            document.getElementById('summaryTotalShops').innerText = totalShops;
+            
+            nextStep(4);
+        }
+        
+    
+
+function handleStatusChange() {
+    var statusSel = document.getElementById('StatusId');
+    var helpText = document.getElementById('statusHelpText');
+    if (!statusSel || !helpText) return;
+    
+    var val = statusSel.value;
+    if (val === '2') {
+        helpText.innerText = 'Aktif olarak inşaatı süren, puantaj ve maliyet takibi yapacağınız projedir.';
+    } else if (val === '0') {
+        helpText.innerText = 'Fizibilite, teklif veya kentsel dönüşüm sürecindeki aday projelerdir.';
+    } else if (val === '3') {
+        helpText.innerText = 'Tamamlanmış referans proje veya sadece bina yönetimi (aidat) yapılacak mülktür.';
+    }
+}
+
+</script>

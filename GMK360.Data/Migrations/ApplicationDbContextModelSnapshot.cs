@@ -921,6 +921,220 @@ namespace GMK360.Data.Migrations
                     b.ToTable("B2BLeads");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.B2b.B2bBranch", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("B2bCompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BranchName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("City")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("District")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("GoogleMapsUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LandlinePhone")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("float");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("B2bCompanyId");
+
+                    b.ToTable("B2bBranches");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.B2b.B2bCompany", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AddedByAgencyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AddedByUserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsEngineering")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsEnterprise")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSubcontractor")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSupplier")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsVerified")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("LegalStatus")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LogoUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<double>("Rating")
+                        .HasColumnType("float");
+
+                    b.Property<string>("TaxNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("TaxOffice")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Website")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AddedByAgencyId");
+
+                    b.HasIndex("AddedByUserId");
+
+                    b.ToTable("B2bCompanies");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.B2b.B2bCompanyCategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("B2bCompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DefinitionValueId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("B2bCompanyId");
+
+                    b.HasIndex("DefinitionValueId");
+
+                    b.ToTable("B2bCompanyCategories");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.B2b.B2bContact", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("B2bCompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DepartmentOrRole")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ExtensionNumber")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LandlinePhone")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("MobilePhone")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("B2bCompanyId");
+
+                    b.ToTable("B2bContacts");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.B2bSupplier", b =>
                 {
                     b.Property<int>("Id")
@@ -1892,8 +2106,20 @@ namespace GMK360.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Address")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("AgencyId")
                         .HasColumnType("int");
+
+                    b.Property<string>("AuthorizedPerson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("AuthorizedPersonRole")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("City")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<byte>("ContactType")
                         .HasColumnType("tinyint");
@@ -1901,9 +2127,21 @@ namespace GMK360.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("District")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Email")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ExtensionNumber")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("GoogleMapsUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Iban")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
@@ -1911,7 +2149,19 @@ namespace GMK360.Data.Migrations
                     b.Property<bool>("IsRegistered")
                         .HasColumnType("bit");
 
+                    b.Property<string>("LandlinePhone")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("float");
+
                     b.Property<string>("LinkedUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("float");
+
+                    b.Property<string>("MobilePhone2")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Name")
@@ -1932,14 +2182,122 @@ namespace GMK360.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("TaxNumber")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TaxOffice")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("WebsiteUrl")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("AgencyId");
 
                     b.ToTable("AgencyPhonebooks");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.AgencyPhonebookBranch", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("AgencyPhonebookId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BranchName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("City")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("District")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("GoogleMapsUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("float");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgencyPhonebookId");
+
+                    b.ToTable("AgencyPhonebookBranch");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.AgencyPhonebookContact", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AgencyPhonebookId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DepartmentOrRole")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ExtensionNumber")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgencyPhonebookId");
+
+                    b.ToTable("AgencyPhonebookContact");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.AgencyWorker", b =>
@@ -2145,6 +2503,73 @@ namespace GMK360.Data.Migrations
                     b.HasIndex("ProjectId");
 
                     b.ToTable("AgendaRecords");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.ConstructionBudgetItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("ActualTotalCost")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("AssetDetailsId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ConstructionProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsUnplannedExtra")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("PhaseCategory")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("PlannedUnitPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("QuoteStatus")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SourceType")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SupplierId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConstructionProjectId");
+
+                    b.HasIndex("SupplierId");
+
+                    b.ToTable("ConstructionBudgetItems");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.ConstructionProject", b =>
@@ -3183,14 +3608,17 @@ namespace GMK360.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime?>("AcquiredDate")
-                        .HasColumnType("datetime2");
+                    b.Property<decimal?>("ActualCost")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTime?>("ApplicationDate")
-                        .HasColumnType("datetime2");
+                    b.Property<decimal?>("AdditionalCost")
+                        .HasColumnType("decimal(18,2)");
 
-                    b.Property<string>("AppliedTo")
+                    b.Property<string>("AssignedUserId")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("CompletedDate")
+                        .HasColumnType("datetime2");
 
                     b.Property<int>("ConstructionProjectId")
                         .HasColumnType("int");
@@ -3198,23 +3626,23 @@ namespace GMK360.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<decimal?>("DocumentCost")
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("DocumentFee")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("DocumentName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<DateTime?>("ExpiryDate")
-                        .HasColumnType("datetime2");
+                    b.Property<decimal?>("EstimatedCost")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("FilePath")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("InstitutionContact")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("InstitutionPhone")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsCustom")
@@ -3223,17 +3651,27 @@ namespace GMK360.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<string>("Notes")
+                    b.Property<string>("IssueNotes")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
+                    b.Property<string>("Stage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("SystemTemplateId")
                         .HasColumnType("int");
 
-                    b.Property<string>("TrackingPerson")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<int?>("TargetContactId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TargetInstitutionId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -3243,6 +3681,10 @@ namespace GMK360.Data.Migrations
                     b.HasIndex("ConstructionProjectId");
 
                     b.HasIndex("SystemTemplateId");
+
+                    b.HasIndex("TargetContactId");
+
+                    b.HasIndex("TargetInstitutionId");
 
                     b.ToTable("ProjectLegalDocuments");
                 });
@@ -6429,6 +6871,86 @@ namespace GMK360.Data.Migrations
                     b.ToTable("Institutions");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.InstitutionContact", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AgencyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("InstitutionRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgencyId");
+
+                    b.HasIndex("InstitutionRecordId");
+
+                    b.ToTable("InstitutionContact");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.InstitutionRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("District")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("GoogleMapsUrl")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("GooglePlaceId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("InstitutionRecord");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.InvitationToken", b =>
                 {
                     b.Property<int>("Id")
@@ -7579,6 +8101,76 @@ namespace GMK360.Data.Migrations
                     b.HasIndex("SenderId");
 
                     b.ToTable("Messages");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.ModuleDocumentRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Stage")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SystemLegalDocumentTemplateId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TargetModule")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SystemLegalDocumentTemplateId");
+
+                    b.ToTable("ModuleDocumentRules");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.ModuleDocumentRulePrerequisite", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ModuleDocumentRuleId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PrerequisiteTemplateId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ModuleDocumentRuleId");
+
+                    b.HasIndex("PrerequisiteTemplateId");
+
+                    b.ToTable("ModuleDocumentRulePrerequisites");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Neighborhood", b =>
@@ -10521,13 +11113,13 @@ namespace GMK360.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Category")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsMandatory")
                         .HasColumnType("bit");
 
                     b.Property<string>("IssuedBy")
@@ -10537,10 +11129,6 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("TargetModule")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
@@ -11808,6 +12396,62 @@ namespace GMK360.Data.Migrations
                     b.Navigation("RequesterAgency");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.B2b.B2bBranch", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.B2b.B2bCompany", "B2bCompany")
+                        .WithMany("Branches")
+                        .HasForeignKey("B2bCompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("B2bCompany");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.B2b.B2bCompany", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Agency", "AddedByAgency")
+                        .WithMany()
+                        .HasForeignKey("AddedByAgencyId");
+
+                    b.HasOne("GMK360.Core.Entities.Identity.ApplicationUser", "AddedByUser")
+                        .WithMany()
+                        .HasForeignKey("AddedByUserId");
+
+                    b.Navigation("AddedByAgency");
+
+                    b.Navigation("AddedByUser");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.B2b.B2bCompanyCategory", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.B2b.B2bCompany", "B2bCompany")
+                        .WithMany("CompanyCategories")
+                        .HasForeignKey("B2bCompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GMK360.Core.Entities.DefinitionValue", "DefinitionValue")
+                        .WithMany()
+                        .HasForeignKey("DefinitionValueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("B2bCompany");
+
+                    b.Navigation("DefinitionValue");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.B2b.B2bContact", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.B2b.B2bCompany", "B2bCompany")
+                        .WithMany("Contacts")
+                        .HasForeignKey("B2bCompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("B2bCompany");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.B2bSupplier", b =>
                 {
                     b.HasOne("GMK360.Core.Entities.Identity.ApplicationUser", "ApplicationUser")
@@ -12157,6 +12801,28 @@ namespace GMK360.Data.Migrations
                     b.Navigation("Agency");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.AgencyPhonebookBranch", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.AgencyPhonebook", "AgencyPhonebook")
+                        .WithMany("Branches")
+                        .HasForeignKey("AgencyPhonebookId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AgencyPhonebook");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.AgencyPhonebookContact", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.AgencyPhonebook", "AgencyPhonebook")
+                        .WithMany("Contacts")
+                        .HasForeignKey("AgencyPhonebookId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AgencyPhonebook");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.Construction.AgencyWorker", b =>
                 {
                     b.HasOne("GMK360.Core.Entities.Agency", "Agency")
@@ -12225,6 +12891,23 @@ namespace GMK360.Data.Migrations
                     b.Navigation("Phonebook");
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.ConstructionBudgetItem", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.ConstructionProject", "ConstructionProject")
+                        .WithMany()
+                        .HasForeignKey("ConstructionProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GMK360.Core.Entities.B2b.B2bCompany", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId");
+
+                    b.Navigation("ConstructionProject");
+
+                    b.Navigation("Supplier");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.ConstructionProject", b =>
@@ -12552,9 +13235,21 @@ namespace GMK360.Data.Migrations
                         .WithMany()
                         .HasForeignKey("SystemTemplateId");
 
+                    b.HasOne("GMK360.Core.Entities.InstitutionContact", "TargetContact")
+                        .WithMany()
+                        .HasForeignKey("TargetContactId");
+
+                    b.HasOne("GMK360.Core.Entities.InstitutionRecord", "TargetInstitution")
+                        .WithMany()
+                        .HasForeignKey("TargetInstitutionId");
+
                     b.Navigation("ConstructionProject");
 
                     b.Navigation("SystemTemplate");
+
+                    b.Navigation("TargetContact");
+
+                    b.Navigation("TargetInstitution");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.ProjectMaterialCatalog", b =>
@@ -13344,6 +14039,25 @@ namespace GMK360.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.InstitutionContact", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Agency", "Agency")
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GMK360.Core.Entities.InstitutionRecord", "Institution")
+                        .WithMany("Contacts")
+                        .HasForeignKey("InstitutionRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Agency");
+
+                    b.Navigation("Institution");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.InvitationToken", b =>
                 {
                     b.HasOne("GMK360.Core.Entities.Identity.ApplicationUser", "InviterUser")
@@ -13610,6 +14324,36 @@ namespace GMK360.Data.Migrations
                     b.Navigation("Receiver");
 
                     b.Navigation("Sender");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.ModuleDocumentRule", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.SystemLegalDocumentTemplate", "SystemLegalDocumentTemplate")
+                        .WithMany()
+                        .HasForeignKey("SystemLegalDocumentTemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SystemLegalDocumentTemplate");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.ModuleDocumentRulePrerequisite", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.ModuleDocumentRule", "ModuleDocumentRule")
+                        .WithMany("Prerequisites")
+                        .HasForeignKey("ModuleDocumentRuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GMK360.Core.Entities.SystemLegalDocumentTemplate", "PrerequisiteTemplate")
+                        .WithMany()
+                        .HasForeignKey("PrerequisiteTemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ModuleDocumentRule");
+
+                    b.Navigation("PrerequisiteTemplate");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Neighborhood", b =>
@@ -14774,6 +15518,15 @@ namespace GMK360.Data.Migrations
                     b.Navigation("Items");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.B2b.B2bCompany", b =>
+                {
+                    b.Navigation("Branches");
+
+                    b.Navigation("CompanyCategories");
+
+                    b.Navigation("Contacts");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.Building", b =>
                 {
                     b.Navigation("Blocks");
@@ -14807,6 +15560,13 @@ namespace GMK360.Data.Migrations
                     b.Navigation("Features");
 
                     b.Navigation("Properties");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.AgencyPhonebook", b =>
+                {
+                    b.Navigation("Branches");
+
+                    b.Navigation("Contacts");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.AgencyWorker", b =>
@@ -14980,6 +15740,11 @@ namespace GMK360.Data.Migrations
                     b.Navigation("Subscriptions");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.InstitutionRecord", b =>
+                {
+                    b.Navigation("Contacts");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.LiabilityType", b =>
                 {
                     b.Navigation("Payments");
@@ -15010,6 +15775,11 @@ namespace GMK360.Data.Migrations
             modelBuilder.Entity("GMK360.Core.Entities.MeetingSurvey", b =>
                 {
                     b.Navigation("Options");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.ModuleDocumentRule", b =>
+                {
+                    b.Navigation("Prerequisites");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Partner", b =>

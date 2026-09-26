@@ -1,4 +1,4 @@
-﻿using GMK360.Core.Entities;
+﻿﻿﻿﻿﻿﻿﻿using GMK360.Core.Entities;
 using GMK360.Core.Entities.Auditing;
 using System.Reflection;
 using System.Linq;
@@ -151,6 +151,13 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
 
         // B2B Nalbur ve Tedarik?i Teklif Sistemi
         public DbSet<B2bSupplier> B2bSuppliers { get; set; }
+        
+        // B2B Marketplace (Yeni)
+        public DbSet<GMK360.Core.Entities.B2b.B2bCompany> B2bCompanies { get; set; }
+        // DefinitionValues kullanılıyor
+        public DbSet<GMK360.Core.Entities.B2b.B2bCompanyCategory> B2bCompanyCategories { get; set; }
+        public DbSet<GMK360.Core.Entities.B2b.B2bBranch> B2bBranches { get; set; }
+        public DbSet<GMK360.Core.Entities.B2b.B2bContact> B2bContacts { get; set; }
         public DbSet<MaterialList> MaterialLists { get; set; }
         public DbSet<MaterialListItem> MaterialListItems { get; set; }
         public DbSet<MaterialListOffer> MaterialListOffers { get; set; }
@@ -204,6 +211,7 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         // ?n?aat ve ?antiye Y?netimi (Kentsel D?n???m ERP)
         public DbSet<GMK360.Core.Entities.Construction.AgencyPhonebook> AgencyPhonebooks { get; set; }
         public DbSet<ConstructionProject> ConstructionProjects { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.ConstructionBudgetItem> ConstructionBudgetItems { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.ProjectOwner> ProjectOwners { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.ProjectOwnerDebt> ProjectOwnerDebts { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.AgendaRecord> AgendaRecords { get; set; }
@@ -221,6 +229,8 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         public DbSet<GMK360.Core.Entities.Construction.PhaseMessage> PhaseMessages { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.ProjectLegalDocument> ProjectLegalDocuments { get; set; }
         public DbSet<GMK360.Core.Entities.SystemLegalDocumentTemplate> SystemLegalDocumentTemplates { get; set; }
+        public DbSet<GMK360.Core.Entities.ModuleDocumentRule> ModuleDocumentRules { get; set; }
+        public DbSet<GMK360.Core.Entities.ModuleDocumentRulePrerequisite> ModuleDocumentRulePrerequisites { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.TaskCost> TaskCosts { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.TaskDocument> TaskDocuments { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.TaskMessage> TaskMessages { get; set; }
@@ -438,6 +448,25 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
                 .OnDelete(DeleteBehavior.Restrict);
 
             base.OnModelCreating(builder);
+
+            builder.Entity<ModuleDocumentRulePrerequisite>()
+                .HasOne(x => x.ModuleDocumentRule)
+                .WithMany(x => x.Prerequisites)
+                .HasForeignKey(x => x.ModuleDocumentRuleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<ModuleDocumentRulePrerequisite>()
+                .HasOne(x => x.PrerequisiteTemplate)
+                .WithMany()
+                .HasForeignKey(x => x.PrerequisiteTemplateId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+
+            // Document Dependencies
+            /* obsolete dependencies removed */
+
+            /* obsolete dependencies removed */
+
 
             builder.Entity<GMK360.Core.Entities.Construction.AgendaParticipant>()
                 .HasOne(ap => ap.Phonebook)
