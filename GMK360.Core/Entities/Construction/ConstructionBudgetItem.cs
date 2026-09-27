@@ -20,14 +20,15 @@ namespace GMK360.Core.Entities.Construction
 
     public enum BudgetPhaseCategory
     {
-        ResmiIslemlerVeKurulum = 1, // Resmi İşlemler, Proje ve Şantiye Kurulumu
-        YikimHafriyatZemin = 2, // Yıkım, Hafriyat ve Zemin İşleri
-        KabaInsaat = 3, // Kaba İnşaat (Ana Taşıyıcılar)
-        ElektrikZayifAkim = 4, // Elektrik ve Zayıf Akım Tesisatı
-        MekanikSihhiTesisat = 5, // Mekanik ve Sıhhi Tesisat
-        DisCepheYalitimCati = 6, // Dış Cephe, Yalıtım ve Çatı
-        InceIscilikKaplama = 7, // İnce İşçilik, Kaplama ve Montaj
-        CevreDuzenlemeTeslim = 8 // Çevre Düzenleme ve Teslim
+        ResmiEvraklarVeProsedurler = 1,
+        YikimVeZeminHazirligi = 2,
+        TemelVeAltYapi = 3,
+        KabaInsaatKarkas = 4,
+        CatiVeDisCephe = 5,
+        InceIslerIcMekan = 6,
+        ElektrikVeZayifAkim = 7,
+        MekanikTesisatVeMakine = 8,
+        PeyzajVeTeslim = 9
     }
 
     public class ConstructionBudgetItem : BaseEntity

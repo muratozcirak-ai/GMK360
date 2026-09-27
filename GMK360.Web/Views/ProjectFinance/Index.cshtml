@@ -1,0 +1,291 @@
+@{
+    ViewData["Title"] = "Proje Maliyet ve Finansman";
+    Layout = "~/Views/Shared/_ProjectLayout.cshtml";
+}
+
+<div class="container-fluid mt-2">
+    
+    <!-- Proje Kimliği (Genel Bilgiler) -->
+    <div class="card shadow-sm border-0 mb-4 rounded-4 bg-light">
+        <div class="card-body p-4">
+            <div class="row align-items-center">
+                <div class="col-md-6 border-end">
+                    <h4 class="fw-bold text-dark mb-1"><i class="bi bi-building me-2 text-primary"></i> @ViewData["ProjectName"]</h4>
+                    <p class="text-muted mb-0"><i class="bi bi-geo-alt me-1"></i> @ViewBag.Address</p>
+                </div>
+                <div class="col-md-6">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <h6 class="text-muted mb-1" style="font-size:0.85rem;">Başlama Tarihi</h6>
+                            <span class="fw-bold text-dark">@ViewBag.StartDate</span>
+                        </div>
+                        <div class="col-4 border-start border-end">
+                            <h6 class="text-muted mb-1" style="font-size:0.85rem;">Tahmini Teslim</h6>
+                            <span class="fw-bold text-dark">@ViewBag.EndDate</span>
+                        </div>
+                        <div class="col-4">
+                            <h6 class="text-muted mb-1" style="font-size:0.85rem;">Süre</h6>
+                            <span class="fw-bold text-primary">@ViewBag.Duration</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Üst Kısım: Proje Beklentisi -->
+    <div class="card shadow-sm border-0 mb-4 rounded-4">
+        <div class="card-header bg-navy text-white fw-bold p-3 rounded-top-4">
+            <i class="bi bi-graph-up-arrow me-2"></i> Proje Beklentisi
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="p-3 bg-light border rounded h-100">
+                        <h6 class="text-muted fw-bold mb-1">Hak Sahiplerine Verilen</h6>
+                        <h4 class="mb-0 fw-bold text-dark">@ViewBag.GivenFlats Daire / @ViewBag.GivenShops Dükkan</h4>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="p-3 bg-light border rounded h-100">
+                        <h6 class="text-muted fw-bold mb-1">Kalan Daire / Dükkan Sayısı</h6>
+                        <h4 class="mb-0 fw-bold text-success">@ViewBag.LeftFlats Daire / @ViewBag.LeftShops Dükkan</h4>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="p-3 bg-light border rounded h-100 d-flex flex-column justify-content-center">
+                        <h6 class="text-muted fw-bold mb-3">Tahmini Satış ve Beklenti</h6>
+                        <div class="row align-items-center">
+                            <!-- Sol Taraf: Inputlar -->
+                            <div class="col-lg-7 border-end">
+                                <div class="input-group input-group-sm mb-2">
+                                    <span class="input-group-text bg-white text-muted fw-bold" style="width: 155px; font-size: 0.8rem;">Ortalama Daire Fiyatı</span>
+                                    <input type="number" id="avgFlatPrice" class="form-control text-end fw-bold text-dark" value="@(ViewBag.AvgFlatPrice == 0 ? "" : ((decimal)ViewBag.AvgFlatPrice).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))" placeholder="0">
+                                    <span class="input-group-text bg-white text-muted">₺</span>
+                                </div>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-white text-muted fw-bold" style="width: 155px; font-size: 0.8rem;">Toplam Dükkan Beklentisi</span>
+                                    <input type="number" id="totalShopRevenue" class="form-control text-end fw-bold text-dark" value="@(ViewBag.TotalShopRevenue == 0 ? "" : ((decimal)ViewBag.TotalShopRevenue).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))" placeholder="0">
+                                    <span class="input-group-text bg-white text-muted">₺</span>
+                                </div>
+                            </div>
+                            <!-- Sağ Taraf: Toplam Sonuç -->
+                            <div class="col-lg-5 text-end">
+                                <span class="text-muted small fw-bold d-block mb-1">Toplam Sonuç</span>
+                                <h4 class="mb-0 fw-bold text-primary" id="estimatedTotalResult">0,00 ₺</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+    <!-- Orta Kısım: Genel Özet Tablosu -->
+    <div class="card shadow-sm border-0 mb-4 rounded-4">
+        <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center" style="cursor: pointer;" data-bs-toggle="collapse" data-bs-target="#genelOzetCollapse" aria-expanded="false" aria-controls="genelOzetCollapse">
+            <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-table text-primary me-2"></i>Genel Özet</h5>
+            <i class="bi bi-chevron-down text-muted"></i>
+        </div>
+        <div id="genelOzetCollapse" class="collapse">
+            <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="fw-bold">Başlık (Proje Harcamaları)</th>
+                            <th class="fw-bold text-end">Planlanan</th>
+                            <th class="fw-bold text-end">Gerçekleşen</th>
+                            <th class="fw-bold text-end">Fark</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var phase in (Dictionary<GMK360.Core.Entities.Construction.BudgetPhaseCategory, dynamic>)ViewBag.PhaseData)
+                        {
+                            string asamaAdi = "";
+                            switch (phase.Key)
+                            {
+                                case GMK360.Core.Entities.Construction.BudgetPhaseCategory.ResmiEvraklarVeProsedurler: asamaAdi = "Resmi Evraklar ve Prosedürler"; break;
+                                case GMK360.Core.Entities.Construction.BudgetPhaseCategory.YikimVeZeminHazirligi: asamaAdi = "Yıkım ve Zemin Hazırlığı"; break;
+                                case GMK360.Core.Entities.Construction.BudgetPhaseCategory.TemelVeAltYapi: asamaAdi = "Temel ve Alt Yapı"; break;
+                                case GMK360.Core.Entities.Construction.BudgetPhaseCategory.KabaInsaatKarkas: asamaAdi = "Kaba İnşaat (Karkas)"; break;
+                                case GMK360.Core.Entities.Construction.BudgetPhaseCategory.CatiVeDisCephe: asamaAdi = "Çatı ve Dış Cephe"; break;
+                                case GMK360.Core.Entities.Construction.BudgetPhaseCategory.InceIslerIcMekan: asamaAdi = "İnce İşler (İç Mekan)"; break;
+                                case GMK360.Core.Entities.Construction.BudgetPhaseCategory.ElektrikVeZayifAkim: asamaAdi = "Elektrik ve Zayıf Akım"; break;
+                                case GMK360.Core.Entities.Construction.BudgetPhaseCategory.MekanikTesisatVeMakine: asamaAdi = "Mekanik Tesisat ve Makine"; break;
+                                case GMK360.Core.Entities.Construction.BudgetPhaseCategory.PeyzajVeTeslim: asamaAdi = "Peyzaj ve Teslim"; break;
+                            }
+                            
+                            decimal diff = phase.Value.Diff;
+                            string diffColorClass = diff > 0 ? "text-danger" : (diff < 0 ? "text-success" : "text-muted");
+
+                            <tr>
+                                <td class="fw-bold">@asamaAdi</td>
+                                <td class="text-end">@(((decimal)phase.Value.Planned).ToString("N2")) ₺</td>
+                                <td class="text-end">@(((decimal)phase.Value.Actual).ToString("N2")) ₺</td>
+                                <td class="text-end fw-bold @diffColorClass">@((Math.Abs(diff)).ToString("N2")) ₺ @(diff > 0 ? "(Aşıldı)" : (diff < 0 ? "(Tasarruf)" : ""))</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot class="table-light fw-bold">
+                        <tr>
+                            <td class="text-end text-uppercase">Genel Toplam:</td>
+                            <td class="text-end fs-5 text-primary">@(((decimal)ViewBag.TotalPlanned).ToString("N2")) ₺</td>
+                            <td class="text-end fs-5 text-dark">@(((decimal)ViewBag.TotalActual).ToString("N2")) ₺</td>
+                            <td class="text-end fs-5 @((decimal)ViewBag.TotalDiff > 0 ? "text-danger" : "text-success")">@((Math.Abs((decimal)ViewBag.TotalDiff)).ToString("N2")) ₺</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alt Kısım: Detaylı Akordeon Yapısı -->
+    <h5 class="fw-bold mb-3 mt-5"><i class="bi bi-list-nested text-warning me-2"></i>Aşama Detayları</h5>
+    
+    <div class="accordion mb-5 shadow-sm" id="financeAccordion">
+        @{
+            int index = 0;
+            foreach (var phase in (Dictionary<GMK360.Core.Entities.Construction.BudgetPhaseCategory, dynamic>)ViewBag.PhaseData)
+            {
+                string asamaAdi = "";
+                switch (phase.Key)
+                {
+                    case GMK360.Core.Entities.Construction.BudgetPhaseCategory.ResmiEvraklarVeProsedurler: asamaAdi = "Resmi Evraklar ve Prosedürler"; break;
+                    case GMK360.Core.Entities.Construction.BudgetPhaseCategory.YikimVeZeminHazirligi: asamaAdi = "Yıkım ve Zemin Hazırlığı"; break;
+                    case GMK360.Core.Entities.Construction.BudgetPhaseCategory.TemelVeAltYapi: asamaAdi = "Temel ve Alt Yapı"; break;
+                    case GMK360.Core.Entities.Construction.BudgetPhaseCategory.KabaInsaatKarkas: asamaAdi = "Kaba İnşaat (Karkas)"; break;
+                    case GMK360.Core.Entities.Construction.BudgetPhaseCategory.CatiVeDisCephe: asamaAdi = "Çatı ve Dış Cephe"; break;
+                    case GMK360.Core.Entities.Construction.BudgetPhaseCategory.InceIslerIcMekan: asamaAdi = "İnce İşler (İç Mekan)"; break;
+                    case GMK360.Core.Entities.Construction.BudgetPhaseCategory.ElektrikVeZayifAkim: asamaAdi = "Elektrik ve Zayıf Akım"; break;
+                    case GMK360.Core.Entities.Construction.BudgetPhaseCategory.MekanikTesisatVeMakine: asamaAdi = "Mekanik Tesisat ve Makine"; break;
+                    case GMK360.Core.Entities.Construction.BudgetPhaseCategory.PeyzajVeTeslim: asamaAdi = "Peyzaj ve Teslim"; break;
+                }
+
+                string accId = "collapse" + index;
+                string headId = "heading" + index;
+                index++;
+                
+                var items = (List<GMK360.Core.Entities.Construction.ConstructionBudgetItem>)phase.Value.Items;
+
+                <div class="accordion-item border-0 border-bottom">
+                    <h2 class="accordion-header" id="@headId">
+                        <button class="accordion-button collapsed fw-bold bg-white text-dark" type="button" data-bs-toggle="collapse" data-bs-target="#@accId">
+                            <i class="bi bi-building-gear me-2 text-muted"></i> @asamaAdi 
+                            <span class="ms-auto badge bg-light text-dark border me-3">Toplam: @(((decimal)phase.Value.Actual).ToString("N2")) ₺</span>
+                        </button>
+                    </h2>
+                    <div id="@accId" class="accordion-collapse collapse" data-bs-parent="#financeAccordion">
+                        <div class="accordion-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-4">Kalemler / Başlık</th>
+                                            <th class="text-end">Planlanan</th>
+                                            <th class="text-end">Gerçekleşen</th>
+                                            <th class="text-end pe-4">Fark</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (items.Count == 0)
+                                        {
+                                            <tr>
+                                                <td class="ps-4 text-muted" colspan="4"><em>(Henüz bütçe veya harcama kalemi girilmedi)</em></td>
+                                            </tr>
+                                        }
+                                        else
+                                        {
+                                            foreach (var item in items)
+                                            {
+                                                decimal iDiff = item.ActualTotalCost - item.PlannedTotalCost;
+                                                string iColor = iDiff > 0 ? "text-danger" : (iDiff < 0 ? "text-success" : "text-muted");
+                                                <tr>
+                                                    <td class="ps-4">@item.ItemName <small class="text-muted d-block">@item.Quantity @item.Unit</small></td>
+                                                    <td class="text-end">@item.PlannedTotalCost.ToString("N2") ₺</td>
+                                                    <td class="text-end">@item.ActualTotalCost.ToString("N2") ₺</td>
+                                                    <td class="text-end pe-4 fw-bold @iColor">@Math.Abs(iDiff).ToString("N2") ₺ @(iDiff > 0 ? "(Aşıldı)" : (iDiff < 0 ? "(Tasarruf)" : ""))</td>
+                                                </tr>
+                                            }
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const avgFlatPriceInput = document.getElementById('avgFlatPrice');
+            const totalShopRevenueInput = document.getElementById('totalShopRevenue');
+            const estimatedTotalResult = document.getElementById('estimatedTotalResult');
+            
+            const leftFlatsCount = parseInt('@ViewBag.LeftFlats') || 0;
+            const projectId = parseInt('@ViewData["ProjectId"]');
+
+            let saveTimeout;
+
+            // Yardımcı: Sadece sayısal kısımları alıp parse eden fonksiyon (örn: 12.000.000 veya 12000000 -> 12000000)
+            function parseCustomNumber(val) {
+                if (!val) return 0;
+                // Noktaları sil, virgülü noktaya çevir (Eğer Türkçe ondalık varsa)
+                let cleaned = val.toString().replace(/\./g, '').replace(',', '.');
+                return parseFloat(cleaned) || 0;
+            }
+
+            function calculateAndRender() {
+                const avgPrice = parseCustomNumber(avgFlatPriceInput.value);
+                const shopRev = parseCustomNumber(totalShopRevenueInput.value);
+                
+                const total = (leftFlatsCount * avgPrice) + shopRev;
+                
+                estimatedTotalResult.textContent = total.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
+            }
+
+            function saveToDatabase() {
+                const avgPrice = parseCustomNumber(avgFlatPriceInput.value);
+                const shopRev = parseCustomNumber(totalShopRevenueInput.value);
+
+                // AJAX İsteği
+                fetch('/ProjectFinance/UpdateExpectations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        projectId: projectId,
+                        avgFlatPrice: avgPrice,
+                        totalShopRevenue: shopRev
+                    })
+                }).then(res => {
+                    if(!res.ok) console.error("Kayıt başarısız oldu.");
+                    else console.log("Başarıyla kaydedildi:", avgPrice, shopRev);
+                }).catch(err => console.error("Kayıt hatası:", err));
+            }
+
+            // Debounce: Kullanıcı yazmayı bıraktıktan 1 saniye sonra otomatik kaydet
+            function handleInput() {
+                calculateAndRender();
+                clearTimeout(saveTimeout);
+                saveTimeout = setTimeout(saveToDatabase, 1000);
+            }
+
+            // Olayları dinle
+            avgFlatPriceInput.addEventListener('input', handleInput);
+            totalShopRevenueInput.addEventListener('input', handleInput);
+
+            // Ne olur ne olmaz blur (odak kaybı) durumunda da kaydet
+            avgFlatPriceInput.addEventListener('blur', saveToDatabase);
+            totalShopRevenueInput.addEventListener('blur', saveToDatabase);
+        calculateAndRender();
+        });
+    </script>
+}

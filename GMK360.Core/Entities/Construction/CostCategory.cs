@@ -12,8 +12,6 @@ namespace GMK360.Core.Entities.Construction
         public string Description { get; set; }
         public string Icon { get; set; } // e.g. "bi-truck", "bi-cup-hot"
         
-        public PhaseItemType BaseType { get; set; } = PhaseItemType.Genel;
 
-        public ICollection<TaskCost> TaskCosts { get; set; }
     }
 }

@@ -222,18 +222,11 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         public DbSet<GMK360.Core.Entities.Construction.DocumentTemplate> DocumentTemplates { get; set; }
 
         public DbSet<ConstructionTimesheet> ConstructionTimesheets { get; set; }
-        public DbSet<ProjectPhase> ProjectPhases { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.CostCategory> CostCategories { get; set; }
-        public DbSet<GMK360.Core.Entities.Construction.PhaseTask> PhaseTasks { get; set; }
-        public DbSet<GMK360.Core.Entities.Construction.PhaseApproval> PhaseApprovals { get; set; }
-        public DbSet<GMK360.Core.Entities.Construction.PhaseMessage> PhaseMessages { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.ProjectLegalDocument> ProjectLegalDocuments { get; set; }
         public DbSet<GMK360.Core.Entities.SystemLegalDocumentTemplate> SystemLegalDocumentTemplates { get; set; }
         public DbSet<GMK360.Core.Entities.ModuleDocumentRule> ModuleDocumentRules { get; set; }
         public DbSet<GMK360.Core.Entities.ModuleDocumentRulePrerequisite> ModuleDocumentRulePrerequisites { get; set; }
-        public DbSet<GMK360.Core.Entities.Construction.TaskCost> TaskCosts { get; set; }
-        public DbSet<GMK360.Core.Entities.Construction.TaskDocument> TaskDocuments { get; set; }
-        public DbSet<GMK360.Core.Entities.Construction.TaskMessage> TaskMessages { get; set; }
         public DbSet<ProjectMaterialCatalog> ProjectMaterialCatalogs { get; set; }
         public DbSet<UnitMaterialSelection> UnitMaterialSelections { get; set; }
         public DbSet<ConstructionTask> ConstructionTasks { get; set; }
@@ -247,7 +240,6 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         public DbSet<GMK360.Core.Entities.Construction.InventoryReceipt> InventoryReceipts { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.InventoryReceiptItem> InventoryReceiptItems { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.AgencyWorker> AgencyWorkers { get; set; }
-        public DbSet<GMK360.Core.Entities.Construction.PhaseWorkerDemand> PhaseWorkerDemands { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.DailyTimesheet> DailyTimesheets { get; set; }
         
         // --- FINANCE & CURRENT ACCOUNTS ---
@@ -435,17 +427,7 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
                 .HasForeignKey(t => t.AgencyWorkerId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            builder.Entity<GMK360.Core.Entities.Construction.DailyTimesheet>()
-                .HasOne(t => t.ProjectPhase)
-                .WithMany()
-                .HasForeignKey(t => t.ProjectPhaseId)
-                .OnDelete(DeleteBehavior.Restrict);
-                
-            builder.Entity<GMK360.Core.Entities.Construction.DailyTimesheet>()
-                .HasOne(t => t.PhaseTask)
-                .WithMany()
-                .HasForeignKey(t => t.PhaseTaskId)
-                .OnDelete(DeleteBehavior.Restrict);
+            
 
             base.OnModelCreating(builder);
 

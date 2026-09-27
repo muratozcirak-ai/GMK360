@@ -63,14 +63,8 @@ namespace GMK360.Data.Seeds
                 context.ConstructionProjects.Add(project);
                 await context.SaveChangesAsync();
                 
-                var phase1 = new ProjectPhase { ConstructionProjectId = project.Id, Name = "Hafriyat ve Temel", Description = "Kaz� ve temel beton", PlannedStartDate = DateTime.UtcNow.AddMonths(-2), Status = 2, OrderIndex = 1 };
-                var phase2 = new ProjectPhase { ConstructionProjectId = project.Id, Name = "Kaba �n�aat", Description = "Kolon ve tabliyeler", PlannedStartDate = DateTime.UtcNow.AddMonths(-1), Status = 1, OrderIndex = 2 };
-                var phase3 = new ProjectPhase { ConstructionProjectId = project.Id, Name = "�nce ���ilik", Description = "Duvar, s�va, elektrik", PlannedStartDate = DateTime.UtcNow.AddMonths(1), Status = 0, OrderIndex = 3 };
-                context.ProjectPhases.AddRange(phase1, phase2, phase3);
                 await context.SaveChangesAsync();
 
-                context.PhaseTasks.Add(new PhaseTask { ProjectPhaseId = phase1.Id, Name = "Temel Kaz�s�", Status = "Tamamland�", OrderIndex = 1 });
-                context.PhaseTasks.Add(new PhaseTask { ProjectPhaseId = phase2.Id, Name = "1. Kat Kolon Betonlar�", Status = "Devam Ediyor", OrderIndex = 1 });
                 await context.SaveChangesAsync();
 
                 var building = new Building { ConstructionProjectId = project.Id, BlockName = "A Blok", TotalFloors = 5 };

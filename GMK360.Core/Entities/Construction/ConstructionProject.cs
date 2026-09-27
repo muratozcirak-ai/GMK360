@@ -64,7 +64,6 @@ namespace GMK360.Core.Entities.Construction
 
         public DateTime SelectionDeadline { get; set; }
 
-        public virtual ICollection<ProjectPhase> Phases { get; set; }
         public virtual ICollection<ConstructionBudgetItem> BudgetItems { get; set; }
         public virtual ICollection<ProjectMaterialCatalog> MaterialCatalogs { get; set; }
         public ProjectLifecycleStatus LifecycleStatus { get; set; } = ProjectLifecycleStatus.UnderConstruction;
@@ -75,6 +74,10 @@ namespace GMK360.Core.Entities.Construction
         // Arsa ve Peyzaj Bilgileri
         public double? TotalLandArea { get; set; } // Toplam Arsa Alanı (m2)
         public double? LandscapeArea { get; set; } // Peyzaj Alanı (m2)
+
+        // Bütçe / Satış Beklenti (Fizibilite)
+        public decimal AverageFlatSalePrice { get; set; } = 0; // Ortalama Daire Fiyatı
+        public decimal ExpectedTotalShopRevenue { get; set; } = 0; // Toplam Dükkan Beklentisi
 
         // Projeye ait bloklar / binalar
         public virtual ICollection<Building> Blocks { get; set; }

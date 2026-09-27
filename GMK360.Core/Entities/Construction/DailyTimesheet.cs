@@ -11,11 +11,7 @@ namespace GMK360.Core.Entities.Construction
 
         public DateTime WorkDate { get; set; }
 
-        public int? ProjectPhaseId { get; set; }
-        public ProjectPhase ProjectPhase { get; set; }
 
-        public int? PhaseTaskId { get; set; }
-        public PhaseTask PhaseTask { get; set; }
 
         public string AttendanceStatus { get; set; } = "Tam Gün";
         

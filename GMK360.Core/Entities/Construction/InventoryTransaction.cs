@@ -22,8 +22,6 @@ namespace GMK360.Core.Entities.Construction
         public decimal Quantity { get; set; }
         public DateTime TransactionDate { get; set; }
 
-        public int? PhaseTaskId { get; set; }
-        public PhaseTask PhaseTask { get; set; }
 
         public string Description { get; set; }
         public string HandledByUserId { get; set; }
