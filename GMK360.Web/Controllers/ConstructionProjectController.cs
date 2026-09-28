@@ -170,47 +170,11 @@ namespace GMK360.Web.Controllers
 
 
 
-                        // Faz 0 Evraklari kontrol et ve otomatik ekle
-
-            var existingDocs = await _context.ProjectLegalDocuments.Where(d => d.ConstructionProjectId == id).Select(d => d.SystemTemplateId).ToListAsync();
-
-            var globalTemplates = await _context.SystemLegalDocumentTemplates.ToListAsync();
-
-            
-
-            bool addedNew = false;
-
-            foreach(var template in globalTemplates)
-
-            {
-
-                if(!existingDocs.Contains(template.Id))
-
-                {
-
-                    _context.ProjectLegalDocuments.Add(new GMK360.Core.Entities.Construction.ProjectLegalDocument {
-
-                        ConstructionProjectId = id.Value,
-
-                        DocumentName = template.Name,
-
-                        SystemTemplateId = template.Id,
-
-                        InstitutionContact = template.IssuedBy,
-
-                        Status = "Bekliyor"
-
-                    });
-
-                    addedNew = true;
-
-                }
-
-            }
-
-            if(addedNew) await _context.SaveChangesAsync();
-
-
+                        ViewBag.GlobalRules = await _context.ModuleDocumentRules
+                .Include(r => r.Prerequisites)
+                .ThenInclude(p => p.PrerequisiteTemplate)
+                .Where(r => r.TargetModule == "Construction")
+                .ToListAsync();
 
             ViewBag.Phase0Docs = await _context.ProjectLegalDocuments
 

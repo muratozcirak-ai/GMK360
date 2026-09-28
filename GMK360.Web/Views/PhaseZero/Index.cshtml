@@ -1,0 +1,327 @@
+﻿@model IEnumerable<GMK360.Core.Entities.Construction.ProjectLegalDocument>
+@{
+    Layout = null; 
+    var globalRules = ViewBag.GlobalRules as List<GMK360.Core.Entities.ModuleDocumentRule> ?? new List<GMK360.Core.Entities.ModuleDocumentRule>();
+    var renderedDocIds = new HashSet<int>();
+}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FAZ 0 Yönetim Masası - @ViewData["ProjectName"]</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; }
+        @@media screen and (min-width: 992px) and (max-width: 1536px) { body { zoom: 0.8; } }
+        .header-bar { background: linear-gradient(135deg, #1e3a8a, #2563eb); color: white; padding: 1rem 2rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .table-card { background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 2rem; overflow: hidden; }
+        .section-title { background-color: #f1f5f9; padding: 1rem 1.5rem; border-bottom: 2px solid #e2e8f0; font-weight: 600; color: #334155; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+        .table thead th { background-color: #f8fafc; color: #64748b; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #e2e8f0; }
+        .table tbody td { vertical-align: middle; font-size: 0.95rem; color: #334155; }
+        .status-badge { padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; }
+        .badge-waiting { background: #fef08a; color: #854d0e; }
+        .badge-success { background: #dcfce3; color: #166534; }
+        .badge-process { background: #e0f2fe; color: #075985; }
+        .badge-danger { background: #fee2e2; color: #991b1b; }
+    </style>
+</head>
+<body>
+
+    <div class="header-bar d-flex justify-content-between align-items-center">
+        <div>
+            <h4 class="mb-0 fw-bold"><i class="bi bi-rocket-takeoff me-2"></i> FAZ 0: Operasyon, Bürokrasi ve İhale Masası</h4>
+            <p class="mb-0 text-white-50 small mt-1">@ViewData["ProjectName"] - Yasal Evrak, İzin ve Sözleşme Takibi</p>
+        </div>
+        <div>
+            <button class="btn btn-danger btn-sm fw-bold me-2"><i class="bi bi-plus-lg me-1"></i> Özel Evrak Ekle</button>
+            <form method="post" action="/PhaseZero/SyncDocs/@ViewData["ProjectId"]" class="d-inline">
+                <button type="submit" class="btn btn-warning btn-sm fw-bold me-2 shadow-sm text-dark">
+                    <i class="bi bi-arrow-repeat me-1"></i> Havuzdan Senkronize Et
+                </button>
+            </form>
+            <a href="/ProjectFinance/Index/@ViewData["ProjectId"]" class="btn btn-light btn-sm fw-bold"><i class="bi bi-arrow-left me-1"></i> Finans Sayfasına Dön</a>
+        </div>
+    </div>
+
+    <div class="container-fluid p-4">
+        
+        @if (!Model.Any())
+        {
+            <div class="alert alert-info shadow-sm p-4 text-center rounded-4 border-0">
+                <i class="bi bi-info-circle text-primary" style="font-size: 3rem;"></i>
+                <h4 class="fw-bold mt-3">Bu projede henüz hiç Faz 0 evrağı bulunmuyor.</h4>
+                <p class="text-muted">Projeniz için Merkez Kütüphane kurallarını işleterek evrak ağacını oluşturabilirsiniz.</p>
+                <form method="post" action="/PhaseZero/SyncDocs/@ViewData["ProjectId"]">
+                    <button type="submit" class="btn btn-primary btn-lg rounded-pill fw-bold px-5 mt-2 shadow-sm">
+                        <i class="bi bi-cloud-download me-2"></i> Kütüphaneden Şablonları Çek
+                    </button>
+                </form>
+            </div>
+        }
+        else
+        {
+            var stageGroups = Model.GroupBy(d => d.Stage ?? "Diğer Evraklar");
+            int i = 0;
+            foreach (var group in stageGroups)
+            {
+                i++;
+                var collapseId = "collapseStage" + i;
+                <div class="table-card">
+                    <div class="section-title" data-bs-toggle="collapse" data-bs-target="#@collapseId">
+                        <span><i class="bi bi-folder2-open me-2 text-primary"></i> @group.Key</span>
+                        <span class="badge bg-primary rounded-pill">@group.Count() Evrak</span>
+                    </div>
+                    <div id="@collapseId" class="collapse show">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 30%" class="ps-4">Evrak / Süreç Adı</th>
+                                        <th style="width: 25%">Kimden Alınır / Kaynak</th>
+                                        <th>Takipçi (Atanan)</th>
+                                        <th class="text-end">Maliyet (₺)</th>
+                                        <th class="text-center">Durum</th>
+                                        <th class="text-end pe-4" style="width:180px;">İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var doc in group.OrderBy(x => x.DisplayOrder))
+                                    {
+                                        if (renderedDocIds.Contains(doc.Id)) { continue; }
+                                        
+                                        var rule = globalRules.FirstOrDefault(r => r.SystemLegalDocumentTemplateId == doc.SystemTemplateId);
+                                        bool isOnlyPrereq = globalRules.Any(r => r.Prerequisites != null && r.Prerequisites.Any(p => p.PrerequisiteTemplateId == doc.SystemTemplateId)) && rule == null;
+                                        
+                                        if (isOnlyPrereq) { continue; } 
+                                        
+                                        var prereqs = rule?.Prerequisites;
+                                        bool isDependent = prereqs != null && prereqs.Any();
+                                        bool isReadyToApply = true;
+                                        if (isDependent) {
+                                            foreach (var pr in prereqs) {
+                                                var cDoc = Model.FirstOrDefault(d => d.SystemTemplateId == pr.PrerequisiteTemplateId);
+                                                if (cDoc == null || cDoc.Status != "Alındı") {
+                                                    isReadyToApply = false; break;
+                                                }
+                                            }
+                                        }
+                                        
+                                        <tr data-bs-toggle="@(isDependent ? "collapse" : "")" data-bs-target=".child-of-@doc.Id" style="@(isDependent ? "cursor: pointer;" : "")">
+                                            <td class="fw-bold ps-4 @(isDependent && !isReadyToApply ? "text-danger" : "text-dark")">
+                                                @if(isDependent) { <i class="bi bi-chevron-expand text-primary me-2 fs-5 align-middle"></i> } else { <span style="margin-left: 28px;"></span> }
+                                                @doc.DocumentName
+                                                @if(!string.IsNullOrEmpty(doc.FilePath)) { <a href="@doc.FilePath" target="_blank" class="ms-1" title="Evrak Yüklendi"><i class="bi bi-paperclip text-primary fs-5"></i></a> }
+                                                @if(isDependent)
+                                                {
+                                                    <br/>
+                                                    @if(isReadyToApply) {
+                                                        <small class="text-success ms-4" style="font-size: 0.75rem;"><i class="bi bi-unlock-fill"></i> Ön koşullar sağlandı</small>
+                                                    } else {
+                                                        <small class="text-danger ms-4" style="font-size: 0.75rem;"><i class="bi bi-lock-fill"></i> Ön koşullar tamamlanmadı!</small>
+                                                    }
+                                                }
+                                            </td>
+                                            <td>
+                                                <i class="bi bi-building me-1 text-muted"></i>
+                                                @(doc.SystemTemplate?.IssuedBy ?? "Belirtilmedi")
+                                            </td>
+                                            <td>
+                                                @if(string.IsNullOrEmpty(doc.AssignedUserId)) { <span class="text-danger"><i class="bi bi-person-x"></i> Yok</span> } else { <span><i class="bi bi-person-check text-primary"></i> @doc.AssignedUserId</span> }
+                                            </td>
+                                            <td class="text-end fw-bold" title="Harç: @(doc.DocumentFee?.ToString("N2") ?? "0,00") | Ek Masraf: @(doc.AdditionalCost?.ToString("N2") ?? "0,00")">
+                                                @((doc.DocumentFee.GetValueOrDefault() + doc.AdditionalCost.GetValueOrDefault()).ToString("N2")) ₺
+                                            </td>
+                                            <td class="text-center">
+                                                @if (isDependent && !isReadyToApply) { <span class="badge bg-danger rounded-pill px-3 shadow-sm"><i class="bi bi-lock-fill"></i> Kilitli (Önkoşul)</span> }
+                                                else if (doc.Status == "Bekliyor") { <span class="status-badge badge-waiting">Bekliyor</span> }
+                                                else if (doc.Status == "İşlemde") { <span class="status-badge badge-process">Başvuru Yapıldı</span> }
+                                                else if (doc.Status == "Sorunlu") { <span class="status-badge badge-danger">Sorun Çıktı</span> }
+                                                else if (doc.Status == "Alındı") { <span class="status-badge badge-success">Tamamlandı</span> }
+                                                else { <span class="status-badge badge-waiting">@doc.Status</span> }
+                                            </td>
+                                            <td class="text-end pe-4" onclick="event.stopPropagation();">
+                                                <div class="d-flex justify-content-end gap-1">
+                                                      <form method="post" action="/PhaseZero/RequestQuote/@doc.Id" class="m-0 p-0">
+                                                          <button type="submit" class="btn btn-sm btn-warning rounded-pill px-2 shadow-sm text-dark fw-bold" title="Satınalmaya Gönder / Fiyat Araştırması İste" @(isDependent && !isReadyToApply ? "disabled" : "")>
+                                                              <i class="bi bi-cart-plus"></i> Teklif
+                                                          </button>
+                                                      </form>
+                                                      <button class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold shadow-sm" onclick="openManageModal(@doc.Id)" @(isDependent && !isReadyToApply ? "disabled title='Önce alt ön koşul evrakları tamamlanmalıdır'" : "")>
+                                                          @if(isDependent && !isReadyToApply) { <i class="bi bi-lock-fill text-danger"></i> } else { <i class="bi bi-pencil-square"></i> } Yönet
+                                                      </button>
+                                                  </div>
+                                            </td>
+                                        </tr>
+                                        renderedDocIds.Add(doc.Id);
+
+                                        if (isDependent)
+                                        {
+                                            foreach (var pr in prereqs)
+                                            {
+                                                var childDoc = Model.FirstOrDefault(d => d.SystemTemplateId == pr.PrerequisiteTemplateId);
+                                                if (childDoc != null)
+                                                {
+                                                    <tr class="collapse child-of-@doc.Id bg-light" style="border-left: 4px solid #ffc107;">
+                                                        <td class="ps-5">
+                                                            <i class="bi bi-arrow-return-right text-muted me-2 ms-4"></i>
+                                                            <span class="text-secondary fw-semibold">@childDoc.DocumentName</span>
+                                                            @if(!string.IsNullOrEmpty(childDoc.FilePath)) { <a href="@childDoc.FilePath" target="_blank" class="ms-1" title="Evrak Yüklendi"><i class="bi bi-paperclip text-primary fs-5"></i></a> }
+                                                        </td>
+                                                        <td>
+                                                            <i class="bi bi-building me-1 text-muted"></i>
+                                                            @(childDoc.SystemTemplate?.IssuedBy ?? "Belirtilmedi")
+                                                        </td>
+                                                        <td>
+                                                            @if(string.IsNullOrEmpty(childDoc.AssignedUserId)) { <span class="text-danger"><i class="bi bi-person-x"></i> Yok</span> } else { <span><i class="bi bi-person-check text-primary"></i> @childDoc.AssignedUserId</span> }
+                                                        </td>
+                                                        <td class="text-end fw-bold" title="Harç: @(childDoc.DocumentFee?.ToString("N2") ?? "0,00") | Ek Masraf: @(childDoc.AdditionalCost?.ToString("N2") ?? "0,00")">
+                                                            @((childDoc.DocumentFee.GetValueOrDefault() + childDoc.AdditionalCost.GetValueOrDefault()).ToString("N2")) ₺
+                                                        </td>
+                                                        <td class="text-center">
+                                                            @if (childDoc.Status == "Bekliyor") { <span class="status-badge badge-waiting">Bekliyor</span> }
+                                                            else if (childDoc.Status == "İşlemde") { <span class="status-badge badge-process">Başvuru Yapıldı</span> }
+                                                            else if (childDoc.Status == "Sorunlu") { <span class="status-badge badge-danger">Sorun Çıktı</span> }
+                                                            else if (childDoc.Status == "Alındı") { <span class="status-badge badge-success">Tamamlandı</span> }
+                                                            else { <span class="status-badge badge-waiting">@childDoc.Status</span> }
+                                                        </td>
+                                                        <td class="text-end pe-4">
+                                                            <div class="d-flex justify-content-end gap-1">
+                                                                <form method="post" action="/PhaseZero/RequestQuote/@childDoc.Id" class="m-0 p-0">
+                                                                    <button type="submit" class="btn btn-sm btn-warning rounded-pill px-2 shadow-sm text-dark fw-bold" title="Satınalmaya Gönder / Fiyat Araştırması İste">
+                                                                        <i class="bi bi-cart-plus"></i> Teklif
+                                                                    </button>
+                                                                </form>
+                                                                <button class="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-bold shadow-sm" onclick="openManageModal(@childDoc.Id)">
+                                                                    <i class="bi bi-pencil-square"></i> Yönet
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                    renderedDocIds.Add(childDoc.Id);
+                                                }
+                                            }
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    <!-- YÖNET MODALI -->
+    <div class="modal fade" id="manageDocModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content border-0 shadow-lg">
+                <form id="manageDocForm" method="post" action="/PhaseZero/UpdateDoc" enctype="multipart/form-data">
+                    <input type="hidden" name="id" id="modalDocId" />
+                    <div class="modal-header bg-light border-bottom-0">
+                        <h5 class="modal-title fw-bold text-dark"><i class="bi bi-file-earmark-text text-primary me-2"></i> Evrak Yönetimi</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="alert alert-warning small mb-4 d-flex align-items-center rounded-3">
+                            <i class="bi bi-shield-lock-fill fs-4 me-3 text-warning"></i> 
+                            <div>
+                                <strong>Yetki Bildirimi:</strong> Bu panele sadece <b>Firma Sahibi (Admin)</b> ve evrağa atanmış <b>Sorumlu Kişi</b> veri girebilir. Bu bilgi vitrin sayfasında görünmez.
+                            </div>
+                        </div>
+
+                        <h5 class="fw-bold text-primary mb-4 border-bottom pb-2" id="modalDocNameTitle">Evrak Adı</h5>
+
+                        <div class="row g-4">
+                            <!-- Durum ve Atama -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Durum</label>
+                                <select class="form-select" name="status" id="modalStatus">
+                                    <option value="Bekliyor">Eksik / Bekliyor</option>
+                                    <option value="İşlemde">Başvuru Yapıldı (İşlemde)</option>
+                                    <option value="Sorunlu">Sorun Çıktı / Beklemede</option>
+                                    <option value="Alındı">Tamamlandı (Alındı)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-primary"><i class="bi bi-person-badge"></i> Tek Sorumlu (Atanan Kişi)</label>
+                                <input type="text" class="form-control" name="assignedUserId" id="modalAssignedUser" placeholder="Örn: Av. Yılmaz veya Satınalma Ali Bey">
+                                <small class="text-muted">Bu evrak/ihale/fiyat alımından sorumlu kişi</small>
+                            </div>
+
+                            <!-- Maliyetler -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Resmi Harç / Belge Bedeli (₺)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₺</span>
+                                    <input type="number" step="0.01" class="form-control text-end" name="documentFee" id="modalDocFee">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Ek Masraf (Yol, Yemek vs.) (₺)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₺</span>
+                                    <input type="number" step="0.01" class="form-control text-end" name="additionalCost" id="modalAddCost">
+                                </div>
+                            </div>
+
+                            <!-- Tanıdık / Kontak (Hassas Bilgi) -->
+                            <div class="col-md-12">
+                                <label class="form-label fw-semibold text-danger"><i class="bi bi-incognito"></i> Kurum İçi İlgili (Tanıdık / Gizli Kontak)</label>
+                                <input type="text" class="form-control" name="institutionContact" id="modalInstitutionContact" placeholder="Örn: Ahmet Bey - Vezne, Veya İhaleyi Veren Şirket Md.">
+                                <small class="text-danger">Bu alan vitrinde görünmez! Sadece yöneticiler ve atanan kişi görebilir.</small>
+                            </div>
+                            
+                            <div class="col-md-12 mt-4 border-top pt-3">
+                                <label class="form-label fw-bold text-dark"><i class="bi bi-cloud-arrow-up text-primary"></i> Fiziksel Evrak / Dekont Yükle</label>
+                                <input type="file" class="form-control" name="uploadedFile" id="modalUploadedFile" accept=".pdf,.jpg,.jpeg,.png">
+                                <small class="text-muted">Evrakın taranmış halini veya faturasını buradan yükleyebilirsiniz.</small>
+                                <div id="modalExistingFileArea" class="mt-2 d-none">
+                                    <span class="badge bg-success"><i class="bi bi-check-circle"></i> Yüklü Evrak Var:</span> 
+                                    <a href="#" id="modalExistingFileLink" target="_blank" class="fw-bold text-primary ms-1">Görüntüle / İndir</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top-0 bg-light">
+                        <button type="button" class="btn btn-outline-secondary fw-bold rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                        <button type="submit" class="btn btn-primary fw-bold rounded-pill px-4 shadow-sm"><i class="bi bi-check2-circle me-1"></i> Kaydet ve Kapat</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function openManageModal(docId) {
+            fetch('/PhaseZero/GetDoc/' + docId)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('modalDocId').value = data.id;
+                    document.getElementById('modalDocNameTitle').innerText = data.documentName;
+                    document.getElementById('modalStatus').value = data.status || 'Bekliyor';
+                    document.getElementById('modalAssignedUser').value = data.assignedUserId || '';
+                    document.getElementById('modalInstitutionContact').value = data.institutionContact || '';
+                    document.getElementById('modalDocFee').value = data.documentFee == 0 ? '' : data.documentFee;
+                    document.getElementById('modalAddCost').value = data.additionalCost == 0 ? '' : data.additionalCost;
+                    
+                    if (data.filePath) {
+                        document.getElementById('modalExistingFileArea').classList.remove('d-none');
+                        document.getElementById('modalExistingFileLink').href = data.filePath;
+                    } else {
+                        document.getElementById('modalExistingFileArea').classList.add('d-none');
+                        document.getElementById('modalExistingFileLink').href = '#';
+                    }
+                    
+                    var modal = new bootstrap.Modal(document.getElementById('manageDocModal'));
+                    modal.show();
+                })
+                .catch(err => alert("Veri çekilirken hata oluştu: " + err));
+        }
+    </script>
+</body>
+</html>
