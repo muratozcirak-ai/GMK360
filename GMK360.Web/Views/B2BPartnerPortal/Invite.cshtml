@@ -1,0 +1,239 @@
+﻿@model GMK360.Core.Entities.B2B.B2BQuoteInvite
+@{
+    Layout = null;
+    var projectInfo = ViewBag.ProjectInfo as dynamic;
+}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GMK360 - Tedarikçi Paneli</title>
+    <!-- Bootstrap 5 CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .gmk-header { background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%); color: white; padding: 15px 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .card { border-radius: 12px; border: none; box-shadow: 0 2px 15px rgba(0,0,0,0.04); margin-bottom: 20px; }
+        .blurred-section { position: relative; user-select: none; }
+        .blurred-section .content-to-blur { filter: blur(4px); opacity: 0.6; pointer-events: none; }
+        .blurred-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10; text-align: center; width: 80%; }
+        .pro-badge { background: linear-gradient(45deg, #FFD700, #FFA500); color: #000; font-weight: bold; padding: 5px 12px; border-radius: 20px; font-size: 0.8rem;}
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <div class="gmk-header">
+        <div class="container d-flex justify-content-between align-items-center">
+            <h4 class="mb-0 fw-bold"><i class="bi bi-buildings"></i> GMK360 <span class="fw-light fs-6 ms-2 opacity-75">| B2B Partner Portalı</span></h4>
+            <div class="dropdown">
+                <button class="btn btn-light btn-sm dropdown-toggle rounded-pill" type="button"><i class="bi bi-person-circle text-primary"></i> @(Model.NetworkContact?.CompanyName ?? "Tedarikçi Firma")</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mt-4">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success border-0 shadow-sm rounded-3 mb-4 d-flex align-items-center">
+                <i class="bi bi-check-circle-fill fs-3 me-3"></i>
+                <div>
+                    <h6 class="fw-bold mb-0">@TempData["SuccessMessage"]</h6>
+                </div>
+            </div>
+        }
+
+                @if (TempData["InfoMessage"] != null)
+        {
+            <div class="alert alert-info border-0 shadow-sm rounded-3 mb-4 d-flex align-items-center">
+                <i class="bi bi-info-circle-fill fs-3 me-3"></i>
+                <div>
+                    <h6 class="fw-bold mb-0">@TempData["InfoMessage"]</h6>
+                </div>
+            </div>
+        }
+
+        <!-- Güvenlik & Hoşgeldin -->
+        <div class="alert alert-warning border-0 shadow-sm d-flex align-items-center rounded-3 mb-4" role="alert">
+            <i class="bi bi-shield-exclamation fs-3 text-warning me-3"></i>
+            <div>
+                <h6 class="fw-bold mb-1">Hoş Geldiniz @(Model.NetworkContact?.ContactPerson ?? Model.NetworkContact?.CompanyName)! GMK360 altyapısında sizin için hazırlanan paneledesiniz.</h6>
+                <span class="small">@(Model.QuoteRequest?.RequesterAgency?.CompanyName ?? "Ana Firma") tarafından size özel oluşturulan bu hesabın geçici şifresi <strong>(Gç-8472)</strong> 3 gün içinde kilitlenecektir. Sisteme kesintisiz erişim ve cari takibiniz için lütfen kendi şifrenizi belirleyin. <a href="#" class="alert-link">Şifremi Şimdi Değiştir</a></span>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Sol Taraf (Aktif İhale) -->
+            <div class="col-lg-8">
+                <div class="card border-primary border-top border-4">
+                    <div class="card-header bg-white p-4 d-flex justify-content-between align-items-center border-0">
+                        <div>
+                            @if(Model.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Pending)
+                            {
+                                <span class="badge bg-danger rounded-pill mb-2">Acil Teklif Bekleniyor</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-success rounded-pill mb-2"><i class="bi bi-check"></i> Teklifiniz İletildi</span>
+                            }
+                            <h4 class="fw-bold text-dark mb-0">@(Model.QuoteRequest?.RequesterAgency?.CompanyName ?? "Ana Firma")</h4>
+                            <p class="text-muted mb-0">@(Model.QuoteRequest?.Title)</p>
+                        </div>
+                        <div class="bg-light rounded p-3 text-center border">
+                            <i class="bi bi-building fs-1 text-primary"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body px-4 pb-4 bg-light bg-opacity-50">
+                        @if(projectInfo != null)
+                        {
+                            <!-- Teknik Künye (Ustanın Zekası) -->
+                            <div class="bg-white p-3 rounded-3 border mb-4 shadow-sm">
+                                <h6 class="fw-bold text-primary border-bottom pb-2 mb-3"><i class="bi bi-info-square me-2"></i>Proje Teknik Künyesi (@projectInfo.Name)</h6>
+                                <div class="row g-3 small">
+                                    <div class="col-sm-6"><span class="text-muted">Yapım Yılı:</span> <strong class="float-end">@projectInfo.BuiltYear</strong></div>
+                                    <div class="col-sm-6"><span class="text-muted">Yapı Tipi:</span> <strong class="float-end">@projectInfo.Type</strong></div>
+                                    <div class="col-sm-6"><span class="text-muted">Bağımsız Bölümler:</span> <strong class="float-end">@projectInfo.Units</strong></div>
+                                    <div class="col-sm-6"><span class="text-muted">Alan (Arsa Toplam):</span> <strong class="float-end">@projectInfo.Area m²</strong></div>
+                                </div>
+                                <hr>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="small text-muted"><i class="bi bi-geo-alt-fill text-danger"></i> @(string.IsNullOrEmpty(projectInfo.Address) ? "Adres Girilmemiş" : projectInfo.Address)</span>
+                                    @if(projectInfo.Lat != null && projectInfo.Lng != null)
+                                    {
+                                        <a href="https://maps.google.com/?q=@projectInfo.Lat.ToString(System.Globalization.CultureInfo.InvariantCulture),@projectInfo.Lng.ToString(System.Globalization.CultureInfo.InvariantCulture)" target="_blank" class="btn btn-sm btn-outline-danger rounded-pill px-3"><i class="bi bi-map"></i> Haritada Gör</a>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        @if(Model.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Pending)
+                        {
+                            <!-- Fiyat Giriş Alanı -->
+                            <div class="bg-white p-4 rounded-3 border border-primary shadow-sm">
+                                <h6 class="fw-bold mb-3">Sizin Teklifiniz (TL)</h6>
+                                <form method="post" action="/B2BPartnerPortal/SubmitQuote">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="inviteId" value="@Model.Id" />
+                                    <div class="input-group input-group-lg mb-3">
+                                        <span class="input-group-text bg-light fw-bold text-muted">₺</span>
+                                        <input type="number" step="0.01" name="offeredPrice" class="form-control fw-bold text-dark" placeholder="Götürü veya Birim fiyatınızı giriniz..." required>
+                                        <button class="btn btn-primary px-4 fw-bold" type="submit"><i class="bi bi-send-fill me-2"></i> Teklifi İlet</button>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="form-text"><i class="bi bi-clock-history"></i> Fiyatınız şifreli olarak satınalma departmanına iletilecektir.</div>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('inspectionForm').submit();">
+                                            <i class="bi bi-calendar-event"></i> Sahayı Görmek İstiyorum (Keşif Talebi)
+                                        </button>
+                                    </div>
+                                </form>
+                                <form id="inspectionForm" method="post" action="/B2BPartnerPortal/RequestInspection" style="display:none;">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="inviteId" value="@Model.Id" />
+                                </form>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="bg-white p-4 rounded-3 border shadow-sm text-center">
+                                <i class="bi bi-check-circle text-success" style="font-size:3rem;"></i>
+                                <h5 class="fw-bold mt-2">Teklifiniz İletildi (@Model.OfferedPrice?.ToString("N2") TL)</h5>
+                                <p class="text-muted mb-0">Fiyatınız firma tarafından değerlendirilecektir. Onaylanması durumunda SMS ile bilgilendirileceksiniz.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Pazar Yeri Oltası (PRO) -->
+                <div class="card bg-dark text-white blurred-section overflow-hidden mt-4">
+                    <div class="card-header border-secondary p-3">
+                        <h5 class="mb-0 fw-bold"><i class="bi bi-globe me-2"></i> GMK360 Pazar Yeri</h5>
+                    </div>
+                    
+                    <div class="content-to-blur p-4">
+                        <div class="d-flex justify-content-between border-bottom border-secondary pb-2 mb-2">
+                            <span>Varyant Yapı - Hafriyat İşi</span>
+                            <span class="text-warning">Teklif Bekliyor</span>
+                        </div>
+                        <div class="d-flex justify-content-between border-bottom border-secondary pb-2 mb-2">
+                            <span>Kılıç İnşaat - Zemin Dolgu ve Tesviye</span>
+                            <span class="text-warning">Teklif Bekliyor</span>
+                        </div>
+                    </div>
+
+                    <div class="blurred-overlay bg-dark bg-opacity-75 p-4 rounded-4 border border-secondary shadow-lg">
+                        <i class="bi bi-lock-fill fs-1 text-warning mb-2"></i>
+                        <h5 class="fw-bold mb-2">Bölgenizdeki Diğer İhaleler Sizi Bekliyor!</h5>
+                        <p class="small text-light mb-3">Sadece bu projeye değil, şehrinizdeki tüm projelere fiyat vermek ve iş almak için PRO hesaba geçmelisiniz.</p>
+                        <button class="btn btn-warning fw-bold text-dark rounded-pill px-4 shadow" type="button"><i class="bi bi-star-fill"></i> PRO Aboneliği İncele</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sağ Taraf (Firmanın Kendi Mini-ERP'si) -->
+            <div class="col-lg-4">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white border-0 pt-4 pb-2">
+                        <h6 class="fw-bold text-secondary text-uppercase mb-0"><i class="bi bi-briefcase-fill me-2"></i> Benim Ekosistemim</h6>
+                    </div>
+                    <div class="card-body">
+                        
+                        <div class="list-group list-group-flush small">
+                            @{
+                                bool isLab = Model.QuoteRequest?.Title != null && (Model.QuoteRequest.Title.IndexOf("Karot", StringComparison.OrdinalIgnoreCase) >= 0 || Model.QuoteRequest.Title.IndexOf("Laboratuvar", StringComparison.OrdinalIgnoreCase) >= 0 || Model.QuoteRequest.Title.IndexOf("Zemin", StringComparison.OrdinalIgnoreCase) >= 0 || Model.QuoteRequest.Title.IndexOf("Tespit Raporu", StringComparison.OrdinalIgnoreCase) >= 0);
+                            }
+                            <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3 border-0 active fw-bold shadow-sm rounded-3 mb-2" style="background: linear-gradient(135deg, #2563eb, #1e40af); color: white;">
+                                <span><i class="bi bi-wallet2 text-warning me-2 fs-5 align-middle"></i> @(Model.QuoteRequest?.RequesterAgency?.CompanyName ?? "Firma") İle Cari</span>
+                                <span class="badge bg-white text-primary rounded-pill px-3 shadow-sm">Ücretsiz</span>
+                            </a>
+                            
+                            @if(isLab)
+                            {
+                                <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3 border-0 text-dark fw-bold rounded-3 mb-2" style="background-color: #f8f9fa;">
+                                    <span><i class="bi bi-file-earmark-pdf-fill text-danger me-2 fs-5 align-middle"></i> Karot Raporunu Yükle</span>
+                                    <span class="badge bg-success rounded-pill px-3 shadow-sm">Aktif İşlem</span>
+                                </a>
+                            }
+                            else
+                            {
+                                <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3 border-0 text-muted">
+                                    <span><i class="bi bi-recycle text-secondary me-2 fs-5 align-middle"></i> Hurda / Çıkma Malzeme Envanteri</span>
+                                    <span class="pro-badge shadow-sm"><i class="bi bi-lock-fill"></i> PRO</span>
+                                </a>
+                                <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3 border-0 text-muted">
+                                    <span><i class="bi bi-people-fill text-secondary me-2 fs-5 align-middle"></i> Saha Ekipleri (Puantaj)</span>
+                                    <span class="pro-badge shadow-sm"><i class="bi bi-lock-fill"></i> PRO</span>
+                                </a>
+                                <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3 border-0 text-muted">
+                                    <span><i class="bi bi-truck text-secondary me-2 fs-5 align-middle"></i> Sefer ve Kantar Fişleri</span>
+                                    <span class="pro-badge shadow-sm"><i class="bi bi-lock-fill"></i> PRO</span>
+                                </a>
+                                <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3 border-0 text-muted">
+                                    <span><i class="bi bi-truck-front-fill text-secondary me-2 fs-5 align-middle"></i> Makine ve Araç Filom</span>
+                                    <span class="pro-badge shadow-sm"><i class="bi bi-lock-fill"></i> PRO</span>
+                                </a>
+                                <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3 border-0 text-muted">
+                                    <span><i class="bi bi-fuel-pump-fill text-secondary me-2 fs-5 align-middle"></i> Yakıt (Mazot) Takibi</span>
+                                    <span class="pro-badge shadow-sm"><i class="bi bi-lock-fill"></i> PRO</span>
+                                </a>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 bg-primary bg-opacity-10 mt-3 p-3 text-center">
+                    <i class="bi bi-phone-vibrate fs-1 text-primary mb-2"></i>
+                    <h6 class="fw-bold text-primary">Kendi Ustalarınızı Yönetin</h6>
+                    <p class="small text-muted mb-0">Müteahhit firmanın yaptığı gibi, siz de kendi taşeronlarınızı GMK360 üzerinden ücretsiz yönetebilirsiniz.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

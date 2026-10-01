@@ -211,6 +211,16 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         // ?n?aat ve ?antiye Y?netimi (Kentsel D?n???m ERP)
         public DbSet<GMK360.Core.Entities.Construction.AgencyPhonebook> AgencyPhonebooks { get; set; }
         public DbSet<ConstructionProject> ConstructionProjects { get; set; }
+public DbSet<GMK360.Core.Entities.Construction.ConstructionProjectExpense> ConstructionProjectExpenses { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.ProjectStakeholder> ProjectStakeholders { get; set; }
+        public DbSet<GMK360.Core.Entities.Finance.ProjectCashRequest> ProjectCashRequests { get; set; }
+        public DbSet<GMK360.Core.Entities.Logistics.CompanyVehicle> CompanyVehicles { get; set; }
+        public DbSet<GMK360.Core.Entities.Logistics.VehicleAssignment> VehicleAssignments { get; set; }
+        public DbSet<GMK360.Core.Entities.Logistics.VehicleTask> VehicleTasks { get; set; }
+        public DbSet<GMK360.Core.Entities.Logistics.VehicleExpense> VehicleExpenses { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.SiteDailyLog> SiteDailyLogs { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.ProjectManagementInvitation> ProjectManagementInvitations { get; set; }
+        public DbSet<GMK360.Core.Entities.B2b.B2BNetworkConnection> B2BNetworkConnections { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.ConstructionBudgetItem> ConstructionBudgetItems { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.ProjectOwner> ProjectOwners { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.ProjectOwnerDebt> ProjectOwnerDebts { get; set; }

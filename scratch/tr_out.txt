@@ -1,0 +1,47 @@
+<tr data-bs-toggle="@(isDependent ? "collapse" : "")" data-bs-target=".child-of-@doc.Id" style="@(isDependent ? "cursor: pointer;" : "")">
+                                            <td class="fw-bold ps-4 @(isDependent && !isReadyToApply ? "text-danger" : "text-dark")">
+                                                @if(isDependent) { <i class="bi bi-chevron-expand text-primary me-2 fs-5 align-middle"></i> } else { <span style="margin-left: 28px;"></span> }
+                                                @doc.DocumentName
+                                                @if(!string.IsNullOrEmpty(doc.FilePath)) { <a href="@doc.FilePath" target="_blank" class="ms-1" title="Evrak Yüklendi"><i class="bi bi-paperclip text-primary fs-5"></i></a> }
+                                                @if(isDependent)
+                                                {
+                                                    <br/>
+                                                    @if(isReadyToApply) {
+                                                        <small class="text-success ms-4" style="font-size: 0.75rem;"><i class="bi bi-unlock-fill"></i> Ön koşullar sağlandı</small>
+                                                    } else {
+                                                        <small class="text-danger ms-4" style="font-size: 0.75rem;"><i class="bi bi-lock-fill"></i> Ön koşullar tamamlanmadı!</small>
+                                                    }
+                                                }
+                                            </td>
+                                            <td>
+                                                <i class="bi bi-building me-1 text-muted"></i>
+                                                @(doc.SystemTemplate?.IssuedBy ?? "Belirtilmedi")
+                                            </td>
+                                            <td>
+                                                @if(string.IsNullOrEmpty(doc.AssignedUserId)) { <span class="text-danger"><i class="bi bi-person-x"></i> Yok</span> } else { <span><i class="bi bi-person-check text-primary"></i> @doc.AssignedUserId</span> }
+                                            </td>
+                                            <td class="text-end fw-bold" title="Harç: @(doc.DocumentFee?.ToString("N2") ?? "0,00") | Ek Masraf: @(doc.AdditionalCost?.ToString("N2") ?? "0,00")">
+                                                @((doc.DocumentFee.GetValueOrDefault() + doc.AdditionalCost.GetValueOrDefault()).ToString("N2")) ₺
+                                            </td>
+                                            <td class="text-center">
+                                                @if (doc.Status == "Fiyat Araştırılıyor") { <span class="badge bg-info text-dark rounded-pill px-3 shadow-sm fw-bold"><i class="bi bi-search"></i> Fiyat Araştırılıyor</span> }
+                                                else if (isDependent && !isReadyToApply) { <span class="badge bg-danger rounded-pill px-3 shadow-sm"><i class="bi bi-lock-fill"></i> Kilitli (Önkoşul)</span> }
+                                                else if (doc.Status == "Bekliyor") { <span class="status-badge badge-waiting">Bekliyor</span> }
+                                                else if (doc.Status == "İşlemde") { <span class="status-badge badge-process">Başvuru Yapıldı</span> }
+                                                else if (doc.Status == "Sorunlu") { <span class="status-badge badge-danger">Sorun Çıktı</span> }
+                                                else if (doc.Status == "Alındı") { <span class="status-badge badge-success">Tamamlandı</span> }
+                                                else { <span class="status-badge badge-waiting">@doc.Status</span> }
+                                            </td>
+                                            <td class="text-end pe-4" onclick="event.stopPropagation();">
+                                                <div class="d-flex justify-content-end gap-1">
+                                                      <form method="post" action="/PhaseZero/RequestQuote/@doc.Id" class="m-0 p-0">
+                                                          <button type="submit" class="btn btn-sm btn-warning rounded-pill px-2 shadow-sm text-dark fw-bold" title="Satınalmaya Gönder / Fiyat Araştırması İste">
+                                                              <i class="bi bi-cart-plus"></i> Teklif
+                                                          </button>
+                                                      </form>
+                                                      <button class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold shadow-sm" onclick="openManageModal(@doc.Id)" @(isDependent && !isReadyToApply ? "disabled title='Önce alt ön koşul evrakları tamamlanmalıdır'" : "")>
+                                                          @if(isDependent && !isReadyToApply) { <i class="bi bi-lock-fill text-danger"></i> } else { <i class="bi bi-pencil-square"></i> } Yönet
+                                                      </button>
+                                                  </div>
+                                            </td>
+                                        </tr>

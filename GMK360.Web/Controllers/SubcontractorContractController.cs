@@ -176,8 +176,8 @@ namespace GMK360.Web.Controllers
                 .Where(p => p.AgencyId == agencyId && !p.IsDeleted)
                 .ToListAsync();
 
-            ViewBag.PhonebookContacts = await _context.B2BNetworkContacts
-                .Where(s => s.OwnerAgencyId == agencyId && !s.IsDeleted)
+            ViewBag.Subcontractors = await _context.AgencyPhonebooks
+                .Where(s => s.AgencyId == agencyId && !s.IsDeleted)
                 .ToListAsync();
 
             return View(new SubcontractorContract { ContractDate = DateTime.UtcNow, Currency = "TRY", IsExpenseContract = true });
@@ -210,8 +210,8 @@ namespace GMK360.Web.Controllers
                 .Where(p => p.AgencyId == agencyId && !p.IsDeleted)
                 .ToListAsync();
 
-            ViewBag.PhonebookContacts = await _context.B2BNetworkContacts
-                .Where(s => s.OwnerAgencyId == agencyId && !s.IsDeleted)
+            ViewBag.Subcontractors = await _context.AgencyPhonebooks
+                .Where(s => s.AgencyId == agencyId && !s.IsDeleted)
                 .ToListAsync();
 
             return View(model);

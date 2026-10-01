@@ -1,27 +1,17 @@
-﻿import sys
+﻿import codecs
 import re
 
-filepath = 'GMK360.Data/Contexts/ApplicationDbContext.cs'
-
-with open(filepath, 'r', encoding='utf-8') as f:
+path = 'GMK360.Data/Contexts/ApplicationDbContext.cs'
+with codecs.open(path, 'r', 'utf-8-sig') as f:
     content = f.read()
 
-# Check if already added
-if "public DbSet<GMK360.Core.Entities.B2b.B2bCompany> B2bCompanies" not in content:
-    target = "public DbSet<B2bSupplier> B2bSuppliers { get; set; }"
-    replacement = """public DbSet<B2bSupplier> B2bSuppliers { get; set; }
-        
-        // B2B Marketplace (Yeni)
-        public DbSet<GMK360.Core.Entities.B2b.B2bCompany> B2bCompanies { get; set; }
-        public DbSet<GMK360.Core.Entities.B2b.B2bCategory> B2bCategories { get; set; }
-        public DbSet<GMK360.Core.Entities.B2b.B2bCompanyCategory> B2bCompanyCategories { get; set; }
-        public DbSet<GMK360.Core.Entities.B2b.B2bBranch> B2bBranches { get; set; }
-        public DbSet<GMK360.Core.Entities.B2b.B2bContact> B2bContacts { get; set; }"""
-        
-    content = content.replace(target, replacement)
-    
-    with open(filepath, 'w', encoding='utf-8') as f:
-        f.write(content)
-        print("ApplicationDbContext updated.")
-else:
-    print("Already updated.")
+if 'ConstructionProjectExpenses' not in content:
+    replacement = '''
+        public DbSet<ConstructionBudgetItem> ConstructionBudgetItems { get; set; }
+        public DbSet<ConstructionProjectExpense> ConstructionProjectExpenses { get; set; }
+'''
+    content = content.replace('public DbSet<ConstructionBudgetItem> ConstructionBudgetItems { get; set; }', replacement.strip() + '\n')
+
+with codecs.open(path, 'w', 'utf-8-sig') as f:
+    f.write(content)
+print("Updated ApplicationDbContext.cs")

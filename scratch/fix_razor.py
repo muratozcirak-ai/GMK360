@@ -1,27 +1,32 @@
-﻿import re
+﻿import io
+import re
 
-ctrl_file = 'GMK360.Web/Controllers/ConstructionProjectController.cs'
-with open(ctrl_file, 'r', encoding='utf-8') as f:
-    ctrl_content = f.read()
+filepath = r'GMK360.Web\Views\PhaseZero\Index.cshtml'
+with io.open(filepath, 'r', encoding='utf-8') as f:
+    content = f.read()
 
-ctrl_content = re.sub(r'GMK360\.Core\.Entities\.Construction\.LegalDocumentStatus\.[a-zA-Z]+', '"Sorunlu"', ctrl_content)
+# Fix RZ1010 error: Change "@{" to "{" or check if it's already in C# context.
+# In razor: 
+# @if(isDependent) { <i class="..."></i> } else { <span ...></span> }
+# Let's just fix my injection from earlier:
+# I used `@{` inside the razor block probably inappropriately?
+# Actually, I injected `@{ var relatedQuote = ... }` right after `@foreach (var doc in group...) {`
+# Ah! Since it's inside `@foreach (var doc in ...) {`, it's already in C# context!
+# So `@{ ... }` is invalid. It should just be `var relatedQuote = ...` 
+# Wait, NO, Razor allows `@{ }` inside `@foreach` IF it's rendering HTML. But let's just make it valid C#.
 
-with open(ctrl_file, 'w', encoding='utf-8-sig') as f:
-    f.write(ctrl_content)
+content = content.replace("                                        @{\n                                            var relatedQuote", "                                        \n                                            var relatedQuote")
+content = content.replace("var hasQuote = relatedQuote != null;\n                                        }", "var hasQuote = relatedQuote != null;\n                                        ")
 
-view_file = 'GMK360.Web/Views/ConstructionProject/Details.cshtml'
-with open(view_file, 'r', encoding='utf-8') as f:
-    view_content = f.read()
+# Fix CS1501: (doc.DocumentFee.GetValueOrDefault() + doc.AdditionalCost.GetValueOrDefault()).ToString("N2")
+# Wait, DocumentFee is probably double?. GetValueOrDefault() on double? returns double. double has ToString("N2").
+# Let's just use string.Format("{0:N2}", ...) to be safe.
+# Or `((decimal)(doc.DocumentFee ?? 0) + (decimal)(doc.AdditionalCost ?? 0)).ToString("N2")`
 
-view_content = view_content.replace('selected="@(doc.Status == "Bekliyor")"', 'selected="@(doc.Status?.ToString() == "Bekliyor")"')
-view_content = view_content.replace('selected="@(doc.Status == "İşlemde")"', 'selected="@(doc.Status?.ToString() == "İşlemde")"')
-view_content = view_content.replace('selected="@(doc.Status == "Tamamlandı")"', 'selected="@(doc.Status?.ToString() == "Tamamlandı")"')
-view_content = view_content.replace('selected="@(doc.Status == "Sorunlu")"', 'selected="@(doc.Status?.ToString() == "Sorunlu")"')
+content = re.sub(r'@\(\(doc\.DocumentFee\.GetValueOrDefault\(\) \+ doc\.AdditionalCost\.GetValueOrDefault\(\)\)\.ToString\("N2"\)\)', 
+                 r'@(((decimal)(doc.DocumentFee ?? 0) + (decimal)(doc.AdditionalCost ?? 0)).ToString("N2"))', content)
 
-view_content = re.sub(r'@\(doc\.Status == "([^"]+)"\)', r'@(doc.Status?.ToString() == "\1")', view_content)
 
-# Fix razor syntax issue at top of file
-view_content = view_content.replace('@model ', '@model ')
-
-with open(view_file, 'w', encoding='utf-8-sig') as f:
-    f.write(view_content)
+with io.open(filepath, 'w', encoding='utf-8') as f:
+    f.write(content)
+print("Fixed Razor syntax errors")

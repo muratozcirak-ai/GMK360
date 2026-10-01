@@ -1,0 +1,12 @@
+﻿CREATE TABLE B2BNetworkConnections (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    AgencyId INT NOT NULL,
+    B2bCompanyId INT NOT NULL,
+    IsActive BIT NOT NULL DEFAULT 1,
+    ConnectionNotes NVARCHAR(500) NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT GETDATE(),
+    UpdatedAt DATETIME2 NULL,
+    IsDeleted BIT NOT NULL DEFAULT 0,
+    CONSTRAINT FK_B2BNetworkConnections_Agencies FOREIGN KEY (AgencyId) REFERENCES Agencies(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_B2BNetworkConnections_B2bCompanies FOREIGN KEY (B2bCompanyId) REFERENCES B2bCompanies(Id) ON DELETE CASCADE
+);

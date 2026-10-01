@@ -921,6 +921,45 @@ namespace GMK360.Data.Migrations
                     b.ToTable("B2BLeads");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.B2b.B2BNetworkConnection", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AgencyId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("B2bCompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ConnectionNotes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgencyId");
+
+                    b.HasIndex("B2bCompanyId");
+
+                    b.ToTable("B2BNetworkConnections");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.B2b.B2bBranch", b =>
                 {
                     b.Property<int>("Id")
@@ -1328,6 +1367,9 @@ namespace GMK360.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("CreatedByUserId")
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
@@ -1362,6 +1404,9 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsExistingBuilding")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSystemVerified")
                         .HasColumnType("bit");
 
                     b.Property<double?>("Latitude")
@@ -1421,6 +1466,8 @@ namespace GMK360.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ConstructionProjectId");
+
+                    b.HasIndex("CreatedByUserId");
 
                     b.HasIndex("DistrictId");
 
@@ -2330,6 +2377,9 @@ namespace GMK360.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("ForemanId")
+                        .HasColumnType("int");
+
                     b.Property<string>("IdentityNumber")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -2359,11 +2409,16 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("SubcontractorName")
-                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TeamName")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("WorkerType")
                         .IsRequired()
@@ -2373,7 +2428,11 @@ namespace GMK360.Data.Migrations
 
                     b.HasIndex("AgencyId");
 
+                    b.HasIndex("ForemanId");
+
                     b.HasIndex("SubcontractorContactId");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("AgencyWorkers");
                 });
@@ -2736,6 +2795,58 @@ namespace GMK360.Data.Migrations
                     b.ToTable("ConstructionProjects");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.ConstructionProjectExpense", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AgencyId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DocumentNo")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("ExpenseDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ExpenseType")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPaid")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("ConstructionProjectExpenses");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.Construction.ConstructionTask", b =>
                 {
                     b.Property<int>("Id")
@@ -2974,21 +3085,40 @@ namespace GMK360.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("ConstructionProjectId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<decimal>("EarnedWage")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("FieldExpenseDescription")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsAfternoonPresent")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsMorningPresent")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Notes")
-                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("OvertimeHours")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("PendingFieldExpense")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("PhaseName")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RecordedByUserId")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -3000,6 +3130,8 @@ namespace GMK360.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AgencyWorkerId");
+
+                    b.HasIndex("ConstructionProjectId");
 
                     b.ToTable("DailyTimesheets");
                 });
@@ -3430,6 +3562,9 @@ namespace GMK360.Data.Migrations
                     b.Property<string>("InstitutionContact")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsCustom")
                         .HasColumnType("bit");
 
@@ -3472,6 +3607,59 @@ namespace GMK360.Data.Migrations
                     b.HasIndex("TargetInstitutionId");
 
                     b.ToTable("ProjectLegalDocuments");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.ProjectManagementInvitation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("AgencyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("InvitationToken")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ManagerEmail")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ManagerName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ManagerPhone")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("SentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ProjectManagementInvitations");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.ProjectMaterialCatalog", b =>
@@ -3606,6 +3794,98 @@ namespace GMK360.Data.Migrations
                     b.HasIndex("ProjectOwnerId");
 
                     b.ToTable("ProjectOwnerDebts");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.ProjectStakeholder", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("SharePercentage")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("ProjectStakeholders");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.SiteDailyLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AgencyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("GeneralProgress")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsReadByAdmin")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("LogDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("MaterialNeeds")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ObstaclesAndDelays")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReporterUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("WeatherCondition")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SiteDailyLogs");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.TaskProgressLog", b =>
@@ -5432,6 +5712,53 @@ namespace GMK360.Data.Migrations
                     b.ToTable("Hakedisler");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.Finance.ProjectCashRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AgencyId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("RequestDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RequestedByUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ResolvedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ProjectCashRequests");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.Finance.SubcontractorContract", b =>
                 {
                     b.Property<int>("Id")
@@ -6840,6 +7167,189 @@ namespace GMK360.Data.Migrations
                     b.ToTable("LocalProfessionals");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.Logistics.CompanyVehicle", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AgencyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BrandModel")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PlateNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("VehicleType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CompanyVehicles");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Logistics.VehicleAssignment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AgencyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AssignedToName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("AssignedToUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("AssignmentDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ReturnDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("VehicleId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VehicleId");
+
+                    b.ToTable("VehicleAssignments");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Logistics.VehicleExpense", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AgencyId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpenseDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ExpenseType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ReceiptNumber")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ReceiptPhotoUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ReportedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("VehicleId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VehicleId");
+
+                    b.ToTable("VehicleExpenses");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Logistics.VehicleTask", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AgencyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("DestinationProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DriverName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("TaskDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("TaskDescription")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("VehicleId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VehicleId");
+
+                    b.ToTable("VehicleTasks");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.ManagementCompany", b =>
                 {
                     b.Property<int>("Id")
@@ -7673,6 +8183,9 @@ namespace GMK360.Data.Migrations
 
                     b.Property<int>("DisplayOrder")
                         .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
@@ -11585,15 +12098,27 @@ namespace GMK360.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("Amount")
+                    b.Property<decimal>("Amount")
                         .HasPrecision(18, 2)
-                        .HasColumnType("int");
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
+
+                    b.Property<DateTime?>("MaturityDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("NetAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("TaxAmount")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("TransactionType")
                         .IsRequired()
@@ -11953,6 +12478,25 @@ namespace GMK360.Data.Migrations
                     b.Navigation("RequesterAgency");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.B2b.B2BNetworkConnection", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Agency", "Agency")
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GMK360.Core.Entities.B2b.B2bCompany", "B2bCompany")
+                        .WithMany()
+                        .HasForeignKey("B2bCompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Agency");
+
+                    b.Navigation("B2bCompany");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.B2b.B2bBranch", b =>
                 {
                     b.HasOne("GMK360.Core.Entities.B2b.B2bCompany", "B2bCompany")
@@ -12049,6 +12593,10 @@ namespace GMK360.Data.Migrations
                         .HasForeignKey("ConstructionProjectId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("GMK360.Core.Entities.Identity.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId");
+
                     b.HasOne("GMK360.Core.Entities.District", "District")
                         .WithMany()
                         .HasForeignKey("DistrictId")
@@ -12083,6 +12631,8 @@ namespace GMK360.Data.Migrations
                     b.Navigation("City");
 
                     b.Navigation("ConstructionProject");
+
+                    b.Navigation("CreatedByUser");
 
                     b.Navigation("District");
 
@@ -12388,13 +12938,25 @@ namespace GMK360.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("GMK360.Core.Entities.Construction.AgencyWorker", "Foreman")
+                        .WithMany()
+                        .HasForeignKey("ForemanId");
+
                     b.HasOne("GMK360.Core.Entities.Construction.AgencyPhonebook", "SubcontractorContact")
                         .WithMany()
                         .HasForeignKey("SubcontractorContactId");
 
+                    b.HasOne("GMK360.Core.Entities.Identity.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId");
+
                     b.Navigation("Agency");
 
+                    b.Navigation("Foreman");
+
                     b.Navigation("SubcontractorContact");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.AgendaItem", b =>
@@ -12484,6 +13046,17 @@ namespace GMK360.Data.Migrations
                     b.Navigation("BinaYoneticisi");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.ConstructionProjectExpense", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.ConstructionProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.Construction.ConstructionTask", b =>
                 {
                     b.HasOne("GMK360.Core.Entities.Identity.ApplicationUser", "AssignedToUser")
@@ -12564,7 +13137,13 @@ namespace GMK360.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("GMK360.Core.Entities.Construction.ConstructionProject", "ConstructionProject")
+                        .WithMany()
+                        .HasForeignKey("ConstructionProjectId");
+
                     b.Navigation("AgencyWorker");
+
+                    b.Navigation("ConstructionProject");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.DocumentTemplate", b =>
@@ -12765,6 +13344,25 @@ namespace GMK360.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("ProjectOwner");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.ProjectStakeholder", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.ConstructionProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GMK360.Core.Entities.Identity.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.TaskProgressLog", b =>
@@ -13537,6 +14135,39 @@ namespace GMK360.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Neighborhood");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Logistics.VehicleAssignment", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Logistics.CompanyVehicle", "Vehicle")
+                        .WithMany("Assignments")
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Vehicle");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Logistics.VehicleExpense", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Logistics.CompanyVehicle", "Vehicle")
+                        .WithMany("Expenses")
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Vehicle");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Logistics.VehicleTask", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Logistics.CompanyVehicle", "Vehicle")
+                        .WithMany("Tasks")
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Vehicle");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.ManagementDecision", b =>
@@ -15145,6 +15776,15 @@ namespace GMK360.Data.Migrations
             modelBuilder.Entity("GMK360.Core.Entities.LiabilityType", b =>
                 {
                     b.Navigation("Payments");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Logistics.CompanyVehicle", b =>
+                {
+                    b.Navigation("Assignments");
+
+                    b.Navigation("Expenses");
+
+                    b.Navigation("Tasks");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.ManagementCompany", b =>

@@ -68,6 +68,10 @@ namespace GMK360.Core.Entities
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
         public bool IsApproved { get; set; } = true;
+        public string? CreatedByUserId { get; set; }
+        public virtual GMK360.Core.Entities.Identity.ApplicationUser CreatedByUser { get; set; }
+        
+        public bool IsSystemVerified { get; set; } = false; // Harita Ajanı / GMK Admin Onayı
         
         [NotMapped]
         public string Address { get => $"{StreetName} {BuildingNumber}"; set { } }
@@ -95,5 +99,6 @@ namespace GMK360.Core.Entities
         public int OnboardingStep { get; set; } = 1;
     }
 }
+
 
 

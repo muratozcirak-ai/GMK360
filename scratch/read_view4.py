@@ -1,0 +1,9 @@
+﻿import io
+import re
+filepath = r'GMK360.Web\Views\PhaseZero\Index.cshtml'
+with io.open(filepath, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+match = re.search(r'<tr data-bs-toggle=.*?</tr>', content, re.DOTALL)
+if match:
+    print(match.group(0))

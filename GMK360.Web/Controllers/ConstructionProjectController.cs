@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿﻿using Microsoft.AspNetCore.Authorization;
 
 using Microsoft.AspNetCore.Identity;
 
@@ -183,6 +183,11 @@ namespace GMK360.Web.Controllers
                 .Where(d => d.ConstructionProjectId == id)
 
                 .ToListAsync();
+            ViewBag.Stakeholders = await _context.ProjectStakeholders
+                .Include(s => s.User)
+                .Where(s => s.ProjectId == id && !s.IsDeleted)
+                .ToListAsync();
+
 
 
 
@@ -3568,7 +3573,112 @@ namespace GMK360.Web.Controllers
             return RedirectToAction(nameof(BudgetDashboard), new { id = projectId });
         }
 
+
+
+        // --- YENİ PAYDAŞ (GÖLGE KULLANICI) EKLEME ---
+        [HttpPost]
+        public async Task<IActionResult> AddStakeholder(int projectId, int role, decimal? sharePercentage, string firstName, string lastName, string phone, string email)
+        {
+            try
+            {
+                var agencyId = await GetUserAgencyIdAsync();
+                if (agencyId == null) 
+                {
+                    TempData["ErrorMessage"] = "Yetki Hatası: Şantiye yöneticisi veya admin yetkiniz bulunamadı.";
+                    return RedirectToAction("Details", new { id = projectId });
+                }
+
+                var existingUser = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phone || (!string.IsNullOrEmpty(email) && u.Email == email));
+
+                if (existingUser == null)
+                {
+                    string cleanPhone = phone.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
+                    if (!cleanPhone.StartsWith("+90") && !cleanPhone.StartsWith("0")) cleanPhone = "0" + cleanPhone;
+                    
+                    string generatedUserName = string.IsNullOrEmpty(email) ? cleanPhone : email;
+                    string generatedEmail = string.IsNullOrEmpty(email) ? $"{cleanPhone}@gmk360.local" : email;
+                    
+                    existingUser = new ApplicationUser
+                    {
+                        UserName = generatedUserName,
+                        Email = generatedEmail,
+                        FirstName = firstName,
+                        LastName = lastName,
+                        PhoneNumber = phone,
+                        EmailConfirmed = false,
+                        PhoneNumberConfirmed = false
+                    };
+
+                    var result = await _userManager.CreateAsync(existingUser, "Shadow.User2026!");
+                    if (!result.Succeeded)
+                    {
+                        TempData["ErrorMessage"] = "Gölge kullanıcı oluşturulurken hata oluştu.";
+                        return RedirectToAction("Details", new { id = projectId });
+                    }
+                    await _userManager.AddToRoleAsync(existingUser, "Musteri");
+                }
+
+                var existingStakeholder = await _context.ProjectStakeholders
+                    .FirstOrDefaultAsync(s => s.ProjectId == projectId && s.UserId == existingUser.Id);
+
+                if (existingStakeholder == null)
+                {
+                    var stakeholder = new GMK360.Core.Entities.Construction.ProjectStakeholder
+                    {
+                        ProjectId = projectId,
+                        UserId = existingUser.Id,
+                        Role = (GMK360.Core.Entities.Construction.StakeholderRole)role,
+                        SharePercentage = (role == 1) ? sharePercentage : null,
+                        Notes = "Firma tarafından davet edildi (Gölge Onay Bekliyor)"
+                    };
+                    
+                    _context.ProjectStakeholders.Add(stakeholder);
+                    await _context.SaveChangesAsync();
+                    
+                    TempData["SuccessMessage"] = $"{firstName} {lastName} projeye başarıyla eklendi! Sisteme giriş yapması için SMS gönderimi tetiklendi.";
+                }
+                else
+                {
+                    TempData["ErrorMessage"] = "Bu kişi zaten bu projenin paydaşı!";
+                }
+
+                return RedirectToAction("Details", new { id = projectId });
+            }
+            catch (Exception ex)
+            {
+                TempData["ErrorMessage"] = "Sistem Hatası: Lütfen bilgileri kontrol edin.";
+                return RedirectToAction("Details", new { id = projectId });
+            }
+        }
+    
+        [HttpPost]
+        public async Task<IActionResult> EditStakeholder(int stakeholderId, GMK360.Core.Entities.Construction.StakeholderRole role, decimal? sharePercentage)
+        {
+            int projectId = 0;
+            try
+            {
+                var st = await _context.ProjectStakeholders.FirstOrDefaultAsync(s => s.Id == stakeholderId);
+                if (st == null)
+                {
+                    TempData["ErrorMessage"] = "Paydaş bulunamadı.";
+                    return RedirectToAction("Index");
+                }
+                
+                projectId = st.ProjectId;
+                st.Role = role;
+                st.SharePercentage = sharePercentage;
+                
+                await _context.SaveChangesAsync();
+                
+                TempData["SuccessMessage"] = "Paydaş bilgileri başarıyla güncellendi.";
+                return RedirectToAction("Details", new { id = projectId });
+            }
+            catch (System.Exception ex)
+            {
+                TempData["ErrorMessage"] = "Paydaş düzenlenirken hata oluştu: " + ex.Message;
+                return projectId > 0 ? RedirectToAction("Details", new { id = projectId }) : RedirectToAction("Index");
+            }
+        }
+
     }
 }
-
-

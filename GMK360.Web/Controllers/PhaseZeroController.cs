@@ -37,6 +37,16 @@ namespace GMK360.Web.Controllers
                 .Where(r => r.TargetModule == "Construction")
                 .ToListAsync();
 
+            // Fetch quote requests for these documents to show status
+            var docIds = docs.Select(d => d.Id).ToList();
+            var quoteRequests = await _context.B2BQuoteRequests
+                .Include(q => q.Invites)
+                .Where(q => q.SourceModule == "PhaseZeroDocument" && docIds.Contains(q.SourceReferenceId))
+                .ToListAsync();
+            
+            ViewBag.Quotes = quoteRequests;
+
+
             return View(docs);
         }
 
@@ -166,7 +176,7 @@ namespace GMK360.Web.Controllers
 
                 _context.B2BQuoteRequests.Add(quoteRequest);
                 
-                doc.Status = "İşlemde"; // Satınalma sürecine girdi
+                doc.Status = "Fiyat Araştırılıyor"; // Satınalma sürecine girdi
                 doc.AssignedUserId = "Satınalma Departmanı"; // Otomatik satınalmaya atandı
                 
                 await _context.SaveChangesAsync();

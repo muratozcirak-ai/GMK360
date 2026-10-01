@@ -1,0 +1,165 @@
+﻿@model GMK360.Core.Entities.Identity.ApplicationUser
+@{
+    ViewData["Title"] = "Kullanıcı Profili - " + Model.FirstName + " " + Model.LastName;
+    Layout = "~/Views/Shared/_AdminLayout.cshtml";
+    
+    var projects = ViewBag.Projects as IEnumerable<GMK360.Core.Entities.Construction.ProjectStakeholder>;
+    var agencyRoles = ViewBag.AgencyRoles as IEnumerable<GMK360.Core.Entities.AgencyConsultant>;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-1"><i class="bi bi-person-vcard text-primary me-2"></i>Kapsamlı Kullanıcı Profili</h2>
+        <p class="text-muted mb-0">Platform üzerindeki tüm ilişkiler, yetkiler ve proje katılımları.</p>
+    </div>
+    <a asp-action="Index" class="btn btn-outline-secondary shadow-sm">
+        <i class="bi bi-arrow-left me-2"></i>CRM'e Dön
+    </a>
+</div>
+
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="row g-4">
+    <!-- SOL KOLON: KİŞİSEL BİLGİLER -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body text-center p-4">
+                <div class="avatar-circle bg-primary bg-opacity-10 text-primary mx-auto mb-3" style="width: 100px; height: 100px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; font-weight: bold;">
+                    @(Model.FirstName?.Substring(0,1))@(Model.LastName?.Substring(0,1))
+                </div>
+                <h4 class="fw-bold mb-1">@Model.FirstName @Model.LastName</h4>
+                <p class="text-muted mb-3">@(Model.EmailConfirmed ? "Doğrulanmış Müşteri" : "Gölge/Onay Bekleyen Kullanıcı")</p>
+                
+                <hr class="bg-light my-4" />
+                
+                <div class="text-start">
+                    <div class="mb-3">
+                        <small class="text-muted d-block text-uppercase fw-bold" style="font-size: 0.75rem;">Telefon Numarası</small>
+                        <div class="fs-6"><i class="bi bi-telephone text-secondary me-2"></i>@Model.PhoneNumber</div>
+                    </div>
+                    <div class="mb-3">
+                        <small class="text-muted d-block text-uppercase fw-bold" style="font-size: 0.75rem;">E-Posta Adresi</small>
+                        <div class="fs-6"><i class="bi bi-envelope text-secondary me-2"></i>@Model.Email</div>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SAĞ KOLON: İLİŞKİLER VE PROJELER -->
+    <div class="col-lg-8">
+        <!-- İNŞAAT PROJELERİ -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white border-bottom py-3">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-building-check text-success me-2"></i>Dahil Olduğu Projeler (Paydaşlıklar)</h5>
+            </div>
+            <div class="card-body p-0">
+                @if (projects != null && projects.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light text-secondary">
+                                <tr>
+                                    <th class="ps-4">Proje Adı</th>
+                                    <th>Rolü</th>
+                                    <th>Hissesi</th>
+                                    <th>Durum</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var p in projects)
+                                {
+                                    <tr>
+                                        <td class="ps-4 fw-bold text-dark">
+                                            <a href="/ConstructionProject/Details/@p.ProjectId" class="text-decoration-none">
+                                                @p.Project.Name
+                                            </a>
+                                        </td>
+                                        <td>
+                                            @if (p.Role == GMK360.Core.Entities.Construction.StakeholderRole.Landowner)
+                                            {
+                                                <span class="badge bg-primary">Arsa Sahibi</span>
+                                            }
+                                            else if (p.Role == GMK360.Core.Entities.Construction.StakeholderRole.Representative)
+                                            {
+                                                <span class="badge bg-info">Temsilci</span>
+                                            }
+                                            
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">@p.Role.ToString()</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @(p.SharePercentage.HasValue ? $"% {p.SharePercentage.Value.ToString("N2")}" : "-")
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-success bg-opacity-10 text-success border border-success">Aktif</span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="p-4 text-center text-muted">
+                        <i class="bi bi-building-slash fs-1 text-light mb-2 d-block"></i>
+                        Henüz hiçbir şantiye veya projeye paydaş olarak eklenmemiş.
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- B2B / FİRMA BAĞLANTILARI -->
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white border-bottom py-3">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-briefcase text-primary me-2"></i>Bağlı Olduğu Taşeron / Tedarikçi Firmalar</h5>
+            </div>
+            <div class="card-body p-0">
+                @if (agencyRoles != null && agencyRoles.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light text-secondary">
+                                <tr>
+                                    <th class="ps-4">Firma Adı</th>
+                                    <th>Unvanı</th>
+                                    <th>Durum</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var r in agencyRoles)
+                                {
+                                    <tr>
+                                        <td class="ps-4 fw-bold">@r.Agency.CompanyName</td>
+                                        <td>@r.Role.ToString()</td>
+                                        <td>
+                                            <span class="badge bg-success bg-opacity-10 text-success border border-success">Onaylı Personel</span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="p-4 text-center text-muted">
+                        <i class="bi bi-briefcase fs-1 text-light mb-2 d-block"></i>
+                        Herhangi bir B2B / Tedarikçi firmada kaydı bulunmuyor.
+                    </div>
+                }
+            </div>
+        </div>
+
+    </div>
+</div>

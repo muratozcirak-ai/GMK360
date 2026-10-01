@@ -39,6 +39,8 @@ namespace GMK360.Core.Entities.Construction
         public string? FilePath { get; set; } 
         public bool IsCustom { get; set; } 
         public int DisplayOrder { get; set; } // YENİ: Sıralama Kolonu
+        
+        public bool IsActive { get; set; } = true; // YENİ: Soft Delete / Muafiyet için
 
         [NotMapped]
         public bool IsLocked { get; set; }

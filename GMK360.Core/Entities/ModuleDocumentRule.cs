@@ -11,6 +11,8 @@ namespace GMK360.Core.Entities
         public int SystemLegalDocumentTemplateId { get; set; }
         public SystemLegalDocumentTemplate SystemLegalDocumentTemplate { get; set; }
         
+        public bool IsActive { get; set; } = true; // YENİ: Merkez şablondan silinen (pasife alınan) evraklar için
+        
         public ICollection<ModuleDocumentRulePrerequisite> Prerequisites { get; set; } = new List<ModuleDocumentRulePrerequisite>();
     }
 }

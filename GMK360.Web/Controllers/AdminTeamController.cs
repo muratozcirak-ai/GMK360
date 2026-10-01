@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -24,7 +24,7 @@ namespace GMK360.Web.Controllers
         // --- Ekip Listesi ---
         public async Task<IActionResult> Index()
         {
-            // Sadece Sistem Rollerine Sahip Kullanıcılar (Sakin ve Usta hariç)
+            // Sadece Sistem Rollerine Sahip KullanÄ±cÄ±lar (Sakin ve Usta hariÃ§)
             var allUsers = await _userManager.Users.ToListAsync();
             var staffUsers = new System.Collections.Generic.List<ApplicationUser>();
             var userRolesMap = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IList<string>>();
@@ -32,7 +32,7 @@ namespace GMK360.Web.Controllers
             foreach (var user in allUsers)
             {
                 var roles = await _userManager.GetRolesAsync(user);
-                // Eğer "SuperAdmin", "Muhasebe", "Destek", "TeknikServis", "HalklaIliskiler", "Pazarlama" rollerinden birine sahipse
+                // EÄŸer "SuperAdmin", "Muhasebe", "Destek", "TeknikServis", "HalklaIliskiler", "Pazarlama" rollerinden birine sahipse
                 var isStaff = roles.Any(r => new[] { "SuperAdmin", "Muhasebe", "Destek", "TeknikServis", "HalklaIliskiler", "Pazarlama" }.Contains(r));
                 
                 if (isStaff)
@@ -50,9 +50,9 @@ namespace GMK360.Web.Controllers
         [HttpGet]
         public async Task<IActionResult> Create()
         {
-            // Sadece yönetici rollerini seçilebilir yapalım
+            // Sadece yÃ¶netici rollerini seÃ§ilebilir yapalÄ±m
             var roles = await _roleManager.Roles
-                .Where(r => r.Name != "Sakin" && r.Name != "BinaYoneticisi" && r.Name != "Usta")
+                .Where(r => new[] { "SuperAdmin", "Muhasebe", "Destek", "TeknikServis", "HalklaIliskiler", "Pazarlama", "BolgeSorumlusu" }.Contains(r.Name))
                 .ToListAsync();
                 
             ViewBag.Roles = roles;
@@ -65,8 +65,8 @@ namespace GMK360.Web.Controllers
         {
             if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
             {
-                ModelState.AddModelError("", "E-posta ve şifre zorunludur.");
-                ViewBag.Roles = await _roleManager.Roles.Where(r => r.Name != "Sakin" && r.Name != "BinaYoneticisi" && r.Name != "Usta").ToListAsync();
+                ModelState.AddModelError("", "E-posta ve ÅŸifre zorunludur.");
+                ViewBag.Roles = await _roleManager.Roles.Where(r => new[] { "SuperAdmin", "Muhasebe", "Destek", "TeknikServis", "HalklaIliskiler", "Pazarlama", "BolgeSorumlusu" }.Contains(r.Name)).ToListAsync();
                 return View();
             }
 
@@ -77,7 +77,7 @@ namespace GMK360.Web.Controllers
                 FirstName = firstName,
                 LastName = lastName,
                 EmailConfirmed = true,
-                UserType = UserType.Corporate // Personel olarak işaretleyebiliriz
+                UserType = UserType.Corporate // Personel olarak iÅŸaretleyebiliriz
             };
 
             var result = await _userManager.CreateAsync(user, password);
@@ -95,26 +95,26 @@ namespace GMK360.Web.Controllers
                 ModelState.AddModelError("", error.Description);
             }
 
-            ViewBag.Roles = await _roleManager.Roles.Where(r => r.Name != "Sakin" && r.Name != "BinaYoneticisi" && r.Name != "Usta").ToListAsync();
+            ViewBag.Roles = await _roleManager.Roles.Where(r => new[] { "SuperAdmin", "Muhasebe", "Destek", "TeknikServis", "HalklaIliskiler", "Pazarlama", "BolgeSorumlusu" }.Contains(r.Name)).ToListAsync();
             return View();
         }
 
-        // --- Personel Askıya Al / Durum Değiştir ---
+        // --- Personel AskÄ±ya Al / Durum DeÄŸiÅŸtir ---
         [HttpPost]
         public async Task<IActionResult> ToggleStatus(string id)
         {
             var user = await _userManager.FindByIdAsync(id);
             if (user == null) return NotFound();
             
-            // Gerçek projede IsActive gibi bir property kullanılır. 
-            // Şimdilik LockoutEnd kullanarak pasif yapalım.
+            // GerÃ§ek projede IsActive gibi bir property kullanÄ±lÄ±r. 
+            // Åimdilik LockoutEnd kullanarak pasif yapalÄ±m.
             if (user.LockoutEnd != null && user.LockoutEnd > DateTimeOffset.UtcNow)
             {
                 user.LockoutEnd = null; // Aktif yap
             }
             else
             {
-                user.LockoutEnd = DateTimeOffset.MaxValue; // Süresiz askıya al
+                user.LockoutEnd = DateTimeOffset.MaxValue; // SÃ¼resiz askÄ±ya al
             }
             
             await _userManager.UpdateAsync(user);

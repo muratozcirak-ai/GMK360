@@ -1,7 +1,10 @@
+﻿using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using GMK360.Data.Contexts;
 using GMK360.Core.Helpers;
+using GMK360.Core.Entities;
 
 namespace GMK360.Web.Controllers
 {
@@ -48,7 +51,6 @@ namespace GMK360.Web.Controllers
                 return RedirectPermanent($"/usta/{slug}");
             }
 
-            // Normal Detail (Veritabanından asıl çekim, View'a aktarım vs.)
             var model = await _context.ServiceProviders
                 .Include(p => p.Areas).ThenInclude(a => a.District)
                 .Include(p => p.User)
@@ -58,5 +60,38 @@ namespace GMK360.Web.Controllers
 
             return View(model);
         }
+
+        // --- YENİ EKLENEN AKSİYONLAR (APPEND-ONLY) ---
+
+        // Bireysel Kullanıcının veya Yöneticinin İhale/İş Talebi Açtığı Ekran
+        [HttpGet]
+        public IActionResult TalepAc()
+        {
+            // Kullanıcı usta veya malzeme aradığında buraya düşer.
+            return View();
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> TalepAc(JobRequest model)
+        {
+            // İleride kullanıcı doğrulaması (Auth) eklenecek, şimdilik UI'ın kaydetme mantığını simüle ediyoruz.
+            // Arka planda Ajanın analiz edeceği serbest metin bu model.Description üzerinden gelecek.
+            return RedirectToAction("Index", "PublicRealEstate");
+        }
+
+        // Usta veya Malzeme Tedarikçisinin havuza girdiği kayıt ekranı
+        [HttpGet]
+        public IActionResult Basvuru()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Basvuru(GMK360.Core.Entities.ServiceProvider model)
+        {
+            // Kurumsal hizmet, hafriyat, yıkım veya tedarikçi başvurusu
+            return RedirectToAction("Index", "PublicRealEstate");
+        }
     }
 }
+

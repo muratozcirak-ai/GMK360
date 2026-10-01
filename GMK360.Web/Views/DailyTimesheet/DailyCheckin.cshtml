@@ -1,0 +1,427 @@
+﻿@model IEnumerable<GMK360.Core.Entities.Construction.AgencyWorker>
+@{
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+    ViewData["Title"] = "Şantiye Puantaj ve Yoklama";
+    var phases = ViewBag.Phases as IEnumerable<string>;
+    var timesheets = ViewBag.Timesheets as IEnumerable<GMK360.Core.Entities.Construction.DailyTimesheet>;
+    var existingTeams = ViewBag.ExistingTeams as List<string>;
+    var existingSubcontractors = ViewBag.ExistingSubcontractors as List<string>;
+
+    // Gruplama Mantığı:
+    // Taşeron ise Taşeron Adına göre, Firma Personeli ise Çavuş'a göre
+    var groupedWorkers = Model.GroupBy(w => w.WorkerType == "Taşeron Personeli" 
+        ? "TASERON_" + (w.SubcontractorName ?? "Bilinmeyen Taşeron")
+        : "EKIP_" + (w.ForemanId.HasValue ? w.ForemanId.Value.ToString() : w.Id.ToString())
+    ).ToList();
+}
+
+<div class="container-fluid py-4">
+    
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-4 shadow-sm mb-4" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-5">
+            <h3 class="fw-bold text-dark mb-0"><i class="bi bi-calendar-check text-primary me-2"></i> Günlük Puantaj</h3>
+            <p class="text-muted mb-0">@ViewBag.ProjectName - Tarih: @ViewBag.TargetDate</p>
+        </div>
+        <div class="col-md-3 text-center">
+            <!-- YEMEK BİLDİRİM KARTI -->
+            <div class="bg-warning bg-opacity-10 border border-warning rounded-pill py-2 px-3 d-inline-block shadow-sm">
+                <span class="fw-bold text-dark"><i class="bi bi-cup-hot-fill text-warning me-2"></i> Bugünkü Yemek Çıkarımı:</span>
+                <span class="fw-bold fs-5 text-danger ms-1" id="foodCounter">0</span> <span class="text-muted">Porsiyon</span>
+            </div>
+        </div>
+        <div class="col-md-4 text-md-end">
+            <button class="btn btn-outline-success fw-bold rounded-pill px-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#quickAddModal">
+                <i class="bi bi-person-plus-fill me-1"></i> Yeni Eleman Ekle
+            </button>
+            
+            <button class="btn btn-danger fw-bold ms-2 shadow-sm rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#cashRequestModal" title="Şantiye Acil Nakit/Kasa Talebi">
+                <i class="bi bi-cash-stack"></i> Nakit
+            </button>
+            <button class="btn btn-warning text-dark fw-bold ms-2 shadow-sm rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#dailyLogModal" title="Şantiye Günlük Jurnali">
+                <i class="bi bi-journal-text"></i> Jurnal
+            </button>
+            <input type="date" class="form-control d-inline-block w-auto ms-2" id="dateSelector" value="@ViewBag.TargetDate" onchange="changeDate(this.value)">
+            <button class="btn btn-primary fw-bold ms-2 shadow-sm rounded-pill px-4" onclick="savePuantaj()">
+                <i class="bi bi-save me-1"></i> Kaydet
+            </button>
+
+        </div>
+    </div>
+
+    @if(!Model.Any()) {
+        <div class="alert alert-info text-center shadow-sm rounded-4 py-5">
+            <i class="bi bi-info-circle fs-1 text-info d-block mb-3"></i>
+            <h5 class="fw-bold">Havuzda Kayıtlı Eleman Yok</h5>
+            <p>Yoklama yapabilmek için sisteme çalışan/taşeron eklemelisiniz. Yukarıdaki "Yeni Eleman Ekle" butonunu kullanarak hemen ilk ekibinizi oluşturabilirsiniz.</p>
+        </div>
+    } else {
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-secondary">
+                            <tr>
+                                <th class="ps-4">Ekip / Personel Adı</th>
+                                <th>Meslek</th>
+                                <th class="text-center">Sabah</th>
+                                <th class="text-center">Öğle</th>
+                                <th class="text-center">Mesai (Saat)</th>
+                                <th>Görev (Faz)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var group in groupedWorkers)
+                            {
+                                bool isSubcontractorGroup = group.Key.StartsWith("TASERON_");
+                                string groupDisplayName = "";
+                                string groupIdForJs = group.Key.Replace(" ", "_");
+
+                                if(isSubcontractorGroup) {
+                                    groupDisplayName = "TAŞERON FİRMA: " + group.Key.Replace("TASERON_", "");
+                                } else {
+                                    var leaderIdStr = group.Key.Replace("EKIP_", "");
+                                    if(int.TryParse(leaderIdStr, out int leaderId)) {
+                                        var leader = Model.FirstOrDefault(w => w.Id == leaderId);
+                                        groupDisplayName = leader?.TeamName ?? leader?.FullName + " Ekibi";
+                                    } else {
+                                        groupDisplayName = "Bağımsız Çalışanlar";
+                                    }
+                                }
+                                
+                                <tr class="table-light border-bottom">
+                                    <td colspan="6" class="ps-4 py-3">
+                                        <div class="d-flex align-items-center justify-content-between">
+                                            <h6 class="fw-bold mb-0 text-dark">
+                                                @if(isSubcontractorGroup) {
+                                                    <i class="bi bi-building text-warning me-2"></i>
+                                                } else {
+                                                    <i class="bi bi-people-fill text-info me-2"></i>
+                                                }
+                                                @groupDisplayName (@group.Count() Kişi)
+                                            </h6>
+                                            <div>
+                                                <button class="btn btn-sm btn-outline-success rounded-pill px-3" onclick="selectAllInTeam('@groupIdForJs', true)">Tümünü Seç</button>
+                                                <button class="btn btn-sm btn-outline-secondary rounded-pill px-3 ms-1" onclick="selectAllInTeam('@groupIdForJs', false)">Temizle</button>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                @foreach(var worker in group)
+                                {
+                                    var ts = timesheets?.FirstOrDefault(t => t.AgencyWorkerId == worker.Id);
+                                    bool isMorning = ts?.IsMorningPresent ?? false;
+                                    bool isAfternoon = ts?.IsAfternoonPresent ?? false;
+                                    decimal overtime = ts?.OvertimeHours ?? 0;
+                                    string selectedPhase = ts?.PhaseName ?? "";
+
+                                    <tr class="team-member-@groupIdForJs worker-row" data-worker-id="@worker.Id">
+                                        <td class="ps-5">
+                                            <div class="d-flex align-items-center">
+                                                <div class="avatar @(isSubcontractorGroup ? "bg-warning" : "bg-primary") text-white rounded-circle me-3 d-flex align-items-center justify-content-center fw-bold" style="width: 40px; height: 40px;">
+                                                    @worker.FirstName.Substring(0,1)@worker.LastName.Substring(0,1)
+                                                </div>
+                                                <div>
+                                                    <h6 class="mb-0 fw-bold">@worker.FullName</h6>
+                                                    <small class="text-muted">@worker.IdentityNumber</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge @(isSubcontractorGroup ? "bg-warning text-dark" : "bg-secondary")">@worker.Profession</span>
+                                        </td>
+                                        <td class="text-center">
+                                            <div class="form-check form-switch d-flex justify-content-center">
+                                                <input class="form-check-input fs-4 chk-morning attendance-chk" type="checkbox" @(isMorning ? "checked" : "") onchange="updateFoodCounter()">
+                                            </div>
+                                        </td>
+                                        <td class="text-center">
+                                            <div class="form-check form-switch d-flex justify-content-center">
+                                                <input class="form-check-input fs-4 chk-afternoon attendance-chk" type="checkbox" @(isAfternoon ? "checked" : "") onchange="updateFoodCounter()">
+                                            </div>
+                                        </td>
+                                        <td class="text-center" style="width: 150px;">
+                                            <input type="number" class="form-control form-control-sm text-center input-overtime" min="0" step="0.5" value="@overtime" placeholder="0">
+                                        </td>
+                                        <td>
+                                            <select class="form-select form-select-sm select-phase">
+                                                <option value="">-- Faz Seçin --</option>
+                                                @if(phases != null)
+                                                {
+                                                    foreach(var phase in phases)
+                                                    {
+                                                        if(!string.IsNullOrEmpty(phase))
+                                                        {
+                                                            if(phase == selectedPhase) {
+                                                                <option value="@phase" selected>@phase</option>
+                                                            } else {
+                                                                <option value="@phase">@phase</option>
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            </select>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+
+<!-- KASA TALEBİ MODAL -->
+<div class="modal fade" id="cashRequestModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-danger border-2 rounded-4 shadow-lg">
+            <div class="modal-header bg-danger bg-opacity-10 border-0">
+                <h5 class="modal-title fw-bold text-danger"><i class="bi bi-cash-coin me-2"></i> Şantiye Acil Kasa/Avans Talebi</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="/SiteOperations/RequestCash" method="post">
+                <div class="modal-body">
+                    <input type="hidden" name="projectId" value="@ViewBag.ProjectId" />
+                    <div class="alert alert-warning small">
+                        <i class="bi bi-info-circle-fill me-1"></i> Bu talep anında merkez onaya düşecektir. Unutulma riski yoktur.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Talep Edilen Tutar (TL)</label>
+                        <input type="number" name="amount" class="form-control form-control-lg text-danger fw-bold" required placeholder="Örn: 15000" min="1" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Gerekçe / Nerelere Harcanacak?</label>
+                        <textarea name="reason" class="form-control" required rows="3" placeholder="Örn: Acil çivi, taşeron yemeği, hırdavat..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-danger fw-bold rounded-pill px-4">Talebi Gönder</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ŞANTİYE JURNALİ MODAL -->
+<div class="modal fade" id="dailyLogModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-warning border-2 rounded-4 shadow-lg">
+            <div class="modal-header bg-warning bg-opacity-10 border-0">
+                <h5 class="modal-title fw-bold text-dark"><i class="bi bi-journal-check text-warning me-2"></i> Şantiye Seyir Defteri (Jurnal)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="/SiteOperations/SaveLog" method="post">
+                <div class="modal-body bg-light">
+                    <input type="hidden" name="projectId" value="@ViewBag.ProjectId" />
+                    <p class="text-muted small mb-4">Şantiye şefi olarak günün özetini, yaşanan gecikmeleri ve ustaların hatalarını buraya not edin. Bu rapor doğrudan patrona ulaşır ve sorumluluğunuzu korur.</p>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold text-primary">1. Bugün Ne Yapıldı? (Genel İlerleme)</label>
+                            <textarea name="progress" class="form-control border-primary" rows="2" placeholder="Örn: 3. Kat kalıpları %80 çakıldı..."></textarea>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold text-danger">2. Engeller, Sorunlar ve Gecikmeler</label>
+                            <textarea name="obstacles" class="form-control border-danger bg-white" rows="3" placeholder="Örn: Ahmet Usta malzemeyi geç söylediği için iş 3 saat durdu."></textarea>
+                            <small class="text-danger">Usta manipülasyonlarına karşı kendinizi koruyun.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-info">3. Acil Malzeme İhtiyacı</label>
+                            <textarea name="needs" class="form-control border-info" rows="2" placeholder="Örn: Yarın sabah 10 torba çimento şart."></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">4. Hava Durumu</label>
+                            <input type="text" name="weather" class="form-control" placeholder="Örn: Yağmurlu, iş yavaşladı." />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="submit" class="btn btn-warning text-dark fw-bold rounded-pill px-5 w-100">Jurnali Kaydet ve Merkeze İlet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Hızlı Eleman Ekle Modal -->
+<div class="modal fade" id="quickAddModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-light border-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-person-plus text-primary me-2"></i> Yeni Çalışan/Taşeron Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="/DailyTimesheet/QuickAddWorker" method="post">
+                <div class="modal-body">
+                    <input type="hidden" name="projectId" value="@ViewBag.ProjectId" />
+                    
+                    <div class="row g-3">
+                        <div class="col-12 mb-2">
+                            <label class="form-label fw-bold">Çalışan Tipi</label>
+                            <select class="form-select" name="workerType" id="workerTypeSelect" onchange="toggleWorkerTypeFields()">
+                                <option value="Firma Personeli">Kendi Personelimiz</option>
+                                <option value="Taşeron Personeli">Taşeron Personeli</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Adı</label>
+                            <input type="text" name="firstName" class="form-control" required placeholder="Örn: Ahmet" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Soyadı</label>
+                            <input type="text" name="lastName" class="form-control" required placeholder="Örn: Yılmaz" />
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">TC Kimlik No (İSG İçin)</label>
+                            <input type="text" name="identityNumber" class="form-control" placeholder="Zorunlu Değil" />
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Meslek / Uzmanlık</label>
+                            <input type="text" name="profession" class="form-control" placeholder="Örn: Kalıpçı Ustası" />
+                        </div>
+
+                        <!-- Kendi Personelimiz ise Ekip (Çavuş) -->
+                        <div class="col-12" id="teamNameField">
+                            <label class="form-label fw-bold">Bağlı Olduğu Ekip / Çavuş</label>
+                            <input class="form-control" name="teamName" list="teamOptions" placeholder="Yeni ekip adı veya listeden seçin...">
+                            <datalist id="teamOptions">
+                                @if(existingTeams != null) {
+                                    foreach(var t in existingTeams) {
+                                        <option value="@t">@t</option>
+                                    }
+                                }
+                            </datalist>
+                        </div>
+
+                        <!-- Taşeron ise Taşeron Firma Adı -->
+                        <div class="col-12" id="subcontractorNameField" style="display: none;">
+                            <label class="form-label fw-bold">Taşeron Firma Adı</label>
+                            <input class="form-control" name="subcontractorName" list="subcontractorOptions" placeholder="Firma Adı (Örn: Gül İnşaat Hafriyat)">
+                            <datalist id="subcontractorOptions">
+                                @if(existingSubcontractors != null) {
+                                    foreach(var t in existingSubcontractors) {
+                                        <option value="@t">@t</option>
+                                    }
+                                }
+                            </datalist>
+                        </div>
+                        
+                        <div class="col-12">
+                            <label class="form-label fw-bold text-danger"><i class="bi bi-cash me-1"></i> Günlük Yevmiye / Hakediş (TL)</label>
+                            <input type="number" name="dailyWage" class="form-control fw-bold text-danger bg-danger bg-opacity-10" required placeholder="0" value="0" min="0" step="50" />
+                            <small class="text-muted">Taşeron işçisi için 0 bırakabilirsiniz. Rakamlar şef ekranında gizlidir.</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary fw-bold rounded-pill px-4"><i class="bi bi-save me-1"></i> Kaydet ve Ekle</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function changeDate(dateStr) {
+            window.location.href = `/DailyTimesheet/Project/@ViewBag.ProjectId?date=${dateStr}`;
+        }
+
+        function toggleWorkerTypeFields() {
+            var type = document.getElementById('workerTypeSelect').value;
+            if(type === 'Taşeron Personeli') {
+                document.getElementById('teamNameField').style.display = 'none';
+                document.getElementById('subcontractorNameField').style.display = 'block';
+            } else {
+                document.getElementById('teamNameField').style.display = 'block';
+                document.getElementById('subcontractorNameField').style.display = 'none';
+            }
+        }
+
+        function selectAllInTeam(teamId, state) {
+            document.querySelectorAll(`.team-member-${teamId}`).forEach(row => {
+                let morningChk = row.querySelector('.chk-morning');
+                let afternoonChk = row.querySelector('.chk-afternoon');
+                morningChk.checked = state;
+                afternoonChk.checked = state;
+            });
+            updateFoodCounter();
+        }
+
+        function updateFoodCounter() {
+            // Her çalışan için, Sabah VEYA Öğle işaretliyse 1 yemek sayılır.
+            let count = 0;
+            document.querySelectorAll('.worker-row').forEach(row => {
+                let m = row.querySelector('.chk-morning').checked;
+                let a = row.querySelector('.chk-afternoon').checked;
+                if(m || a) {
+                    count++;
+                }
+            });
+            document.getElementById('foodCounter').innerText = count;
+        }
+
+        // Sayfa ilk yüklendiğinde yemek sayısını hesapla
+        document.addEventListener('DOMContentLoaded', function() {
+            updateFoodCounter();
+        });
+
+        function savePuantaj() {
+            let records = [];
+            document.querySelectorAll('.worker-row').forEach(row => {
+                records.push({
+                    WorkerId: parseInt(row.getAttribute('data-worker-id')),
+                    IsMorning: row.querySelector('.chk-morning').checked,
+                    IsAfternoon: row.querySelector('.chk-afternoon').checked,
+                    Overtime: parseFloat(row.querySelector('.input-overtime').value) || 0,
+                    Phase: row.querySelector('.select-phase').value
+                });
+            });
+
+            if(records.length === 0) {
+                alert('Kaydedilecek kimse yok. Önce eleman ekleyin.');
+                return;
+            }
+
+            let payload = {
+                ProjectId: @ViewBag.ProjectId,
+                Date: document.getElementById('dateSelector').value,
+                Records: records
+            };
+
+            fetch('/DailyTimesheet/SaveDaily', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value || ''
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    alert('Yoklama başarıyla kaydedildi! İaşe ve yevmiyeler güncellendi.');
+                } else {
+                    alert('Hata oluştu.');
+                }
+            })
+            .catch(err => alert('Bir hata oluştu.'));
+        }
+    </script>
+}
