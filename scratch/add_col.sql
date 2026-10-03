@@ -1,0 +1,1 @@
+ALTER TABLE B2BQuoteInvites ADD IsFeasibilitySelected bit NOT NULL DEFAULT 0;

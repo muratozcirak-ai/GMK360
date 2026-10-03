@@ -235,6 +235,7 @@ public DbSet<GMK360.Core.Entities.Construction.ConstructionProjectExpense> Const
         public DbSet<GMK360.Core.Entities.Construction.CostCategory> CostCategories { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.ProjectLegalDocument> ProjectLegalDocuments { get; set; }
         public DbSet<GMK360.Core.Entities.SystemLegalDocumentTemplate> SystemLegalDocumentTemplates { get; set; }
+        public DbSet<GMK360.Core.Entities.SystemPhaseTemplate> SystemPhaseTemplates { get; set; }
         public DbSet<GMK360.Core.Entities.ModuleDocumentRule> ModuleDocumentRules { get; set; }
         public DbSet<GMK360.Core.Entities.ModuleDocumentRulePrerequisite> ModuleDocumentRulePrerequisites { get; set; }
         public DbSet<ProjectMaterialCatalog> ProjectMaterialCatalogs { get; set; }

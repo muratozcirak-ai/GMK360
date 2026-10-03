@@ -1,26 +1,25 @@
-﻿import io
+﻿import codecs
 import re
 
-filepath = r'GMK360.Core\Entities\Construction\ConstructionBudgetItem.cs'
-with io.open(filepath, 'r', encoding='utf-8') as f:
+path = 'GMK360.Core/Entities/Construction/ConstructionProjectExpense.cs'
+with codecs.open(path, 'r', 'utf-8-sig') as f:
     content = f.read()
 
-new_enum = """
-    public enum BudgetPhaseCategory
+target = r'public enum ConstructionExpenseType\s*\{[^}]*\}'
+replacement = '''public enum ConstructionExpenseType
     {
-        ResmiEvraklarVeProsedurler = 1,
-        YikimVeZeminHazirligi = 2,
-        TemelVeAltYapi = 3,
-        KabaInsaatKarkas = 4,
-        CatiVeDisCephe = 5,
-        InceIslerIcMekan = 6,
-        ElektrikVeZayifAkim = 7,
-        MekanikTesisatVeMakine = 8,
-        PeyzajVeTeslim = 9
-    }
-"""
+        SantiyeIasesi = 1,      // Şantiye Yemek/Çay/Su
+        TemsilAgirlama = 2,     // Müşteri Yemek, Lansman, Kanepe vs
+        DigerGenelGider = 3,    // Ofis, Kırtasiye, Ulaşım
+        SirketIciYemek = 4,     // Şirket İçi Yemek
+        Iletisim = 5,           // İletişim (Telefon / İnternet)
+        Demirbas = 6,           // Demirbaş
+        SarfMalzeme = 7,        // Sarf Malzeme
+        Temizlik = 8            // Temizlik
+    }'''
 
-content = re.sub(r'public enum BudgetPhaseCategory\s*\{[^}]+\}', new_enum.strip(), content)
+content = re.sub(target, replacement, content)
 
-with io.open(filepath, 'w', encoding='utf-8') as f:
+with codecs.open(path, 'w', 'utf-8-sig') as f:
     f.write(content)
+print('Updated enum.')

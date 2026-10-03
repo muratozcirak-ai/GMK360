@@ -29,6 +29,7 @@ public decimal? OfferedPrice { get; set; } // Bu artık genel toplam (KDV Hariç
         public string OfferNotes { get; set; }
 
         public DateTime? RespondedAt { get; set; }
+        public bool IsFeasibilitySelected { get; set; } = false; // Faz 0'da fizibilite için baz alınan teklif mi?
     }
 }
 

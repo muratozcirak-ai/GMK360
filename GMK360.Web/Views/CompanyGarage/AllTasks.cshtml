@@ -1,0 +1,87 @@
+﻿@model IEnumerable<GMK360.Core.Entities.Logistics.VehicleTask>
+@{
+    ViewData["Title"] = "Tüm Araç Görevleri";
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0"><i class="bi bi-list-task"></i> Araç Görev & Sefer Listesi</h4>
+        <a href="/CompanyGarage" class="btn btn-outline-secondary">Garaja Dön</a>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+            <form method="get" class="d-flex gap-3 align-items-end">
+                <div>
+                    <label class="form-label fw-bold">Tarih Filtresi</label>
+                    <input type="date" name="date" class="form-control" value="@ViewBag.SelectedDate" onchange="this.form.submit()" />
+                </div>
+                <div>
+                    <a href="/CompanyGarage/AllTasks" class="btn btn-light">Tüm Zamanlar (Filtreyi Temizle)</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tarih & Saat</th>
+                            <th>Araç (Plaka)</th>
+                            <th>Şoför</th>
+                            <th>Görev / Rota</th>
+                            <th>Süre / KM</th>
+                            <th>Durum</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach(var item in Model)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@item.TaskDate.ToShortDateString()</strong><br/>
+                                    <span class="badge bg-light text-dark border"><i class="bi bi-clock"></i> @(item.StartTime ?? "--:--") - @(item.EndTime ?? "--:--")</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-dark fs-6">@(item.Vehicle?.PlateNumber ?? "Bilinmiyor")</span>
+                                </td>
+                                <td class="fw-bold">
+                                    @item.DriverName<br/>
+                                    @if(item.DestinationProjectId.HasValue) {
+                                        var pName = ((IEnumerable<dynamic>)ViewBag.Projects).FirstOrDefault(p => p.Id == item.DestinationProjectId.Value)?.Name;
+                                        <span class="badge bg-primary mt-1"><i class="bi bi-building"></i> @pName</span>
+                                    } else {
+                                        <span class="badge bg-secondary mt-1"><i class="bi bi-building"></i> Merkez</span>
+                                    }
+                                </td>
+                                <td>@item.TaskDescription</td>
+                                <td>
+                                    @if(item.StartKm.HasValue || item.EndKm.HasValue) {
+                                        <span class="badge bg-secondary mb-1">KM: @(item.StartKm ?? 0) <i class="bi bi-arrow-right"></i> @(item.EndKm?.ToString() ?? "?")</span><br/>
+                                    }
+                                    @if(item.WorkingHours.HasValue) {
+                                        <span class="badge bg-info text-dark">Süre: @item.WorkingHours Saat</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if(item.Status == "Tamamlandı" || item.Status == "Tamamland") { 
+                                        <span class="badge bg-success fs-6"><i class="bi bi-check-circle-fill"></i> Tamamlandı</span> 
+                                    }
+                                    else { 
+                                        <span class="badge bg-warning text-dark fs-6"><i class="bi bi-hourglass-split"></i> @item.Status</span> 
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if(!Model.Any()) {
+                            <tr><td colspan="6" class="text-center py-4 text-muted">Bu tarihte hiç görev bulunmuyor.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

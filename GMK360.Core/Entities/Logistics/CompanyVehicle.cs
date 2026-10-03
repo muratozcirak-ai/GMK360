@@ -7,9 +7,13 @@ namespace GMK360.Core.Entities.Logistics
     {
         public int AgencyId { get; set; }
         public string PlateNumber { get; set; }
-        public string? VehicleType { get; set; } // Pikap, Binek, Minibüs vs
+        public string? VehicleType { get; set; } // Pikap, Binek, Minibüs, İş Makinası vs
         public string? BrandModel { get; set; }
         public string Status { get; set; } = "Aktif"; // Aktif, Bakımda, Pasif
+        
+        // Araç KM ve Saat Takibi
+        public int CurrentKm { get; set; } = 0; // Güncel Kilometre
+        public decimal CurrentWorkingHours { get; set; } = 0; // İş Makinaları için Güncel Çalışma Saati
         
         public ICollection<VehicleAssignment> Assignments { get; set; }
         public ICollection<VehicleTask> Tasks { get; set; }
@@ -32,4 +36,3 @@ namespace GMK360.Core.Entities.Logistics
         public string? Notes { get; set; }
     }
 }
-

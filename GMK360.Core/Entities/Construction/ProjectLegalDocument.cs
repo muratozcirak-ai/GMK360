@@ -36,7 +36,8 @@ namespace GMK360.Core.Entities.Construction
 
         public int? TargetContactId { get; set; }
         public InstitutionContact TargetContact { get; set; } 
-        public string? FilePath { get; set; } 
+        public string? FilePath { get; set; }
+        public string? OriginalLocation { get; set; } // YENİ: Orjinal Evrak Nerede (Çekmece vs.) 
         public bool IsCustom { get; set; } 
         public int DisplayOrder { get; set; } // YENİ: Sıralama Kolonu
         

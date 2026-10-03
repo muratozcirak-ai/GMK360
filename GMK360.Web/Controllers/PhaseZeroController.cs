@@ -40,7 +40,7 @@ namespace GMK360.Web.Controllers
             // Fetch quote requests for these documents to show status
             var docIds = docs.Select(d => d.Id).ToList();
             var quoteRequests = await _context.B2BQuoteRequests
-                .Include(q => q.Invites)
+                .Include(q => q.Invites).ThenInclude(i => i.NetworkContact)
                 .Where(q => q.SourceModule == "PhaseZeroDocument" && docIds.Contains(q.SourceReferenceId))
                 .ToListAsync();
             
@@ -51,7 +51,6 @@ namespace GMK360.Web.Controllers
         }
 
         [HttpPost("PhaseZero/SyncDocs/{projectId}")]
-        [IgnoreAntiforgeryToken]
         public async Task<IActionResult> SyncDocs(int projectId)
         {
             var rules = await _context.ModuleDocumentRules
@@ -108,13 +107,14 @@ namespace GMK360.Web.Controllers
                 institutionContact = doc.InstitutionContact,
                 documentFee = doc.DocumentFee ?? 0,
                 additionalCost = doc.AdditionalCost ?? 0,
+                originalLocation = doc.OriginalLocation,
                 filePath = doc.FilePath
             });
         }
 
         [HttpPost("PhaseZero/UpdateDoc")]
         [IgnoreAntiforgeryToken]
-        public async Task<IActionResult> UpdateDoc(int id, string status, string assignedUserId, string institutionContact, decimal documentFee, decimal additionalCost, Microsoft.AspNetCore.Http.IFormFile uploadedFile)
+        public async Task<IActionResult> UpdateDoc(int id, string status, string assignedUserId, string institutionContact, decimal? documentFee, decimal? additionalCost, string originalLocation, Microsoft.AspNetCore.Http.IFormFile uploadedFile)
         {
             var doc = await _context.ProjectLegalDocuments.FindAsync(id);
             if (doc == null) return NotFound();
@@ -126,6 +126,7 @@ namespace GMK360.Web.Controllers
             doc.InstitutionContact = institutionContact;
             doc.DocumentFee = documentFee;
             doc.AdditionalCost = additionalCost;
+            doc.OriginalLocation = originalLocation;
 
             if (uploadedFile != null && uploadedFile.Length > 0)
             {
@@ -146,7 +147,26 @@ namespace GMK360.Web.Controllers
 
             return RedirectToAction("Index", new { projectId = doc.ConstructionProjectId });
         }
-    
+        
+        [HttpPost]
+        public async Task<IActionResult> AcceptQuote(int documentId, int inviteId)
+        {
+            var document = await _context.ProjectLegalDocuments.FindAsync(documentId);
+            if (document == null) return NotFound();
+
+            var invite = await _context.B2BQuoteInvites.FindAsync(inviteId);
+            if (invite == null) return NotFound();
+
+            invite.IsFeasibilitySelected = true;
+            document.EstimatedCost = invite.OfferedPrice;
+            document.Status = "İşlemde";
+            
+            await _context.SaveChangesAsync();
+            
+            TempData["SuccessMessage"] = "Teklif başarıyla seçildi ve fizibilite güncellendi.";
+            return RedirectToAction(nameof(Index), new { projectId = document.ConstructionProjectId });
+        }
+
         [HttpPost("PhaseZero/RequestQuote/{documentId}")]
         [IgnoreAntiforgeryToken]
         public async Task<IActionResult> RequestQuote(int documentId)
@@ -183,6 +203,9 @@ namespace GMK360.Web.Controllers
             }
 
             return RedirectToAction("Index", new { projectId = doc.ConstructionProjectId });
+    
         }
-}
+
+        
+    }
 }

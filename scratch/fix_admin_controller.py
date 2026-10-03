@@ -1,14 +1,17 @@
-﻿import sys
+﻿import codecs
+import re
 
-filepath = 'GMK360.Web/Controllers/AdminController.cs'
-
-with open(filepath, 'r', encoding='utf-8') as f:
+path = 'GMK360.Web/Controllers/SystemPhaseTemplateController.cs'
+with codecs.open(path, 'r', 'utf-8-sig') as f:
     content = f.read()
 
-target = ".ThenInclude(cc => cc.B2bCategory)"
-replacement = ".ThenInclude(cc => cc.DefinitionValue)"
+target = r'public async Task<IActionResult> Add\(int phaseCategory, string subCategory, string itemName, bool isQuoteRequired\)'
+replacement = r'public async Task<IActionResult> Add(int phaseCategory, string subCategory, string itemName)'
+content = re.sub(target, replacement, content)
 
-content = content.replace(target, replacement)
+target2 = r'IsQuoteRequired = isQuoteRequired'
+replacement2 = r'IsQuoteRequired = false'
+content = re.sub(target2, replacement2, content)
 
-with open(filepath, 'w', encoding='utf-8') as f:
+with codecs.open(path, 'w', 'utf-8-sig') as f:
     f.write(content)

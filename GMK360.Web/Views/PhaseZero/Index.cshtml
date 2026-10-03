@@ -49,6 +49,74 @@
 
     <div class="container-fluid p-4">
         
+        
+        <!-- YENİ EKLENEN: ÖZET MALİYET TABLOSU -->
+        @if (Model.Any())
+        {
+            var totalFee = Model.Sum(x => x.DocumentFee ?? 0);
+            var totalAdditional = Model.Sum(x => x.AdditionalCost ?? 0);
+            var grandTotal = totalFee + totalAdditional;
+            var completedCount = Model.Count(x => x.Status == "Tamamlandı");
+            var totalCount = Model.Count();
+            var percentage = totalCount > 0 ? (completedCount * 100) / totalCount : 0;
+
+            <div class="row g-4 mb-4">
+                <div class="col-xl-3 col-md-6">
+                    <div class="card border-0 shadow-sm rounded-4 bg-primary text-white h-100">
+                        <div class="card-body p-4 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="fw-bold mb-1 opacity-75">TOPLAM FAZ-0 MALİYETİ</h6>
+                                <h3 class="fw-bold mb-0">@grandTotal.ToString("N2") ₺</h3>
+                            </div>
+                            <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                                <i class="bi bi-wallet2 fs-3"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="card border-0 shadow-sm rounded-4 h-100">
+                        <div class="card-body p-4 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="fw-bold mb-1 text-muted">RESMİ HARÇLAR & ÜCRETLER</h6>
+                                <h3 class="fw-bold mb-0 text-dark">@totalFee.ToString("N2") ₺</h3>
+                            </div>
+                            <div class="bg-light rounded-circle p-3 text-secondary">
+                                <i class="bi bi-bank fs-3"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="card border-0 shadow-sm rounded-4 h-100">
+                        <div class="card-body p-4 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="fw-bold mb-1 text-muted">EK GİDER / KOMİSYON</h6>
+                                <h3 class="fw-bold mb-0 text-danger">@totalAdditional.ToString("N2") ₺</h3>
+                            </div>
+                            <div class="bg-danger bg-opacity-10 rounded-circle p-3 text-danger">
+                                <i class="bi bi-cash-coin fs-3"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="card border-0 shadow-sm rounded-4 h-100">
+                        <div class="card-body p-4">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="fw-bold mb-0 text-muted">EVRAK İLERLEMESİ</h6>
+                                <span class="badge bg-success">@completedCount / @totalCount Tamamlandı</span>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: @percentage%;" aria-valuenow="@percentage" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        <!-- ÖZET TABLOSU BİTİŞ -->
+        
         @if (!Model.Any())
         {
             <div class="alert alert-info shadow-sm p-4 text-center rounded-4 border-0">
@@ -91,12 +159,16 @@
                                 <tbody>
                                     @foreach (var doc in group.OrderBy(x => x.DisplayOrder))
                                     {
-                                        if (renderedDocIds.Contains(doc.Id)) { continue; }
                                         
-                                        var rule = globalRules.FirstOrDefault(r => r.SystemLegalDocumentTemplateId == doc.SystemTemplateId);
+                                        
+                                        
+                                        var biddableKeywords = new[] { "Firma", "Taşeron", "Ofis", "Mühendis", "Mimar", "Laboratuvar", "OSGB" };
+                                        bool isChildOfSomeone = Model.Any(m => globalRules.FirstOrDefault(r => r.SystemLegalDocumentTemplateId == m.SystemTemplateId)?.Prerequisites?.Any(p => p.PrerequisiteTemplateId == doc.SystemTemplateId) == true);
+                                        bool canRequestQuote = doc.SystemTemplate?.IssuedBy != null && biddableKeywords.Any(k => doc.SystemTemplate.IssuedBy.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0);
+    var rule = globalRules.FirstOrDefault(r => r.SystemLegalDocumentTemplateId == doc.SystemTemplateId);
                                         bool isOnlyPrereq = globalRules.Any(r => r.Prerequisites != null && r.Prerequisites.Any(p => p.PrerequisiteTemplateId == doc.SystemTemplateId)) && rule == null;
                                         
-                                        if (isOnlyPrereq) { continue; } 
+                                         
                                         
                                         var prereqs = rule?.Prerequisites;
                                         bool isDependent = prereqs != null && prereqs.Any();
@@ -113,9 +185,9 @@
                                         
                                         var relatedQuote = (ViewBag.Quotes as IEnumerable<GMK360.Core.Entities.B2B.B2BQuoteRequest>)?.FirstOrDefault(q => q.SourceReferenceId == doc.Id);
                                         var pendingQ = relatedQuote?.Invites.Count(i => i.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Pending) ?? 0;
-                                        var submittedQ = relatedQuote?.Invites.Count(i => i.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Submitted) ?? 0;
+                                        var submittedQ = relatedQuote?.Invites.Count(i => i.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Submitted || i.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Accepted || (i.OfferNotes != null && i.OfferNotes.Contains("KEŞİF"))) ?? 0;
                                         var kesifReq = relatedQuote?.Invites.Count(i => i.OfferNotes != null && i.OfferNotes.Contains("KEŞİF")) ?? 0;
-                                        decimal bestPrice = submittedQ > 0 ? (relatedQuote.Invites.Where(i => i.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Submitted).Min(i => i.OfferedPrice) ?? 0) : 0;
+                                        decimal bestPrice = submittedQ > 0 ? (relatedQuote.Invites.Where(i => i.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Submitted || i.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Accepted || (i.OfferNotes != null && i.OfferNotes.Contains("KEŞİF"))).Min(i => i.OfferedPrice) ?? 0) : 0;
                                         
                                         <tr data-bs-toggle="@(isDependent ? "collapse" : "")" data-bs-target=".child-of-@doc.Id" style="@(isDependent ? "cursor: pointer;" : "")">
                                             <td class="fw-bold ps-4 @(isDependent && !isReadyToApply ? "text-danger" : "text-dark")">
@@ -150,65 +222,100 @@
                                                 else if (doc.Status == "Alındı") { <span class="status-badge badge-success">Tamamlandı</span> }
                                                 else { <span class="status-badge badge-waiting">@doc.Status</span> }
                                             </td>
-                                            <td class="text-end pe-4" onclick="event.stopPropagation();">
+                                            <td class="text-end pe-4" >
                                                 <div class="d-flex justify-content-end gap-1">
-                                                      <form method="post" action="/PhaseZero/RequestQuote/@doc.Id" class="m-0 p-0">
-                                                          <button type="submit" class="btn btn-sm btn-warning rounded-pill px-2 shadow-sm text-dark fw-bold" title="Satınalmaya Gönder / Fiyat Araştırması İste" @(isDependent && !isReadyToApply ? "disabled" : "")>
-                                                              <i class="bi bi-cart-plus"></i> Teklif
-                                                          </button>
-                                                      </form>
-                                                      <button class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold shadow-sm" onclick="openManageModal(@doc.Id)" @(isDependent && !isReadyToApply ? "disabled title='Önce alt ön koşul evrakları tamamlanmalıdır'" : "")>
+                                                      @if(canRequestQuote) {
+                                                              @if(relatedQuote != null) {
+                                                                  <a href="/B2BPurchasing/Details/@relatedQuote.Id" class="btn btn-sm btn-info rounded-pill px-2 shadow-sm text-white fw-bold" title="Satınalma & İhale Yönetimi" onclick="event.stopPropagation();" >
+                                                                      <i class="bi bi-box-arrow-up-right"></i> İhaleye Git
+                                                                  </a>
+                                                              } else {
+                                                                  <form method="post" action="/PhaseZero/RequestQuote/@doc.Id" class="m-0 p-0">
+                                                                      <button type="submit" onclick="event.stopPropagation();" class="btn btn-sm btn-warning rounded-pill px-2 shadow-sm text-dark fw-bold" title="Satınalmaya Gönder / Fiyat Araştırması İste" >
+                                                                          <i class="bi bi-cart-plus"></i> Teklif
+                                                                      </button>
+                                                                  </form>
+                                                              }
+                                                          }
+                                                      <button class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold shadow-sm" onclick="event.stopPropagation(); openManageModal(@doc.Id)">
                                                           @if(isDependent && !isReadyToApply) { <i class="bi bi-lock-fill text-danger"></i> } else { <i class="bi bi-pencil-square"></i> } Yönet
                                                       </button>
                                                   </div>
                                             </td>
                                         </tr>
-                                        renderedDocIds.Add(doc.Id);
+                                        @if (relatedQuote != null && relatedQuote.Invites.Any(i => i.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Submitted || (i.OfferNotes != null && i.OfferNotes.Contains("KEŞİF"))))
+                                        {
+                                            <tr class="bg-light">
+                                                <td colspan="7" class="p-3 border-start border-4 border-info">
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <i class="bi bi-arrow-return-right me-2 text-info"></i>
+                                                        <strong class="text-secondary">Alınan Fiyat Teklifleri (Fizibiliteye Eklenebilir)</strong>
+                                                    </div>
+                                                    <div class="row g-3">
+                                                        @foreach(var inv in relatedQuote.Invites.Where(i => i.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Submitted || i.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Accepted || (i.OfferNotes != null && i.OfferNotes.Contains("KEŞİF"))).OrderBy(i => i.OfferedPrice))
+                                                        {
+                                                            <div class="col-md-4">
+                                                                <div class="card border border-info shadow-sm">
+                                                                    <div class="card-body p-2 d-flex justify-content-between align-items-center">
+                                                                        <div>
+                                                                              <h6 class="mb-0 text-dark fw-bold">
+                                                                                @inv.NetworkContact?.CompanyName
+                                                                                @if(inv.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Accepted) {
+                                                                                    <span class="badge bg-success ms-1"><i class="bi bi-check-circle-fill"></i> RESMİ ONAYLI</span>
+                                                                                } else if (inv.IsFeasibilitySelected) {
+                                                                                    <span class="badge bg-primary ms-1"><i class="bi bi-star-fill text-warning"></i> FİZİBİLİTEDE KULLANILDI</span>
+                                                                                }
+                                                                            </h6>
+                                                                              @if(inv.OfferedPrice.HasValue && inv.OfferedPrice.Value > 0) {
+                                                                                  <span class="text-success fw-bold fs-6">@inv.OfferedPrice.Value.ToString("C2")</span>
+                                                                              } else {
+                                                                                  <span class="text-danger fw-bold" style="font-size: 0.75rem;"><i class="bi bi-exclamation-triangle"></i> Keşif Talebi (Saha Görüşmesi)</span>
+                                                                              }
+                                                                          </div>
+                                                                          @if(inv.OfferedPrice.HasValue && inv.OfferedPrice.Value > 0) {
+                                                                              @if(inv.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Accepted) {
+                                                                                <span class="badge bg-success-subtle text-success border border-success p-2"><i class="bi bi-check2-all"></i> Satınalma Onaylı</span>
+                                                                            } else {
+                                                                                <form asp-action="AcceptQuote" method="post">
+                                                                                    <input type="hidden" name="documentId" value="@doc.Id" />
+                                                                                    <input type="hidden" name="inviteId" value="@inv.Id" />
+                                                                                    <button type="submit" onclick="event.stopPropagation();" class="btn btn-sm btn-info text-white fw-bold" title="Fizibilite Olarak Seç">
+                                                                                        <i class="bi bi-calculator"></i> Fizibilite Seç
+                                                                                    </button>
+                                                                                </form>
+                                                                            }
+                                                                          }
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                        
 
                                         if (isDependent)
                                         {
                                             foreach (var pr in prereqs)
                                             {
                                                 var childDoc = Model.FirstOrDefault(d => d.SystemTemplateId == pr.PrerequisiteTemplateId);
+                                                bool canRequestChildQuote = childDoc?.SystemTemplate?.IssuedBy != null && biddableKeywords.Any(k => childDoc.SystemTemplate.IssuedBy.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0);
+        
                                                 if (childDoc != null)
                                                 {
                                                     <tr class="collapse child-of-@doc.Id bg-light" style="border-left: 4px solid #ffc107;">
-                                                        <td class="ps-5">
+                                                        <td colspan="6" class="ps-5 py-2">
                                                             <i class="bi bi-arrow-return-right text-muted me-2 ms-4"></i>
-                                                            <span class="text-secondary fw-semibold">@childDoc.DocumentName</span>
-                                                            @if(!string.IsNullOrEmpty(childDoc.FilePath)) { <a href="@childDoc.FilePath" target="_blank" class="ms-1" title="Evrak Yüklendi"><i class="bi bi-paperclip text-primary fs-5"></i></a> }
-                                                        </td>
-                                                        <td>
-                                                            <i class="bi bi-building me-1 text-muted"></i>
-                                                            @(childDoc.SystemTemplate?.IssuedBy ?? "Belirtilmedi")
-                                                        </td>
-                                                        <td>
-                                                            @if(string.IsNullOrEmpty(childDoc.AssignedUserId)) { <span class="text-danger"><i class="bi bi-person-x"></i> Yok</span> } else { <span><i class="bi bi-person-check text-primary"></i> @childDoc.AssignedUserId</span> }
-                                                        </td>
-                                                        <td class="text-end fw-bold" title="Harç: @(childDoc.DocumentFee?.ToString("N2") ?? "0,00") | Ek Masraf: @(childDoc.AdditionalCost?.ToString("N2") ?? "0,00")">
-                                                            @((childDoc.DocumentFee.GetValueOrDefault() + childDoc.AdditionalCost.GetValueOrDefault()).ToString("N2")) ₺
-                                                        </td>
-                                                        <td class="text-center">
-                                                            @if (childDoc.Status == "Bekliyor") { <span class="status-badge badge-waiting">Bekliyor</span> }
-                                                            else if (childDoc.Status == "İşlemde") { <span class="status-badge badge-process">Başvuru Yapıldı</span> }
-                                                            else if (childDoc.Status == "Sorunlu") { <span class="status-badge badge-danger">Sorun Çıktı</span> }
-                                                            else if (childDoc.Status == "Alındı") { <span class="status-badge badge-success">Tamamlandı</span> }
-                                                            else { <span class="status-badge badge-waiting">@childDoc.Status</span> }
-                                                        </td>
-                                                        <td class="text-end pe-4">
-                                                            <div class="d-flex justify-content-end gap-1">
-                                                                <form method="post" action="/PhaseZero/RequestQuote/@childDoc.Id" class="m-0 p-0">
-                                                                    <button type="submit" class="btn btn-sm btn-warning rounded-pill px-2 shadow-sm text-dark fw-bold" title="Satınalmaya Gönder / Fiyat Araştırması İste">
-                                                                        <i class="bi bi-cart-plus"></i> Teklif
-                                                                    </button>
-                                                                </form>
-                                                                <button class="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-bold shadow-sm" onclick="openManageModal(@childDoc.Id)">
-                                                                    <i class="bi bi-pencil-square"></i> Yönet
-                                                                </button>
-                                                            </div>
+                                                            <span class="text-secondary fw-semibold">Önkoşul: @childDoc.DocumentName</span>
+                                                            @if (childDoc.Status == "Alındı") {
+                                                                <span class="badge bg-success ms-2"><i class="bi bi-check-circle"></i> Tamamlandı</span>
+                                                            } else {
+                                                                <span class="badge bg-danger ms-2"><i class="bi bi-lock-fill"></i> Tamamlanmadı (Bekliyor)</span>
+                                                            }
                                                         </td>
                                                     </tr>
-                                                    renderedDocIds.Add(childDoc.Id);
+                                          
                                                 }
                                             }
                                         }
@@ -317,6 +424,11 @@
                                     <span class="input-group-text">₺</span>
                                     <input type="number" step="0.01" class="form-control text-end" name="additionalCost" id="modalAddCost">
                                 </div>
+                            </div>
+                            <div class="col-md-12 mt-3">
+                                <label class="form-label fw-bold text-danger"><i class="bi bi-pin-map-fill"></i> Fiziksel Orijinali Nerede?</label>
+                                <input type="text" class="form-control border-danger" name="originalLocation" id="modalOriginalLocation" placeholder="Örn: Ahmet Bey'in çekmecesinde, Muhasebe klasöründe...">
+                                <small class="text-muted">Denetimde sorulduğunda veya gerektiğinde ıslak imzalı orijinaline ulaşabilmek için not düşün.</small>
                             </div>
 
                             <!-- Tanıdık / Kontak (Hassas Bilgi) -->
@@ -605,6 +717,9 @@
             </div>
         </div>
     </div>
+
+
+    
 
 </body>
 </html>

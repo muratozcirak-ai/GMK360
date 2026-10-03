@@ -5,7 +5,7 @@
 
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0"><i class="bi bi-receipt"></i> Proje Genel Giderleri (Akaryakıt, İaşe, Ağırlama)</h4>
+        <h4 class="mb-0"><i class="bi bi-receipt"></i> Şirket Genel Giderleri (Şantiye & Ofis)</h4>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
             <i class="bi bi-plus-circle"></i> Yeni Gider Ekle
         </button>
@@ -21,14 +21,50 @@
 
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-body bg-light">
-            <form method="get" class="row g-3">
-                <div class="col-md-8">
-                    <label class="form-label fw-bold">Projeye Göre Filtrele</label>
-                    <select name="projectId" class="form-select" asp-items="ViewBag.Projects" onchange="this.form.submit()">
-                        <option value="">-- Tüm Projeler --</option>
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Giderin Yeri (Proje / Şirket)</label>
+                    <select name="projectId" class="form-select" asp-items="ViewBag.Projects">
+                        <option value="">-- Tüm Projeler / Şirket --</option>
                     </select>
                 </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Masraf Türü</label>
+                    <select name="expenseType" class="form-select">
+                        <option value="">-- Tümü --</option>
+                        <option value="1" selected="@(ViewBag.SelectedType == 1)">Şantiye İaşesi</option>
+                        <option value="2" selected="@(ViewBag.SelectedType == 2)">Temsil / Ağırlama</option>
+                        <option value="4" selected="@(ViewBag.SelectedType == 4)">Şirket İçi Yemek</option>
+                        <option value="5" selected="@(ViewBag.SelectedType == 5)">İletişim</option>
+                        <option value="6" selected="@(ViewBag.SelectedType == 6)">Demirbaş</option>
+                        <option value="7" selected="@(ViewBag.SelectedType == 7)">Sarf Malzeme</option>
+                        <option value="8" selected="@(ViewBag.SelectedType == 8)">Temizlik</option>
+                        <option value="3" selected="@(ViewBag.SelectedType == 3)">Diğer Genel Gider</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Başlangıç</label>
+                    <input type="date" name="startDate" class="form-control" value="@ViewBag.StartDate" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Bitiş</label>
+                    <input type="date" name="endDate" class="form-control" value="@ViewBag.EndDate" />
+                </div>
+                <div class="col-md-2 text-end">
+                    <button type="submit" class="btn btn-primary w-100 fw-bold"><i class="bi bi-search"></i> Filtrele</button>
+                </div>
             </form>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm bg-danger text-white rounded-4">
+                <div class="card-body p-4 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold">Seçili Filtreye Göre Toplam Masraf:</h5>
+                    <h2 class="mb-0 fw-bold">@Model.Sum(x => x.Amount).ToString("C2")</h2>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -58,7 +94,12 @@
                                     <strong>@item.Title</strong><br/>
                                     <small class="text-muted">@item.Description</small>
                                 </td>
-                                <td>@item.DocumentNo</td>
+                                <td>
+                                    @item.DocumentNo
+                                    @if(!string.IsNullOrEmpty(item.PhotoPath)) { 
+                                        <br/><a href="@item.PhotoPath" target="_blank" class="badge bg-primary text-decoration-none mt-1"><i class="bi bi-image"></i> Fiş Görseli</a> 
+                                    }
+                                </td>
                                 <td class="fw-bold">@item.Amount.ToString("C2")</td>
                                 <td>
                                     @if(item.IsPaid)
@@ -86,7 +127,7 @@
 <!-- Modal -->
 <div class="modal fade" id="addExpenseModal" tabindex="-1">
     <div class="modal-dialog">
-        <form asp-action="Create" method="post" class="modal-content">
+        <form asp-action="Create" method="post" class="modal-content" enctype="multipart/form-data">
             <div class="modal-header">
                 <h5 class="modal-title">Yeni Proje Gideri (Fiş/Fatura) Gir</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -94,15 +135,25 @@
             <div class="modal-body">
                 <div class="row g-3">
                     <div class="col-12">
-                        <label class="form-label">İlgili Proje</label>
-                        <select name="ProjectId" class="form-select" asp-items="ViewBag.Projects" required></select>
+                        <label class="form-label fw-bold">Giderin Ait Olduğu Yer</label>
+                        <select name="ProjectId" class="form-select">
+                            <option value="">Şirket İçi (Merkez / Ofis / Genel)</option>
+                            @foreach(var p in (IEnumerable<SelectListItem>)ViewBag.Projects) {
+                                <option value="@p.Value">Proje: @p.Text</option>
+                            }
+                        </select>
                     </div>
                     <div class="col-12">
                         <label class="form-label">Gider Türü</label>
                         <select name="ExpenseType" class="form-select" required>
                             <option value="1">Şantiye İaşesi (Yemek, Çay, Su)</option>
                             <option value="2">Temsil & Ağırlama (Müşteri Yemek, Lansman)</option>
-                            <option value="3">Diğer Genel Gider (Akaryakıt, Ofis, Ulaşım)</option>
+                            <option value="4">Şirket İçi Yemek</option>
+                            <option value="5">İletişim (Telefon, İnternet)</option>
+                            <option value="6">Demirbaş (Masa, Bilgisayar vs.)</option>
+                            <option value="7">Sarf Malzeme (Kırtasiye, Kartuş vs.)</option>
+                            <option value="8">Temizlik Malzemeleri</option>
+                            <option value="3">Diğer Genel Gider (Akaryakıt, Ulaşım)</option>
                         </select>
                     </div>
                     <div class="col-12">
@@ -121,8 +172,13 @@
                         <label class="form-label">Fiş / Fatura No</label>
                         <input type="text" name="DocumentNo" class="form-control" />
                     </div>
-                    <div class="col-6">
-                        <label class="form-label">Tarih</label>
+                    <div class="col-12">
+                          <label class="form-label fw-bold">Fiş / Fatura Fotoğrafı (Kameradan Çek / Yükle)</label>
+                          <input type="file" name="photo" class="form-control" accept="image/*" capture="environment" />
+                          <small class="text-muted d-block mt-1" style="font-size:0.75rem;"><i class="bi bi-camera"></i> Telefondan direkt fotoğraf çekebilirsiniz.</small>
+                      </div>
+                      <div class="col-6">
+                          <label class="form-label">Tarih</label>
                         <input type="date" name="ExpenseDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
                     </div>
                     <div class="col-6 pt-4">

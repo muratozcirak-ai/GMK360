@@ -1,0 +1,40 @@
+﻿                                            foreach (var pr in prereqs)
+                                            {
+                                                var childDoc = Model.FirstOrDefault(d => d.SystemTemplateId == pr.PrerequisiteTemplateId);
+                                                bool canRequestChildQuote = childDoc?.SystemTemplate?.IssuedBy != null && biddableKeywords.Any(k => childDoc.SystemTemplate.IssuedBy.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0);
+        
+                                                if (childDoc != null)
+                                                {
+                                                    <tr class="collapse child-of-@doc.Id bg-light" style="border-left: 4px solid #ffc107;">
+                                                        <td class="ps-5">
+                                                            <i class="bi bi-arrow-return-right text-muted me-2 ms-4"></i>
+                                                            <span class="text-secondary fw-semibold">@childDoc.DocumentName</span>
+                                                            @if(!string.IsNullOrEmpty(childDoc.FilePath)) { <a href="@childDoc.FilePath" target="_blank" class="ms-1" title="Evrak Yüklendi"><i class="bi bi-paperclip text-primary fs-5"></i></a> }
+                                                        </td>
+                                                        <td>
+                                                            <i class="bi bi-building me-1 text-muted"></i>
+                                                            @(childDoc.SystemTemplate?.IssuedBy ?? "Belirtilmedi")
+                                                        </td>
+                                                        <td>
+                                                            @if(string.IsNullOrEmpty(childDoc.AssignedUserId)) { <span class="text-danger"><i class="bi bi-person-x"></i> Yok</span> } else { <span><i class="bi bi-person-check text-primary"></i> @childDoc.AssignedUserId</span> }
+                                                        </td>
+                                                        <td class="text-end fw-bold" title="Harç: @(childDoc.DocumentFee?.ToString("N2") ?? "0,00") | Ek Masraf: @(childDoc.AdditionalCost?.ToString("N2") ?? "0,00")">
+                                                            @((childDoc.DocumentFee.GetValueOrDefault() + childDoc.AdditionalCost.GetValueOrDefault()).ToString("N2")) ₺
+                                                        </td>
+                                                        <td class="text-center">
+                                                            @if (childDoc.Status == "Bekliyor") { <span class="status-badge badge-waiting">Bekliyor</span> }
+                                                            else if (childDoc.Status == "İşlemde") { <span class="status-badge badge-process">Başvuru Yapıldı</span> }
+                                                            else if (childDoc.Status == "Sorunlu") { <span class="status-badge badge-danger">Sorun Çıktı</span> }
+                                                            else if (childDoc.Status == "Alındı") { <span class="status-badge badge-success">Tamamlandı</span> }
+                                                            else { <span class="status-badge badge-waiting">@childDoc.Status</span> }
+                                                        </td>
+                                                        <td class="text-end pe-4">
+                                                            <div class="d-flex justify-content-end gap-1">
+                                                                @if(canRequestChildQuote) {
+                                                                      var tempQuote = (ViewBag.Quotes as IEnumerable<GMK360.Core.Entities.B2B.B2BQuoteRequest>)?.FirstOrDefault(q => q.SourceReferenceId == childDoc.Id);
+                                                                      @if(tempQuote != null) {
+                                                                          <a href="/B2BPurchasing/Details/@tempQuote.Id" class="btn btn-sm btn-info rounded-pill px-2 shadow-sm text-white fw-bold" title="Satınalma & İhale Yönetimi">
+                                                                              <i class="bi bi-box-arrow-up-right"></i> İhaleye Git
+                                                                          </a>
+                                                                      } else {
+                                                                          <form method="post" action="/PhaseZero/RequestQuote/@childDoc.Id" class="m-0 p-0">

@@ -20,12 +20,41 @@ namespace GMK360.Web.Controllers
             _context = context;
         }
 
+        
+        public async Task<IActionResult> ProjectTimesheet(int id, DateTime? date)
+        {
+            var targetDate = date ?? DateTime.Today;
+            var project = await _context.ConstructionProjects.FindAsync(id);
+            if (project == null) return NotFound();
+
+            var workers = await _context.AgencyWorkers
+                .Where(w => !w.IsDeleted)
+                .OrderBy(w => w.FirstName)
+                .ToListAsync();
+
+            var existingTimesheets = await _context.Set<DailyTimesheet>()
+                .Where(t => t.ConstructionProjectId == id && t.WorkDate.Date == targetDate.Date)
+                .ToDictionaryAsync(t => t.AgencyWorkerId);
+
+            var projects = await _context.ConstructionProjects
+                .Where(p => !p.IsDeleted)
+                .ToListAsync();
+
+            ViewBag.Project = project;
+            ViewBag.TargetDate = targetDate;
+            ViewBag.Workers = workers;
+            ViewBag.ExistingTimesheets = existingTimesheets;
+            ViewBag.Projects = projects;
+
+            return View();
+        }
+
         public async Task<IActionResult> Index(int? projectId, DateTime? workDate)
         {
             var date = workDate ?? DateTime.Today;
             
             // Tüm projeleri çek
-            ViewBag.Projects = new SelectList(await _context.ConstructionProjects.Where(p => !p.IsDeleted).ToListAsync(), "Id", "ProjectName", projectId);
+            ViewBag.Projects = new SelectList(await _context.ConstructionProjects.Where(p => !p.IsDeleted).ToListAsync(), "Id", "Name", projectId);
             ViewBag.CurrentDate = date.ToString("yyyy-MM-dd");
 
             var query = _context.Set<DailyTimesheet>()

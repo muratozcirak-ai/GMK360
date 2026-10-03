@@ -7,13 +7,19 @@ namespace GMK360.Core.Entities.Construction
     {
         SantiyeIasesi = 1,      // Şantiye Yemek/Çay/Su
         TemsilAgirlama = 2,     // Müşteri Yemek, Lansman, Kanepe vs
-        DigerGenelGider = 3     // Ofis, Kırtasiye, Ulaşım
+        DigerGenelGider = 3,    // Ofis, Kırtasiye, Ulaşım
+        SirketIciYemek = 4,     // Şirket İçi Yemek
+        Iletisim = 5,           // İletişim (Telefon / İnternet)
+        Demirbas = 6,           // Demirbaş
+        SarfMalzeme = 7,        // Sarf Malzeme
+        Temizlik = 8            // Temizlik
     }
 
     public class ConstructionProjectExpense : BaseEntity
     {
         public int AgencyId { get; set; }
-        public int ProjectId { get; set; }
+        public int? ProjectId { get; set; }
+        public string? PhotoPath { get; set; }
         public ConstructionProject Project { get; set; }
         
         public ConstructionExpenseType ExpenseType { get; set; }

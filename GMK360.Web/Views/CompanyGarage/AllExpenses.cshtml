@@ -1,0 +1,108 @@
+﻿@model IEnumerable<GMK360.Core.Entities.Logistics.VehicleExpense>
+@{
+    ViewData["Title"] = "Tüm Araç Masrafları";
+    var vehicles = ViewBag.Vehicles as IEnumerable<GMK360.Core.Entities.Logistics.CompanyVehicle>;
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="mb-0 fw-bold"><i class="bi bi-funnel text-danger me-2"></i> Şantiye Geneli Araç Masrafları</h3>
+        <a href="/CompanyGarage" class="btn btn-outline-secondary rounded-pill fw-bold"><i class="bi bi-arrow-left"></i> Garaja Dön</a>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-4 bg-light rounded-4">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Araç Filtresi</label>
+                    <select name="vehicleId" class="form-select">
+                        <option value="">-- Tüm Araçlar --</option>
+                        @foreach(var v in vehicles)
+                        {
+                            if(ViewBag.SelectedVehicleId != null && (int)ViewBag.SelectedVehicleId == v.Id) {
+                                <option value="@v.Id" selected>@v.PlateNumber - @v.VehicleType</option>
+                            } else {
+                                <option value="@v.Id">@v.PlateNumber - @v.VehicleType</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Masraf Türü</label>
+                    <select name="expenseType" class="form-select">
+                        <option value="">-- Tümü --</option>
+                        <option value="Yakıt" selected="@(ViewBag.SelectedType == "Yakıt")">Yakıt (Mazot/Benzin)</option>
+                        <option value="Bakım/Onarım" selected="@(ViewBag.SelectedType == "Bakım/Onarım")">Bakım / Onarım</option>
+                        <option value="Sigorta/Kasko" selected="@(ViewBag.SelectedType == "Sigorta/Kasko")">Sigorta / Kasko</option>
+                        <option value="OGS/HGS" selected="@(ViewBag.SelectedType == "OGS/HGS")">OGS / HGS Otoyol</option>
+                        <option value="Diğer" selected="@(ViewBag.SelectedType == "Diğer")">Diğer</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Başlangıç</label>
+                    <input type="date" name="startDate" class="form-control" value="@ViewBag.StartDate" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Bitiş</label>
+                    <input type="date" name="endDate" class="form-control" value="@ViewBag.EndDate" />
+                </div>
+                <div class="col-md-2 text-end">
+                    <button type="submit" class="btn btn-primary w-100 fw-bold"><i class="bi bi-search"></i> Filtrele</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm bg-danger text-white rounded-4">
+                <div class="card-body p-4 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold">Seçili Filtreye Göre Toplam Masraf:</h5>
+                    <h2 class="mb-0 fw-bold">@Model.Sum(x => x.Amount).ToString("N2") ₺</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Tarih</th>
+                            <th>Plaka / Araç</th>
+                            <th>Masraf Türü</th>
+                            <th>Açıklama / Fiş No</th>
+                            <th class="text-end">Tutar (₺)</th>
+                            <th class="text-center">Fiş İmzası / KM</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach(var item in Model)
+                        {
+                            <tr>
+                                <td class="ps-4">
+                                    <span class="badge bg-light text-dark border">@item.ExpenseDate.ToShortDateString()</span>
+                                </td>
+                                <td><span class="badge bg-dark">@item.Vehicle?.PlateNumber</span></td>
+                                <td>
+                                    @if(item.ExpenseType == "Yakıt") { <span class="badge bg-danger">@item.ExpenseType</span> }
+                                    else if(item.ExpenseType == "Bakım/Onarım") { <span class="badge bg-warning text-dark">@item.ExpenseType</span> }
+                                    else { <span class="badge bg-secondary">@item.ExpenseType</span> }
+                                </td>
+                                <td>@(item.ReceiptNumber ?? "Fiş No Yok")</td>
+                                <td class="text-end fw-bold text-danger">@item.Amount.ToString("N2") ₺</td>
+                                <td class="text-center">
+                                    @if(item.OdometerAtExpense.HasValue) { <span class="badge bg-secondary mb-1">KM: @item.OdometerAtExpense</span><br/> }
+                                    @if(!string.IsNullOrEmpty(item.PhotoPath)) { <a href="@item.PhotoPath" target="_blank" class="badge bg-primary text-decoration-none"><i class="bi bi-image"></i> Fiş Görseli</a> }
+                                </td>
+                            </tr>
+                        }
+                        @if(!Model.Any()) { <tr><td colspan="6" class="text-center text-muted py-5">Bu filtrede masraf bulunamadı.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

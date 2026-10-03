@@ -1,20 +1,14 @@
-﻿import sys
+﻿import codecs
+import re
 
-filepath = 'GMK360.Core/Entities/Construction/ProjectLegalDocument.cs'
-
-with open(filepath, 'r', encoding='utf-8') as f:
+path = 'GMK360.Core/Entities/Construction/ConstructionBudgetItem.cs'
+with codecs.open(path, 'r', 'utf-8-sig') as f:
     content = f.read()
 
-target = "public string? IssueNotes { get; set; }"
-replacement = """public string? IssueNotes { get; set; }
+target = r'public string ItemName \{ get; set; \}'
+replacement = 'public string? SubCategory { get; set; }\n        public string ItemName { get; set; }'
 
-        public decimal? DocumentFee { get; set; }
-        public decimal? AdditionalCost { get; set; }"""
+content = re.sub(target, replacement, content)
 
-if "DocumentFee" not in content:
-    content = content.replace(target, replacement)
-    with open(filepath, 'w', encoding='utf-8') as f:
-        f.write(content)
-        print("Entity updated.")
-else:
-    print("Entity already updated.")
+with codecs.open(path, 'w', 'utf-8-sig') as f:
+    f.write(content)

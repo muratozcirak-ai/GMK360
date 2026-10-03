@@ -12,6 +12,12 @@
             <p class="text-muted mb-0">Görevler, Rotalar, Fişler ve Toplam Masraflar (Araç Bazlı Lojistik)</p>
         </div>
         <div class="col-md-4 text-md-end">
+            <a href="/CompanyGarage/AllExpenses" class="btn btn-outline-danger fw-bold rounded-pill px-4 shadow-sm me-2">
+                <i class="bi bi-funnel-fill me-1"></i> Tüm Masraflar (Filtreli)
+            </a>
+            <a href="/CompanyGarage/AllTasks" class="btn btn-outline-primary fw-bold rounded-pill px-4 shadow-sm me-2">
+                <i class="bi bi-list-task me-1"></i> Tüm Görev Listesi
+            </a>
             <button class="btn btn-primary fw-bold rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#addVehicleModal">
                 <i class="bi bi-plus-lg me-1"></i> Yeni Araç Ekle
             </button>
@@ -33,7 +39,7 @@
             var statusColor = activeAssignment != null ? "warning" : "success";
             var statusText = activeAssignment != null ? "Sahada / Görevde" : "Garajda (Boşta)";
             var totalExpense = vehicle.Expenses?.Sum(e => e.Amount) ?? 0;
-            var activeTasks = vehicle.Tasks?.Where(t => t.Status != "Tamamlandı").OrderBy(t => t.TaskDate).ToList();
+            var activeTasks = vehicle.Tasks?.Where(t => t.Status != "Tamamlandıı").OrderBy(t => t.TaskDate).ToList();
 
             <div class="col-xl-4 col-lg-6">
                 <div class="card border-0 shadow-sm rounded-4 h-100 transition-all">
@@ -46,6 +52,14 @@
                                 <div>
                                     <h4 class="fw-bold mb-0 text-dark">@vehicle.PlateNumber</h4>
                                     <span class="text-muted small">@vehicle.BrandModel - @vehicle.VehicleType</span>
+                                    @if(activeAssignment != null && activeAssignment.ProjectId.HasValue) {
+                                        var pName = ((IEnumerable<dynamic>)ViewBag.Projects).FirstOrDefault(p => p.Id == activeAssignment.ProjectId.Value)?.Name;
+                                        <div class="mt-1"><span class="badge bg-primary bg-opacity-10 text-primary border border-primary"><i class="bi bi-pin-angle-fill"></i> Sabit: @pName</span></div>
+                                    }
+                                    <div class="mt-2">
+                                        <span class="badge bg-secondary me-1" title="Güncel Kilometre"><i class="bi bi-speedometer2"></i> @vehicle.CurrentKm KM</span>
+                                        <span class="badge bg-info text-dark" title="Çalışma Saati (İş Makinası)"><i class="bi bi-clock-history"></i> @vehicle.CurrentWorkingHours Saat</span>
+                                    </div>
                                 </div>
                             </div>
                             <span class="badge bg-@statusColor rounded-pill">@statusText</span>
@@ -54,10 +68,15 @@
                         <!-- Masraf Özeti -->
                         <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-danger bg-opacity-10 rounded-3">
                             <span class="text-danger fw-bold small"><i class="bi bi-cash-coin me-1"></i> Toplam Araç Masrafı:</span>
-                            <span class="text-danger fw-bold">@totalExpense.ToString("N2") ₺</span>
+                            <a href="/CompanyGarage/VehicleExpenses/@vehicle.Id" class="text-danger fw-bold text-decoration-none">@totalExpense.ToString("N2") ₺ <i class="bi bi-arrow-right-short"></i></a>
                         </div>
 
                         <!-- Aksiyon Butonları -->
+                        <div class="d-flex mb-2">
+                            <button class="btn btn-sm btn-light w-100 fw-bold border text-secondary" data-bs-toggle="modal" data-bs-target="#assignModal-@vehicle.Id">
+                                <i class="bi bi-person-badge me-1"></i> Sabit Tahsis Değiştir
+                            </button>
+                        </div>
                         <div class="d-flex gap-2 mb-3">
                             <button class="btn btn-sm btn-outline-primary flex-fill fw-bold rounded-pill" data-bs-toggle="modal" data-bs-target="#taskModal-@vehicle.Id">
                                 <i class="bi bi-pin-map-fill me-1"></i> Görev Yaz
@@ -80,14 +99,96 @@
                                         <div class="d-flex justify-content-between align-items-start">
                                             <div>
                                                 <small class="text-muted d-block"><i class="bi bi-person me-1"></i> Şoför: @task.DriverName</small>
+                                                @if(task.DestinationProjectId.HasValue) {
+                                                    var pName = ((IEnumerable<dynamic>)ViewBag.Projects).FirstOrDefault(p => p.Id == task.DestinationProjectId.Value)?.Name;
+                                                    <span class="badge bg-primary mb-1"><i class="bi bi-building"></i> Şantiye: @pName</span><br/>
+                                                } else {
+                                                    <span class="badge bg-secondary mb-1"><i class="bi bi-building"></i> Şirket Merkez</span><br/>
+                                                }
                                                 <span class="fw-bold text-dark d-block">@task.TaskDescription</span>
                                                 <small class="text-danger">Tarih: @task.TaskDate.ToString("dd.MM.yyyy")</small>
                                             </div>
-                                            <form action="/CompanyGarage/UpdateTaskStatus" method="post">
-                                                <input type="hidden" name="taskId" value="@task.Id" />
-                                                <input type="hidden" name="status" value="Tamamlandı" />
-                                                <button type="submit" class="btn btn-sm btn-success rounded-circle" title="Tamamlandı İşaretle"><i class="bi bi-check-lg"></i></button>
-                                            </form>
+                                            
+                                            <button type="button" class="btn btn-sm btn-primary rounded-circle shadow-sm me-1" title="Görevi Üstlen / Başlat (Şoför/Araç Değişimi)" data-bs-toggle="modal" data-bs-target="#startTaskModal-@task.Id">
+                                                <i class="bi bi-play-fill"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-success rounded-circle shadow-sm" title="Tamamlandı İşaretle" data-bs-toggle="modal" data-bs-target="#completeTaskModal-@task.Id">
+                                                <i class="bi bi-check-lg"></i>
+                                            </button>
+
+                                            <!-- Görevi Üstlen / Başlat Modalı -->
+                                            <div class="modal fade" id="startTaskModal-@task.Id" tabindex="-1">
+                                                <div class="modal-dialog modal-sm modal-dialog-centered">
+                                                    <div class="modal-content border-0 shadow">
+                                                        <div class="modal-header border-0 bg-primary text-white">
+                                                            <h6 class="modal-title fw-bold"><i class="bi bi-play-circle me-1"></i> Görevi Başlat / Devral</h6>
+                                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                                        </div>
+                                                        <form asp-action="StartTask" asp-controller="CompanyGarage" method="post">
+                                                            <div class="modal-body">
+                                                                <input type="hidden" name="taskId" value="@task.Id" />
+                                                                <p class="small text-muted mb-3">Bu görevi üstlenmek için başlangıç KM'sini girin. Araç arızalandıysa farklı bir araç seçerek görevi devredebilirsiniz.</p>
+                                                                
+                                                                <div class="mb-3">
+                                                                    <label class="form-label fw-bold">Görevli Araç</label>
+                                                                    <select name="vehicleId" class="form-select">
+                                                                        @foreach(var v in Model) {
+                                                                            if(v.Id == vehicle.Id) {
+                                                                                <option value="@v.Id" selected>@v.PlateNumber</option>
+                                                                            } else {
+                                                                                <option value="@v.Id">@v.PlateNumber</option>
+                                                                            }
+                                                                        }
+                                                                    </select>
+                                                                </div>
+                                                                <div class="mb-3">
+                                                                    <label class="form-label fw-bold">Şoför Adı</label>
+                                                                    <input type="text" name="driverName" class="form-control" value="@task.DriverName" required />
+                                                                </div>
+                                                                <div class="mb-3">
+                                                                    <label class="form-label fw-bold">Araç Başlangıç KM</label>
+                                                                    <input type="number" name="startKm" class="form-control" value="@vehicle.CurrentKm" required />
+                                                                </div>
+                                                            </div>
+                                                            <div class="modal-footer border-0 pt-0">
+                                                                <button type="submit" class="btn btn-primary w-100 fw-bold">Görevi Başlat</button>
+                                                            </div>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            
+                                            <!-- Görev Tamamlama Modalı (KM ve Saat Girişi) -->
+                                            <div class="modal fade" id="completeTaskModal-@task.Id" tabindex="-1">
+                                                <div class="modal-dialog modal-sm modal-dialog-centered">
+                                                    <div class="modal-content border-0 shadow">
+                                                        <div class="modal-header bg-light border-0">
+                                                            <h6 class="modal-title fw-bold text-dark">Görevi Tamamla</h6>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                        </div>
+                                                        <form asp-action="UpdateTaskStatus" asp-controller="CompanyGarage" method="post">
+                                                            <div class="modal-body text-start">
+                                                                <input type="hidden" name="taskId" value="@task.Id" />
+                                                                <input type="hidden" name="status" value="Tamamlandı" />
+                                                                <p class="small text-muted mb-3">Aracın güncel kilometresi veya iş makinası çalışma saatini girerek görevi sonlandırın.</p>
+                                                                <div class="mb-3">
+                                                                    <label class="form-label small fw-bold text-dark">Bitiş KM (Görev Sonu)</label>
+                                                                    <input type="number" name="endKm" class="form-control" placeholder="Örn: 15450" />
+                                                                    <small class="text-muted" style="font-size:0.7rem;">(Başlangıç: @(task.StartKm ?? 0) KM)</small>
+                                                                </div>
+                                                                <div class="mb-3">
+                                                                    <label class="form-label small fw-bold text-dark">Harcanan Çalışma Saati</label>
+                                                                    <input type="number" step="0.5" name="workingHours" class="form-control" placeholder="Örn: 8.5" />
+                                                                </div>
+                                                            </div>
+                                                            <div class="modal-footer border-0 p-2">
+                                                                <button type="submit" class="btn btn-success w-100 fw-bold">Görevi Bitir</button>
+                                                            </div>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </li>
                                 }
@@ -112,7 +213,7 @@
                             <h5 class="modal-title fw-bold text-primary"><i class="bi bi-pin-map-fill me-2"></i> Görev / Rota Belirle</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
-                        <form action="/CompanyGarage/CreateTask" method="post">
+                        <form asp-action="CreateTask" asp-controller="CompanyGarage" method="post">
                             <div class="modal-body row g-3">
                                 <input type="hidden" name="vehicleId" value="@vehicle.Id" />
                                 <div class="col-12">
@@ -120,9 +221,9 @@
                                     <input type="text" name="driverName" class="form-control" required placeholder="Örn: Ahmet Şoför" />
                                 </div>
                                 <div class="col-12">
-                                    <label class="form-label fw-bold">Hedef Şantiye (Opsiyonel)</label>
+                                    <label class="form-label fw-bold text-dark">Görev Yeri (Şirket / Şantiye)</label>
                                     <select class="form-select" name="projectId">
-                                        <option value="">-- Müşteri Gezdirme / Nalbur vb. --</option>
+                                        <option value="">Şirket İçi (Merkez / Genel / Nalbur vb.)</option>
                                         @if(activeProjects != null) {
                                             foreach(var p in activeProjects) {
                                                 <option value="@p.Id">@p.Name</option>
@@ -136,7 +237,15 @@
                                 </div>
                                 <div class="col-12">
                                     <label class="form-label fw-bold">Görev Tarihi</label>
-                                    <input type="date" name="taskDate" class="form-control" required />
+                                    <input type="date" name="taskDate" class="form-control" required value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">Saat Aralığı (Örn: 09:00 - 12:00)</label>
+                                    <div class="input-group">
+                                        <input type="time" name="startTime" class="form-control" />
+                                        <span class="input-group-text">-</span>
+                                        <input type="time" name="endTime" class="form-control" />
+                                    </div>
                                 </div>
                             </div>
                             <div class="modal-footer border-0 bg-light">
@@ -155,11 +264,20 @@
                             <h5 class="modal-title fw-bold text-danger"><i class="bi bi-receipt me-2"></i> @vehicle.PlateNumber - Araç Masrafı İşle</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
-                        <form action="/CompanyGarage/AddExpense" method="post">
+                        <form asp-action="AddExpense" asp-controller="CompanyGarage" method="post" enctype="multipart/form-data">
                             <div class="modal-body row g-3">
                                 <input type="hidden" name="vehicleId" value="@vehicle.Id" />
                                 <div class="alert alert-warning small mb-0">
                                     Buraya girilen tutarlar otomatik olarak <b>@vehicle.PlateNumber</b> plakalı aracın toplam giderine yansıtılır.
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label fw-bold text-dark">Fiş / Fatura Fotoğrafı (Kameradan Çek / Yükle)</label>
+                                    <input type="file" name="photo" class="form-control" accept="image/*" capture="environment" />
+                                    <small class="text-muted d-block mt-1" style="font-size:0.75rem;"><i class="bi bi-camera"></i> Telefondan direkt fotoğraf çekebilirsiniz.</small>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label fw-bold text-dark">Fiş Anındaki Kilometre <span class="text-muted fw-normal">(İsteğe Bağlı)</span></label>
+                                    <input type="number" name="odometer" class="form-control" placeholder="Örn: 15400" />
                                 </div>
                                 <div class="col-12">
                                     <label class="form-label fw-bold">Masraf Türü</label>
@@ -203,7 +321,7 @@
                 <h5 class="modal-title fw-bold">Yeni Araç Tanımla</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form action="/CompanyGarage/AddVehicle" method="post">
+            <form asp-action="AddVehicle" asp-controller="CompanyGarage" method="post">
                 <div class="modal-body row g-3">
                     <div class="col-12">
                         <label class="form-label fw-bold">Plaka</label>

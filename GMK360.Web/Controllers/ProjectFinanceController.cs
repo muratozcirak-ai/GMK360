@@ -75,6 +75,22 @@ namespace GMK360.Web.Controllers
 
             // Bütçe Aşama Verileri
             var budgetItems = project.BudgetItems?.ToList() ?? new List<ConstructionBudgetItem>();
+            
+            // Faz 0 Evraklarını Sanal Bütçe Kalemi Olarak Ekle
+            var phase0Docs = await _context.ProjectLegalDocuments
+                .Where(d => d.ConstructionProjectId == projectId)
+                .ToListAsync();
+            
+            var phase0BudgetItems = phase0Docs.Select(d => new GMK360.Core.Entities.Construction.ConstructionBudgetItem
+            {
+                ItemName = d.DocumentName,
+                PlannedUnitPrice = (d.EstimatedCost ?? 0) + (d.DocumentFee ?? 0) + (d.AdditionalCost ?? 0),
+                Quantity = 1,
+                ActualTotalCost = d.ActualCost ?? 0,
+                PhaseCategory = GMK360.Core.Entities.Construction.BudgetPhaseCategory.ResmiEvraklarVeProsedurler
+            }).ToList();
+            
+            budgetItems.AddRange(phase0BudgetItems);
             var phaseData = new Dictionary<BudgetPhaseCategory, dynamic>();
             
             foreach (BudgetPhaseCategory phase in Enum.GetValues(typeof(BudgetPhaseCategory)))

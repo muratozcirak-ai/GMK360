@@ -4,6 +4,14 @@ using GMK360.Core.Entities.B2b;
 
 namespace GMK360.Core.Entities.Construction
 {
+    public enum ProcurementStrategy
+    {
+        NotSelected = 0,
+        Purchase = 1,          // Satın Alma (B2B Teklif)
+        Rent = 2,              // Aylık Kiralama
+        InternalTransfer = 3,  // Kendi Depomuzdan / Eski Şantiyeden
+        Borrow = 4             // Kardeş Firmadan Ödünç
+    }
     public enum BudgetItemSourceType
     {
         Manual = 1,
@@ -38,7 +46,9 @@ namespace GMK360.Core.Entities.Construction
 
         public BudgetPhaseCategory PhaseCategory { get; set; }
         
+        public string? SubCategory { get; set; }
         public string ItemName { get; set; } // Örn: C30 Beton, Mikser Yolu Dökümü
+        public string? ItemCode { get; set; } // Poz Kodu / İmalat Kodu
         public string? Description { get; set; } // Detay/Notlar
         
         public decimal Quantity { get; set; } = 1;
@@ -46,6 +56,7 @@ namespace GMK360.Core.Entities.Construction
 
         public BudgetItemSourceType SourceType { get; set; } = BudgetItemSourceType.Manual;
         public BudgetQuoteStatus QuoteStatus { get; set; } = BudgetQuoteStatus.WaitingForPrice;
+        public ProcurementStrategy ProcurementStrategy { get; set; } = ProcurementStrategy.NotSelected;
 
         // BÜTÇE RAKAMLARI
         public decimal PlannedUnitPrice { get; set; } = 0; // Planlanan/Tahmini Birim Fiyat

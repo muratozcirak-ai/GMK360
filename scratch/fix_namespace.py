@@ -1,11 +1,13 @@
 ﻿import codecs
+import re
 
-path = 'GMK360.Data/Contexts/ApplicationDbContext.cs'
+path = 'GMK360.Web/Controllers/PhaseOneController.cs'
 with codecs.open(path, 'r', 'utf-8-sig') as f:
     content = f.read()
 
-content = content.replace('GMK360.Core.Entities.B2B.B2BNetworkConnection', 'GMK360.Core.Entities.B2b.B2BNetworkConnection')
+target = r'using GMK360\.Data\.Context;'
+replacement = 'using GMK360.Data.Contexts;'
+content = re.sub(target, replacement, content)
 
 with codecs.open(path, 'w', 'utf-8-sig') as f:
     f.write(content)
-print('Fixed namespace case!')

@@ -1,0 +1,268 @@
+﻿@model IEnumerable<GMK360.Core.Entities.Construction.ConstructionBudgetItem>
+@{
+    ViewData["Title"] = "Faz 1: Yıkım ve Zemin Hazırlığı";
+    Layout = "_ProjectLayout";
+    var projectId = ViewData["ProjectId"] as int?;
+    var projectName = ViewData["ProjectName"] as string;
+    var hasTemplates = ViewData["HasTemplates"] as bool? ?? false;
+
+    var subCategories = Model.Where(x => !string.IsNullOrEmpty(x.SubCategory)).Select(x => x.SubCategory).Distinct().OrderBy(c => c).ToList();
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <a href="/ConstructionProject/Details/@projectId" class="btn btn-sm btn-light text-dark shadow-sm mb-3 rounded-pill fw-bold border">
+                <i class="bi bi-arrow-left me-1"></i> Projeye Dön
+            </a>
+            <h3 class="fw-bold text-dark mb-0"><i class="bi bi-cone-striped text-primary me-2"></i> FAZ 7: Elektrik ve Zayıf Akım Tesisatı</h3>
+            <p class="text-muted mt-1 mb-0">Şantiye öncesi bütçeleme ve planlama aşaması (Zaman çizelgesi ve puantaj yönetimi inşaat başlayınca aktif olacaktır).</p>
+        </div>
+        <div class="text-end">
+            <form action="/PhaseSeven/SyncFromPool/@projectId" method="post" class="d-inline me-3">
+                <button type="submit" class="btn btn-warning fw-bold shadow-sm rounded-pill px-4"><i class="bi bi-cloud-download me-1"></i> Havuzdan Senkronize Et</button>
+            </form>
+            <h4 class="fw-bold text-primary mb-0 d-inline-block">@Model.Sum(x => x.PlannedTotalCost).ToString("N2") ₺ <span class="fs-6 text-muted fw-normal">Toplam Fizibilite Bütçesi</span></h4>
+        </div>
+    </div>
+
+    <div class="alert alert-info border-0 shadow-sm rounded-4 mb-4 d-flex align-items-center">
+        <i class="bi bi-lightbulb-fill fs-3 text-info me-3"></i>
+        <div>
+            <h6 class="fw-bold mb-1">Bu Liste Nasıl Kullanılır?</h6>
+            <p class="mb-0 small text-dark">
+                Havuzdan senkronize edilen kalemler, projede unutulmaması gereken <strong>asgari ve mecburi</strong> temel işlerdir (Abonelikler, ruhsatlar vb.). 
+                Şantiyenizin özel fiziki şartlarına (örn: dağ başında olduğu için su tankeri gerekmesi) veya şirketinizin demirbaş durumuna (örn: JCB veya Konteyneriniz yoksa kiralama gerekmesi) göre doğacak ek ihtiyaçları, ilgili kategorinin altındaki <strong>"Yeni Bütçe Kalemi Ekle"</strong> butonunu kullanarak fizibilitenize eklemelisiniz.
+            </p>
+        </div>
+    </div>
+
+    <div class="accordion border-0 shadow-sm rounded-4 overflow-hidden" id="phaseOneAccordion">
+        @foreach (var cat in subCategories)
+        {
+            var catItems = Model.Where(m => m.SubCategory == cat).ToList();
+            var catTotal = catItems.Sum(x => x.PlannedTotalCost);
+            var headerId = "heading" + cat.Replace(".", "").Replace(" ", "");
+            var collapseId = "collapse" + cat.Replace(".", "").Replace(" ", "");
+
+            <div class="accordion-item border-0 border-bottom">
+                <h2 class="accordion-header" id="@headerId">
+                    <button class="accordion-button bg-white text-dark fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId">
+                        <div class="d-flex justify-content-between w-100 pe-3">
+                            <span><i class="bi bi-diagram-2 text-primary me-2"></i> @cat</span>
+                            <span class="text-success">@catTotal.ToString("N2") ₺</span>
+                        </div>
+                    </button>
+                </h2>
+                <div id="@collapseId" class="accordion-collapse collapse show" data-bs-parent="#phaseOneAccordion">
+                    <div class="accordion-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-4">Kalem / Açıklama</th>
+                                        <th class="text-end pe-4">Tahmini Tutar (₺)</th>
+                                        <th class="text-end pe-4">İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (!catItems.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="3" class="text-center text-muted py-4">Bu gruba henüz bütçe kalemi eklenmemiş.</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        foreach (var item in catItems)
+                                        {
+                                            <tr>
+                                                <td class="ps-4">
+                                                    <div class="fw-bold text-dark">@item.ItemName</div>
+                                                    @if (!string.IsNullOrEmpty(item.Description))
+                                                    {
+                                                        <small class="text-muted d-block mt-1">@item.Description</small>
+                                                    }
+                                                </td>
+                                                <td class="text-end pe-4">
+                                                    <div class="fw-bold text-dark fs-6">@item.PlannedTotalCost.ToString("N2") ₺</div>
+                                                    @if (item.Quantity != 1 || item.Unit != "Götürü")
+                                                    {
+                                                        <small class="text-muted" style="font-size:0.75rem;">@item.Quantity.ToString("G29") @item.Unit x @item.PlannedUnitPrice.ToString("N2") ₺</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <small class="text-muted" style="font-size:0.75rem;">Götürü Bedel</small>
+                                                    }
+                                                </td>
+                                                <td class="text-end pe-4">
+                                                <div class="d-flex align-items-center justify-content-end">
+                                                    @if (item.PlannedTotalCost == 0)
+                                                    {
+                                                        <button class="btn btn-sm btn-primary rounded-pill fw-bold px-3 me-2" onclick="openManageModal(@item.Id, '@item.ItemName', '0', '@item.Description', '1', 'Götürü')">
+                                                            <i class="bi bi-currency-dollar"></i> Tutar Gir
+                                                        </button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button class="btn btn-sm btn-outline-primary rounded-pill fw-bold px-3 me-2" onclick="openManageModal(@item.Id, '@item.ItemName', '@item.PlannedTotalCost.ToString(System.Globalization.CultureInfo.InvariantCulture)', '@item.Description', '@item.Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture)', '@item.Unit')">
+                                                            <i class="bi bi-pencil"></i> Düzenle
+                                                        </button>
+                                                    }
+
+                                                    <form action="/PhaseSeven/DeleteItem/@item.Id" method="post" class="d-inline">
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger border-0"><i class="bi bi-trash"></i></button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                            
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                            <div class="p-3 bg-white border-top">
+                                <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 shadow-sm" onclick="openAddModal('@cat')">
+                                    <i class="bi bi-plus-lg me-1"></i> Yeni Bütçe Kalemi Ekle
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Yönet Modal -->
+<div class="modal fade" id="manageModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form action="/PhaseSeven/UpdatePrice" method="post" class="modal-content border-0 shadow">
+            <input type="hidden" name="id" id="manageId" />
+            
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold text-dark" id="manageTitle">Bütçe Kalemini Yönet</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">Miktar (Opsiyonel)</label>
+                        <input type="number" step="0.01" name="quantity" id="manageQty" class="form-control" value="1" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">Birim</label>
+                        <select name="unit" id="manageUnit" class="form-select">
+                            <option value="Götürü">Götürü</option>
+                            <option value="m2">m2</option>
+                            <option value="m3">m3</option>
+                            <option value="Ton">Ton</option>
+                            <option value="Kg">Kg</option>
+                            <option value="Adet">Adet</option>
+                            <option value="Ay">Ay</option>
+                            <option value="Gün">Gün</option>
+                            <option value="Saat">Saat</option>
+                            <option value="Sefer">Sefer</option>
+                            <option value="Paket">Paket</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-primary">Tahmini Toplam Tutar (₺)</label>
+                    <div class="input-group">
+                        <input type="number" step="0.01" name="totalCost" id="managePrice" class="form-control border-primary" required />
+                        <span class="input-group-text bg-primary text-white border-primary">₺</span>
+                    </div>
+                    <small class="text-muted mt-1 d-block"><i class="bi bi-info-circle"></i> Miktar girmezseniz sistem Götürü (Lump Sum) olarak hesaplar.</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-dark">Açıklama / Notlar</label>
+                    <textarea name="description" id="manageDesc" class="form-control" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-primary px-4">Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Yeni Kalem Ekle Modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form action="/PhaseSeven/AddItem" method="post" class="modal-content border-0 shadow">
+            <input type="hidden" name="projectId" value="@projectId" />
+            <input type="hidden" name="subCategory" id="modalSubCategory" />
+            
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold text-dark">Manuel Bütçe Kalemi Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted small text-uppercase">Eklenecek Klasör</label>
+                    <input type="text" id="modalCatDisplay" class="form-control bg-light border-0" readonly />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-dark">Kalem Adı / İmalat Tanımı</label>
+                    <input type="text" name="itemName" class="form-control" placeholder="Örn: 200m2 çevre çiti yapılması" required />
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">Miktar (Opsiyonel)</label>
+                        <input type="number" step="0.01" name="quantity" class="form-control" value="1" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">Birim</label>
+                        <select name="unit" class="form-select">
+                            <option value="Götürü">Götürü</option>
+                            <option value="m2">m2</option>
+                            <option value="m3">m3</option>
+                            <option value="Ton">Ton</option>
+                            <option value="Kg">Kg</option>
+                            <option value="Adet">Adet</option>
+                            <option value="Ay">Ay</option>
+                            <option value="Gün">Gün</option>
+                            <option value="Saat">Saat</option>
+                            <option value="Sefer">Sefer</option>
+                            <option value="Paket">Paket</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-primary">Tahmini Toplam Tutar (Opsiyonel)</label>
+                    <div class="input-group">
+                        <input type="number" step="0.01" name="totalCost" class="form-control border-primary" value="0" />
+                        <span class="input-group-text bg-primary text-white border-primary">₺</span>
+                    </div>
+                    <small class="text-muted mt-1 d-block">Tutarı sonra girmek için 0 bırakabilirsiniz.</small>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-primary px-4">Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    
+
+    function openManageModal(id, title, price, desc, qty, unit) {
+        document.getElementById('manageId').value = id;
+        document.getElementById('manageTitle').innerText = title;
+        document.getElementById('managePrice').value = price;
+        document.getElementById('manageDesc').value = desc !== 'null' ? desc : '';
+        document.getElementById('manageQty').value = qty !== 'null' ? qty : '1';
+        document.getElementById('manageUnit').value = unit !== 'null' && unit !== '' ? unit : 'Götürü';
+        new bootstrap.Modal(document.getElementById('manageModal')).show();
+    }
+
+    function openAddModal(categoryName) {
+        document.getElementById('modalSubCategory').value = categoryName;
+        document.getElementById('modalCatDisplay').value = categoryName;
+        new bootstrap.Modal(document.getElementById('addModal')).show();
+    }
+</script>

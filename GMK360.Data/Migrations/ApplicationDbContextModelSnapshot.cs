@@ -713,6 +713,9 @@ namespace GMK360.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsFeasibilitySelected")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsVatIncludedGlobally")
                         .HasColumnType("bit");
 
@@ -2830,7 +2833,10 @@ namespace GMK360.Data.Migrations
                     b.Property<bool>("IsPaid")
                         .HasColumnType("bit");
 
-                    b.Property<int>("ProjectId")
+                    b.Property<string>("PhotoPath")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("ProjectId")
                         .HasColumnType("int");
 
                     b.Property<string>("Title")
@@ -3572,6 +3578,9 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("bit");
 
                     b.Property<string>("IssueNotes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OriginalLocation")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Stage")
@@ -7184,6 +7193,12 @@ namespace GMK360.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("CurrentKm")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("CurrentWorkingHours")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -7281,6 +7296,12 @@ namespace GMK360.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<int?>("OdometerAtExpense")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PhotoPath")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("ReceiptNumber")
                         .HasColumnType("nvarchar(max)");
 
@@ -7323,8 +7344,20 @@ namespace GMK360.Data.Migrations
                     b.Property<string>("DriverName")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("EndKm")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EndTime")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
+
+                    b.Property<int?>("StartKm")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StartTime")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -7342,6 +7375,9 @@ namespace GMK360.Data.Migrations
 
                     b.Property<int>("VehicleId")
                         .HasColumnType("int");
+
+                    b.Property<decimal?>("WorkingHours")
+                        .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
 
@@ -13050,9 +13086,7 @@ namespace GMK360.Data.Migrations
                 {
                     b.HasOne("GMK360.Core.Entities.Construction.ConstructionProject", "Project")
                         .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("ProjectId");
 
                     b.Navigation("Project");
                 });
