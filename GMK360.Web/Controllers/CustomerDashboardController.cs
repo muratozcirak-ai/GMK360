@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -224,8 +224,14 @@ namespace GMK360.Web.Controllers
             return RedirectToAction("Construction", "Dashboard");
         }
 
-        public async Task<IActionResult> Referrals()
+                public async Task<IActionResult> MyUnitUpgrades()
         {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Challenge();
+            return View();
+        }
+
+        public async Task<IActionResult> Referrals() {
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
 

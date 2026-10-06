@@ -17,6 +17,7 @@ namespace GMK360.Core.Entities.Construction
         public string Name { get; set; }
         public string Description { get; set; }
         public string? ProjectType { get; set; }
+        public string? BypassedPhases { get; set; } // Örn: "1,3,4" (Hard Lock Bypass edilen fazlar)
         
         public int AgencyId { get; set; }
         public Agency Agency { get; set; }

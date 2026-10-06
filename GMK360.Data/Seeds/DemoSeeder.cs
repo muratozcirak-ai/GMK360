@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using GMK360.Core.Entities;
@@ -23,6 +23,16 @@ namespace GMK360.Data.Seeds
                 await roleManager.CreateAsync(new ApplicationRole { Name = "Customer" });
             if (!await roleManager.RoleExistsAsync("AgencyAdmin"))
                 await roleManager.CreateAsync(new ApplicationRole { Name = "AgencyAdmin" });
+            if (!await roleManager.RoleExistsAsync("CompanyEmployee"))
+                await roleManager.CreateAsync(new ApplicationRole { Name = "CompanyEmployee" });
+
+            var employeeUser = await userManager.FindByEmailAsync("beyazyaka@gmk360.com");
+            if (employeeUser == null)
+            {
+                employeeUser = new ApplicationUser { UserName = "beyazyaka@gmk360.com", Email = "beyazyaka@gmk360.com", FirstName = "Ayşe", LastName = "Beyazyaka", EmailConfirmed = true };
+                await userManager.CreateAsync(employeeUser, "123456");
+                await userManager.AddToRoleAsync(employeeUser, "CompanyEmployee");
+            }
 
             var adminUser = await userManager.FindByEmailAsync("admin@gmk360.com");
             if (adminUser == null)

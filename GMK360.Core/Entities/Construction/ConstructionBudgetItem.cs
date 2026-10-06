@@ -60,6 +60,8 @@ namespace GMK360.Core.Entities.Construction
 
         // BÜTÇE RAKAMLARI
         public decimal PlannedUnitPrice { get; set; } = 0; // Planlanan/Tahmini Birim Fiyat
+        public decimal? EstimatedMaterialCost { get; set; } // Malzeme Tahmini (Döviz bazlı hesaplamalar için)
+        public decimal? EstimatedLaborCost { get; set; } // İşçilik Tahmini (Yerel enflasyon için)
         [NotMapped]
         public decimal PlannedTotalCost => Quantity * PlannedUnitPrice; // Planlanan Toplam
         

@@ -31,6 +31,9 @@ namespace GMK360.Core.Entities.Construction
         public decimal? DocumentFee { get; set; }
         public decimal? AdditionalCost { get; set; }
 
+        // Hedef Faz Bağlantısı (Akıllı Köprü)
+        public BudgetPhaseCategory? LinkedPhaseCategory { get; set; }
+
         public int? TargetInstitutionId { get; set; }
         public InstitutionRecord TargetInstitution { get; set; }
 

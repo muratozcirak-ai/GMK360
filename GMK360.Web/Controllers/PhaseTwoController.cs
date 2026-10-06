@@ -25,6 +25,9 @@ namespace GMK360.Web.Controllers
 
             ViewData["ProjectId"] = project.Id;
             ViewData["ProjectName"] = project.Name;
+            ViewData["BypassedPhases"] = project.BypassedPhases;
+            ViewBag.LinkedDocs = await _context.ProjectLegalDocuments.Where(d => d.ConstructionProjectId == projectId && d.LinkedPhaseCategory == GMK360.Core.Entities.Construction.BudgetPhaseCategory.TemelVeAltYapi).ToListAsync();
+            ViewBag.PhaseId = (int)GMK360.Core.Entities.Construction.BudgetPhaseCategory.TemelVeAltYapi;
 
             var items = await _context.ConstructionBudgetItems
                 .Where(b => b.ConstructionProjectId == projectId && b.PhaseCategory == BudgetPhaseCategory.TemelVeAltYapi)
@@ -100,7 +103,7 @@ namespace GMK360.Web.Controllers
 
         [HttpPost("PhaseTwo/UpdatePrice")]
         [IgnoreAntiforgeryToken]
-        public async Task<IActionResult> UpdatePrice(int id, decimal totalCost, decimal quantity, string unit, string description)
+        public async Task<IActionResult> UpdatePrice(int id, decimal totalCost, decimal quantity, string unit, string description, decimal? estimatedMaterialCost, decimal? estimatedLaborCost)
         {
             var item = await _context.ConstructionBudgetItems.FindAsync(id);
             if (item == null) return NotFound();
@@ -110,6 +113,8 @@ namespace GMK360.Web.Controllers
             item.PlannedUnitPrice = totalCost / item.Quantity; // Calculate unit price from total
             
             item.Description = description;
+            item.EstimatedMaterialCost = estimatedMaterialCost;
+            item.EstimatedLaborCost = estimatedLaborCost;
             item.QuoteStatus = BudgetQuoteStatus.EstimatedOrQuoted;
             await _context.SaveChangesAsync();
             return RedirectToAction("Index", new { projectId = item.ConstructionProjectId });

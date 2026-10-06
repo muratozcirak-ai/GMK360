@@ -1,4 +1,4 @@
-using GMK360.Data.Contexts;
+﻿using GMK360.Data.Contexts;
 using GMK360.Core.Entities.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
@@ -34,17 +34,17 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
 
 builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options => {
-    // DEV: Kolay test iÃ§in Email OnayÄ± geÃ§ici olarak kapatÄ±ldÄ±
+    // DEV: Kolay test iÃƒÂ§in Email OnayÃ„Â± geÃƒÂ§ici olarak kapatÃ„Â±ldÃ„Â±
     options.SignIn.RequireConfirmedAccount = false;
     
-    // GÃ¼venlik: Åifre ZorunluluklarÄ±
+    // GÃƒÂ¼venlik: Ã…Âifre ZorunluluklarÃ„Â±
     options.Password.RequireDigit = true;
     options.Password.RequireLowercase = true;
     options.Password.RequireNonAlphanumeric = true;
     options.Password.RequireUppercase = true;
     options.Password.RequiredLength = 8;
     
-    // GÃ¼venlik: Hesap Kilitleme (Brute-Force KorumasÄ±)
+    // GÃƒÂ¼venlik: Hesap Kilitleme (Brute-Force KorumasÃ„Â±)
     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     options.Lockout.MaxFailedAccessAttempts = 5;
     options.Lockout.AllowedForNewUsers = true;
@@ -52,10 +52,10 @@ builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options => {
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
-// Alt Domain (Subdomain) SSO iÃ§in Cookie AyarlarÄ±
+// Alt Domain (Subdomain) SSO iÃƒÂ§in Cookie AyarlarÃ„Â±
 builder.Services.ConfigureApplicationCookie(options =>
 {
-    // DEV: Localhost'ta giriÅŸ yapabilmek iÃ§in Cookie.Domain sadece canlÄ± (Production) ortamda set edilmelidir.
+    // DEV: Localhost'ta giriÃ…Å¸ yapabilmek iÃƒÂ§in Cookie.Domain sadece canlÃ„Â± (Production) ortamda set edilmelidir.
     // options.Cookie.Domain = ".gmk360.com"; // Ana ve alt domainlerde ortak oturum
     options.Cookie.Name = "GMK360.AuthCookie";
 });
@@ -83,10 +83,10 @@ if (!string.IsNullOrEmpty(builder.Configuration["Authentication:Apple:ClientId"]
     });
 }
 
-// GÃ¼venlik: Rate Limiting (DDoS ve Kaba Kuvvet KorumasÄ±)
+// GÃƒÂ¼venlik: Rate Limiting (DDoS ve Kaba Kuvvet KorumasÃ„Â±)
 builder.Services.AddRateLimiter(options =>
 {
-    // Genel site trafiÄŸi (Saniyede 100 istek)
+    // Genel site trafiÃ„Å¸i (Saniyede 100 istek)
     options.AddFixedWindowLimiter("GlobalLimiter", opt =>
     {
         opt.PermitLimit = 100;
@@ -95,7 +95,7 @@ builder.Services.AddRateLimiter(options =>
         opt.QueueLimit = 2;
     });
 
-    // Login ve kritik iÅŸlemler (Dakikada 5 istek)
+    // Login ve kritik iÃ…Å¸lemler (Dakikada 5 istek)
     options.AddFixedWindowLimiter("LoginLimiter", opt =>
     {
         opt.PermitLimit = 5;
@@ -159,14 +159,14 @@ builder.Services.AddCors(options =>
     // options.AddPolicy("AllowExtension", policy => { ... });
 
 
-    // Alt domainler iÃ§in (kurumsal.gmk360.com gibi)
+    // Alt domainler iÃƒÂ§in (kurumsal.gmk360.com gibi)
     options.AddPolicy("SubdomainPolicy", policy =>
     {
         policy.WithOrigins(
                 "https://gmk360.com",
                 "https://www.gmk360.com",
                 "https://kurumsal.gmk360.com",
-                "https://*.gmk360.com"  // TÃ¼m alt domainler
+                "https://*.gmk360.com"  // TÃƒÂ¼m alt domainler
               )
               .SetIsOriginAllowedToAllowWildcardSubdomains()
               .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH")
@@ -174,7 +174,7 @@ builder.Services.AddCors(options =>
               .AllowCredentials();
     });
 
-    // Development iÃ§in
+    // Development iÃƒÂ§in
     if (builder.Environment.IsDevelopment())
     {
         options.AddPolicy("AllowDevelopment", policy =>
@@ -189,10 +189,10 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddControllersWithViews(options => 
     {
-        // GÃ¼venlik: CSRF (Cross-Site Request Forgery) KorumasÄ± tÃ¼m POST istekleri iÃ§in zorunlu
+        // GÃƒÂ¼venlik: CSRF (Cross-Site Request Forgery) KorumasÃ„Â± tÃƒÂ¼m POST istekleri iÃƒÂ§in zorunlu
         options.Filters.Add(new Microsoft.AspNetCore.Mvc.AutoValidateAntiforgeryTokenAttribute());
         
-        // Zorunlu KayÄ±t Tamamlama (Onboarding) Filtresi
+        // Zorunlu KayÃ„Â±t Tamamlama (Onboarding) Filtresi
         options.Filters.Add(typeof(GMK360.Web.Filters.OnboardingRequirementFilter));
     })
     .AddRazorRuntimeCompilation()
@@ -267,8 +267,8 @@ if (locOptions != null)
     app.UseRequestLocalization(locOptions.Value);
 }
 
-// GÃ¼venlik Middleware'leri
-app.UseRateLimiter(); // Rate limiter devreye alÄ±nÄ±yor
+// GÃƒÂ¼venlik Middleware'leri
+app.UseRateLimiter(); // Rate limiter devreye alÃ„Â±nÃ„Â±yor
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -290,12 +290,12 @@ using (var scope = app.Services.CreateScope())
     catch (Exception ex)
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Roller ve Admin hesabÄ± oluÅŸturulurken bir hata meydana geldi.");
+        logger.LogError(ex, "Roller ve Admin hesabÃ„Â± oluÃ…Å¸turulurken bir hata meydana geldi.");
     }
 }
 
 
-// SEO Dostu YÃ¶nlendirmeler (Slug tabanlÄ±)
+// SEO Dostu YÃƒÂ¶nlendirmeler (Slug tabanlÃ„Â±)
 
 app.MapDynamicControllerRoute<GMK360.Web.Routing.SeoRouteTransformer>(
     "{city}/{district}/{seoSlug}");
@@ -315,6 +315,11 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
 
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<GMK360.Data.Contexts.ApplicationDbContext>();
+    try { dbContext.Database.Migrate(); } catch { }
+}
 app.Run();
 
 
@@ -322,5 +327,9 @@ app.Run();
 
 
 
+
+
+
+// Trigger Rebuild
 
 

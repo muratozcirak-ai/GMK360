@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using GMK360.Core.Entities.Identity;
 
 namespace GMK360.Core.Entities
@@ -14,7 +14,8 @@ namespace GMK360.Core.Entities
         Architect,
         Engineer,
         Accountant,
-        Purchasing
+        Purchasing,
+        Driver
     }
 
     public class AgencyConsultant : BaseEntity

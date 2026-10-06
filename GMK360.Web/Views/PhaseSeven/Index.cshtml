@@ -37,7 +37,27 @@
         </div>
     </div>
 
-    <div class="accordion border-0 shadow-sm rounded-4 overflow-hidden" id="phaseOneAccordion">
+    
+  @if (ViewBag.LinkedDocs != null && ((IEnumerable<GMK360.Core.Entities.Construction.ProjectLegalDocument>)ViewBag.LinkedDocs).Any())
+  {
+      <div class="alert alert-warning border-warning shadow-sm mb-4 rounded-4">
+          <h5 class="fw-bold text-dark mb-3"><i class="bi bi-exclamation-triangle-fill text-warning me-2 fs-4"></i> DİKKAT: Bu Aşamaya Bağlı Ön Koşul Evrakları (Faz 0)</h5>
+          <div class="list-group shadow-sm rounded-3">
+              @foreach(var doc in (IEnumerable<GMK360.Core.Entities.Construction.ProjectLegalDocument>)ViewBag.LinkedDocs)
+              {
+                  <a href="/PhaseZero/Index/@ViewBag.ProjectId" class="list-group-item list-group-item-action list-group-item-warning border-warning d-flex justify-content-between align-items-center">
+                      <div>
+                          <i class="bi bi-file-earmark-text me-2"></i> <span class="fw-bold text-dark fs-6">@doc.DocumentName</span>
+                      </div>
+                      <span class="badge @(doc.Status == "Onaylandı" ? "bg-success" : "bg-danger") rounded-pill fs-6 px-3">@doc.Status</span>
+                  </a>
+              }
+          </div>
+          <small class="d-block mt-3 text-dark fw-semibold"><i class="bi bi-info-circle-fill me-1"></i> Not: Yukarıdaki evrakların süreci (Faz 0'da) tamamlanmadan bu aşamadaki imalatlara başlanması yasal risk oluşturur.</small>
+      </div>
+  }
+
+      <div class="accordion border-0 shadow-sm rounded-4 overflow-hidden" id="phaseOneAccordion">
         @foreach (var cat in subCategories)
         {
             var catItems = Model.Where(m => m.SubCategory == cat).ToList();
@@ -49,8 +69,8 @@
                 <h2 class="accordion-header" id="@headerId">
                     <button class="accordion-button bg-white text-dark fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId">
                         <div class="d-flex justify-content-between w-100 pe-3">
-                            <span><i class="bi bi-diagram-2 text-primary me-2"></i> @cat</span>
-                            <span class="text-success">@catTotal.ToString("N2") ₺</span>
+                            <span class="fw-bold fs-5 text-dark"><i class="bi bi-diagram-2 text-primary me-2"></i> @cat</span>
+                            <span class="badge bg-white text-primary border border-primary rounded-pill px-3 py-1 shadow-sm fs-6">Toplam: @catTotal.ToString("N2") ₺</span>
                         </div>
                     </button>
                 </h2>
@@ -167,6 +187,25 @@
                         </select>
                     </div>
                 </div>
+                
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">Tahmini Malzeme (₺)</label>
+                        <input type="number" step="0.01" name="estimatedMaterialCost" id="manageMaterial" class="form-control" oninput="calcTotal()" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">Tahmini İşçilik (₺)</label>
+                        <input type="number" step="0.01" name="estimatedLaborCost" id="manageLabor" class="form-control" oninput="calcTotal()" />
+                    </div>
+                </div>
+                <script>
+                    function calcTotal() {
+                        let m = parseFloat(document.getElementById('manageMaterial').value) || 0;
+                        let l = parseFloat(document.getElementById('manageLabor').value) || 0;
+                        document.getElementById('managePrice').value = m + l;
+                    }
+                </script>
+
                 <div class="mb-3">
                     <label class="form-label fw-bold text-primary">Tahmini Toplam Tutar (₺)</label>
                     <div class="input-group">
@@ -230,6 +269,25 @@
                         </select>
                     </div>
                 </div>
+                
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">Tahmini Malzeme (₺)</label>
+                        <input type="number" step="0.01" name="estimatedMaterialCost" id="manageMaterial" class="form-control" oninput="calcTotal()" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">Tahmini İşçilik (₺)</label>
+                        <input type="number" step="0.01" name="estimatedLaborCost" id="manageLabor" class="form-control" oninput="calcTotal()" />
+                    </div>
+                </div>
+                <script>
+                    function calcTotal() {
+                        let m = parseFloat(document.getElementById('manageMaterial').value) || 0;
+                        let l = parseFloat(document.getElementById('manageLabor').value) || 0;
+                        document.getElementById('managePrice').value = m + l;
+                    }
+                </script>
+
                 <div class="mb-3">
                     <label class="form-label fw-bold text-primary">Tahmini Toplam Tutar (Opsiyonel)</label>
                     <div class="input-group">
@@ -250,10 +308,12 @@
 <script>
     
 
-    function openManageModal(id, title, price, desc, qty, unit) {
+    function openManageModal(id, title, price, desc, qty, unit, mat, lab) {
         document.getElementById('manageId').value = id;
         document.getElementById('manageTitle').innerText = title;
-        document.getElementById('managePrice').value = price;
+        document.getElementById('managePrice').value = (price === '0' || price === '0,00' || price === '0.00') ? '' : price;
+        document.getElementById('manageMaterial').value = (mat === 'null' || mat === '0' || mat === '') ? '' : mat;
+        document.getElementById('manageLabor').value = (lab === 'null' || lab === '0' || lab === '') ? '' : lab;
         document.getElementById('manageDesc').value = desc !== 'null' ? desc : '';
         document.getElementById('manageQty').value = qty !== 'null' ? qty : '1';
         document.getElementById('manageUnit').value = unit !== 'null' && unit !== '' ? unit : 'Götürü';

@@ -1,4 +1,4 @@
-﻿﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 
 using Microsoft.AspNetCore.Identity;
 
@@ -62,14 +62,12 @@ namespace GMK360.Web.Controllers
 
 
 
-    [Authorize(Roles = "InsaatFirmasi,Admin,Corporate")]
-
+    [Authorize(Roles = "InsaatFirmasi,Admin,Corporate,CompanyEmployee")]
     public class ConstructionProjectController : Controller
 
     {
 
         private readonly ApplicationDbContext _context;
-
         private readonly UserManager<ApplicationUser> _userManager;
 
 
@@ -81,9 +79,7 @@ namespace GMK360.Web.Controllers
         public ConstructionProjectController(ApplicationDbContext context, UserManager<ApplicationUser> userManager, IWebHostEnvironment hostEnvironment)
 
         {
-
             _context = context;
-
             _userManager = userManager;
 
             _hostEnvironment = hostEnvironment;
@@ -114,9 +110,20 @@ namespace GMK360.Web.Controllers
 
         // GET: ConstructionProject
 
-        public async Task<IActionResult> Index()
-
+                private async Task<GMK360.Core.Entities.AgencyConsultant?> GetCurrentStaffAsync()
         {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return null;
+            return await _context.AgencyConsultants.FirstOrDefaultAsync(c => c.UserId == user.Id && c.IsActive);
+        }
+
+                public async Task<IActionResult> Index()
+        {
+            var staff = await GetCurrentStaffAsync();
+            if (staff != null && staff.Role == GMK360.Core.Entities.AgencyRole.Driver)
+            {
+                return Forbid(); // ÅofÃ¶r ÅŸantiyeleri gÃ¶remez!
+            }
 
             var agencyId = await GetUserAgencyIdAsync();
 
@@ -283,6 +290,7 @@ namespace GMK360.Web.Controllers
         }
 
 
+        [Authorize(Roles = "InsaatFirmasi,Admin,Corporate")]
         public async Task<IActionResult> Create(int? id = null) { 
 
             int? projectId = id; 
@@ -474,14 +482,14 @@ namespace GMK360.Web.Controllers
 
                 var agencyId = await GetUserAgencyIdAsync();
 
-                if (agencyId == null) return Json(new { success = false, message = "Yetkisiz eriâ”¼ÅŸim." });
+                if (agencyId == null) return Json(new { success = false, message = "Yetkisiz eriÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â¼ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸im." });
 
 
 
-                if (model.DraftProjectId <= 0) return Json(new { success = false, message = "Proje ID bulunamadÄ±. LÃ¼tfen Ã¶nce projeyi baÅŸlatÄ±n." });
+                if (model.DraftProjectId <= 0) return Json(new { success = false, message = "Proje ID bulunamadÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±. LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼tfen ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶nce projeyi baÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸latÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±n." });
                 var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == model.DraftProjectId);
-                if (project == null) return Json(new { success = false, message = "Proje bulunamadÄ±." });
-                if (project.IsDataLocked) return Json(new { success = false, message = "Bu proje bÃ¼tÃ§e kontrolÃ¼ iÃ§in kilitlenmiÅŸtir, veriler deÄŸiÅŸtirilemez." });
+                if (project == null) return Json(new { success = false, message = "Proje bulunamadÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±." });
+                if (project.IsDataLocked) return Json(new { success = false, message = "Bu proje bÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼tÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§e kontrolÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ iÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§in kilitlenmiÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸tir, veriler deÃƒÆ’Ã¢â‚¬ÂÃƒâ€¦Ã‚Â¸iÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸tirilemez." });
 
                 // Update fields
                 project.Description = model.Description;
@@ -534,14 +542,14 @@ namespace GMK360.Web.Controllers
                     {
                         AgencyId = agencyId.Value,
                         ProjectId = project.Id,
-                        Title = "Mevcut Durum GÃ¶rseli (Ä°lk Hali)",
-                        Category = "Bina GÃ¶rselleri",
+                        Title = "Mevcut Durum GÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶rseli (ÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â°lk Hali)",
+                        Category = "Bina GÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶rselleri",
                         SourceModule = "Construction",
                         DocumentUrl = $"/uploads/Agency_{agencyId.Value}/Project_{project.Id}/images/{uniqueFileName}",
                         FileName = Path.GetFileName(model.CurrentStateImageFile.FileName),
                         FileExtension = Path.GetExtension(model.CurrentStateImageFile.FileName),
                         UploadDate = DateTime.UtcNow,
-                        Status = "TamamlandÄ±"
+                        Status = "TamamlandÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±"
                     };
                     _context.DocumentArchives.Add(archive);
                     project.CoverImageUrl = archive.DocumentUrl;
@@ -566,7 +574,7 @@ namespace GMK360.Web.Controllers
                         FileName = Path.GetFileName(model.TapuDocumentFile.FileName),
                         FileExtension = Path.GetExtension(model.TapuDocumentFile.FileName),
                         UploadDate = DateTime.UtcNow,
-                        Status = "TamamlandÄ±"
+                        Status = "TamamlandÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±"
                     };
                     _context.DocumentArchives.Add(archive);
                     project.CoverImageUrl = archive.DocumentUrl;
@@ -594,11 +602,11 @@ namespace GMK360.Web.Controllers
 
             try {
 
-                if (model.DraftProjectId == 0) return Json(new { success = false, message = "Proje ID bulunamadâ”€â–’." });
+                if (model.DraftProjectId == 0) return Json(new { success = false, message = "Proje ID bulunamadÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢." });
 
                 var project = await _context.ConstructionProjects.Include(p => p.Blocks).FirstOrDefaultAsync(p => p.Id == model.DraftProjectId);
 
-                if (project == null) return Json(new { success = false, message = "Proje bulunamadâ”€â–’." });
+                if (project == null) return Json(new { success = false, message = "Proje bulunamadÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢." });
 
 
 
@@ -633,7 +641,7 @@ namespace GMK360.Web.Controllers
                         var existingBlock = existingBlocks.FirstOrDefault(eb => eb.BlockName == b.BlockName && eb.IsExistingBuilding == b.IsExistingBuilding);
                         if (existingBlock != null)
                         {
-                            // Varsa SADECE GÜNCELLE
+                            // Varsa SADECE GÃƒÆ’Ã…â€œNCELLE
                             existingBlock.BaseArea = b.BaseArea;
                             existingBlock.BasementFloors = b.BasementFloors;
                             existingBlock.TotalFloors = b.TotalFloors;
@@ -647,7 +655,7 @@ namespace GMK360.Web.Controllers
                         }
                         else
                         {
-                            // Yoksa YENİ EKLE
+                            // Yoksa YENÃƒâ€Ã‚Â° EKLE
                             var building = new GMK360.Core.Entities.Building
                             {
                                 Name = project.Name + " - " + b.BlockName,
@@ -709,7 +717,7 @@ namespace GMK360.Web.Controllers
                 _context.CrmContacts.Add(crmContact);
                 await _context.SaveChangesAsync();
 
-                // Ä°nÅŸaat Rehberine de ekle (AgencyPhonebook)
+                // ÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â°nÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸aat Rehberine de ekle (AgencyPhonebook)
                 var agencyId = await GetUserAgencyIdAsync();
                 int actualAgencyId = agencyId ?? 1;
                   if (true)
@@ -720,7 +728,7 @@ namespace GMK360.Web.Controllers
                         Name = $"{crmContact.FirstName} {crmContact.LastName}".Trim(),
                         PhoneNumber = phone ?? "",
                         Email = email,
-                        ContactType = 7, // 7 = MÃ¼ÅŸteri & Kat Maliki
+                        ContactType = 7, // 7 = MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸teri & Kat Maliki
                         IsRegistered = false
                     };
                     _context.AgencyPhonebooks.Add(phonebook);
@@ -765,7 +773,7 @@ namespace GMK360.Web.Controllers
 
                 {
 
-                    TempData["ErrorMessage"] = "Proje ID bulunamadâ”€â–’. Lâ”œâ•tfen iâ”¼ÅŸleminizi baâ”¼ÅŸtan yapâ”€â–’n.";
+                    TempData["ErrorMessage"] = "Proje ID bulunamadÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢. LÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Âtfen iÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â¼ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸leminizi baÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â¼ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸tan yapÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢n.";
 
                     return RedirectToAction(nameof(Index));
 
@@ -776,11 +784,11 @@ namespace GMK360.Web.Controllers
                 var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == model.DraftProjectId);
                 if (project == null)
                 {
-                    TempData["ErrorMessage"] = "Proje bulunamadÄ±.";
+                    TempData["ErrorMessage"] = "Proje bulunamadÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±.";
                     return RedirectToAction(nameof(Index));
                 }
 
-                // Mevcut kayÄ±tlarÄ± temizle (Geri dÃ¶nÃ¼p gÃ¼ncelleyenler iÃ§in mÃ¼kemmel senkronizasyon)
+                // Mevcut kayÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±tlarÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â± temizle (Geri dÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼p gÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ncelleyenler iÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§in mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼kemmel senkronizasyon)
                 var existingOwners = await _context.ProjectOwners.Where(po => po.ConstructionProjectId == project.Id).ToListAsync();
                 if(existingOwners.Any()) {
                     _context.ProjectOwners.RemoveRange(existingOwners);
@@ -803,7 +811,7 @@ namespace GMK360.Web.Controllers
                         _context.CrmContacts.Add(crmContact);
                         await _context.SaveChangesAsync();
 
-                        // Ä°nÅŸaat Rehberine de ekle (AgencyPhonebook)
+                        // ÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â°nÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸aat Rehberine de ekle (AgencyPhonebook)
                         int actualAgencyId = agencyId ?? 1;
                   if (true)
                         {
@@ -813,7 +821,7 @@ namespace GMK360.Web.Controllers
                                 Name = $"{crmContact.FirstName} {crmContact.LastName}".Trim(),
                                 PhoneNumber = owner.PhoneNumber ?? "",
                                 Email = owner.Email,
-                                ContactType = 7, // 7 = MÃ¼ÅŸteri & Kat Maliki
+                                ContactType = 7, // 7 = MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸teri & Kat Maliki
                                 IsRegistered = false
                             };
                             _context.AgencyPhonebooks.Add(phonebook);
@@ -844,7 +852,7 @@ namespace GMK360.Web.Controllers
 
 
 
-                TempData["SuccessMessage"] = "â”¼Åantiye baâ”¼ÅŸarâ”€â–’yla baâ”¼ÅŸlatâ”€â–’ldâ”€â–’ ve bloklar oluâ”¼ÅŸturuldu.";
+                TempData["SuccessMessage"] = "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â¼ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Âantiye baÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â¼ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸arÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢yla baÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â¼ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸latÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢ldÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢ ve bloklar oluÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â¼ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸turuldu.";
 
                 return RedirectToAction(nameof(Details), new { id = project.Id });
 
@@ -854,7 +862,7 @@ namespace GMK360.Web.Controllers
 
             {
 
-                TempData["ErrorMessage"] = "Bir hata oluâ”¼ÅŸtu: " + ex.Message;
+                TempData["ErrorMessage"] = "Bir hata oluÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â¼ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸tu: " + ex.Message;
 
                 return RedirectToAction(nameof(Index));
 
@@ -1026,7 +1034,7 @@ namespace GMK360.Web.Controllers
 
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = "Bina iskeleti (kat yapÄ±larÄ±) baÅŸarÄ±yla gÃ¼ncellendi.";
+                TempData["SuccessMessage"] = "Bina iskeleti (kat yapÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±larÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±) baÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸arÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±yla gÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ncellendi.";
 
             }
 
@@ -1096,7 +1104,7 @@ namespace GMK360.Web.Controllers
 
 
 
-                // --- SOSYAL DONATILAR VE DIÅ ALANLAR (AMENITIES) ---
+                // --- SOSYAL DONATILAR VE DIÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â ALANLAR (AMENITIES) ---
 
                 [HttpPost]
 
@@ -1216,7 +1224,7 @@ namespace GMK360.Web.Controllers
 
 
 
-            TempData["SuccessMessage"] = "Yeni Sosyal DonatÄ± / AÃ§Ä±k Alan eklendi.";
+            TempData["SuccessMessage"] = "Yeni Sosyal DonatÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â± / AÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±k Alan eklendi.";
 
             return RedirectToAction(nameof(Amenities), new { projectId = projectId, isExisting = isExisting });
 
@@ -1240,7 +1248,7 @@ namespace GMK360.Web.Controllers
 
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = "AÃ§Ä±k alan baÅŸarÄ±yla silindi.";
+                TempData["SuccessMessage"] = "AÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±k alan baÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸arÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±yla silindi.";
 
             }
 
@@ -1276,7 +1284,7 @@ namespace GMK360.Web.Controllers
 
 
 
-        // --- DAIRE TÄ°PLERÄ° (ÅABLONLAR) ---
+        // --- DAIRE TÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â°PLERÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â° (ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚ÂABLONLAR) ---
 
         
 
@@ -1346,7 +1354,7 @@ namespace GMK360.Web.Controllers
 
 
 
-            TempData["SuccessMessage"] = "Yeni Daire Tipi Åablonu baÅŸarÄ±yla oluÅŸturuldu.";
+            TempData["SuccessMessage"] = "Yeni Daire Tipi ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Âablonu baÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸arÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±yla oluÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸turuldu.";
 
             return RedirectToAction(nameof(Templates), new { projectId = projectId });
 
@@ -1414,7 +1422,7 @@ namespace GMK360.Web.Controllers
 
 
 
-            TempData["SuccessMessage"] = "Åablona yeni alan eklendi.";
+            TempData["SuccessMessage"] = "ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Âablona yeni alan eklendi.";
 
             return RedirectToAction(nameof(TemplateSpaces), new { templateId = templateId });
 
@@ -1438,7 +1446,7 @@ namespace GMK360.Web.Controllers
 
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = "Alan ÅŸablondan silindi.";
+                TempData["SuccessMessage"] = "Alan ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸ablondan silindi.";
 
             }
 
@@ -2423,7 +2431,7 @@ namespace GMK360.Web.Controllers
 
                 IsCustom = true,
 
-                Status = "Onaylandı"
+                Status = "OnaylandÃƒâ€Ã‚Â±"
 
             };
 
@@ -3504,7 +3512,7 @@ namespace GMK360.Web.Controllers
             {
                 project.Status = (GMK360.Core.Entities.Construction.ProjectStatus)statusObj;
                 await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = "Proje durumu başarıyla güncellendi.";
+                TempData["SuccessMessage"] = "Proje durumu baÃƒâ€¦Ã…Â¸arÃƒâ€Ã‚Â±yla gÃƒÆ’Ã‚Â¼ncellendi.";
             }
             return RedirectToAction("Details", new { id = id });
         }
@@ -3543,7 +3551,7 @@ namespace GMK360.Web.Controllers
 
             if (project == null) return NotFound();
 
-            // Sadece bütçe sayfasının çökmemesi için temel modeli gönderiyoruz.
+            // Sadece bÃƒÆ’Ã‚Â¼tÃƒÆ’Ã‚Â§e sayfasÃƒâ€Ã‚Â±nÃƒâ€Ã‚Â±n ÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â¶kmemesi iÃƒÆ’Ã‚Â§in temel modeli gÃƒÆ’Ã‚Â¶nderiyoruz.
             return View(project);
         }
 
@@ -3569,13 +3577,13 @@ namespace GMK360.Web.Controllers
             _context.ConstructionBudgetItems.Add(item);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Fiş/Gider başarıyla bütçeye eklendi.";
+            TempData["SuccessMessage"] = "FiÃƒâ€¦Ã…Â¸/Gider baÃƒâ€¦Ã…Â¸arÃƒâ€Ã‚Â±yla bÃƒÆ’Ã‚Â¼tÃƒÆ’Ã‚Â§eye eklendi.";
             return RedirectToAction(nameof(BudgetDashboard), new { id = projectId });
         }
 
 
 
-        // --- YENİ PAYDAŞ (GÖLGE KULLANICI) EKLEME ---
+        // --- YENÃƒâ€Ã‚Â° PAYDAÃƒâ€¦Ã‚Â (GÃƒÆ’Ã¢â‚¬â€œLGE KULLANICI) EKLEME ---
         [HttpPost]
         public async Task<IActionResult> AddStakeholder(int projectId, int role, decimal? sharePercentage, string firstName, string lastName, string phone, string email)
         {
@@ -3584,7 +3592,7 @@ namespace GMK360.Web.Controllers
                 var agencyId = await GetUserAgencyIdAsync();
                 if (agencyId == null) 
                 {
-                    TempData["ErrorMessage"] = "Yetki Hatası: Şantiye yöneticisi veya admin yetkiniz bulunamadı.";
+                    TempData["ErrorMessage"] = "Yetki HatasÃƒâ€Ã‚Â±: Ãƒâ€¦Ã‚Âantiye yÃƒÆ’Ã‚Â¶neticisi veya admin yetkiniz bulunamadÃƒâ€Ã‚Â±.";
                     return RedirectToAction("Details", new { id = projectId });
                 }
 
@@ -3612,7 +3620,7 @@ namespace GMK360.Web.Controllers
                     var result = await _userManager.CreateAsync(existingUser, "Shadow.User2026!");
                     if (!result.Succeeded)
                     {
-                        TempData["ErrorMessage"] = "Gölge kullanıcı oluşturulurken hata oluştu.";
+                        TempData["ErrorMessage"] = "GÃƒÆ’Ã‚Â¶lge kullanÃƒâ€Ã‚Â±cÃƒâ€Ã‚Â± oluÃƒâ€¦Ã…Â¸turulurken hata oluÃƒâ€¦Ã…Â¸tu.";
                         return RedirectToAction("Details", new { id = projectId });
                     }
                     await _userManager.AddToRoleAsync(existingUser, "Musteri");
@@ -3629,24 +3637,24 @@ namespace GMK360.Web.Controllers
                         UserId = existingUser.Id,
                         Role = (GMK360.Core.Entities.Construction.StakeholderRole)role,
                         SharePercentage = (role == 1) ? sharePercentage : null,
-                        Notes = "Firma tarafından davet edildi (Gölge Onay Bekliyor)"
+                        Notes = "Firma tarafÃƒâ€Ã‚Â±ndan davet edildi (GÃƒÆ’Ã‚Â¶lge Onay Bekliyor)"
                     };
                     
                     _context.ProjectStakeholders.Add(stakeholder);
                     await _context.SaveChangesAsync();
                     
-                    TempData["SuccessMessage"] = $"{firstName} {lastName} projeye başarıyla eklendi! Sisteme giriş yapması için SMS gönderimi tetiklendi.";
+                    TempData["SuccessMessage"] = $"{firstName} {lastName} projeye baÃƒâ€¦Ã…Â¸arÃƒâ€Ã‚Â±yla eklendi! Sisteme giriÃƒâ€¦Ã…Â¸ yapmasÃƒâ€Ã‚Â± iÃƒÆ’Ã‚Â§in SMS gÃƒÆ’Ã‚Â¶nderimi tetiklendi.";
                 }
                 else
                 {
-                    TempData["ErrorMessage"] = "Bu kişi zaten bu projenin paydaşı!";
+                    TempData["ErrorMessage"] = "Bu kiÃƒâ€¦Ã…Â¸i zaten bu projenin paydaÃƒâ€¦Ã…Â¸Ãƒâ€Ã‚Â±!";
                 }
 
                 return RedirectToAction("Details", new { id = projectId });
             }
             catch (Exception ex)
             {
-                TempData["ErrorMessage"] = "Sistem Hatası: Lütfen bilgileri kontrol edin.";
+                TempData["ErrorMessage"] = "Sistem HatasÃƒâ€Ã‚Â±: LÃƒÆ’Ã‚Â¼tfen bilgileri kontrol edin.";
                 return RedirectToAction("Details", new { id = projectId });
             }
         }
@@ -3660,7 +3668,7 @@ namespace GMK360.Web.Controllers
                 var st = await _context.ProjectStakeholders.FirstOrDefaultAsync(s => s.Id == stakeholderId);
                 if (st == null)
                 {
-                    TempData["ErrorMessage"] = "Paydaş bulunamadı.";
+                    TempData["ErrorMessage"] = "PaydaÃƒâ€¦Ã…Â¸ bulunamadÃƒâ€Ã‚Â±.";
                     return RedirectToAction("Index");
                 }
                 
@@ -3670,12 +3678,12 @@ namespace GMK360.Web.Controllers
                 
                 await _context.SaveChangesAsync();
                 
-                TempData["SuccessMessage"] = "Paydaş bilgileri başarıyla güncellendi.";
+                TempData["SuccessMessage"] = "PaydaÃƒâ€¦Ã…Â¸ bilgileri baÃƒâ€¦Ã…Â¸arÃƒâ€Ã‚Â±yla gÃƒÆ’Ã‚Â¼ncellendi.";
                 return RedirectToAction("Details", new { id = projectId });
             }
             catch (System.Exception ex)
             {
-                TempData["ErrorMessage"] = "Paydaş düzenlenirken hata oluştu: " + ex.Message;
+                TempData["ErrorMessage"] = "PaydaÃƒâ€¦Ã…Â¸ dÃƒÆ’Ã‚Â¼zenlenirken hata oluÃƒâ€¦Ã…Â¸tu: " + ex.Message;
                 return projectId > 0 ? RedirectToAction("Details", new { id = projectId }) : RedirectToAction("Index");
             }
         }
@@ -3725,7 +3733,7 @@ namespace GMK360.Web.Controllers
                 await _context.SaveChangesAsync();
             }
 
-            TempData["Success"] = $"Başarıyla {newItems.Count} kalem havuza göre senkronize edildi!";
+            TempData["Success"] = $"BaÃƒâ€¦Ã…Â¸arÃƒâ€Ã‚Â±yla {newItems.Count} kalem havuza gÃƒÆ’Ã‚Â¶re senkronize edildi!";
             return RedirectToAction("Details", new { id = projectId });
         }
 

@@ -108,13 +108,14 @@ namespace GMK360.Web.Controllers
                 documentFee = doc.DocumentFee ?? 0,
                 additionalCost = doc.AdditionalCost ?? 0,
                 originalLocation = doc.OriginalLocation,
+                linkedPhaseCategory = doc.LinkedPhaseCategory,
                 filePath = doc.FilePath
             });
         }
 
         [HttpPost("PhaseZero/UpdateDoc")]
         [IgnoreAntiforgeryToken]
-        public async Task<IActionResult> UpdateDoc(int id, string status, string assignedUserId, string institutionContact, decimal? documentFee, decimal? additionalCost, string originalLocation, Microsoft.AspNetCore.Http.IFormFile uploadedFile)
+        public async Task<IActionResult> UpdateDoc(int id, string status, string assignedUserId, string institutionContact, decimal? documentFee, decimal? additionalCost, string originalLocation, GMK360.Core.Entities.Construction.BudgetPhaseCategory? linkedPhaseCategory, Microsoft.AspNetCore.Http.IFormFile uploadedFile)
         {
             var doc = await _context.ProjectLegalDocuments.FindAsync(id);
             if (doc == null) return NotFound();
@@ -127,6 +128,7 @@ namespace GMK360.Web.Controllers
             doc.DocumentFee = documentFee;
             doc.AdditionalCost = additionalCost;
             doc.OriginalLocation = originalLocation;
+            doc.LinkedPhaseCategory = linkedPhaseCategory;
 
             if (uploadedFile != null && uploadedFile.Length > 0)
             {

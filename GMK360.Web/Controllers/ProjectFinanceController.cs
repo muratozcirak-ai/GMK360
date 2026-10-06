@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -9,6 +9,7 @@ using System.Collections.Generic;
 
 namespace GMK360.Web.Controllers
 {
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "InsaatFirmasi,Admin,Corporate")]
     public class ProjectFinanceController : Controller
     {
         private readonly ApplicationDbContext _context;
