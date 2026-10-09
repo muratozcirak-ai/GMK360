@@ -1,34 +1,21 @@
-﻿import io
+﻿import codecs
 import re
 
-# UPDATE CONTROLLER
-filepath = r'GMK360.Web\Controllers\PhaseZeroController.cs'
-with io.open(filepath, 'r', encoding='utf-8') as f:
+path = 'GMK360.Web/Controllers/PhaseZeroController.cs'
+with codecs.open(path, 'r', 'utf-8-sig') as f:
     content = f.read()
 
-injection = """            ViewBag.GlobalRules = await _context.ModuleDocumentRules
-                .Include(r => r.Prerequisites)
-                .ThenInclude(p => p.PrerequisiteTemplate)
-                .Where(r => r.TargetModule == "Construction")
-                .ToListAsync();
+# Update signature
+content = content.replace(
+    'public async Task<IActionResult> UpdateDoc(int id, string status, string assignedUserId, string institutionContact, decimal? documentFee, decimal? additionalCost, string originalLocation, Microsoft.AspNetCore.Http.IFormFile uploadedFile)',
+    'public async Task<IActionResult> UpdateDoc(int id, string status, string assignedUserId, string institutionContact, decimal? documentFee, decimal? additionalCost, string originalLocation, GMK360.Core.Entities.Construction.BudgetPhaseCategory? linkedPhaseCategory, Microsoft.AspNetCore.Http.IFormFile uploadedFile)'
+)
 
-            // Fetch quote requests for these documents to show status
-            var docIds = docs.Select(d => d.Id).ToList();
-            var quoteRequests = await _context.B2BQuoteRequests
-                .Include(q => q.Invites)
-                .Where(q => q.SourceModule == "PhaseZeroDocument" && docIds.Contains(q.SourceReferenceId))
-                .ToListAsync();
-            
-            ViewBag.Quotes = quoteRequests;
-"""
+# Update doc assignment
+content = content.replace(
+    'doc.OriginalLocation = originalLocation;',
+    'doc.OriginalLocation = originalLocation;\n            doc.LinkedPhaseCategory = linkedPhaseCategory;'
+)
 
-content = content.replace("""            ViewBag.GlobalRules = await _context.ModuleDocumentRules
-                .Include(r => r.Prerequisites)
-                .ThenInclude(p => p.PrerequisiteTemplate)
-                .Where(r => r.TargetModule == "Construction")
-                .ToListAsync();""", injection)
-
-with io.open(filepath, 'w', encoding='utf-8') as f:
+with codecs.open(path, 'w', 'utf-8-sig') as f:
     f.write(content)
-
-print("Updated PhaseZeroController")

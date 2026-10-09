@@ -1,12 +1,10 @@
-﻿import codecs
-
-path = 'GMK360.Web/Views/SubcontractorContract/Create.cshtml'
-with codecs.open(path, 'r', 'iso-8859-9') as f:
+﻿with open("GMK360.Web/Controllers/ConstructionProjectController.cs", "r", encoding="utf-8") as f:
     content = f.read()
 
-content = content.replace('IEnumerable<GMK360.Core.Entities.B2B.B2BNetworkContact>', 'IEnumerable<GMK360.Core.Entities.Construction.AgencyPhonebook>')
-content = content.replace('@sub.CompanyName', '@sub.Name')
+import re
+# Replace the garbage string
+content = re.sub(r'TempData\["SuccessMessage"\] = "ÃƒÆ’Ã†â€™.*?uruldu\.";', 'TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";', content)
 
-with codecs.open(path, 'w', 'utf-8-sig') as f:
+with open("GMK360.Web/Controllers/ConstructionProjectController.cs", "w", encoding="utf-8") as f:
     f.write(content)
-print('Fixed encoding properly!')
+print("Fixed encoding string in CreateWizard")

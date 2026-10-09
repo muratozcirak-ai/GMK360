@@ -1,50 +1,139 @@
-﻿import codecs
-import re
-
-path = 'GMK360.Web/Views/ConstructionProject/Details.cshtml'
-with codecs.open(path, 'r', 'utf-8-sig') as f:
+﻿with open("GMK360.Web/Views/ConstructionProject/Details.cshtml", "r", encoding="utf-8") as f:
     content = f.read()
 
-target = r'<!-- BARIYER \(FAZ 0\) UYARISI YERINE GERCEK TABLO -->.*?<!-- ŞANTİYE ÖZEL MAL KABUL BÖLÜMÜ -->'
+import re
 
-replacement = '''<!-- FAZ 0 ÖZET KARTI -->
-  <div class="card border-0 shadow-sm rounded-4 mb-4" style="background: linear-gradient(135deg, #fff5f5 0%, #fff 100%);">
-      <div class="card-body p-4 d-flex justify-content-between align-items-center">
-          <div>
-              <h5 class="fw-bold text-danger mb-1"><i class="bi bi-file-earmark-lock-fill fs-4 me-2"></i> FAZ 0: Yasal Evrak, İzin ve Sözleşme Takibi</h5>
-              <p class="text-muted mb-0 ms-4 ps-2">Projenin resmi bürokrasisi, önkoşullar, ruhsatlar ve taşeron ihale araştırmaları bu masadan yönetilmektedir.</p>
-          </div>
-          <div class="text-end">
-              <a href="/PhaseZero/Index/@Model.Id" class="btn btn-danger fw-bold rounded-pill shadow-sm px-4">
-                  <i class="bi bi-rocket-takeoff me-2"></i> Faz 0 İhale Masasına Git
-              </a>
-          </div>
-      </div>
-  </div>
+new_render = r"""@if (Model.Blocks != null && Model.Blocks.Any())
+{
+    // ONLY get root blocks (ParentBuildingId == null)
+    var rootExistingBlocks = Model.Blocks.Where(b => b.IsExistingBuilding && b.ParentBuildingId == null).ToList();
+    var rootNewBlocks = Model.Blocks.Where(b => !b.IsExistingBuilding && b.ParentBuildingId == null).ToList();
 
-  <!-- ŞANTİYE ÖZEL MAL KABUL BÖLÜMÜ -->'''
+    if (rootExistingBlocks.Any())
+    {
+        <h6 class="fw-bold text-danger border-bottom border-danger pb-2 mb-3 mt-4"><i class="bi bi-building-dash me-2"></i>Eski (Yklacak) Binalar (Paketler)</h6>
+        <div class="row g-4 mb-4">
+            @foreach (var block in rootExistingBlocks)
+            {
+                var children = Model.Blocks.Where(c => c.ParentBuildingId == block.Id).ToList();
+                <div class="col-12">
+                    <div class="card border border-danger border-opacity-25 shadow-sm rounded-4 h-100">
+                        <div class="card-header bg-danger bg-opacity-10 border-0 pt-3 pb-2">
+                            <h5 class="fw-bold text-danger mb-0"><i class="ph ph-intersect me-2"></i>@block.Name @(children.Any() ? "(Ana Yap)" : "(Tekil Yap)")</h5>
+                        </div>
+                        <div class="card-body p-4">
+                            <!-- Main Block Info -->
+                            <div class="row mb-4">
+                                <div class="col-md-4">
+                                    <span class="px-3 py-2 bg-light text-dark border rounded-pill d-inline-block fw-bold"><i class="bi bi-layers me-1"></i>Ana Yap: @(block.TotalFloors ?? 0) Kat</span>
+                                </div>
+                                <div class="col-md-4 text-center">
+                                    <div class="fw-bold fs-5 text-dark"><i class="bi bi-door-open text-danger me-1"></i>@(block.TotalUnits - block.TotalShops) Daire, @(block.TotalShops) Dkkan</div>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <a asp-action="ManageBlock" asp-route-id="@block.Id" class="btn btn-outline-danger rounded-pill btn-sm">
+                                        Ana Yap Plann Ynet <i class="bi bi-arrow-right ms-1"></i>
+                                    </a>
+                                </div>
+                            </div>
+                            
+                            <!-- Sub Blocks (Towers) -->
+                            @if(children.Any())
+                            {
+                                <h6 class="fw-bold text-dark border-bottom pb-2 mb-3"><i class="ph ph-buildings me-2"></i>Alt Yaplar (Kuleler / Bloklar)</h6>
+                                <div class="row g-3">
+                                    @foreach(var child in children)
+                                    {
+                                        <div class="col-md-6 col-lg-4">
+                                            <div class="card border-0 bg-light rounded-3 shadow-sm h-100">
+                                                <div class="card-body p-3">
+                                                    <div class="d-flex justify-content-between mb-2">
+                                                        <h6 class="fw-bold text-dark mb-0">@child.Name</h6>
+                                                        <span class="badge bg-secondary">@(child.TotalFloors ?? 0) Kat</span>
+                                                    </div>
+                                                    <div class="text-muted small mb-3">
+                                                        <i class="bi bi-door-open me-1"></i>@(child.TotalUnits - child.TotalShops) Daire, @(child.TotalShops) Dkkan
+                                                    </div>
+                                                    <a asp-action="ManageBlock" asp-route-id="@child.Id" class="btn btn-sm btn-light border w-100 text-danger fw-bold">
+                                                        Kule/Blok Ynet <i class="bi bi-arrow-right ms-1"></i>
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
 
-# The original has "<!-- ?ANTYE ZEL MAL KABUL BLM -->" encoding problem?
-# Let's search using a regex that handles encoding variations.
-target2 = r'<!-- BARIYER \(FAZ 0\) UYARISI YERINE GERCEK TABLO -->.*?<!-- .*?ANT.*?YE .*?ZEL MAL KABUL B.*?L.*?M.*? -->'
+    if (rootNewBlocks.Any())
+    {
+        <h6 class="fw-bold text-primary border-bottom border-primary pb-2 mb-3 mt-4"><i class="bi bi-building-add me-2"></i>Yeni (Hedef) Binalar (Paketler)</h6>
+        <div class="row g-4 mb-4">
+            @foreach (var block in rootNewBlocks)
+            {
+                var children = Model.Blocks.Where(c => c.ParentBuildingId == block.Id).ToList();
+                <div class="col-12">
+                    <div class="card border border-primary border-opacity-25 shadow-sm rounded-4 h-100">
+                        <div class="card-header bg-primary bg-opacity-10 border-0 pt-3 pb-2">
+                            <h5 class="fw-bold text-primary mb-0"><i class="ph ph-intersect me-2"></i>@block.Name @(children.Any() ? "(Ana Yap)" : "(Tekil Yap)")</h5>
+                        </div>
+                        <div class="card-body p-4">
+                            <!-- Main Block Info -->
+                            <div class="row mb-4">
+                                <div class="col-md-4">
+                                    <span class="px-3 py-2 bg-light text-dark border rounded-pill d-inline-block fw-bold"><i class="bi bi-layers me-1"></i>Ana Yap / Taban: @(block.TotalFloors ?? 0) Kat</span>
+                                </div>
+                                <div class="col-md-4 text-center">
+                                    <div class="fw-bold fs-5 text-dark"><i class="bi bi-door-open text-primary me-1"></i>@(block.TotalUnits - block.TotalShops) Daire, @(block.TotalShops) Dkkan</div>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <a asp-action="ManageBlock" asp-route-id="@block.Id" class="btn btn-outline-primary rounded-pill btn-sm">
+                                        Taban/Baza Plann Ynet <i class="bi bi-arrow-right ms-1"></i>
+                                    </a>
+                                </div>
+                            </div>
+                            
+                            <!-- Sub Blocks (Towers) -->
+                            @if(children.Any())
+                            {
+                                <h6 class="fw-bold text-dark border-bottom pb-2 mb-3"><i class="ph ph-buildings me-2"></i>Alt Yaplar (Kuleler / Bloklar)</h6>
+                                <div class="row g-3">
+                                    @foreach(var child in children)
+                                    {
+                                        <div class="col-md-6 col-lg-4">
+                                            <div class="card border-0 bg-light rounded-3 shadow-sm h-100">
+                                                <div class="card-body p-3">
+                                                    <div class="d-flex justify-content-between mb-2">
+                                                        <h6 class="fw-bold text-dark mb-0">@child.Name</h6>
+                                                        <span class="badge bg-secondary">@(child.TotalFloors ?? 0) Kat</span>
+                                                    </div>
+                                                    <div class="text-muted small mb-3">
+                                                        <i class="bi bi-door-open me-1"></i>@(child.TotalUnits - child.TotalShops) Daire, @(child.TotalShops) Dkkan
+                                                    </div>
+                                                    <a asp-action="ManageBlock" asp-route-id="@child.Id" class="btn btn-sm btn-light border w-100 text-primary fw-bold">
+                                                        Kule/Blok Ynet <i class="bi bi-arrow-right ms-1"></i>
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}"""
 
-replacement2 = '''<!-- FAZ 0 ÖZET KARTI -->
-  <div class="card border-0 shadow-sm rounded-4 mb-4 border-danger border-start border-5">
-      <div class="card-body p-4 d-flex justify-content-between align-items-center">
-          <div>
-              <h5 class="fw-bold text-danger mb-1"><i class="bi bi-file-earmark-lock-fill fs-4 me-2"></i> FAZ 0: Yasal Evrak, İzin ve Sözleşme Takibi</h5>
-              <p class="text-muted mb-0">Projenin resmi bürokrasisi, önkoşullar, ruhsatlar ve taşeron ihale fizibilitesi "İhale Masası" ekranından yönetilmektedir.</p>
-          </div>
-          <div class="text-end">
-              <a href="/PhaseZero/Index/@Model.Id" class="btn btn-danger fw-bold rounded-pill shadow-sm px-4">
-                  <i class="bi bi-rocket-takeoff me-2"></i> Faz 0 İhale Masasına Git
-              </a>
-          </div>
-      </div>
-  </div>
+content = re.sub(r'@if \(Model\.Blocks != null && Model\.Blocks\.Any\(\)\)\s*\{.*?\}\s*\}', new_render, content, flags=re.DOTALL)
 
-  <!-- ŞANTİYE ÖZEL MAL KABUL BÖLÜMÜ -->'''
-content = re.sub(target2, replacement2, content, flags=re.DOTALL)
-
-with codecs.open(path, 'w', 'utf-8-sig') as f:
+with open("GMK360.Web/Views/ConstructionProject/Details.cshtml", "w", encoding="utf-8") as f:
     f.write(content)
+print("Updated Details.cshtml to render hierarchically!")

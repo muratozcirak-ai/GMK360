@@ -1,0 +1,148 @@
+﻿import codecs
+
+path = 'GMK360.Web/Views/Dashboard/PropertyOwner.cshtml'
+
+content = '''@{
+    ViewData["Title"] = "Mülk Sahibi Paneli";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+}
+
+<div class="container mt-5">
+    <!-- Üst Başlık -->
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-8">
+            <h2 class="fw-bold text-dark"><i class="bi bi-house-door-fill text-primary me-2"></i>Bireysel Mülk Sahibi & Kira Takibi</h2>
+            <p class="text-muted">Evleriniz, dükkanlarınız, kiracılarınız ve yasal beyannameleriniz tek ekranda.</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <button class="btn btn-primary rounded-pill shadow-sm px-4 fw-bold">
+                <i class="bi bi-plus-lg me-1"></i> Yeni Mülk Ekle
+            </button>
+        </div>
+    </div>
+
+    <!-- 4 KARTLI ÖZET -->
+    <div class="row g-3 mb-5">
+        <div class="col-md-3">
+            <div class="card bg-white shadow-sm border-0 rounded-4 h-100">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase fw-semibold mb-2"><i class="bi bi-key me-1"></i> Toplam Mülk</h6>
+                    <h3 class="mb-0 text-dark fw-bold">3 Adet</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-white shadow-sm border-0 rounded-4 h-100">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase fw-semibold mb-2"><i class="bi bi-cash-coin me-1"></i> Aylık Beklenen Kira</h6>
+                    <h3 class="mb-0 text-success fw-bold">45.000,00 ₺</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-white shadow-sm border-0 rounded-4 h-100">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase fw-semibold mb-2"><i class="bi bi-exclamation-triangle me-1"></i> Geciken Ödeme</h6>
+                    <h3 class="mb-0 text-danger fw-bold">0,00 ₺</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-white shadow-sm border-0 rounded-4 h-100">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase fw-semibold mb-2"><i class="bi bi-shield-check me-1"></i> DASK & Vergi</h6>
+                    <h3 class="mb-0 text-warning fw-bold">1 Yaklaşan</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- SOL KOLON: Mülkler ve Kiracılar -->
+        <div class="col-md-8">
+            <h5 class="fw-bold mb-3">Mülklerim ve Kiracı Durumu</h5>
+            
+            <!-- Mülk 1 -->
+            <div class="card border-0 shadow-sm rounded-4 mb-3">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-building text-info me-2"></i>Beyaz Konak Apt. Kat:4 No:12</h5>
+                        <span class="badge bg-success rounded-pill px-3">Kirada</span>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 border-end">
+                            <small class="text-muted d-block fw-bold text-uppercase" style="font-size:0.7rem;">Kiracı Bilgisi</small>
+                            <span class="fw-semibold">Ahmet Yılmaz</span> (Tel: 0555 123 4567)<br>
+                            <small class="text-muted">Kontrat Bitiş: 15.08.2027</small>
+                        </div>
+                        <div class="col-md-6 ps-4">
+                            <small class="text-muted d-block fw-bold text-uppercase" style="font-size:0.7rem;">Kira Durumu</small>
+                            <span class="fw-bold text-dark fs-5">15.000 ₺</span> / Ay<br>
+                            <span class="text-success small fw-bold"><i class="bi bi-check-circle-fill me-1"></i> Bu Ay Ödendi (Ekim 2026)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mülk 2 (Boş) -->
+            <div class="card border-0 shadow-sm rounded-4 mb-3">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-shop text-warning me-2"></i>Çarşı Merkezi 50m2 Dükkan</h5>
+                        <span class="badge bg-warning text-dark rounded-pill px-3">Boş / Kiralık</span>
+                    </div>
+                    <div class="row">
+                        <div class="col-12">
+                            <p class="text-muted small mb-3">Bu mülkünüz şu an boş. GMK360 Kurumsal Emlak Ofisi ağına göndererek hızlıca kiralanmasını sağlayabilirsiniz.</p>
+                            <button class="btn btn-sm btn-outline-dark fw-bold"><i class="bi bi-megaphone-fill me-1"></i> Emlakçı Ağına Gönder (İlan Ver)</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SAĞ KOLON: Yasal Takip ve Bina Yönetimi -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 mb-4 bg-light">
+                <div class="card-body p-4">
+                    <h6 class="fw-bold mb-4"><i class="bi bi-bank text-primary me-2"></i>Yasal Beyanname & Vergi</h6>
+                    
+                    <div class="mb-4">
+                        <small class="text-muted fw-bold text-uppercase d-block mb-1">GMSİ (Kira Gelir Beyannamesi)</small>
+                        <p class="small text-dark mb-2">2026 yılı içerisinde toplanan kira gelirleriniz <strong>135.000 TL</strong>'ye ulaşmıştır. İstisna sınırını aştınız.</p>
+                        <button class="btn btn-sm btn-primary w-100 fw-bold"><i class="bi bi-file-earmark-spreadsheet me-1"></i> Beyanname Taslağı Oluştur</button>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div>
+                        <small class="text-muted fw-bold text-uppercase d-block mb-2">DASK ve Emlak Vergisi</small>
+                        <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
+                            <span class="small fw-semibold">Beyaz Konak DASK</span>
+                            <span class="badge bg-danger">15 Gün Kaldı</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="small fw-semibold">Dükkan Emlak Vergisi (2. Taksit)</span>
+                            <span class="badge bg-success">Ödendi</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bina Yönetiminden Gelen Talepler -->
+            <div class="card border-warning shadow-sm rounded-4 mb-4 border-2">
+                <div class="card-body p-4">
+                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-envelope-exclamation-fill text-warning me-2"></i>Bina Yönetiminden Mesaj</h6>
+                    <p class="small text-muted mb-2"><strong>Beyaz Konak Apt. Yönetimi</strong> tarafından "Çatı Onarımı" için çoklu PIN onayı bekleniyor.</p>
+                    <p class="small text-danger fw-bold mb-3">Size Düşen Pay: 2.000 TL</p>
+                    <a href="/BuildingManager/Detail/1" class="btn btn-sm btn-warning fw-bold text-dark w-100"><i class="bi bi-pencil-square me-1"></i> Karar Defterine Git & Onayla</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+'''
+
+with codecs.open(path, 'w', 'utf-8-sig') as f:
+    f.write(content)
+print("PropertyOwner Dashboard created!")

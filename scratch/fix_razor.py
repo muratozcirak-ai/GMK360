@@ -1,32 +1,79 @@
-﻿import io
-import re
-
-filepath = r'GMK360.Web\Views\PhaseZero\Index.cshtml'
-with io.open(filepath, 'r', encoding='utf-8') as f:
+﻿with open("GMK360.Web/Views/ConstructionProject/Details.cshtml", "r", encoding="utf-8") as f:
     content = f.read()
 
-# Fix RZ1010 error: Change "@{" to "{" or check if it's already in C# context.
-# In razor: 
-# @if(isDependent) { <i class="..."></i> } else { <span ...></span> }
-# Let's just fix my injection from earlier:
-# I used `@{` inside the razor block probably inappropriately?
-# Actually, I injected `@{ var relatedQuote = ... }` right after `@foreach (var doc in group...) {`
-# Ah! Since it's inside `@foreach (var doc in ...) {`, it's already in C# context!
-# So `@{ ... }` is invalid. It should just be `var relatedQuote = ...` 
-# Wait, NO, Razor allows `@{ }` inside `@foreach` IF it's rendering HTML. But let's just make it valid C#.
+import re
 
-content = content.replace("                                        @{\n                                            var relatedQuote", "                                        \n                                            var relatedQuote")
-content = content.replace("var hasQuote = relatedQuote != null;\n                                        }", "var hasQuote = relatedQuote != null;\n                                        ")
+# We want to replace the row but KEEP the closing tags properly!
+# Let's just find the exact block and replace it using string replacement.
+old_str1 = """                            <!-- Main Block Info -->
+                            <div class="row mb-4">
+                                <div class="col-md-4">
+                                    <span class="px-3 py-2 bg-light text-dark border rounded-pill d-inline-block fw-bold"><i class="bi bi-layers me-1"></i>Ana Yap: @(block.TotalFloors ?? 0) Kat</span>
+                                </div>
+                                <div class="col-md-4 text-center">
+                                    <div class="fw-bold fs-5 text-dark"><i class="bi bi-door-open text-danger me-1"></i>@(block.TotalUnits - block.TotalShops) Daire, @(block.TotalShops) Dkkan</div>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <a asp-action="ManageBlock" asp-route-id="@block.Id" class="btn btn-outline-danger rounded-pill btn-sm">
+                                        Ana Yap Plann Ynet <i class="bi bi-arrow-right ms-1"></i>
+                                    </a>
+                                </div>
+                            </div>"""
 
-# Fix CS1501: (doc.DocumentFee.GetValueOrDefault() + doc.AdditionalCost.GetValueOrDefault()).ToString("N2")
-# Wait, DocumentFee is probably double?. GetValueOrDefault() on double? returns double. double has ToString("N2").
-# Let's just use string.Format("{0:N2}", ...) to be safe.
-# Or `((decimal)(doc.DocumentFee ?? 0) + (decimal)(doc.AdditionalCost ?? 0)).ToString("N2")`
+new_str1 = """                            <!-- Main Block Info -->
+                            @if ((block.TotalFloors ?? 0) > 0 || block.TotalUnits > 0 || block.TotalShops > 0)
+                            {
+                                <div class="row mb-4">
+                                    <div class="col-md-4">
+                                        <span class="px-3 py-2 bg-light text-dark border rounded-pill d-inline-block fw-bold"><i class="bi bi-layers me-1"></i>Ana Yap: @(block.TotalFloors ?? 0) Kat</span>
+                                    </div>
+                                    <div class="col-md-4 text-center">
+                                        <div class="fw-bold fs-5 text-dark"><i class="bi bi-door-open text-danger me-1"></i>@(block.TotalUnits - block.TotalShops) Daire, @(block.TotalShops) Dkkan</div>
+                                    </div>
+                                    <div class="col-md-4 text-end">
+                                        <a asp-action="ManageBlock" asp-route-id="@block.Id" class="btn btn-outline-danger rounded-pill btn-sm">
+                                            Ana Yap Plann Ynet <i class="bi bi-arrow-right ms-1"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            }"""
 
-content = re.sub(r'@\(\(doc\.DocumentFee\.GetValueOrDefault\(\) \+ doc\.AdditionalCost\.GetValueOrDefault\(\)\)\.ToString\("N2"\)\)', 
-                 r'@(((decimal)(doc.DocumentFee ?? 0) + (decimal)(doc.AdditionalCost ?? 0)).ToString("N2"))', content)
+old_str2 = """                            <!-- Main Block Info -->
+                            <div class="row mb-4">
+                                <div class="col-md-4">
+                                    <span class="px-3 py-2 bg-light text-dark border rounded-pill d-inline-block fw-bold"><i class="bi bi-layers me-1"></i>Ana Yap / Taban: @(block.TotalFloors ?? 0) Kat</span>
+                                </div>
+                                <div class="col-md-4 text-center">
+                                    <div class="fw-bold fs-5 text-dark"><i class="bi bi-door-open text-primary me-1"></i>@(block.TotalUnits - block.TotalShops) Daire, @(block.TotalShops) Dkkan</div>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <a asp-action="ManageBlock" asp-route-id="@block.Id" class="btn btn-outline-primary rounded-pill btn-sm">
+                                        Taban/Baza Plann Ynet <i class="bi bi-arrow-right ms-1"></i>
+                                    </a>
+                                </div>
+                            </div>"""
 
+new_str2 = """                            <!-- Main Block Info -->
+                            @if ((block.TotalFloors ?? 0) > 0 || block.TotalUnits > 0 || block.TotalShops > 0)
+                            {
+                                <div class="row mb-4">
+                                    <div class="col-md-4">
+                                        <span class="px-3 py-2 bg-light text-dark border rounded-pill d-inline-block fw-bold"><i class="bi bi-layers me-1"></i>Ana Yap / Taban: @(block.TotalFloors ?? 0) Kat</span>
+                                    </div>
+                                    <div class="col-md-4 text-center">
+                                        <div class="fw-bold fs-5 text-dark"><i class="bi bi-door-open text-primary me-1"></i>@(block.TotalUnits - block.TotalShops) Daire, @(block.TotalShops) Dkkan</div>
+                                    </div>
+                                    <div class="col-md-4 text-end">
+                                        <a asp-action="ManageBlock" asp-route-id="@block.Id" class="btn btn-outline-primary rounded-pill btn-sm">
+                                            Taban/Baza Plann Ynet <i class="bi bi-arrow-right ms-1"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            }"""
 
-with io.open(filepath, 'w', encoding='utf-8') as f:
+content = content.replace(old_str1, new_str1)
+content = content.replace(old_str2, new_str2)
+
+with open("GMK360.Web/Views/ConstructionProject/Details.cshtml", "w", encoding="utf-8") as f:
     f.write(content)
-print("Fixed Razor syntax errors")
+print("Fixed razor syntax!")

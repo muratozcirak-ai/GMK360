@@ -1,17 +1,74 @@
 ﻿@model GMK360.Core.Entities.Building
+
+@functions {
+    public string GetFloorNameBySlabIndex(GMK360.Core.Entities.Building b, int slabIndex) {
+        int current = 1;
+        int basements = b.BasementFloors;
+        if (slabIndex <= basements) {
+            int bodrumNo = (basements - slabIndex) + 1;
+            return $"-{bodrumNo}. Bodrum";
+        }
+        current += basements;
+
+        if (b.HasGroundFloor) {
+            if (slabIndex == current) return "Zemin Kat";
+            current++;
+        }
+
+        int totalF = b.TotalFloors ?? 0;
+        if (slabIndex < current + totalF) {
+            int katNo = slabIndex - current + 1;
+            return $"{katNo}. Kat";
+        }
+        current += totalF;
+
+        if (b.HasRoof && slabIndex == current) {
+            return "Çatı Katı";
+        }
+
+        return "Bilinmeyen Kat";
+    }
+
+    public int GetTotalSlabs(GMK360.Core.Entities.Building b) {
+        return b.BasementFloors + (b.HasGroundFloor ? 1 : 0) + (b.TotalFloors ?? 0) + (b.HasRoof ? 1 : 0);
+    }
+}
 @{
-    ViewData["Title"] = "Blok Yönetimi: " + Model.BlockName;
+    ViewData["Title"] = "Yapı Yönetimi";
     Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
-    var allUnits = Model.Units ?? new List<GMK360.Core.Entities.BuildingUnit>();
+    var allUnits = Model.Units?.ToList() ?? new List<GMK360.Core.Entities.BuildingUnit>();
+    if (Model.ChildBuildings != null) {
+        foreach(var cb in Model.ChildBuildings) {
+            if (cb.Units != null) {
+                allUnits.AddRange(cb.Units);
+            }
+        }
+    }
     // Determine all possible floor levels (Expected + Actual)
     var floorLevels = new HashSet<int>();
     // 1. Add expected floors from Building properties
-    int totalF = Model.TotalFloors ?? 0;
-    int baseF = Model.BasementFloors;
-    if (Model.HasRoof) floorLevels.Add(totalF + 1);
-    for (int i = totalF; i >= 1; i--) floorLevels.Add(i);
-    if (Model.HasGroundFloor) floorLevels.Add(0);
-    for (int i = 1; i <= baseF; i++) floorLevels.Add(-i);
+    bool isParentBlock = Model.ChildBuildings != null && Model.ChildBuildings.Any();
+    bool isOrtakBaza = Model.LayoutPattern == "Ortak Baza" || Model.LayoutPattern == "Kule";
+    int podiumKots = isOrtakBaza ? GetTotalSlabs(Model) : 0;
+
+    if (isParentBlock) {
+        int maxKots = 0;
+        foreach(var child in Model.ChildBuildings) {
+            int childKots = GetTotalSlabs(child);
+            if (childKots > maxKots) maxKots = childKots;
+        }
+        int totalMasterKots = podiumKots + maxKots;
+        for (int i = totalMasterKots; i >= 1; i--) {
+            floorLevels.Add(i);
+        }
+    } else {
+        int totalF = Model.TotalFloors ?? 0;
+        int baseF = Model.BasementFloors;
+        if (Model.HasRoof) floorLevels.Add(totalF + 1);
+        for (int i = totalF; i >= 1; i--) floorLevels.Add(i);
+        if (Model.HasGroundFloor) floorLevels.Add(0);
+        for (int i = 1; i <= baseF; i++) floorLevels.Add(-i);
+    }
     // 2. Add any floors that actually have units (in case they added one outside expected bounds)
     foreach(var u in allUnits) {
         floorLevels.Add(u.FloorLevel);
@@ -22,7 +79,7 @@
 }
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h2 class="fw-bold mb-1"><i class="bi bi-layers text-primary me-2"></i>@Model.BlockName Yönetimi</h2>
+        <h2 class="fw-bold mb-1"><i class="bi bi-layers text-primary me-2"></i>Yapı Yönetimi</h2>
         <p class="text-muted mb-0"><i class="bi bi-building me-1"></i>Proje: @Model.ConstructionProject?.Name</p>
     </div>
     <a asp-action="Details" asp-route-id="@Model.ConstructionProjectId" class="btn btn-outline-secondary rounded-pill px-4">
@@ -37,12 +94,12 @@
     </div>
 }
 <div class="row g-4">
-    <div class="col-md-4">
-        <!-- Blok Özellikleri -->
+    <div class="col-md-3">
+        <!-- Yapı Özellikleri -->
         <div class="card border-0 shadow-sm rounded-4 mb-4">
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
-                    <h5 class="fw-bold mb-0"><i class="bi bi-info-square text-info me-2"></i>Blok Özellikleri</h5>
+                    <h5 class="fw-bold mb-0"><i class="bi bi-info-square text-info me-2"></i>Yapı Özellikleri</h5>
                     <button class="btn btn-sm btn-icon btn-light-primary rounded-circle" data-bs-toggle="modal" data-bs-target="#editBlockDetailsModal" title="Düzenle">
                         <i class="bi bi-pencil"></i>
                     </button>
@@ -87,169 +144,294 @@
             </div>
         </div>
     </div>
-    <div class="col-md-8">
+    <div class="col-md-9">
         <!-- Daire Listesi (Ağaç Görünümü) -->
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-4">
-                    <h5 class="fw-bold mb-0"><i class="bi bi-diagram-3 text-navy me-2"></i>Bağımsız Bölümler ve Toplu Düzenleme</h5>
-                    <div>
-                        <button type="button" class="btn btn-sm btn-success rounded-pill px-3 me-2 btn-add-global" data-bs-toggle="modal" data-bs-target="#editBlockSkeletonModal">
-                            <i class="bi bi-building-up me-1"></i> Bina İskeletini Güncelle (Kat Ekle/Çıkar)
-                        </button>
-                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 me-2" data-bs-toggle="modal" data-bs-target="#bulkEditUnitsModal">
-                            <i class="bi bi-pencil-square me-1"></i> Seçili Daireleri Toplu Düzenle
-                        </button>
-                    </div>
-                </div>
-                @if (sortedFloors.Any())
-                {
-                    <div class="accordion" id="floorAccordion">
+                <div class="text-end mb-3 pb-2 border-bottom">
+                                    
+                                    
+                                        <button type="button" class="btn btn-sm btn-warning rounded-pill px-3 me-2" id="btnOpenBulkGenerator" data-bs-toggle="modal" data-bs-target="#bulkGenerateModal">
+                                            <i class="bi bi-lightning-charge-fill me-1"></i> Hızlı Daire/Dükkan Üret
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 me-2" data-bs-toggle="modal" data-bs-target="#bulkEditUnitsModal">
+
+                                        <i class="bi bi-pencil-square me-1"></i> Seçili Daireleri Toplu Düzenle
+                                    </button>
+                                </div>
+                                <div class="building-master-grid">
                         @foreach (var floorLevel in sortedFloors)
                         {
                             var floorUnits = allUnits.Where(u => u.FloorLevel == floorLevel).OrderBy(u => u.ParentUnitId ?? u.Id).ThenBy(u => u.ParentUnitId.HasValue).ThenBy(u => u.Id).ToList();
-                            string defaultName = floorLevel == 0 ? "Zemin Kat" : (floorLevel < 0 ? $"{-floorLevel}. Bodrum" : (floorLevel == (Model.TotalFloors ?? 0) + 1 && Model.HasRoof ? "Çatı Katı" : $"{floorLevel}. Kat"));
+                            string defaultName;
+                            if (isParentBlock) {
+                                defaultName = $"{floorLevel}. Kot Düzlemi";
+                            } else {
+                                defaultName = floorLevel == 0 ? "Zemin Kat" : (floorLevel < 0 ? $"{-floorLevel}. Bodrum" : (floorLevel == (Model.TotalFloors ?? 0) + 1 && Model.HasRoof ? "Çatı Katı" : $"{floorLevel}. Kat"));
+                            }
                             var floorName = floorUnits.FirstOrDefault()?.FloorName ?? defaultName;
                             var headingId = $"heading{floorLevel}".Replace("-", "minus");
                             var collapseId = $"collapse{floorLevel}".Replace("-", "minus");
                             var planDoc = floorPlans.FirstOrDefault(d => d.EntityId == floorLevel);
-                            <div class="accordion-item border-0 mb-3 shadow-sm rounded-4 overflow-hidden">
-                                <h2 class="accordion-header d-flex align-items-center bg-light border-bottom" id="@headingId">
-                                    <button class="accordion-button bg-transparent fw-bold collapsed flex-grow-1 shadow-none border-0" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId" aria-expanded="false" aria-controls="@collapseId">
-                                        <i class="bi bi-building-up me-2 text-primary"></i> <span class="text-dark me-2">@floorName</span> <small class="text-muted fw-normal">(@(floorUnits.Count()) Birim)</small>
-                                    </button>
-                                    <div class="pe-3 d-flex align-items-center" style="min-width: 500px; z-index: 2;">
-                                        @if(planDoc != null)
-                                        {
-                                            <a href="@planDoc.DocumentUrl" target="_blank" class="btn btn-sm btn-success rounded-pill me-2"><i class="bi bi-file-earmark-image me-1"></i> Kat Planını Gör</a>
-                                            <form asp-action="DeleteArchitectureMedia" method="post" class="m-0 p-0">
-                                                <input type="hidden" name="documentId" value="@planDoc.Id" />
-                                                <input type="hidden" name="buildingId" value="@Model.Id" />
-                                                <button type="submit" class="btn btn-sm btn-outline-danger rounded-circle p-1" onclick="return confirm('Silmek istediğinize emin misiniz?');" title="Planı Sil"><i class="bi bi-trash"></i></button>
-                                            </form>
-                                        }
-                                        else
-                                        {
-                                            <form asp-action="UploadArchitectureMedia" method="post" enctype="multipart/form-data" class="d-flex m-0 p-0 w-100">
-                                                <input type="hidden" name="buildingId" value="@Model.Id" />
-                                                <input type="hidden" name="entityType" value="BuildingFloor_@Model.Id" />
-                                                <input type="hidden" name="entityId" value="@floorLevel" />
-                                                <input type="hidden" name="title" value="@floorName Planıı" />
-                                                <div class="input-group input-group-sm">
-                                                    <input type="text" name="PhysicalLocationNote" class="form-control form-control-sm" placeholder="Orijinal Evrak Yeri (Örn: Arşiv)" style="max-width:200px;" title="Orijinal kat planının fiziki olarak nerede saklandığını yazın" />
-                                                    <input type="file" name="file" class="form-control form-control-sm" accept="image/*,.pdf" required style="max-width:220px;" />
-                                                    <button type="submit" class="btn btn-primary"><i class="bi bi-upload"></i> Kat Planı Yükle</button>
+                            
+                            <div class="d-flex w-100 mb-2 align-items-start">
+                                <!-- LEFT: The Kot Axis (Label) -->
+                                        <div class="axis-label-container" style="flex: 0 0 25%;">
+                                            <div class="border shadow-sm rounded-4 overflow-hidden h-100 d-flex align-items-center bg-light">
+                                                <div class="flex-grow-1 fw-bold text-dark p-3">
+                                                    <i class="bi bi-layers me-2 text-primary"></i> @floorName
                                                 </div>
-                                            </form>
-                                        }
-                                    </div>
-                                </h2>
-                                <!-- COLLAPSED by default (removed 'show' class) -->
-                                <div id="@collapseId" class="accordion-collapse collapse" aria-labelledby="@headingId">
-                                    <div class="accordion-body p-0">
-                                        <table class="table table-hover align-middle mb-0">
-                                            <thead class="table-light small">
-                                                <tr>
-                                                    <th class="ps-4" style="width:40px;">
-                                                        <div class="form-check">
-                                                            <input class="form-check-input select-all-floor" type="checkbox" data-floor="@floorLevel">
-                                                        </div>
-                                                    </th>
-                                                    <th>No</th>
-                                                    <th>Planı</th>
-                                                    <th>Cephe / Alan</th>
-                                                    <th>Mal Sahibi</th>
-                                                    <th class="text-end pe-4">İşİşlemler</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach (var unit in floorUnits)
-                                                {
-                                                    var isOwned = !string.IsNullOrEmpty(unit.OwnerName) || (unit.ParentUnit != null && !string.IsNullOrEmpty(unit.ParentUnit.OwnerName));
-                                                    var rowClass = "";
-                                                    var linkClass = "text-decoration-none fw-bold ";
-                                                    
-                                                    if (unit.Category != null && unit.Category.StartsWith("OrtakAlan")) {
-                                                        rowClass = "bg-light border-start border-4 border-secondary text-muted";
-                                                        linkClass += "text-secondary text-dark";
-                                                    } else if (isOwned) {
-                                                        rowClass = "table-danger border-start border-4 border-danger";
-                                                        linkClass += "text-danger";
-                                                    } else {
-                                                        rowClass = "border-start border-4 border-primary";
-                                                        linkClass += "text-primary";
+                                                <div class="pe-3 d-flex align-items-center gap-2">
+                                                    @if(planDoc != null)
+                                                    {
+                                                        <a href="@planDoc.DocumentUrl" target="_blank" class="btn btn-sm btn-success rounded-pill" title="Planı Gör"><i class="bi bi-image"></i></a>
                                                     }
-                                                    <tr class="@rowClass">
-                                                        <td class="ps-4">
-                                                            <div class="form-check">
-                                                                <input class="form-check-input unit-checkbox" type="checkbox" name="selectedUnitIds" value="@unit.Id" data-floor="@floorLevel">
-                                                            </div>
-                                                        </td>
-                                                        <td>
-                                                              <a asp-controller="ConstructionProject" asp-action="ManageUnitSpaces" asp-route-id="@unit.Id" target="_blank" class="@linkClass" title="Daire Paneline Git">
-                                                                  @if(unit.Category == "Eklenti") {
-                                                                      <text>No: @unit.DoorNumber <span class="text-muted small fw-normal ms-1">(@(unit.RoomLayout ?? "Eklenti") - Bağlı Daire: @(unit.ParentUnit?.DoorNumber))</span> <i class="bi bi-box-arrow-up-right ms-1 small"></i></text>
-                                                                  } else if (unit.Category != null && unit.Category.StartsWith("OrtakAlan")) {
-                                                                      <text>@unit.DoorNumber <span class="text-muted small fw-normal ms-1">(@(unit.RoomLayout ?? "Ortak Alan"))</span> <i class="bi bi-box-arrow-up-right ms-1 small"></i></text>
-                                                                  } else {
-                                                                      <text>No: @unit.DoorNumber <span class="text-muted small fw-normal ms-1">(@(unit.RoomLayout ?? "Mesken"))</span> <i class="bi bi-box-arrow-up-right ms-1 small"></i></text>
-                                                                  }
-                                                              </a>
-                                                          </td>
-                                                        <td><span class="badge bg-light text-dark border"><i class="bi bi-aspect-ratio me-1"></i>@unit.RoomLayout</span></td>
-                                                        <td class="small">
-                                                            <div class="text-muted">Cephe: @(string.IsNullOrEmpty(unit.FacadeDirection) ? "-" : unit.FacadeDirection)</div>
-                                                            <div class="text-muted">Brüt: @(unit.GrossSquareMeters?.ToString() ?? "-") m²</div>
-                                                        </td>
-                                                        <td>
-                                                            @if (unit.Category != null && unit.Category.StartsWith("OrtakAlan"))
-                                                            {
-                                                                <span class="badge bg-secondary"><i class="bi bi-building me-1"></i>Ortak Alan</span>
-                                                            }
-                                                            else if (unit.Category == "Eklenti")
-                                                            {
-                                                                <span class="badge bg-info text-dark"><i class="bi bi-paperclip me-1"></i>Bağlı (Daire @(unit.ParentUnit?.DoorNumber))</span>
-                                                            }
-                                                            else if (!string.IsNullOrEmpty(unit.OwnerName))
-                                                            {
-                                                                <span class="text-dark small"><i class="bi bi-person-circle me-1"></i>@unit.OwnerName</span>
-                                                            }
-                                                            else
-                                                            {
-                                                                <span class="text-muted small fst-italic">Sahipsiz / Boş</span>
-                                                            }
-                                                        </td>
-                                                        <td class="text-end pe-4">
-                                                            <a asp-controller="CustomerPortal" asp-action="MyUnitMaterials" asp-route-unitId="@unit.Id" class="btn btn-sm btn-outline-primary rounded-pill me-1" title="Müşteri Seçim Portalı (Görünüm)"><i class="bi bi-shop"></i> Portal</a>
-                                                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill btn-edit-unit" title="Düzenle" data-unit-id="@unit.Id" data-door-number="@unit.DoorNumber" data-owner-name="@unit.OwnerName" data-unit-structure="@unit.RoomLayout"><i class="bi bi-pencil"></i></button>
+                                                    else
+                                                    {
+                                                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill btn-upload-plan" data-floor="@floorLevel" data-bs-toggle="modal" data-bs-target="#uploadFloorPlanModal" title="DXF Plan Yükle">
+                                                            <i class="bi bi-upload"></i> Yükle
+                                                        </button>
+                                                    }
+                                                    
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        
+<!-- BULK GENERATOR MODAL -->
+<div class="modal fade" id="bulkGenerateModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 rounded-4 shadow-lg">
+            <div class="modal-header bg-warning bg-opacity-10 border-bottom-0 pb-0">
+                <h5 class="modal-title fw-bold text-dark"><i class="bi bi-lightning-charge-fill text-warning me-2"></i> Çoklu Bağımsız Bölüm Üretici</h5>
+                <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-muted small mb-4">Bu ara, seçtiğiniz katlara anında isimsiz ve numarasız boş kutular (bağımsız bölümler) fırlatır. Seri üretim yapabilirsiniz.</p>
+                
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark small">Mahal Tipi</label>
+                        <select class="form-select form-select-sm shadow-sm" id="bulkGenCategory">
+                            <option value="Daire">Daire (Mesken)</option>
+                            <option value="Dükkan">Dükkan / Ticari</option>
+                            <option value="Ofis">Ofis</option>
+                            <option value="Depo">Depo / Eklenti</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark small">Seçili Her Kata Kaç Adet Üretilecek?</label>
+                        <input type="number" class="form-control form-control-sm shadow-sm fw-bold text-primary" id="bulkGenCount" value="4" min="1" max="100">
+                    </div>
+                </div>
+
+                <label class="form-label fw-bold text-dark small border-bottom w-100 pb-2 mb-3">Hedef Katları Seçin</label>
+                <div class="row" id="bulkGenFloorsContainer" style="max-height: 350px; overflow-y: auto;">
+                    <!-- JavaScript will populate checkboxes here based on matrix data -->
+                </div>
+            </div>
+            <div class="modal-footer border-top-0 bg-light rounded-bottom-4">
+                <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Kapat ve Maketi Yenile</button>
+                <button type="button" class="btn btn-warning rounded-pill px-4 fw-bold shadow-sm" id="btnSubmitBulkGen">
+                    <i class="bi bi-magic me-1"></i> Üret ve Devam Et
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- RIGHT: The Visual Matrix (Blocks) -->
+                                <div class="matrix-cells-container d-flex flex-grow-1 ps-4" style="gap: 24px;">
+                                    @if (isParentBlock) {
+                                        if (isOrtakBaza && floorLevel <= podiumKots) {
+                                            <!-- Podium spans the whole width -->
+                                            <div class="podium-cell flex-fill bg-light text-dark rounded-4 border border-secondary shadow-sm p-3 mb-2">
+                                                <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary">
+                                                    <h6 class="mb-0 fw-bold text-secondary"><i class="bi bi-layers me-2"></i>Ortak Baza - @GetFloorNameBySlabIndex(Model, floorLevel)</h6>
+                                                    
+                                                </div>
+                                                <div class="d-flex flex-wrap gap-2">
+                                                    @{
+                                                        var blockUnits = allUnits.Where(u => u.BuildingId == Model.Id && u.FloorLevel == floorLevel).OrderBy(u => u.DoorNumber).ToList();
+    if (blockUnits.Any()) {
+        int tCount = blockUnits.Count;
+        int dCount = blockUnits.Count(x => x.Category == "Dükkan" || x.Category == "Ticari");
+        int rCount = tCount - dCount;
+        int sCount = blockUnits.Count(x => !string.IsNullOrEmpty(x.OwnerName));
+        int mCount = tCount - sCount;
+        string unitCollapseId = "collapse_" + Model.Id + "_" + (floorLevel < 0 ? "neg" + Math.Abs(floorLevel) : floorLevel.ToString());
+
+        <div class="w-100 mb-2">
+            <button class="btn btn-sm btn-light w-100 text-start border shadow-sm d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#@unitCollapseId" aria-expanded="false" aria-controls="@unitCollapseId">
+                <span class="text-dark fw-bold" style="font-size:0.8rem;"><i class="bi bi-list-ul me-1"></i> @tCount Birim <span class="fw-normal text-muted">(@rCount Daire, @dCount Dükkan)</span></span>
+                <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill" style="font-size:0.7rem;">@mCount Müsait</span>
+            </button>
+        </div>
+        <div class="collapse w-100" id="@unitCollapseId">
+            <div class="list-group list-group-flush border rounded mb-2">
+                @foreach(var unit in blockUnits) {
+                    bool isOwned = !string.IsNullOrEmpty(unit.OwnerName);
+                    string bgClass = isOwned ? "bg-danger bg-opacity-10" : "bg-success bg-opacity-10";
+                    string textClass = isOwned ? "text-danger" : "text-success";
+                    string icon = unit.Category == "Dükkan" || unit.Category == "Ticari" ? "bi-shop" : "bi-door-open-fill";
+
+                    <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center p-2 @bgClass">
+                        <div class="d-flex align-items-center flex-fill btn-edit-unit" style="cursor:pointer;" data-unit-id="@unit.Id" data-door-number="@unit.DoorNumber" data-owner-name="@unit.OwnerName" data-unit-structure="@unit.RoomLayout" data-gross-sqm="@unit.GrossSquareMeters" data-facade="@unit.FacadeDirection" title="Düzenle">
+                            <i class="bi @icon @textClass fs-5 me-2"></i>
+                            <div>
+                                <div class="fw-bold mb-0 text-dark" style="font-size: 0.85rem;">No: @unit.DoorNumber <span class="badge bg-light border text-secondary ms-1 fw-normal">@(unit.Category ?? "Mesken")</span></div>
+                                <div class="small fw-bold @textClass" style="font-size: 0.7rem;">@(isOwned ? unit.OwnerName : "Müsait")</div>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-1 ms-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 btn-edit-unit" data-unit-id="@unit.Id" data-door-number="@unit.DoorNumber" data-owner-name="@unit.OwnerName" data-unit-structure="@unit.RoomLayout" data-gross-sqm="@unit.GrossSquareMeters" data-facade="@unit.FacadeDirection" title="Düzenle">
+                                <i class="bi bi-pencil" style="font-size:0.8rem;"></i>
+                            </button>
+                            <a href="/ConstructionProject/ManageUnitSpaces/@unit.Id" class="btn btn-sm btn-primary py-0 px-2 text-white" title="İçine Gir (Odalar)">
+                                <i class="bi bi-box-arrow-in-right" style="font-size:0.8rem;"></i>
+                            </a>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    } else {
+        <div class="text-muted small w-100 text-center py-2 bg-light rounded"><i class="bi bi-info-circle me-1"></i>Birim yok</div>
+    }
+                                                    }
+                                                </div>
+                                            </div>
+                                        } else {
+                                            <!-- Towers above podium (or normal Bitişik Nizam towers) -->
+                                            @foreach(var child in Model.ChildBuildings.OrderBy(c => c.Id)) {
+                                                int towerSlabIndex = isOrtakBaza ? (floorLevel - podiumKots) : floorLevel;
+                                                if (towerSlabIndex > 0 && towerSlabIndex <= GetTotalSlabs(child)) {
+                                                    var childFloorName = GetFloorNameBySlabIndex(child, towerSlabIndex);
+                                                    <div class="tower-cell flex-fill bg-white text-dark rounded-4 border shadow-sm p-3 mb-2">
+                                                        <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                                                            <button class="d-none btn-add-unit-to-floor" data-floorlevel="@towerSlabIndex" data-floorname="@childFloorName" data-buildingid="@child.Id"></button>
+<h6 class="mb-0 fw-bold text-primary text-truncate" style="max-width: 150px;" title="@child.BlockName - @childFloorName"><i class="bi bi-building me-1"></i>@child.BlockName <br/><small class="text-muted">@childFloorName</small></h6>
                                                             
-                                                            <form asp-action="DeleteUnit" method="post" class="d-inline" onsubmit="return confirm('Bu birimi silmek istediğinize emin misiniz?');">
-                                                                <input type="hidden" name="unitId" value="@unit.Id" />
-                                                                <input type="hidden" name="buildingId" value="@Model.Id" />
-                                                                <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill" title="Sil"><i class="bi bi-trash"></i></button>
-                                                            </form>
-                                                        </td>
-                                                    </tr>
+                                                        </div>
+                                                        <div class="d-flex flex-wrap gap-2">
+                                                            @{
+                                                                var blockUnits = allUnits.Where(u => u.BuildingId == child.Id && u.FloorLevel == towerSlabIndex).OrderBy(u => u.DoorNumber).ToList();
+    if (blockUnits.Any()) {
+        int tCount = blockUnits.Count;
+        int dCount = blockUnits.Count(x => x.Category == "Dükkan" || x.Category == "Ticari");
+        int rCount = tCount - dCount;
+        int sCount = blockUnits.Count(x => !string.IsNullOrEmpty(x.OwnerName));
+        int mCount = tCount - sCount;
+        string unitCollapseId = "collapse_" + child.Id + "_" + (towerSlabIndex < 0 ? "neg" + Math.Abs(towerSlabIndex) : towerSlabIndex.ToString());
+
+        <div class="w-100 mb-2">
+            <button class="btn btn-sm btn-light w-100 text-start border shadow-sm d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#@unitCollapseId" aria-expanded="false" aria-controls="@unitCollapseId">
+                <span class="text-dark fw-bold" style="font-size:0.8rem;"><i class="bi bi-list-ul me-1"></i> @tCount Birim <span class="fw-normal text-muted">(@rCount Daire, @dCount Dükkan)</span></span>
+                <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill" style="font-size:0.7rem;">@mCount Müsait</span>
+            </button>
+        </div>
+        <div class="collapse w-100" id="@unitCollapseId">
+            <div class="list-group list-group-flush border rounded mb-2">
+                @foreach(var unit in blockUnits) {
+                    bool isOwned = !string.IsNullOrEmpty(unit.OwnerName);
+                    string bgClass = isOwned ? "bg-danger bg-opacity-10" : "bg-success bg-opacity-10";
+                    string textClass = isOwned ? "text-danger" : "text-success";
+                    string icon = unit.Category == "Dükkan" || unit.Category == "Ticari" ? "bi-shop" : "bi-door-open-fill";
+
+                    <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center p-2 @bgClass">
+                        <div class="d-flex align-items-center flex-fill btn-edit-unit" style="cursor:pointer;" data-unit-id="@unit.Id" data-door-number="@unit.DoorNumber" data-owner-name="@unit.OwnerName" data-unit-structure="@unit.RoomLayout" data-gross-sqm="@unit.GrossSquareMeters" data-facade="@unit.FacadeDirection" title="Düzenle">
+                            <i class="bi @icon @textClass fs-5 me-2"></i>
+                            <div>
+                                <div class="fw-bold mb-0 text-dark" style="font-size: 0.85rem;">No: @unit.DoorNumber <span class="badge bg-light border text-secondary ms-1 fw-normal">@(unit.Category ?? "Mesken")</span></div>
+                                <div class="small fw-bold @textClass" style="font-size: 0.7rem;">@(isOwned ? unit.OwnerName : "Müsait")</div>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-1 ms-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 btn-edit-unit" data-unit-id="@unit.Id" data-door-number="@unit.DoorNumber" data-owner-name="@unit.OwnerName" data-unit-structure="@unit.RoomLayout" data-gross-sqm="@unit.GrossSquareMeters" data-facade="@unit.FacadeDirection" title="Düzenle">
+                                <i class="bi bi-pencil" style="font-size:0.8rem;"></i>
+                            </button>
+                            <a href="/ConstructionProject/ManageUnitSpaces/@unit.Id" class="btn btn-sm btn-primary py-0 px-2 text-white" title="İçine Gir (Odalar)">
+                                <i class="bi bi-box-arrow-in-right" style="font-size:0.8rem;"></i>
+                            </a>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    } else {
+        <div class="text-muted small w-100 text-center py-2 bg-light rounded"><i class="bi bi-info-circle me-1"></i>Birim yok</div>
+    }
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                } else {
+                                                    <div class="empty-cell flex-fill" style="min-height: 50px;"></div>
                                                 }
-                                            </tbody>
-                                            <tfoot class="table-light">
-                                                <tr>
-                                                    <td colspan="6" class="text-center py-2">
-                                                        <button type="button" class="btn btn-sm btn-link text-success text-decoration-none fw-bold btn-add-unit-to-floor" data-bs-toggle="modal" data-bs-target="#addUnitModal" data-floorlevel="@floorLevel" data-floorname="@floorName">
-                                                                <i class="bi bi-plus-circle me-1"></i> Bu Kata Yeni Birim Ekle
-                                                            </button>
-                                                            <button type="button" class="btn btn-sm btn-link text-primary text-decoration-none fw-bold btn-copy-floor ms-3" data-bs-toggle="modal" data-bs-target="#copyFloorModal" data-floorlevel="@floorLevel" data-floorname="@floorName">
-                                                                <i class="bi bi-files me-1"></i> Bu Katı Kopyala (Şablon)
-                                                            </button>
-                                                    </td>
-                                                </tr>
-                                            </tfoot>
-                                        </table>
-                                    </div>
+                                            }
+                                        }
+                                    } else {
+                                        <!-- Single Building -->
+                                        <div class="single-block-cell w-100 bg-white text-dark rounded-4 border shadow-sm p-3 mb-2">
+                                            <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                                                <h6 class="mb-0 fw-bold text-primary"><i class="bi bi-building me-2"></i>@Model.BlockName - @floorName</h6>
+                                                
+                                            </div>
+                                            <div class="d-flex flex-wrap gap-2">
+                                                @{
+                                                    var blockUnits = allUnits.Where(u => u.BuildingId == Model.Id && u.FloorLevel == floorLevel).OrderBy(u => u.DoorNumber).ToList();
+    if (blockUnits.Any()) {
+        int tCount = blockUnits.Count;
+        int dCount = blockUnits.Count(x => x.Category == "Dükkan" || x.Category == "Ticari");
+        int rCount = tCount - dCount;
+        int sCount = blockUnits.Count(x => !string.IsNullOrEmpty(x.OwnerName));
+        int mCount = tCount - sCount;
+        string unitCollapseId = "collapse_" + Model.Id + "_" + (floorLevel < 0 ? "neg" + Math.Abs(floorLevel) : floorLevel.ToString());
+
+        <div class="w-100 mb-2">
+            <button class="btn btn-sm btn-light w-100 text-start border shadow-sm d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#@unitCollapseId" aria-expanded="false" aria-controls="@unitCollapseId">
+                <span class="text-dark fw-bold" style="font-size:0.8rem;"><i class="bi bi-list-ul me-1"></i> @tCount Birim <span class="fw-normal text-muted">(@rCount Daire, @dCount Dükkan)</span></span>
+                <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill" style="font-size:0.7rem;">@mCount Müsait</span>
+            </button>
+        </div>
+        <div class="collapse w-100" id="@unitCollapseId">
+            <div class="list-group list-group-flush border rounded mb-2">
+                @foreach(var unit in blockUnits) {
+                    bool isOwned = !string.IsNullOrEmpty(unit.OwnerName);
+                    string bgClass = isOwned ? "bg-danger bg-opacity-10" : "bg-success bg-opacity-10";
+                    string textClass = isOwned ? "text-danger" : "text-success";
+                    string icon = unit.Category == "Dükkan" || unit.Category == "Ticari" ? "bi-shop" : "bi-door-open-fill";
+
+                    <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center p-2 @bgClass">
+                        <div class="d-flex align-items-center flex-fill btn-edit-unit" style="cursor:pointer;" data-unit-id="@unit.Id" data-door-number="@unit.DoorNumber" data-owner-name="@unit.OwnerName" data-unit-structure="@unit.RoomLayout" data-gross-sqm="@unit.GrossSquareMeters" data-facade="@unit.FacadeDirection" title="Düzenle">
+                            <i class="bi @icon @textClass fs-5 me-2"></i>
+                            <div>
+                                <div class="fw-bold mb-0 text-dark" style="font-size: 0.85rem;">No: @unit.DoorNumber <span class="badge bg-light border text-secondary ms-1 fw-normal">@(unit.Category ?? "Mesken")</span></div>
+                                <div class="small fw-bold @textClass" style="font-size: 0.7rem;">@(isOwned ? unit.OwnerName : "Müsait")</div>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-1 ms-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 btn-edit-unit" data-unit-id="@unit.Id" data-door-number="@unit.DoorNumber" data-owner-name="@unit.OwnerName" data-unit-structure="@unit.RoomLayout" data-gross-sqm="@unit.GrossSquareMeters" data-facade="@unit.FacadeDirection" title="Düzenle">
+                                <i class="bi bi-pencil" style="font-size:0.8rem;"></i>
+                            </button>
+                            <a href="/ConstructionProject/ManageUnitSpaces/@unit.Id" class="btn btn-sm btn-primary py-0 px-2 text-white" title="İçine Gir (Odalar)">
+                                <i class="bi bi-box-arrow-in-right" style="font-size:0.8rem;"></i>
+                            </a>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    } else {
+        <div class="text-muted small w-100 text-center py-2 bg-light rounded"><i class="bi bi-info-circle me-1"></i>Birim yok</div>
+    }
+                                                }
+                                            </div>
+                                        </div>
+                                    }
                                 </div>
                             </div>
                         }
-                    </div>
+                                        </div>
                 }
                 else
                 {
@@ -263,6 +445,7 @@
         </div>
     </div>
 </div>
+
 <!-- Edit Block Details Modal -->
 <div class="modal fade" id="editBlockDetailsModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -270,7 +453,7 @@
             <form asp-action="UpdateBlockDetails" method="post">
                 <input type="hidden" name="Id" value="@Model.Id" />
                 <div class="modal-header border-0 pb-0">
-                    <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square text-primary me-2"></i>Blok Özelliklerini Düzenle</h5>
+                    <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square text-primary me-2"></i>Yapı Özelliklerini Düzenle</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -619,7 +802,25 @@
                     </div>
                     
                     <div class="mb-3">
-                        <div class="form-check form-switch mb-2">
+                        <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Brüt Alan (m²)</label>
+                        <input type="number" class="form-control" name="GrossSquareMeters" step="0.01">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Cephe</label>
+                        <select class="form-select" name="FacadeDirection">
+                            <option value="">Seçiniz...</option>
+                            <option value="Kuzey">Kuzey</option>
+                            <option value="Güney">Güney</option>
+                            <option value="Doğu">Doğu</option>
+                            <option value="Batı">Batı</option>
+                            <option value="Kuzey-Doğu">Kuzey-Doğu</option>
+                            <option value="Kuzey-Batı">Kuzey-Batı</option>
+                            <option value="Güney-Doğu">Güney-Doğu</option>
+                            <option value="Güney-Batı">Güney-Batı</option>
+                        </select>
+                    </div>
+                    <div class="form-check form-switch mb-2">
                             <input class="form-check-input" type="checkbox" id="editIsOwnedSwitch">
                             <label class="form-check-label fw-bold small" for="editIsOwnedSwitch">Sahipli mi?</label>
                         </div>
@@ -683,6 +884,18 @@
 @section Scripts {
     <script>
         $(document).ready(function() {
+            // Populate Add Unit Modal automatically when clicking "Bu Kata Yeni Birim Ekle"
+            $('.btn-add-unit-to-floor').click(function() {
+                var floorLevel = $(this).data('floorlevel');
+                var floorName = $(this).data('floorname');
+                if (floorLevel !== undefined) {
+                    $('#addUnitModal input[name="FloorLevel"]').val(floorLevel);
+                }
+                if (floorName !== undefined) {
+                    $('#addUnitModal input[name="FloorName"]').val(floorName);
+                }
+            });
+
             // Populate Copy Floor Modal
             $('.btn-copy-floor').click(function() {
                 var floorLevel = $(this).data('floorlevel');
@@ -776,8 +989,12 @@
             $('.btn-add-unit-to-floor').click(function() {
                   var floorLevel = $(this).data('floorlevel');
                   var floorName = $(this).data('floorname');
+                  var buildingId = $(this).data('buildingid');
                   $('[name="FloorLevel"]').val(floorLevel);
                   $('[name="FloorName"]').val(floorName);
+                  if (buildingId) {
+                      $('#addUnitModal input[name="BuildingId"]').val(buildingId);
+                  }
                   $('#addUnitModal .modal-title').html('<i class="bi bi-plus-square text-success me-2"></i>' + floorName + ' - Hızlı Birim Ekle');
                   $('#floorDataRow').hide();
                   $('#addUnitAlert').hide();
@@ -893,7 +1110,135 @@
         }
     });
 
-    // ACCORDION STATE PERSISTENCE LOGIC
+    
+// BULK GENERATOR LOGIC
+$(document).on('click', '#btnOpenBulkGenerator', function() {
+    try {
+        var targets = {};
+        var btnCount = 0;
+        alert('Sistem arka planda ' + $('.btn-add-unit-to-floor').length + ' adet kat tespit etti!');
+        
+        $('.btn-add-unit-to-floor').each(function() {
+            btnCount++;
+            var bId = $(this).data('buildingid') || $(this).attr('data-buildingid') || 'bilinmeyen';
+            var fLevel = $(this).data('floorlevel') || $(this).attr('data-floorlevel') || 0;
+            var fName = $(this).data('floorname') || $(this).attr('data-floorname') || 'Kat';
+            
+            var bName = "Bilinmeyen Blok";
+            var header = $(this).closest('.tower-cell, .podium-cell, .single-block-cell').find('h6').first();
+            if(header.length) { bName = header.text().replace('Ekle', '').trim().split('-')[0].trim(); }
+            
+            if (!targets[bId]) { targets[bId] = { name: bName, floors: [] }; }
+            
+            var exists = false;
+            for(var i=0; i<targets[bId].floors.length; i++) {
+                if(targets[bId].floors[i].level == fLevel) { exists = true; break; }
+            }
+            
+            if (!exists) {
+                 targets[bId].floors.push({ level: fLevel, name: fName });
+            }
+        });
+
+        var html = '';
+        var blockCount = 0;
+        for (var bId in targets) {
+            blockCount++;
+            var b = targets[bId];
+            html += '<div class="col-md-6 mb-4">';
+            html += '<div class="card border-0 bg-light shadow-sm"><div class="card-body p-3">';
+            html += '<h6 class="fw-bold text-primary mb-3"><i class="bi bi-building me-2"></i>' + b.name + '</h6>';
+            
+            html += '<div class="form-check mb-2 pb-2 border-bottom">';
+            html += '<input class="form-check-input select-all-block-floors shadow-sm" type="checkbox" data-target-block="' + bId + '" id="selAll_' + bId + '">';
+            html += '<label class="form-check-label fw-bold text-dark" for="selAll_' + bId + '">Tüm Katları Seç</label>';
+            html += '</div>';
+
+            b.floors.sort(function(x,y){ return y.level - x.level; }); 
+            for (var i = 0; i < b.floors.length; i++) {
+                var f = b.floors[i];
+                var val = bId + '|' + f.level;
+                var id = 'chk_' + bId + '_' + f.level;
+                html += '<div class="form-check">';
+                html += '<input class="form-check-input chk-bulk-gen shadow-sm" type="checkbox" value="' + val + '" data-block="' + bId + '" id="' + id + '">';
+                html += '<label class="form-check-label small" for="' + id + '">' + f.name + '</label>';
+                html += '</div>';
+            }
+            html += '</div></div></div>';
+        }
+        
+        if (blockCount === 0) {
+            html = '<div class="alert alert-warning">Seçilecek kat bulunamadı! (Bulunan Ekle butonu: ' + btnCount + ')</div>';
+        }
+        
+        $('#bulkGenFloorsContainer').html(html);
+
+    } catch (e) {
+        $('#bulkGenFloorsContainer').html('<div class="alert alert-danger">JS Hatası: ' + e.message + '</div>');
+        console.error("HATA:", e);
+    }
+});
+
+$(document).on('change', '.select-all-block-floors', function() {
+    var bId = $(this).data('target-block');
+    var isChecked = $(this).is(':checked');
+    $('.chk-bulk-gen[data-block="'+bId+'"]').prop('checked', isChecked);
+});
+
+$(document).on('click', '#btnSubmitBulkGen', function() {
+    var selected = [];
+    $('.chk-bulk-gen:checked').each(function() {
+        selected.push($(this).val());
+    });
+    
+    if(selected.length === 0) {
+        alert("Lütfen en az bir kat seçin!");
+        return;
+    }
+    
+    var category = $('#bulkGenCategory').val();
+    var count = $('#bulkGenCount').val();
+    
+    var btn = $(this);
+    var oldText = btn.html();
+    btn.html('<i class="spinner-border spinner-border-sm"></i> Üretiliyor...').prop('disabled', true);
+    
+    $.ajax({
+        url: '/ConstructionProject/BulkGenerateEmptyUnits',
+        type: 'POST',
+        data: {
+            __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val(),
+            projectId: '@Model.ConstructionProjectId',
+            targetFloors: selected,
+            category: category,
+            count: count
+        },
+        traditional: true,
+        success: function(res) {
+            btn.html(oldText).prop('disabled', false);
+            if(res.success) {
+                $('.chk-bulk-gen').prop('checked', false);
+                $('.select-all-block-floors').prop('checked', false);
+                alert(res.message);
+                $('#bulkGenerateModal').data('needs-reload', true);
+            } else {
+                alert(res.message || 'Hata oluştu');
+            }
+        },
+        error: function(xhr, status, error) {
+            btn.html(oldText).prop('disabled', false);
+            alert('HTTP Hatası: ' + xhr.status + ' - ' + error + '\nDetay: ' + (xhr.responseText ? xhr.responseText.substring(0, 500) : 'Yok'));
+        }
+    });
+});
+
+$('#bulkGenerateModal').on('hidden.bs.modal', function() {
+    if($(this).data('needs-reload')) {
+        window.location.reload();
+    }
+});
+
+// ACCORDION STATE PERSISTENCE LOGIC
     $('.accordion-collapse').on('shown.bs.collapse', function (e) {
         localStorage.setItem('gmk_openAccordion', $(this).attr('id'));
     });

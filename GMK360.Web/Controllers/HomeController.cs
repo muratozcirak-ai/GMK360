@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using GMK360.Web.Models;
 
@@ -213,4 +213,17 @@ public class HomeController : Controller
         }
         return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
     }
+
+    public IActionResult Faq()
+    {
+        return View();
+    }
+
+    public IActionResult Legal(string doc)
+    {
+        ViewBag.DocType = doc;
+        return View();
+    }
 }
+
+

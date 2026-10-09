@@ -96,7 +96,8 @@ namespace GMK360.Web.Models
         public bool HasGroundFloor { get; set; } = true;
         public bool IsExistingBuilding { get; set; } = false;
         public int? BuildingAge { get; set; }
-        public string? LayoutPattern { get; set; } // Ortak Baza, BaÄŸÄ±msÄ±z (Tek Temel) vb.
+        public string? LayoutPattern { get; set; }
+        public List<WizardBlockItem> SubBlocks { get; set; } = new List<WizardBlockItem>();
     }
 }
 

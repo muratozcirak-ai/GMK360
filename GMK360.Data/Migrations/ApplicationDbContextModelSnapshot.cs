@@ -1953,12 +1953,48 @@ namespace GMK360.Data.Migrations
                     b.HasData(
                         new
                         {
-                            Id = 34,
+                            Id = 1,
                             CountryId = 1,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             IsDeleted = false,
-                            Name = "?stanbul",
-                            PlateCode = "34"
+                            Name = "Adana",
+                            PlateCode = "01"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Adıyaman",
+                            PlateCode = "02"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Afyonkarahisar",
+                            PlateCode = "03"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Ağrı",
+                            PlateCode = "04"
+                        },
+                        new
+                        {
+                            Id = 5,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Amasya",
+                            PlateCode = "05"
                         },
                         new
                         {
@@ -1971,12 +2007,678 @@ namespace GMK360.Data.Migrations
                         },
                         new
                         {
+                            Id = 7,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Antalya",
+                            PlateCode = "07"
+                        },
+                        new
+                        {
+                            Id = 8,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Artvin",
+                            PlateCode = "08"
+                        },
+                        new
+                        {
+                            Id = 9,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Aydın",
+                            PlateCode = "09"
+                        },
+                        new
+                        {
+                            Id = 10,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Balıkesir",
+                            PlateCode = "10"
+                        },
+                        new
+                        {
+                            Id = 11,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Bilecik",
+                            PlateCode = "11"
+                        },
+                        new
+                        {
+                            Id = 12,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Bingöl",
+                            PlateCode = "12"
+                        },
+                        new
+                        {
+                            Id = 13,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Bitlis",
+                            PlateCode = "13"
+                        },
+                        new
+                        {
+                            Id = 14,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Bolu",
+                            PlateCode = "14"
+                        },
+                        new
+                        {
+                            Id = 15,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Burdur",
+                            PlateCode = "15"
+                        },
+                        new
+                        {
+                            Id = 16,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Bursa",
+                            PlateCode = "16"
+                        },
+                        new
+                        {
+                            Id = 17,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Çanakkale",
+                            PlateCode = "17"
+                        },
+                        new
+                        {
+                            Id = 18,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Çankırı",
+                            PlateCode = "18"
+                        },
+                        new
+                        {
+                            Id = 19,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Çorum",
+                            PlateCode = "19"
+                        },
+                        new
+                        {
+                            Id = 20,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Denizli",
+                            PlateCode = "20"
+                        },
+                        new
+                        {
+                            Id = 21,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Diyarbakır",
+                            PlateCode = "21"
+                        },
+                        new
+                        {
+                            Id = 22,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Edirne",
+                            PlateCode = "22"
+                        },
+                        new
+                        {
+                            Id = 23,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Elazığ",
+                            PlateCode = "23"
+                        },
+                        new
+                        {
+                            Id = 24,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Erzincan",
+                            PlateCode = "24"
+                        },
+                        new
+                        {
+                            Id = 25,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Erzurum",
+                            PlateCode = "25"
+                        },
+                        new
+                        {
+                            Id = 26,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Eskişehir",
+                            PlateCode = "26"
+                        },
+                        new
+                        {
+                            Id = 27,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Gaziantep",
+                            PlateCode = "27"
+                        },
+                        new
+                        {
+                            Id = 28,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Giresun",
+                            PlateCode = "28"
+                        },
+                        new
+                        {
+                            Id = 29,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Gümüşhane",
+                            PlateCode = "29"
+                        },
+                        new
+                        {
+                            Id = 30,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Hakkari",
+                            PlateCode = "30"
+                        },
+                        new
+                        {
+                            Id = 31,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Hatay",
+                            PlateCode = "31"
+                        },
+                        new
+                        {
+                            Id = 32,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Isparta",
+                            PlateCode = "32"
+                        },
+                        new
+                        {
+                            Id = 33,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Mersin",
+                            PlateCode = "33"
+                        },
+                        new
+                        {
+                            Id = 34,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "İstanbul",
+                            PlateCode = "34"
+                        },
+                        new
+                        {
                             Id = 35,
                             CountryId = 1,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             IsDeleted = false,
-                            Name = "?zmir",
+                            Name = "İzmir",
                             PlateCode = "35"
+                        },
+                        new
+                        {
+                            Id = 36,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Kars",
+                            PlateCode = "36"
+                        },
+                        new
+                        {
+                            Id = 37,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Kastamonu",
+                            PlateCode = "37"
+                        },
+                        new
+                        {
+                            Id = 38,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Kayseri",
+                            PlateCode = "38"
+                        },
+                        new
+                        {
+                            Id = 39,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Kırklareli",
+                            PlateCode = "39"
+                        },
+                        new
+                        {
+                            Id = 40,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Kırşehir",
+                            PlateCode = "40"
+                        },
+                        new
+                        {
+                            Id = 41,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Kocaeli",
+                            PlateCode = "41"
+                        },
+                        new
+                        {
+                            Id = 42,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Konya",
+                            PlateCode = "42"
+                        },
+                        new
+                        {
+                            Id = 43,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Kütahya",
+                            PlateCode = "43"
+                        },
+                        new
+                        {
+                            Id = 44,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Malatya",
+                            PlateCode = "44"
+                        },
+                        new
+                        {
+                            Id = 45,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Manisa",
+                            PlateCode = "45"
+                        },
+                        new
+                        {
+                            Id = 46,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Kahramanmaraş",
+                            PlateCode = "46"
+                        },
+                        new
+                        {
+                            Id = 47,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Mardin",
+                            PlateCode = "47"
+                        },
+                        new
+                        {
+                            Id = 48,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Muğla",
+                            PlateCode = "48"
+                        },
+                        new
+                        {
+                            Id = 49,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Muş",
+                            PlateCode = "49"
+                        },
+                        new
+                        {
+                            Id = 50,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Nevşehir",
+                            PlateCode = "50"
+                        },
+                        new
+                        {
+                            Id = 51,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Niğde",
+                            PlateCode = "51"
+                        },
+                        new
+                        {
+                            Id = 52,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Ordu",
+                            PlateCode = "52"
+                        },
+                        new
+                        {
+                            Id = 53,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Rize",
+                            PlateCode = "53"
+                        },
+                        new
+                        {
+                            Id = 54,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Sakarya",
+                            PlateCode = "54"
+                        },
+                        new
+                        {
+                            Id = 55,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Samsun",
+                            PlateCode = "55"
+                        },
+                        new
+                        {
+                            Id = 56,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Siirt",
+                            PlateCode = "56"
+                        },
+                        new
+                        {
+                            Id = 57,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Sinop",
+                            PlateCode = "57"
+                        },
+                        new
+                        {
+                            Id = 58,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Sivas",
+                            PlateCode = "58"
+                        },
+                        new
+                        {
+                            Id = 59,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Tekirdağ",
+                            PlateCode = "59"
+                        },
+                        new
+                        {
+                            Id = 60,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Tokat",
+                            PlateCode = "60"
+                        },
+                        new
+                        {
+                            Id = 61,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Trabzon",
+                            PlateCode = "61"
+                        },
+                        new
+                        {
+                            Id = 62,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Tunceli",
+                            PlateCode = "62"
+                        },
+                        new
+                        {
+                            Id = 63,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Şanlıurfa",
+                            PlateCode = "63"
+                        },
+                        new
+                        {
+                            Id = 64,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Uşak",
+                            PlateCode = "64"
+                        },
+                        new
+                        {
+                            Id = 65,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Van",
+                            PlateCode = "65"
+                        },
+                        new
+                        {
+                            Id = 66,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Yozgat",
+                            PlateCode = "66"
+                        },
+                        new
+                        {
+                            Id = 67,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Zonguldak",
+                            PlateCode = "67"
+                        },
+                        new
+                        {
+                            Id = 68,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Aksaray",
+                            PlateCode = "68"
+                        },
+                        new
+                        {
+                            Id = 69,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Bayburt",
+                            PlateCode = "69"
+                        },
+                        new
+                        {
+                            Id = 70,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Karaman",
+                            PlateCode = "70"
+                        },
+                        new
+                        {
+                            Id = 71,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Kırıkkale",
+                            PlateCode = "71"
+                        },
+                        new
+                        {
+                            Id = 72,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Batman",
+                            PlateCode = "72"
+                        },
+                        new
+                        {
+                            Id = 73,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Şırnak",
+                            PlateCode = "73"
+                        },
+                        new
+                        {
+                            Id = 74,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Bartın",
+                            PlateCode = "74"
+                        },
+                        new
+                        {
+                            Id = 75,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Ardahan",
+                            PlateCode = "75"
+                        },
+                        new
+                        {
+                            Id = 76,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Iğdır",
+                            PlateCode = "76"
+                        },
+                        new
+                        {
+                            Id = 77,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Yalova",
+                            PlateCode = "77"
+                        },
+                        new
+                        {
+                            Id = 78,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Karabük",
+                            PlateCode = "78"
+                        },
+                        new
+                        {
+                            Id = 79,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Kilis",
+                            PlateCode = "79"
+                        },
+                        new
+                        {
+                            Id = 80,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Osmaniye",
+                            PlateCode = "80"
+                        },
+                        new
+                        {
+                            Id = 81,
+                            CountryId = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            Name = "Düzce",
+                            PlateCode = "81"
                         });
                 });
 
@@ -2596,11 +3298,20 @@ namespace GMK360.Data.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<decimal?>("EstimatedLaborCost")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("EstimatedMaterialCost")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsUnplannedExtra")
                         .HasColumnType("bit");
+
+                    b.Property<string>("ItemCode")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ItemName")
                         .IsRequired()
@@ -2612,6 +3323,9 @@ namespace GMK360.Data.Migrations
                     b.Property<decimal>("PlannedUnitPrice")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int>("ProcurementStrategy")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(18,2)");
 
@@ -2620,6 +3334,9 @@ namespace GMK360.Data.Migrations
 
                     b.Property<int>("SourceType")
                         .HasColumnType("int");
+
+                    b.Property<string>("SubCategory")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("SupplierId")
                         .HasColumnType("int");
@@ -2666,6 +3383,9 @@ namespace GMK360.Data.Migrations
 
                     b.Property<int?>("BuildingAge")
                         .HasColumnType("int");
+
+                    b.Property<string>("BypassedPhases")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("CityId")
                         .HasColumnType("int");
@@ -3579,6 +4299,9 @@ namespace GMK360.Data.Migrations
 
                     b.Property<string>("IssueNotes")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("LinkedPhaseCategory")
+                        .HasColumnType("int");
 
                     b.Property<string>("OriginalLocation")
                         .HasColumnType("nvarchar(max)");
@@ -4710,64 +5433,6 @@ namespace GMK360.Data.Migrations
                     b.HasIndex("CityId");
 
                     b.ToTable("Districts");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            CityId = 34,
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
-                            IsDeleted = false,
-                            Name = "Kad?k?y"
-                        },
-                        new
-                        {
-                            Id = 2,
-                            CityId = 34,
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
-                            IsDeleted = false,
-                            Name = "Be?ikta?"
-                        },
-                        new
-                        {
-                            Id = 3,
-                            CityId = 34,
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
-                            IsDeleted = false,
-                            Name = "?i?li"
-                        },
-                        new
-                        {
-                            Id = 4,
-                            CityId = 6,
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
-                            IsDeleted = false,
-                            Name = "?ankaya"
-                        },
-                        new
-                        {
-                            Id = 5,
-                            CityId = 6,
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
-                            IsDeleted = false,
-                            Name = "Ke?i?ren"
-                        },
-                        new
-                        {
-                            Id = 6,
-                            CityId = 35,
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
-                            IsDeleted = false,
-                            Name = "Kar??yaka"
-                        },
-                        new
-                        {
-                            Id = 7,
-                            CityId = 35,
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
-                            IsDeleted = false,
-                            Name = "Bornova"
-                        });
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.DmsCabinet", b =>
@@ -8323,32 +8988,6 @@ namespace GMK360.Data.Migrations
                     b.HasIndex("DistrictId");
 
                     b.ToTable("Neighborhoods");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
-                            DistrictId = 1,
-                            IsDeleted = false,
-                            Name = "Ac?badem"
-                        },
-                        new
-                        {
-                            Id = 2,
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
-                            DistrictId = 1,
-                            IsDeleted = false,
-                            Name = "Bostanc?"
-                        },
-                        new
-                        {
-                            Id = 3,
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
-                            DistrictId = 4,
-                            IsDeleted = false,
-                            Name = "Bah?elievler"
-                        });
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.NeighborhoodPOI", b =>
@@ -10720,26 +11359,6 @@ namespace GMK360.Data.Migrations
                     b.HasIndex("NeighborhoodId");
 
                     b.ToTable("Streets");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
-                            IsActive = true,
-                            IsDeleted = false,
-                            Name = "G?l Sokak",
-                            NeighborhoodId = 1
-                        },
-                        new
-                        {
-                            Id = 2,
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
-                            IsActive = true,
-                            IsDeleted = false,
-                            Name = "Lale Sokak",
-                            NeighborhoodId = 1
-                        });
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.SubscriptionPackage", b =>
@@ -11366,6 +11985,45 @@ namespace GMK360.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("SystemNotificationLogs");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.SystemPhaseTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsQuoteRequired")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ItemCode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("PhaseCategory")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SubCategory")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SystemPhaseTemplates");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.TaxParameter", b =>
@@ -14435,7 +15093,7 @@ namespace GMK360.Data.Migrations
                     b.HasOne("GMK360.Core.Entities.SystemLegalDocumentTemplate", "PrerequisiteTemplate")
                         .WithMany()
                         .HasForeignKey("PrerequisiteTemplateId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("ModuleDocumentRule");

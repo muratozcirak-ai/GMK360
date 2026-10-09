@@ -1,18 +1,20 @@
 ﻿using System;
 using System.Linq;
-using Microsoft.EntityFrameworkCore;
-using GMK360.Data.Context;
-using GMK360.Core.Entities;
+using Microsoft.EntityFrameworkData;
+using Microsoft.Data.Sqlite;
 
-class Program {
-    static void Main() {
-        var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
-        optionsBuilder.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=GMK360Db;Trusted_Connection=True;");
-        using var context = new ApplicationDbContext(optionsBuilder.Options);
-        
-        var blocks = context.Buildings.ToList();
-        foreach (var b in blocks) {
-            Console.WriteLine($"Block: {b.Name}, Existing: {b.IsExistingBuilding}, TotalUnits: {b.TotalUnits}, TotalShops: {b.TotalShops}, TotalApartments: {b.TotalApartments}");
+var connectionString = "Data Source=GMK360.Web/GMK360Db.sqlite";
+using (var connection = new SqliteConnection(connectionString))
+{
+    connection.Open();
+    var command = connection.CreateCommand();
+    command.CommandText = "SELECT Id, BlockName, IsExistingBuilding, ParentBuildingId FROM Buildings WHERE ConstructionProjectId IS NOT NULL;";
+    using (var reader = command.ExecuteReader())
+    {
+        Console.WriteLine("ID | BlockName | IsExistingBuilding | ParentBuildingId");
+        while (reader.Read())
+        {
+            Console.WriteLine($"{reader.GetInt32(0)} | {reader.GetString(1)} | {reader.GetBoolean(2)} | {(reader.IsDBNull(3) ? "NULL" : reader.GetInt32(3).ToString())}");
         }
     }
 }

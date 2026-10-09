@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 
 using Microsoft.AspNetCore.Identity;
 
@@ -273,7 +273,7 @@ namespace GMK360.Web.Controllers
                 ProjectType = projectType,
                 Address = "", // DB requires not null
                 Description = "", // DB requires not null
-                CreatedAt = DateTime.UtcNow,
+                
                 IsDataLocked = false
             };
 
@@ -397,30 +397,47 @@ namespace GMK360.Web.Controllers
                         }).ToList();
                     }
                     if (draft.Blocks != null && draft.Blocks.Any()) {
-                        model.ExistingBlocks = draft.Blocks.Where(b => b.IsExistingBuilding).Select(b => new GMK360.Web.Models.WizardBlockItem {
+                        model.ExistingBlocks = draft.Blocks.Where(b => b.IsExistingBuilding && b.ParentBuildingId == null).Select(b => new GMK360.Web.Models.WizardBlockItem {
                             BlockName = b.BlockName,
                             BaseArea = b.BaseArea,
                             TotalFloors = b.TotalFloors ?? 0,
-                            BasementFloors = b.BasementFloors,
-                            TotalApartments = b.TotalApartments > 0 ? b.TotalApartments : b.TotalUnits,
+                            TotalApartments = b.TotalApartments,
                             TotalShops = b.TotalShops,
+                            BuildingAge = b.BuildingAge,
+                            BasementFloors = b.BasementFloors,
                             HasGroundFloor = b.HasGroundFloor,
                             HasRoof = b.HasRoof,
-                            IsExistingBuilding = true,
-                            LayoutPattern = b.LayoutPattern, BuildingAge = b.BuildingAge
+                            LayoutPattern = b.LayoutPattern,
+                            SubBlocks = draft.Blocks.Where(cb => cb.ParentBuildingId == b.Id).Select(cb => new GMK360.Web.Models.WizardBlockItem {
+                                BlockName = cb.BlockName,
+                                TotalFloors = cb.TotalFloors ?? 0,
+                                TotalApartments = cb.TotalApartments,
+                                TotalShops = cb.TotalShops,
+                                BasementFloors = cb.BasementFloors,
+                                HasGroundFloor = cb.HasGroundFloor,
+                                HasRoof = cb.HasRoof
+                            }).ToList()
                         }).ToList();
-
-                        model.TargetBlocks = draft.Blocks.Where(b => !b.IsExistingBuilding).Select(b => new GMK360.Web.Models.WizardBlockItem {
+                        model.TargetBlocks = draft.Blocks.Where(b => !b.IsExistingBuilding && b.ParentBuildingId == null).Select(b => new GMK360.Web.Models.WizardBlockItem {
                             BlockName = b.BlockName,
                             BaseArea = b.BaseArea,
                             TotalFloors = b.TotalFloors ?? 0,
-                            BasementFloors = b.BasementFloors,
-                            TotalApartments = b.TotalApartments > 0 ? b.TotalApartments : b.TotalUnits,
+                            TotalApartments = b.TotalApartments,
                             TotalShops = b.TotalShops,
+                            BuildingAge = b.BuildingAge,
+                            BasementFloors = b.BasementFloors,
                             HasGroundFloor = b.HasGroundFloor,
                             HasRoof = b.HasRoof,
-                            IsExistingBuilding = false,
-                            LayoutPattern = b.LayoutPattern
+                            LayoutPattern = b.LayoutPattern,
+                            SubBlocks = draft.Blocks.Where(cb => cb.ParentBuildingId == b.Id).Select(cb => new GMK360.Web.Models.WizardBlockItem {
+                                BlockName = cb.BlockName,
+                                TotalFloors = cb.TotalFloors ?? 0,
+                                TotalApartments = cb.TotalApartments,
+                                TotalShops = cb.TotalShops,
+                                BasementFloors = cb.BasementFloors,
+                                HasGroundFloor = cb.HasGroundFloor,
+                                HasRoof = cb.HasRoof
+                            }).ToList()
                         }).ToList();
                     }
 
@@ -530,10 +547,62 @@ namespace GMK360.Web.Controllers
                 Directory.CreateDirectory(imagesFolder);
                 Directory.CreateDirectory(docsFolder);
 
+                // Helper to sanitize project name for filenames
+                string safeProjName = string.Join("_", project.Name.Split(Path.GetInvalidFileNameChars()));
+                safeProjName = safeProjName.Replace(" ", "_");
+
+                // --- 1. COVER IMAGE (GELECEGİ HALİ) ---
+                if (model.CoverImageFile != null && model.CoverImageFile.Length > 0)
+                {
+                    // Find and remove old archive and file if exists
+                    var oldArchive = await _context.DocumentArchives.FirstOrDefaultAsync(d => d.ProjectId == project.Id && d.Title == "Proje Görseli (Geleceği Hali)");
+                    if (oldArchive != null)
+                    {
+                        var oldFilePath = Path.Combine(_hostEnvironment.WebRootPath, oldArchive.DocumentUrl.TrimStart('/'));
+                        if (System.IO.File.Exists(oldFilePath)) System.IO.File.Delete(oldFilePath);
+                        _context.DocumentArchives.Remove(oldArchive);
+                    }
+
+                    string extension = Path.GetExtension(model.CoverImageFile.FileName);
+                    string standardizedName = $"{safeProjName}_GelecekHali_1{extension}";
+                    string filePath = Path.Combine(imagesFolder, standardizedName);
+                    
+                    using (var fileStream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await model.CoverImageFile.CopyToAsync(fileStream);
+                    }
+                    var archive = new GMK360.Core.Entities.DocumentArchive
+                    {
+                        AgencyId = agencyId.Value,
+                        ProjectId = project.Id,
+                        Title = "Proje Görseli (Geleceği Hali)",
+                        Category = "Bina Görselleri",
+                        SourceModule = "Construction",
+                        DocumentUrl = $"/uploads/Agency_{agencyId.Value}/Project_{project.Id}/images/{standardizedName}",
+                        FileName = standardizedName,
+                        FileExtension = extension,
+                        UploadDate = DateTime.UtcNow,
+                        Status = "Tamamlandı"
+                    };
+                    _context.DocumentArchives.Add(archive);
+                    project.CoverImageUrl = archive.DocumentUrl;
+                }
+
+                // --- 2. CURRENT STATE IMAGE (MEVCUT DURUM / İLK HALİ) ---
                 if (model.CurrentStateImageFile != null && model.CurrentStateImageFile.Length > 0)
                 {
-                    string uniqueFileName = Guid.NewGuid().ToString() + "_" + Path.GetFileName(model.CurrentStateImageFile.FileName);
-                    string filePath = Path.Combine(imagesFolder, uniqueFileName);
+                    var oldArchive = await _context.DocumentArchives.FirstOrDefaultAsync(d => d.ProjectId == project.Id && d.Title == "Mevcut Durum Görseli (İlk Hali)");
+                    if (oldArchive != null)
+                    {
+                        var oldFilePath = Path.Combine(_hostEnvironment.WebRootPath, oldArchive.DocumentUrl.TrimStart('/'));
+                        if (System.IO.File.Exists(oldFilePath)) System.IO.File.Delete(oldFilePath);
+                        _context.DocumentArchives.Remove(oldArchive);
+                    }
+
+                    string extension = Path.GetExtension(model.CurrentStateImageFile.FileName);
+                    string standardizedName = $"{safeProjName}_EskiHali_1{extension}";
+                    string filePath = Path.Combine(imagesFolder, standardizedName);
+                    
                     using (var fileStream = new FileStream(filePath, FileMode.Create))
                     {
                         await model.CurrentStateImageFile.CopyToAsync(fileStream);
@@ -542,23 +611,34 @@ namespace GMK360.Web.Controllers
                     {
                         AgencyId = agencyId.Value,
                         ProjectId = project.Id,
-                        Title = "Mevcut Durum GÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶rseli (ÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â°lk Hali)",
-                        Category = "Bina GÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶rselleri",
+                        Title = "Mevcut Durum Görseli (İlk Hali)",
+                        Category = "Bina Görselleri",
                         SourceModule = "Construction",
-                        DocumentUrl = $"/uploads/Agency_{agencyId.Value}/Project_{project.Id}/images/{uniqueFileName}",
-                        FileName = Path.GetFileName(model.CurrentStateImageFile.FileName),
-                        FileExtension = Path.GetExtension(model.CurrentStateImageFile.FileName),
+                        DocumentUrl = $"/uploads/Agency_{agencyId.Value}/Project_{project.Id}/images/{standardizedName}",
+                        FileName = standardizedName,
+                        FileExtension = extension,
                         UploadDate = DateTime.UtcNow,
-                        Status = "TamamlandÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±"
+                        Status = "Tamamlandı"
                     };
                     _context.DocumentArchives.Add(archive);
-                    project.CoverImageUrl = archive.DocumentUrl;
+                    project.CurrentStateImageUrl = archive.DocumentUrl;
                 }
-                
+
+                // --- 3. TAPU DOCUMENT (TAPU BELGESİ) ---
                 if (model.TapuDocumentFile != null && model.TapuDocumentFile.Length > 0)
                 {
-                    string uniqueFileName = Guid.NewGuid().ToString() + "_" + Path.GetFileName(model.TapuDocumentFile.FileName);
-                    string filePath = Path.Combine(docsFolder, uniqueFileName);
+                    var oldArchive = await _context.DocumentArchives.FirstOrDefaultAsync(d => d.ProjectId == project.Id && d.Title == "Tapu Belgesi");
+                    if (oldArchive != null)
+                    {
+                        var oldFilePath = Path.Combine(_hostEnvironment.WebRootPath, oldArchive.DocumentUrl.TrimStart('/'));
+                        if (System.IO.File.Exists(oldFilePath)) System.IO.File.Delete(oldFilePath);
+                        _context.DocumentArchives.Remove(oldArchive);
+                    }
+
+                    string extension = Path.GetExtension(model.TapuDocumentFile.FileName);
+                    string standardizedName = $"{safeProjName}_TapuBelgesi{extension}";
+                    string filePath = Path.Combine(docsFolder, standardizedName);
+                    
                     using (var fileStream = new FileStream(filePath, FileMode.Create))
                     {
                         await model.TapuDocumentFile.CopyToAsync(fileStream);
@@ -570,14 +650,13 @@ namespace GMK360.Web.Controllers
                         Title = "Tapu Belgesi",
                         Category = "Resmi Evraklar",
                         SourceModule = "Construction",
-                        DocumentUrl = $"/uploads/Agency_{agencyId.Value}/Project_{project.Id}/documents/{uniqueFileName}",
-                        FileName = Path.GetFileName(model.TapuDocumentFile.FileName),
-                        FileExtension = Path.GetExtension(model.TapuDocumentFile.FileName),
+                        DocumentUrl = $"/uploads/Agency_{agencyId.Value}/Project_{project.Id}/documents/{standardizedName}",
+                        FileName = standardizedName,
+                        FileExtension = extension,
                         UploadDate = DateTime.UtcNow,
-                        Status = "TamamlandÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±"
+                        Status = "Tamamlandı"
                     };
                     _context.DocumentArchives.Add(archive);
-                    project.CoverImageUrl = archive.DocumentUrl;
                 }
                 
                 await _context.SaveChangesAsync();
@@ -596,108 +675,134 @@ namespace GMK360.Web.Controllers
 
         [HttpPost]
 
-        public async Task<IActionResult> SaveStep2([FromForm] GMK360.Web.Models.CreateProjectWizardViewModel model)
-
+                public async Task<IActionResult> SaveStep2([FromForm] GMK360.Web.Models.CreateProjectWizardViewModel model)
         {
-
             try {
-
-                if (model.DraftProjectId == 0) return Json(new { success = false, message = "Proje ID bulunamadÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢." });
-
+                if (model.DraftProjectId == 0) return Json(new { success = false, message = "Proje ID bulunamadı." });
                 var project = await _context.ConstructionProjects.Include(p => p.Blocks).FirstOrDefaultAsync(p => p.Id == model.DraftProjectId);
+                if (project == null) return Json(new { success = false, message = "Proje bulunamadı." });
 
-                if (project == null) return Json(new { success = false, message = "Proje bulunamadÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢." });
+                var existingBlocks = project.Blocks?.ToList() ?? new System.Collections.Generic.List<GMK360.Core.Entities.Building>();
+                var parentBlocks = new System.Collections.Generic.List<GMK360.Web.Models.WizardBlockItem>();
+                if (model.ExistingBlocks != null) { foreach(var b in model.ExistingBlocks) { b.IsExistingBuilding = true; parentBlocks.Add(b); } }
+                if (model.TargetBlocks != null) { foreach(var b in model.TargetBlocks) { b.IsExistingBuilding = false; parentBlocks.Add(b); } }
 
-
-
-                var allBlocks = new System.Collections.Generic.List<GMK360.Web.Models.WizardBlockItem>();
-                if (model.ExistingBlocks != null) {
-                    foreach(var eb in model.ExistingBlocks) {
-                        eb.IsExistingBuilding = true;
-                        allBlocks.Add(eb);
+                var allCurrentNames = new System.Collections.Generic.List<string>();
+                
+                int blockCounter = 1;
+                foreach (var pb in parentBlocks) {
+                    allCurrentNames.Add(pb.BlockName);
+                    var existingParent = existingBlocks.FirstOrDefault(eb => eb.BlockName == pb.BlockName && eb.IsExistingBuilding == pb.IsExistingBuilding && eb.ParentBuildingId == null);
+                    
+                    if (existingParent != null) {
+                        existingParent.BaseArea = pb.BaseArea;
+                        existingParent.BasementFloors = pb.BasementFloors;
+                        existingParent.TotalFloors = pb.TotalFloors;
+                        existingParent.TotalUnits = pb.TotalApartments + pb.TotalShops;
+                        existingParent.TotalApartments = pb.TotalApartments;
+                        existingParent.TotalShops = pb.TotalShops;
+                        existingParent.HasGroundFloor = pb.HasGroundFloor;
+                        existingParent.HasRoof = pb.HasRoof;
+                        existingParent.BuildingAge = pb.BuildingAge;
+                        existingParent.LayoutPattern = pb.LayoutPattern;
+                    } else {
+                        existingParent = new GMK360.Core.Entities.Building {
+                            Name = project.Name + " - " + pb.BlockName,
+                            BlockName = pb.BlockName,
+                            BuildingNumber = blockCounter.ToString(),
+                            StreetName = "Belirtilmedi",
+                            IsExistingBuilding = pb.IsExistingBuilding,
+                            BaseArea = pb.BaseArea,
+                            BasementFloors = pb.BasementFloors,
+                            TotalFloors = pb.TotalFloors,
+                            TotalUnits = pb.TotalApartments + pb.TotalShops,
+                            TotalApartments = pb.TotalApartments,
+                            TotalShops = pb.TotalShops,
+                            HasGroundFloor = pb.HasGroundFloor,
+                            HasRoof = pb.HasRoof,
+                            BuildingAge = pb.BuildingAge,
+                            LayoutPattern = pb.LayoutPattern,
+                            ConstructionProjectId = project.Id,
+                            CityId = project.CityId ?? 34,
+                            DistrictId = project.DistrictId ?? 1,
+                            NeighborhoodId = project.NeighborhoodId ?? 1,
+                            StreetId = project.StreetId,
+                            
+                            ManagerUserId = _userManager.GetUserId(User) ?? ""
+                        };
+                        _context.Buildings.Add(existingParent);
+                        existingBlocks.Add(existingParent); // Add to local list for child linking
                     }
-                }
-                if (model.TargetBlocks != null) {
-                    foreach(var tb in model.TargetBlocks) {
-                        tb.IsExistingBuilding = false;
-                        allBlocks.Add(tb);
-                    }
-                }
-
-                if (allBlocks.Any())
-                {
-                    var existingBlocks = project.Blocks?.ToList() ?? new System.Collections.Generic.List<GMK360.Core.Entities.Building>();
-                    var currentBlockNames = allBlocks.Select(b => b.BlockName).ToList();
-
-                    // Sadece formda olmayan bloklar sil
-                    var blocksToRemove = existingBlocks.Where(b => !currentBlockNames.Contains(b.BlockName)).ToList();
-                    if (blocksToRemove.Any()) {
-                        _context.Buildings.RemoveRange(blocksToRemove);
-                    }
-
-                    int blockCounter = 1;
-                    foreach (var b in allBlocks)
-                    {
-                        var existingBlock = existingBlocks.FirstOrDefault(eb => eb.BlockName == b.BlockName && eb.IsExistingBuilding == b.IsExistingBuilding);
-                        if (existingBlock != null)
-                        {
-                            // Varsa SADECE GÃƒÆ’Ã…â€œNCELLE
-                            existingBlock.BaseArea = b.BaseArea;
-                            existingBlock.BasementFloors = b.BasementFloors;
-                            existingBlock.TotalFloors = b.TotalFloors;
-                            existingBlock.TotalUnits = b.TotalApartments + b.TotalShops;
-                            existingBlock.TotalApartments = b.TotalApartments;
-                            existingBlock.TotalShops = b.TotalShops;
-                            existingBlock.HasRoof = b.HasRoof;
-                            existingBlock.HasGroundFloor = b.HasGroundFloor;
-                            existingBlock.LayoutPattern = b.LayoutPattern;
-                            existingBlock.BuildingAge = b.BuildingAge;
+                    
+                    // İşlem bittikten sonra Parent ID almak için kaydetmemiz gerekmiyor çünkü Entity Framework navigasyon üzerinden id çözer
+                    if (pb.SubBlocks != null && pb.SubBlocks.Any()) {
+                        foreach (var sb in pb.SubBlocks) {
+                            allCurrentNames.Add(sb.BlockName);
+                            // Ebeveyn bağlantısını kontrol et.
+                            var existingChild = existingBlocks.FirstOrDefault(eb => eb.BlockName == sb.BlockName && eb.IsExistingBuilding == pb.IsExistingBuilding && (eb.ParentBuilding == existingParent || eb.ParentBuildingId == existingParent.Id));
+                            
+                            if (existingChild != null) {
+                                existingChild.TotalFloors = sb.TotalFloors;
+                                existingChild.TotalUnits = sb.TotalApartments + sb.TotalShops;
+                                existingChild.TotalApartments = sb.TotalApartments;
+                                existingChild.TotalShops = sb.TotalShops;
+                                existingChild.BasementFloors = sb.BasementFloors;
+                                existingChild.HasGroundFloor = sb.HasGroundFloor;
+                                existingChild.HasRoof = sb.HasRoof;
+                            } else {
+                                existingChild = new GMK360.Core.Entities.Building {
+                                    Name = project.Name + " - " + sb.BlockName,
+                                    BlockName = sb.BlockName,
+                                    BuildingNumber = blockCounter.ToString() + "-Sub",
+                                    StreetName = "Belirtilmedi",
+                                    IsExistingBuilding = pb.IsExistingBuilding,
+                                    TotalFloors = sb.TotalFloors,
+                                    TotalUnits = sb.TotalApartments + sb.TotalShops,
+                                    TotalApartments = sb.TotalApartments,
+                                    TotalShops = sb.TotalShops,
+                                    BasementFloors = sb.BasementFloors,
+                                    HasGroundFloor = sb.HasGroundFloor,
+                                    HasRoof = sb.HasRoof,
+                                    ConstructionProjectId = project.Id,
+                                    ParentBuilding = existingParent, // Navigation mapping
+                                    CityId = project.CityId ?? 34,
+                                    DistrictId = project.DistrictId ?? 1,
+                                    NeighborhoodId = project.NeighborhoodId ?? 1,
+                                    StreetId = project.StreetId,
+                                    
+                                    ManagerUserId = _userManager.GetUserId(User) ?? ""
+                                };
+                                _context.Buildings.Add(existingChild);
+                                existingBlocks.Add(existingChild);
+                            }
                         }
-                        else
-                        {
-                            // Yoksa YENÃƒâ€Ã‚Â° EKLE
-                            var building = new GMK360.Core.Entities.Building
-                            {
-                                Name = project.Name + " - " + b.BlockName,
-                                BlockName = b.BlockName,
-                                BuildingNumber = blockCounter.ToString(),
-                                StreetName = "Belirtilmedi",
-                                BaseArea = b.BaseArea,
-                                BasementFloors = b.BasementFloors,
-                                TotalFloors = b.TotalFloors,
-                                TotalUnits = b.TotalApartments + b.TotalShops,
-                                TotalApartments = b.TotalApartments,
-                                TotalShops = b.TotalShops,
-                                HasBlock = true,
-                                HasRoof = b.HasRoof,
-                                HasGroundFloor = b.HasGroundFloor,
-                                IsExistingBuilding = b.IsExistingBuilding,
-                                LayoutPattern = b.LayoutPattern,
-                                BuildingAge = b.BuildingAge,
-                                ConstructionProjectId = project.Id,
-                                CityId = project.CityId ?? 34,
-                                DistrictId = project.DistrictId ?? 1,
-                                NeighborhoodId = project.NeighborhoodId ?? 1,
-                                StreetId = project.StreetId,
-                                CreatedAt = DateTime.UtcNow,
-                                ManagerUserId = _userManager.GetUserId(User) ?? ""
-                            };
-                            _context.Buildings.Add(building);
-                        }
-                        blockCounter++;
                     }
+                    blockCounter++;
+                }
+                
+                // Silme işlemi
+                var submittedExistingParentNames = parentBlocks.Where(pb => pb.IsExistingBuilding).Select(pb => pb.BlockName).ToList();
+        var submittedExistingSubNames = parentBlocks.Where(pb => pb.IsExistingBuilding).SelectMany(pb => pb.SubBlocks?.Select(sb => sb.BlockName) ?? new string[0]).ToList();
+        
+        var submittedNewParentNames = parentBlocks.Where(pb => !pb.IsExistingBuilding).Select(pb => pb.BlockName).ToList();
+        var submittedNewSubNames = parentBlocks.Where(pb => !pb.IsExistingBuilding).SelectMany(pb => pb.SubBlocks?.Select(sb => sb.BlockName) ?? new string[0]).ToList();
+
+        var blocksToRemove = existingBlocks.Where(b => 
+            (b.IsExistingBuilding && b.ParentBuildingId == null && !submittedExistingParentNames.Contains(b.BlockName)) || 
+            (b.IsExistingBuilding && b.ParentBuildingId != null && !submittedExistingSubNames.Contains(b.BlockName)) ||
+            (!b.IsExistingBuilding && b.ParentBuildingId == null && !submittedNewParentNames.Contains(b.BlockName)) ||
+            (!b.IsExistingBuilding && b.ParentBuildingId != null && !submittedNewSubNames.Contains(b.BlockName))
+        ).ToList();
+                if (blocksToRemove.Any()) {
+                    _context.Buildings.RemoveRange(blocksToRemove);
                 }
 
                 await _context.SaveChangesAsync();
-
                 return Json(new { success = true });
 
             } catch (Exception ex) {
-
                 return Json(new { success = false, message = ex.Message + (ex.InnerException != null ? " - " + ex.InnerException.Message : "") });
-
             }
-
         }
 
         [HttpPost]
@@ -852,7 +957,7 @@ namespace GMK360.Web.Controllers
 
 
 
-                TempData["SuccessMessage"] = "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â¼ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Âantiye baÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â¼ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸arÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢yla baÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â¼ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸latÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢ldÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢ ve bloklar oluÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â¼ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸turuldu.";
+                TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
 
                 return RedirectToAction(nameof(Details), new { id = project.Id });
 
@@ -956,7 +1061,7 @@ namespace GMK360.Web.Controllers
 
             
 
-            TempData["SuccessMessage"] = "Yeni aama baaryla eklendi.";
+            TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
 
             return RedirectToAction(nameof(Details), new { id = projectId });
 
@@ -1034,7 +1139,7 @@ namespace GMK360.Web.Controllers
 
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = "Bina iskeleti (kat yapÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±larÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±) baÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸arÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±yla gÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ncellendi.";
+                TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
 
             }
 
@@ -1043,6 +1148,50 @@ namespace GMK360.Web.Controllers
         }
 
 
+
+        
+        [HttpPost]
+        public async Task<IActionResult> BulkGenerateEmptyUnits(int projectId, List<string> targetFloors, string category, int count)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Json(new { success = false, message = "Yetkisiz işlem." });
+
+            var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId);
+            if (project == null && !User.IsInRole("Admin")) return Json(new { success = false, message = "Proje bulunamadı." });
+
+                        int addedCount = 0;
+            try {
+                foreach (var target in targetFloors)
+                {
+                    var parts = target.Split('|');
+                    if (parts.Length == 2 && int.TryParse(parts[0], out int buildingId) && int.TryParse(parts[1], out int floorLevel))
+                    {
+                        var b = await _context.Buildings.FirstOrDefaultAsync(x => x.Id == buildingId && x.ConstructionProjectId == projectId);
+                        if (b != null)
+                        {
+                            for (int i = 0; i < count; i++)
+                            {
+                                var unit = new GMK360.Core.Entities.BuildingUnit
+                                {
+                                    BuildingId = buildingId,
+                                    FloorLevel = floorLevel,
+                                    Category = category,
+                                    DoorNumber = "-", 
+                                    FacadeDirection = "-",
+                                    RoomLayout = category == "Dükkan" ? "Dükkan" : (category == "Ofis" ? "Ofis" : "Mesken")
+                                };
+                                _context.BuildingUnits.Add(unit);
+                                addedCount++;
+                            }
+                        }
+                    }
+                }
+                await _context.SaveChangesAsync();
+                return Json(new { success = true, message = $"{addedCount} adet {category} başarıyla üretildi!" });
+            } catch (Exception ex) {
+                return Json(new { success = false, message = "Sunucu Hatası: " + (ex.InnerException != null ? ex.InnerException.Message : ex.Message) });
+            }
+        }
 
         public async Task<IActionResult> ManageBlock(int id)
 
@@ -1058,7 +1207,7 @@ namespace GMK360.Web.Controllers
 
                 .Include(b => b.ConstructionProject)
 
-                .Include(b => b.Units).ThenInclude(u => u.ParentUnit).Include(b => b.ParentBuilding)
+                .Include(b => b.Units).ThenInclude(u => u.ParentUnit).Include(b => b.ParentBuilding).Include(b => b.ChildBuildings).ThenInclude(c => c.Units)
 
                 .FirstOrDefaultAsync(b => b.Id == id);
 
@@ -1224,7 +1373,7 @@ namespace GMK360.Web.Controllers
 
 
 
-            TempData["SuccessMessage"] = "Yeni Sosyal DonatÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â± / AÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±k Alan eklendi.";
+            TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
 
             return RedirectToAction(nameof(Amenities), new { projectId = projectId, isExisting = isExisting });
 
@@ -1248,7 +1397,7 @@ namespace GMK360.Web.Controllers
 
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = "AÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±k alan baÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸arÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±yla silindi.";
+                TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
 
             }
 
@@ -1354,7 +1503,7 @@ namespace GMK360.Web.Controllers
 
 
 
-            TempData["SuccessMessage"] = "Yeni Daire Tipi ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Âablonu baÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸arÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±yla oluÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸turuldu.";
+            TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
 
             return RedirectToAction(nameof(Templates), new { projectId = projectId });
 
@@ -1422,7 +1571,7 @@ namespace GMK360.Web.Controllers
 
 
 
-            TempData["SuccessMessage"] = "ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Âablona yeni alan eklendi.";
+            TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
 
             return RedirectToAction(nameof(TemplateSpaces), new { templateId = templateId });
 
@@ -1446,7 +1595,7 @@ namespace GMK360.Web.Controllers
 
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = "Alan ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸ablondan silindi.";
+                TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
 
             }
 
@@ -1536,7 +1685,7 @@ namespace GMK360.Web.Controllers
 
 
 
-            TempData["SuccessMessage"] = "Blok zellikleri baaryla gncellendi.";
+            TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
 
             return RedirectToAction(nameof(ManageBlock), new { id = Id });
 
@@ -1882,29 +2031,26 @@ namespace GMK360.Web.Controllers
 
         [ValidateAntiForgeryToken]
 
-        public async Task<IActionResult> EditBuildingUnit(int unitId, string DoorNumber, string OwnerName, string UnitStructure)
-
+        public async Task<IActionResult> EditBuildingUnit(int unitId, string DoorNumber, string OwnerName, string UnitStructure, double? GrossSquareMeters, string FacadeDirection)
         {
-
             var unit = await _context.BuildingUnits.FindAsync(unitId);
-
             if (unit == null) return NotFound();
 
-
-
             unit.DoorNumber = string.IsNullOrWhiteSpace(DoorNumber) ? unit.DoorNumber : DoorNumber;
-
             unit.OwnerName = string.IsNullOrWhiteSpace(OwnerName) ? null : OwnerName;
-
+            
             if (!string.IsNullOrWhiteSpace(UnitStructure))
-
             {
-
                 unit.RoomLayout = UnitStructure;
-
             }
-
-
+            if (GrossSquareMeters.HasValue)
+            {
+                unit.GrossSquareMeters = GrossSquareMeters.Value;
+            }
+            if (!string.IsNullOrWhiteSpace(FacadeDirection))
+            {
+                unit.FacadeDirection = FacadeDirection;
+            }
 
             await _context.SaveChangesAsync();
 
@@ -2757,7 +2903,7 @@ namespace GMK360.Web.Controllers
 
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Akll ablon ile ller baaryla kaydedildi.";
+            TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
 
             
 
@@ -2865,7 +3011,7 @@ namespace GMK360.Web.Controllers
 
 
 
-                TempData["SuccessMessage"] = "l baaryla eklendi.";
+                TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
 
                 return RedirectToAction(nameof(ManageUnitSpaces), new { id = space.BuildingUnitId });
 
@@ -3512,7 +3658,7 @@ namespace GMK360.Web.Controllers
             {
                 project.Status = (GMK360.Core.Entities.Construction.ProjectStatus)statusObj;
                 await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = "Proje durumu baÃƒâ€¦Ã…Â¸arÃƒâ€Ã‚Â±yla gÃƒÆ’Ã‚Â¼ncellendi.";
+                TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
             }
             return RedirectToAction("Details", new { id = id });
         }
@@ -3577,7 +3723,7 @@ namespace GMK360.Web.Controllers
             _context.ConstructionBudgetItems.Add(item);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "FiÃƒâ€¦Ã…Â¸/Gider baÃƒâ€¦Ã…Â¸arÃƒâ€Ã‚Â±yla bÃƒÆ’Ã‚Â¼tÃƒÆ’Ã‚Â§eye eklendi.";
+            TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
             return RedirectToAction(nameof(BudgetDashboard), new { id = projectId });
         }
 
@@ -3678,7 +3824,7 @@ namespace GMK360.Web.Controllers
                 
                 await _context.SaveChangesAsync();
                 
-                TempData["SuccessMessage"] = "PaydaÃƒâ€¦Ã…Â¸ bilgileri baÃƒâ€¦Ã…Â¸arÃƒâ€Ã‚Â±yla gÃƒÆ’Ã‚Â¼ncellendi.";
+                TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
                 return RedirectToAction("Details", new { id = projectId });
             }
             catch (System.Exception ex)

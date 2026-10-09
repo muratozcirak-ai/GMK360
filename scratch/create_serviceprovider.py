@@ -1,0 +1,179 @@
+﻿import codecs
+
+path = 'GMK360.Web/Views/Dashboard/ServiceProvider.cshtml'
+content = '''@{
+    ViewData["Title"] = "Esnaf ve Usta Portalı";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+}
+
+<div class="container-fluid py-4 px-md-4">
+    <!-- Üst Başlık -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark">
+                <i class="bi bi-tools text-primary me-2"></i> Esnaf & Hizmet Sağlayıcı Portalı
+            </h2>
+            <p class="text-muted mb-0">Bölgenizdeki bina yönetimlerinden ve inşaat firmalarından gelen iş/ihale talepleri.</p>
+        </div>
+        <div>
+            <div class="form-check form-switch fs-5 d-inline-block me-3">
+                <input class="form-check-input" type="checkbox" id="availabilitySwitch" checked>
+                <label class="form-check-label text-success fw-bold ms-2" for="availabilitySwitch">Yeni İş Alımına Açığım</label>
+            </div>
+            <button class="btn btn-primary rounded-pill shadow-sm px-4 fw-bold">
+                <i class="bi bi-person-lines-fill me-1"></i> Profilim
+            </button>
+        </div>
+    </div>
+
+    <!-- 4 KARTLI ÖZET -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card bg-white shadow-sm border-0 rounded-4 h-100 border-start border-4 border-danger">
+                <div class="card-body p-4">
+                    <h6 class="text-muted text-uppercase fw-semibold mb-2">Yeni İş Davetleri</h6>
+                    <h3 class="mb-0 text-dark fw-bold">4 İş</h3>
+                    <small class="text-danger fw-bold"><i class="bi bi-bell-fill"></i> Teklif Bekleniyor</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-white shadow-sm border-0 rounded-4 h-100 border-start border-4 border-primary">
+                <div class="card-body p-4">
+                    <h6 class="text-muted text-uppercase fw-semibold mb-2">Devam Eden İşlerim</h6>
+                    <h3 class="mb-0 text-dark fw-bold">2 Şantiye</h3>
+                    <small class="text-muted">Hakediş Sürecinde</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-white shadow-sm border-0 rounded-4 h-100 border-start border-4 border-success">
+                <div class="card-body p-4">
+                    <h6 class="text-muted text-uppercase fw-semibold mb-2">Onaylanan Hakedişler</h6>
+                    <h3 class="mb-0 text-dark fw-bold">35.000 TL</h3>
+                    <small class="text-success"><i class="bi bi-check-circle-fill"></i> Ödeme Bekliyor</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-white shadow-sm border-0 rounded-4 h-100 border-start border-4 border-warning">
+                <div class="card-body p-4">
+                    <h6 class="text-muted text-uppercase fw-semibold mb-2">Puan & İtibar</h6>
+                    <h3 class="mb-0 text-dark fw-bold">4.8 <i class="bi bi-star-fill text-warning fs-5"></i></h3>
+                    <small class="text-muted">Bölgedeki En İyi %10 İçindesiniz</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- SOL KOLON: Gelen Talepler -->
+        <div class="col-md-8">
+            <h5 class="fw-bold mb-3"><i class="bi bi-inbox-fill text-danger me-2"></i>Gelen Yeni İş Davetleri (B2B & B2C)</h5>
+            
+            <!-- Şantiyeden Gelen Talep (B2B) -->
+            <div class="card border-0 shadow-sm rounded-4 mb-3 hover-lift border-start border-5 border-info">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-cone-striped text-info me-2"></i>Dengehan İnşaat - Şantiye Faz 2: Kaba İnşaat</h5>
+                        <span class="badge bg-info text-dark rounded-pill px-3">B2B Şantiye İhalesi</span>
+                    </div>
+                    <p class="text-muted mb-3">Beyaz Konak Apartmanı şantiyesi için <strong>Demir Bağlama Ustası ve Ekibi (Taşeron)</strong> aranmaktadır. Tahmini metraj ektedir.</p>
+                    
+                    <div class="bg-light p-3 rounded-3 mb-3 d-flex justify-content-between">
+                        <div>
+                            <small class="text-muted d-block fw-bold text-uppercase">Bitiş Tarihi</small>
+                            <span class="fw-semibold text-danger">Yarın 17:00</span>
+                        </div>
+                        <div>
+                            <small class="text-muted d-block fw-bold text-uppercase">Tahmini Bütçe (Birim Fiyat)</small>
+                            <span class="fw-bold text-success fs-5">180 TL / m²</span>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-primary fw-bold px-4"><i class="bi bi-send-fill me-1"></i> Fiyat Teklifimi Gönder</button>
+                        <button class="btn btn-outline-secondary px-3"><i class="bi bi-file-earmark-pdf me-1"></i> Şartname İndir</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bina Yönetiminden Gelen Talep (B2C) -->
+            <div class="card border-0 shadow-sm rounded-4 mb-3 hover-lift border-start border-5 border-warning">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-building-fill-gear text-warning me-2"></i>Beyaz Konak Apt. Yönetimi</h5>
+                        <span class="badge bg-warning text-dark rounded-pill px-3">B2C Bina Bakımı</span>
+                    </div>
+                    <p class="text-muted mb-3">Bina karar defterinde onaylanan <strong>Çatı İzolasyon ve Akıntı Tamiri</strong> işlemi için bölge esnafından fiyat toplanmaktadır.</p>
+                    
+                    <div class="bg-light p-3 rounded-3 mb-3 d-flex justify-content-between">
+                        <div>
+                            <small class="text-muted d-block fw-bold text-uppercase">Konum</small>
+                            <span class="fw-semibold">Kadıköy, İstanbul (Size 2 KM)</span>
+                        </div>
+                        <div>
+                            <small class="text-muted d-block fw-bold text-uppercase">Keşif İzni</small>
+                            <span class="fw-semibold text-success">Bugün 13:00 - 17:00 arası müsait</span>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-warning fw-bold text-dark px-4"><i class="bi bi-calculator-fill me-1"></i> Teklif Ver</button>
+                        <button class="btn btn-outline-dark px-3"><i class="bi bi-geo-alt-fill me-1"></i> Haritada Gör</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SAĞ KOLON: Hakediş ve Muhasebe -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 mb-4 bg-light">
+                <div class="card-body p-4">
+                    <h6 class="fw-bold mb-4"><i class="bi bi-cash-stack text-success me-2"></i>Muhasebe & Hakediş</h6>
+                    
+                    <div class="mb-4">
+                        <small class="text-muted fw-bold text-uppercase d-block mb-1">Dengehan İnşaat (Şantiye 1)</small>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small fw-semibold">Faz 1 Yıkım Hakedişi</span>
+                            <span class="text-success fw-bold">120.000 TL</span>
+                        </div>
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar bg-success" style="width: 100%;"></div>
+                        </div>
+                        <small class="text-success d-block mt-1"><i class="bi bi-check-circle-fill"></i> Ödeme Hesaba Geçti</small>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div>
+                        <small class="text-muted fw-bold text-uppercase d-block mb-1">Güzel Evler Sitesi</small>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small fw-semibold">Peyzaj Bakım Faturası</span>
+                            <span class="text-warning fw-bold text-dark">5.000 TL</span>
+                        </div>
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar bg-warning" style="width: 50%;"></div>
+                        </div>
+                        <small class="text-muted d-block mt-1"><i class="bi bi-hourglass-split"></i> Site Yönetimi Onayında</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gelişmiş E-Fatura Entegrasyonu -->
+            <div class="card border-0 shadow-sm rounded-4 mb-4 bg-primary text-white">
+                <div class="card-body p-4 text-center">
+                    <i class="bi bi-receipt-cutoff fs-1 mb-2"></i>
+                    <h6 class="fw-bold">Tek Tuşla E-Fatura Kes</h6>
+                    <p class="small text-white-50">Onaylanan hakedişlerinizi sisteme entegre mali mührünüz ile anında e-faturaya dönüştürün.</p>
+                    <button class="btn btn-light btn-sm fw-bold text-primary w-100 rounded-pill">Fatura Modülü</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+'''
+
+with codecs.open(path, 'w', 'utf-8-sig') as f:
+    f.write(content)
+print("ServiceProvider Dashboard created!")

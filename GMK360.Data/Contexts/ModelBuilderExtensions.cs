@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using GMK360.Core.Entities;
 
 namespace GMK360.Data.Contexts
@@ -33,20 +33,8 @@ namespace GMK360.Data.Contexts
             );
 
             // 4. Cities (İl)
-            modelBuilder.Entity<City>().HasData(
-                new City { Id = 34, CountryId = 1, Name = "İstanbul", PlateCode = "34", IsDeleted = false },
-                new City { Id = 6, CountryId = 1, Name = "Ankara", PlateCode = "06", IsDeleted = false },
-                new City { Id = 35, CountryId = 1, Name = "İzmir", PlateCode = "35", IsDeleted = false },
-                new City { Id = 7, CountryId = 1, Name = "Antalya", PlateCode = "07", IsDeleted = false }
-            );
+            // Cities and Districts are seeded in ApplicationDbContext directly.
 
-            // 5. Districts (İlçe)
-            modelBuilder.Entity<District>().HasData(
-                new District { Id = 1, CityId = 34, Name = "Kadıköy", IsDeleted = false },
-                new District { Id = 2, CityId = 34, Name = "Beşiktaş", IsDeleted = false },
-                new District { Id = 3, CityId = 6, Name = "Çankaya", IsDeleted = false },
-                new District { Id = 4, CityId = 35, Name = "Karşıyaka", IsDeleted = false }
-            );
             // 6. Financial Obligation Types (Vergi ve Yükümlülük Kuralları)
             modelBuilder.Entity<FinancialObligationType>().HasData(
                 new FinancialObligationType { Id = 1, Name = "Emlak Vergisi", TargetPropertyType = TargetPropertyType.All, ResponsibleRole = ResponsibleRole.Owner, PaymentFrequency = PaymentFrequency.Biannual, FirstInstallmentMonth = 3, SecondInstallmentMonth = 11, IsActive = true, IsDeleted = false },

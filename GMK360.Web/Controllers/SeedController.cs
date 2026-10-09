@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GMK360.Web.Controllers
 {
-    // Yalnızca geçici veri aktarımı içindir.
+    // Yalnzca geici veri aktarm iindir.
     public class SeedController : Controller
     {
         private readonly ApplicationDbContext _context;
@@ -25,10 +25,10 @@ namespace GMK360.Web.Controllers
         {
             var categories = new[]
             {
-                new { Name = "Oda Sayısı", Code = "DROPDOWN_ROOM_COUNT", Values = new[] { "1+0 (Stüdyo)", "1+1", "2+1", "3+1", "4+1", "5+1", "5+2" } },
-                new { Name = "Banyo Sayısı", Code = "DROPDOWN_BATHROOM_COUNT", Values = new[] { "1", "2", "3", "4" } },
-                new { Name = "Daire Tipi", Code = "DROPDOWN_APARTMENT_TYPE", Values = new[] { "Standart", "Dubleks", "Dubleks (Ters)", "Dubleks (Çatı)", "Tripleks", "Dörtlex", "Suit" } },
-                new { Name = "Bina Yaşı", Code = "DROPDOWN_BUILDING_AGE", Values = new[] { "0 (Yeni)", "1-5", "6-10", "11-20", "21 ve üzeri" } }
+                new { Name = "Oda Says", Code = "DROPDOWN_ROOM_COUNT", Values = new[] { "1+0 (Stdyo)", "1+1", "2+1", "3+1", "4+1", "5+1", "5+2" } },
+                new { Name = "Banyo Says", Code = "DROPDOWN_BATHROOM_COUNT", Values = new[] { "1", "2", "3", "4" } },
+                new { Name = "Daire Tipi", Code = "DROPDOWN_APARTMENT_TYPE", Values = new[] { "Standart", "Dubleks", "Dubleks (Ters)", "Dubleks (at)", "Tripleks", "Drtlex", "Suit" } },
+                new { Name = "Bina Ya", Code = "DROPDOWN_BUILDING_AGE", Values = new[] { "0 (Yeni)", "1-5", "6-10", "11-20", "21 ve zeri" } }
             };
 
             foreach (var c in categories)
@@ -56,10 +56,10 @@ namespace GMK360.Web.Controllers
         {
             var categories = new[]
             {
-                new { Name = "Eşya / Demirbaş Listesi (Konut)", Code = "DROPDOWN_FURNITURE_LIST", Values = new[] { "Koltuk Takımı", "TV & Ünite", "Buzdolabı", "Çamaşır Makinesi", "Bulaşık Makinesi", "Çift Kişilik Yatak", "Gardırop", "Yemek Masası" } },
-                new { Name = "B2B Malzeme (Tedarikçi) Türleri", Code = "DROPDOWN_B2B_MATERIALS", Values = new[] { "Çimento & Harç", "İnşaat Demiri", "Boya & Yalıtım", "Seramik & Fayans", "Hırdavat & El Aletleri" } },
-                new { Name = "İlan Şikayet Sebepleri", Code = "DROPDOWN_COMPLAINT_REASONS", Values = new[] { "Yanıltıcı Fiyat", "Yanlış Konum/Adres", "Fotoğraflar Gerçek Değil", "İlan Sahibi Ulaşılamıyor", "Kapora Dolandırıcılığı Şüphesi" } },
-                new { Name = "Sözleşme Fesih Sebepleri", Code = "DROPDOWN_CONTRACT_TERMINATION", Values = new[] { "Ödeme Gecikmesi", "Mülkün Satılması", "Hasar/Kötü Kullanım", "Karşılıklı Anlaşma" } }
+                new { Name = "Eya / Demirba Listesi (Konut)", Code = "DROPDOWN_FURNITURE_LIST", Values = new[] { "Koltuk Takm", "TV & nite", "Buzdolab", "amar Makinesi", "Bulak Makinesi", "ift Kiilik Yatak", "Gardrop", "Yemek Masas" } },
+                new { Name = "B2B Malzeme (Tedariki) Trleri", Code = "DROPDOWN_B2B_MATERIALS", Values = new[] { "imento & Har", "naat Demiri", "Boya & Yaltm", "Seramik & Fayans", "Hrdavat & El Aletleri" } },
+                new { Name = "lan ikayet Sebepleri", Code = "DROPDOWN_COMPLAINT_REASONS", Values = new[] { "Yanltc Fiyat", "Yanl Konum/Adres", "Fotoraflar Gerek Deil", "lan Sahibi Ulalamyor", "Kapora Dolandrcl phesi" } },
+                new { Name = "Szleme Fesih Sebepleri", Code = "DROPDOWN_CONTRACT_TERMINATION", Values = new[] { "deme Gecikmesi", "Mlkn Satlmas", "Hasar/Kt Kullanm", "Karlkl Anlama" } }
             };
 
             foreach (var c in categories)
@@ -86,12 +86,12 @@ namespace GMK360.Web.Controllers
                 var liabilities = new List<LiabilityType>
                 {
                     new LiabilityType { Name = "Emlak Vergisi", Category = "Vergi", IsSystemType = true },
-                    new LiabilityType { Name = "Çevre ve Temizlik Vergisi", Category = "Vergi", IsSystemType = true },
+                    new LiabilityType { Name = "evre ve Temizlik Vergisi", Category = "Vergi", IsSystemType = true },
                     new LiabilityType { Name = "Tabela/Reklam Vergisi", Category = "Vergi", IsSystemType = true },
                     new LiabilityType { Name = "DASK", Category = "Sigorta", IsSystemType = true },
-                    new LiabilityType { Name = "Konut/İşyeri Sigortası", Category = "Sigorta", IsSystemType = true },
-                    new LiabilityType { Name = "Bina Aidatı", Category = "Sabit Gider", IsSystemType = true },
-                    new LiabilityType { Name = "Tadilat / Bakım", Category = "Özel Gider", IsSystemType = false }
+                    new LiabilityType { Name = "Konut/yeri Sigortas", Category = "Sigorta", IsSystemType = true },
+                    new LiabilityType { Name = "Bina Aidat", Category = "Sabit Gider", IsSystemType = true },
+                    new LiabilityType { Name = "Tadilat / Bakm", Category = "zel Gider", IsSystemType = false }
                 };
                 _context.LiabilityTypes.AddRange(liabilities);
                 await _context.SaveChangesAsync();
@@ -104,7 +104,7 @@ namespace GMK360.Web.Controllers
         {
             string sqlFilePath = @"C:\Users\murat\source\repos\GMK360\TempAddressDb\tr-address-db-main\data.sql";
             if (!System.IO.File.Exists(sqlFilePath))
-                return Content("SQL dosyası bulunamadı.");
+                return Content("SQL dosyas bulunamad.");
 
             // Clear old data to prevent conflicts (except Country)
             await _context.Database.ExecuteSqlRawAsync("DELETE FROM Neighborhoods; DELETE FROM Districts; DELETE FROM Cities;"); _context.ChangeTracker.Clear();
@@ -116,75 +116,24 @@ namespace GMK360.Web.Controllers
             var neighborhoods = new List<Neighborhood>();
             var semtToIlce = new Dictionary<int, int>(); // semt_id -> ilce_id
 
-            string currentTable = "";
-            
-            // Regex patterns based on standard mysqldump
-            // (1, 'Adana')
+                        // Regex patterns
             var cityRegex = new Regex(@"^\((\d+),\s*'([^']+)'\)");
-            // (1, 1, 'Aladağ')
             var districtRegex = new Regex(@"^\((\d+),\s*(\d+),\s*'([^']+)'\)");
-            // (1, 1, 'Karatas Semti')
             var semtRegex = new Regex(@"^\((\d+),\s*(\d+),\s*'([^']+)'\)");
-            // (1, 1, 'Akpınar Mah', '01720')
             var neighborhoodRegex = new Regex(@"^\((\d+),\s*(\d+),\s*'([^']*)',\s*'([^']*)'\)");
 
+            // Pass 1: Parse Semtler
+            string currentTable = "";
             foreach (var line in lines)
             {
-                var trimmed = line.Trim();
-                if (trimmed.StartsWith("INSERT INTO `volt_iller`"))
-                {
-                    currentTable = "iller";
-                    continue;
-                }
-                else if (trimmed.StartsWith("INSERT INTO `volt_ilceler`"))
-                {
-                    currentTable = "ilceler";
-                    continue;
-                }
-                else if (trimmed.StartsWith("INSERT INTO `volt_semtler`"))
-                {
-                    currentTable = "semtler";
-                    continue;
-                }
-                else if (trimmed.StartsWith("INSERT INTO `volt_mahalleler`"))
-                {
-                    currentTable = "mahalleler";
-                    continue;
-                }
+                var cleanLine = line.Trim();
+                if (string.IsNullOrEmpty(cleanLine)) continue;
+                if (cleanLine.Contains("INSERT INTO") && cleanLine.Contains("volt_iller")) { currentTable = "iller"; continue; }
+                if (cleanLine.Contains("INSERT INTO") && cleanLine.Contains("volt_ilceler")) { currentTable = "ilceler"; continue; }
+                if (cleanLine.Contains("INSERT INTO") && cleanLine.Contains("volt_semtler")) { currentTable = "semtler"; continue; }
+                if (cleanLine.Contains("INSERT INTO") && cleanLine.Contains("volt_mahalleler")) { currentTable = "mahalleler"; continue; }
 
-                if (string.IsNullOrEmpty(currentTable) || !trimmed.StartsWith("("))
-                    continue;
-
-                // Remove trailing commas or semicolons for regex
-                var cleanLine = trimmed;
-                if (cleanLine.EndsWith(",") || cleanLine.EndsWith(";"))
-                {
-                    cleanLine = cleanLine.Substring(0, cleanLine.Length - 1);
-                }
-
-                if (currentTable == "iller")
-                {
-                    var match = cityRegex.Match(cleanLine);
-                    if (match.Success)
-                    {
-                        int id = int.Parse(match.Groups[1].Value);
-                        string name = match.Groups[2].Value;
-                        // Add to memory
-                        cities.Add(new City { Id = id, CountryId = 1, Name = name, PlateCode = id.ToString().PadLeft(2, '0') });
-                    }
-                }
-                else if (currentTable == "ilceler")
-                {
-                    var match = districtRegex.Match(cleanLine);
-                    if (match.Success)
-                    {
-                        int id = int.Parse(match.Groups[1].Value);
-                        int ilId = int.Parse(match.Groups[2].Value);
-                        string name = match.Groups[3].Value;
-                        districts.Add(new District { Id = id, CityId = ilId, Name = name });
-                    }
-                }
-                else if (currentTable == "semtler")
+                if (cleanLine.StartsWith("(") && currentTable == "semtler")
                 {
                     var match = semtRegex.Match(cleanLine);
                     if (match.Success)
@@ -194,19 +143,55 @@ namespace GMK360.Web.Controllers
                         semtToIlce[id] = ilceId;
                     }
                 }
-                else if (currentTable == "mahalleler")
-                {
-                    var match = neighborhoodRegex.Match(cleanLine);
-                    if (match.Success)
-                    {
-                        int id = int.Parse(match.Groups[1].Value);
-                        int semtId = int.Parse(match.Groups[2].Value);
-                        string name = match.Groups[3].Value;
-                        string zipCode = match.Groups[4].Value;
+            }
 
-                        if (semtToIlce.TryGetValue(semtId, out int ilceId))
+            // Pass 2: Parse Others
+            currentTable = "";
+            foreach (var line in lines)
+            {
+                var cleanLine = line.Trim();
+                if (string.IsNullOrEmpty(cleanLine)) continue;
+                if (cleanLine.Contains("INSERT INTO") && cleanLine.Contains("volt_iller")) { currentTable = "iller"; continue; }
+                if (cleanLine.Contains("INSERT INTO") && cleanLine.Contains("volt_ilceler")) { currentTable = "ilceler"; continue; }
+                if (cleanLine.Contains("INSERT INTO") && cleanLine.Contains("volt_semtler")) { currentTable = "semtler"; continue; }
+                if (cleanLine.Contains("INSERT INTO") && cleanLine.Contains("volt_mahalleler")) { currentTable = "mahalleler"; continue; }
+
+                if (cleanLine.StartsWith("("))
+                {
+                    if (currentTable == "iller")
+                    {
+                        var match = cityRegex.Match(cleanLine);
+                        if (match.Success)
                         {
-                            neighborhoods.Add(new Neighborhood { Id = id, DistrictId = ilceId, Name = name, ZipCode = zipCode });
+                            int id = int.Parse(match.Groups[1].Value);
+                            string name = match.Groups[2].Value;
+                            cities.Add(new City { Id = id, CountryId = 1, Name = name, PlateCode = id.ToString("D2") });
+                        }
+                    }
+                    else if (currentTable == "ilceler")
+                    {
+                        var match = districtRegex.Match(cleanLine);
+                        if (match.Success)
+                        {
+                            int id = int.Parse(match.Groups[1].Value);
+                            int ilId = int.Parse(match.Groups[2].Value);
+                            string name = match.Groups[3].Value;
+                            districts.Add(new District { Id = id, CityId = ilId, Name = name });
+                        }
+                    }
+                    else if (currentTable == "mahalleler")
+                    {
+                        var match = neighborhoodRegex.Match(cleanLine);
+                        if (match.Success)
+                        {
+                            int id = int.Parse(match.Groups[1].Value);
+                            int semtId = int.Parse(match.Groups[2].Value);
+                            string name = match.Groups[3].Value;
+                            string zipCode = match.Groups[4].Value;
+                            if (semtToIlce.TryGetValue(semtId, out int ilceId))
+                            {
+                                neighborhoods.Add(new Neighborhood { Id = id, DistrictId = ilceId, Name = name, ZipCode = zipCode });
+                            }
                         }
                     }
                 }
@@ -243,12 +228,12 @@ namespace GMK360.Web.Controllers
                 await _context.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT Neighborhoods OFF");
                 await transaction.CommitAsync();
 
-                return Content($"Başarılı: {cities.Count} Şehir, {districts.Count} İlçe, {neighborhoods.Count} Mahalle eklendi.");
+                return Content($"Baarl: {cities.Count} ehir, {districts.Count} le, {neighborhoods.Count} Mahalle eklendi.");
             }
             catch(Exception ex)
             {
                 await transaction.RollbackAsync();
-                return Content("Hata oluştu: " + ex.Message + " | Inner: " + ex.InnerException?.Message);
+                return Content("Hata olutu: " + ex.Message + " | Inner: " + ex.InnerException?.Message);
             }
         }
 
@@ -257,17 +242,17 @@ namespace GMK360.Web.Controllers
         {
             if (await _context.DefinitionCategories.AnyAsync())
             {
-                return Content("Tanımlamalar zaten eklenmiş.");
+                return Content("Tanmlamalar zaten eklenmi.");
             }
 
             var categories = new List<DefinitionCategory>
             {
-                new DefinitionCategory { Name = "İlan Durumu", SystemCode = "PropertyStatus" },
+                new DefinitionCategory { Name = "lan Durumu", SystemCode = "PropertyStatus" },
                 new DefinitionCategory { Name = "Konut Tipi", SystemCode = "PropertyType" },
-                new DefinitionCategory { Name = "İşyeri Tipi", SystemCode = "CommercialType" },
+                new DefinitionCategory { Name = "yeri Tipi", SystemCode = "CommercialType" },
                 new DefinitionCategory { Name = "Arsa Tipi", SystemCode = "LandType" },
-                new DefinitionCategory { Name = "Isıtma Tipi", SystemCode = "HeatingType" },
-                new DefinitionCategory { Name = "Bina Yaşı", SystemCode = "BuildingAge" },
+                new DefinitionCategory { Name = "Istma Tipi", SystemCode = "HeatingType" },
+                new DefinitionCategory { Name = "Bina Ya", SystemCode = "BuildingAge" },
                 new DefinitionCategory { Name = "Cephe", SystemCode = "Facade" }
             };
 
@@ -285,59 +270,59 @@ namespace GMK360.Web.Controllers
             var definitions = new List<DefinitionValue>
             {
                 // Status
-                new DefinitionValue { CategoryId = statusCat.Id, Name = "Satılık", SystemCode = "Sale" },
-                new DefinitionValue { CategoryId = statusCat.Id, Name = "Kiralık", SystemCode = "Rent" },
-                new DefinitionValue { CategoryId = statusCat.Id, Name = "Günlük Kiralık", SystemCode = "DailyRent" },
+                new DefinitionValue { CategoryId = statusCat.Id, Name = "Satlk", SystemCode = "Sale" },
+                new DefinitionValue { CategoryId = statusCat.Id, Name = "Kiralk", SystemCode = "Rent" },
+                new DefinitionValue { CategoryId = statusCat.Id, Name = "Gnlk Kiralk", SystemCode = "DailyRent" },
                 
                 // Property Type
                 new DefinitionValue { CategoryId = resTypeCat.Id, Name = "Daire", SystemCode = "Apartment" },
-                new DefinitionValue { CategoryId = resTypeCat.Id, Name = "Müstakil Ev", SystemCode = "DetachedHouse" },
+                new DefinitionValue { CategoryId = resTypeCat.Id, Name = "Mstakil Ev", SystemCode = "DetachedHouse" },
                 new DefinitionValue { CategoryId = resTypeCat.Id, Name = "Villa", SystemCode = "Villa" },
-                new DefinitionValue { CategoryId = resTypeCat.Id, Name = "Yalı", SystemCode = "Waterside" },
+                new DefinitionValue { CategoryId = resTypeCat.Id, Name = "Yal", SystemCode = "Waterside" },
                 new DefinitionValue { CategoryId = resTypeCat.Id, Name = "Rezidans", SystemCode = "Residence" },
                 new DefinitionValue { CategoryId = resTypeCat.Id, Name = "Prefabrik", SystemCode = "Prefabricated" },
 
                 // Commercial Type
-                new DefinitionValue { CategoryId = comTypeCat.Id, Name = "Dükkan", SystemCode = "Shop" },
+                new DefinitionValue { CategoryId = comTypeCat.Id, Name = "Dkkan", SystemCode = "Shop" },
                 new DefinitionValue { CategoryId = comTypeCat.Id, Name = "Ofis", SystemCode = "Office" },
-                new DefinitionValue { CategoryId = comTypeCat.Id, Name = "Plaza Katı", SystemCode = "Plaza" },
+                new DefinitionValue { CategoryId = comTypeCat.Id, Name = "Plaza Kat", SystemCode = "Plaza" },
                 new DefinitionValue { CategoryId = comTypeCat.Id, Name = "Depo", SystemCode = "Warehouse" },
                 new DefinitionValue { CategoryId = comTypeCat.Id, Name = "Fabrika", SystemCode = "Factory" },
 
                 // Land Type
-                new DefinitionValue { CategoryId = landTypeCat.Id, Name = "İmarlı", SystemCode = "Zoned" },
+                new DefinitionValue { CategoryId = landTypeCat.Id, Name = "marl", SystemCode = "Zoned" },
                 new DefinitionValue { CategoryId = landTypeCat.Id, Name = "Tarla", SystemCode = "Field" },
                 new DefinitionValue { CategoryId = landTypeCat.Id, Name = "Zeytinlik", SystemCode = "OliveGrove" },
-                new DefinitionValue { CategoryId = landTypeCat.Id, Name = "Bağ & Bahçe", SystemCode = "Orchard" },
+                new DefinitionValue { CategoryId = landTypeCat.Id, Name = "Ba & Bahe", SystemCode = "Orchard" },
 
                 // Heating
                 new DefinitionValue { CategoryId = heatCat.Id, Name = "Yok", SystemCode = "None" },
                 new DefinitionValue { CategoryId = heatCat.Id, Name = "Soba", SystemCode = "Stove" },
-                new DefinitionValue { CategoryId = heatCat.Id, Name = "Doğalgaz (Kombi)", SystemCode = "Combi" },
+                new DefinitionValue { CategoryId = heatCat.Id, Name = "Doalgaz (Kombi)", SystemCode = "Combi" },
                 new DefinitionValue { CategoryId = heatCat.Id, Name = "Merkezi", SystemCode = "Central" },
-                new DefinitionValue { CategoryId = heatCat.Id, Name = "Merkezi (Pay Ölçer)", SystemCode = "CentralShareMeter" },
-                new DefinitionValue { CategoryId = heatCat.Id, Name = "Yerden Isıtma", SystemCode = "Underfloor" },
+                new DefinitionValue { CategoryId = heatCat.Id, Name = "Merkezi (Pay ler)", SystemCode = "CentralShareMeter" },
+                new DefinitionValue { CategoryId = heatCat.Id, Name = "Yerden Istma", SystemCode = "Underfloor" },
                 new DefinitionValue { CategoryId = heatCat.Id, Name = "Klima", SystemCode = "AC" },
 
                 // Age
-                new DefinitionValue { CategoryId = ageCat.Id, Name = "0 (Sıfır)", SystemCode = "Age0" },
-                new DefinitionValue { CategoryId = ageCat.Id, Name = "1-5 Arası", SystemCode = "Age1_5" },
-                new DefinitionValue { CategoryId = ageCat.Id, Name = "6-10 Arası", SystemCode = "Age6_10" },
-                new DefinitionValue { CategoryId = ageCat.Id, Name = "11-15 Arası", SystemCode = "Age11_15" },
-                new DefinitionValue { CategoryId = ageCat.Id, Name = "16-20 Arası", SystemCode = "Age16_20" },
-                new DefinitionValue { CategoryId = ageCat.Id, Name = "21 ve Üzeri", SystemCode = "Age21Plus" },
+                new DefinitionValue { CategoryId = ageCat.Id, Name = "0 (Sfr)", SystemCode = "Age0" },
+                new DefinitionValue { CategoryId = ageCat.Id, Name = "1-5 Aras", SystemCode = "Age1_5" },
+                new DefinitionValue { CategoryId = ageCat.Id, Name = "6-10 Aras", SystemCode = "Age6_10" },
+                new DefinitionValue { CategoryId = ageCat.Id, Name = "11-15 Aras", SystemCode = "Age11_15" },
+                new DefinitionValue { CategoryId = ageCat.Id, Name = "16-20 Aras", SystemCode = "Age16_20" },
+                new DefinitionValue { CategoryId = ageCat.Id, Name = "21 ve zeri", SystemCode = "Age21Plus" },
 
                 // Facade
                 new DefinitionValue { CategoryId = facadeCat.Id, Name = "Kuzey", SystemCode = "North" },
-                new DefinitionValue { CategoryId = facadeCat.Id, Name = "Güney", SystemCode = "South" },
-                new DefinitionValue { CategoryId = facadeCat.Id, Name = "Doğu", SystemCode = "East" },
-                new DefinitionValue { CategoryId = facadeCat.Id, Name = "Batı", SystemCode = "West" }
+                new DefinitionValue { CategoryId = facadeCat.Id, Name = "Gney", SystemCode = "South" },
+                new DefinitionValue { CategoryId = facadeCat.Id, Name = "Dou", SystemCode = "East" },
+                new DefinitionValue { CategoryId = facadeCat.Id, Name = "Bat", SystemCode = "West" }
             };
 
             _context.DefinitionValues.AddRange(definitions);
             await _context.SaveChangesAsync();
 
-            return Content("Emlak tanımlamaları başarıyla veritabanına eklendi!");
+            return Content("Emlak tanmlamalar baaryla veritabanna eklendi!");
         }
 
         [HttpGet("Seed/LocationIntelligence")]
@@ -345,7 +330,7 @@ namespace GMK360.Web.Controllers
         {
             if (await _context.NeighborhoodPOIs.AnyAsync() || await _context.LocalProfessionals.AnyAsync())
             {
-                return Content("Lokasyon Zekası verileri (Okul, Usta, Komşu) zaten eklenmiş.");
+                return Content("Lokasyon Zekas verileri (Okul, Usta, Komu) zaten eklenmi.");
             }
 
             var acibademId = 1;
@@ -362,7 +347,7 @@ namespace GMK360.Web.Controllers
             }
             else
             {
-                // Veritabanı tamamen boşsa geçici bir tane ekleyelim
+                // Veritaban tamamen bosa geici bir tane ekleyelim
                 var dist = await _context.Districts.FirstOrDefaultAsync();
                 var nb1 = new Neighborhood { Name = "Seed Mahalle 1", DistrictId = dist?.Id ?? 1 };
                 var nb2 = new Neighborhood { Name = "Seed Mahalle 2", DistrictId = dist?.Id ?? 1 };
@@ -381,20 +366,20 @@ namespace GMK360.Web.Controllers
 
             var neighborhoodPois = new List<NeighborhoodPOI>
             {
-                new NeighborhoodPOI { NeighborhoodId = acibademId, PoiName = "Acıbadem Lisesi", PoiCategory = GMK360.Core.Enums.POICategory.Education, DistanceInMeters = 300 },
-                new NeighborhoodPOI { NeighborhoodId = acibademId, PoiName = "Acıbadem Hastanesi", PoiCategory = GMK360.Core.Enums.POICategory.Health, DistanceInMeters = 850 },
-                new NeighborhoodPOI { NeighborhoodId = acibademId, PoiName = "Kadıköy Metro İstasyonu", PoiCategory = GMK360.Core.Enums.POICategory.Transport, DistanceInMeters = 1200 },
-                new NeighborhoodPOI { NeighborhoodId = acibademId, PoiName = "Acıbadem Polis Merkezi", PoiCategory = GMK360.Core.Enums.POICategory.Security, DistanceInMeters = 500 },
-                new NeighborhoodPOI { NeighborhoodId = acibademId, PoiName = "Acıbadem Parkı", PoiCategory = GMK360.Core.Enums.POICategory.SocialAndPark, DistanceInMeters = 200 },
+                new NeighborhoodPOI { NeighborhoodId = acibademId, PoiName = "Acbadem Lisesi", PoiCategory = GMK360.Core.Enums.POICategory.Education, DistanceInMeters = 300 },
+                new NeighborhoodPOI { NeighborhoodId = acibademId, PoiName = "Acbadem Hastanesi", PoiCategory = GMK360.Core.Enums.POICategory.Health, DistanceInMeters = 850 },
+                new NeighborhoodPOI { NeighborhoodId = acibademId, PoiName = "Kadky Metro stasyonu", PoiCategory = GMK360.Core.Enums.POICategory.Transport, DistanceInMeters = 1200 },
+                new NeighborhoodPOI { NeighborhoodId = acibademId, PoiName = "Acbadem Polis Merkezi", PoiCategory = GMK360.Core.Enums.POICategory.Security, DistanceInMeters = 500 },
+                new NeighborhoodPOI { NeighborhoodId = acibademId, PoiName = "Acbadem Park", PoiCategory = GMK360.Core.Enums.POICategory.SocialAndPark, DistanceInMeters = 200 },
                 new NeighborhoodPOI { NeighborhoodId = acibademId, PoiName = "Tepe Nautilus AVM", PoiCategory = GMK360.Core.Enums.POICategory.Shopping, DistanceInMeters = 1500 }
             };
 
             var professionals = new List<LocalProfessional>
             {
-                new LocalProfessional { Name = "Çelik Kardeşler Nakliyat", ProfessionType = "Nakliyat", NeighborhoodId = acibademId, IsPremium = true, PhoneNumber = "0532 111 22 33" },
-                new LocalProfessional { Name = "Ahmet Usta Boya & Badana", ProfessionType = "Boyacı", NeighborhoodId = acibademId, IsPremium = false, PhoneNumber = "0555 444 55 66" },
-                new LocalProfessional { Name = "Acıbadem Yapı Market", ProfessionType = "Nalbur", NeighborhoodId = acibademId, IsPremium = true, PhoneNumber = "0216 333 44 55" },
-                new LocalProfessional { Name = "Güven Tesisat", ProfessionType = "Tesisatçı", NeighborhoodId = acibademId, IsPremium = false, PhoneNumber = "0505 666 77 88" }
+                new LocalProfessional { Name = "elik Kardeler Nakliyat", ProfessionType = "Nakliyat", NeighborhoodId = acibademId, IsPremium = true, PhoneNumber = "0532 111 22 33" },
+                new LocalProfessional { Name = "Ahmet Usta Boya & Badana", ProfessionType = "Boyac", NeighborhoodId = acibademId, IsPremium = false, PhoneNumber = "0555 444 55 66" },
+                new LocalProfessional { Name = "Acbadem Yap Market", ProfessionType = "Nalbur", NeighborhoodId = acibademId, IsPremium = true, PhoneNumber = "0216 333 44 55" },
+                new LocalProfessional { Name = "Gven Tesisat", ProfessionType = "Tesisat", NeighborhoodId = acibademId, IsPremium = false, PhoneNumber = "0505 666 77 88" }
             };
 
             var neighbors = new List<NeighboringArea>
@@ -408,7 +393,7 @@ namespace GMK360.Web.Controllers
 
             await _context.SaveChangesAsync();
 
-            return Content("Lokasyon Zekası (Okullar, Esnaflar, Komşu Mahalleler) başarıyla eklendi!");
+            return Content("Lokasyon Zekas (Okullar, Esnaflar, Komu Mahalleler) baaryla eklendi!");
         }
     }
 }

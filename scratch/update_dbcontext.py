@@ -1,14 +1,23 @@
-﻿import codecs
-import re
+﻿import re
 
-path = 'GMK360.Data/Contexts/ApplicationDbContext.cs'
-with codecs.open(path, 'r', 'utf-8-sig') as f:
+with open(r'GMK360.Data\Contexts\ApplicationDbContext.cs', 'r', encoding='utf-8-sig', errors='ignore') as f:
     content = f.read()
 
-target = r'public DbSet<SystemLegalDocumentTemplate> SystemLegalDocumentTemplates \{ get; set; \}'
-replacement = 'public DbSet<SystemLegalDocumentTemplate> SystemLegalDocumentTemplates { get; set; }\n        public DbSet<SystemPhaseTemplate> SystemPhaseTemplates { get; set; }'
+target = '''builder.Entity<ModuleDocumentRulePrerequisite>()
+                .HasOne(x => x.PrerequisiteTemplate)
+                .WithMany()
+                .HasForeignKey(x => x.PrerequisiteTemplateId)
+                .OnDelete(DeleteBehavior.Cascade);'''
 
-content = re.sub(target, replacement, content)
+replacement = '''builder.Entity<ModuleDocumentRulePrerequisite>()
+                .HasOne(x => x.PrerequisiteTemplate)
+                .WithMany()
+                .HasForeignKey(x => x.PrerequisiteTemplateId)
+                .OnDelete(DeleteBehavior.Restrict);'''
 
-with codecs.open(path, 'w', 'utf-8-sig') as f:
+content = content.replace(target, replacement)
+
+with open(r'GMK360.Data\Contexts\ApplicationDbContext.cs', 'w', encoding='utf-8-sig') as f:
     f.write(content)
+
+print("ApplicationDbContext updated.")
