@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Linq;
 using System.Net.Http;
@@ -20,8 +20,8 @@ namespace GMK360.Web.Services.BackgroundTasks
         private readonly ILogger<TcmbExchangeRateService> _logger;
         private readonly IHttpClientFactory _httpClientFactory;
 
-        // Her gün saat 15:30'da kurların güncellenmesi için (Kaba bir delay ile, Cron job yerine)
-        // Ya da basitçe günde 1 kez çalışması için.
+        // Her gÃ¼n saat 15:30'da kurlarÄ±n gÃ¼ncellenmesi iÃ§in (Kaba bir delay ile, Cron job yerine)
+        // Ya da basitÃ§e gÃ¼nde 1 kez Ã§alÄ±ÅŸmasÄ± iÃ§in.
         private readonly TimeSpan _checkInterval = TimeSpan.FromHours(12);
 
         public TcmbExchangeRateService(
@@ -36,32 +36,29 @@ namespace GMK360.Web.Services.BackgroundTasks
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            while (!stoppingToken.IsCancellationRequested)
+            await Task.Yield(); while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
                     await FetchAndSaveRatesAsync(stoppingToken);
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "TCMB kurları çekilirken bir hata oluştu.");
-                }
+                catch (OperationCanceledException) { break; } catch (Exception ex) { try { _logger.LogError(ex, "TCMB kurlarÄ± Ã§ekilirken bir hata oluÅŸtu."); } catch { } }
 
                 // 12 saat bekle
-                await Task.Delay(_checkInterval, stoppingToken);
+                try { await Task.Delay(_checkInterval, stoppingToken); } catch (OperationCanceledException) { break; }
             }
         }
 
         private async Task FetchAndSaveRatesAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("TCMB kur güncellemesi başlatılıyor...");
+            _logger.LogInformation("TCMB kur gÃ¼ncellemesi baÅŸlatÄ±lÄ±yor...");
 
             var client = _httpClientFactory.CreateClient();
             var response = await client.GetAsync("https://www.tcmb.gov.tr/kurlar/today.xml", stoppingToken);
             
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("TCMB XML servisine erişilemedi.");
+                _logger.LogWarning("TCMB XML servisine eriÅŸilemedi.");
                 return;
             }
 
@@ -81,7 +78,7 @@ namespace GMK360.Web.Services.BackgroundTasks
                 if (decimal.TryParse(usdForexSelling, NumberStyles.Any, cultureInfo, out decimal usdRate) &&
                     decimal.TryParse(eurForexSelling, NumberStyles.Any, cultureInfo, out decimal eurRate))
                 {
-                    // Veritabanına yaz
+                    // VeritabanÄ±na yaz
                     using (var scope = _serviceProvider.CreateScope())
                     {
                         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -95,7 +92,7 @@ namespace GMK360.Web.Services.BackgroundTasks
                             existingRate.UsdRate = usdRate;
                             existingRate.EurRate = eurRate;
                             existingRate.UpdatedAt = DateTime.Now;
-                            _logger.LogInformation($"Bugünün kurları güncellendi: USD: {usdRate}, EUR: {eurRate}");
+                            _logger.LogInformation($"BugÃ¼nÃ¼n kurlarÄ± gÃ¼ncellendi: USD: {usdRate}, EUR: {eurRate}");
                         }
                         else
                         {
@@ -107,7 +104,7 @@ namespace GMK360.Web.Services.BackgroundTasks
                                 CreatedAt = DateTime.Now
                             };
                             dbContext.ExchangeRates.Add(newRate);
-                            _logger.LogInformation($"Yeni günün kurları eklendi: USD: {usdRate}, EUR: {eurRate}");
+                            _logger.LogInformation($"Yeni gÃ¼nÃ¼n kurlarÄ± eklendi: USD: {usdRate}, EUR: {eurRate}");
                         }
 
                         await dbContext.SaveChangesAsync(stoppingToken);
@@ -117,3 +114,5 @@ namespace GMK360.Web.Services.BackgroundTasks
         }
     }
 }
+
+

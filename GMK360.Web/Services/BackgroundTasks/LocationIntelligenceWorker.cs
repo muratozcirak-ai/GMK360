@@ -1,4 +1,4 @@
-using GMK360.Core.Entities;
+﻿using GMK360.Core.Entities;
 using GMK360.Core.Enums;
 using GMK360.Data.Contexts;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +12,7 @@ namespace GMK360.Web.Services.BackgroundTasks
         private readonly ILogger<LocationIntelligenceWorker> _logger;
         private readonly HttpClient _httpClient;
 
-        // Devamlılığı engellemek için taramanın bitip bitmediğini tutan state
+        // DevamlÄ±lÄ±ÄŸÄ± engellemek iÃ§in taramanÄ±n bitip bitmediÄŸini tutan state
         private bool _isScanningComplete = false;
 
         private int _googleApiMonthlyCount = 0;
@@ -30,37 +30,32 @@ namespace GMK360.Web.Services.BackgroundTasks
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("LocationIntelligenceWorker başlatıldı.");
+            _logger.LogInformation("LocationIntelligenceWorker başlatıldı."); await Task.Yield();
 
             while (!stoppingToken.IsCancellationRequested && !_isScanningComplete)
             {
                 try
                 {
-                    // Ayın 1'inde sayacı ve şalteri sıfırla
+                    // AyÄ±n 1'inde sayacÄ± ve ÅŸalteri sÄ±fÄ±rla
                     if (DateTime.UtcNow.Month != _lastResetDate.Month)
                     {
                         _googleApiMonthlyCount = 0;
                         _isGoogleApiCircuitBroken = false;
                         _lastResetDate = DateTime.UtcNow;
-                        _logger.LogInformation("Yeni aya girildi. Google API sayacı ve şalteri sıfırlandı.");
+                        _logger.LogInformation("Yeni aya girildi. Google API sayacÄ± ve ÅŸalteri sÄ±fÄ±rlandÄ±.");
                     }
 
                     await ProcessMissingNeighborhoods(stoppingToken);
 
-                    // Döngü tamamlandıysa ve eksik kalmadıysa Worker'ı uykuya geçiriyoruz (örn. 24 saat)
+                    // DÃ¶ngÃ¼ tamamlandÄ±ysa ve eksik kalmadÄ±ysa Worker'Ä± uykuya geÃ§iriyoruz (Ã¶rn. 24 saat)
                     if (_isScanningComplete)
                     {
-                        _logger.LogInformation("Tüm mahallelerin koordinat ve POI taraması tamamlandı. Worker uyku moduna geçiyor...");
-                        await Task.Delay(TimeSpan.FromHours(24), stoppingToken);
-                        _isScanningComplete = false; // Bir sonraki gün tekrar kontrol etmesi için
+                        _logger.LogInformation("TÃ¼m mahallelerin koordinat ve POI taramasÄ± tamamlandÄ±. Worker uyku moduna geÃ§iyor...");
+                        try { await Task.Delay(TimeSpan.FromHours(24), stoppingToken); } catch { break; }
+                        _isScanningComplete = false; // Bir sonraki gÃ¼n tekrar kontrol etmesi iÃ§in
                     }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "LocationIntelligenceWorker sırasında beklenmeyen bir hata oluştu.");
-                    // Hata durumunda bekle ve tekrar dene
-                    await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
-                }
+                catch (OperationCanceledException) { break; } catch (Exception ex) { try { _logger.LogError(ex, "Hata"); } catch { } try { await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken); } catch { break; } }
             }
         }
 
@@ -69,12 +64,12 @@ namespace GMK360.Web.Services.BackgroundTasks
             using var scope = _serviceProvider.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            // Koordinatı olmayan veya hiç POI kaydı olmayan mahalleleri bul (Optimizasyon: batch halinde alalım)
+            // KoordinatÄ± olmayan veya hiÃ§ POI kaydÄ± olmayan mahalleleri bul (Optimizasyon: batch halinde alalÄ±m)
             var neighborhoodsToProcess = await context.Neighborhoods
                 .Include(n => n.District)
                 .ThenInclude(d => d.City)
                 .Where(n => !context.NeighborhoodPOIs.Any(p => p.NeighborhoodId == n.Id))
-                .Take(10) // Her döngüde 10 tane işle (Rate limiting'e takılmamak için)
+                .Take(10) // Her dÃ¶ngÃ¼de 10 tane iÅŸle (Rate limiting'e takÄ±lmamak iÃ§in)
                 .ToListAsync(stoppingToken);
 
             if (!neighborhoodsToProcess.Any())
@@ -87,17 +82,17 @@ namespace GMK360.Web.Services.BackgroundTasks
             {
                 if (stoppingToken.IsCancellationRequested) break;
 
-                // 1. Koordinatları Bul
+                // 1. KoordinatlarÄ± Bul
                 var query = $"{neighborhood.Name}, {neighborhood.District.Name}, {neighborhood.District.City.Name}";
                 var (lat, lon) = await GetCoordinatesHybridAsync(query, stoppingToken);
 
                 if (string.IsNullOrEmpty(lat) || string.IsNullOrEmpty(lon))
                 {
-                    _logger.LogWarning($"Koordinat bulunamadı: {query}");
-                    continue; // Bir sonrakine geç
+                    _logger.LogWarning($"Koordinat bulunamadÄ±: {query}");
+                    continue; // Bir sonrakine geÃ§
                 }
 
-                // Neighborhood'a koordinatları kaydet
+                // Neighborhood'a koordinatlarÄ± kaydet
                 neighborhood.Latitude = lat;
                 neighborhood.Longitude = lon;
 
@@ -106,9 +101,9 @@ namespace GMK360.Web.Services.BackgroundTasks
 
                 context.NeighborhoodPOIs.AddRange(pois);
 
-                _logger.LogInformation($"Mahalle POI'leri başarıyla eklendi: {neighborhood.Name}");
+                _logger.LogInformation($"Mahalle POI'leri baÅŸarÄ±yla eklendi: {neighborhood.Name}");
 
-                // API Ban yememek için bekle (Nominatim Rate Limit)
+                // API Ban yememek iÃ§in bekle (Nominatim Rate Limit)
                 await Task.Delay(1500, stoppingToken); 
             }
 
@@ -127,11 +122,11 @@ namespace GMK360.Web.Services.BackgroundTasks
                     // if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests) throw new Exception("Quota Exceeded");
                     
                     // For safety, throw to simulate fail and trigger fallback to Nominatim immediately since we don't have a key
-                    throw new Exception("Google API Key bulunamadı veya Quota Exceeded simülasyonu.");
+                    throw new Exception("Google API Key bulunamadÄ± veya Quota Exceeded simÃ¼lasyonu.");
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning($"Google Geocoding başarısız oldu. Şalter indiriliyor. Hata: {ex.Message}");
+                    _logger.LogWarning($"Google Geocoding baÅŸarÄ±sÄ±z oldu. Åalter indiriliyor. Hata: {ex.Message}");
                     _isGoogleApiCircuitBroken = true; // Circuit Breaker Trips!
                 }
             }
@@ -139,7 +134,7 @@ namespace GMK360.Web.Services.BackgroundTasks
             // FALLBACK: Nominatim (OpenStreetMap)
             try
             {
-                await Task.Delay(1500, stoppingToken); // Rate limiting (Kısık Ateş Modu)
+                await Task.Delay(1500, stoppingToken); // Rate limiting (KÄ±sÄ±k AteÅŸ Modu)
                 var url = $"https://nominatim.openstreetmap.org/search?q={Uri.EscapeDataString(query)}&format=json&limit=1";
                 var response = await _httpClient.GetStringAsync(url, stoppingToken);
                 var doc = JsonDocument.Parse(response);
@@ -151,7 +146,7 @@ namespace GMK360.Web.Services.BackgroundTasks
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Nominatim Geocoding de başarısız oldu: {ex.Message}");
+                _logger.LogError($"Nominatim Geocoding de baÅŸarÄ±sÄ±z oldu: {ex.Message}");
             }
 
             return (null, null);
@@ -165,7 +160,7 @@ namespace GMK360.Web.Services.BackgroundTasks
                 {
                     // GOOGLE PLACES API
                     _googleApiMonthlyCount++;
-                    throw new Exception("Google Places API Key bulunamadı simülasyonu.");
+                    throw new Exception("Google Places API Key bulunamadÄ± simÃ¼lasyonu.");
                 }
                 catch
                 {
@@ -237,7 +232,7 @@ out center;";
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Overpass API hatası: {ex.Message}");
+                _logger.LogError($"Overpass API hatasÄ±: {ex.Message}");
             }
 
             return pois;
@@ -260,3 +255,6 @@ out center;";
         }
     }
 }
+
+
+

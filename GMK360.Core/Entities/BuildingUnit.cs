@@ -32,6 +32,14 @@ namespace GMK360.Core.Entities
         public string? OwnerPhone { get; set; }
         public string? OwnerEmail { get; set; }
         
+        
+        // Satış & Pazarlama Alanları
+        public decimal? ListPrice { get; set; }
+        public string? ListingType { get; set; } // "Satılık" / "Kiralık"
+        public string? SalesStatus { get; set; } // "Müsait", "İlgileniliyor", "Opsiyonlu", "Satıldı", "Kiralandı"
+        public string? AssignedAgent { get; set; } // İlgilenen Pazarlamacı
+        public string? SalesStage { get; set; } // "Topraktan", "İnşaat Halinde", "Hazır"
+        
         public string? TenantName { get; set; }
         public string? TenantPhone { get; set; }
         public string? TenantEmail { get; set; }

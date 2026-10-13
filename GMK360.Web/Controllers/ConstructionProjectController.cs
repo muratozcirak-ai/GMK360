@@ -2029,11 +2029,27 @@ namespace GMK360.Web.Controllers
 
         [HttpPost]
 
-        [ValidateAntiForgeryToken]
 
-        public async Task<IActionResult> EditBuildingUnit(int unitId, string DoorNumber, string OwnerName, string UnitStructure, double? GrossSquareMeters, string FacadeDirection)
+        
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteBuildingUnit(int unitId)
         {
-            var unit = await _context.BuildingUnits.FindAsync(unitId);
+            var unit = await _context.BuildingUnits.Include(u => u.Building).FirstOrDefaultAsync(u => u.Id == unitId);
+            if (unit == null) return NotFound();
+
+            var buildingId = unit.BuildingId;
+            var redirectId = unit.Building.ParentBuildingId ?? unit.BuildingId;
+
+            _context.BuildingUnits.Remove(unit);
+            await _context.SaveChangesAsync();
+
+            return RedirectToAction(nameof(ManageBlock), new { id = redirectId });
+        }
+
+        public async Task<IActionResult> EditBuildingUnit(int unitId, string DoorNumber, string OwnerName, string UnitStructure, double? GrossSquareMeters, string FacadeDirection, decimal? ListPrice, string ListingType, string SalesStatus, string AssignedAgent, string SalesStage)
+        {
+            var unit = await _context.BuildingUnits.Include(u => u.Building).FirstOrDefaultAsync(u => u.Id == unitId);
             if (unit == null) return NotFound();
 
             unit.DoorNumber = string.IsNullOrWhiteSpace(DoorNumber) ? unit.DoorNumber : DoorNumber;
@@ -2051,10 +2067,15 @@ namespace GMK360.Web.Controllers
             {
                 unit.FacadeDirection = FacadeDirection;
             }
+            unit.ListPrice = ListPrice;
+            unit.ListingType = string.IsNullOrWhiteSpace(ListingType) ? null : ListingType;
+            unit.SalesStatus = string.IsNullOrWhiteSpace(SalesStatus) ? null : SalesStatus;
+            unit.AssignedAgent = string.IsNullOrWhiteSpace(AssignedAgent) ? null : AssignedAgent;
+            unit.SalesStage = string.IsNullOrWhiteSpace(SalesStage) ? null : SalesStage;
 
             await _context.SaveChangesAsync();
 
-            return RedirectToAction(nameof(ManageBlock), new { id = unit.BuildingId });
+            return RedirectToAction(nameof(ManageBlock), new { id = unit.Building.ParentBuildingId ?? unit.BuildingId });
 
         }
 
@@ -3883,5 +3904,81 @@ namespace GMK360.Web.Controllers
             return RedirectToAction("Details", new { id = projectId });
         }
 
-    }
+    
+        [HttpGet]
+        public async Task<IActionResult> Map(int id)
+        {
+            var project = await _context.ConstructionProjects.FindAsync(id);
+            if (project == null) return NotFound();
+
+            if (!string.IsNullOrEmpty(project.GoogleMapsUrl))
+            {
+                return Redirect(project.GoogleMapsUrl);
+            }
+            else if (project.Latitude.HasValue && project.Longitude.HasValue)
+            {
+                return Redirect($"https://www.google.com/maps/search/?api=1&query={project.Latitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)},{project.Longitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+            }
+
+            // Fallback: If no location is set, just redirect to the details page with an alert
+            TempData["ErrorMessage"] = "Bu proje iin henüz bir konum/harita bilgisi girilmemi.";
+            return RedirectToAction("Details", new { id = id });
+        }
+
+        [HttpGet("ConstructionProject/Equipment/{id}")]
+        public async Task<IActionResult> Equipment(int id)
+        {
+            var project = await _context.ConstructionProjects.FindAsync(id);
+            if (project == null) return NotFound();
+            
+            ViewData["ProjectId"] = id;
+            ViewData["ProjectName"] = project.Name;
+            
+            var equipments = await _context.CompanyEquipments.ToListAsync();
+            var logs = await _context.EquipmentUsageLogs
+                                     .Include(x => x.CompanyEquipment)
+                                     .Where(x => x.ConstructionProjectId == id)
+                                     .OrderByDescending(x => x.CreatedAt)
+                                     .ToListAsync();
+                                     
+            ViewData["Logs"] = logs;
+            return View(equipments);
+        }
+
+        [HttpPost("ConstructionProject/AddEquipmentLog")]
+        public async Task<IActionResult> AddEquipmentLog(int projectId, int equipmentId, string usageType, DateTime startDate, DateTime? endDate, TimeSpan? startTime, TimeSpan? endTime, int duration)
+        {
+            var project = await _context.ConstructionProjects.FindAsync(projectId);
+            var equipment = await _context.CompanyEquipments.FindAsync(equipmentId);
+            if (project == null || equipment == null) return NotFound();
+            
+            decimal totalCost = 0;
+            if (usageType == "Saatlik")
+                totalCost = equipment.UnitCost * duration;
+            else if (usageType == "Günlük")
+                totalCost = equipment.UnitCost * 8 * duration; // Assuming 8 hour workday
+            else
+                totalCost = equipment.UnitCost * duration;
+                
+            var log = new GMK360.Core.Entities.Construction.Workflows.EquipmentUsageLog
+            {
+                ConstructionProjectId = projectId,
+                CompanyEquipmentId = equipmentId,
+                StartDate = startDate,
+                EndDate = endDate,
+                StartTime = startTime,
+                EndTime = endTime,
+                UsageType = usageType,
+                Duration = duration,
+                TotalCost = totalCost,
+                CreatedAt = DateTime.Now
+            };
+            
+            _context.EquipmentUsageLogs.Add(log);
+            await _context.SaveChangesAsync();
+            
+            TempData["SuccessMessage"] = "Kiralık araç talebi ve kullanım kaydı başarıyla eklendi!";
+            return RedirectToAction("Equipment", new { id = projectId });
+        }
+}
 }

@@ -1,4 +1,0 @@
-﻿IF COL_LENGTH('B2bCompanies', 'CompanyType') IS NULL
-BEGIN
-    ALTER TABLE B2bCompanies ADD CompanyType TINYINT NOT NULL DEFAULT 1;
-END

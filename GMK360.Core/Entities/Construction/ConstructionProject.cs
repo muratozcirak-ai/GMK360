@@ -17,7 +17,24 @@ namespace GMK360.Core.Entities.Construction
         public string Name { get; set; }
         public string Description { get; set; }
         public string? ProjectType { get; set; }
-        public string? BypassedPhases { get; set; } // Örn: "1,3,4" (Hard Lock Bypass edilen fazlar)
+        public string? BypassedPhases { get; set; }
+
+        // Proje DNA Seçimleri (Şablonları Filtreler)
+        public string? OuterWallType { get; set; } // "Ytong", "Bims", "Tugla"
+        public string? InnerWallType { get; set; } // "Tugla", "Alcipan"
+        public string? RoofType { get; set; }      // "Kiremit", "SandvicPanel"
+        public string? PlumbingType { get; set; }  // "Standart", "Gomme"
+        public string? ElevatorType { get; set; }  // "MRL", "Klasik"
+
+        public string? FoundationInsulation { get; set; } // "Sürme_Zift", "Membran", "XPS_Köpük"
+        public string? FacadeInsulation { get; set; }     // "Dış_Mantolama", "ÇiftTuğla_Arası_Köpük"
+        public string? RoofMaterial { get; set; }         // "Ahşap_Kiremit", "Çelik_SandviçPanel", "OSB_Şingıl", "Düz_Teras"
+
+        public string? FireExtinguishingSystem { get; set; } // Örn: "Sulu_Sprinkler", "Gömme_Yangın_Dolabı", "SıvaÜstü_Dolap"
+        public string? FireAlarmSystem { get; set; }         // Örn: "Duman_Dedektörü_Var", "Yok"
+
+
+ // Örn: "1,3,4" (Hard Lock Bypass edilen fazlar)
         
         public int AgencyId { get; set; }
         public Agency Agency { get; set; }
@@ -77,7 +94,9 @@ namespace GMK360.Core.Entities.Construction
         public double? LandscapeArea { get; set; } // Peyzaj Alanı (m2)
 
         // Bütçe / Satış Beklenti (Fizibilite)
-        public decimal AverageFlatSalePrice { get; set; } = 0; // Ortalama Daire Fiyatı
+        
+        public decimal? OfficialCostPerSqm { get; set; } // Bakanlk Resmi naat m2 Maliyeti
+public decimal AverageFlatSalePrice { get; set; } = 0; // Ortalama Daire Fiyatı
         public decimal ExpectedTotalShopRevenue { get; set; } = 0; // Toplam Dükkan Beklentisi
 
         // Projeye ait bloklar / binalar

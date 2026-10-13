@@ -23,6 +23,45 @@ namespace GMK360.Web.Controllers
             _userManager = userManager;
         }
 
+                private async Task<int?> GetUserAgencyIdAsync()
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return null;
+
+            var agencyConsultant = await _context.AgencyConsultants
+                .FirstOrDefaultAsync(a => a.UserId == user.Id);
+
+            if (agencyConsultant == null && User.IsInRole("Admin"))
+            {
+                var defaultAgency = await _context.Agencies.OrderBy(a => a.Id).FirstOrDefaultAsync();
+                return defaultAgency?.Id ?? 1;
+            }
+
+            return agencyConsultant?.AgencyId;
+        }
+
+        public async Task<IActionResult> SalesPool()
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var availableUnits = await _context.BuildingUnits
+                .Include(u => u.Building)
+                    .ThenInclude(b => b.ConstructionProject)
+                .Include(u => u.Building)
+                    .ThenInclude(b => b.ParentBuilding)
+                .Where(u => u.Building.ConstructionProject.AgencyId == agencyId)
+                .Where(u => string.IsNullOrEmpty(u.OwnerName))
+                
+                .OrderByDescending(u => u.Building.ConstructionProject.Id)
+                .ThenBy(u => u.Building.Id)
+                .ThenBy(u => u.FloorLevel)
+                .ThenBy(u => u.DoorNumber)
+                .ToListAsync();
+
+            return View(availableUnits);
+        }
+
         public async Task<IActionResult> Index()
         {
             var userId = _userManager.GetUserId(User);

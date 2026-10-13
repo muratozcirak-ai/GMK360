@@ -227,6 +227,8 @@ builder.Services.AddResponseCompression(options =>
     options.EnableForHttps = true;
 });
 
+builder.Services.AddScoped<GMK360.Web.Services.Construction.ProjectManagerService>();
+
 var app = builder.Build();
 
 // Enable Swagger UI (sadece Development ortaminda)

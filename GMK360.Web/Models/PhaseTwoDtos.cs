@@ -1,0 +1,1 @@
+namespace GMK360.Web.Models { public class AutoSaveTaskDto { public int TaskId {get;set;} public System.DateTime? StartDate {get;set;} public int Duration {get;set;} public bool? IsCancelled {get;set;} } public class AddNewTaskDto { public int ProjectId {get;set;} public string TaskName {get;set;} public string FloorOrZone {get;set;} public int OrderIndex {get;set;} } }

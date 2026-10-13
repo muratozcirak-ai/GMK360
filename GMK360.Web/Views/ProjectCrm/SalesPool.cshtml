@@ -1,0 +1,173 @@
+﻿@model IEnumerable<GMK360.Core.Entities.BuildingUnit>
+@functions {
+    public string GetFloorNameBySlabIndex(GMK360.Core.Entities.Building b, int slabIndex) {
+        if (b == null) return slabIndex + ". Kat";
+        int current = 1;
+        int basements = b.BasementFloors;
+        if (slabIndex <= basements) {
+            int bodrumNo = (basements - slabIndex) + 1;
+            return $"-{bodrumNo}. Bodrum";
+        }
+        current += basements;
+
+        if (b.HasGroundFloor) {
+            if (slabIndex == current) return "Zemin Kat";
+            current++;
+        }
+
+        int totalF = b.TotalFloors ?? 0;
+        int normalKatIndex = slabIndex - current + 1;
+        
+        if (b.HasRoof && normalKatIndex == totalF + 1) {
+            return "Çatı Katı";
+        }
+        
+        return $"{normalKatIndex}. Kat";
+    }
+}
+
+@{
+    ViewData["Title"] = "Satış & Kiralama Havuzu";
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1 text-dark fw-bold"><i class="bi bi-building-check text-warning me-2"></i>Satış & Kiralama Havuzu</h4>
+        <p class="text-muted small mb-0">Tüm projelerinizdeki müsait (sahibi atanmamış) bağımsız bölümler.</p>
+    </div>
+</div>
+
+
+<div class="card border-0 shadow-sm rounded-4 mb-3 bg-white">
+    <div class="card-body p-3">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-3">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" class="form-control border-start-0" placeholder="Proje, Blok veya Kapı No ara...">
+                </div>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm">
+                    <option value="">Tüm Cepheler</option>
+                    <option value="Kuzey">Kuzey</option>
+                    <option value="Güney">Güney</option>
+                    <option value="Doğu">Doğu</option>
+                    <option value="Batı">Batı</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm">
+                    <option value="">Birim Tipi</option>
+                    <option value="Mesken">Daire</option>
+                    <option value="Dükkan">Dükkan</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm">
+                    <option value="">Tüm Statüler</option>
+                    <option value="musait" selected>🟢 Müsait</option>
+                    <option value="opsiyonlu">🟡 Kapora Alındı (Opsiyonlu)</option>
+                </select>
+            </div>
+            <div class="col-md-3 text-end">
+                <button class="btn btn-sm btn-primary px-3 rounded-pill"><i class="bi bi-funnel me-1"></i> Filtrele</button>
+                <button class="btn btn-sm btn-light px-3 rounded-pill ms-1"><i class="bi bi-arrow-clockwise"></i> Temizle</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0 border-top" style="font-size: 0.85rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Proje & Şantiye</th>
+                        <th>Blok / Kule</th>
+                        <th>Kat</th>
+                        <th>Kapı No</th>
+                        <th>Birim Tipi</th>
+                        <th>Brüt / Net (m²)</th>
+                        <th>Cephe</th>
+                        <th>Liste Fiyatı</th>
+                        <th>Satış Türü</th>
+                        <th>Pazarlamacı</th>
+                        <th>Durum</th>
+                        <th class="text-end pe-4">İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model != null && Model.Any())
+                    {
+                        foreach (var unit in Model)
+                        {
+                            var projectName = unit.Building?.ConstructionProject?.Name ?? "Bilinmeyen Proje";
+                            var blockName = unit.Building?.BlockName ?? "Bilinmeyen Blok";
+                            var floorLevel = unit.FloorLevel;
+                            var doorNo = unit.DoorNumber;
+                            var category = string.IsNullOrWhiteSpace(unit.Category) ? "Mesken" : unit.Category;
+                            var gross = unit.GrossSquareMeters > 0 ? unit.GrossSquareMeters.ToString() + " m²" : "-";
+                            var facade = string.IsNullOrWhiteSpace(unit.FacadeDirection) ? "-" : unit.FacadeDirection;
+                            
+                            string icon = (category == "Dükkan" || category == "Ticari") ? "bi-shop text-primary" : "bi-door-open-fill text-success";
+                            var formattedPrice = unit.ListPrice.HasValue ? unit.ListPrice.Value.ToString("C0") : "<span class='text-muted fst-italic' style='font-size:0.75rem;'>Fiyat Girilmedi</span>";
+                            var statusStr = string.IsNullOrWhiteSpace(unit.SalesStatus) ? "Müsait" : unit.SalesStatus;
+                            var statusColor = statusStr == "İlgileniliyor" ? "text-warning border-warning-subtle bg-warning" : (statusStr == "Opsiyonlu" ? "text-primary border-primary-subtle bg-primary" : "text-success border-success-subtle bg-success");
+                            var agent = string.IsNullOrWhiteSpace(unit.AssignedAgent) ? "-" : unit.AssignedAgent;
+                            var listType = string.IsNullOrWhiteSpace(unit.ListingType) ? "Belirsiz" : unit.ListingType;
+                            var stage = string.IsNullOrWhiteSpace(unit.SalesStage) ? "" : $"<br><small class='text-muted'>{unit.SalesStage}</small>";
+                            
+                            <tr>
+                                <td class="ps-4 fw-bold text-dark">@projectName</td>
+                                <td>@blockName</td>
+                                <td>@(GetFloorNameBySlabIndex(unit.Building, unit.FloorLevel))</td>
+                                <td><span class="badge bg-light text-dark border">No: @doorNo</span></td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <span><i class="bi @icon me-1"></i> @category</span>
+                                        @if (!string.IsNullOrWhiteSpace(unit.RoomLayout) && unit.RoomLayout != category)
+                                        {
+                                            <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary-subtle ms-2" style="font-size:0.7rem;">@unit.RoomLayout</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td>@gross <span class="text-muted">/ -</span></td>
+                                <td>@facade</td>
+                                <td>@Html.Raw(formattedPrice)</td>
+                                <td><span class="fw-bold">@listType</span> @Html.Raw(stage)</td>
+                                <td>@agent</td>
+                                <td>
+                                    <span class="badge @statusColor bg-opacity-10 rounded-pill text-dark">
+                                        <i class="bi bi-circle-fill me-1" style="font-size:0.5rem;"></i> @statusStr
+                                    </span>
+                                </td>
+                                <td class="text-end pe-4">
+                                    <div class="btn-group">
+                                        <button class="btn btn-sm btn-outline-success py-0 px-2" title="Satış Yap" style="font-size:0.75rem;"><i class="bi bi-currency-dollar"></i> Satış</button>
+                                        <button class="btn btn-sm btn-outline-warning py-0 px-2" title="Kapora Al" style="font-size:0.75rem;"><i class="bi bi-lock"></i> Opsiyon</button>
+                                        <button class="btn btn-sm btn-outline-info py-0 px-2" title="İlana Çıkar" style="font-size:0.75rem;"><i class="bi bi-megaphone"></i> İlan</button>
+                                        <button class="btn btn-sm btn-outline-secondary py-0 px-2" title="Detay" style="font-size:0.75rem;"><i class="bi bi-three-dots"></i></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="12" class="text-center py-5 text-muted">
+                                <i class="bi bi-inboxes fs-1 d-block mb-3 text-secondary opacity-50"></i>
+                                <h5>Şu an boşta mülk bulunmuyor</h5>
+                                <p class="small">Tüm şantiyelerinizdeki bağımsız bölümlerin sahibi atanmış veya hiç bölüm üretilmemiş.</p>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

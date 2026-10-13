@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿using GMK360.Core.Entities;
+using GMK360.Core.Entities;
 using GMK360.Core.Entities.Auditing;
 using System.Reflection;
 using System.Linq;
@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Text.Json;
 using GMK360.Core.Entities.Construction;
+using GMK360.Core.Entities.Construction.Workflows;
 using GMK360.Core.Entities.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -33,6 +34,7 @@ namespace GMK360.Data.Contexts
         public DbSet<NeighboringArea> NeighboringAreas { get; set; }
 
         public DbSet<AuditLog> AuditLogs { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.Workflows.WorkGroupDefinition> WorkGroupDefinitions { get; set; }
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options)
         {
@@ -242,7 +244,19 @@ public DbSet<GMK360.Core.Entities.Construction.ConstructionProjectExpense> Const
         public DbSet<UnitMaterialSelection> UnitMaterialSelections { get; set; }
         public DbSet<ConstructionTask> ConstructionTasks { get; set; }
         public DbSet<ConstructionTaskInvite> ConstructionTaskInvites { get; set; }
-                public DbSet<TaskProgressLog> TaskProgressLogs { get; set; }
+                public DbSet<GMK360.Core.Entities.Construction.Workflows.TaskProgressLog> TaskProgressLogs { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.Workflows.WorkItemSubcontractorContract> WorkItemSubcontractorContracts { get; set; }
+
+        public DbSet<GMK360.Core.Entities.Construction.Workflows.CustomerUnit> CustomerUnits { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.Workflows.CustomerSelection> CustomerSelections { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.Workflows.MasterIsgQuestion> MasterIsgQuestions { get; set; }
+
+        public DbSet<GMK360.Core.Entities.Construction.Workflows.CompanyEquipment> CompanyEquipments { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.Workflows.EquipmentUsageLog> EquipmentUsageLogs { get; set; }
+
+
+
+
 
         // MERKEZ DEPO VE DEMİRBAŞLAR (INVENTORY)
         public DbSet<GMK360.Core.Entities.Construction.Warehouse> Warehouses { get; set; }
@@ -393,8 +407,125 @@ public DbSet<GMK360.Core.Entities.Construction.ConstructionProjectExpense> Const
             }
         }
 
+        
+        // --- WORKFLOW ENGINE ENTITIES ---
+        public DbSet<WorkflowTemplate> WorkflowTemplates { get; set; }
+        public DbSet<ProjectElevation> ProjectElevations { get; set; }
+        public DbSet<ProjectTask> ProjectTasks { get; set; }
+
+        // --- YENİ EKLENEN İSG VE MALZEME REÇETESİ TABLOLARI ---
+        public DbSet<MasterMaterial> MasterMaterials { get; set; }
+        public DbSet<ProjectMaterialDemand> ProjectMaterialDemands { get; set; }
+        public DbSet<MaterialRecipe> MaterialRecipes { get; set; }
+        public DbSet<RecipeIngredient> RecipeIngredients { get; set; }
+        public DbSet<IsgAuditForm> IsgAuditForms { get; set; }
+        public DbSet<IsgChecklistItem> IsgChecklistItems { get; set; }
+
+        public DbSet<WorkflowTimesheet> WorkflowTimesheets { get; set; }
+
+        public DbSet<ProjectDnaProfile> ProjectDnaProfiles { get; set; }
+        public DbSet<ProjectDnaDetail> ProjectDnaDetails { get; set; }
+                public DbSet<GMK360.Core.Entities.Construction.Workflows.DnaTemplateStep> DnaTemplateSteps { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.Workflows.DnaTemplateQuestion> DnaTemplateQuestions { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.Workflows.DnaTemplateOption> DnaTemplateOptions { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.Workflows.DnaProfession> DnaProfessions { get; set; }
+        
+        public DbSet<DxfUnitTypeProfile> DxfUnitTypeProfiles { get; set; }
+        public DbSet<DxfUnitSpace> DxfUnitSpaces { get; set; }
+
+        public DbSet<ProjectScheduleTask> ProjectScheduleTasks { get; set; }
+        public DbSet<ProjectScheduleSubTask> ProjectScheduleSubTasks { get; set; }
+        // SITE DIARY & WORKFLOW
+        public DbSet<GMK360.Core.Entities.Construction.SiteDiary.TaskTemplate> TaskTemplates { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.SiteDiary.TaskActionTemplate> TaskActionTemplates { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.SiteDiary.TaskChecklistTemplate> TaskChecklistTemplates { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.SiteDiary.SiteDiaryTask> SiteDiaryTasks { get; set; }
+
         protected override void OnModelCreating(ModelBuilder builder)
         {
+
+        // ========================================================================
+        // GMK360 - SEED DATA (BAŞLANGIÇ VERİLERİ VE ŞANTİYE HAFIZASI)
+        // ========================================================================
+
+        
+        // ========================================================================
+        
+        // ========================================================================
+        // 0. ANA MALZEME KATALOĞU (DXF KÖPRÜSÜ)
+        // ========================================================================
+        builder.Entity<MasterMaterial>().HasData(
+            new MasterMaterial { Id = 1, CreatedAt = new DateTime(2024, 1, 1), MaterialCode = "MAT-YTONG-20", MaterialName = "20'lik Ytong Blok", Category = "Ince_Duvar", BaseUnit = "Adet" },
+            new MasterMaterial { Id = 2, CreatedAt = new DateTime(2024, 1, 1), MaterialCode = "MAT-YAPISTIRICI", MaterialName = "Örgü Tutkalı / Yapıştırıcı", Category = "Ince_Duvar", BaseUnit = "Kg" },
+            new MasterMaterial { Id = 3, CreatedAt = new DateTime(2024, 1, 1), MaterialCode = "MAT-TUGLA-13", MaterialName = "13.5'luk Harman Tuğla", Category = "Ince_Duvar", BaseUnit = "Adet" },
+            new MasterMaterial { Id = 4, CreatedAt = new DateTime(2024, 1, 1), MaterialCode = "MAT-CIMENTO-50", MaterialName = "50 Kg Torba Çimento", Category = "Ince_Duvar", BaseUnit = "Torba" },
+            new MasterMaterial { Id = 5, CreatedAt = new DateTime(2024, 1, 1), MaterialCode = "MAT-KUM", MaterialName = "Sıva Kumu", Category = "Ince_Duvar", BaseUnit = "Ton" }
+        );
+
+        // 1. MALZEME REÇETELERİ (1 m2 için Birim Fiyat Analizi)
+        // ========================================================================
+        
+        builder.Entity<MaterialRecipe>().HasData(
+            new MaterialRecipe { Id = 1, WorkItemCode = "DUVAR_YTONG_20", WorkItemName = "20'lik Ytong Duvar Örümü", BaseUnit = "m2", CreatedAt = new DateTime(2024, 1, 1) },
+            new MaterialRecipe { Id = 2, WorkItemCode = "DUVAR_TUGLA_13", WorkItemName = "13.5'luk Harman Tuğla Örümü", BaseUnit = "m2", CreatedAt = new DateTime(2024, 1, 1) }
+        );
+
+        builder.Entity<RecipeIngredient>().HasData(
+            // 1 m2 Ytong Duvar için gerekenler
+            new RecipeIngredient { Id = 1, MaterialRecipeId = 1, MasterMaterialId = 1, Quantity = 6.5m, CreatedAt = new DateTime(2024, 1, 1) },
+            new RecipeIngredient { Id = 2, MaterialRecipeId = 1, MasterMaterialId = 2, Quantity = 3.0m, CreatedAt = new DateTime(2024, 1, 1) },
+            
+            // 1 m2 Tuğla Duvar için gerekenler
+            new RecipeIngredient { Id = 3, MaterialRecipeId = 2, MasterMaterialId = 3, Quantity = 35.0m, CreatedAt = new DateTime(2024, 1, 1) },
+            new RecipeIngredient { Id = 4, MaterialRecipeId = 2, MasterMaterialId = 4, Quantity = 15.0m, CreatedAt = new DateTime(2024, 1, 1) },
+            new RecipeIngredient { Id = 5, MaterialRecipeId = 2, MasterMaterialId = 5, Quantity = 40.0m, CreatedAt = new DateTime(2024, 1, 1) }
+        );
+
+        // ========================================================================
+        // 2. İŞ AKIŞ ŞABLONLARI (DNA FİLTRELİ)
+        // ========================================================================
+
+        builder.Entity<WorkflowTemplate>().HasData(
+            // --- A) TEMEL FAZI (Sadece en altta 1 kez çalışır) ---
+            new WorkflowTemplate { Id = 1, PhaseCategory = "Temel", WorkflowType = "Kaba", StepOrder = 1, TaskName = "Aplikasyon ve Harita Ölçümü", IsGatekeeper = false, WaitDays = 0, ExperienceNote = "Sınır kotları haritacı tarafından net işaretlenmeden kazıya başlama!", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 2, PhaseCategory = "Temel", WorkflowType = "Kaba", StepOrder = 2, TaskName = "Hafriyat ve Temel Kazısı", IsGatekeeper = false, WaitDays = 0, ExperienceNote = "Hafriyat toprağını şantiye sahasında gereksiz yer kaplamayacak şekilde istifle.", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 3, PhaseCategory = "Temel", WorkflowType = "Kaba", StepOrder = 3, TaskName = "Grobeton ve İzolasyon (Bohçalama)", IsGatekeeper = false, WaitDays = 1, ExperienceNote = "Yalıtım yırtılmasın diye grobeton yüzeyi pürüzsüz olmalı.", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 4, PhaseCategory = "Temel", WorkflowType = "Kaba", StepOrder = 4, TaskName = "Temel Demiri ve Paspayı Kontrolü", IsGatekeeper = true, WaitDays = 0, ExperienceNote = "DİKKAT KİLİT NOKTASI: Yapı denetim gelip paspayı ve demir sayımını onaylamadan kesinlikle beton dökülemez!", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 5, PhaseCategory = "Temel", WorkflowType = "Kaba", StepOrder = 5, TaskName = "Temel Betonu Dökümü ve Kürleme", IsGatekeeper = false, WaitDays = 3, ExperienceNote = "Beton döküldükten sonra yanmaması için yaz aylarında günde en az 2 kez sulama (kürleme) yapılacak.", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 6, PhaseCategory = "Temel", WorkflowType = "Kaba", StepOrder = 6, TaskName = "Subasman Vizesi (Onay)", IsGatekeeper = true, WaitDays = 0, ExperienceNote = "Belediyeden subasman vize belgesi alınmadan 1. Katın kolon filizlerine başlama!", CreatedAt = new DateTime(2024, 1, 1) },
+
+            // --- B) TİP KAT FAZI (Sistem bunu 1. kattan 15. kata kadar dinamik kopyalar) ---
+            
+            // Şerit 1: KABA İNŞAAT
+            new WorkflowTemplate { Id = 7, PhaseCategory = "TipKat", WorkflowType = "Kaba", StepOrder = 1, TaskName = "Kolon ve Perde Kalıbı", WorkGroupCategory = "Kaba_Kalıp", IsGatekeeper = false, WaitDays = 0, ExperienceNote = "Şakül kontrollerini çift taraflı yap.", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 8, PhaseCategory = "TipKat", WorkflowType = "Kaba", StepOrder = 2, TaskName = "Kolon ve Perde Demiri", WorkGroupCategory = "Kaba_Demir", IsGatekeeper = true, WaitDays = 0, ExperienceNote = "Yapı denetim kolon demirlerini onaylamadan kalıbı kapatma!", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 9, PhaseCategory = "TipKat", WorkflowType = "Kaba", StepOrder = 3, TaskName = "Döşeme Kalıp ve Demiri", IsGatekeeper = true, WaitDays = 0, ExperienceNote = "Tesisat rezervasyon (boşluk) borularını yerleştirmeyi unutma.", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 10, PhaseCategory = "TipKat", WorkflowType = "Kaba", StepOrder = 4, TaskName = "Kat Betonu Dökümü", WorkGroupCategory = "Kaba_Beton", IsGatekeeper = false, WaitDays = 3, ExperienceNote = "Vibratörsüz kesinlikle döküm yapılmayacak.", CreatedAt = new DateTime(2024, 1, 1) },
+
+            // Şerit 2: İNCE İŞLER (SABİT - Kat betonu bittiği gibi alttan başlar)
+            new WorkflowTemplate { Id = 11, PhaseCategory = "TipKat", WorkflowType = "InceSabit", StepOrder = 5, TaskName = "Kaba Temizlik", IsGatekeeper = false, WaitDays = 0, ExperienceNote = "DİKKAT: Temizlikten çıkan molozları kesinlikle asansör boşluğuna veya tesisat şaftlarına dökmeyin!", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 12, PhaseCategory = "TipKat", WorkflowType = "InceSabit", StepOrder = 6, TaskName = "Duvar / Tuğla Örümü", IsGatekeeper = false, WaitDays = 0, ExperienceNote = "Kapı kasa boşluk ölçülerine standartlara göre dikkat et.", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 13, PhaseCategory = "TipKat", WorkflowType = "InceSabit", StepOrder = 7, TaskName = "Altyapı Tesisat (Elektrik & Sıhhi)", IsGatekeeper = true, WaitDays = 0, ExperienceNote = "Tesisat testi (basınç testi) yapılmadan sıva aşamasına geçilmeyecek!", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 21, PhaseCategory = "TipKat", WorkflowType = "InceSabit", StepOrder = 8, TaskName = "İtfaiye ve Yangın Tesisatı (Hortum/Dolap)", IsGatekeeper = true, WaitDays = 0, ExperienceNote = "DİKKAT: İtfaiye onayı için yangın dolabı ve hortum tesisatı standartlara uygun montajlanmalı!", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 22, PhaseCategory = "TipKat", WorkflowType = "InceSabit", StepOrder = 9, TaskName = "Islak Hacim Su Yalıtımı", IsGatekeeper = true, WaitDays = 1, ExperienceNote = "Banyo ve tuvaletlerde su izolasyonu yapılıp 24 saat su testi (göllendirme) yapılmadan şap atılmayacak.", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 14, PhaseCategory = "TipKat", WorkflowType = "InceSabit", StepOrder = 10, TaskName = "Kaba Sıva ve Kat Şapı", IsGatekeeper = false, WaitDays = 2, ExperienceNote = "Şap dökülmeden önce zemin temizliği tam yapılmalı.", CreatedAt = new DateTime(2024, 1, 1) },
+
+            // Şerit 3: İNCE İŞLER (SEÇMELİ - Satış/CRM onayına kilitli)
+            new WorkflowTemplate { Id = 15, PhaseCategory = "TipKat", WorkflowType = "InceSecmeli", StepOrder = 11, TaskName = "Islak Hacim Seramik/Fayans", IsGatekeeper = true, WaitDays = 0, ExperienceNote = "CRM'den müşterinin renk/desen seçimi bekleniyor! Onay gelmeden döşemeye başlama.", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 16, PhaseCategory = "TipKat", WorkflowType = "InceSecmeli", StepOrder = 12, TaskName = "Zemin Kaplama (Parke/Mermer)", IsGatekeeper = true, WaitDays = 0, ExperienceNote = "Müşteri tercihi teyit edilecek. Şapın tam kuruduğundan emin ol.", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 17, PhaseCategory = "TipKat", WorkflowType = "InceSecmeli", StepOrder = 13, TaskName = "Mutfak Dolapları ve İç Kapılar", IsGatekeeper = true, WaitDays = 0, ExperienceNote = "Müşteri aksesuar/model seçimi bekleniyor.", CreatedAt = new DateTime(2024, 1, 1) },
+
+            // --- C) ÇATI FAZI (En tepede 1 kez çalışır) ---
+            new WorkflowTemplate { Id = 18, PhaseCategory = "Cati", WorkflowType = "Kaba", StepOrder = 1, TaskName = "Çelik/Ahşap Konstrüksiyon İşleri", IsGatekeeper = false, WaitDays = 0, ExperienceNote = "Rüzgar bağlantılarını sağlamlaştır.", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 19, PhaseCategory = "Cati", WorkflowType = "Kaba", StepOrder = 2, TaskName = "Çatı İzolasyonu (Su ve Isı)", IsGatekeeper = true, WaitDays = 0, ExperienceNote = "Yağmur testi yapılmadan kiremit/kaplama işine geçme.", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 20, PhaseCategory = "Cati", WorkflowType = "Kaba", StepOrder = 3, TaskName = "Çatı Kaplama (Kiremit/Membran)", IsGatekeeper = false, WaitDays = 0, ExperienceNote = "Dere oluklarının eğimlerini son kez kontrol et.", CreatedAt = new DateTime(2024, 1, 1) },
+            // --- D) YENİ EKLENEN DNA FİLTRELİ GÖREVLER ---
+            new WorkflowTemplate { Id = 23, PhaseCategory = "TipKat", WorkflowType = "Kaba", StepOrder = 1, TaskName = "Tesisat Rezervasyon ve Borulama", WorkGroupCategory = "Tesisat_Mekanik", RequiredCondition = "PlumbingType_Gomme", IsGatekeeper = true, WaitDays = 0, ExperienceNote = "Beton dökülmeden gider borularını sabitle.", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 24, PhaseCategory = "TipKat", WorkflowType = "InceSabit", StepOrder = 3, TaskName = "Dış Cephe Ytong Örümü", WorkGroupCategory = "Ince_Duvar", RequiredCondition = "OuterWallType_Ytong", IsGatekeeper = false, WaitDays = 0, ExperienceNote = "Yapıştırıcıyı kıvamında hazırla.", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 25, PhaseCategory = "TipKat", WorkflowType = "InceSabit", StepOrder = 3, TaskName = "Dış Cephe Tuğla Örümü", WorkGroupCategory = "Ince_Duvar", RequiredCondition = "OuterWallType_Tugla", IsGatekeeper = false, WaitDays = 0, ExperienceNote = "Harç paylarına standartlara göre dikkat et.", CreatedAt = new DateTime(2024, 1, 1) },
+            new WorkflowTemplate { Id = 26, PhaseCategory = "Cati", WorkflowType = "Kaba", StepOrder = 1, TaskName = "Asansör Makine Dairesi Betonu", WorkGroupCategory = "Kaba_Kalıp_Demir", RequiredCondition = "ElevatorType_Klasik", IsGatekeeper = true, WaitDays = 0, ExperienceNote = "Motor kanca payını projeye göre bırak.", CreatedAt = new DateTime(2024, 1, 1) }
+        );
+
             builder.Entity<GMK360.Core.Entities.Finance.AgencyStaffAdvance>()
                 .HasOne(a => a.Consultant)
                 .WithMany()
@@ -441,6 +572,39 @@ public DbSet<GMK360.Core.Entities.Construction.ConstructionProjectExpense> Const
             
 
             base.OnModelCreating(builder);
+
+            builder.Entity<GMK360.Core.Entities.Construction.Workflows.EquipmentUsageLog>()
+                .HasOne(e => e.ConstructionProject)
+                .WithMany()
+                .HasForeignKey(e => e.ConstructionProjectId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<GMK360.Core.Entities.Construction.Workflows.EquipmentUsageLog>()
+                .HasOne(e => e.CompanyEquipment)
+                .WithMany()
+                .HasForeignKey(e => e.CompanyEquipmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+
+            builder.Entity<GMK360.Core.Entities.Construction.Workflows.MasterIsgQuestion>().HasData(
+                new GMK360.Core.Entities.Construction.Workflows.MasterIsgQuestion { Id = 1, PhaseCategory = "Temel", QuestionText = "Derin kazı destekleri (iksa) güvenli mi?", IsCritical = true, CreatedAt = new System.DateTime(2024, 1, 1), IsDeleted = false },
+                new GMK360.Core.Entities.Construction.Workflows.MasterIsgQuestion { Id = 2, PhaseCategory = "TipKat", QuestionText = "Şaft boşluklarında düşmeyi önleyici korkuluk var mı?", IsCritical = true, CreatedAt = new System.DateTime(2024, 1, 1), IsDeleted = false },
+                new GMK360.Core.Entities.Construction.Workflows.MasterIsgQuestion { Id = 3, PhaseCategory = "Cati", QuestionText = "Yaşam hatları kurulu mu?", IsCritical = true, CreatedAt = new System.DateTime(2024, 1, 1), IsDeleted = false }
+            );
+
+
+            builder.Entity<GMK360.Core.Entities.Construction.Workflows.CustomerSelection>()
+                .HasOne(cs => cs.StandardMasterMaterial)
+                .WithMany()
+                .HasForeignKey(cs => cs.StandardMasterMaterialId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<GMK360.Core.Entities.Construction.Workflows.CustomerSelection>()
+                .HasOne(cs => cs.SelectedMasterMaterial)
+                .WithMany()
+                .HasForeignKey(cs => cs.SelectedMasterMaterialId)
+                .OnDelete(DeleteBehavior.Restrict);
+
 
             builder.Entity<ModuleDocumentRulePrerequisite>()
                 .HasOne(x => x.ModuleDocumentRule)
@@ -1521,6 +1685,13 @@ public DbSet<GMK360.Core.Entities.Construction.ConstructionProjectExpense> Const
         }
     }
 }
+
+
+
+
+
+
+
 
 
 

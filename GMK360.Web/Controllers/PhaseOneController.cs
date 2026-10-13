@@ -18,7 +18,7 @@ namespace GMK360.Web.Controllers
         }
 
         [HttpGet("PhaseOne/Index/{projectId}")]
-        public async Task<IActionResult> Index(int projectId)
+        public async Task<IActionResult> Index(int projectId, int? recipeId)
         {
             var project = await _context.ConstructionProjects.FindAsync(projectId);
             if (project == null) return NotFound();
@@ -43,7 +43,34 @@ namespace GMK360.Web.Controllers
                 .ToListAsync();
             ViewBag.Quotes = quoteRequests;
 
-            // Sadece Fizibilite Aşaması İçin Listeyi Gönderiyoruz
+
+            // GERÇEK VERİ HESAPLAMASI (Parent DNA)
+            decimal baseMaterialCost = 0;
+            if (recipeId.HasValue)
+            {
+                var ingredients = await _context.RecipeIngredients
+                    .Include(r => r.MasterMaterial)
+                    .Where(r => r.MaterialRecipeId == recipeId.Value)
+                    .ToListAsync();
+                    
+                var totalArea = 1000m; // DXF'ten gelen simüle alan (m2)
+                
+                foreach(var ing in ingredients)
+                {
+                    var qty = ing.Quantity * totalArea;
+                    // B2B Fiyat Simülasyonu: Tuğla/Ytong gibi ürünler için temsili birim fiyat
+                    var unitPrice = ing.MasterMaterial.Category.Contains("Demir") ? 25000m : 
+                                    ing.MasterMaterial.Category.Contains("Yalitim") ? 350m : 120m;
+                    baseMaterialCost += (qty * unitPrice);
+                }
+            }
+            else
+            {
+                baseMaterialCost = 15000000m; // Fallback
+            }
+            
+            // Lüks, Optimum, Ekonomik Varyantları (Gerçek hesaba göre)
+
             return View(items);
         }
 

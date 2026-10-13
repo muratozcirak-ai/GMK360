@@ -1,0 +1,435 @@
+﻿@{
+    Layout = null;
+    var project = ViewBag.Project as GMK360.Core.Entities.Construction.ConstructionProject;
+    var elevations = ViewBag.Elevations as List<GMK360.Core.Entities.Construction.Workflows.ProjectElevation>;
+}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Şantiye Matrisi - @(project?.Name ?? "Proje")</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome (Icons) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            overflow-x: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        /* Top Navbar */
+        .matrix-navbar {
+            background-color: #2c3e50;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .matrix-navbar .navbar-brand {
+            color: white;
+            font-weight: bold;
+        }
+        
+        /* Progress Bar in Navbar */
+        .nav-progress-container {
+            width: 400px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .nav-progress-container .progress {
+            flex-grow: 1;
+            height: 10px;
+            background-color: #34495e;
+        }
+        
+        /* Icons */
+        .nav-icons .badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            font-size: 0.6rem;
+        }
+        .nav-icon-btn {
+            position: relative;
+            color: white;
+            margin-left: 15px;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+        
+        /* Layout Grid */
+        .dashboard-container {
+            height: calc(100vh - 60px);
+            display: flex;
+        }
+        
+        /* Sidebar Tree View */
+        .sidebar {
+            width: 25%;
+            background: #ffffff;
+            border-right: 1px solid #dee2e6;
+            overflow-y: auto;
+            padding: 15px;
+        }
+        
+        /* Main Matrix Area */
+        .main-matrix {
+            width: 75%;
+            padding: 20px;
+            background: #f1f4f6;
+            overflow-y: auto;
+        }
+
+        /* Tree View Styling */
+        .tree-ul {
+            list-style-type: none;
+            padding-left: 20px;
+        }
+        .tree-ul li {
+            margin: 8px 0;
+            position: relative;
+        }
+        .tree-ul li::before {
+            content: "";
+            position: absolute;
+            top: 15px;
+            left: -15px;
+            border-left: 1px solid #ccc;
+            border-bottom: 1px solid #ccc;
+            width: 10px;
+            height: 15px;
+        }
+        .tree-root {
+            font-weight: bold;
+            color: #333;
+            cursor: pointer;
+        }
+        .tree-leaf {
+            color: #555;
+            text-decoration: none;
+            display: block;
+            padding: 5px 10px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        .tree-leaf:hover {
+            background: #e9ecef;
+            color: #000;
+        }
+        .tree-leaf.isg-locked {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        
+        /* Empty State */
+        .empty-matrix {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. ÜST BAR (Top Navbar) -->
+    <nav class="navbar navbar-expand-lg matrix-navbar py-2 h-60">
+        <div class="container-fluid">
+            <!-- Sol Taraf: Proje Adı -->
+            <a class="navbar-brand" href="#"><i class="fas fa-building me-2"></i>@(project?.Name ?? "Beyaz Konak Projesi")</a>
+
+            <!-- Orta Kısım: Genel İlerleme Çubuğu -->
+            <div class="mx-auto nav-progress-container d-none d-md-flex">
+                <span class="small text-white-50">Proje İlerlemesi</span>
+                <div class="progress">
+                    <!-- Statik bir %65 değeri kullanıyoruz. İleride dinamik olacak. -->
+                    <div class="progress-bar bg-success" role="progressbar" style="width: 65%;" aria-valuenow="65" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+                <span class="small font-weight-bold">%65</span>
+            </div>
+
+            <!-- Sağ Taraf: Uyarı Çanları -->
+            <div class="d-flex nav-icons align-items-center">
+                <div class="nav-icon-btn" title="İSG Bildirimleri">
+                    <i class="fas fa-hard-hat text-danger"></i>
+                    <span class="badge bg-danger rounded-circle">3</span>
+                </div>
+                <div class="nav-icon-btn" title="Lojistik Uyarıları (Malzeme Gecikmesi)">
+                    <i class="fas fa-truck text-warning"></i>
+                    <span class="badge bg-warning text-dark rounded-circle">2</span>
+                </div>
+                <a href="/ConstructionProject/Details/@(project?.Id ?? 0)" class="btn btn-sm btn-outline-light ms-4">
+                    <i class="fas fa-arrow-left me-1"></i> Şantiyeye Dön
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 2. EKRANIN İKİYE BÖLÜNMESİ -->
+    <div class="dashboard-container">
+        
+        <!-- SOL MENÜ (Ağaç Mimarisi) -->
+        <div class="sidebar">
+            <h6 class="text-muted fw-bold mb-3"><i class="fas fa-sitemap me-2"></i>BİNA HİYERARŞİSİ</h6>
+            
+            <ul class="tree-ul ps-0">
+                <!-- Statik HTML Konsepti (Şefin menüsü) -->
+                <li>
+                    <span class="tree-root"><i class="fas fa-layer-group me-1"></i> Ortak Baza</span>
+                    <ul class="tree-ul">
+                        <li><a href="#" class="tree-leaf"><i class="fas fa-level-down-alt me-1"></i> -2. Bodrum</a></li>
+                        <li><a href="#" class="tree-leaf"><i class="fas fa-level-down-alt me-1"></i> Zemin Kat</a></li>
+                        <li><a href="#" class="tree-leaf"><i class="fas fa-level-up-alt me-1"></i> Baza 1. Kat</a></li>
+                    </ul>
+                </li>
+                <li class="mt-2">
+                    <span class="tree-root"><i class="fas fa-building me-1"></i> A Kulesi</span>
+                    <ul class="tree-ul">
+                        <li><a href="#" class="tree-leaf"><i class="fas fa-level-up-alt me-1"></i> A Kulesi 2. Kat</a></li>
+                        <li>
+                            <a href="#" class="tree-leaf isg-locked">
+                                <i class="fas fa-exclamation-triangle me-1"></i> A Kulesi 3. Kat (İSG Mühürlü)
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="mt-2">
+                    <span class="tree-root"><i class="fas fa-building me-1"></i> B Kulesi</span>
+                    <ul class="tree-ul">
+                        <li><a href="#" class="tree-leaf"><i class="fas fa-level-up-alt me-1"></i> B Kulesi 2. Kat</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+
+        <!-- ANA ÇALIŞMA ALANI (Matris Alanı) -->
+        <div class="main-matrix">
+
+            <div class="container-fluid pt-3">
+                <div class="row h-100">
+                    
+                    <!-- ŞERİT 1: KABA İNŞAAT VE MÜHENDİSLİK (Sarı Başlık) -->
+                    <div class="col-md-4 d-flex flex-column h-100">
+                        <h4 class="bg-warning text-dark text-center p-2 rounded fw-bold shadow-sm">Kaba İnşaat</h4>
+                        <div class="task-lane flex-grow-1 p-2 bg-white rounded shadow-sm overflow-auto" id="lane-kaba" style="max-height: calc(100vh - 120px);">
+                            
+                            <!-- Bitti (Yeşil) Kartı -->
+                            <div class="card mb-3 shadow-sm border-0 bg-success text-white">
+                                <div class="card-body p-2">
+                                    <div class="d-flex justify-content-between">
+                                        <h6 class="card-title fw-bold mb-1"><i class="fas fa-check-circle me-1"></i>Temel Kazısı</h6>
+                                        <small>Taşeron: XYZ Hafriyat</small>
+                                    </div>
+                                    <p class="card-text small mb-1">Hedef: 1000 m3 | Biten: 1000 m3</p>
+                                    <div class="progress" style="height: 10px;">
+                                        <div class="progress-bar bg-white" style="width: 100%;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Bitti (Yeşil) Kartı -->
+                            <div class="card mb-3 shadow-sm border-0 bg-success text-white">
+                                <div class="card-body p-2">
+                                    <div class="d-flex justify-content-between">
+                                        <h6 class="card-title fw-bold mb-1"><i class="fas fa-check-circle me-1"></i>Radye Temel Betonu</h6>
+                                        <small>Taşeron: Beton A.Ş.</small>
+                                    </div>
+                                    <p class="card-text small mb-1">Hedef: 250 m3 | Biten: 250 m3</p>
+                                    <div class="progress" style="height: 10px;">
+                                        <div class="progress-bar bg-white" style="width: 100%;"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- ŞERİT 2: STANDART İNCE (Mavi Başlık) -->
+                    <div class="col-md-4 d-flex flex-column h-100">
+                        <h4 class="bg-info text-white text-center p-2 rounded fw-bold shadow-sm">Standart İnce</h4>
+                        <div class="task-lane flex-grow-1 p-2 bg-white rounded shadow-sm overflow-auto" id="lane-standart" style="max-height: calc(100vh - 120px);">
+                            
+                            <!-- Aktif (Mavi) Kartı - Hakediş Butonu ile -->
+                            <div class="card mb-3 shadow-sm border-0 bg-primary text-white position-relative">
+                                <div class="card-body p-2">
+                                    <div class="d-flex justify-content-between">
+                                        <h6 class="card-title fw-bold mb-1"><i class="fas fa-hammer me-1"></i>Dış Duvar (Ytong 20'lik)</h6>
+                                        <small>Taşeron: Ahmet Usta</small>
+                                    </div>
+                                    <p class="card-text small mb-1">Hedef: 500 m2 | Biten: 200 m2</p>
+                                    <div class="progress" style="height: 10px;">
+                                        <div class="progress-bar bg-warning" style="width: 40%;"></div>
+                                    </div>
+                                    
+                                    <!-- Mavi Kartın İçine Eklenecek Buton -->
+                                    <div class="mt-2 text-end">
+                                        <button class="btn btn-light btn-sm text-primary shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#progressModal">
+                                            <i class="fas fa-plus-circle"></i> İlerleme (Hakediş) Gir
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- İSG KİLİTLİ Kart Örneği -->
+                            <div class="card mb-3 shadow-sm border-0 bg-primary text-white position-relative overflow-hidden">
+                                <!-- İSG Mührü İçin CSS Katmanı -->
+                                <div class="position-absolute top-0 start-0 w-100 h-100 bg-danger opacity-75 d-flex justify-content-center align-items-center" style="z-index: 10; pointer-events: none;">
+                                    <h3 class="text-white fw-bold m-0" style="transform: rotate(-15deg); border: 3px solid white; padding: 5px;">İSG MÜHRÜ</h3>
+                                </div>
+                                <div class="card-body p-2" style="opacity: 0.5;">
+                                    <div class="d-flex justify-content-between">
+                                        <h6 class="card-title fw-bold mb-1"><i class="fas fa-hammer me-1"></i>Şaft Boşluğu Duvarı</h6>
+                                        <small>Taşeron: Ahmet Usta</small>
+                                    </div>
+                                    <p class="card-text small mb-1">Hedef: 150 m2 | Biten: 10 m2</p>
+                                    <div class="progress" style="height: 10px;">
+                                        <div class="progress-bar bg-warning" style="width: 5%;"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Lojistik Uyarısı (Kırmızı) Kartı - Agile Butonu ile -->
+                            <div class="card mb-3 shadow-sm border-0 bg-danger text-white position-relative">
+                                <div class="card-body p-2">
+                                    <div class="d-flex justify-content-between">
+                                        <h6 class="card-title fw-bold mb-1"><i class="fas fa-exclamation-triangle me-1"></i>Elektrik Tesisatı (Gömme)</h6>
+                                        <small>Taşeron: Voltaj Elk.</small>
+                                    </div>
+                                    <p class="card-text small mb-1 fw-bold">DURDURULDU: Malzeme Depoda Yok!</p>
+                                    <div class="progress" style="height: 10px;">
+                                        <div class="progress-bar bg-white" style="width: 10%;"></div>
+                                    </div>
+                                    
+                                    <!-- Kırmızı Kartın İçine Eklenecek Buton -->
+                                    <div class="mt-2 text-end">
+                                        <button class="btn btn-warning btn-sm text-dark fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#agileModal">
+                                            <i class="fas fa-random"></i> Ekibi Başka İşe Yönlendir
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Bekliyor (Gri) Kartı -->
+                            <div class="card mb-3 shadow-sm border border-secondary bg-light text-dark">
+                                <div class="card-body p-2">
+                                    <div class="d-flex justify-content-between">
+                                        <h6 class="card-title fw-bold mb-1"><i class="far fa-clock me-1"></i>Sıva İşleri</h6>
+                                        <small>Taşeron: Belli Değil</small>
+                                    </div>
+                                    <p class="card-text small mb-1">Hedef: 450 m2 | Biten: 0 m2</p>
+                                    <div class="progress" style="height: 10px;">
+                                        <div class="progress-bar bg-secondary" style="width: 0%;"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- ŞERİT 3: SEÇMELİ İNCE / MÜŞTERİ CRM (Mor Başlık) -->
+                    <div class="col-md-4 d-flex flex-column h-100">
+                        <h4 class="text-white text-center p-2 rounded fw-bold shadow-sm" style="background-color: #6f42c1;">Seçmeli İnce (CRM)</h4>
+                        <div class="task-lane flex-grow-1 p-2 bg-white rounded shadow-sm overflow-auto" id="lane-crm" style="max-height: calc(100vh - 120px);">
+                            
+                            <!-- Müşteri Bekliyor (Koyu Gri) Kartı -->
+                            <div class="card mb-3 shadow-sm border-0 bg-secondary text-white">
+                                <div class="card-body p-2">
+                                    <div class="d-flex justify-content-between">
+                                        <h6 class="card-title fw-bold mb-1"><i class="fas fa-user-clock me-1"></i>Mutfak Dolabı (Daire 12)</h6>
+                                        <small>Müşteri Seçimi</small>
+                                    </div>
+                                    <p class="card-text small mb-1 fw-bold">MÜŞTERİ BEKLENİYOR</p>
+                                    <p class="card-text small mb-0">Standart: MDFAkam | Son Onay: 3 Gün</p>
+                                </div>
+                            </div>
+                            
+                            <!-- Müşteri Onaylı / Yükseltilmiş Kartı - Fark Faturası İle -->
+                            <div class="card mb-3 shadow-sm border-0 bg-light text-dark position-relative" style="border-left: 4px solid #6f42c1 !important;">
+                                <div class="card-body p-2">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <div>
+                                            <h6 class="card-title fw-bold mb-1" style="color: #6f42c1;"><i class="fas fa-star me-1"></i>Zemin Kaplama (Daire 14)</h6>
+                                            <small class="text-muted">Müşteri Onaylı: İtalyan Granit</small>
+                                        </div>
+                                        <!-- CRM Fark Faturası Etiketi -->
+                                        <span class="badge bg-success rounded-pill fs-6 shadow-sm">
+                                            <i class="fas fa-coins me-1"></i> Fark: +45.000 TL
+                                        </span>
+                                    </div>
+                                    <div class="progress" style="height: 10px;">
+                                        <div class="progress-bar" style="width: 20%; background-color: #6f42c1;"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.css"></script>
+
+
+    <!-- AGILE (YÖNLENDİRME) MODAL -->
+    <div class="modal fade" id="agileModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark border-0">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-random me-2"></i>Ekibi Başka İşe Yönlendir</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center py-4">
+                    <i class="fas fa-search-location text-muted mb-3" style="font-size: 3rem;"></i>
+                    <p>Karar Motoru, <b>Voltaj Elk.</b> ekibi için malzeme beklemeyen alternatif işleri tarıyor...</p>
+                    <div class="spinner-border text-warning" role="status">
+                        <span class="visually-hidden">Aranıyor...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HAKEDİŞ (İLERLEME) MODAL -->
+    <div class="modal fade" id="progressModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white border-0">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-plus-circle me-2"></i>İlerleme (Hakediş) Gir</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Günlük Yapılan İş Miktarı (m2)</label>
+                            <input type="number" class="form-control" placeholder="Örn: 50">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Kullanılan Araç/Makine (İsteğe Bağlı)</label>
+                            <select class="form-select">
+                                <option>Araç kullanılmadı</option>
+                                <option>VNC-01 (75 Tonluk Mobil Vinç)</option>
+                                <option>KPC-02 (JCB Kepçe)</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm">Kaydet & Hakedişe Yansıt</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

@@ -141,15 +141,15 @@ namespace GMK360.Data.Seeds
             if (!hasServiceCategories)
             {
                 context.Set<ServiceCategory>().AddRange(
-                    new ServiceCategory { Name = "Boya & Badana", Slug = "boya-badana", Icon = "ph-paint-roller" },
-                    new ServiceCategory { Name = "Su Tesisatı", Slug = "su-tesisati", Icon = "ph-wrench" },
-                    new ServiceCategory { Name = "Elektrik", Slug = "elektrik", Icon = "ph-lightning" },
-                    new ServiceCategory { Name = "Fayans & Seramik", Slug = "fayans-seramik", Icon = "ph-squares-four" },
-                    new ServiceCategory { Name = "Çatı & İzolasyon", Slug = "cati-izolasyon", Icon = "ph-house-line" },
-                    new ServiceCategory { Name = "Güneş Enerjisi (Solar)", Slug = "gunes-enerjisi", Icon = "ph-sun" },
-                    new ServiceCategory { Name = "Sigorta Şirketleri", Slug = "sigorta-sirketleri", Icon = "ph-shield-check" },
-                    new ServiceCategory { Name = "Pimapen & Kepenk", Slug = "pimapen-kepenk", Icon = "ph-door" },
-                    new ServiceCategory { Name = "Cam Balkon & Duşakabin", Slug = "cam-balkon-dusakabin", Icon = "ph-shower" }
+                    new ServiceCategory { Name = "Boya & Badana", Slug = "boya-badana", Icon = "ph-paint-roller", Description = "" },
+                    new ServiceCategory { Name = "Su Tesisatı", Slug = "su-tesisati", Icon = "ph-wrench", Description = "" },
+                    new ServiceCategory { Name = "Elektrik", Slug = "elektrik", Icon = "ph-lightning", Description = "" },
+                    new ServiceCategory { Name = "Fayans & Seramik", Slug = "fayans-seramik", Icon = "ph-squares-four", Description = "" },
+                    new ServiceCategory { Name = "Çatı & İzolasyon", Slug = "cati-izolasyon", Icon = "ph-house-line", Description = "" },
+                    new ServiceCategory { Name = "Güneş Enerjisi (Solar)", Slug = "gunes-enerjisi", Icon = "ph-sun", Description = "" },
+                    new ServiceCategory { Name = "Sigorta Şirketleri", Slug = "sigorta-sirketleri", Icon = "ph-shield-check", Description = "" },
+                    new ServiceCategory { Name = "Pimapen & Kepenk", Slug = "pimapen-kepenk", Icon = "ph-door", Description = "" },
+                    new ServiceCategory { Name = "Cam Balkon & Duşakabin", Slug = "cam-balkon-dusakabin", Icon = "ph-shower", Description = "" }
                 );
                 await context.SaveChangesAsync();
             }
@@ -200,3 +200,5 @@ namespace GMK360.Data.Seeds
         }
     }
 }
+
+

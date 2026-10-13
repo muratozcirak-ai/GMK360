@@ -1,1 +1,0 @@
-ALTER TABLE ConstructionBudgetItems ADD SubCategory nvarchar(100) NULL;

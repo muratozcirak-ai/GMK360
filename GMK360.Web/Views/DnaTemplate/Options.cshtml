@@ -1,0 +1,192 @@
+﻿@model IEnumerable<GMK360.Core.Entities.Construction.Workflows.DnaTemplateOption>
+@{
+    ViewData["Title"] = "Seçenek Havuzu";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var questionId = ViewBag.QuestionId;
+    var questionTitle = ViewBag.QuestionTitle;
+    var optionSource = ViewBag.OptionSource;
+}
+
+<div class="container-fluid p-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <a href="/DnaTemplate/Questions?stepId=@ViewBag.StepId" class="text-muted text-decoration-none small mb-2 d-inline-block">
+                <i class="fas fa-arrow-left me-1"></i> Sorulara Dön
+            </a>
+            <h4 class="mb-1 text-primary">Seçenek Havuzu: @optionSource</h4>
+            <p class="text-muted small mb-0">Soru: @questionTitle</p>
+        </div>
+        <button class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#addOptionModal">
+            <i class="fas fa-plus me-1"></i> Yeni Seçenek Ekle
+        </button>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="ps-4 border-0 text-secondary font-weight-semibold" style="width: 80px;">Sıra No</th>
+                            <th class="border-0 text-secondary font-weight-semibold">Seçenek (Malzeme / Durum)</th>
+                            <th class="border-0 text-secondary font-weight-semibold">İş Branşı (Özel)</th>
+                            <th class="text-end pe-4 border-0 text-secondary font-weight-semibold" style="width: 150px;">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody class="border-top-0">
+                        @if (!Model.Any())
+                        {
+                            <tr>
+                                <td colspan="4" class="text-center py-5 text-muted">
+                                    <i class="fas fa-info-circle fs-4 mb-2 d-block"></i>
+                                    Bu soruya ait henüz bir seçenek eklenmemiş.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var opt in Model.OrderBy(o => o.OptionOrder))
+                            {
+                                <tr>
+                                    <td class="ps-4">
+                                        <span class="badge bg-secondary rounded-pill">@opt.OptionOrder</span>
+                                    </td>
+                                    <td class="fw-medium text-primary">@opt.OptionText</td>
+                                    <td>
+                                        @if (opt.Profession != null)
+                                        {
+                                            <span class="badge bg-info text-dark">@opt.Profession.Name</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted fst-italic">-Belirtilmedi-</span>
+                                        }
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        <button class="btn btn-sm btn-outline-secondary me-1" onclick="editOption(@opt.Id, '@opt.OptionText', '@opt.DnaProfessionId', @opt.OptionOrder)">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" onclick="deleteOption(@opt.Id)">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Modal -->
+<div class="modal fade" id="addOptionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Yeni Seçenek Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addOptionForm" action="/DnaTemplate/AddOption" method="post">
+                    <input type="hidden" name="questionId" value="@questionId" />
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Seçenek Adı (Malzeme / Durum) <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="optionText" required placeholder="Örn: Seramik, Gazbeton..." />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Seçeneğe Özel İş Branşı (Usta)</label>
+                        <select class="form-select" name="dnaProfessionId">
+                            <option value="">-- Boş Bırak (Sorudaki Branşı Kullanır) --</option>
+                            @foreach (var prof in ViewBag.Professions)
+                            {
+                                <option value="@prof.Id">@prof.Name</option>
+                            }
+                        </select>
+                        <div class="form-text">Malzemeye göre farklı bir usta gerekiyorsa buradan atayın.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Sıra No</label>
+                        <input type="number" class="form-control" name="optionOrder" value="1" />
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-primary rounded-pill" onclick="document.getElementById('addOptionForm').submit()">Kaydet</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editOptionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Seçeneği Düzenle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editOptionForm" action="/DnaTemplate/UpdateOption" method="post">
+                    <input type="hidden" name="id" id="editOptionId" />
+                    <input type="hidden" name="questionId" value="@questionId" />
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Seçenek Adı (Malzeme / Durum) <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="optionText" id="editOptionText" required />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Seçeneğe Özel İş Branşı (Usta)</label>
+                        <select class="form-select" name="dnaProfessionId" id="editProfessionId">
+                            <option value="">-- Boş Bırak (Sorudaki Branşı Kullanır) --</option>
+                            @foreach (var prof in ViewBag.Professions)
+                            {
+                                <option value="@prof.Id">@prof.Name</option>
+                            }
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Sıra No</label>
+                        <input type="number" class="form-control" name="optionOrder" id="editOptionOrder" />
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-primary rounded-pill" onclick="document.getElementById('editOptionForm').submit()">Güncelle</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Form -->
+<form id="deleteOptionForm" action="/DnaTemplate/DeleteOption" method="post" style="display:none;">
+    <input type="hidden" name="id" id="deleteOptionId" />
+    <input type="hidden" name="questionId" value="@questionId" />
+</form>
+
+<script>
+    function editOption(id, text, professionId, order) {
+        document.getElementById('editOptionId').value = id;
+        document.getElementById('editOptionText').value = text;
+        document.getElementById('editProfessionId').value = professionId || '';
+        document.getElementById('editOptionOrder').value = order;
+        
+        var editModal = new bootstrap.Modal(document.getElementById('editOptionModal'));
+        editModal.show();
+    }
+
+    function deleteOption(id) {
+        if (confirm('Bu seçeneği silmek istediğinize emin misiniz?')) {
+            document.getElementById('deleteOptionId').value = id;
+            document.getElementById('deleteOptionForm').submit();
+        }
+    }
+</script>

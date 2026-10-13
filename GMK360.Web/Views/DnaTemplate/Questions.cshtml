@@ -1,0 +1,210 @@
+﻿@model List<GMK360.Core.Entities.Construction.Workflows.DnaTemplateQuestion>
+@{
+    ViewData["Title"] = "Profil Başlıkları (Sorular)";
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+    var workGroups = ViewBag.WorkGroups as List<GMK360.Core.Entities.Construction.Workflows.WorkGroupDefinition>;
+    int stepId = ViewBag.StepId;
+    var professions = ViewBag.Professions as List<GMK360.Core.Entities.Construction.Workflows.DnaProfession>;
+}
+<div class="container-fluid p-4">
+    <div class="mb-3">
+        <a href="/DnaTemplate/Index" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left me-1"></i> Adımlara Dön</a>
+    </div>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="fas fa-stream text-primary me-2"></i>@ViewBag.StepName - Profil Başlıkları</h3>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addQuestionModal">
+            <i class="fas fa-plus me-1"></i> Yeni Başlık Ekle
+        </button>
+    </div>
+    
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white border-bottom">
+            <h5 class="mb-0 fw-bold text-secondary"><i class="fas fa-list me-2"></i> Sorular / Başlıklar</h5>
+        </div>
+        <div class="card-body">
+            @if(Model != null && Model.Count > 0)
+            {
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Sıra No</th>
+                            <th>Başlık (Soru)</th>
+                            <th>İş Branşı (Usta/Trade)</th>
+                            <th>Notlar</th>
+                            <th class="text-center">Seçmeli Mi?</th>
+                            <th>Seçenek Kaynağı</th>
+                            <th class="text-end">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach(var q in Model)
+                        {
+                            <tr>
+                                <td><span class="badge bg-secondary">@q.QuestionOrder</span></td>
+                                <td class="fw-bold text-primary">@q.Title</td>
+                                <td>
+                                    @if(q.Profession != null) {
+                                        <span class="badge bg-info text-dark">@q.Profession.Name</span>
+                                    } else {
+                                        <span class="text-muted fst-italic">-Belirtilmedi-</span>
+                                    }
+                                </td>
+                                <td class="text-muted small">@q.Notes</td>
+                                <td class="text-center">
+                                    @if(q.IsMultipleChoice)
+                                    {
+                                        <i class="fas fa-check-circle text-success fs-5" title="Evet (Seçenek Eklenecek)"></i>
+                                    }
+                                    else
+                                    {
+                                        <i class="fas fa-times-circle text-danger fs-5" title="Hayır (Sabit Metin)"></i>
+                                    }
+                                </td>
+                                <td class="text-muted small">@q.OptionSource</td>
+                                <td class="text-end">
+                                    @if(q.IsMultipleChoice)
+                                    {
+                                        <a href="/DnaTemplate/Options?questionId=@q.Id" class="btn btn-sm btn-outline-warning me-1"><i class="fas fa-list-ul me-1"></i> Seçenek Havuzu</a>
+                                    }
+                                    <button class="btn btn-sm btn-outline-secondary me-1" data-bs-toggle="modal" data-bs-target="#editQuestionModal-@q.Id">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <form asp-action="DeleteQuestion" asp-route-id="@q.Id" method="post" class="d-inline" onsubmit="return confirm('Bu başlığı tamamen silmek istediğinize emin misiniz?');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                                    </form>
+                                </td>
+                            </tr>
+                            
+                            <!-- Edit Modal -->
+                            <div class="modal fade" id="editQuestionModal-@q.Id" tabindex="-1" aria-hidden="true">
+                              <div class="modal-dialog">
+                                <div class="modal-content">
+                                  <form asp-controller="DnaTemplate" asp-action="UpdateQuestion" method="post">
+                                      <input type="hidden" name="id" value="@q.Id" />
+                                      <div class="modal-header bg-light">
+                                        <h5 class="modal-title"><i class="fas fa-edit text-primary me-2"></i>Başlığı Düzenle</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                      </div>
+                                      <div class="modal-body text-start">
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Başlık (Soru) <span class="text-danger">*</span></label>
+                                            <input type="text" name="title" class="form-control" value="@q.Title" required />
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">İş Branşı (Usta / Meslek)</label>
+                                            <select name="dnaProfessionId" class="form-select">
+                                                <option value="">-- Boş Bırak --</option>
+                                                @if(professions != null)
+                                                {
+                                                    foreach(var p in professions)
+                                                    {
+                                                        if(q.DnaProfessionId == p.Id)
+                                                        {
+                                                            <option value="@p.Id" selected>@p.Name</option>
+                                                        }
+                                                        else
+                                                        {
+                                                            <option value="@p.Id">@p.Name</option>
+                                                        }
+                                                    }
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Not (Açıklama)</label>
+                                            <textarea name="notes" class="form-control" rows="2">@q.Notes</textarea>
+                                        </div>
+                                        <div class="mb-3">
+                                            <div class="form-check form-switch">
+                                              <input class="form-check-input" type="checkbox" name="isMultipleChoice" value="true" @(q.IsMultipleChoice ? "checked" : "")>
+                                              <label class="form-check-label fw-bold text-success">Seçmeli Mi? (Daha sonra havuzdan seçenekler eklenecek mi?)</label>
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Seçenek Kaynağı (Nereden Seçilecek?)</label>
+                                            <input type="text" name="optionSource" class="form-control" value="@q.OptionSource" placeholder="Örn: Malzemeler Listesi, Taşeronlar vb." />
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Sıra No</label>
+                                            <input type="number" name="questionOrder" class="form-control" value="@q.QuestionOrder" required />
+                                        </div>
+                                      </div>
+                                      <div class="modal-footer bg-light">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                                        <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i> Güncelle</button>
+                                      </div>
+                                  </form>
+                                </div>
+                              </div>
+                            </div>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <div class="alert alert-warning text-center mb-0">
+                    <i class="fas fa-info-circle me-2"></i> Bu adıma henüz hiçbir başlık (soru) eklenmemiş. Lütfen sağ üstten "Yeni Başlık Ekle" butonuna tıklayın.
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Yeni Başlık Ekle Modal -->
+<div class="modal fade" id="addQuestionModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form asp-controller="DnaTemplate" asp-action="AddQuestion" method="post">
+          <input type="hidden" name="stepId" value="@stepId" />
+          <div class="modal-header bg-light">
+            <h5 class="modal-title"><i class="fas fa-plus text-primary me-2"></i>Yeni Başlık Ekle</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+                <label class="form-label fw-bold">Başlık (Soru) <span class="text-danger">*</span></label>
+                <input type="text" name="title" class="form-control" placeholder="Örn: Taşıyıcı Beton, Dolgu Malzemesi vb." required />
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold">İş Branşı (Usta / Meslek)</label>
+                <select name="dnaProfessionId" class="form-select">
+                    <option value="">-- Boş Bırak --</option>
+                    @if(professions != null)
+                    {
+                        foreach(var p in professions)
+                        {
+                            <option value="@p.Id">@p.Name</option>
+                        }
+                    }
+                </select>
+                <div class="form-text">Pazar yerinde usta aratılacak anahtar kelimedir.</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold">Not (Açıklama)</label>
+                <textarea name="notes" class="form-control" rows="2" placeholder="Varsa eklemek istediğiniz notu yazın"></textarea>
+            </div>
+            <div class="mb-3">
+                <div class="form-check form-switch border p-2 rounded bg-light">
+                  <input class="form-check-input" type="checkbox" name="isMultipleChoice" value="true">
+                  <label class="form-check-label fw-bold ms-2 text-success">Seçmeli Mi? (Daha sonra havuzdan seçenekler eklenecek mi?)</label>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold">Seçenek Kaynağı (Nereden Seçilecek?)</label>
+                <input type="text" name="optionSource" class="form-control" placeholder="Örn: Malzemeler Listesi, Özelleştirilmiş Havuz vb." />
+                <div class="form-text">"Seçmeli Mi?" işaretliyse listedeki seçeneklerin nereden çekileceğini belirtin.</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold">Sıra No</label>
+                <input type="number" name="questionOrder" class="form-control" value="0" required />
+            </div>
+          </div>
+          <div class="modal-footer bg-light">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i> Kaydet</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>

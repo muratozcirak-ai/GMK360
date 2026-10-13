@@ -1820,6 +1820,9 @@ namespace GMK360.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AssignedAgent")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("BuildingId")
                         .HasColumnType("int");
 
@@ -1855,6 +1858,12 @@ namespace GMK360.Data.Migrations
                     b.Property<bool>("IsEmpty")
                         .HasColumnType("bit");
 
+                    b.Property<decimal?>("ListPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ListingType")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<double?>("NetSquareMeters")
                         .HasColumnType("float");
 
@@ -1877,6 +1886,12 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("RoomLayout")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SalesStage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SalesStatus")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TenantEmail")
@@ -3406,6 +3421,9 @@ namespace GMK360.Data.Migrations
                     b.Property<int?>("DistrictId")
                         .HasColumnType("int");
 
+                    b.Property<string>("ElevatorType")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("EndDate")
                         .HasColumnType("datetime2");
 
@@ -3433,7 +3451,22 @@ namespace GMK360.Data.Migrations
                     b.Property<decimal>("ExpectedTotalShopRevenue")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("FacadeInsulation")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FireAlarmSystem")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FireExtinguishingSystem")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FoundationInsulation")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("GoogleMapsUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("InnerWallType")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsDataLocked")
@@ -3467,7 +3500,16 @@ namespace GMK360.Data.Migrations
                     b.Property<int?>("NeighborhoodId")
                         .HasColumnType("int");
 
+                    b.Property<decimal?>("OfficialCostPerSqm")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("OuterWallType")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Parsel")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PlumbingType")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("ProjectOriginId")
@@ -3480,6 +3522,12 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PublicDescription")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RoofMaterial")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RoofType")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("SelectionDeadline")
@@ -3844,6 +3892,9 @@ namespace GMK360.Data.Migrations
                     b.Property<string>("PhaseName")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("ProjectScheduleTaskId")
+                        .HasColumnType("int");
+
                     b.Property<string>("RecordedByUserId")
                         .HasColumnType("nvarchar(max)");
 
@@ -3858,6 +3909,8 @@ namespace GMK360.Data.Migrations
                     b.HasIndex("AgencyWorkerId");
 
                     b.HasIndex("ConstructionProjectId");
+
+                    b.HasIndex("ProjectScheduleTaskId");
 
                     b.ToTable("DailyTimesheets");
                 });
@@ -4620,6 +4673,167 @@ namespace GMK360.Data.Migrations
                     b.ToTable("SiteDailyLogs");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.SiteDiary.SiteDiaryTask", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("BagliOlduguAnaGorevId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Durum")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("GorevTanimi")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("GorevTarihi")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("GorevTipi")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("KanitFotografUrl")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OnaylayanKullaniciId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ZimmetliPersonelId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("SiteDiaryTasks");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.SiteDiary.TaskActionTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("GorevTanimi")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("HedefRol")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("TaskTemplateId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ZamanOfsetiGun")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskTemplateId");
+
+                    b.ToTable("TaskActionTemplates");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.SiteDiary.TaskChecklistTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("FotografZorunluMu")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IseEngelMi")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("KontrolMaddesi")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("TaskTemplateId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskTemplateId");
+
+                    b.ToTable("TaskChecklistTemplates");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.SiteDiary.TaskTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AktifMi")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PaketAdi")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("TaskTemplates");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.Construction.TaskProgressLog", b =>
                 {
                     b.Property<int>("Id")
@@ -4655,7 +4869,7 @@ namespace GMK360.Data.Migrations
 
                     b.HasIndex("ConstructionTaskId");
 
-                    b.ToTable("TaskProgressLogs");
+                    b.ToTable("TaskProgressLog");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.UnitMaterialSelection", b =>
@@ -4747,6 +4961,1711 @@ namespace GMK360.Data.Migrations
                     b.HasIndex("ConstructionProjectId");
 
                     b.ToTable("Warehouses");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.CompanyEquipment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EquipmentCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EquipmentName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("OwnershipType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PricingUnit")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CompanyEquipments");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.CustomerSelection", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CustomerUnitId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsApprovedByCustomer")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("SelectedMasterMaterialId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SelectionCategory")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("StandardMasterMaterialId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("UpgradePriceDifference")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerUnitId");
+
+                    b.HasIndex("SelectedMasterMaterialId");
+
+                    b.HasIndex("StandardMasterMaterialId");
+
+                    b.ToTable("CustomerSelections");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.CustomerUnit", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CustomerName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ElevationId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("NetAreaSquareMeters")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UnitNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UnitType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CustomerUnits");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.DnaProfession", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DnaProfessions");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.DnaTemplateOption", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("DnaProfessionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DnaTemplateQuestionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OptionOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OptionText")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DnaProfessionId");
+
+                    b.HasIndex("DnaTemplateQuestionId");
+
+                    b.ToTable("DnaTemplateOptions");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.DnaTemplateQuestion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("DnaProfessionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DnaTemplateStepId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsMultipleChoice")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsRequired")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("OptionSource")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("QuestionOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DnaProfessionId");
+
+                    b.HasIndex("DnaTemplateStepId");
+
+                    b.ToTable("DnaTemplateQuestions");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.DnaTemplateStep", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("StepName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("StepOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DnaTemplateSteps");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.DxfUnitSpace", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("CeilingArea")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DxfUnitTypeProfileId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("FloorArea")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("GrossWallArea")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("InteriorDoorCount")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("NetWallArea")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("SkirtingLength")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("SpaceGroup")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SpaceName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("WindowCount")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("WindowSillLength")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DxfUnitTypeProfileId");
+
+                    b.ToTable("DxfUnitSpaces");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.DxfUnitTypeProfile", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ModelName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("TotalGrossArea")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalNetArea")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("TotalSpaceCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DxfUnitTypeProfiles");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.EquipmentUsageLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyEquipmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ConstructionProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Duration")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<TimeSpan?>("EndTime")
+                        .HasColumnType("time");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<TimeSpan?>("StartTime")
+                        .HasColumnType("time");
+
+                    b.Property<decimal>("TotalCost")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UsageType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyEquipmentId");
+
+                    b.HasIndex("ConstructionProjectId");
+
+                    b.ToTable("EquipmentUsageLogs");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.IsgAuditForm", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AuditDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("AuditorName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ElevationId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSiteSafe")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ElevationId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("IsgAuditForms");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.IsgChecklistItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActionRequired")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsCritical")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPassed")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("IsgAuditFormId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Question")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsgAuditFormId");
+
+                    b.ToTable("IsgChecklistItems");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.MasterIsgQuestion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsCritical")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PhaseCategory")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("QuestionText")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("MasterIsgQuestions");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsCritical = true,
+                            IsDeleted = false,
+                            PhaseCategory = "Temel",
+                            QuestionText = "Derin kazı destekleri (iksa) güvenli mi?"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsCritical = true,
+                            IsDeleted = false,
+                            PhaseCategory = "TipKat",
+                            QuestionText = "Şaft boşluklarında düşmeyi önleyici korkuluk var mı?"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsCritical = true,
+                            IsDeleted = false,
+                            PhaseCategory = "Cati",
+                            QuestionText = "Yaşam hatları kurulu mu?"
+                        });
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.MasterMaterial", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BaseUnit")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MaterialCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("MaterialName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("MasterMaterials");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            BaseUnit = "Adet",
+                            Category = "Ince_Duvar",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            MaterialCode = "MAT-YTONG-20",
+                            MaterialName = "20'lik Ytong Blok"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            BaseUnit = "Kg",
+                            Category = "Ince_Duvar",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            MaterialCode = "MAT-YAPISTIRICI",
+                            MaterialName = "Örgü Tutkalı / Yapıştırıcı"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            BaseUnit = "Adet",
+                            Category = "Ince_Duvar",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            MaterialCode = "MAT-TUGLA-13",
+                            MaterialName = "13.5'luk Harman Tuğla"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            BaseUnit = "Torba",
+                            Category = "Ince_Duvar",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            MaterialCode = "MAT-CIMENTO-50",
+                            MaterialName = "50 Kg Torba Çimento"
+                        },
+                        new
+                        {
+                            Id = 5,
+                            BaseUnit = "Ton",
+                            Category = "Ince_Duvar",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            MaterialCode = "MAT-KUM",
+                            MaterialName = "Sıva Kumu"
+                        });
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.MaterialRecipe", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BaseUnit")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("WorkItemCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("WorkItemName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("MaterialRecipes");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            BaseUnit = "m2",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            WorkItemCode = "DUVAR_YTONG_20",
+                            WorkItemName = "20'lik Ytong Duvar Örümü"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            BaseUnit = "m2",
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            WorkItemCode = "DUVAR_TUGLA_13",
+                            WorkItemName = "13.5'luk Harman Tuğla Örümü"
+                        });
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.ProjectDnaDetail", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("DnaProfessionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Phase")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("ProfileId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("SelectedItem")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DnaProfessionId");
+
+                    b.HasIndex("ProfileId");
+
+                    b.ToTable("ProjectDnaDetails");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.ProjectDnaProfile", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ExtraField1")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ExtraField2")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("ProjectDnaProfiles");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.ProjectElevation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BlockName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ElevationLevel")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsBasement")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsLockedByIsg")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("IsgLockReason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("ParentElevationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParentElevationId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("ProjectElevations");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.ProjectMaterialDemand", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ElevationId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeliveredToSite")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsOrdered")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MasterMaterialId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ProjectScheduleTaskId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("TotalRequiredQuantity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MasterMaterialId");
+
+                    b.HasIndex("ProjectScheduleTaskId");
+
+                    b.ToTable("ProjectMaterialDemands");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.ProjectScheduleSubTask", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ProjectScheduleTaskId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("RequiresPhoto")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectScheduleTaskId");
+
+                    b.ToTable("ProjectScheduleSubTasks");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.ProjectScheduleTask", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FloorOrZone")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsCancelled")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("OrderIndex")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PlannedDurationDays")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PlannedEndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PlannedStartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TaskName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ProjectScheduleTasks");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.ProjectTask", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("CompletedQuantity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("CostCategory")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CustomNote")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("CustomerUnitId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DelayDays")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ElevationId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsExtraWork")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsMaterialReady")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPaused")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MaterialShortageNote")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PauseReason")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("PlannedStartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("ProgressPaymentAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RequiredCustomerId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("SubcontractorId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TaskName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("TotalQuantity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("WorkGroupCategory")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("WorkItemCode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("WorkflowType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ElevationId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("ProjectTasks");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.RecipeIngredient", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MasterMaterialId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaterialRecipeId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MasterMaterialId");
+
+                    b.HasIndex("MaterialRecipeId");
+
+                    b.ToTable("RecipeIngredients");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            MasterMaterialId = 1,
+                            MaterialRecipeId = 1,
+                            Quantity = 6.5m
+                        },
+                        new
+                        {
+                            Id = 2,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            MasterMaterialId = 2,
+                            MaterialRecipeId = 1,
+                            Quantity = 3.0m
+                        },
+                        new
+                        {
+                            Id = 3,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            MasterMaterialId = 3,
+                            MaterialRecipeId = 2,
+                            Quantity = 35.0m
+                        },
+                        new
+                        {
+                            Id = 4,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            MasterMaterialId = 4,
+                            MaterialRecipeId = 2,
+                            Quantity = 15.0m
+                        },
+                        new
+                        {
+                            Id = 5,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            IsDeleted = false,
+                            MasterMaterialId = 5,
+                            MaterialRecipeId = 2,
+                            Quantity = 40.0m
+                        });
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.TaskProgressLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("CalculatedEarnedValue")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("CompletedQuantity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsApprovedByChief")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ProjectTaskId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ReportDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("SubcontractorId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("TaskProgressLogs");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.WorkGroupDefinition", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsProcurementOnly")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("WorkGroupDefinitions");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.WorkItemSubcontractorContract", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SubcontractorId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("WorkItemCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("WorkItemSubcontractorContracts");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.WorkflowTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ExperienceNote")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsGatekeeper")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PhaseCategory")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RequiredCondition")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("StepOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TaskName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("WaitDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("WorkGroupCategory")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("WorkflowType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("WorkflowTemplates");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Sınır kotları haritacı tarafından net işaretlenmeden kazıya başlama!",
+                            IsDeleted = false,
+                            IsGatekeeper = false,
+                            PhaseCategory = "Temel",
+                            StepOrder = 1,
+                            TaskName = "Aplikasyon ve Harita Ölçümü",
+                            WaitDays = 0,
+                            WorkflowType = "Kaba"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Hafriyat toprağını şantiye sahasında gereksiz yer kaplamayacak şekilde istifle.",
+                            IsDeleted = false,
+                            IsGatekeeper = false,
+                            PhaseCategory = "Temel",
+                            StepOrder = 2,
+                            TaskName = "Hafriyat ve Temel Kazısı",
+                            WaitDays = 0,
+                            WorkflowType = "Kaba"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Yalıtım yırtılmasın diye grobeton yüzeyi pürüzsüz olmalı.",
+                            IsDeleted = false,
+                            IsGatekeeper = false,
+                            PhaseCategory = "Temel",
+                            StepOrder = 3,
+                            TaskName = "Grobeton ve İzolasyon (Bohçalama)",
+                            WaitDays = 1,
+                            WorkflowType = "Kaba"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "DİKKAT KİLİT NOKTASI: Yapı denetim gelip paspayı ve demir sayımını onaylamadan kesinlikle beton dökülemez!",
+                            IsDeleted = false,
+                            IsGatekeeper = true,
+                            PhaseCategory = "Temel",
+                            StepOrder = 4,
+                            TaskName = "Temel Demiri ve Paspayı Kontrolü",
+                            WaitDays = 0,
+                            WorkflowType = "Kaba"
+                        },
+                        new
+                        {
+                            Id = 5,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Beton döküldükten sonra yanmaması için yaz aylarında günde en az 2 kez sulama (kürleme) yapılacak.",
+                            IsDeleted = false,
+                            IsGatekeeper = false,
+                            PhaseCategory = "Temel",
+                            StepOrder = 5,
+                            TaskName = "Temel Betonu Dökümü ve Kürleme",
+                            WaitDays = 3,
+                            WorkflowType = "Kaba"
+                        },
+                        new
+                        {
+                            Id = 6,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Belediyeden subasman vize belgesi alınmadan 1. Katın kolon filizlerine başlama!",
+                            IsDeleted = false,
+                            IsGatekeeper = true,
+                            PhaseCategory = "Temel",
+                            StepOrder = 6,
+                            TaskName = "Subasman Vizesi (Onay)",
+                            WaitDays = 0,
+                            WorkflowType = "Kaba"
+                        },
+                        new
+                        {
+                            Id = 7,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Şakül kontrollerini çift taraflı yap.",
+                            IsDeleted = false,
+                            IsGatekeeper = false,
+                            PhaseCategory = "TipKat",
+                            StepOrder = 1,
+                            TaskName = "Kolon ve Perde Kalıbı",
+                            WaitDays = 0,
+                            WorkGroupCategory = "Kaba_Kalıp",
+                            WorkflowType = "Kaba"
+                        },
+                        new
+                        {
+                            Id = 8,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Yapı denetim kolon demirlerini onaylamadan kalıbı kapatma!",
+                            IsDeleted = false,
+                            IsGatekeeper = true,
+                            PhaseCategory = "TipKat",
+                            StepOrder = 2,
+                            TaskName = "Kolon ve Perde Demiri",
+                            WaitDays = 0,
+                            WorkGroupCategory = "Kaba_Demir",
+                            WorkflowType = "Kaba"
+                        },
+                        new
+                        {
+                            Id = 9,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Tesisat rezervasyon (boşluk) borularını yerleştirmeyi unutma.",
+                            IsDeleted = false,
+                            IsGatekeeper = true,
+                            PhaseCategory = "TipKat",
+                            StepOrder = 3,
+                            TaskName = "Döşeme Kalıp ve Demiri",
+                            WaitDays = 0,
+                            WorkflowType = "Kaba"
+                        },
+                        new
+                        {
+                            Id = 10,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Vibratörsüz kesinlikle döküm yapılmayacak.",
+                            IsDeleted = false,
+                            IsGatekeeper = false,
+                            PhaseCategory = "TipKat",
+                            StepOrder = 4,
+                            TaskName = "Kat Betonu Dökümü",
+                            WaitDays = 3,
+                            WorkGroupCategory = "Kaba_Beton",
+                            WorkflowType = "Kaba"
+                        },
+                        new
+                        {
+                            Id = 11,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "DİKKAT: Temizlikten çıkan molozları kesinlikle asansör boşluğuna veya tesisat şaftlarına dökmeyin!",
+                            IsDeleted = false,
+                            IsGatekeeper = false,
+                            PhaseCategory = "TipKat",
+                            StepOrder = 5,
+                            TaskName = "Kaba Temizlik",
+                            WaitDays = 0,
+                            WorkflowType = "InceSabit"
+                        },
+                        new
+                        {
+                            Id = 12,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Kapı kasa boşluk ölçülerine standartlara göre dikkat et.",
+                            IsDeleted = false,
+                            IsGatekeeper = false,
+                            PhaseCategory = "TipKat",
+                            StepOrder = 6,
+                            TaskName = "Duvar / Tuğla Örümü",
+                            WaitDays = 0,
+                            WorkflowType = "InceSabit"
+                        },
+                        new
+                        {
+                            Id = 13,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Tesisat testi (basınç testi) yapılmadan sıva aşamasına geçilmeyecek!",
+                            IsDeleted = false,
+                            IsGatekeeper = true,
+                            PhaseCategory = "TipKat",
+                            StepOrder = 7,
+                            TaskName = "Altyapı Tesisat (Elektrik & Sıhhi)",
+                            WaitDays = 0,
+                            WorkflowType = "InceSabit"
+                        },
+                        new
+                        {
+                            Id = 21,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "DİKKAT: İtfaiye onayı için yangın dolabı ve hortum tesisatı standartlara uygun montajlanmalı!",
+                            IsDeleted = false,
+                            IsGatekeeper = true,
+                            PhaseCategory = "TipKat",
+                            StepOrder = 8,
+                            TaskName = "İtfaiye ve Yangın Tesisatı (Hortum/Dolap)",
+                            WaitDays = 0,
+                            WorkflowType = "InceSabit"
+                        },
+                        new
+                        {
+                            Id = 22,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Banyo ve tuvaletlerde su izolasyonu yapılıp 24 saat su testi (göllendirme) yapılmadan şap atılmayacak.",
+                            IsDeleted = false,
+                            IsGatekeeper = true,
+                            PhaseCategory = "TipKat",
+                            StepOrder = 9,
+                            TaskName = "Islak Hacim Su Yalıtımı",
+                            WaitDays = 1,
+                            WorkflowType = "InceSabit"
+                        },
+                        new
+                        {
+                            Id = 14,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Şap dökülmeden önce zemin temizliği tam yapılmalı.",
+                            IsDeleted = false,
+                            IsGatekeeper = false,
+                            PhaseCategory = "TipKat",
+                            StepOrder = 10,
+                            TaskName = "Kaba Sıva ve Kat Şapı",
+                            WaitDays = 2,
+                            WorkflowType = "InceSabit"
+                        },
+                        new
+                        {
+                            Id = 15,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "CRM'den müşterinin renk/desen seçimi bekleniyor! Onay gelmeden döşemeye başlama.",
+                            IsDeleted = false,
+                            IsGatekeeper = true,
+                            PhaseCategory = "TipKat",
+                            StepOrder = 11,
+                            TaskName = "Islak Hacim Seramik/Fayans",
+                            WaitDays = 0,
+                            WorkflowType = "InceSecmeli"
+                        },
+                        new
+                        {
+                            Id = 16,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Müşteri tercihi teyit edilecek. Şapın tam kuruduğundan emin ol.",
+                            IsDeleted = false,
+                            IsGatekeeper = true,
+                            PhaseCategory = "TipKat",
+                            StepOrder = 12,
+                            TaskName = "Zemin Kaplama (Parke/Mermer)",
+                            WaitDays = 0,
+                            WorkflowType = "InceSecmeli"
+                        },
+                        new
+                        {
+                            Id = 17,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Müşteri aksesuar/model seçimi bekleniyor.",
+                            IsDeleted = false,
+                            IsGatekeeper = true,
+                            PhaseCategory = "TipKat",
+                            StepOrder = 13,
+                            TaskName = "Mutfak Dolapları ve İç Kapılar",
+                            WaitDays = 0,
+                            WorkflowType = "InceSecmeli"
+                        },
+                        new
+                        {
+                            Id = 18,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Rüzgar bağlantılarını sağlamlaştır.",
+                            IsDeleted = false,
+                            IsGatekeeper = false,
+                            PhaseCategory = "Cati",
+                            StepOrder = 1,
+                            TaskName = "Çelik/Ahşap Konstrüksiyon İşleri",
+                            WaitDays = 0,
+                            WorkflowType = "Kaba"
+                        },
+                        new
+                        {
+                            Id = 19,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Yağmur testi yapılmadan kiremit/kaplama işine geçme.",
+                            IsDeleted = false,
+                            IsGatekeeper = true,
+                            PhaseCategory = "Cati",
+                            StepOrder = 2,
+                            TaskName = "Çatı İzolasyonu (Su ve Isı)",
+                            WaitDays = 0,
+                            WorkflowType = "Kaba"
+                        },
+                        new
+                        {
+                            Id = 20,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Dere oluklarının eğimlerini son kez kontrol et.",
+                            IsDeleted = false,
+                            IsGatekeeper = false,
+                            PhaseCategory = "Cati",
+                            StepOrder = 3,
+                            TaskName = "Çatı Kaplama (Kiremit/Membran)",
+                            WaitDays = 0,
+                            WorkflowType = "Kaba"
+                        },
+                        new
+                        {
+                            Id = 23,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Beton dökülmeden gider borularını sabitle.",
+                            IsDeleted = false,
+                            IsGatekeeper = true,
+                            PhaseCategory = "TipKat",
+                            RequiredCondition = "PlumbingType_Gomme",
+                            StepOrder = 1,
+                            TaskName = "Tesisat Rezervasyon ve Borulama",
+                            WaitDays = 0,
+                            WorkGroupCategory = "Tesisat_Mekanik",
+                            WorkflowType = "Kaba"
+                        },
+                        new
+                        {
+                            Id = 24,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Yapıştırıcıyı kıvamında hazırla.",
+                            IsDeleted = false,
+                            IsGatekeeper = false,
+                            PhaseCategory = "TipKat",
+                            RequiredCondition = "OuterWallType_Ytong",
+                            StepOrder = 3,
+                            TaskName = "Dış Cephe Ytong Örümü",
+                            WaitDays = 0,
+                            WorkGroupCategory = "Ince_Duvar",
+                            WorkflowType = "InceSabit"
+                        },
+                        new
+                        {
+                            Id = 25,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Harç paylarına standartlara göre dikkat et.",
+                            IsDeleted = false,
+                            IsGatekeeper = false,
+                            PhaseCategory = "TipKat",
+                            RequiredCondition = "OuterWallType_Tugla",
+                            StepOrder = 3,
+                            TaskName = "Dış Cephe Tuğla Örümü",
+                            WaitDays = 0,
+                            WorkGroupCategory = "Ince_Duvar",
+                            WorkflowType = "InceSabit"
+                        },
+                        new
+                        {
+                            Id = 26,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            ExperienceNote = "Motor kanca payını projeye göre bırak.",
+                            IsDeleted = false,
+                            IsGatekeeper = true,
+                            PhaseCategory = "Cati",
+                            RequiredCondition = "ElevatorType_Klasik",
+                            StepOrder = 1,
+                            TaskName = "Asansör Makine Dairesi Betonu",
+                            WaitDays = 0,
+                            WorkGroupCategory = "Kaba_Kalıp_Demir",
+                            WorkflowType = "Kaba"
+                        });
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.WorkflowTimesheet", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CrewId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("DailyWage")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("StandbyReason")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("WorkStatus")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("WorkflowTimesheets");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.ConsultantRating", b =>
@@ -13833,9 +15752,15 @@ namespace GMK360.Data.Migrations
                         .WithMany()
                         .HasForeignKey("ConstructionProjectId");
 
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.ProjectScheduleTask", "ProjectScheduleTask")
+                        .WithMany()
+                        .HasForeignKey("ProjectScheduleTaskId");
+
                     b.Navigation("AgencyWorker");
 
                     b.Navigation("ConstructionProject");
+
+                    b.Navigation("ProjectScheduleTask");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.DocumentTemplate", b =>
@@ -14057,6 +15982,39 @@ namespace GMK360.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.SiteDiary.SiteDiaryTask", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.ConstructionProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.SiteDiary.TaskActionTemplate", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.SiteDiary.TaskTemplate", "TaskTemplate")
+                        .WithMany("Aksiyonlar")
+                        .HasForeignKey("TaskTemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TaskTemplate");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.SiteDiary.TaskChecklistTemplate", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.SiteDiary.TaskTemplate", "TaskTemplate")
+                        .WithMany("Checklistler")
+                        .HasForeignKey("TaskTemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TaskTemplate");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.Construction.TaskProgressLog", b =>
                 {
                     b.HasOne("GMK360.Core.Entities.Construction.ConstructionTask", "ConstructionTask")
@@ -14108,6 +16066,234 @@ namespace GMK360.Data.Migrations
                     b.Navigation("Agency");
 
                     b.Navigation("ConstructionProject");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.CustomerSelection", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.CustomerUnit", "CustomerUnit")
+                        .WithMany()
+                        .HasForeignKey("CustomerUnitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.MasterMaterial", "SelectedMasterMaterial")
+                        .WithMany()
+                        .HasForeignKey("SelectedMasterMaterialId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.MasterMaterial", "StandardMasterMaterial")
+                        .WithMany()
+                        .HasForeignKey("StandardMasterMaterialId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CustomerUnit");
+
+                    b.Navigation("SelectedMasterMaterial");
+
+                    b.Navigation("StandardMasterMaterial");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.DnaTemplateOption", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.DnaProfession", "Profession")
+                        .WithMany()
+                        .HasForeignKey("DnaProfessionId");
+
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.DnaTemplateQuestion", "Question")
+                        .WithMany("Options")
+                        .HasForeignKey("DnaTemplateQuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Profession");
+
+                    b.Navigation("Question");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.DnaTemplateQuestion", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.DnaProfession", "Profession")
+                        .WithMany()
+                        .HasForeignKey("DnaProfessionId");
+
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.DnaTemplateStep", "Step")
+                        .WithMany("Questions")
+                        .HasForeignKey("DnaTemplateStepId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Profession");
+
+                    b.Navigation("Step");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.DxfUnitSpace", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.DxfUnitTypeProfile", "UnitTypeProfile")
+                        .WithMany("Spaces")
+                        .HasForeignKey("DxfUnitTypeProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("UnitTypeProfile");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.EquipmentUsageLog", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.CompanyEquipment", "CompanyEquipment")
+                        .WithMany()
+                        .HasForeignKey("CompanyEquipmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GMK360.Core.Entities.Construction.ConstructionProject", "ConstructionProject")
+                        .WithMany()
+                        .HasForeignKey("ConstructionProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CompanyEquipment");
+
+                    b.Navigation("ConstructionProject");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.IsgAuditForm", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.ProjectElevation", "Elevation")
+                        .WithMany()
+                        .HasForeignKey("ElevationId");
+
+                    b.HasOne("GMK360.Core.Entities.Construction.ConstructionProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Elevation");
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.IsgChecklistItem", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.IsgAuditForm", "IsgAuditForm")
+                        .WithMany("ChecklistItems")
+                        .HasForeignKey("IsgAuditFormId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("IsgAuditForm");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.ProjectDnaDetail", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.DnaProfession", "Profession")
+                        .WithMany()
+                        .HasForeignKey("DnaProfessionId");
+
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.ProjectDnaProfile", "Profile")
+                        .WithMany("Details")
+                        .HasForeignKey("ProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Profession");
+
+                    b.Navigation("Profile");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.ProjectDnaProfile", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.ConstructionProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.ProjectElevation", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.ProjectElevation", "ParentElevation")
+                        .WithMany()
+                        .HasForeignKey("ParentElevationId");
+
+                    b.HasOne("GMK360.Core.Entities.Construction.ConstructionProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ParentElevation");
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.ProjectMaterialDemand", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.MasterMaterial", "MasterMaterial")
+                        .WithMany()
+                        .HasForeignKey("MasterMaterialId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.ProjectScheduleTask", "ProjectScheduleTask")
+                        .WithMany()
+                        .HasForeignKey("ProjectScheduleTaskId");
+
+                    b.Navigation("MasterMaterial");
+
+                    b.Navigation("ProjectScheduleTask");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.ProjectScheduleSubTask", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.ProjectScheduleTask", "ProjectScheduleTask")
+                        .WithMany("PrePreparations")
+                        .HasForeignKey("ProjectScheduleTaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ProjectScheduleTask");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.ProjectTask", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.ProjectElevation", "Elevation")
+                        .WithMany()
+                        .HasForeignKey("ElevationId");
+
+                    b.HasOne("GMK360.Core.Entities.Construction.ConstructionProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Elevation");
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.RecipeIngredient", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.MasterMaterial", "MasterMaterial")
+                        .WithMany()
+                        .HasForeignKey("MasterMaterialId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GMK360.Core.Entities.Construction.Workflows.MaterialRecipe", "MaterialRecipe")
+                        .WithMany("Ingredients")
+                        .HasForeignKey("MaterialRecipeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("MasterMaterial");
+
+                    b.Navigation("MaterialRecipe");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.ConsultantRating", b =>
@@ -16370,9 +18556,51 @@ namespace GMK360.Data.Migrations
                     b.Navigation("Debts");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.SiteDiary.TaskTemplate", b =>
+                {
+                    b.Navigation("Aksiyonlar");
+
+                    b.Navigation("Checklistler");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.Construction.Warehouse", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.DnaTemplateQuestion", b =>
+                {
+                    b.Navigation("Options");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.DnaTemplateStep", b =>
+                {
+                    b.Navigation("Questions");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.DxfUnitTypeProfile", b =>
+                {
+                    b.Navigation("Spaces");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.IsgAuditForm", b =>
+                {
+                    b.Navigation("ChecklistItems");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.MaterialRecipe", b =>
+                {
+                    b.Navigation("Ingredients");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.ProjectDnaProfile", b =>
+                {
+                    b.Navigation("Details");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.Workflows.ProjectScheduleTask", b =>
+                {
+                    b.Navigation("PrePreparations");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Country", b =>

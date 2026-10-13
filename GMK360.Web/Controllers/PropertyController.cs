@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using GMK360.Core.Interfaces;
 using GMK360.Core.Entities;
@@ -61,7 +61,7 @@ namespace GMK360.Web.Controllers
             }
             
             // Dummy or real values
-            draft.Title = string.IsNullOrWhiteSpace(model.Title) ? "Taslak Ä°lan" : model.Title;
+            draft.Title = string.IsNullOrWhiteSpace(model.Title) ? "Taslak Ã„Â°lan" : model.Title;
             draft.Description = string.IsNullOrWhiteSpace(model.Description) ? "" : model.Description;
             draft.Price = model.Price == 0 ? 1 : model.Price;
             draft.StatusId = model.StatusId == 0 ? 1 : model.StatusId; // Dummy Status
@@ -110,7 +110,7 @@ namespace GMK360.Web.Controllers
                 .OrderByDescending(p => p.CreatedAt)
                 .ToListAsync();
 
-            // Sadece gerekli alanlarÄ± View'e taÅŸÄ±yabiliriz veya direkt Entity listesi dÃ¶nebiliriz.
+            // Sadece gerekli alanlarÃ„Â± View'e taÃ…Å¸Ã„Â±yabiliriz veya direkt Entity listesi dÃƒÂ¶nebiliriz.
             return View(properties);
         }
 
@@ -152,7 +152,7 @@ namespace GMK360.Web.Controllers
                 return Json(new { success = false, message = "Bu ilan zaten vitrinde." });
             }
 
-            // Vitrin Ãœcreti (Ã–rn: 50 Kredi)
+            // Vitrin ÃƒÅ“creti (Ãƒâ€“rn: 50 Kredi)
             decimal vitrinCost = 50m;
             
             bool isPaid = await _walletService.SpendCreditAsync(user.Id, vitrinCost);
@@ -160,14 +160,14 @@ namespace GMK360.Web.Controllers
             if (isPaid)
             {
                 property.IsBoosted = true;
-                property.PromotedEndDate = DateTime.Now.AddDays(30); // 30 GÃ¼nlÃ¼k Vitrin
+                property.PromotedEndDate = DateTime.Now.AddDays(30); // 30 GÃƒÂ¼nlÃƒÂ¼k Vitrin
                 await _context.SaveChangesAsync();
                 
-                return Json(new { success = true, message = "Ä°lanÄ±nÄ±z baÅŸarÄ±yla vitrine taÅŸÄ±ndÄ±!" });
+                return Json(new { success = true, message = "Ã„Â°lanÃ„Â±nÃ„Â±z baÃ…Å¸arÃ„Â±yla vitrine taÃ…Å¸Ã„Â±ndÃ„Â±!" });
             }
             else
             {
-                return Json(new { success = false, message = "Yetersiz bakiye. LÃ¼tfen cÃ¼zdanÄ±nÄ±za kredi yÃ¼kleyin.", redirectUrl = "/Wallet/Index" });
+                return Json(new { success = false, message = "Yetersiz bakiye. LÃƒÂ¼tfen cÃƒÂ¼zdanÃ„Â±nÃ„Â±za kredi yÃƒÂ¼kleyin.", redirectUrl = "/Wallet/Index" });
             }
         }
 
@@ -228,7 +228,7 @@ namespace GMK360.Web.Controllers
                 return RedirectPermanent($"/ilan/{slug}");
             }
 
-            // VeritabanÄ±ndan gerÃ§ek veriyi Ã§ekmeyi deniyoruz
+            // VeritabanÃ„Â±ndan gerÃƒÂ§ek veriyi ÃƒÂ§ekmeyi deniyoruz
             var realProperty = await _context.Properties
                 .Include(p => p.Images)
                 .Include(p => p.Building).ThenInclude(c => c.District)
@@ -243,7 +243,7 @@ namespace GMK360.Web.Controllers
             if (realProperty != null)
             {
                 property = realProperty;
-                // GerÃ§ek resimler
+                // GerÃƒÂ§ek resimler
                 if (property.Images != null && property.Images.Any())
                 {
                     ViewBag.MediaList = property.Images.OrderBy(img => img.SortOrder).ToList();
@@ -253,7 +253,7 @@ namespace GMK360.Web.Controllers
                     ViewBag.MediaList = new List<PropertyImage>();
                 }
                 
-                // GerÃ§ek Ã¶zellikler
+                // GerÃƒÂ§ek ÃƒÂ¶zellikler
                 var featureList = new List<string>();
                 if (property.Features != null)
                 {
@@ -268,30 +268,30 @@ namespace GMK360.Web.Controllers
             }
             else
             {
-                // Ä°leride veritabanÄ±ndan Ã§ekilecek, ÅŸimdilik UI tasarÄ±mÄ± iÃ§in zengin mock data
+                // Ã„Â°leride veritabanÃ„Â±ndan ÃƒÂ§ekilecek, Ã…Å¸imdilik UI tasarÃ„Â±mÃ„Â± iÃƒÂ§in zengin mock data
                 property = new Property
                 {
                     Id = id == 0 ? 1 : id,
-                    Title = "KadÄ±kÃ¶y Moda'da Full Deniz ManzaralÄ± LÃ¼ks 3+1 AkÄ±llÄ± Ev",
-                    Description = @"<p>Moda sahilinin en prestijli lokasyonunda, kesintisiz deniz ve adalar manzarasÄ±na sahip, tamamen yenilenmiÅŸ 3+1 lÃ¼ks daire.</p>
-                                    <p><strong>Daire Ã–zellikleri:</strong></p>
+                    Title = "KadÃ„Â±kÃƒÂ¶y Moda'da Full Deniz ManzaralÃ„Â± LÃƒÂ¼ks 3+1 AkÃ„Â±llÃ„Â± Ev",
+                    Description = @"<p>Moda sahilinin en prestijli lokasyonunda, kesintisiz deniz ve adalar manzarasÃ„Â±na sahip, tamamen yenilenmiÃ…Å¸ 3+1 lÃƒÂ¼ks daire.</p>
+                                    <p><strong>Daire Ãƒâ€“zellikleri:</strong></p>
                                     <ul>
-                                        <li>145 mÂ² brÃ¼t, 130 mÂ² net kullanÄ±m alanÄ±</li>
-                                        <li>AkÄ±llÄ± ev sistemi (AydÄ±nlatma, Ä±sÄ±tma ve panjur kontrolÃ¼)</li>
-                                        <li>Ebeveyn banyosu ve giyinme odasÄ±</li>
-                                        <li>Yerden Ä±sÄ±tma ve VRF klima sistemi</li>
-                                        <li>2 araÃ§lÄ±k kapalÄ± otopark tahsisi</li>
+                                        <li>145 mÃ‚Â² brÃƒÂ¼t, 130 mÃ‚Â² net kullanÃ„Â±m alanÃ„Â±</li>
+                                        <li>AkÃ„Â±llÃ„Â± ev sistemi (AydÃ„Â±nlatma, Ã„Â±sÃ„Â±tma ve panjur kontrolÃƒÂ¼)</li>
+                                        <li>Ebeveyn banyosu ve giyinme odasÃ„Â±</li>
+                                        <li>Yerden Ã„Â±sÃ„Â±tma ve VRF klima sistemi</li>
+                                        <li>2 araÃƒÂ§lÃ„Â±k kapalÃ„Â± otopark tahsisi</li>
                                     </ul>
-                                    <p>Binada 7/24 gÃ¼venlik, kapalÄ± yÃ¼zme havuzu ve fitness salonu bulunmaktadÄ±r. Randevu ile gÃ¶sterilmektedir.</p>",
+                                    <p>Binada 7/24 gÃƒÂ¼venlik, kapalÃ„Â± yÃƒÂ¼zme havuzu ve fitness salonu bulunmaktadÃ„Â±r. Randevu ile gÃƒÂ¶sterilmektedir.</p>",
                     Price = 18500000,
                     Currency = "TRY",
-                    // Complex mock kaldÄ±rÄ±ldÄ±
-                    StatusId = 1, // SatÄ±lÄ±k
+                    // Complex mock kaldÃ„Â±rÃ„Â±ldÃ„Â±
+                    StatusId = 1, // SatÃ„Â±lÃ„Â±k
                     TypeId = 1, // Konut
                     User = new GMK360.Core.Entities.Identity.ApplicationUser 
                     { 
                         FirstName = "Ahmet", 
-                        LastName = "YÄ±lmaz",
+                        LastName = "YÃ„Â±lmaz",
                         Email = "ahmet@emlakburada.com",
                         ProfileImageUrl = "/images/default-avatar.png",
                         AgencyConsultants = new List<AgencyConsultant> 
@@ -299,41 +299,41 @@ namespace GMK360.Web.Controllers
                             new AgencyConsultant 
                             { 
                                 IsActive = true, 
-                                Agency = new Agency { CompanyName = "Premium Gayrimenkul A.Å." } 
+                                Agency = new Agency { CompanyName = "Premium Gayrimenkul A.Ã…Â." } 
                             } 
                         }
                     }
                 };
 
                 // Dynamic Features Mock
-                ViewBag.Features = new List<string> { "AkÄ±llÄ± Ev Sistemi", "Yerden IsÄ±tma", "Ebeveyn Banyosu", "KapalÄ± Otopark", "7/24 GÃ¼venlik", "Deniz ManzarasÄ±", "AsansÃ¶r", "Balkon" };
+                ViewBag.Features = new List<string> { "AkÃ„Â±llÃ„Â± Ev Sistemi", "Yerden IsÃ„Â±tma", "Ebeveyn Banyosu", "KapalÃ„Â± Otopark", "7/24 GÃƒÂ¼venlik", "Deniz ManzarasÃ„Â±", "AsansÃƒÂ¶r", "Balkon" };
                 
-                // Mock Images (DÃ¶nÃ¼ÅŸtÃ¼rÃ¼ldÃ¼)
+                // Mock Images (DÃƒÂ¶nÃƒÂ¼Ã…Å¸tÃƒÂ¼rÃƒÂ¼ldÃƒÂ¼)
                 var mockImages = new List<PropertyImage> 
                 {
-                    new PropertyImage { ImageUrl = "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=2075&q=80", SortOrder = 1, IsCover = true, RoomTag = "DÄ±ÅŸ Cephe", IsVideo = false },
+                    new PropertyImage { ImageUrl = "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=2075&q=80", SortOrder = 1, IsCover = true, RoomTag = "DÃ„Â±Ã…Å¸ Cephe", IsVideo = false },
                     new PropertyImage { ImageUrl = "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1170&q=80", SortOrder = 2, RoomTag = "Salon", IsVideo = false },
-                    new PropertyImage { ImageUrl = "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?ixlib=rb-4.0.3&auto=format&fit=crop&w=1170&q=80", SortOrder = 3, RoomTag = "Yatak OdasÄ±", IsVideo = false },
-                    new PropertyImage { ImageUrl = "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?ixlib=rb-4.0.3&auto=format&fit=crop&w=1170&q=80", SortOrder = 4, RoomTag = "KapalÄ± Otopark", IsVideo = false }
+                    new PropertyImage { ImageUrl = "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?ixlib=rb-4.0.3&auto=format&fit=crop&w=1170&q=80", SortOrder = 3, RoomTag = "Yatak OdasÃ„Â±", IsVideo = false },
+                    new PropertyImage { ImageUrl = "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?ixlib=rb-4.0.3&auto=format&fit=crop&w=1170&q=80", SortOrder = 4, RoomTag = "KapalÃ„Â± Otopark", IsVideo = false }
                 };
                 ViewBag.MediaList = mockImages;
             }
 
-            // Kurlar ve AltÄ±n (Mock/Temsili)
+            // Kurlar ve AltÃ„Â±n (Mock/Temsili)
             ViewBag.UsdRate = 33.20m;
             ViewBag.EurRate = 35.50m;
-            ViewBag.GoldGram = 2500m; // Gram AltÄ±n
+            ViewBag.GoldGram = 2500m; // Gram AltÃ„Â±n
 
-            // YouTube MantÄ±ÄŸÄ± Ä°Ã§in SaÄŸ Taraftaki Benzer/Vitrin Ä°lanlar
+            // YouTube MantÃ„Â±Ã„Å¸Ã„Â± Ã„Â°ÃƒÂ§in SaÃ„Å¸ Taraftaki Benzer/Vitrin Ã„Â°lanlar
             var relatedProperties = new List<Property>();
             for(int i = 1; i <= 5; i++)
             {
                 relatedProperties.Add(new Property {
                     Id = id + i,
-                    Title = $"KadÄ±kÃ¶y Sahilde {i+1}+1 LÃ¼ks Daire",
+                    Title = $"KadÃ„Â±kÃƒÂ¶y Sahilde {i+1}+1 LÃƒÂ¼ks Daire",
                     Price = 15000000 + (i * 1000000),
                     Currency = "TRY",
-                    // Complex mock kaldÄ±rÄ±ldÄ±
+                    // Complex mock kaldÃ„Â±rÃ„Â±ldÃ„Â±
                 });
             }
             ViewBag.RelatedProperties = relatedProperties;
@@ -363,38 +363,38 @@ namespace GMK360.Web.Controllers
 
         public IActionResult Compare(int id1, int id2)
         {
-            // Mock verilerle iki ilanÄ± kÄ±yaslama sayfasÄ± iÃ§in hazÄ±rlÄ±yoruz.
+            // Mock verilerle iki ilanÃ„Â± kÃ„Â±yaslama sayfasÃ„Â± iÃƒÂ§in hazÃ„Â±rlÃ„Â±yoruz.
             var p1 = new Property
             {
                 Id = id1,
-                Title = "Moda'da Full Deniz ManzaralÄ± 3+1",
+                Title = "Moda'da Full Deniz ManzaralÃ„Â± 3+1",
                 Price = 18500000,
                 Currency = "TRY",
-                // Complex mock kaldÄ±rÄ±ldÄ±
+                // Complex mock kaldÃ„Â±rÃ„Â±ldÃ„Â±
             };
 
             var p2 = new Property
             {
                 Id = id2,
-                Title = "Caddebostan Sahilde 4+1 LÃ¼ks Daire",
+                Title = "Caddebostan Sahilde 4+1 LÃƒÂ¼ks Daire",
                 Price = 24000000,
                 Currency = "TRY",
-                // Complex mock kaldÄ±rÄ±ldÄ±
+                // Complex mock kaldÃ„Â±rÃ„Â±ldÃ„Â±
             };
 
-            // P1 Ã–zellikler
+            // P1 Ãƒâ€“zellikler
             ViewBag.P1Images = new List<string> { "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80" };
-            ViewBag.P1Features = new List<string> { "AkÄ±llÄ± Ev Sistemi", "Yerden IsÄ±tma", "Deniz ManzarasÄ±" };
+            ViewBag.P1Features = new List<string> { "AkÃ„Â±llÃ„Â± Ev Sistemi", "Yerden IsÃ„Â±tma", "Deniz ManzarasÃ„Â±" };
             ViewBag.P1Rooms = "3+1";
-            ViewBag.P1Area = "145 mÂ²";
-            ViewBag.P1Age = "5 YaÅŸÄ±nda";
+            ViewBag.P1Area = "145 mÃ‚Â²";
+            ViewBag.P1Age = "5 YaÃ…Å¸Ã„Â±nda";
 
-            // P2 Ã–zellikler
+            // P2 Ãƒâ€“zellikler
             ViewBag.P2Images = new List<string> { "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80" };
-            ViewBag.P2Features = new List<string> { "Yerden IsÄ±tma", "KapalÄ± Otopark", "7/24 GÃ¼venlik", "AsansÃ¶r" };
+            ViewBag.P2Features = new List<string> { "Yerden IsÃ„Â±tma", "KapalÃ„Â± Otopark", "7/24 GÃƒÂ¼venlik", "AsansÃƒÂ¶r" };
             ViewBag.P2Rooms = "4+1";
-            ViewBag.P2Area = "180 mÂ²";
-            ViewBag.P2Age = "SÄ±fÄ±r Bina";
+            ViewBag.P2Area = "180 mÃ‚Â²";
+            ViewBag.P2Age = "SÃ„Â±fÃ„Â±r Bina";
 
             ViewBag.Property1 = p1;
             ViewBag.Property2 = p2;
@@ -409,8 +409,8 @@ namespace GMK360.Web.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user != null)
             {
-                // TODO: CanlÄ±ya Ã§Ä±karken EÄ°DS (e-Devlet) doÄŸrulamasÄ± aktif edilecek. 
-                // Åimdilik test iÃ§in devre dÄ±ÅŸÄ± bÄ±rakÄ±ldÄ±.
+                // TODO: CanlÃ„Â±ya ÃƒÂ§Ã„Â±karken EÃ„Â°DS (e-Devlet) doÃ„Å¸rulamasÃ„Â± aktif edilecek. 
+                // Ã…Âimdilik test iÃƒÂ§in devre dÃ„Â±Ã…Å¸Ã„Â± bÃ„Â±rakÃ„Â±ldÃ„Â±.
                 // if (!user.PhoneNumberConfirmed || !user.IsEDevletVerified)
                 // {
                 //     return RedirectToAction("VerificationRequired", "Account");
@@ -488,7 +488,7 @@ namespace GMK360.Web.Controllers
             {
                 if (id.HasValue && id.Value > 0)
                 {
-                    // Spesifik taslaÄŸÄ± yÃ¼kle
+                    // Spesifik taslaÃ„Å¸Ã„Â± yÃƒÂ¼kle
                     var draftProperty = await _context.Properties
                         .Include(p => p.Complex)
                         .FirstOrDefaultAsync(p => p.UserId == user.Id && p.Id == id.Value && p.State == ListingState.Draft);
@@ -499,7 +499,7 @@ namespace GMK360.Web.Controllers
                         {
                             Id = draftProperty.Id,
                             DraftStep = draftProperty.DraftStep,
-                            Title = draftProperty.Title == "Taslak Ä°lan" ? "" : draftProperty.Title,
+                            Title = draftProperty.Title == "Taslak Ã„Â°lan" ? "" : draftProperty.Title,
                             Description = draftProperty.Description,
                             Price = draftProperty.Price == 1 ? 0 : draftProperty.Price,
                             StatusId = draftProperty.StatusId,
@@ -520,7 +520,7 @@ namespace GMK360.Web.Controllers
                 }
                 else
                 {
-                    // KullanÄ±cÄ±nÄ±n tÃ¼m taslaklarÄ±nÄ± getir
+                    // KullanÃ„Â±cÃ„Â±nÃ„Â±n tÃƒÂ¼m taslaklarÃ„Â±nÃ„Â± getir
                     var userDrafts = await _context.Properties
                         .Where(p => p.UserId == user.Id && p.State == ListingState.Draft)
                         .OrderByDescending(p => p.CreatedAt)
@@ -540,19 +540,19 @@ namespace GMK360.Web.Controllers
         [HttpPost]
         public async Task<IActionResult> Create(GMK360.Web.Models.PropertyCreateViewModel model)
         {
-            // Basit bir reCAPTCHA kontrolÃ¼ (UI tarafÄ±nda doÄŸrulanmÄ±ÅŸ farz ediyoruz)
+            // Basit bir reCAPTCHA kontrolÃƒÂ¼ (UI tarafÃ„Â±nda doÃ„Å¸rulanmÃ„Â±Ã…Å¸ farz ediyoruz)
             if (string.IsNullOrEmpty(model.RecaptchaToken))
             {
-                ModelState.AddModelError("RecaptchaToken", "LÃ¼tfen robot olmadÄ±ÄŸÄ±nÄ±zÄ± doÄŸrulayÄ±n.");
+                ModelState.AddModelError("RecaptchaToken", "LÃƒÂ¼tfen robot olmadÃ„Â±Ã„Å¸Ã„Â±nÃ„Â±zÃ„Â± doÃ„Å¸rulayÃ„Â±n.");
             }
 
-            // 40 Resim KotasÄ± KontrolÃ¼
+            // 40 Resim KotasÃ„Â± KontrolÃƒÂ¼
             if (model.ProcessedImages != null && model.ProcessedImages.Count > 40)
             {
-                ModelState.AddModelError("ProcessedImages", "Bir ilana en fazla 40 adet resim yÃ¼kleyebilirsiniz.");
+                ModelState.AddModelError("ProcessedImages", "Bir ilana en fazla 40 adet resim yÃƒÂ¼kleyebilirsiniz.");
             }
 
-            // Tapu Ä°stisnasÄ± (MÃ¼teahhit / Ä°nÅŸaat FirmasÄ± & Topraktan SatÄ±ÅŸ)
+            // Tapu Ã„Â°stisnasÃ„Â± (MÃƒÂ¼teahhit / Ã„Â°nÃ…Å¸aat FirmasÃ„Â± & Topraktan SatÃ„Â±Ã…Å¸)
             if (string.IsNullOrEmpty(model.DeedStatus))
             {
                 var statusDef = await _context.DefinitionValues.FindAsync(model.StatusId);
@@ -561,26 +561,26 @@ namespace GMK360.Web.Controllers
 
                 if (!(isInsaatFirmasi && isTopraktan))
                 {
-                    ModelState.AddModelError("DeedStatus", "Tapu durumu veya belge numarasÄ± girilmesi zorunludur (Sadece Ä°nÅŸaat FirmalarÄ±nÄ±n 'Topraktan SatÄ±ÅŸ' ilanlarÄ±nda bu alan opsiyoneldir).");
+                    ModelState.AddModelError("DeedStatus", "Tapu durumu veya belge numarasÃ„Â± girilmesi zorunludur (Sadece Ã„Â°nÃ…Å¸aat FirmalarÃ„Â±nÃ„Â±n 'Topraktan SatÃ„Â±Ã…Å¸' ilanlarÃ„Â±nda bu alan opsiyoneldir).");
                 }
             }
 
             if (!ModelState.IsValid)
             {
                 var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
-                TempData["ErrorMessage"] = "Ä°lan kaydedilirken bazÄ± alanlar eksik veya hatalÄ±: " + string.Join(" | ", errors);
+                TempData["ErrorMessage"] = "Ã„Â°lan kaydedilirken bazÃ„Â± alanlar eksik veya hatalÃ„Â±: " + string.Join(" | ", errors);
                 
                 ViewBag.ParkingTypes = await _context.DefinitionValues.Where(v => v.Category.SystemCode == "PARKING_TYPE").OrderBy(v => v.Order).ToListAsync();
                 ViewBag.PropertyStatuses = await _context.DefinitionValues.Where(v => v.Category.SystemCode == "PROPERTY_STATUS").OrderBy(v => v.Order).ToListAsync();
                 ViewBag.PropertyTypes = await _context.DefinitionValues.Where(v => v.Category.SystemCode == "PROPERTY_TYPE").OrderBy(v => v.Order).ToListAsync();
-                // Yeni Dinamik SeÃ§im KutularÄ± (Dropdownlar) - "DROPDOWN_" ile baÅŸlayanlar
+                // Yeni Dinamik SeÃƒÂ§im KutularÃ„Â± (Dropdownlar) - "DROPDOWN_" ile baÃ…Å¸layanlar
                 ViewBag.DynamicDropdowns = await _context.DefinitionCategories
                     .Include(c => c.Values)
                     .Where(c => c.SystemCode.StartsWith("DROPDOWN_"))
                     .OrderBy(c => c.Name)
                     .ToListAsync();
                     
-                // Dinamik Matris Ã–zellikleri GruplarÄ± (Ä°Ã§ Ã–zellikler, DÄ±ÅŸ Ã–zellikler vb.)
+                // Dinamik Matris Ãƒâ€“zellikleri GruplarÃ„Â± (Ã„Â°ÃƒÂ§ Ãƒâ€“zellikler, DÃ„Â±Ã…Å¸ Ãƒâ€“zellikler vb.)
                 ViewBag.MatrixCategories = await _context.DefinitionCategories
                     .Include(c => c.SubCategories)
                         .ThenInclude(sc => sc.Values)
@@ -600,7 +600,7 @@ namespace GMK360.Web.Controllers
                 return RedirectToAction("VerificationRequired", "Account");
             }
 
-            // DanÄ±ÅŸman ise aktif ajansÄ±nÄ± bul
+            // DanÃ„Â±Ã…Å¸man ise aktif ajansÃ„Â±nÃ„Â± bul
             int? agencyId = null;
             if (user.UserType == UserType.Consultant)
             {
@@ -612,7 +612,7 @@ namespace GMK360.Web.Controllers
                 }
             }
 
-            // Bina Ekleme / Koordinat MantÄ±ÄŸÄ±
+            // Bina Ekleme / Koordinat MantÃ„Â±Ã„Å¸Ã„Â±
             int? finalComplexId = model.ComplexId;
             // Note: New complexes are now saved via AJAX in step 2 before reaching here.
             // So model.ComplexId will already be populated if they entered a new building.
@@ -696,7 +696,7 @@ namespace GMK360.Web.Controllers
                 BuildingAge = model.BuildingAge ?? "-",
                 HeatingId = model.HeatingId,
                 IsFurnished = model.IsFurnished,
-                UnitNumber = unitNumbers.First(), // Ä°lk daire noyu taslak alÄ±yoruz
+                UnitNumber = unitNumbers.First(), // Ã„Â°lk daire noyu taslak alÃ„Â±yoruz
                 FloorNumber = model.FloorNumber,
                 TotalFloors = model.TotalFloors,
                 BuildingNumber = model.BuildingNumber ?? "-",
@@ -710,22 +710,22 @@ namespace GMK360.Web.Controllers
                 Side = side,
                 UserId = user.Id,
                 AgencyId = agencyId,
-                State = ListingState.PendingApproval, // EÄ°DS (e-Devlet) onayÄ± bekliyor
+                State = ListingState.PendingApproval, // EÃ„Â°DS (e-Devlet) onayÃ„Â± bekliyor
                 VideoFilePath = "",
                 VideoUrl = model.VideoUrl ?? "",
                 ICalUrl = "",
                 
-                // EÄ°DS Yetki AlanlarÄ±
+                // EÃ„Â°DS Yetki AlanlarÃ„Â±
                 HasAuthorization = model.HasAuthorization,
                 AuthorizationDocumentNo = model.AuthorizationDocumentNo ?? "-",
                 OwnerIdNumber = model.OwnerIdNumber ?? "-",
-                AuthorizationEndDate = model.HasAuthorization ? DateTime.Now.AddDays(90) : (DateTime?)null, // VarsayÄ±lan 90 gÃ¼n yetki
+                AuthorizationEndDate = model.HasAuthorization ? DateTime.Now.AddDays(90) : (DateTime?)null, // VarsayÃ„Â±lan 90 gÃƒÂ¼n yetki
                 ExternalMarketAlert = false,
 
                 Features = new List<PropertyFeature>()
             };
 
-            // Normal Ã¶zellikler (Checkbox vb) (Eski YapÄ± - Geriye Uyumluluk iÃ§in tutulabilir)
+            // Normal ÃƒÂ¶zellikler (Checkbox vb) (Eski YapÃ„Â± - Geriye Uyumluluk iÃƒÂ§in tutulabilir)
             if (model.SelectedFeatureIds != null && model.SelectedFeatureIds.Any())
             {
                 foreach (var fid in model.SelectedFeatureIds)
@@ -737,12 +737,12 @@ namespace GMK360.Web.Controllers
                 }
             }
 
-            // DÄ°NAMÄ°K AÃ‡ILIR LÄ°STELER (DROPDOWN) - Ã–rn: Oda SayÄ±sÄ±, Daire Tipi vs.
+            // DÃ„Â°NAMÃ„Â°K AÃƒâ€¡ILIR LÃ„Â°STELER (DROPDOWN) - Ãƒâ€“rn: Oda SayÃ„Â±sÃ„Â±, Daire Tipi vs.
             if (model.DynamicSelects != null && model.DynamicSelects.Any())
             {
                 foreach (var ds in model.DynamicSelects)
                 {
-                    // ds.Value, seÃ§ilen DefinitionValueId'dir
+                    // ds.Value, seÃƒÂ§ilen DefinitionValueId'dir
                     if (ds.Value > 0)
                     {
                         baseProperty.Features.Add(new PropertyFeature
@@ -753,7 +753,7 @@ namespace GMK360.Web.Controllers
                 }
             }
 
-            // DÄ°NAMÄ°K MATRÄ°S Ã–ZELLÄ°KLERÄ° (Yeni SÃ¼per YapÄ±)
+            // DÃ„Â°NAMÃ„Â°K MATRÃ„Â°S Ãƒâ€“ZELLÃ„Â°KLERÃ„Â° (Yeni SÃƒÂ¼per YapÃ„Â±)
             if (model.MatrixFeatures != null && model.MatrixFeatures.Any())
             {
                 foreach (var mf in model.MatrixFeatures)
@@ -771,7 +771,7 @@ namespace GMK360.Web.Controllers
                 }
             }
 
-            // DÄ°NAMÄ°K MATRÄ°S (COMPLEX / SÄ°TE Ã–ZELLÄ°KLERÄ°)
+            // DÃ„Â°NAMÃ„Â°K MATRÃ„Â°S (COMPLEX / SÃ„Â°TE Ãƒâ€“ZELLÃ„Â°KLERÃ„Â°)
             if (model.MatrixFeaturesComplex != null && model.MatrixFeaturesComplex.Any() && finalComplexId.HasValue)
             {
                 var complex = await _context.Complexes.Include(c => c.Features).FirstOrDefaultAsync(c => c.Id == finalComplexId.Value);
@@ -791,7 +791,7 @@ namespace GMK360.Web.Controllers
                 }
             }
 
-            // Dinamik Key-Value Ã¶zellikleri (Bina YaÅŸÄ±: 5 vb)
+            // Dinamik Key-Value ÃƒÂ¶zellikleri (Bina YaÃ…Å¸Ã„Â±: 5 vb)
             if (model.DynamicFeatures != null && model.DynamicFeatures.Any())
             {
                 foreach (var kv in model.DynamicFeatures)
@@ -807,18 +807,18 @@ namespace GMK360.Web.Controllers
                 }
             }
 
-            // POI'leri OTOMATÄ°K olarak ilana Ã¶zellik olarak ekle (KullanÄ±cÄ± seÃ§imine gerek yok)
+            // POI'leri OTOMATÃ„Â°K olarak ilana ÃƒÂ¶zellik olarak ekle (KullanÃ„Â±cÃ„Â± seÃƒÂ§imine gerek yok)
             if (model.NeighborhoodId > 0)
             {
                 var pois = await _context.NeighborhoodPOIs.Where(p => p.NeighborhoodId == model.NeighborhoodId).ToListAsync();
                 
                 if (pois.Any())
                 {
-                    // YakÄ±n Ã‡evre kategorisini bul veya oluÅŸtur
+                    // YakÃ„Â±n Ãƒâ€¡evre kategorisini bul veya oluÃ…Å¸tur
                     var poiCategory = await _context.DefinitionCategories.FirstOrDefaultAsync(c => c.SystemCode == "POI");
                     if (poiCategory == null)
                     {
-                        poiCategory = new DefinitionCategory { Name = "YakÄ±n Ã‡evre", SystemCode = "POI" };
+                        poiCategory = new DefinitionCategory { Name = "YakÃ„Â±n Ãƒâ€¡evre", SystemCode = "POI" };
                         _context.DefinitionCategories.Add(poiCategory);
                         await _context.SaveChangesAsync();
                     }
@@ -842,7 +842,7 @@ namespace GMK360.Web.Controllers
                 }
             }
 
-            // Resim/Video YÃ¼kleme Ä°ÅŸlemleri (Yeni Smart Media Dropzone)
+            // Resim/Video YÃƒÂ¼kleme Ã„Â°Ã…Å¸lemleri (Yeni Smart Media Dropzone)
             if (model.ProcessedImages != null && model.ProcessedImages.Any())
             {
                 baseProperty.Images = new List<PropertyImage>();
@@ -879,10 +879,10 @@ namespace GMK360.Web.Controllers
                 }
             }
             
-            // DÄ±ÅŸ YouTube/Vimeo Linki
+            // DÃ„Â±Ã…Å¸ YouTube/Vimeo Linki
             baseProperty.VideoUrl = model.VideoUrl;
 
-            // Taslak (Draft) varsa onu silip yeni Aktif versiyonu kaydediyoruz (mapping kolaylÄ±ÄŸÄ± iÃ§in)
+            // Taslak (Draft) varsa onu silip yeni Aktif versiyonu kaydediyoruz (mapping kolaylÃ„Â±Ã„Å¸Ã„Â± iÃƒÂ§in)
             if (model.Id > 0)
             {
                 var existingDraft = await _context.Properties
@@ -898,7 +898,7 @@ namespace GMK360.Web.Controllers
 
             var propertiesToInsert = new List<Property> { baseProperty };
             
-            // EÄŸer 1'den fazla UnitNumber girildiyse (Bulk Insert)
+            // EÃ„Å¸er 1'den fazla UnitNumber girildiyse (Bulk Insert)
             for (int i = 1; i < unitNumbers.Count; i++)
             {
                 var clone = new Property
@@ -990,7 +990,7 @@ namespace GMK360.Web.Controllers
             await _context.SaveChangesAsync();
 
             // -----------------------------------------------------
-            // EÄ°DS YETKÄ° KONTROLÃœ (Ä°Ã‡ Ã‡ATIÅMA Ã‡Ã–ZÃœMÃœ) & N8N WEBHOOK
+            // EÃ„Â°DS YETKÃ„Â° KONTROLÃƒÅ“ (Ã„Â°Ãƒâ€¡ Ãƒâ€¡ATIÃ…ÂMA Ãƒâ€¡Ãƒâ€“ZÃƒÅ“MÃƒÅ“) & N8N WEBHOOK
             // -----------------------------------------------------
             foreach (var prop in propertiesToInsert)
             {
@@ -1012,7 +1012,7 @@ namespace GMK360.Web.Controllers
                     {
                         foreach (var oldListing in conflictingListings)
                         {
-                            oldListing.State = ListingState.Revoked; // Yetkisi AlÄ±ndÄ± (Ä°ptal)
+                            oldListing.State = ListingState.Revoked; // Yetkisi AlÃ„Â±ndÃ„Â± (Ã„Â°ptal)
                         }
                         await _context.SaveChangesAsync();
                     }
@@ -1022,7 +1022,7 @@ namespace GMK360.Web.Controllers
                 {
                     try
                     {
-                        // Fire and forget (Asenkron beklemeden fÄ±rlatÄ±rÄ±z)
+                        // Fire and forget (Asenkron beklemeden fÃ„Â±rlatÃ„Â±rÃ„Â±z)
                         var webhookUrl = "http://localhost:5678/webhook/market-intelligence-crosscheck";
                         var payload = new {
                             PropertyId = prop.Id,
@@ -1039,17 +1039,17 @@ namespace GMK360.Web.Controllers
                         var content = new StringContent(System.Text.Json.JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json");
                         _ = new HttpClient().PostAsync(webhookUrl, content);
                     }
-                    catch (Exception) { /* Webhook hatasÄ± uygulamayÄ± patlatmasÄ±n */ }
+                    catch (Exception) { /* Webhook hatasÃ„Â± uygulamayÃ„Â± patlatmasÃ„Â±n */ }
                 }
             }
 
             if(propertiesToInsert.Count > 1)
             {
-                TempData["SuccessMessage"] = $"{propertiesToInsert.Count} adet ilanÄ±nÄ±z baÅŸarÄ±yla toplu olarak eklendi ve yayÄ±na alÄ±ndÄ±!";
+                TempData["SuccessMessage"] = $"{propertiesToInsert.Count} adet ilanÃ„Â±nÃ„Â±z baÃ…Å¸arÃ„Â±yla toplu olarak eklendi ve yayÃ„Â±na alÃ„Â±ndÃ„Â±!";
             }
             else
             {
-                TempData["SuccessMessage"] = "Ä°lanÄ±nÄ±z baÅŸarÄ±yla eklendi ve yayÄ±na alÄ±ndÄ±!";
+                TempData["SuccessMessage"] = "Ã„Â°lanÃ„Â±nÃ„Â±z baÃ…Å¸arÃ„Â±yla eklendi ve yayÃ„Â±na alÃ„Â±ndÃ„Â±!";
             }
             
             return RedirectToAction("Index", "Home");
@@ -1058,8 +1058,8 @@ namespace GMK360.Web.Controllers
         [HttpPost]
         public IActionResult SavePropertyNote([FromBody] PropertyNoteRequest request)
         {
-            // Ä°leride veritabanÄ±na eklenecek (User - Property Note tablosu)
-            return Json(new { success = true, message = "Not baÅŸarÄ±yla kaydedildi." });
+            // Ã„Â°leride veritabanÃ„Â±na eklenecek (User - Property Note tablosu)
+            return Json(new { success = true, message = "Not baÃ…Å¸arÃ„Â±yla kaydedildi." });
         }
     }
 
@@ -1070,6 +1070,7 @@ namespace GMK360.Web.Controllers
         public string note { get; set; }
     }
 }
+
 
 
 

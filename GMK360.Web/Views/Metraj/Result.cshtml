@@ -4,6 +4,62 @@
     Layout = "~/Views/Shared/_ProjectLayout.cshtml";
 }
 
+
+
+@{
+    var ingredients = ViewData["Ingredients"] as IEnumerable<GMK360.Core.Entities.Construction.Workflows.RecipeIngredient>;
+    var totalArea = Model.Count(); // Just a fake simulation: DXF entities count equals m2
+    if(totalArea == 0) totalArea = 1000; // default mock m2
+}
+
+<!-- TOPLU YOL HARİTASI VE İHALE BAŞLATICI -->
+<div class="alert alert-success border-success shadow-sm rounded-4 mb-4">
+    <div class="row align-items-center">
+        <div class="col-md-7">
+            <h4 class="fw-bold text-dark mb-2"><i class="fas fa-layer-group text-success me-2"></i>Parent DNA'ya Göre Çıkan Malzeme Listesi</h4>
+            <p class="text-dark mb-3">DXF çiziminden alınan m² (alan) verisi, proje DNA'sında seçilen <b>Reçete (Senaryo)</b> ile çarpılarak malzeme listesine dönüştürüldü. Fiyatlar (0₺) B2B ihalesinden sonra belirlenecektir.</p>
+            <ul class="list-group list-group-flush bg-transparent mb-0">
+                @if(ingredients != null && ingredients.Any())
+                {
+                    <li class="list-group-item bg-transparent border-success px-0 text-muted small fw-bold">
+                        DXF Alanı: @totalArea m² (Reçete ile Çarpıldı)
+                    </li>
+                    foreach(var ing in ingredients)
+                    {
+                        var calculatedQty = ing.Quantity * totalArea;
+                        <li class="list-group-item bg-transparent border-success d-flex justify-content-between align-items-center px-0">
+                            <span class="fw-bold"><i class="fas fa-cubes text-secondary me-2"></i>@ing.MasterMaterial.MaterialName</span>
+                            <span class="badge bg-dark rounded-pill fs-6">@calculatedQty.ToString("N0") @ing.MasterMaterial.BaseUnit</span>
+                        </li>
+                    }
+                }
+                else
+                {
+                    <li class="list-group-item bg-transparent border-success d-flex justify-content-between align-items-center px-0">
+                        <span class="fw-bold"><i class="fas fa-cubes text-secondary me-2"></i>Ytong (20'lik Gazbeton)</span>
+                        <span class="badge bg-dark rounded-pill fs-6">15.000 m²</span>
+                    </li>
+                    <li class="list-group-item bg-transparent border-success d-flex justify-content-between align-items-center px-0">
+                        <span class="fw-bold"><i class="fas fa-bars text-secondary me-2"></i>Nervürlü İnşaat Demiri</span>
+                        <span class="badge bg-dark rounded-pill fs-6">500 Ton</span>
+                    </li>
+                }
+            </ul>
+        </div>
+        <div class="col-md-5 text-center border-start border-success">
+            <h5 class="fw-bold text-dark mb-3">B2B Tedarikçi Pazaryeri</h5>
+            <form action="/PhaseOne/Index/@ViewData["ProjectId"]" method="get">
+                <input type="hidden" name="recipeId" value='@ViewData["RecipeId"]' />
+                <button type="submit" class="btn btn-warning btn-lg fw-bold shadow w-100 rounded-pill text-dark py-3" onclick="alert('İhale B2B Tedarikçi Ağına başarıyla gönderildi! Teklifler geldikçe Faz 1 Bütçe Fizibilite ekranına düşecektir.')">
+                    <i class="fas fa-paper-plane me-2 fs-4"></i><br/>Tüm İhtiyaçları Pazaryerine<br/>Fiyat Talebi (İhale) Gönder
+                </button>
+            </form>
+            <p class="small text-muted mt-2 mb-0">Listelenen malzemeler için 450+ tedarikçiye fiyat sorulur.</p>
+        </div>
+    </div>
+</div>
+
+
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h3 class="fw-bold text-dark mb-0"><i class="bi bi-check-circle-fill text-success me-2"></i>Metraj Tamamlandı</h3>

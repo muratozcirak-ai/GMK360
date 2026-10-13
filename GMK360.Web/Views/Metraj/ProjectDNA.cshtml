@@ -1,0 +1,515 @@
+﻿@{
+    ViewData["Title"] = "DNA Profili Yönetimi";
+    Layout = "~/Views/Shared/_ProjectLayout.cshtml";
+    var projectId = ViewData["ProjectId"];
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-dark mb-0"><i class="fas fa-dna text-primary me-2"></i>DNA Profili Yönetimi (Konfigüratör)</h3>
+            <p class="text-muted small mt-1 mb-0">Şantiyenin mimari ve statik profillerini (DNA) oluşturarak piyasa araştırması başlatın.</p>
+        </div>
+        <div class="d-flex gap-2"><button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#newConfigModal"><i class="fas fa-plus me-2"></i> Yeni DNA Profili Üret</button><button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#dynamicConfigModal" style="background-color: #6f42c1; border-color: #6f42c1;"><i class="fas fa-magic me-2"></i> Profil Üret</button></div>
+    </div>
+
+    <!-- DXF CIZIM SARTNAMESI BILGILENDIRME ALANI -->
+    <div class="alert alert-info border-0 shadow-sm d-flex align-items-center mb-4 rounded-4" style="background-color: #f0f7ff;" role="alert">
+        <div class="me-4">
+            <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary">
+                <i class="fas fa-drafting-compass fa-2x"></i>
+            </div>
+        </div>
+        <div class="flex-grow-1">
+            <h6 class="fw-bold mb-1 text-dark">GMK360 AutoCAD DXF Cizim Sartnamesi</h6>
+            <p class="mb-0 small text-muted">Asagidaki 3 farkli DXF Okuma Motorunun sifir hata ve yapay zeka entegrasyonuyla calisabilmesi icin, firmanizda cizim yapan mimar ve muhendislerin uymasi gereken AutoCAD Katman (Layer) kurallari kilavuzudur.</p>
+        </div>
+        <div class="ms-3">
+            <button class="btn btn-primary fw-bold rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#sartnameModal">
+                <i class="fas fa-book-open me-2"></i> Sartnameyi Incele
+            </button>
+        </div>
+    </div>
+
+    <!-- PROFIL LISTESI (MIMARI) -->
+    <div class="card shadow-sm border-0 rounded-4 mb-4 border-top border-4 border-primary">
+        <div class="card-header bg-white border-bottom p-4 d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-list-ul me-2 text-primary"></i>Üretilen Mimari DNA Profilleri</h5>
+                <p class="text-muted small mb-0 mt-1">Farklı statik ve mimari kombinasyonlar (DNA'lar) oluşturarak bütçe alternatifleri yaratın.</p>
+            </div>
+            <div>
+                <button class="btn btn-primary fw-bold shadow-sm">
+                    <i class="fas fa-file-import me-2"></i> Mimari DXF'i Oku ve Profillere Dağıt
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="configTable">
+                    <thead class="bg-light text-secondary small">
+                        <tr>
+                            <th class="px-4 py-3" style="width: 50px;">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="selectAll" checked onchange="toggleAllConfigs(this)">
+                                </div>
+                            </th>
+                            <th class="py-3">Profil Adı</th>
+                            <th class="py-3">Temel & Gövde</th>
+                            <th class="py-3">Tesisat & İnce İşler</th>
+                            <th class="py-3">Durum</th>
+                            <th class="py-3 text-end px-4">İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody id="configListBody">
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="emptyState" class="text-center p-5">
+                <i class="fas fa-fingerprint fa-3x text-muted mb-3 opacity-50"></i>
+                <h5 class="fw-bold text-dark">Henüz DNA Profili Üretilmedi</h5>
+                <p class="text-muted small">Sağ üstteki "Yeni DNA Profili Üret" butonunu kullanarak ilk reçetenizi oluşturun.</p>
+            </div>
+        </div>
+        <div class="card-footer bg-light border-top p-3 d-flex justify-content-between align-items-center">
+            <span class="text-muted small"><i class="fas fa-info-circle me-1"></i> Sadece seçili profiller (alternatifler) B2B fiyatlandırma departmanına gönderilir.</span>
+            <button class="btn btn-success fw-bold px-4" id="btnB2bMimari" disabled>
+                <i class="fas fa-paper-plane me-2"></i> Seçili (<span id="selectedCount">0</span>) Profil İçin B2B'den Teklif İste
+            </button>
+        </div>
+    </div>
+
+    <!-- TESİSAT VE ELEKTRİK (MEP) DXF MOTORU -->
+    <div class="card shadow-sm border-0 rounded-4 mb-4 border-top border-4 border-warning">
+        <div class="card-header bg-white border-bottom p-4 d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-network-wired text-warning me-2"></i>Tesisat, Elektrik ve Altyapı İhtiyaç Listesi</h5>
+                <p class="text-muted small mb-0 mt-1">Bu tablo Mimari DNA'dan bağımsızdır. Doğrudan Mekanik/Elektrik projelerindeki net metrajları fire payıyla hesaplar.</p>
+            </div>
+            <div>
+                <button class="btn btn-warning fw-bold text-dark shadow-sm">
+                    <i class="fas fa-file-import me-2"></i> Tesisat/Elektrik DXF'ini Oku
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-secondary small">
+                        <tr>
+                            <th class="px-4 py-3">Kategori</th>
+                            <th class="py-3">Malzeme / Ekipman Cinsi</th>
+                            <th class="py-3 text-center">Net Metraj</th>
+                            <th class="py-3 text-center">Fire Payı</th>
+                            <th class="py-3 text-center fw-bold text-dark">Toplam İhtiyaç</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Örnek Görünüm (Boş State) -->
+                        <tr>
+                            <td colspan="5" class="text-center p-5">
+                                <i class="fas fa-drafting-compass fa-3x text-muted mb-3 opacity-25"></i>
+                                <h6 class="fw-bold text-dark">Henüz MEP (Tesisat) Projesi Okutulmadı</h6>
+                                <p class="text-muted small mb-0">Kablo, boru, anahtar ve priz gibi altyapı metrajlarını süzmek için yukarıdaki "DXF'i Oku" butonunu kullanın.</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer bg-light border-top p-3 text-end">
+            <button class="btn btn-success fw-bold px-4" disabled>
+                <i class="fas fa-paper-plane me-2"></i> Tüm Tesisat İhtiyacını B2B'ye Gönder (Teklif İste)
+            </button>
+        </div>
+    </div>
+
+    <!-- 3. MOTOR: DAİRE TİPLERİ VE MAHAL LİSTESİ (CRM ŞABLONLARI) -->
+    <div class="card shadow-sm border-0 rounded-4 mb-4 border-top border-4 border-danger">
+        <div class="card-header bg-white border-bottom p-4 d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-vector-square text-danger me-2"></i>Daire Tipi ve Mahal Listesi (Tip Plan) Motoru</h5>
+                <p class="text-muted small mb-0 mt-1">Mimari DXF'ten daire tiplerini (Örn: 3+1 A Tipi) ve oda ölçülerini okuyarak CRM'de kullanılacak 'Şablonları' oluşturur.</p>
+            </div>
+            <div>
+                <button class="btn btn-danger fw-bold text-white shadow-sm">
+                    <i class="fas fa-ruler-combined me-2"></i> Daire Tiplerini DXF'ten Oku
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-secondary small">
+                        <tr>
+                            <th class="px-4 py-3">Daire Tipi (Model)</th>
+                            <th class="py-3 text-center">Toplam Hacim</th>
+                            <th class="py-3 text-center">Oda / Mahal Sayısı</th>
+                            <th class="py-3">Örnek Odalar (Özet)</th>
+                            <th class="py-3 text-end px-4">Durum</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Örnek Görünüm (Boş State) -->
+                        <tr>
+                            <td colspan="5" class="text-center p-5">
+                                <i class="fas fa-border-all fa-3x text-muted mb-3 opacity-25"></i>
+                                <h6 class="fw-bold text-dark">Henüz Mimari DXF'ten Tip Planlar Okutulmadı</h6>
+                                <p class="text-muted small mb-0">Binadaki daire modellerini ve iç ölçülerini (Salon, Yatak Odası m2) çıkarmak için DXF'i okutun.</p>
+                            </td>
+                        </tr>
+                        <!-- Taslak Dolu Satır Örneği (Yorum Satırında)
+                        <tr class="opacity-50">
+                            <td class="px-4 fw-bold">A Tipi (3+1 Kuzey)</td>
+                            <td class="text-center">145 mÂ² Brüt</td>
+                            <td class="text-center">8 Mahal</td>
+                            <td class="small text-muted">Salon (30mÂ²), Mutfak (15mÂ²), Ebeveyn (20mÂ²) ...</td>
+                            <td class="text-end px-4"><span class="badge bg-info">CRM İçin Hazır</span></td>
+                        </tr>
+                        -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer bg-light border-top p-3 text-start">
+            <span class="text-muted small">
+                <i class="fas fa-info-circle text-primary me-1"></i> <strong>Bilgi:</strong> Burada oluşturulan "Daire Tipleri", Satış/CRM sayfasında listelenen birebir dairelerin (Daire 1, Daire 2) üzerine şablon olarak giydirilecektir. B2B bütçesi çıkarmaz, CRM için metraj oluşturur.
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- DINAMIK SABLON MODALI -->
+<div class="modal fade" id="dynamicTemplateModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-info text-white border-0 p-4 sticky-top">
+                <h5 class="modal-title fw-bold"><i class="fas fa-table me-2"></i>Dinamik DNA Şablonu (Soru & Seçenek Listesi)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped align-middle mb-0">
+                        <thead class="table-light sticky-top shadow-sm">
+                            <tr>
+                                <th class="text-center" style="width: 50px;">Adım</th>
+                                <th>Adım Adı</th>
+                                <th>Soru (Başlık)</th>
+                                <th>Seçenekler & İş Branşları (Ustalar)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if(ViewBag.AllSteps != null) {
+                                foreach(var step in (IEnumerable<GMK360.Core.Entities.Construction.Workflows.DnaTemplateStep>)ViewBag.AllSteps) {
+                                    if(!step.Questions.Any()) {
+                                        <tr>
+                                            <td class="text-center fw-bold">@step.StepOrder</td>
+                                            <td class="fw-bold text-primary">@step.StepName</td>
+                                            <td class="text-muted fst-italic" colspan="2">Henüz soru eklenmedi.</td>
+                                        </tr>
+                                    } else {
+                                        bool isFirstQ = true;
+                                        foreach(var q in step.Questions) {
+                                            <tr>
+                                                @if(isFirstQ) {
+                                                    <td class="text-center fw-bold" rowspan="@step.Questions.Count">@step.StepOrder</td>
+                                                    <td class="fw-bold text-primary" rowspan="@step.Questions.Count">@step.StepName</td>
+                                                }
+                                                <td class="fw-medium">
+                                                    @q.Title
+                                                    @if(q.IsMultipleChoice) { <span class="badge bg-warning text-dark ms-1">Çoklu Seçim</span> }
+                                                </td>
+                                                <td>
+                                                    @if(q.Options.Any()) {
+                                                        <ul class="list-unstyled mb-0 small">
+                                                            @foreach(var opt in q.Options) {
+                                                                var profName = opt.Profession != null ? opt.Profession.Name : (q.Profession != null ? q.Profession.Name : "-Belirtilmedi-");
+                                                                <li class="mb-1"><i class="fas fa-check text-success me-1"></i> @opt.OptionText <span class="badge bg-secondary ms-1">Usta: @profName</span></li>
+                                                            }
+                                                        </ul>
+                                                    } else {
+                                                        <span class="text-muted fst-italic">DXF'ten okunacak veya sabit.</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                            isFirstQ = false;
+                                        }
+                                    }
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-secondary px-4 fw-bold" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- YENİ DNA PROFİLİ MODALI --><!-- YENİ DNA PROFİLİ MODALI (ESKİ STATİK) -->
+<div class="modal fade" id="newConfigModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-dark text-white border-0 p-4 sticky-top">
+                <h5 class="modal-title fw-bold"><i class="fas fa-building text-primary me-2"></i>Yeni DNA Profili (Master Şablon)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 bg-light">
+                <div class="mb-4 bg-white p-3 rounded-3 shadow-sm border-start border-4 border-primary">
+                    <label class="form-label fw-bold text-dark">DNA Profilinin Adı</label>
+                    <input type="text" class="form-control form-control-lg border-1" id="configNameOld" placeholder="Örn: Ultra Lüks Konfigürasyon">
+                </div>
+                <div class="accordion shadow-sm" id="dnaAccordionOld">
+                    <!-- ADIM 0 -->
+                    <div class="accordion-item border-0 mb-2 rounded-3 overflow-hidden">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed bg-white fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#oldAdim0">
+                                <i class="fas fa-lock text-danger me-2"></i> Adım 0: Mecburi Statik ve Taşıyıcılar (Sabit Alan)
+                            </button>
+                        </h2>
+                        <div id="oldAdim0" class="accordion-collapse collapse" data-bs-parent="#dnaAccordionOld">
+                            <div class="accordion-body bg-light">
+                                <div class="alert alert-danger mb-4"><i class="fas fa-exclamation-circle me-2"></i> Bu kalemler DXF'ten (Statik Projeden) sistem tarafından mecburi çekilmektedir. Değiştirilemez.</div>
+                                <div class="mb-3"><label class="form-label text-muted small">Taşıyıcı Beton</label><input type="text" class="form-control bg-white" value="Radye Temel ve Kat Betonu (DXF)" readonly></div>
+                                <div class="mb-3"><label class="form-label text-muted small">Taşıyıcı Donatı</label><input type="text" class="form-control bg-white" value="Nervürlü Taşıyıcı Donatı Çeliği (DXF)" readonly></div>
+                                <div class="mb-3"><label class="form-label text-muted small">Kalıp Sistemi</label><input type="text" class="form-control bg-white" value="Kalıp ve İskele İşçiliği (DXF)" readonly></div>
+                                <div class="mb-4"><label class="form-label text-muted small">Donatı Ekipmanları</label><input type="text" class="form-control bg-white" value="Paspayları ve Filizler (DXF)" readonly></div>
+                                <h6 class="fw-bold text-danger mb-3"><i class="fas fa-layer-group me-2"></i>Döşeme Sistemi (Asmolen / Kaset)</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6"><label class="form-label fw-bold text-dark small">1. Dolgu Malzemesi</label><select class="form-select border-0 shadow-sm"><option value="">-- Dolgu Seçin --</option></select></div>
+                                    <div class="col-md-6"><label class="form-label fw-bold text-dark small">2. Taşıyıcı (Nervür) Tekniği</label><select class="form-select border-0 shadow-sm"><option value="">-- Teknik Seçin --</option></select></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ADIM 1 -->
+                    <div class="accordion-item border-0 mb-2 rounded-3 overflow-hidden">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed bg-white fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#oldAdim1">
+                                <i class="fas fa-layer-group text-primary me-2"></i> Adım 1: Kot 0 (Zemin, Temel ve Perde İzolasyonu)
+                            </button>
+                        </h2>
+                        <div id="oldAdim1" class="accordion-collapse collapse" data-bs-parent="#dnaAccordionOld">
+                            <div class="accordion-body bg-light">
+                                <div class="alert alert-info">Bu orijinal statik adımdır. Yeni dinamik form "Profil Üret" butonundadır.</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ADIM 2 -->
+                    <div class="accordion-item border-0 mb-2 rounded-3 overflow-hidden">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed bg-white fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#oldAdim2">
+                                <i class="fas fa-cubes text-warning me-2"></i> Adım 2: Gövde (Duvar, Yalıtım ve Dış Cephe Boyası)
+                            </button>
+                        </h2>
+                        <div id="oldAdim2" class="accordion-collapse collapse" data-bs-parent="#dnaAccordionOld">
+                            <div class="accordion-body bg-light">
+                                <div class="alert alert-info">Gövde adımı statik...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ADIM 3 -->
+                    <div class="accordion-item border-0 mb-2 rounded-3 overflow-hidden">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed bg-white fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#oldAdim3">
+                                <i class="fas fa-paint-roller text-info me-2"></i> Adım 3: İç Mekan ve Dekorasyon (Yaşam Alanı)
+                            </button>
+                        </h2>
+                        <div id="oldAdim3" class="accordion-collapse collapse" data-bs-parent="#dnaAccordionOld">
+                            <div class="accordion-body bg-light">
+                                <div class="mb-4"><label class="form-label fw-bold text-dark small">Sıva ve Temel Şap Karakteri</label><select class="form-select border-0 shadow-sm"><option>Kaba Sıva + Alçı Sıva / Standart Şap</option></select></div>
+                                <div class="mb-4"><label class="form-label fw-bold text-dark small">İç Cephe Boya Karakteri</label><select class="form-select border-0 shadow-sm"><option>Standart Plastik (Mat) Boya</option></select></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top p-3 bg-white sticky-bottom">
+                <button type="button" class="btn btn-outline-secondary fw-bold rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- DINAMIK DNA PROFİLİ MODALI (YENİ) -->
+<div class="modal fade" id="dynamicConfigModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-primary text-white border-0 p-4 sticky-top">
+                <h5 class="modal-title fw-bold"><i class="fas fa-magic text-light me-2"></i>Profil Üret (Dinamik Şablon)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 bg-light">
+                <div class="mb-4 bg-white p-3 rounded-3 shadow-sm border-start border-4 border-primary">
+                    <label class="form-label fw-bold text-dark">DNA Profilinin Adı</label>
+                    <input type="text" class="form-control form-control-lg border-1" id="configName" placeholder="Örn: Yeni Dinamik Profil">
+                </div>
+                <div class="accordion shadow-sm" id="dnaAccordion">
+                    
+                    <!-- DINAMIK ADIM 0 (Sabit DXF Alanı) -->
+                    <div class="accordion-item border-0 mb-2 rounded-3 overflow-hidden">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed bg-white fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#adim0">
+                                <i class="fas fa-lock text-danger me-2"></i> Adım 0: Mecburi Statik ve Taşıyıcılar (Sabit Alan)
+                            </button>
+                        </h2>
+                        <div id="adim0" class="accordion-collapse collapse" data-bs-parent="#dnaAccordion">
+                            <div class="accordion-body bg-light">
+                                <div class="alert alert-danger mb-4"><i class="fas fa-exclamation-circle me-2"></i> Bu kalemler DXF'ten (Statik Projeden) sistem tarafından mecburi çekilmektedir. Değiştirilemez.</div>
+                                <div class="mb-3"><label class="form-label text-muted small">Taşıyıcı Beton</label><input type="text" class="form-control bg-white" value="Radye Temel ve Kat Betonu (DXF)" readonly></div>
+                                <div class="mb-3"><label class="form-label text-muted small">Taşıyıcı Donatı</label><input type="text" class="form-control bg-white" value="Nervürlü Taşıyıcı Donatı Çeliği (DXF)" readonly></div>
+                                <div class="mb-3"><label class="form-label text-muted small">Kalıp Sistemi</label><input type="text" class="form-control bg-white" value="Kalıp ve İskele İşçiliği (DXF)" readonly></div>
+                                <div class="mb-4"><label class="form-label text-muted small">Donatı Ekipmanları</label><input type="text" class="form-control bg-white" value="Paspayları ve Filizler (DXF)" readonly></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DINAMIK ADIM 1 -->
+                    <div class="accordion-item border-0 mb-2 rounded-3 overflow-hidden">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button bg-white fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#adim1">
+                                <i class="fas fa-layer-group text-primary me-2"></i> Adım 1: Kot 0 (Zemin, Temel ve Perde İzolasyonu)
+                            </button>
+                        </h2>
+                        <div id="adim1" class="accordion-collapse collapse show" data-bs-parent="#dnaAccordion">
+                            <div class="accordion-body bg-light">
+                                @if(ViewBag.Step1 != null) {
+                                    var step1 = (GMK360.Core.Entities.Construction.Workflows.DnaTemplateStep)ViewBag.Step1;
+                                    foreach(var q in step1.Questions) {
+                                        <div class="mb-4 bg-white p-3 border rounded shadow-sm">
+                                            <label class="form-label fw-bold text-dark">@q.Title</label>
+                                            
+                                            @if(q.IsMultipleChoice) {
+                                                <div class="input-group mb-2 shadow-sm">
+                                                    <select class="form-select border-0 dynamic-dna-select" id="q_@q.Id">
+                                                        <option value="">-- Seçiniz --</option>
+                                                        @foreach(var opt in q.Options.OrderBy(o => o.OptionOrder)) {
+                                                            var profName = opt.Profession != null ? opt.Profession.Name : (q.Profession != null ? q.Profession.Name : "");
+                                                            <option value="@opt.Id" data-prof="@profName">@opt.OptionText</option>
+                                                        }
+                                                    </select>
+                                                    <button class="btn btn-primary fw-bold px-4" type="button" onclick="addDynamicLayer('list_@q.Id', 'q_@q.Id')"><i class="fas fa-plus"></i> Ekle</button>
+                                                </div>
+                                                <ul class="list-group list-group-flush dynamic-dna-list" id="list_@q.Id"></ul>
+                                            } else {
+                                                <select class="form-select border-0 dynamic-dna-single shadow-sm" id="q_@q.Id">
+                                                    <option value="">-- Seçiniz --</option>
+                                                    @foreach(var opt in q.Options.OrderBy(o => o.OptionOrder)) {
+                                                        var profName = opt.Profession != null ? opt.Profession.Name : (q.Profession != null ? q.Profession.Name : "");
+                                                        <option value="@opt.Id" data-prof="@profName">@opt.OptionText</option>
+                                                    }
+                                                </select>
+                                                <div class="mt-2" id="prof_q_@q.Id"></div>
+                                            }
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top p-3 bg-white sticky-bottom">
+                <button type="button" class="btn btn-outline-secondary fw-bold rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-primary fw-bold rounded-pill px-5 shadow-sm" onclick="addConfiguration()">
+                    <i class="fas fa-check-circle me-2"></i> DNA Profilini Kaydet
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function addDynamicLayer(listId, selectId) {
+        var sel = document.getElementById(selectId);
+        var list = document.getElementById(listId);
+        if(!sel.value) return;
+        var text = sel.options[sel.selectedIndex].text;
+        var prof = sel.options[sel.selectedIndex].getAttribute("data-prof");
+        
+        var existing = list.querySelector("li[data-val='" + sel.value + "']");
+        if(existing) return;
+        
+        var li = document.createElement("li");
+        li.className = "list-group-item d-flex justify-content-between align-items-center bg-light border-0 mb-1 rounded";
+        li.setAttribute("data-val", sel.value);
+        li.innerHTML = `
+            <div>
+                <i class="fas fa-check-circle text-success me-2"></i><span class="fw-bold">${text}</span>
+                <div class="small mt-1 text-primary"><i class="fas fa-hard-hat me-1"></i> Kim Yapar: <strong>${prof}</strong></div>
+            </div>
+            <button class="btn btn-sm btn-outline-danger border-0" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+        `;
+        list.appendChild(li);
+        sel.value = "";
+    }
+    
+    document.addEventListener("change", function(e) {
+        if(e.target && e.target.classList.contains("dynamic-dna-single")) {
+            var divId = "prof_" + e.target.id;
+            var div = document.getElementById(divId);
+            if(div) {
+                if(e.target.value) {
+                    var prof = e.target.options[e.target.selectedIndex].getAttribute("data-prof");
+                    div.innerHTML = `<span class="badge bg-primary px-3 py-2 mt-2 d-inline-block"><i class="fas fa-hard-hat me-1"></i> Kim Yapar: <strong>${prof}</strong></span>`;
+                } else {
+                    div.innerHTML = "";
+                }
+            }
+        }
+    });
+
+    function addConfiguration() {
+        var profileName = document.getElementById("configName").value.trim();
+        if(!profileName) {
+            alert("Lütfen profil adını giriniz.");
+            return;
+        }
+
+        var details = [];
+        
+        document.querySelectorAll(".dynamic-dna-list").forEach(function(ul) {
+            Array.from(ul.children).forEach(function(li) {
+                var val = li.getAttribute("data-val");
+                var text = li.querySelector("span").innerText;
+                details.push({ Phase: "Adım 1", SelectedItem: text, ValueId: parseInt(val) });
+            });
+        });
+
+        document.querySelectorAll(".dynamic-dna-single").forEach(function(sel) {
+            if(sel.value) {
+                var opt = sel.options[sel.selectedIndex];
+                details.push({ Phase: "Adım 1", SelectedItem: opt.text, ValueId: parseInt(sel.value) });
+            }
+        });
+
+        fetch("/Metraj/SaveDnaProfile", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                ProjectId: @(ViewData["ProjectId"] ?? "0"),
+                Name: profileName,
+                Details: details
+            })
+        }).then(res => {
+            if(res.ok) window.location.reload();
+            else alert("Kayıt sırasında hata oluştu.");
+        }).catch(err => {
+            console.error(err);
+            alert("Sunucuya bağlanılamadı.");
+        });
+    }
+
+    function deleteProfile(id) {
+        if(confirm("Profili silmek istediğinize emin misiniz?")) {
+            fetch("/Metraj/DeleteDnaProfile/" + id, { method: "POST" })
+            .then(res => { if(res.ok) window.location.reload(); });
+        }
+    }
+</script>
