@@ -1,4 +1,4 @@
-﻿using GMK360.Core.Entities.Construction.Workflows;
+using GMK360.Core.Entities.Construction.Workflows;
 using GMK360.Data.Contexts;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -23,6 +23,47 @@ namespace GMK360.Web.Controllers
             return View(steps);
         }
 
+        [HttpPost]
+        public IActionResult AddStep(string stepName, int stepOrder)
+        {
+            if (!string.IsNullOrWhiteSpace(stepName))
+            {
+                var step = new DnaTemplateStep
+                {
+                    StepName = stepName.Trim(),
+                    StepOrder = stepOrder
+                };
+                _context.DnaTemplateSteps.Add(step);
+                _context.SaveChanges();
+            }
+            return RedirectToAction("Index");
+        }
+
+        [HttpPost]
+        public IActionResult UpdateStep(int id, string stepName, int stepOrder)
+        {
+            var step = _context.DnaTemplateSteps.Find(id);
+            if (step != null && !string.IsNullOrWhiteSpace(stepName))
+            {
+                step.StepName = stepName.Trim();
+                step.StepOrder = stepOrder;
+                _context.SaveChanges();
+            }
+            return RedirectToAction("Index");
+        }
+
+        [HttpPost]
+        public IActionResult DeleteStep(int id)
+        {
+            var step = _context.DnaTemplateSteps.Include(s => s.Questions).FirstOrDefault(s => s.Id == id);
+            if (step != null)
+            {
+                _context.DnaTemplateSteps.Remove(step);
+                _context.SaveChanges();
+            }
+            return RedirectToAction("Index");
+        }
+
         public IActionResult Questions(int stepId)
         {
             var step = _context.DnaTemplateSteps.Find(stepId);
@@ -30,6 +71,7 @@ namespace GMK360.Web.Controllers
 
             var questions = _context.DnaTemplateQuestions
                 .Include(q => q.Profession)
+                .Include(q => q.Options)
                 .Where(q => q.DnaTemplateStepId == stepId)
                 .OrderBy(q => q.QuestionOrder)
                 .ToList();

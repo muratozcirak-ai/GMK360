@@ -1,4 +1,4 @@
-﻿@model List<GMK360.Core.Entities.Construction.Workflows.DnaTemplateQuestion>
+@model List<GMK360.Core.Entities.Construction.Workflows.DnaTemplateQuestion>
 @{
     ViewData["Title"] = "Profil Başlıkları (Sorular)";
     Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
@@ -31,7 +31,7 @@
                             <th>Başlık (Soru)</th>
                             <th>İş Branşı (Usta/Trade)</th>
                             <th>Notlar</th>
-                            <th class="text-center">Seçmeli Mi?</th>
+                            <th class="text-center">Giriş / Seçim Türü</th>
                             <th>Seçenek Kaynağı</th>
                             <th class="text-end">İşlemler</th>
                         </tr>
@@ -43,34 +43,47 @@
                                 <td><span class="badge bg-secondary">@q.QuestionOrder</span></td>
                                 <td class="fw-bold text-primary">@q.Title</td>
                                 <td>
-                                    @if(q.Profession != null) {
-                                        <span class="badge bg-info text-dark">@q.Profession.Name</span>
-                                    } else {
-                                        <span class="text-muted fst-italic">-Belirtilmedi-</span>
-                                    }
+                                    <button type="button" class="btn btn-sm btn-light border py-1 px-2 text-start d-flex justify-content-between align-items-center" data-bs-toggle="modal" data-bs-target="#editQuestionModal-@q.Id" title="İş Branşını (Kim Yapar) Değiştirmek İçin Tıklayın">
+                                        @if(q.Profession != null) {
+                                            <span class="badge bg-info text-dark me-2"><i class="fas fa-hard-hat me-1"></i>@q.Profession.Name</span>
+                                        } else {
+                                            <span class="text-muted small fst-italic me-2"><i class="fas fa-plus me-1"></i>Branş Ata</span>
+                                        }
+                                        <i class="fas fa-pen text-muted small"></i>
+                                    </button>
                                 </td>
                                 <td class="text-muted small">@q.Notes</td>
                                 <td class="text-center">
-                                    @if(q.IsMultipleChoice)
+                                    @if(q.OptionSource != null && q.OptionSource.Contains("Sayısal"))
                                     {
-                                        <i class="fas fa-check-circle text-success fs-5" title="Evet (Seçenek Eklenecek)"></i>
+                                        <span class="badge bg-secondary"><i class="fas fa-calculator me-1"></i> Sayısal Giriş</span>
+                                    }
+                                    else if(q.IsMultipleChoice)
+                                    {
+                                        <span class="badge bg-success"><i class="fas fa-check-double me-1"></i> Çoklu Seçim</span>
                                     }
                                     else
                                     {
-                                        <i class="fas fa-times-circle text-danger fs-5" title="Hayır (Sabit Metin)"></i>
+                                        <span class="badge bg-info text-dark"><i class="fas fa-dot-circle me-1"></i> Tekli Seçim</span>
                                     }
                                 </td>
                                 <td class="text-muted small">@q.OptionSource</td>
-                                <td class="text-end">
-                                    @if(q.IsMultipleChoice)
+                                <td class="text-end" style="white-space: nowrap;">
+                                    @if(q.OptionSource != null && q.OptionSource.Contains("Sayısal"))
                                     {
-                                        <a href="/DnaTemplate/Options?questionId=@q.Id" class="btn btn-sm btn-outline-warning me-1"><i class="fas fa-list-ul me-1"></i> Seçenek Havuzu</a>
+                                        <span class="badge bg-light text-muted border me-1"><i class="fas fa-hashtag me-1"></i> Sayısal Alan</span>
                                     }
-                                    <button class="btn btn-sm btn-outline-secondary me-1" data-bs-toggle="modal" data-bs-target="#editQuestionModal-@q.Id">
-                                        <i class="fas fa-edit"></i>
+                                    else
+                                    {
+                                        <a href="/DnaTemplate/Options?questionId=@q.Id" class="btn btn-sm btn-outline-warning me-1">
+                                            <i class="fas fa-list-ul me-1"></i> Seçenek Havuzu (@(q.Options?.Count ?? 0))
+                                        </a>
+                                    }
+                                    <button class="btn btn-sm btn-outline-primary me-1" data-bs-toggle="modal" data-bs-target="#editQuestionModal-@q.Id" title="Başlığı Düzenle">
+                                        <i class="fas fa-pen me-1"></i> Düzenle
                                     </button>
                                     <form asp-action="DeleteQuestion" asp-route-id="@q.Id" method="post" class="d-inline" onsubmit="return confirm('Bu başlığı tamamen silmek istediğinize emin misiniz?');">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Sil"><i class="fas fa-trash"></i></button>
                                     </form>
                                 </td>
                             </tr>
@@ -117,7 +130,7 @@
                                         <div class="mb-3">
                                             <div class="form-check form-switch">
                                               <input class="form-check-input" type="checkbox" name="isMultipleChoice" value="true" @(q.IsMultipleChoice ? "checked" : "")>
-                                              <label class="form-check-label fw-bold text-success">Seçmeli Mi? (Daha sonra havuzdan seçenekler eklenecek mi?)</label>
+                                              <label class="form-check-label fw-bold text-success">Çoklu Seçim Mi? (Açık: Birden Fazla Seçim | Kapalı: Tekli Seçim)</label>
                                             </div>
                                         </div>
                                         <div class="mb-3">
@@ -187,7 +200,7 @@
             <div class="mb-3">
                 <div class="form-check form-switch border p-2 rounded bg-light">
                   <input class="form-check-input" type="checkbox" name="isMultipleChoice" value="true">
-                  <label class="form-check-label fw-bold ms-2 text-success">Seçmeli Mi? (Daha sonra havuzdan seçenekler eklenecek mi?)</label>
+                  <label class="form-check-label fw-bold ms-2 text-success">Çoklu Seçim Mi? (Açık: Birden Fazla Seçim | Kapalı: Tekli Seçim)</label>
                 </div>
             </div>
             <div class="mb-3">

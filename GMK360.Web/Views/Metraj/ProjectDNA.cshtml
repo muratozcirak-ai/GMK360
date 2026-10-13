@@ -2,6 +2,7 @@
     ViewData["Title"] = "DNA Profili Yönetimi";
     Layout = "~/Views/Shared/_ProjectLayout.cshtml";
     var projectId = ViewData["ProjectId"];
+    var savedProfiles = ViewBag.SavedProfiles as List<GMK360.Core.Entities.Construction.Workflows.ProjectDnaProfile>;
 }
 
 <div class="container-fluid py-4">
@@ -10,7 +11,7 @@
             <h3 class="fw-bold text-dark mb-0"><i class="fas fa-dna text-primary me-2"></i>DNA Profili Yönetimi (Konfigüratör)</h3>
             <p class="text-muted small mt-1 mb-0">Şantiyenin mimari ve statik profillerini (DNA) oluşturarak piyasa araştırması başlatın.</p>
         </div>
-        <div class="d-flex gap-2"><button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#newConfigModal"><i class="fas fa-plus me-2"></i> Yeni DNA Profili Üret</button><button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#dynamicConfigModal" style="background-color: #6f42c1; border-color: #6f42c1;"><i class="fas fa-magic me-2"></i> Profil Üret</button></div>
+        <div class="d-flex gap-2"><button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#newConfigModal"><i class="fas fa-plus me-2"></i> Yeni DNA Profili Üret</button><a href="/Metraj/DnaWizard/@projectId" target="_blank" class="btn btn-primary fw-bold shadow-sm" style="background-color: #6f42c1; border-color: #6f42c1;"><i class="fas fa-magic me-2"></i> Profil Üret</a></div>
     </div>
 
     <!-- DXF CIZIM SARTNAMESI BILGILENDIRME ALANI -->
@@ -62,20 +63,74 @@
                         </tr>
                     </thead>
                     <tbody id="configListBody">
+                        @if (savedProfiles != null && savedProfiles.Any())
+                        {
+                            foreach (var p in savedProfiles)
+                            {
+                                <tr>
+                                    <td class="px-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input config-item-cb" type="checkbox" value="@p.Id" checked onchange="updateSelectedCount()">
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold text-dark fs-6">@p.Name</div>
+                                        <div class="small text-muted">
+                                            <i class="far fa-calendar-alt me-1"></i> @p.CreatedDate.ToString("dd.MM.yyyy HH:mm")
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-1 rounded-pill small fw-semibold">
+                                            <i class="fas fa-layer-group me-1"></i> 20 Kalem Statik + @(p.Details?.Count ?? 0) Seçim
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-muted border px-2 py-1 small">
+                                            <i class="fas fa-clock me-1"></i> DXF Bekliyor
+                                        </span>
+                                    </td>
+                                    <td>
+                                        @if (p.Status == "Taslak")
+                                        {
+                                            <span class="badge bg-warning bg-opacity-25 text-dark border border-warning px-3 py-1 rounded-pill fw-bold">
+                                                <i class="fas fa-edit me-1 text-warning"></i> Taslak
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success bg-opacity-10 text-success border border-success px-3 py-1 rounded-pill fw-bold">
+                                                <i class="fas fa-check-circle me-1"></i> @p.Status
+                                            </span>
+                                        }
+                                    </td>
+                                    <td class="text-end px-4">
+                                        <a href="/Metraj/DnaWizard/@projectId?profileId=@p.Id" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold me-1">
+                                            <i class="fas fa-pen me-1"></i> Düzenle
+                                        </a>
+                                        <button type="button" onclick="deleteProfile(@p.Id)" class="btn btn-sm btn-outline-danger rounded-pill px-2" title="Sil">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
                     </tbody>
                 </table>
             </div>
             
-            <div id="emptyState" class="text-center p-5">
-                <i class="fas fa-fingerprint fa-3x text-muted mb-3 opacity-50"></i>
-                <h5 class="fw-bold text-dark">Henüz DNA Profili Üretilmedi</h5>
-                <p class="text-muted small">Sağ üstteki "Yeni DNA Profili Üret" butonunu kullanarak ilk reçetenizi oluşturun.</p>
-            </div>
+            @if (savedProfiles == null || !savedProfiles.Any())
+            {
+                <div id="emptyState" class="text-center p-5">
+                    <i class="fas fa-fingerprint fa-3x text-muted mb-3 opacity-50"></i>
+                    <h5 class="fw-bold text-dark">Henüz DNA Profili Üretilmedi</h5>
+                    <p class="text-muted small">Sağ üstteki "Profil Üret" butonunu kullanarak ilk reçetenizi oluşturun.</p>
+                </div>
+            }
         </div>
         <div class="card-footer bg-light border-top p-3 d-flex justify-content-between align-items-center">
             <span class="text-muted small"><i class="fas fa-info-circle me-1"></i> Sadece seçili profiller (alternatifler) B2B fiyatlandırma departmanına gönderilir.</span>
-            <button class="btn btn-success fw-bold px-4" id="btnB2bMimari" disabled>
-                <i class="fas fa-paper-plane me-2"></i> Seçili (<span id="selectedCount">0</span>) Profil İçin B2B'den Teklif İste
+            <button class="btn btn-success fw-bold px-4" id="btnB2bMimari" @(savedProfiles != null && savedProfiles.Any() ? "" : "disabled")>
+                <i class="fas fa-paper-plane me-2"></i> Seçili (<span id="selectedCount">@(savedProfiles?.Count ?? 0)</span>) Profil İçin B2B'den Teklif İste
             </button>
         </div>
     </div>
@@ -511,5 +566,18 @@
             fetch("/Metraj/DeleteDnaProfile/" + id, { method: "POST" })
             .then(res => { if(res.ok) window.location.reload(); });
         }
+    }
+
+    function toggleAllConfigs(masterCb) {
+        document.querySelectorAll(".config-item-cb").forEach(cb => cb.checked = masterCb.checked);
+        updateSelectedCount();
+    }
+
+    function updateSelectedCount() {
+        var count = document.querySelectorAll(".config-item-cb:checked").length;
+        var countSpan = document.getElementById("selectedCount");
+        if(countSpan) countSpan.innerText = count;
+        var btn = document.getElementById("btnB2bMimari");
+        if(btn) btn.disabled = (count === 0);
     }
 </script>

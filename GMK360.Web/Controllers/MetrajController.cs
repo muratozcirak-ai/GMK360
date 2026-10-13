@@ -1,4 +1,6 @@
-﻿using GMK360.Data.Contexts;
+using System;
+using System.Collections.Generic;
+using GMK360.Data.Contexts;
 using GMK360.Core.Entities.Construction.Workflows;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -50,6 +52,8 @@ namespace GMK360.Web.Controllers
 
             // URETILEN PROFILLERI (KAYITLARI) CEK
             ViewBag.SavedProfiles = _context.ProjectDnaProfiles
+                .Include(p => p.Details)
+                    .ThenInclude(d => d.Profession)
                 .Where(p => p.ProjectId == id)
                 .OrderByDescending(p => p.CreatedDate)
                 .ToList();
@@ -57,8 +61,85 @@ namespace GMK360.Web.Controllers
             return View();
         }
 
+        // YENİ TAM SAYFA DNA SİHİRBAZI (YENİ SEKME)
+        public IActionResult DnaWizard(int id, int? profileId)
+        {
+            var project = _context.ConstructionProjects.FirstOrDefault(p => p.Id == id);
+            if (project == null) return NotFound();
+
+            ViewData["ProjectId"] = id;
+            ViewData["ProjectName"] = project.Name;
+
+            // ADIM 0 (Mecburi Statik ve Taşıyıcılar - 20 Soru)
+            var step0 = _context.DnaTemplateSteps
+                .Include(s => s.Questions)
+                    .ThenInclude(q => q.Profession)
+                .FirstOrDefault(s => s.StepOrder == 0 || s.Id == 2);
+
+            if (step0 != null && step0.Questions != null)
+            {
+                step0.Questions = step0.Questions.OrderBy(q => q.QuestionOrder).ToList();
+            }
+            ViewBag.Step0 = step0;
+
+            // ADIM 1 (Kot 0 Zemin, Temel ve İzolasyon)
+            var step1 = _context.DnaTemplateSteps
+                .Include(s => s.Questions)
+                    .ThenInclude(q => q.Options)
+                        .ThenInclude(o => o.Profession)
+                .Include(s => s.Questions)
+                    .ThenInclude(q => q.Profession)
+                .FirstOrDefault(s => s.StepOrder == 1 || s.Id == 3);
+
+            if (step1 != null && step1.Questions != null)
+            {
+                step1.Questions = step1.Questions.OrderBy(q => q.QuestionOrder).ToList();
+            }
+            ViewBag.Step1 = step1;
+
+            // TÜM ADIMLAR (Navigasyon ve Tüm Fazların Soruları/Seçenekleri İçin)
+            ViewBag.AllSteps = _context.DnaTemplateSteps
+                .Include(s => s.Questions)
+                    .ThenInclude(q => q.Options)
+                        .ThenInclude(o => o.Profession)
+                .Include(s => s.Questions)
+                    .ThenInclude(q => q.Profession)
+                .OrderBy(s => s.StepOrder)
+                .ToList();
+
+            // İŞ BRANŞLARI (Pazar Yeri Eşleştirmesi)
+            ViewBag.Professions = _context.DnaProfessions.OrderBy(p => p.Name).ToList();
+
+            // MEVCUT BİR TASLAK VEYA PROFİL VAR MI?
+            if (profileId.HasValue && profileId.Value > 0)
+            {
+                var existing = _context.ProjectDnaProfiles
+                    .Include(p => p.Details)
+                        .ThenInclude(d => d.Profession)
+                    .FirstOrDefault(p => p.Id == profileId.Value && p.ProjectId == id);
+                ViewBag.ExistingProfile = existing;
+            }
+            else
+            {
+                // Parametre verilmediyse projedeki en son aktif taslağı otomatik getir (Kaldığı yerden devam etsin)
+                var latestDraft = _context.ProjectDnaProfiles
+                    .Include(p => p.Details)
+                        .ThenInclude(d => d.Profession)
+                    .Where(p => p.ProjectId == id && p.Status == "Taslak")
+                    .OrderByDescending(p => p.CreatedDate)
+                    .FirstOrDefault();
+                if (latestDraft != null)
+                {
+                    ViewBag.ExistingProfile = latestDraft;
+                }
+            }
+
+            return View();
+        }
+
         public class DnaProfileSaveDto
         {
+            public int? ProfileId { get; set; }
             public int ProjectId { get; set; }
             public string Name { get; set; }
             public List<DnaProfileDetailDto> Details { get; set; }
@@ -71,41 +152,237 @@ namespace GMK360.Web.Controllers
             public int ValueId { get; set; } // OptionId
         }
 
+        [HttpGet]
+        public IActionResult CheckProfileName(int projectId, string name, int? profileId)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return Json(new { exists = false });
+            var trimmed = name.Trim().ToLower();
+            bool exists = _context.ProjectDnaProfiles.Any(p =>
+                p.ProjectId == projectId &&
+                p.Name.Trim().ToLower() == trimmed &&
+                (!profileId.HasValue || p.Id != profileId.Value));
+            return Json(new { exists });
+        }
+
         [HttpPost]
+        [IgnoreAntiforgeryToken]
+        public IActionResult AutoSaveProfile([FromBody] DnaProfileSaveDto data)
+        {
+            if (data == null || string.IsNullOrWhiteSpace(data.Name)) return BadRequest();
+
+            var trimmedName = data.Name.Trim();
+
+            ProjectDnaProfile profile = null;
+            if (data.ProfileId.HasValue && data.ProfileId.Value > 0)
+            {
+                profile = _context.ProjectDnaProfiles
+                    .Include(p => p.Details)
+                    .FirstOrDefault(p => p.Id == data.ProfileId.Value && p.ProjectId == data.ProjectId);
+            }
+
+            if (profile == null)
+            {
+                // Aynı isimde aktif bir taslak varsa onu devam ettir
+                profile = _context.ProjectDnaProfiles
+                    .Include(p => p.Details)
+                    .FirstOrDefault(p => p.ProjectId == data.ProjectId && p.Name.Trim().ToLower() == trimmedName.ToLower());
+            }
+
+            // Başka bir profille isim çakışması kontrolü
+            bool isDuplicate = _context.ProjectDnaProfiles.Any(p =>
+                p.ProjectId == data.ProjectId &&
+                p.Name.Trim().ToLower() == trimmedName.ToLower() &&
+                (profile == null || p.Id != profile.Id));
+
+            if (isDuplicate)
+            {
+                return Json(new { success = false, duplicate = true, message = "Bu isimde bir DNA profili bu projede zaten kayıtlı! Lütfen farklı bir isim belirleyiniz." });
+            }
+
+            if (profile == null)
+            {
+                profile = new ProjectDnaProfile
+                {
+                    ProjectId = data.ProjectId,
+                    Name = trimmedName,
+                    Status = "Taslak",
+                    CreatedBy = User.Identity?.Name ?? "Admin",
+                    CreatedDate = DateTime.UtcNow
+                };
+                _context.ProjectDnaProfiles.Add(profile);
+            }
+            else
+            {
+                profile.Name = trimmedName;
+                profile.Status = "Taslak";
+                if (profile.Details != null && profile.Details.Any())
+                {
+                    _context.ProjectDnaDetails.RemoveRange(profile.Details);
+                }
+            }
+
+            _context.SaveChanges();
+
+            if (data.Details != null && data.Details.Any())
+            {
+                var optIds = data.Details.Select(d => d.ValueId).ToList();
+                var options = _context.DnaTemplateOptions.Where(o => optIds.Contains(o.Id)).ToList();
+                var questions = _context.DnaTemplateQuestions.Where(q => optIds.Contains(q.Id)).ToList();
+
+                foreach (var d in data.Details)
+                {
+                    var opt = options.FirstOrDefault(o => o.Id == d.ValueId);
+                    int? profId = opt?.DnaProfessionId;
+                    if (!profId.HasValue && opt != null)
+                    {
+                        var optQ = _context.DnaTemplateQuestions.Find(opt.DnaTemplateQuestionId);
+                        profId = optQ?.DnaProfessionId;
+                    }
+                    if (!profId.HasValue)
+                    {
+                        var qItem = questions.FirstOrDefault(q => q.Id == d.ValueId);
+                        profId = qItem?.DnaProfessionId;
+                    }
+
+                    decimal qty = 0;
+                    string unit = "Belirsiz";
+                    if (!string.IsNullOrEmpty(d.SelectedItem) && d.SelectedItem.Contains(":"))
+                    {
+                        var parts = d.SelectedItem.Split(':');
+                        if (parts.Length > 1)
+                        {
+                            var valStr = parts[1].Replace("m", "").Trim();
+                            decimal.TryParse(valStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out qty);
+                            unit = "mt";
+                        }
+                    }
+
+                    _context.ProjectDnaDetails.Add(new ProjectDnaDetail
+                    {
+                        ProfileId = profile.Id,
+                        Phase = d.Phase,
+                        SelectedItem = d.SelectedItem,
+                        DnaProfessionId = profId,
+                        Quantity = qty,
+                        Unit = unit
+                    });
+                }
+                _context.SaveChanges();
+            }
+
+            return Json(new { success = true, profileId = profile.Id });
+        }
+
+        [HttpPost]
+        [IgnoreAntiforgeryToken]
         public IActionResult SaveDnaProfile([FromBody] DnaProfileSaveDto data)
         {
             if (data == null || string.IsNullOrWhiteSpace(data.Name)) return BadRequest();
 
-            var profile = new ProjectDnaProfile
-            {
-                ProjectId = data.ProjectId,
-                Name = data.Name,
-                Status = "DXF Bekliyor",
-                CreatedBy = User.Identity?.Name ?? "Admin",
-                CreatedDate = DateTime.UtcNow
-            };
+            var trimmedName = data.Name.Trim();
 
-            foreach (var d in data.Details ?? new List<DnaProfileDetailDto>())
+            ProjectDnaProfile profile = null;
+            if (data.ProfileId.HasValue && data.ProfileId.Value > 0)
             {
-                var option = _context.DnaTemplateOptions.FirstOrDefault(o => o.Id == d.ValueId);
-                
-                profile.Details.Add(new ProjectDnaDetail
-                {
-                    Phase = d.Phase,
-                    SelectedItem = d.SelectedItem,
-                    DnaProfessionId = option?.DnaProfessionId,
-                    Quantity = 0,
-                    Unit = "Belirsiz"
-                });
+                profile = _context.ProjectDnaProfiles
+                    .Include(p => p.Details)
+                    .FirstOrDefault(p => p.Id == data.ProfileId.Value && p.ProjectId == data.ProjectId);
             }
 
-            _context.ProjectDnaProfiles.Add(profile);
+            if (profile == null)
+            {
+                profile = _context.ProjectDnaProfiles
+                    .Include(p => p.Details)
+                    .FirstOrDefault(p => p.ProjectId == data.ProjectId && p.Name.Trim().ToLower() == trimmedName.ToLower());
+            }
+
+            // Aynı isimde başka bir profil var mı kontrolü
+            bool isDuplicate = _context.ProjectDnaProfiles.Any(p =>
+                p.ProjectId == data.ProjectId &&
+                p.Name.Trim().ToLower() == trimmedName.ToLower() &&
+                (profile == null || p.Id != profile.Id));
+
+            if (isDuplicate)
+            {
+                return Json(new { success = false, duplicate = true, message = "Bu isimde bir DNA profili bu projede zaten kayıtlı! Lütfen farklı bir isim belirleyiniz." });
+            }
+
+            if (profile == null)
+            {
+                profile = new ProjectDnaProfile
+                {
+                    ProjectId = data.ProjectId,
+                    Name = trimmedName,
+                    Status = "DXF Bekliyor",
+                    CreatedBy = User.Identity?.Name ?? "Admin",
+                    CreatedDate = DateTime.UtcNow
+                };
+                _context.ProjectDnaProfiles.Add(profile);
+            }
+            else
+            {
+                profile.Name = trimmedName;
+                profile.Status = "DXF Bekliyor";
+                if (profile.Details != null && profile.Details.Any())
+                {
+                    _context.ProjectDnaDetails.RemoveRange(profile.Details);
+                }
+            }
+
             _context.SaveChanges();
 
-            return Ok();
+            if (data.Details != null && data.Details.Any())
+            {
+                var optIds = data.Details.Select(d => d.ValueId).ToList();
+                var options = _context.DnaTemplateOptions.Where(o => optIds.Contains(o.Id)).ToList();
+                var questions = _context.DnaTemplateQuestions.Where(q => optIds.Contains(q.Id)).ToList();
+
+                foreach (var d in data.Details)
+                {
+                    var opt = options.FirstOrDefault(o => o.Id == d.ValueId);
+                    int? profId = opt?.DnaProfessionId;
+                    if (!profId.HasValue && opt != null)
+                    {
+                        var optQ = _context.DnaTemplateQuestions.Find(opt.DnaTemplateQuestionId);
+                        profId = optQ?.DnaProfessionId;
+                    }
+                    if (!profId.HasValue)
+                    {
+                        var qItem = questions.FirstOrDefault(q => q.Id == d.ValueId);
+                        profId = qItem?.DnaProfessionId;
+                    }
+
+                    decimal qty = 0;
+                    string unit = "Belirsiz";
+                    if (!string.IsNullOrEmpty(d.SelectedItem) && d.SelectedItem.Contains(":"))
+                    {
+                        var parts = d.SelectedItem.Split(':');
+                        if (parts.Length > 1)
+                        {
+                            var valStr = parts[1].Replace("m", "").Trim();
+                            decimal.TryParse(valStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out qty);
+                            unit = "mt";
+                        }
+                    }
+
+                    _context.ProjectDnaDetails.Add(new ProjectDnaDetail
+                    {
+                        ProfileId = profile.Id,
+                        Phase = d.Phase,
+                        SelectedItem = d.SelectedItem,
+                        DnaProfessionId = profId,
+                        Quantity = qty,
+                        Unit = unit
+                    });
+                }
+                _context.SaveChanges();
+            }
+
+            return Json(new { success = true, profileId = profile.Id });
         }
 
         [HttpPost]
+        [IgnoreAntiforgeryToken]
         public IActionResult DeleteDnaProfile(int id)
         {
             var profile = _context.ProjectDnaProfiles.Include(p => p.Details).FirstOrDefault(p => p.Id == id);

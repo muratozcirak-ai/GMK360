@@ -1,0 +1,962 @@
+@model dynamic
+@{
+    ViewData["Title"] = "DNA Profil Sihirbazı";
+    Layout = "~/Views/Shared/_ProjectLayout.cshtml";
+    var projectId = ViewData["ProjectId"];
+    var projectName = ViewData["ProjectName"] ?? "Proje";
+    var step0 = ViewBag.Step0 as GMK360.Core.Entities.Construction.Workflows.DnaTemplateStep;
+    var step1 = ViewBag.Step1 as GMK360.Core.Entities.Construction.Workflows.DnaTemplateStep;
+    var allSteps = ViewBag.AllSteps as List<GMK360.Core.Entities.Construction.Workflows.DnaTemplateStep>;
+    var existingProfile = ViewBag.ExistingProfile as GMK360.Core.Entities.Construction.Workflows.ProjectDnaProfile;
+}
+
+<div class="container-fluid py-4 px-4 bg-light min-vh-100">
+
+    <!-- ÜST BİLGİ VE AKSİYON ÇUBUĞU -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 bg-white p-3 rounded-4 shadow-sm border">
+        <div class="d-flex align-items-center gap-3">
+            <a href="/Metraj/ProjectDNA/@projectId" class="btn btn-outline-secondary rounded-pill px-3 fw-bold btn-sm">
+                <i class="fas fa-arrow-left me-1"></i> DNA Yönetimine Dön
+            </a>
+            <div>
+                <h4 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                    <i class="fas fa-dna text-primary"></i>
+                    <span>DNA Profil Sihirbazı</span>
+                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-1 rounded-pill fs-6 fw-semibold">
+                        <i class="fas fa-city me-1"></i> @projectName
+                    </span>
+                </h4>
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-3 mt-2 mt-md-0">
+            <span id="autosaveBadge" class="badge bg-light text-muted border px-3 py-2 rounded-pill shadow-xs">
+                <i class="fas fa-cloud me-1 text-primary"></i> Otomatik Kayıt Hazır
+            </span>
+            <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" onclick="finishProfile()" style="background-color: #6f42c1; border-color: #6f42c1;">
+                <i class="fas fa-check-circle me-2"></i> DNA Profilini Tamamla ve Kaydet
+            </button>
+        </div>
+    </div>
+
+    <!-- PROFİL ADI GİRİŞ KARTI (AUTOSAVE TETİKLEYİCİSİ) -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-4 border-start border-5 border-primary">
+            <div class="row align-items-center">
+                <div class="col-lg-8">
+                    <label class="form-label fw-bold text-dark fs-5 mb-1">
+                        <i class="fas fa-tag text-primary me-2"></i>DNA Profilinin Adı
+                    </label>
+                    <p class="text-muted small mb-2">Profil adını yazdığınızda taslağınız arka planda otomatik oluşturulacak ve yaptığınız tüm seçimler kaydedilecektir.</p>
+                    <input type="text" class="form-control form-control-lg border-2" id="configName" 
+                           placeholder="Örn: A Blok - Standart İhale Reçetesi" 
+                           value="@(existingProfile != null ? existingProfile.Name : "")"
+                           onblur="triggerAutoSave()" oninput="onNameInput()">
+                </div>
+                <div class="col-lg-4 mt-3 mt-lg-0 text-lg-end">
+                    <div class="p-3 bg-light rounded-3 border d-inline-block text-start">
+                        <div class="small text-muted fw-semibold">Taslak Durumu:</div>
+                        <div class="fw-bold text-dark fs-6" id="profileStatusText">
+                            @(existingProfile != null ? existingProfile.Status : "Yeni Profil (Kaydedilmedi)")
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADIMLAR VE İÇERİK SEKMELERİ -->
+    <div class="row">
+        <!-- SOL MENÜ: ADIMLAR LİSTESİ -->
+        <div class="col-lg-3 mb-4">
+            <div class="card border-0 shadow-sm rounded-4 sticky-top" style="top: 20px;">
+                <div class="card-header bg-white border-0 py-3">
+                    <h6 class="fw-bold text-dark mb-0"><i class="fas fa-list-ol text-primary me-2"></i>İnşaat Faz Adımları</h6>
+                </div>
+                <div class="list-group list-group-flush p-2" id="stepTabsList" role="tablist">
+                    <a href="#pill_step0" class="list-group-item list-group-item-action border-0 rounded-3 mb-1 active fw-bold py-3" data-bs-toggle="list" role="tab" onclick="switchStepTab(0, this)">
+                        <i class="fas fa-lock text-danger me-2"></i> Adım 0: Statik & Taşıyıcılar
+                        <span class="badge bg-danger rounded-pill float-end">20 Kalem</span>
+                    </a>
+                    <a href="#pill_step1" class="list-group-item list-group-item-action border-0 rounded-3 mb-1 fw-bold py-3" data-bs-toggle="list" role="tab" onclick="switchStepTab(1, this)">
+                        <i class="fas fa-map-marked-alt text-primary me-2"></i> @(step1?.StepName ?? "Adım 1: Saha Analizi")
+                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary rounded-pill float-end">@((step1?.Questions != null) ? step1.Questions.Count : 0) Soru</span>
+                    </a>
+                    @if (allSteps != null)
+                    {
+                        foreach (var s in allSteps.Where(x => x.StepOrder > 1).OrderBy(x => x.StepOrder))
+                        {
+                            string iconClass = s.StepOrder switch
+                            {
+                                2 => "fas fa-water text-info",
+                                3 => "fas fa-cubes text-warning",
+                                4 => "fas fa-couch text-success",
+                                5 => "fas fa-home text-danger",
+                                6 => "fas fa-door-open text-primary",
+                                7 => "fas fa-bolt text-warning",
+                                8 => "fas fa-walking text-info",
+                                9 => "fas fa-gem text-secondary",
+                                _ => "fas fa-layer-group text-primary"
+                            };
+                            <a href="#pill_step@s.StepOrder" class="list-group-item list-group-item-action border-0 rounded-3 mb-1 fw-bold py-3" data-bs-toggle="list" role="tab" onclick="switchStepTab(@s.StepOrder, this)">
+                                <i class="@iconClass me-2"></i> @s.StepName
+                                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary rounded-pill float-end">@((s.Questions != null) ? s.Questions.Count : 0) Soru</span>
+                            </a>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- SAĞ ALAN: ADIM İÇERİKLERİ -->
+        <div class="col-lg-9">
+            <div class="tab-content">
+
+                <!-- TAB 0: ADIM 0 (MECBURİ STATİK VE TAŞIYICILAR - 20 KALEM TABLO) -->
+                <div class="tab-pane fade show active" id="pill_step0">
+                    <div class="card border-0 shadow-sm rounded-4 mb-4">
+                        <div class="card-header bg-white border-0 p-4 pb-0">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <div>
+                                    <h5 class="fw-bold text-dark mb-1">
+                                        <i class="fas fa-lock text-danger me-2"></i>Adım 0: Mecburi Statik ve Taşıyıcılar (Sabit Alan)
+                                    </h5>
+                                    <p class="text-muted small mb-0">Statik projeden (DXF) sistem tarafından mecburi olarak okunacak olan yapı bileşenleri ve ilgili iş branşları.</p>
+                                </div>
+                                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-3 py-2 rounded-pill fw-bold">
+                                    <i class="fas fa-ban me-1"></i> Değiştirilemez / DXF Sabiti
+                                </span>
+                            </div>
+
+                            <!-- BİLGİLENDİRME KUTUSU -->
+                            <div class="alert alert-danger bg-opacity-10 border-0 text-danger d-flex align-items-center mt-3 rounded-3 p-3">
+                                <i class="fas fa-exclamation-triangle fa-2x me-3"></i>
+                                <div class="small">
+                                    <strong>Şantiye Pazar Yeri & İhale Entegrasyonu:</strong> Bu 20 kalem için kullanıcıdan seçim istenmez; ölçüler doğrudan DXF mimari/statik katmanlarından ve akslarından hesaplanır. Her bir kalemin karşısındaki <strong>İş Branşı</strong>, projenin taşeron ve usta pazarında hangi meslek gruplarıyla ihaleye çıkacağını belirler.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card-body p-4 pt-2">
+                            <div class="table-responsive rounded-3 border">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr class="text-muted small">
+                                            <th style="width: 50px;" class="text-center">#</th>
+                                            <th style="min-width: 250px;">Statik İmalat / Ölçüm Kalemi</th>
+                                            <th style="min-width: 280px;">Mühendislik Açıklaması & Kuralı</th>
+                                            <th style="min-width: 140px;">Veri Kaynağı</th>
+                                            <th style="min-width: 160px;">İlgili İş Branşı (Pazar Yeri)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (step0 != null && step0.Questions != null && step0.Questions.Any())
+                                        {
+                                            foreach (var q in step0.Questions.OrderBy(x => x.QuestionOrder))
+                                            {
+                                                var profName = q.Profession != null ? q.Profession.Name : "Belirtilmedi";
+                                                <tr>
+                                                    <td class="text-center fw-bold text-muted small">@q.QuestionOrder</td>
+                                                    <td>
+                                                        <div class="fw-bold text-dark">
+                                                            <i class="fas fa-cube text-primary me-2 opacity-50"></i>@q.Title
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span class="small text-muted">
+                                                            @(string.IsNullOrWhiteSpace(q.Notes) ? "Statik projeden aks ve kesit bazında otomatik hesaplanır." : q.Notes)
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge bg-secondary bg-opacity-10 text-secondary border px-2 py-1 rounded-pill small">
+                                                            <i class="fas fa-drafting-compass me-1"></i> DXF / Statik
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2 rounded-pill fw-bold small">
+                                                            <i class="fas fa-hard-hat me-1"></i> @profName
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr>
+                                                <td colspan="5" class="text-center py-4 text-muted">Statik tanımlama soruları bulunamadı.</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 1: ADIM 1 (KOT 0 ZEMİN, TEMEL VE İZOLASYON - SEÇİMLİ ALAN) -->
+                <div class="tab-pane fade" id="pill_step1">
+                    <div class="card border-0 shadow-sm rounded-4 mb-4">
+                        <div class="card-header bg-white border-0 p-4 pb-0">
+                            <h5 class="fw-bold text-dark mb-1">
+                                <i class="fas fa-layer-group text-primary me-2"></i>@(step1?.StepName ?? "Adım 1: Saha Analizi")
+                            </h5>
+                            <p class="text-muted small mb-0">Zemin etüdü raporu, saha ve arazi koşulları analizlerini belirleyin.</p>
+                        </div>
+
+                        <div class="card-body p-4">
+                            @if (step1 != null && step1.Questions != null)
+                            {
+                                foreach (var q in step1.Questions.OrderBy(x => x.QuestionOrder))
+                                {
+                                    <div class="card border mb-3 rounded-3 shadow-xs question-card" id="card_q_@q.Id" data-qid="@q.Id" data-qorder="@q.QuestionOrder">
+                                        <div class="card-body p-3">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <label class="form-label fw-bold text-dark fs-6 mb-0">
+                                                    <i class="fas fa-question-circle text-primary me-2"></i>@q.Title
+                                                </label>
+                                                <span class="badge bg-light text-muted border small">
+                                                    @(q.OptionSource != null && q.OptionSource.Contains("DXF") ? "DXF Vaziyet Okuması" : (q.OptionSource != null && q.OptionSource.Contains("Sayısal") ? "Sayısal Giriş (Metre)" : (q.IsMultipleChoice ? "Çoklu Ekleme" : "Tekli Seçim")))
+                                                </span>
+                                            </div>
+                                            @if (!string.IsNullOrWhiteSpace(q.Notes))
+                                            {
+                                                <div class="small text-muted mb-2"><i class="fas fa-info-circle me-1 text-primary"></i> @q.Notes</div>
+                                            }
+
+                                            @if (q.OptionSource != null && q.OptionSource.Contains("DXF"))
+                                            {
+                                                <!-- DXF VAZİYET / PARSEL ÇEVRE POLİGONU HESABI (SABİT / OTOMATİK OKUMA) -->
+                                                string existingDxfVal = "1700";
+                                                if (existingProfile != null && existingProfile.Details != null)
+                                                {
+                                                    var d = existingProfile.Details.FirstOrDefault(x => x.SelectedItem.StartsWith(q.Title + ":"));
+                                                    if (d != null)
+                                                    {
+                                                        var parts = d.SelectedItem.Split(':');
+                                                        if (parts.Length > 1)
+                                                        {
+                                                            existingDxfVal = parts[1].Replace("m", "").Trim();
+                                                        }
+                                                    }
+                                                }
+                                                <div class="p-3 bg-light rounded-3 border d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="rounded-circle bg-primary bg-opacity-10 p-3 me-3 text-primary">
+                                                            <i class="fas fa-drafting-compass fa-lg"></i>
+                                                        </div>
+                                                        <div>
+                                                            <div class="fw-bold text-dark fs-6">
+                                                                <span class="badge bg-secondary me-2"><i class="fas fa-satellite-dish me-1"></i>DXF Okuma Bekleniyor</span>
+                                                                <span class="text-primary fw-bold" id="dxfValText">~@existingDxfVal Metre</span> (Parsel Çevre Poligonu)
+                                                            </div>
+                                                            <div class="small text-muted mt-1">
+                                                                Bu ölçü, mimari vaziyet planı veya harita DXF dosyasından katman bazlı otomatik hesaplanacaktır.
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="d-flex align-items-center">
+                                                        <input type="hidden" class="dynamic-number" id="num_@q.Id" 
+                                                               value="@existingDxfVal"
+                                                               data-qid="@q.Id"
+                                                               data-qtitle="@q.Title"
+                                                               data-qorder="@q.QuestionOrder"
+                                                               data-phase="@(step1?.StepName ?? "Adım 1: Saha Analizi")">
+                                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2 rounded-pill fw-bold">
+                                                            <i class="fas fa-lock me-1"></i> DXF Entegrasyonu
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            }
+                                            else if (q.OptionSource != null && q.OptionSource.Contains("Sayısal"))
+                                            {
+                                                <!-- SAYISAL GİRİŞ ALANI (METRE) -->
+                                                string existingNumVal = "";
+                                                if (existingProfile != null && existingProfile.Details != null)
+                                                {
+                                                    var d = existingProfile.Details.FirstOrDefault(x => x.SelectedItem.StartsWith(q.Title + ":"));
+                                                    if (d != null)
+                                                    {
+                                                        var parts = d.SelectedItem.Split(':');
+                                                        if (parts.Length > 1)
+                                                        {
+                                                            existingNumVal = parts[1].Replace("m", "").Trim();
+                                                        }
+                                                    }
+                                                }
+                                                <div class="input-group input-group-lg shadow-xs">
+                                                    <input type="number" class="form-control border-1 dynamic-number" id="num_@q.Id" 
+                                                           placeholder="Örn: 500" 
+                                                           value="@existingNumVal"
+                                                           data-qid="@q.Id"
+                                                           data-qtitle="@q.Title"
+                                                           data-qorder="@q.QuestionOrder"
+                                                           data-phase="@(step1?.StepName ?? "Adım 1: Saha Analizi")"
+                                                           oninput="onNumberInput(@q.Id)" onblur="triggerAutoSave()">
+                                                    <span class="input-group-text bg-light fw-bold text-muted px-4">Metre (m)</span>
+                                                </div>
+                                                @if (q.QuestionOrder == 5)
+                                                {
+                                                    <!-- AKILLI HESAPLAMA ROZETİ (1700 - 500 = 1200 MT) -->
+                                                    <div id="smartCalculationBadge" class="mt-3 p-3 bg-primary bg-opacity-10 border border-primary rounded-3 text-primary d-none">
+                                                        <div class="d-flex align-items-center">
+                                                            <i class="fas fa-calculator fa-2x me-3"></i>
+                                                            <div>
+                                                                <div class="fw-bold fs-6" id="calcDiffText">Temin Edilecek Net İhtiyaç: 0 Metre</div>
+                                                                <div class="small opacity-75" id="calcDetailText">Toplam Çevre: 0 m | Depoda Mevcut: 0 m</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            }
+                                            else if (q.IsMultipleChoice)
+                                            {
+                                                <!-- ÇOKLU SEÇİM ALANI (+ EKLE BUTONLU LİSTE) -->
+                                                <div class="input-group mb-2 shadow-sm">
+                                                    <select class="form-select border-1 dynamic-select" id="select_@q.Id">
+                                                        <option value="">-- Listeden İmalat Seçiniz --</option>
+                                                        @foreach (var opt in q.Options.OrderBy(o => o.OptionOrder))
+                                                        {
+                                                            var prof = opt.Profession != null ? opt.Profession.Name : (q.Profession != null ? q.Profession.Name : "Belirtilmedi");
+                                                            <option value="@opt.Id" data-prof="@prof">@opt.OptionText</option>
+                                                        }
+                                                    </select>
+                                                    <button class="btn btn-primary fw-bold px-4" type="button" onclick="addMultiItem(@q.Id, '@(step1?.StepName ?? "Adım 1: Saha Analizi")')">
+                                                        <i class="fas fa-plus me-1"></i> Ekle
+                                                    </button>
+                                                </div>
+
+                                                <!-- SEÇİLENLERİN LİSTESİ -->
+                                                <ul class="list-group list-group-flush mt-3 dynamic-list" id="list_@q.Id">
+                                                    @if (existingProfile != null && existingProfile.Details != null)
+                                                    {
+                                                        var qOptTexts = q.Options.Select(o => o.OptionText).ToList();
+                                                        var matchedDetails = existingProfile.Details.Where(d => qOptTexts.Contains(d.SelectedItem)).ToList();
+                                                        foreach (var md in matchedDetails)
+                                                        {
+                                                            var matchingOpt = q.Options.FirstOrDefault(o => o.OptionText == md.SelectedItem);
+                                                            var prof = matchingOpt?.Profession != null ? matchingOpt.Profession.Name : (md.Profession != null ? md.Profession.Name : "Belirtilmedi");
+                                                            <li class="list-group-item d-flex justify-content-between align-items-center bg-white border rounded-3 mb-2 p-3 shadow-xs" data-val="@(matchingOpt?.Id ?? 0)" data-phase="@(step1?.StepName ?? "Adım 1: Saha Analizi")">
+                                                                <div>
+                                                                    <div class="fw-bold text-dark fs-6"><i class="fas fa-check-circle text-success me-2"></i><span class="text-dark">@md.SelectedItem</span></div>
+                                                                    <div class="mt-1">
+                                                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-1 rounded-pill small fw-bold">
+                                                                            <i class="fas fa-hard-hat me-1"></i> İlgili İş Branşı: <strong>@prof</strong>
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                <button type="button" class="btn btn-outline-danger btn-sm rounded-circle border-0 p-2" onclick="removeMultiItem(this)">
+                                                                    <i class="fas fa-trash-alt"></i>
+                                                                </button>
+                                                            </li>
+                                                        }
+                                                    }
+                                                </ul>
+                                            }
+                                            else
+                                            {
+                                                <!-- TEKLİ SEÇİM ALANI (ANINDA ROZET ÇIKARAN) -->
+                                                string activeProf = "";
+                                                <select class="form-select form-select-lg border-1 dynamic-single shadow-sm" id="single_@q.Id" data-phase="@(step1?.StepName ?? "Adım 1: Saha Analizi")" onchange="onSingleChange(@q.Id)">
+                                                    <option value="">-- Seçiniz --</option>
+                                                    @foreach (var opt in q.Options.OrderBy(o => o.OptionOrder))
+                                                    {
+                                                        var prof = opt.Profession != null ? opt.Profession.Name : (q.Profession != null ? q.Profession.Name : "Belirtilmedi");
+                                                        bool isSelected = existingProfile != null && existingProfile.Details != null && existingProfile.Details.Any(d => d.SelectedItem == opt.OptionText);
+                                                        if (isSelected) { activeProf = prof; }
+                                                        if (isSelected)
+                                                        {
+                                                            <option value="@opt.Id" data-prof="@prof" selected>@opt.OptionText</option>
+                                                        }
+                                                        else
+                                                        {
+                                                            <option value="@opt.Id" data-prof="@prof">@opt.OptionText</option>
+                                                        }
+                                                    }
+                                                </select>
+                                                <div class="mt-2" id="badge_single_@q.Id">
+                                                    @if (!string.IsNullOrEmpty(activeProf))
+                                                    {
+                                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2 rounded-pill fw-bold mt-2">
+                                                            <i class="fas fa-hard-hat me-1"></i> İlgili İş Branşı: <strong>@activeProf</strong>
+                                                        </span>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                @if (allSteps != null)
+                {
+                    foreach (var s in allSteps.Where(x => x.StepOrder > 1).OrderBy(x => x.StepOrder))
+                    {
+                        string iconClass = s.StepOrder switch
+                        {
+                            2 => "fas fa-water text-info",
+                            3 => "fas fa-cubes text-warning",
+                            4 => "fas fa-couch text-success",
+                            5 => "fas fa-home text-danger",
+                            6 => "fas fa-door-open text-primary",
+                            7 => "fas fa-bolt text-warning",
+                            8 => "fas fa-walking text-info",
+                            9 => "fas fa-gem text-secondary",
+                            _ => "fas fa-layer-group text-primary"
+                        };
+
+                        <div class="tab-pane fade" id="pill_step@s.StepOrder">
+                            <div class="card border-0 shadow-sm rounded-4 mb-4">
+                                <div class="card-header bg-white border-0 p-4 pb-0">
+                                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                        <div>
+                                            <h5 class="fw-bold text-dark mb-1">
+                                                <i class="@iconClass me-2"></i>@s.StepName
+                                            </h5>
+                                            <p class="text-muted small mb-0">@s.StepName için yapı bileşenlerini ve malzeme tercihlerini belirleyin.</p>
+                                        </div>
+                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2 rounded-pill fw-bold">
+                                            <i class="fas fa-check-circle me-1"></i> @((s.Questions != null) ? s.Questions.Count : 0) İmalat Sorusu
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div class="card-body p-4">
+                                    @if (s.Questions != null && s.Questions.Any())
+                                    {
+                                        foreach (var q in s.Questions.OrderBy(x => x.QuestionOrder))
+                                        {
+                                            <div class="card border mb-3 rounded-3 shadow-xs question-card" id="card_q_@q.Id" data-qid="@q.Id" data-qorder="@q.QuestionOrder">
+                                                <div class="card-body p-3">
+                                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                                        <label class="form-label fw-bold text-dark fs-6 mb-0">
+                                                            <i class="fas fa-question-circle text-primary me-2"></i>@q.Title
+                                                        </label>
+                                                        <span class="badge bg-light text-muted border small">
+                                                            @(q.IsMultipleChoice ? "Çoklu Ekleme" : "Tekli Seçim")
+                                                        </span>
+                                                    </div>
+                                                    @if (!string.IsNullOrWhiteSpace(q.Notes))
+                                                    {
+                                                        <div class="small text-muted mb-2"><i class="fas fa-info-circle me-1 text-primary"></i> @q.Notes</div>
+                                                    }
+
+                                                    @if (q.IsMultipleChoice)
+                                                    {
+                                                        <!-- ÇOKLU SEÇİM ALANI (+ EKLE BUTONLU LİSTE) -->
+                                                        <div class="input-group mb-2 shadow-sm">
+                                                            <select class="form-select border-1 dynamic-select" id="select_@q.Id">
+                                                                <option value="">-- Listeden İmalat Seçiniz --</option>
+                                                                @foreach (var opt in q.Options.OrderBy(o => o.OptionOrder))
+                                                                {
+                                                                    var prof = opt.Profession != null ? opt.Profession.Name : (q.Profession != null ? q.Profession.Name : "Belirtilmedi");
+                                                                    <option value="@opt.Id" data-prof="@prof">@opt.OptionText</option>
+                                                                }
+                                                            </select>
+                                                            <button class="btn btn-primary fw-bold px-4" type="button" onclick="addMultiItem(@q.Id, '@s.StepName')">
+                                                                <i class="fas fa-plus me-1"></i> Ekle
+                                                            </button>
+                                                        </div>
+
+                                                        <!-- SEÇİLENLERİN LİSTESİ -->
+                                                        <ul class="list-group list-group-flush mt-3 dynamic-list" id="list_@q.Id">
+                                                            @if (existingProfile != null && existingProfile.Details != null)
+                                                            {
+                                                                var qOptTexts = q.Options.Select(o => o.OptionText).ToList();
+                                                                var matchedDetails = existingProfile.Details.Where(d => qOptTexts.Contains(d.SelectedItem)).ToList();
+                                                                foreach (var md in matchedDetails)
+                                                                {
+                                                                    var matchingOpt = q.Options.FirstOrDefault(o => o.OptionText == md.SelectedItem);
+                                                                    var prof = matchingOpt?.Profession != null ? matchingOpt.Profession.Name : (md.Profession != null ? md.Profession.Name : "Belirtilmedi");
+                                                                    <li class="list-group-item d-flex justify-content-between align-items-center bg-white border rounded-3 mb-2 p-3 shadow-xs" data-val="@(matchingOpt?.Id ?? 0)" data-phase="@s.StepName">
+                                                                        <div>
+                                                                            <div class="fw-bold text-dark fs-6"><i class="fas fa-check-circle text-success me-2"></i><span class="text-dark">@md.SelectedItem</span></div>
+                                                                            <div class="mt-1">
+                                                                                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-1 rounded-pill small fw-bold">
+                                                                                    <i class="fas fa-hard-hat me-1"></i> İlgili İş Branşı: <strong>@prof</strong>
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                        <button type="button" class="btn btn-outline-danger btn-sm rounded-circle border-0 p-2" onclick="removeMultiItem(this)">
+                                                                            <i class="fas fa-trash-alt"></i>
+                                                                        </button>
+                                                                    </li>
+                                                                }
+                                                            }
+                                                        </ul>
+                                                    }
+                                                    else
+                                                    {
+                                                        <!-- TEKLİ SEÇİM ALANI (ANINDA ROZET ÇIKARAN) -->
+                                                        string activeProf = "";
+                                                        <select class="form-select form-select-lg border-1 dynamic-single shadow-sm" id="single_@q.Id" data-phase="@s.StepName" onchange="onSingleChange(@q.Id)">
+                                                            <option value="">-- Seçiniz --</option>
+                                                            @foreach (var opt in q.Options.OrderBy(o => o.OptionOrder))
+                                                            {
+                                                                var prof = opt.Profession != null ? opt.Profession.Name : (q.Profession != null ? q.Profession.Name : "Belirtilmedi");
+                                                                bool isSelected = existingProfile != null && existingProfile.Details != null && existingProfile.Details.Any(d => d.SelectedItem == opt.OptionText);
+                                                                if (isSelected) { activeProf = prof; }
+                                                                if (isSelected)
+                                                                {
+                                                                    <option value="@opt.Id" data-prof="@prof" selected>@opt.OptionText</option>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <option value="@opt.Id" data-prof="@prof">@opt.OptionText</option>
+                                                                }
+                                                            }
+                                                        </select>
+                                                        <div class="mt-2" id="badge_single_@q.Id">
+                                                            @if (!string.IsNullOrEmpty(activeProf))
+                                                            {
+                                                                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2 rounded-pill fw-bold mt-2">
+                                                                    <i class="fas fa-hard-hat me-1"></i> İlgili İş Branşı: <strong>@activeProf</strong>
+                                                                </span>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <div class="text-center py-5 text-muted">
+                                            <i class="fas fa-clipboard-list fa-3x mb-3 text-secondary opacity-50"></i>
+                                            <p>Bu adıma ait henüz soru bulunamadı.</p>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    var currentProjectId = @(projectId ?? 0);
+    var currentProfileId = @(existingProfile != null ? existingProfile.Id : 0);
+    var autosaveTimer = null;
+
+    function switchStepTab(order, elem) {
+        // 1. Sidebar tab active durumunu güncelle
+        document.querySelectorAll('#stepTabsList .list-group-item').forEach(function(item) {
+            item.classList.remove('active');
+        });
+        if (elem) {
+            elem.classList.add('active');
+        }
+
+        // 2. Tüm tab-pane içeriklerini gizle
+        document.querySelectorAll('.tab-content > .tab-pane').forEach(function(pane) {
+            pane.classList.remove('show', 'active');
+        });
+
+        // 3. Hedef tab-pane'i göster
+        var targetPane = document.getElementById('pill_step' + order);
+        if (targetPane) {
+            targetPane.classList.add('show', 'active');
+        }
+    }
+
+    function onNameInput() {
+        var input = document.getElementById("configName");
+        var name = input.value.trim();
+        var badge = document.getElementById("autosaveBadge");
+        var statusText = document.getElementById("profileStatusText");
+
+        if (!name) {
+            input.classList.remove("is-invalid");
+            clearTimeout(autosaveTimer);
+            if (badge) {
+                badge.className = "badge bg-light text-muted border px-3 py-2 rounded-pill shadow-xs";
+                badge.innerHTML = `<i class="fas fa-cloud me-1 text-primary"></i> Otomatik Kayıt Hazır`;
+            }
+            return;
+        }
+
+        clearTimeout(autosaveTimer);
+        autosaveTimer = setTimeout(function() {
+            fetch(`/Metraj/CheckProfileName?projectId=${currentProjectId}&name=${encodeURIComponent(name)}&profileId=${currentProfileId}`)
+            .then(res => res.json())
+            .then(chk => {
+                if (chk && chk.exists) {
+                    input.classList.add("is-invalid");
+                    if (badge) {
+                        badge.className = "badge bg-danger text-white border px-3 py-2 rounded-pill shadow-xs";
+                        badge.innerHTML = `<i class="fas fa-exclamation-triangle me-1"></i> Bu isim zaten kayıtlı!`;
+                    }
+                    if (statusText) {
+                        statusText.innerHTML = `<span class="text-danger fw-bold"><i class="fas fa-times-circle me-1"></i>Aynı isimde profil var</span>`;
+                    }
+                } else {
+                    input.classList.remove("is-invalid");
+                    triggerAutoSave();
+                }
+            })
+            .catch(() => triggerAutoSave());
+        }, 600);
+    }
+
+    function onNumberInput(questionId) {
+        updateSmartCalculation();
+        applyConditionalVisibility();
+        clearTimeout(autosaveTimer);
+        autosaveTimer = setTimeout(triggerAutoSave, 600);
+    }
+
+    function updateSmartCalculation() {
+        var inpTotal = document.querySelector("input[data-qorder='3']");
+        var inpDepot = document.querySelector("input[data-qorder='5']");
+        var badge = document.getElementById("smartCalculationBadge");
+        if (!inpTotal || !inpDepot || !badge) return;
+
+        var total = parseFloat(inpTotal.value) || 0;
+        var existing = parseFloat(inpDepot.value) || 0;
+
+        if (total > 0 && inpDepot.value && inpDepot.value.trim() !== "") {
+            var diff = total - existing;
+            if (diff < 0) diff = 0;
+            badge.classList.remove("d-none");
+            document.getElementById("calcDiffText").innerHTML = `<i class="fas fa-calculator me-2"></i>Temin Edilecek Net İhtiyaç: <strong>${diff.toLocaleString('tr-TR')} Metre</strong>`;
+            document.getElementById("calcDetailText").innerText = `Toplam İhata (DXF): ${total.toLocaleString('tr-TR')} m | Depoda Mevcut: ${existing.toLocaleString('tr-TR')} m`;
+        } else {
+            badge.classList.add("d-none");
+        }
+    }
+
+    function hideQuestionCard(card, questionId) {
+        if (!card) return;
+        if (!card.classList.contains("d-none")) {
+            card.classList.add("d-none");
+            var singleSel = document.getElementById("single_" + questionId);
+            if (singleSel && singleSel.value) {
+                singleSel.value = "";
+                var badge = document.getElementById("badge_single_" + questionId);
+                if (badge) badge.innerHTML = "";
+            }
+        }
+    }
+
+    function showQuestionCard(card) {
+        if (!card) return;
+        if (card.classList.contains("d-none")) {
+            card.classList.remove("d-none");
+        }
+    }
+
+    function applyConditionalVisibility() {
+        // --- 1. YIKIM VE MOLOZ BERTARAFI (Adım 1 - Soru 9 & 10) ---
+        var selYikim = document.getElementById("single_3028");
+        var cardMoloz = document.getElementById("card_q_3029");
+        if (selYikim && cardMoloz) {
+            var selectedText = selYikim.options[selYikim.selectedIndex]?.text || "";
+            if (selectedText.includes("Boş Arsa") || selectedText === "" || selectedText.includes("Gerekmez")) {
+                hideQuestionCard(cardMoloz, 3029);
+            } else {
+                showQuestionCard(cardMoloz);
+            }
+        }
+
+        // --- 2. ŞANTİYE GEÇİCİ ELEKTRİK & JENERATÖR TEMİNİ (Adım 1 - Soru 11 & 12) ---
+        var selElektrik = document.getElementById("single_3030");
+        var cardJenerator = document.getElementById("card_q_3031");
+        if (selElektrik && cardJenerator) {
+            var selectedText = selElektrik.options[selElektrik.selectedIndex]?.text || "";
+            if (selectedText.includes("Şebeke Şantiye Aboneliği") && !selectedText.includes("Hibrit") && !selectedText.includes("Jeneratör")) {
+                hideQuestionCard(cardJenerator, 3031);
+            } else if (selectedText.includes("Jeneratör") || selectedText.includes("Hibrit")) {
+                showQuestionCard(cardJenerator);
+            } else {
+                hideQuestionCard(cardJenerator, 3031);
+            }
+        }
+
+        // --- 3. İHATA ÇİTİ VE EKSİK MALZEME TEMİNİ (Adım 1 - Soru 4, 5, 6) ---
+        var selCit = document.getElementById("single_2023");
+        var cardDepot = document.getElementById("card_q_2024");
+        var cardEksik = document.getElementById("card_q_2025");
+        var inpTotal = document.querySelector("input[data-qorder='3']");
+        var inpDepot = document.getElementById("num_2024");
+
+        if (selCit) {
+            var citText = selCit.options[selCit.selectedIndex]?.text || "";
+            if (citText.includes("Kapatılmayacak") || citText === "") {
+                if (cardDepot) hideQuestionCard(cardDepot, 2024);
+                if (cardEksik) hideQuestionCard(cardEksik, 2025);
+            } else {
+                if (cardDepot) showQuestionCard(cardDepot);
+                if (cardEksik) {
+                    var total = parseFloat(inpTotal?.value) || 0;
+                    var depot = parseFloat(inpDepot?.value) || 0;
+                    if (total > 0 && depot >= total && inpDepot?.value && inpDepot?.value.trim() !== "") {
+                        hideQuestionCard(cardEksik, 2025);
+                    } else {
+                        showQuestionCard(cardEksik);
+                    }
+                }
+            }
+        }
+
+        // --- 4. GİRİŞ KAPISI VE KAPI TEMİN YÖNTEMİ (Adım 1 - Soru 7 & 8) ---
+        var selKapi = document.getElementById("single_2026");
+        var cardKapiTemin = document.getElementById("card_q_3027");
+        if (selKapi && cardKapiTemin) {
+            var kapiText = selKapi.options[selKapi.selectedIndex]?.text || "";
+            if (kapiText.includes("Yapılmayacak") || kapiText.includes("Açık") || kapiText === "") {
+                hideQuestionCard(cardKapiTemin, 3027);
+            } else {
+                showQuestionCard(cardKapiTemin);
+            }
+        }
+
+        // --- 5. KOT 0 ÇEVRE DRENAJI VE TAHLİYE (Adım 2 - Soru 7 & 8) ---
+        var selDrenaj = document.getElementById("single_3045");
+        var cardDrenajTahliye = document.getElementById("card_q_3046");
+        if (selDrenaj && cardDrenajTahliye) {
+            var drenajText = selDrenaj.options[selDrenaj.selectedIndex]?.text || "";
+            if (drenajText.includes("Yapılmayacak") || drenajText.includes("Doğal Tahliye") || drenajText === "") {
+                hideQuestionCard(cardDrenajTahliye, 3046);
+            } else {
+                showQuestionCard(cardDrenajTahliye);
+            }
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        updateSmartCalculation();
+        applyConditionalVisibility();
+    });
+
+    function onSingleChange(questionId) {
+        var sel = document.getElementById("single_" + questionId);
+        var badgeDiv = document.getElementById("badge_single_" + questionId);
+        if (!sel || !badgeDiv) return;
+
+        if (sel.value) {
+            var prof = sel.options[sel.selectedIndex].getAttribute("data-prof") || "Belirtilmedi";
+            badgeDiv.innerHTML = `
+                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2 rounded-pill fw-bold mt-2">
+                    <i class="fas fa-hard-hat me-1"></i> İlgili İş Branşı: <strong>${prof}</strong>
+                </span>
+            `;
+        } else {
+            badgeDiv.innerHTML = "";
+        }
+        applyConditionalVisibility();
+        triggerAutoSave();
+    }
+
+    function addMultiItem(questionId, phase) {
+        if (!phase) phase = "Adım 1: Saha Analizi";
+        var sel = document.getElementById("select_" + questionId);
+        var list = document.getElementById("list_" + questionId);
+        if (!sel || !list || !sel.value) return;
+
+        var text = sel.options[sel.selectedIndex].text;
+        var prof = sel.options[sel.selectedIndex].getAttribute("data-prof") || "Belirtilmedi";
+        var val = sel.value;
+
+        var existing = list.querySelector(`li[data-val='${val}']`);
+        if (existing) {
+            alert("Bu kalem zaten listenizde ekli.");
+            return;
+        }
+
+        var li = document.createElement("li");
+        li.className = "list-group-item d-flex justify-content-between align-items-center bg-white border rounded-3 mb-2 p-3 shadow-xs";
+        li.setAttribute("data-val", val);
+        li.setAttribute("data-phase", phase);
+        li.innerHTML = `
+            <div>
+                <div class="fw-bold text-dark fs-6"><i class="fas fa-check-circle text-success me-2"></i><span class="text-dark">${text}</span></div>
+                <div class="mt-1">
+                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-1 rounded-pill small fw-bold">
+                        <i class="fas fa-hard-hat me-1"></i> İlgili İş Branşı: <strong>${prof}</strong>
+                    </span>
+                </div>
+            </div>
+            <button type="button" class="btn btn-outline-danger btn-sm rounded-circle border-0 p-2" onclick="removeMultiItem(this)">
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        `;
+        list.appendChild(li);
+        sel.value = "";
+        triggerAutoSave();
+    }
+
+    function removeMultiItem(btn) {
+        var li = btn.closest("li");
+        if (li) {
+            li.remove();
+            triggerAutoSave();
+        }
+    }
+
+    function collectDetails() {
+        var details = [];
+
+        // Sayısal Girişler (Metre)
+        document.querySelectorAll(".dynamic-number").forEach(function(inp) {
+            var card = inp.closest(".question-card");
+            if (card && card.classList.contains("d-none")) return;
+
+            if (inp.value && inp.value.trim() !== "") {
+                var title = inp.getAttribute("data-qtitle");
+                var phase = inp.getAttribute("data-phase") || "Adım 1: Saha Analizi";
+                var val = parseFloat(inp.value.trim()) || 0;
+                details.push({
+                    Phase: phase,
+                    SelectedItem: title + ": " + val + " m",
+                    ValueId: parseInt(inp.getAttribute("data-qid"))
+                });
+            }
+        });
+
+        // Tekli seçimler
+        document.querySelectorAll(".dynamic-single").forEach(function(sel) {
+            var card = sel.closest(".question-card");
+            if (card && card.classList.contains("d-none")) return;
+
+            if (sel.value) {
+                var text = sel.options[sel.selectedIndex].text;
+                var phase = sel.getAttribute("data-phase") || "Adım 1: Saha Analizi";
+                details.push({
+                    Phase: phase,
+                    SelectedItem: text,
+                    ValueId: parseInt(sel.value)
+                });
+            }
+        });
+
+        // Çoklu seçimler
+        document.querySelectorAll(".dynamic-list").forEach(function(ul) {
+            var card = ul.closest(".question-card");
+            if (card && card.classList.contains("d-none")) return;
+
+            Array.from(ul.children).forEach(function(li) {
+                var val = li.getAttribute("data-val");
+                var textElem = li.querySelector(".text-dark");
+                var text = textElem ? textElem.innerText.trim() : "";
+                var phase = li.getAttribute("data-phase") || "Adım 1: Saha Analizi";
+                if (val && text) {
+                    details.push({
+                        Phase: phase,
+                        SelectedItem: text,
+                        ValueId: parseInt(val)
+                    });
+                }
+            });
+        });
+
+        return details;
+    }
+
+    function triggerAutoSave() {
+        var nameInput = document.getElementById("configName");
+        var name = nameInput.value.trim();
+        if (!name) return; // İsim yazılmadan otomatik kayıt başlamaz
+
+        var badge = document.getElementById("autosaveBadge");
+        if (badge) {
+            badge.className = "badge bg-warning bg-opacity-25 text-dark border px-3 py-2 rounded-pill shadow-xs";
+            badge.innerHTML = `<i class="fas fa-spinner fa-spin me-1 text-warning"></i> Taslak Kaydediliyor...`;
+        }
+
+        var details = collectDetails();
+
+        fetch("/Metraj/AutoSaveProfile", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                ProfileId: currentProfileId,
+                ProjectId: currentProjectId,
+                Name: name,
+                Details: details
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.duplicate) {
+                nameInput.classList.add("is-invalid");
+                if (badge) {
+                    badge.className = "badge bg-danger text-white border px-3 py-2 rounded-pill shadow-xs";
+                    badge.innerHTML = `<i class="fas fa-exclamation-triangle me-1"></i> Bu isim zaten kayıtlı!`;
+                }
+                var statusText = document.getElementById("profileStatusText");
+                if (statusText) statusText.innerHTML = `<span class="text-danger fw-bold">${data.message}</span>`;
+                return;
+            }
+
+            if (data && data.success) {
+                nameInput.classList.remove("is-invalid");
+                currentProfileId = data.profileId;
+                if (window.history && window.history.replaceState) {
+                    var newUrl = '/Metraj/DnaWizard/' + currentProjectId + '?profileId=' + currentProfileId;
+                    window.history.replaceState({ path: newUrl }, '', newUrl);
+                }
+                if (badge) {
+                    var now = new Date();
+                    var timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    badge.className = "badge bg-success bg-opacity-10 text-success border border-success px-3 py-2 rounded-pill shadow-xs";
+                    badge.innerHTML = `<i class="fas fa-check-circle me-1"></i> Taslak Kaydedildi (${timeStr})`;
+                }
+                var statusText = document.getElementById("profileStatusText");
+                if (statusText) statusText.innerText = "Taslak (Kaldığınız Yerden Devam Edebilirsiniz)";
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            if (badge) {
+                badge.className = "badge bg-danger bg-opacity-10 text-danger border px-3 py-2 rounded-pill shadow-xs";
+                badge.innerHTML = `<i class="fas fa-exclamation-circle me-1"></i> Kayıt Yapılamadı`;
+            }
+        });
+    }
+
+    function finishProfile() {
+        var name = document.getElementById("configName").value.trim();
+        if (!name) {
+            alert("Lütfen önce DNA Profiline bir isim veriniz.");
+            document.getElementById("configName").focus();
+            return;
+        }
+
+        var details = collectDetails();
+
+        fetch("/Metraj/SaveDnaProfile", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                ProfileId: currentProfileId,
+                ProjectId: currentProjectId,
+                Name: name,
+                Details: details
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.duplicate) {
+                alert(data.message);
+                document.getElementById("configName").classList.add("is-invalid");
+                document.getElementById("configName").focus();
+                return;
+            }
+            if (data && data.success) {
+                alert("Tebrikler! DNA Profiliniz başarıyla tamamlandı ve kaydedildi.");
+                window.location.href = "/Metraj/ProjectDNA/" + currentProjectId;
+            } else {
+                alert("Kayıt sırasında bir hata oluştu.");
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Sunucuya bağlanılamadı.");
+        });
+    }
+</script>
