@@ -708,17 +708,23 @@ namespace GMK360.Web.Controllers
                 var project = await _context.ConstructionProjects.Include(p => p.Blocks).FirstOrDefaultAsync(p => p.Id == model.DraftProjectId);
                 if (project == null) return Json(new { success = false, message = "Proje bulunamadı." });
 
-                var existingBlocks = project.Blocks?.ToList() ?? new System.Collections.Generic.List<GMK360.Core.Entities.Building>();
+                var existingBlocks = await _context.Buildings
+                    .Where(b => b.ConstructionProjectId == model.DraftProjectId)
+                    .ToListAsync();
+
                 var parentBlocks = new System.Collections.Generic.List<GMK360.Web.Models.WizardBlockItem>();
                 if (model.ExistingBlocks != null) { foreach(var b in model.ExistingBlocks) { b.IsExistingBuilding = true; parentBlocks.Add(b); } }
                 if (model.TargetBlocks != null) { foreach(var b in model.TargetBlocks) { b.IsExistingBuilding = false; parentBlocks.Add(b); } }
 
-                var allCurrentNames = new System.Collections.Generic.List<string>();
+                var keptExistingBuildingIds = new System.Collections.Generic.HashSet<int>();
                 
                 int blockCounter = 1;
                 foreach (var pb in parentBlocks) {
-                    allCurrentNames.Add(pb.BlockName);
-                    var existingParent = existingBlocks.FirstOrDefault(eb => eb.BlockName == pb.BlockName && eb.IsExistingBuilding == pb.IsExistingBuilding && eb.ParentBuildingId == null);
+                    var existingParent = existingBlocks.FirstOrDefault(eb => 
+                        eb.ParentBuildingId == null && 
+                        eb.IsExistingBuilding == pb.IsExistingBuilding && 
+                        eb.BlockName == pb.BlockName && 
+                        !keptExistingBuildingIds.Contains(eb.Id));
                     
                     if (existingParent != null) {
                         existingParent.BaseArea = pb.BaseArea;
@@ -732,6 +738,7 @@ namespace GMK360.Web.Controllers
                         existingParent.RoofType = pb.RoofType;
                         existingParent.BuildingAge = pb.BuildingAge;
                         existingParent.LayoutPattern = pb.LayoutPattern;
+                        keptExistingBuildingIds.Add(existingParent.Id);
                     } else {
                         existingParent = new GMK360.Core.Entities.Building {
                             Name = project.Name + " - " + pb.BlockName,
@@ -755,19 +762,21 @@ namespace GMK360.Web.Controllers
                             DistrictId = project.DistrictId ?? 1,
                             NeighborhoodId = project.NeighborhoodId ?? 1,
                             StreetId = project.StreetId,
-                            
                             ManagerUserId = _userManager.GetUserId(User) ?? ""
                         };
                         _context.Buildings.Add(existingParent);
-                        existingBlocks.Add(existingParent); // Add to local list for child linking
                     }
                     
-                    // İşlem bittikten sonra Parent ID almak için kaydetmemiz gerekmiyor çünkü Entity Framework navigasyon üzerinden id çözer
                     if (pb.SubBlocks != null && pb.SubBlocks.Any()) {
                         foreach (var sb in pb.SubBlocks) {
-                            allCurrentNames.Add(sb.BlockName);
-                            // Ebeveyn bağlantısını kontrol et.
-                            var existingChild = existingBlocks.FirstOrDefault(eb => eb.BlockName == sb.BlockName && eb.IsExistingBuilding == pb.IsExistingBuilding && (eb.ParentBuilding == existingParent || eb.ParentBuildingId == existingParent.Id));
+                            GMK360.Core.Entities.Building? existingChild = null;
+                            if (existingParent.Id > 0) {
+                                existingChild = existingBlocks.FirstOrDefault(eb => 
+                                    eb.ParentBuildingId == existingParent.Id && 
+                                    eb.IsExistingBuilding == pb.IsExistingBuilding && 
+                                    eb.BlockName == sb.BlockName && 
+                                    !keptExistingBuildingIds.Contains(eb.Id));
+                            }
                             
                             if (existingChild != null) {
                                 existingChild.TotalFloors = sb.TotalFloors;
@@ -778,6 +787,7 @@ namespace GMK360.Web.Controllers
                                 existingChild.HasGroundFloor = sb.HasGroundFloor;
                                 existingChild.HasRoof = sb.HasRoof;
                                 existingChild.RoofType = sb.RoofType;
+                                keptExistingBuildingIds.Add(existingChild.Id);
                             } else {
                                 existingChild = new GMK360.Core.Entities.Building {
                                     Name = project.Name + " - " + sb.BlockName,
@@ -794,35 +804,26 @@ namespace GMK360.Web.Controllers
                                     HasRoof = sb.HasRoof,
                                     RoofType = sb.RoofType,
                                     ConstructionProjectId = project.Id,
-                                    ParentBuilding = existingParent, // Navigation mapping
+                                    ParentBuilding = existingParent,
                                     CityId = project.CityId ?? 34,
                                     DistrictId = project.DistrictId ?? 1,
                                     NeighborhoodId = project.NeighborhoodId ?? 1,
                                     StreetId = project.StreetId,
-                                    
                                     ManagerUserId = _userManager.GetUserId(User) ?? ""
                                 };
                                 _context.Buildings.Add(existingChild);
-                                existingBlocks.Add(existingChild);
                             }
                         }
                     }
                     blockCounter++;
                 }
                 
-                // Silme işlemi
-                var submittedExistingParentNames = parentBlocks.Where(pb => pb.IsExistingBuilding).Select(pb => pb.BlockName).ToList();
-        var submittedExistingSubNames = parentBlocks.Where(pb => pb.IsExistingBuilding).SelectMany(pb => pb.SubBlocks?.Select(sb => sb.BlockName) ?? new string[0]).ToList();
-        
-        var submittedNewParentNames = parentBlocks.Where(pb => !pb.IsExistingBuilding).Select(pb => pb.BlockName).ToList();
-        var submittedNewSubNames = parentBlocks.Where(pb => !pb.IsExistingBuilding).SelectMany(pb => pb.SubBlocks?.Select(sb => sb.BlockName) ?? new string[0]).ToList();
+                // Güvenli silme: Bu projeye ait olup forma dahil edilmeyen tüm eski binalar silinir (önce alt bloklar, sonra ebeveyn)
+                var blocksToRemove = existingBlocks
+                    .Where(b => b.Id > 0 && !keptExistingBuildingIds.Contains(b.Id))
+                    .OrderByDescending(b => b.ParentBuildingId.HasValue ? 1 : 0)
+                    .ToList();
 
-        var blocksToRemove = existingBlocks.Where(b => 
-            (b.IsExistingBuilding && b.ParentBuildingId == null && !submittedExistingParentNames.Contains(b.BlockName)) || 
-            (b.IsExistingBuilding && b.ParentBuildingId != null && !submittedExistingSubNames.Contains(b.BlockName)) ||
-            (!b.IsExistingBuilding && b.ParentBuildingId == null && !submittedNewParentNames.Contains(b.BlockName)) ||
-            (!b.IsExistingBuilding && b.ParentBuildingId != null && !submittedNewSubNames.Contains(b.BlockName))
-        ).ToList();
                 if (blocksToRemove.Any()) {
                     _context.Buildings.RemoveRange(blocksToRemove);
                 }
