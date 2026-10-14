@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -26,7 +26,8 @@ namespace GMK360.Core.Entities
         public int? TotalFloors { get; set; } // Binadaki Toplam Normal Kat Sayısı
         public int BasementFloors { get; set; } = 0; // Bodrum kat sayısı (Örn: 2)
         public bool HasGroundFloor { get; set; }
-        public bool HasRoof { get; set; } = true; // Zemin kat var mı?
+        public bool HasRoof { get; set; } = true; // Çatı var mı?
+        public string? RoofType { get; set; } // Düz Teras Çatı (Tabliye), Eğimli Saç, Eğimli Kiremit, Çatı Dubleksi, Çatısız
         
         public string? FacadeDirection { get; set; } // Örn: "Güney-Batı Cephe"
         public double? BaseArea { get; set; } // Taban Oturumu m2

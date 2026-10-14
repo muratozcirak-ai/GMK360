@@ -415,6 +415,7 @@ namespace GMK360.Web.Controllers
                             BasementFloors = b.BasementFloors,
                             HasGroundFloor = b.HasGroundFloor,
                             HasRoof = b.HasRoof,
+                            RoofType = b.RoofType,
                             LayoutPattern = b.LayoutPattern,
                             SubBlocks = draft.Blocks.Where(cb => cb.ParentBuildingId == b.Id).Select(cb => new GMK360.Web.Models.WizardBlockItem {
                                 BlockName = cb.BlockName,
@@ -423,7 +424,8 @@ namespace GMK360.Web.Controllers
                                 TotalShops = cb.TotalShops,
                                 BasementFloors = cb.BasementFloors,
                                 HasGroundFloor = cb.HasGroundFloor,
-                                HasRoof = cb.HasRoof
+                                HasRoof = cb.HasRoof,
+                                RoofType = cb.RoofType
                             }).ToList()
                         }).ToList();
                         model.TargetBlocks = draft.Blocks.Where(b => !b.IsExistingBuilding && b.ParentBuildingId == null).Select(b => new GMK360.Web.Models.WizardBlockItem {
@@ -436,6 +438,7 @@ namespace GMK360.Web.Controllers
                             BasementFloors = b.BasementFloors,
                             HasGroundFloor = b.HasGroundFloor,
                             HasRoof = b.HasRoof,
+                            RoofType = b.RoofType,
                             LayoutPattern = b.LayoutPattern,
                             SubBlocks = draft.Blocks.Where(cb => cb.ParentBuildingId == b.Id).Select(cb => new GMK360.Web.Models.WizardBlockItem {
                                 BlockName = cb.BlockName,
@@ -444,7 +447,8 @@ namespace GMK360.Web.Controllers
                                 TotalShops = cb.TotalShops,
                                 BasementFloors = cb.BasementFloors,
                                 HasGroundFloor = cb.HasGroundFloor,
-                                HasRoof = cb.HasRoof
+                                HasRoof = cb.HasRoof,
+                                RoofType = cb.RoofType
                             }).ToList()
                         }).ToList();
                     }
@@ -725,6 +729,7 @@ namespace GMK360.Web.Controllers
                         existingParent.TotalShops = pb.TotalShops;
                         existingParent.HasGroundFloor = pb.HasGroundFloor;
                         existingParent.HasRoof = pb.HasRoof;
+                        existingParent.RoofType = pb.RoofType;
                         existingParent.BuildingAge = pb.BuildingAge;
                         existingParent.LayoutPattern = pb.LayoutPattern;
                     } else {
@@ -742,6 +747,7 @@ namespace GMK360.Web.Controllers
                             TotalShops = pb.TotalShops,
                             HasGroundFloor = pb.HasGroundFloor,
                             HasRoof = pb.HasRoof,
+                            RoofType = pb.RoofType,
                             BuildingAge = pb.BuildingAge,
                             LayoutPattern = pb.LayoutPattern,
                             ConstructionProjectId = project.Id,
@@ -771,6 +777,7 @@ namespace GMK360.Web.Controllers
                                 existingChild.BasementFloors = sb.BasementFloors;
                                 existingChild.HasGroundFloor = sb.HasGroundFloor;
                                 existingChild.HasRoof = sb.HasRoof;
+                                existingChild.RoofType = sb.RoofType;
                             } else {
                                 existingChild = new GMK360.Core.Entities.Building {
                                     Name = project.Name + " - " + sb.BlockName,
@@ -785,6 +792,7 @@ namespace GMK360.Web.Controllers
                                     BasementFloors = sb.BasementFloors,
                                     HasGroundFloor = sb.HasGroundFloor,
                                     HasRoof = sb.HasRoof,
+                                    RoofType = sb.RoofType,
                                     ConstructionProjectId = project.Id,
                                     ParentBuilding = existingParent, // Navigation mapping
                                     CityId = project.CityId ?? 34,

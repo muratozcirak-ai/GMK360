@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
@@ -93,6 +93,7 @@ namespace GMK360.Web.Models
         public int TotalApartments { get; set; }
         public int TotalShops { get; set; }
         public bool HasRoof { get; set; }
+        public string? RoofType { get; set; }
         public bool HasGroundFloor { get; set; } = true;
         public bool IsExistingBuilding { get; set; } = false;
         public int? BuildingAge { get; set; }
