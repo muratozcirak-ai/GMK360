@@ -598,36 +598,65 @@
                                 <a asp-action="Amenities" asp-route-projectId="@Model.Id" asp-route-isExisting="true" class="btn btn-sm btn-outline-danger rounded-pill"><i class="bi bi-pencil me-1"></i> Yönet</a>
                             </div>
                             <div class="row g-3">
-                                <div class="col-sm-12">
-                                    <div class="d-flex align-items-center">
-                                        <i class="bi bi-aspect-ratio text-success fs-4 me-3"></i>
+                                @{
+                                    var eskiKokBloklar = eskiBloklar?.Where(b => b.ParentBuildingId == null).ToList();
+                                    double totalLandEski = Model.TotalLandArea ?? 0;
+                                    double existingBaseArea = eskiKokBloklar?.Sum(b => b.BaseArea ?? 0) ?? 0;
+                                    var eskiDonatilar = Model.Amenities?.Where(a => a.IsExisting).ToList();
+                                    double eskiDonatilarArea = eskiDonatilar?.Sum(a => a.SquareMeters ?? 0) ?? 0;
+                                    double openSpaceEski = totalLandEski > 0 ? (totalLandEski - existingBaseArea - eskiDonatilarArea) : 0;
+                                    double taksRateEski = totalLandEski > 0 ? (existingBaseArea / totalLandEski) * 100 : 0;
+                                }
+                                <div class="col-sm-4">
+                                    <div class="d-flex align-items-center p-2 rounded-3 bg-light border">
+                                        <i class="bi bi-aspect-ratio text-secondary fs-4 me-3"></i>
                                         <div>
-                                            <div class="text-muted small">Toplam Arazi Alanı</div>
-                                            <div class="fw-bold text-dark">@(Model.TotalLandArea.HasValue ? Model.TotalLandArea.Value + " m²" : "Belirtilmedi")</div>
+                                            <div class="text-muted small fw-bold">Toplam Arazi Alanı</div>
+                                            <div class="fw-bold text-dark">@(totalLandEski > 0 ? totalLandEski.ToString("N0") + " m²" : "Belirtilmedi")</div>
                                         </div>
                                     </div>
                                 </div>
-                                
-                                @if (Model.Blocks != null && Model.Blocks.Any(b => b.IsExistingBuilding))
+                                <div class="col-sm-4">
+                                    <div class="d-flex align-items-center p-2 rounded-3 bg-danger bg-opacity-10 border border-danger border-opacity-25">
+                                        <i class="bi bi-building-dash text-danger fs-4 me-3"></i>
+                                        <div>
+                                            <div class="text-muted small text-danger fw-bold">Eski Yapılar Tabanı (TAKS)</div>
+                                            <div class="fw-bold text-dark">@(existingBaseArea > 0 ? existingBaseArea.ToString("N0") + " m²" : "0 m²") <small class="text-muted">(@taksRateEski.ToString("N1")%)</small></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-sm-4">
+                                    <div class="d-flex align-items-center p-2 rounded-3 bg-success bg-opacity-10 border border-success border-opacity-25">
+                                        <i class="bi bi-tree text-success fs-4 me-3"></i>
+                                        <div>
+                                            <div class="text-muted small text-success fw-bold">Eski Açık / Bahçe Alanı</div>
+                                            <div class="fw-bold text-dark">@(openSpaceEski > 0 ? openSpaceEski.ToString("N0") + " m²" : "0 m²")</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                @if (eskiDonatilar != null && eskiDonatilar.Any())
                                 {
-                                    var existingBaseArea = Model.Blocks.Where(b => b.IsExistingBuilding).Sum(b => b.BaseArea ?? 0);
-                                    <div class="col-sm-6">
-                                        <div class="d-flex align-items-center p-2 rounded-3 bg-danger bg-opacity-10 border border-danger border-opacity-25">
-                                            <i class="bi bi-building-dash text-danger fs-4 me-3"></i>
-                                            <div>
-                                                <div class="text-muted small text-danger fw-bold">Eski Bina Toplam Oturumu</div>
-                                                <div class="fw-bold text-dark">@(existingBaseArea > 0 ? existingBaseArea + " m²" : "Belirtilmedi")</div>
-                                            </div>
+                                    <div class="col-12 mt-1">
+                                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                                            <span class="small fw-bold text-muted me-1"><i class="bi bi-tree me-1 text-danger"></i>Mevcut Donatılar:</span>
+                                            @foreach(var donati in eskiDonatilar)
+                                            {
+                                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2 rounded-pill small">
+                                                    <i class="bi bi-check2-circle me-1"></i>@donati.Name @(donati.SquareMeters.HasValue ? $"({donati.SquareMeters.Value} m²)" : "")
+                                                </span>
+                                            }
                                         </div>
                                     </div>
                                 }
-                                
+
                                 @{
+                                    int eskiToplamYapi = eskiKokBloklar?.Count ?? 0;
                                     int eskiToplamBlok = eskiBloklar?.Count ?? 0;
                                     int eskiToplamDaire = eskiBloklar?.Sum(b => b.TotalApartments) ?? 0;
                                     int eskiToplamDukkan = eskiBloklar?.Sum(b => b.TotalShops) ?? 0;
                                     int eskiMaxKat = (eskiBloklar != null && eskiBloklar.Any()) ? eskiBloklar.Max(b => (b.TotalFloors ?? 0) + (b.BasementFloors)) : 0;
-                                    string eskiNizam = (eskiBloklar != null && eskiBloklar.Any()) ? string.Join(", ", eskiBloklar.Where(b => !string.IsNullOrEmpty(b.LayoutPattern)).Select(b => b.LayoutPattern).Distinct()) : "Belirtilmedi";
+                                    string eskiNizam = (eskiKokBloklar != null && eskiKokBloklar.Any()) ? string.Join(", ", eskiKokBloklar.Where(b => !string.IsNullOrEmpty(b.LayoutPattern)).Select(b => b.LayoutPattern).Distinct()) : "Belirtilmedi";
                                     if (string.IsNullOrEmpty(eskiNizam)) eskiNizam = "Belirtilmedi";
                                 }
                                 <div class="col-sm-12 mt-2">
@@ -637,7 +666,7 @@
                                                 <i class="bi bi-grid-3x3-gap text-secondary fs-4 me-3"></i>
                                                 <div>
                                                     <div class="text-muted small fw-bold">Nizam & Blok</div>
-                                                    <div class="fw-bold text-dark">@eskiNizam, @eskiToplamBlok Blok</div>
+                                                    <div class="fw-bold text-dark">@eskiNizam | @eskiToplamYapi Yapı (@eskiToplamBlok Blok)</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -744,38 +773,73 @@
                                 <a asp-action="Amenities" asp-route-projectId="@Model.Id" asp-route-isExisting="false" class="btn btn-sm btn-outline-primary rounded-pill"><i class="bi bi-pencil me-1"></i> Yönet</a>
                             </div>
                             <div class="row g-3">
-                                <div class="col-sm-12">
-                                    <div class="d-flex align-items-center">
-                                        <i class="bi bi-aspect-ratio text-success fs-4 me-3"></i>
+                                @{
+                                    var hedefBloklar = Model.Blocks?.Where(b => !b.IsExistingBuilding).ToList();
+                                    var hedefKokBloklar = hedefBloklar?.Where(b => b.ParentBuildingId == null).ToList();
+                                    double totalLandYeni = Model.TotalLandArea ?? 0;
+                                    double targetBaseArea = hedefKokBloklar?.Sum(b => b.BaseArea ?? 0) ?? 0;
+                                    var hedefDonatilar = Model.Amenities?.Where(a => !a.IsExisting).ToList();
+                                    double targetAmenitiesArea = hedefDonatilar?.Sum(a => a.SquareMeters ?? 0) ?? 0;
+                                    double openSpaceYeni = totalLandYeni > 0 ? (totalLandYeni - targetBaseArea - targetAmenitiesArea) : 0;
+                                    double taksRateYeni = totalLandYeni > 0 ? (targetBaseArea / totalLandYeni) * 100 : 0;
+                                }
+                                <div class="col-sm-4">
+                                    <div class="d-flex align-items-center p-2 rounded-3 bg-light border">
+                                        <i class="bi bi-aspect-ratio text-secondary fs-4 me-3"></i>
                                         <div>
-                                            <div class="text-muted small">Toplam Arazi Alanı</div>
-                                            <div class="fw-bold text-dark">@(Model.TotalLandArea.HasValue ? Model.TotalLandArea.Value + " m²" : "Belirtilmedi")</div>
+                                            <div class="text-muted small fw-bold">Toplam Arazi Alanı</div>
+                                            <div class="fw-bold text-dark">@(totalLandYeni > 0 ? totalLandYeni.ToString("N0") + " m²" : "Belirtilmedi")</div>
                                         </div>
                                     </div>
                                 </div>
-                                
-                                @if (Model.Blocks != null && Model.Blocks.Any(b => !b.IsExistingBuilding))
+                                <div class="col-sm-4">
+                                    <div class="d-flex align-items-center p-2 rounded-3 bg-primary bg-opacity-10 border border-primary border-opacity-25">
+                                        <i class="bi bi-building-add text-primary fs-4 me-3"></i>
+                                        <div>
+                                            <div class="text-muted small text-primary fw-bold">Yeni Yapılar Tabanı (TAKS)</div>
+                                            <div class="fw-bold text-dark">@(targetBaseArea > 0 ? targetBaseArea.ToString("N0") + " m²" : "0 m²") <small class="text-muted">(@taksRateYeni.ToString("N1")%)</small></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-sm-4">
+                                    <div class="d-flex align-items-center p-2 rounded-3 bg-success bg-opacity-10 border border-success border-opacity-25">
+                                        <i class="bi bi-tree text-success fs-4 me-3"></i>
+                                        <div>
+                                            <div class="text-muted small text-success fw-bold">Kalan Açık / Bahçe Alanı</div>
+                                            <div class="fw-bold text-dark">@(openSpaceYeni > 0 ? openSpaceYeni.ToString("N0") + " m²" : "0 m²")</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                @if (hedefDonatilar != null && hedefDonatilar.Any())
                                 {
-                                    var targetBaseArea = Model.Blocks.Where(b => !b.IsExistingBuilding).Sum(b => b.BaseArea ?? 0);
-                                    <div class="col-sm-6">
-                                        <div class="d-flex align-items-center p-2 rounded-3 bg-primary bg-opacity-10 border border-primary border-opacity-25">
-                                            <i class="bi bi-building-add text-primary fs-4 me-3"></i>
-                                            <div>
-                                                <div class="text-muted small text-primary fw-bold">Yeni (Hedef) Bina Toplam Oturumu</div>
-                                                <div class="fw-bold text-dark">@(targetBaseArea > 0 ? targetBaseArea + " m²" : "Belirtilmedi")</div>
-                                            </div>
+                                    <div class="col-12 mt-1">
+                                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                                            <span class="small fw-bold text-muted me-1"><i class="bi bi-tree me-1 text-success"></i>Planlanan Donatılar:</span>
+                                            @foreach(var donati in hedefDonatilar)
+                                            {
+                                                <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 rounded-pill small">
+                                                    <i class="bi bi-check2-circle me-1"></i>@donati.Name @(donati.SquareMeters.HasValue ? $"({donati.SquareMeters.Value} m²)" : "")
+                                                </span>
+                                            }
                                         </div>
                                     </div>
                                 }
-                                
+                                else
+                                {
+                                    <div class="col-12 mt-1">
+                                        <div class="text-muted small fst-italic"><i class="bi bi-info-circle me-1"></i>Otopark, çocuk parkı, kamelya veya çevre çiti gibi dış alan donatıları henüz eklenmedi. "Yönet" butonundan ekleyebilirsiniz.</div>
+                                    </div>
+                                }
+
                                 @{
-                                    var yeniBloklar = Model.Blocks?.Where(b => !b.IsExistingBuilding).ToList();
-                                    int yeniToplamBlok = yeniBloklar?.Count ?? 0;
-                                    int yeniToplamDaire = yeniBloklar?.Sum(b => b.TotalApartments) ?? 0;
-                                    int yeniToplamDukkan = yeniBloklar?.Sum(b => b.TotalShops) ?? 0;
-                                    int yeniMaxKat = (yeniBloklar != null && yeniBloklar.Any()) ? yeniBloklar.Max(b => (b.TotalFloors ?? 0) + (b.BasementFloors)) : 0;
-                                    string yeniNizam = (yeniBloklar != null && yeniBloklar.Any()) ? string.Join(", ", yeniBloklar.Where(b => !string.IsNullOrEmpty(b.LayoutPattern)).Select(b => b.LayoutPattern).Distinct()) : "Belirtilmedi";
-                                    if (string.IsNullOrEmpty(yeniNizam)) yeniNizam = "Belirtilmedi";
+                                    int hedefToplamYapi = hedefKokBloklar?.Count ?? 0;
+                                    int hedefToplamBlok = hedefBloklar?.Count ?? 0;
+                                    int hedefToplamDaire = hedefBloklar?.Sum(b => b.TotalApartments) ?? 0;
+                                    int hedefToplamDukkan = hedefBloklar?.Sum(b => b.TotalShops) ?? 0;
+                                    int hedefMaxKat = (hedefBloklar != null && hedefBloklar.Any()) ? hedefBloklar.Max(b => (b.TotalFloors ?? 0) + (b.BasementFloors)) : 0;
+                                    string hedefNizam = (hedefKokBloklar != null && hedefKokBloklar.Any()) ? string.Join(", ", hedefKokBloklar.Where(b => !string.IsNullOrEmpty(b.LayoutPattern)).Select(b => b.LayoutPattern).Distinct()) : "Belirtilmedi";
+                                    if (string.IsNullOrEmpty(hedefNizam)) hedefNizam = "Belirtilmedi";
                                 }
                                 <div class="col-sm-12 mt-2">
                                     <div class="row g-2">
@@ -784,7 +848,7 @@
                                                 <i class="bi bi-grid-3x3-gap text-secondary fs-4 me-3"></i>
                                                 <div>
                                                     <div class="text-muted small fw-bold">Nizam & Blok</div>
-                                                    <div class="fw-bold text-dark">@yeniNizam, @yeniToplamBlok Blok</div>
+                                                    <div class="fw-bold text-dark">@hedefNizam | @hedefToplamYapi Yapı (@hedefToplamBlok Blok)</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -793,7 +857,7 @@
                                                 <i class="bi bi-door-open text-secondary fs-4 me-3"></i>
                                                 <div>
                                                     <div class="text-muted small fw-bold">Bağımsız Bölüm</div>
-                                                    <div class="fw-bold text-dark">@yeniToplamDaire Daire, @yeniToplamDukkan Dükkan</div>
+                                                    <div class="fw-bold text-dark">@hedefToplamDaire Daire, @hedefToplamDukkan Dükkan (Toplam @(hedefToplamDaire + hedefToplamDukkan))</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -802,14 +866,11 @@
                                                 <i class="bi bi-layers text-secondary fs-4 me-3"></i>
                                                 <div>
                                                     <div class="text-muted small fw-bold">Kat Sayısı</div>
-                                                    <div class="fw-bold text-dark">Bodrum Dahil Max @yeniMaxKat Kat</div>
+                                                    <div class="fw-bold text-dark">Bodrum Dahil Max @hedefMaxKat Kat</div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                                <div class="col-12 mt-2">
-                                    <div class="text-muted small fst-italic"><i class="bi bi-info-circle me-1"></i>Yeni proje için ek dış alan donatıları (Örn: Havuz, Kapalı Otopark) eklenebilir.</div>
                                 </div>
                             </div>
                         </div>
@@ -899,66 +960,121 @@
             @foreach (var block in rootExistingBlocks)
             {
                 var children = Model.Blocks.Where(c => c.ParentBuildingId == block.Id).ToList();
+                var cleanBlockName = !string.IsNullOrEmpty(block.BlockName) ? block.BlockName : block.Name;
                 <div class="col-12">
                     <div class="card border border-danger border-opacity-25 shadow-sm rounded-4 h-100">
-                        <div class="card-header bg-danger bg-opacity-10 border-0 pt-3 pb-2">
-                            <h5 class="fw-bold text-danger mb-0"><i class="ph ph-intersect me-2"></i>@block.Name @(children.Any() ? "(Ana Yapı)" : "(Tekil Yapı)")</h5>
+                        <div class="card-header bg-danger bg-opacity-10 border-0 p-3">
+                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <span class="badge bg-danger text-white fs-6 px-3 py-2 rounded-3 shadow-sm">
+                                        <i class="bi bi-building me-1"></i>@cleanBlockName
+                                    </span>
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+                                        @(block.LayoutPattern ?? (children.Any() ? "Ana Kütle" : "Tekil Yapı"))
+                                    </span>
+                                    @if(block.BaseArea.HasValue && block.BaseArea.Value > 0)
+                                    {
+                                        <span class="badge bg-white text-dark border px-2 py-1 shadow-sm">
+                                            <i class="bi bi-bounding-box-circles me-1 text-danger"></i>Taban: <strong>@block.BaseArea.Value m²</strong>
+                                        </span>
+                                    }
+                                </div>
+                                <div>
+                                    <span class="badge bg-white text-danger border border-danger-subtle px-3 py-2 rounded-pill small shadow-sm">
+                                        @(children.Any() ? $"{children.Count} Bağımsız Kule / Blok" : "Müstakil Blok")
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                         <div class="card-body p-4">
                             <!-- Main Block Info -->
-                            @if (true)
-                            {
-                                <div class="row mb-4 align-items-center">
-                                    <div class="col-md-8">
+                            <div class="row mb-3 align-items-center g-3">
+                                <div class="col-lg-8">
+                                    <div class="d-flex flex-wrap gap-2 align-items-center">
                                         @if(block.LayoutPattern == "Bitişik Nizam")
                                         {
-                                            <span class="px-3 py-2 bg-danger bg-opacity-10 text-danger border border-danger rounded-pill d-inline-block fw-bold"><i class="bi bi-building me-1"></i>Bitişik Nizam (Tek Temel)</span>
+                                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-3 py-2 rounded-pill fw-bold">
+                                                <i class="bi bi-building me-1"></i>Bitişik Nizam (Ortak Temel / İskelet)
+                                            </span>
                                         }
-                                        else if ((block.TotalFloors ?? 0) > 0)
+                                        else if (block.LayoutPattern == "Ortak Baza")
                                         {
-                                            <span class="px-3 py-2 bg-light text-dark border rounded-pill d-inline-block fw-bold"><i class="bi bi-layers me-1"></i>Ana Yapı: @(block.TotalFloors ?? 0) Kat</span>
+                                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-3 py-2 rounded-pill fw-bold">
+                                                <i class="bi bi-shop me-1"></i>Ortak Baza / Podyum Çarşı
+                                            </span>
                                         }
-                                        
-                                        @if(block.TotalUnits > 0 || block.TotalShops > 0)
+
+                                        @if ((block.TotalFloors ?? 0) > 0)
                                         {
-                                            <span class="ms-2 fw-bold text-dark"><i class="bi bi-door-open text-danger me-1"></i>@(block.TotalUnits - block.TotalShops) Daire, @(block.TotalShops) Dükkan</span>
+                                            <span class="badge bg-light text-dark border px-3 py-2 rounded-pill">
+                                                <i class="bi bi-layers me-1 text-danger"></i>@(block.TotalFloors ?? 0) Normal Kat
+                                            </span>
                                         }
-                                    </div>
-                                    <div class="col-md-4 text-end">
-                                        <a asp-action="ManageBlock" asp-route-id="@block.Id" class="btn btn-danger rounded-pill btn-sm fw-bold px-4 py-2 shadow-sm">
-                                            <i class="bi bi-grid-1x2 me-1"></i> @(block.LayoutPattern == "Bitişik Nizam" ? "Bitişik Nizam Ortak İskeletini Yönet" : "Ana Yapı Planını Yönet") <i class="bi bi-arrow-right ms-1"></i>
-                                        </a>
+
+                                        @if (block.BasementFloors > 0)
+                                        {
+                                            <span class="badge bg-light text-dark border px-3 py-2 rounded-pill">
+                                                <i class="bi bi-box-arrow-in-down me-1 text-secondary"></i>@block.BasementFloors Bodrum Kat
+                                            </span>
+                                        }
+
+                                        <span class="badge bg-light text-dark border px-3 py-2 rounded-pill">
+                                            <i class="bi bi-house-door me-1 text-info"></i>@(block.HasGroundFloor ? "Zemin Kat Var" : "Zemin Kat Yok")
+                                        </span>
+
+                                        <span class="badge bg-light text-dark border px-3 py-2 rounded-pill">
+                                            <i class="bi bi-umbrella me-1 text-warning"></i>@(block.HasRoof ? (!string.IsNullOrEmpty(block.RoofType) ? block.RoofType : "Çatılı") : "Çatısız / Teras")
+                                        </span>
+
+                                        @if(block.TotalApartments > 0 || block.TotalShops > 0)
+                                        {
+                                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-3 py-2 rounded-pill fw-bold">
+                                                <i class="bi bi-door-open me-1"></i>@block.TotalApartments Daire, @block.TotalShops Dükkan
+                                            </span>
+                                        }
                                     </div>
                                 </div>
-                            }
+                                <div class="col-lg-4 text-lg-end">
+                                    <a asp-action="ManageBlock" asp-route-id="@block.Id" class="btn btn-danger rounded-pill btn-sm fw-bold px-4 py-2 shadow-sm">
+                                        <i class="bi bi-grid-1x2 me-1"></i> @(block.LayoutPattern == "Bitişik Nizam" ? "Bitişik Nizam Ortak İskeletini Yönet" : block.LayoutPattern == "Ortak Baza" ? "Ortak Baza / Çarşı Planını Yönet" : "Ana Yapı Planını Yönet") <i class="bi bi-arrow-right ms-1"></i>
+                                    </a>
+                                </div>
+                            </div>
                             
                             <!-- Sub Blocks (Towers) -->
                             @if(children.Any())
                             {
-                                <h6 class="fw-bold text-dark border-bottom pb-2 mb-3"><i class="ph ph-buildings me-2"></i>Alt Yapılar (Kuleler / Bloklar)</h6>
-                                <div class="row g-3">
-                                    @foreach(var child in children)
-                                    {
-                                        <div class="col-md-6 col-lg-4">
-                                            <div class="card border-0 bg-light rounded-3 shadow-sm h-100">
-                                                <div class="card-body p-3">
-                                                    <div class="d-flex justify-content-between mb-2">
-                                                        <h6 class="fw-bold text-dark mb-0">@child.Name</h6>
-                                                        <span class="badge bg-secondary">@(child.TotalFloors ?? 0) Kat</span>
-                                                    </div>
-                                                    <div class="text-muted small mb-3">
-                                                        <i class="bi bi-door-open me-1"></i>@(child.TotalUnits - child.TotalShops) Daire, @(child.TotalShops) Dükkan
-                                                    </div>
-                                                    @if(block.LayoutPattern != "Bitişik Nizam" && block.LayoutPattern != "Ortak Baza")
-                                                    {
-                                                        <a asp-action="ManageBlock" asp-route-id="@child.Id" class="btn btn-sm btn-light border w-100 text-danger fw-bold">
-                                                            Kule/Blok Yönet <i class="bi bi-arrow-right ms-1"></i>
+                                <div class="border-top pt-3 mt-3">
+                                    <h6 class="fw-bold text-dark mb-3"><i class="ph ph-buildings me-2 text-danger"></i>Alt Yapılar (Kuleler / Bloklar)</h6>
+                                    <div class="row g-3">
+                                        @foreach(var child in children)
+                                        {
+                                            var cleanChildName = !string.IsNullOrEmpty(child.BlockName) ? child.BlockName : child.Name;
+                                            <div class="col-md-6 col-lg-4">
+                                                <div class="card border rounded-3 shadow-sm h-100 bg-white">
+                                                    <div class="card-body p-3 d-flex flex-column justify-content-between">
+                                                        <div>
+                                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                                <h6 class="fw-bold text-dark mb-0"><i class="bi bi-building text-danger me-1"></i>@cleanChildName</h6>
+                                                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle">@(child.TotalFloors ?? 0) Kat</span>
+                                                            </div>
+                                                            <div class="d-flex flex-wrap gap-1 mb-3">
+                                                                <span class="badge bg-light text-muted border small">@(child.BasementFloors > 0 ? $"{child.BasementFloors} Bodrum" : "Bodrumsuz")</span>
+                                                                <span class="badge bg-light text-muted border small">@(child.HasGroundFloor ? "Zemin Kat Var" : "Baza Üstü")</span>
+                                                                <span class="badge bg-light text-muted border small">@(child.HasRoof ? (!string.IsNullOrEmpty(child.RoofType) ? child.RoofType : "Çatılı") : "Çatısız")</span>
+                                                            </div>
+                                                            <div class="text-muted small mb-3">
+                                                                <i class="bi bi-door-open me-1 text-danger"></i><strong>@child.TotalApartments</strong> Daire, <strong>@child.TotalShops</strong> Dükkan
+                                                            </div>
+                                                        </div>
+                                                        <a asp-action="ManageBlock" asp-route-id="@child.Id" class="btn btn-sm btn-outline-danger w-100 fw-bold rounded-pill">
+                                                            <i class="bi bi-grid-1x2 me-1"></i> Kule / Blok Planını Yönet <i class="bi bi-arrow-right ms-1"></i>
                                                         </a>
-                                                    }
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    }
+                                        }
+                                    </div>
                                 </div>
                             }
                         </div>
@@ -975,66 +1091,121 @@
             @foreach (var block in rootNewBlocks)
             {
                 var children = Model.Blocks.Where(c => c.ParentBuildingId == block.Id).ToList();
+                var cleanBlockName = !string.IsNullOrEmpty(block.BlockName) ? block.BlockName : block.Name;
                 <div class="col-12">
                     <div class="card border border-primary border-opacity-25 shadow-sm rounded-4 h-100">
-                        <div class="card-header bg-primary bg-opacity-10 border-0 pt-3 pb-2">
-                            <h5 class="fw-bold text-primary mb-0"><i class="ph ph-intersect me-2"></i>@block.Name @(children.Any() ? "(Ana Yapı)" : "(Tekil Yapı)")</h5>
+                        <div class="card-header bg-primary bg-opacity-10 border-0 p-3">
+                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <span class="badge bg-primary text-white fs-6 px-3 py-2 rounded-3 shadow-sm">
+                                        <i class="bi bi-building me-1"></i>@cleanBlockName
+                                    </span>
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">
+                                        @(block.LayoutPattern ?? (children.Any() ? "Ana Kütle" : "Tekil Yapı"))
+                                    </span>
+                                    @if(block.BaseArea.HasValue && block.BaseArea.Value > 0)
+                                    {
+                                        <span class="badge bg-white text-dark border px-2 py-1 shadow-sm">
+                                            <i class="bi bi-bounding-box-circles me-1 text-primary"></i>Taban: <strong>@block.BaseArea.Value m²</strong>
+                                        </span>
+                                    }
+                                </div>
+                                <div>
+                                    <span class="badge bg-white text-primary border border-primary-subtle px-3 py-2 rounded-pill small shadow-sm">
+                                        @(children.Any() ? $"{children.Count} Bağımsız Kule / Blok" : "Müstakil Blok")
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                         <div class="card-body p-4">
                             <!-- Main Block Info -->
-                            @if (true)
-                            {
-                                <div class="row mb-4 align-items-center">
-                                    <div class="col-md-8">
+                            <div class="row mb-3 align-items-center g-3">
+                                <div class="col-lg-8">
+                                    <div class="d-flex flex-wrap gap-2 align-items-center">
                                         @if(block.LayoutPattern == "Bitişik Nizam")
                                         {
-                                            <span class="px-3 py-2 bg-primary bg-opacity-10 text-primary border border-primary rounded-pill d-inline-block fw-bold"><i class="bi bi-building me-1"></i>Bitişik Nizam (Tek Temel)</span>
+                                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2 rounded-pill fw-bold">
+                                                <i class="bi bi-building me-1"></i>Bitişik Nizam (Ortak Temel / İskelet)
+                                            </span>
                                         }
-                                        else if ((block.TotalFloors ?? 0) > 0)
+                                        else if (block.LayoutPattern == "Ortak Baza")
                                         {
-                                            <span class="px-3 py-2 bg-light text-dark border rounded-pill d-inline-block fw-bold"><i class="bi bi-layers me-1"></i>Ana Yapı / Taban: @(block.TotalFloors ?? 0) Kat</span>
+                                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2 rounded-pill fw-bold">
+                                                <i class="bi bi-shop me-1"></i>Ortak Baza / Podyum Çarşı
+                                            </span>
                                         }
-                                        
-                                        @if(block.TotalUnits > 0 || block.TotalShops > 0)
+
+                                        @if ((block.TotalFloors ?? 0) > 0)
                                         {
-                                            <span class="ms-2 fw-bold text-dark"><i class="bi bi-door-open text-primary me-1"></i>@(block.TotalUnits - block.TotalShops) Daire, @(block.TotalShops) Dükkan</span>
+                                            <span class="badge bg-light text-dark border px-3 py-2 rounded-pill">
+                                                <i class="bi bi-layers me-1 text-primary"></i>@(block.TotalFloors ?? 0) Normal Kat
+                                            </span>
                                         }
-                                    </div>
-                                    <div class="col-md-4 text-end">
-                                        <a asp-action="ManageBlock" asp-route-id="@block.Id" class="btn btn-primary rounded-pill btn-sm fw-bold px-4 py-2 shadow-sm">
-                                            <i class="bi bi-grid-1x2 me-1"></i> @(block.LayoutPattern == "Bitişik Nizam" ? "Bitişik Nizam Ortak İskeletini Yönet" : "Taban/Baza Planını Yönet") <i class="bi bi-arrow-right ms-1"></i>
-                                        </a>
+
+                                        @if (block.BasementFloors > 0)
+                                        {
+                                            <span class="badge bg-light text-dark border px-3 py-2 rounded-pill">
+                                                <i class="bi bi-box-arrow-in-down me-1 text-secondary"></i>@block.BasementFloors Bodrum Kat
+                                            </span>
+                                        }
+
+                                        <span class="badge bg-light text-dark border px-3 py-2 rounded-pill">
+                                            <i class="bi bi-house-door me-1 text-info"></i>@(block.HasGroundFloor ? "Zemin Kat Var" : "Zemin Kat Yok")
+                                        </span>
+
+                                        <span class="badge bg-light text-dark border px-3 py-2 rounded-pill">
+                                            <i class="bi bi-umbrella me-1 text-warning"></i>@(block.HasRoof ? (!string.IsNullOrEmpty(block.RoofType) ? block.RoofType : "Çatılı") : "Çatısız / Teras")
+                                        </span>
+
+                                        @if(block.TotalApartments > 0 || block.TotalShops > 0)
+                                        {
+                                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2 rounded-pill fw-bold">
+                                                <i class="bi bi-door-open me-1"></i>@block.TotalApartments Daire, @block.TotalShops Dükkan
+                                            </span>
+                                        }
                                     </div>
                                 </div>
-                            }
+                                <div class="col-lg-4 text-lg-end">
+                                    <a asp-action="ManageBlock" asp-route-id="@block.Id" class="btn btn-primary rounded-pill btn-sm fw-bold px-4 py-2 shadow-sm">
+                                        <i class="bi bi-grid-1x2 me-1"></i> @(block.LayoutPattern == "Bitişik Nizam" ? "Bitişik Nizam Ortak İskeletini Yönet" : block.LayoutPattern == "Ortak Baza" ? "Ortak Baza / Çarşı Planını Yönet" : "Ana Yapı Planını Yönet") <i class="bi bi-arrow-right ms-1"></i>
+                                    </a>
+                                </div>
+                            </div>
                             
                             <!-- Sub Blocks (Towers) -->
                             @if(children.Any())
                             {
-                                <h6 class="fw-bold text-dark border-bottom pb-2 mb-3"><i class="ph ph-buildings me-2"></i>Alt Yapılar (Kuleler / Bloklar)</h6>
-                                <div class="row g-3">
-                                    @foreach(var child in children)
-                                    {
-                                        <div class="col-md-6 col-lg-4">
-                                            <div class="card border-0 bg-light rounded-3 shadow-sm h-100">
-                                                <div class="card-body p-3">
-                                                    <div class="d-flex justify-content-between mb-2">
-                                                        <h6 class="fw-bold text-dark mb-0">@child.Name</h6>
-                                                        <span class="badge bg-secondary">@(child.TotalFloors ?? 0) Kat</span>
-                                                    </div>
-                                                    <div class="text-muted small mb-3">
-                                                        <i class="bi bi-door-open me-1"></i>@(child.TotalUnits - child.TotalShops) Daire, @(child.TotalShops) Dükkan
-                                                    </div>
-                                                    @if(block.LayoutPattern != "Bitişik Nizam" && block.LayoutPattern != "Ortak Baza")
-                                                    {
-                                                        <a asp-action="ManageBlock" asp-route-id="@child.Id" class="btn btn-sm btn-light border w-100 text-primary fw-bold">
-                                                            Kule/Blok Yönet <i class="bi bi-arrow-right ms-1"></i>
+                                <div class="border-top pt-3 mt-3">
+                                    <h6 class="fw-bold text-dark mb-3"><i class="ph ph-buildings me-2 text-primary"></i>Alt Yapılar (Kuleler / Bloklar)</h6>
+                                    <div class="row g-3">
+                                        @foreach(var child in children)
+                                        {
+                                            var cleanChildName = !string.IsNullOrEmpty(child.BlockName) ? child.BlockName : child.Name;
+                                            <div class="col-md-6 col-lg-4">
+                                                <div class="card border rounded-3 shadow-sm h-100 bg-white">
+                                                    <div class="card-body p-3 d-flex flex-column justify-content-between">
+                                                        <div>
+                                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                                <h6 class="fw-bold text-dark mb-0"><i class="bi bi-building text-primary me-1"></i>@cleanChildName</h6>
+                                                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">@(child.TotalFloors ?? 0) Kat</span>
+                                                            </div>
+                                                            <div class="d-flex flex-wrap gap-1 mb-3">
+                                                                <span class="badge bg-light text-muted border small">@(child.BasementFloors > 0 ? $"{child.BasementFloors} Bodrum" : "Bodrumsuz")</span>
+                                                                <span class="badge bg-light text-muted border small">@(child.HasGroundFloor ? "Zemin Kat Var" : "Baza Üstü")</span>
+                                                                <span class="badge bg-light text-muted border small">@(child.HasRoof ? (!string.IsNullOrEmpty(child.RoofType) ? child.RoofType : "Çatılı") : "Çatısız")</span>
+                                                            </div>
+                                                            <div class="text-muted small mb-3">
+                                                                <i class="bi bi-door-open me-1 text-primary"></i><strong>@child.TotalApartments</strong> Daire, <strong>@child.TotalShops</strong> Dükkan
+                                                            </div>
+                                                        </div>
+                                                        <a asp-action="ManageBlock" asp-route-id="@child.Id" class="btn btn-sm btn-outline-primary w-100 fw-bold rounded-pill">
+                                                            <i class="bi bi-grid-1x2 me-1"></i> Kule / Blok Planını Yönet <i class="bi bi-arrow-right ms-1"></i>
                                                         </a>
-                                                    }
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    }
+                                        }
+                                    </div>
                                 </div>
                             }
                         </div>

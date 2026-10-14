@@ -1,4 +1,4 @@
-﻿@model GMK360.Core.Entities.Construction.ConstructionProject
+@model GMK360.Core.Entities.Construction.ConstructionProject
 
 @{
     Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
@@ -57,7 +57,7 @@
                 @{
                     double totalLand = Model.TotalLandArea ?? 0;
                     bool isEx = ViewBag.IsExisting == true;
-                      double totalBlocksFootprint = Model.Blocks?.Where(b => b.IsExistingBuilding == isEx).Sum(b => b.BaseArea ?? 0) ?? 0;
+                    double totalBlocksFootprint = Model.Blocks?.Where(b => b.IsExistingBuilding == isEx && b.ParentBuildingId == null).Sum(b => b.BaseArea ?? 0) ?? 0;
                     double totalAmenities = Model.Amenities?.Where(a => a.IsExisting == isEx).Sum(a => a.SquareMeters ?? 0) ?? 0;
                     double remainingSpace = totalLand - totalBlocksFootprint - totalAmenities;
                     
@@ -71,14 +71,14 @@
                     <span class="fw-bolder fs-5 text-dark">@totalBlocksFootprint m²</span>
                 </div>
                 <!-- Blok Detayları Listesi -->
-                @if(Model.Blocks != null && Model.Blocks.Any(b => b.IsExistingBuilding == isEx))
+                @if(Model.Blocks != null && Model.Blocks.Any(b => b.IsExistingBuilding == isEx && b.ParentBuildingId == null))
                 {
                     <div class="bg-light rounded p-3 mb-3">
-                        @foreach(var block in Model.Blocks.Where(b => b.IsExistingBuilding == isEx))
+                        @foreach(var block in Model.Blocks.Where(b => b.IsExistingBuilding == isEx && b.ParentBuildingId == null))
                         {
                             <div class="d-flex justify-content-between text-muted small mb-1">
-                                <span><i class="bi bi-building me-1"></i> @block.Name</span>
-                                <span>@(block.BaseArea.HasValue ? block.BaseArea.Value + " m²" : "Belirtilmedi (Lütfen Blok ayarlarından girin)")</span>
+                                <span><i class="bi bi-building me-1"></i> @(!string.IsNullOrEmpty(block.BlockName) ? block.BlockName : block.Name) <span class="badge bg-secondary-subtle text-secondary py-0 ms-1">@(block.LayoutPattern ?? "Yapı")</span></span>
+                                <span class="fw-bold text-dark">@(block.BaseArea.HasValue ? block.BaseArea.Value + " m²" : "0 m²")</span>
                             </div>
                         }
                     </div>
