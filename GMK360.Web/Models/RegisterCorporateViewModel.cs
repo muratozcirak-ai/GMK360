@@ -65,7 +65,7 @@ namespace GMK360.Web.Models
         public string ThemePrimaryColor { get; set; } = "#0f172a";
 
         [Display(Name = "Firma Logosu")]
-        public IFormFile LogoFile { get; set; }
+        public IFormFile? LogoFile { get; set; }
 
         public string? ReferralCode { get; set; }
     }

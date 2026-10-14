@@ -633,10 +633,12 @@ namespace GMK360.Web.Controllers
                 return View(model);
             }
 
+            bool isLocalOrDev = env.IsDevelopment() || HttpContext.Request.Host.Host == "localhost" || HttpContext.Request.Host.Host == "127.0.0.1";
+
             // VKN Modül 10 Doğrulaması (Beta / Demo toleransı)
             if (!ValidateVkn(model.TaxNumber))
             {
-                if (!env.IsDevelopment() && model.TaxNumber != "1111111111" && model.TaxNumber != "1234567890" && !model.TaxNumber.StartsWith("999") && !model.TaxNumber.StartsWith("111"))
+                if (!isLocalOrDev && model.TaxNumber != "1111111111" && model.TaxNumber != "1234567890" && !model.TaxNumber.StartsWith("999") && !model.TaxNumber.StartsWith("111"))
                 {
                     ModelState.AddModelError("TaxNumber", "Girdiğiniz Vergi Kimlik Numarası (VKN) geçersizdir.");
                     return View(model);
@@ -644,16 +646,24 @@ namespace GMK360.Web.Controllers
             }
 
             // NVI (KPSPublic) TCKN Doğrulaması (Yetkili Kişi İçin - Beta / Demo toleransı)
-            var isNviValid = await _nviValidationService.ValidateTcIdentityAsync(
-                model.TcIdentityNo, 
-                model.FirstName, 
-                model.LastName, 
-                model.BirthYear
-            );
+            bool isNviValid = false;
+            try
+            {
+                isNviValid = await _nviValidationService.ValidateTcIdentityAsync(
+                    model.TcIdentityNo, 
+                    model.FirstName, 
+                    model.LastName, 
+                    model.BirthYear
+                );
+            }
+            catch
+            {
+                isNviValid = false;
+            }
 
             if (!isNviValid)
             {
-                if (!env.IsDevelopment() && model.TcIdentityNo != "11111111111" && !model.TcIdentityNo.StartsWith("999") && !model.TcIdentityNo.StartsWith("111"))
+                if (!isLocalOrDev && model.TcIdentityNo != "11111111111" && !model.TcIdentityNo.StartsWith("999") && !model.TcIdentityNo.StartsWith("111"))
                 {
                     ModelState.AddModelError("TcIdentityNo", "NVI (Kimlik) doğrulaması başarısız oldu. Lütfen bilgilerinizi kontrol ediniz.");
                     return View(model);
