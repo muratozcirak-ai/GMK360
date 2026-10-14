@@ -201,7 +201,7 @@ namespace GMK360.Web.Controllers
             
             // Fetch images from DocumentArchive dynamically if they exist (in case user uploaded manually)
             var sahaGorseli = await _context.DocumentArchives
-                .Where(d => d.SourceModule == "Construction" && d.ProjectId == id && (d.Category.Contains("Saha") || d.Title.Contains("Mevcut")))
+                .Where(d => d.SourceModule == "Construction" && d.ProjectId == id && (d.Category.Contains("Saha") || d.Title.Contains("Mevcut") || d.Title.Contains("Arsa") || d.Title.Contains("Eski") || d.Title.Contains("Saha")))
                 .OrderByDescending(d => d.Id)
                 .FirstOrDefaultAsync();
             if (sahaGorseli != null) {
@@ -209,7 +209,7 @@ namespace GMK360.Web.Controllers
             }
             
             var projeGorseli = await _context.DocumentArchives
-                .Where(d => d.SourceModule == "Construction" && d.ProjectId == id && (d.Category.Contains("Proje") || (d.Category.Contains("Bina") && !d.Title.Contains("Mevcut"))))
+                .Where(d => d.SourceModule == "Construction" && d.ProjectId == id && (d.Category.Contains("Proje") || d.Title.Contains("Gelecek") || d.Title.Contains("Render") || (d.Category.Contains("Bina") && !d.Title.Contains("Mevcut") && !d.Title.Contains("Arsa") && !d.Title.Contains("Eski"))))
                 .OrderByDescending(d => d.Id)
                 .FirstOrDefaultAsync();
             if (projeGorseli != null) {
@@ -341,6 +341,11 @@ namespace GMK360.Web.Controllers
                     model.Longitude = draft.Longitude?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
 
                     ViewBag.CoverImageUrl = draft.CoverImageUrl;
+                    if (string.IsNullOrEmpty(ViewBag.CoverImageUrl)) {
+                        var coverDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModule == "Construction" && d.ProjectId == draft.Id && (d.Category.Contains("Proje") || d.Title.Contains("Gelecek") || d.Title.Contains("Render")));
+                        if (coverDoc != null) ViewBag.CoverImageUrl = coverDoc.DocumentUrl;
+                    }
+
                     if (draft.CityId.HasValue && draft.CityId.Value > 0) {
                         var dists = _context.Districts.Where(d => d.CityId == draft.CityId.Value).OrderBy(d => d.Name).ToList();
                         ViewBag.Districts = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(dists, "Id", "Name", draft.DistrictId);
@@ -353,11 +358,13 @@ namespace GMK360.Web.Controllers
                         var sts = _context.Streets.Where(s => s.NeighborhoodId == draft.NeighborhoodId.Value).OrderBy(s => s.Name).ToList();
                         ViewBag.Streets = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(sts, "Id", "Name", draft.StreetId);
                     }
-                    var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModule == "Construction" && d.ProjectId == draft.Id && (d.Category.Contains("Saha") || d.Title.Contains("Mevcut")));
+                    var currentStateDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModule == "Construction" && d.ProjectId == draft.Id && (d.Category.Contains("Saha") || d.Title.Contains("Mevcut") || d.Title.Contains("Arsa") || d.Title.Contains("Eski") || d.Title.Contains("Saha")));
                     if (currentStateDoc != null) {
                         ViewBag.CurrentStateImageUrl = currentStateDoc.DocumentUrl;
+                    } else if (!string.IsNullOrEmpty(draft.CurrentStateImageUrl)) {
+                        ViewBag.CurrentStateImageUrl = draft.CurrentStateImageUrl;
                     }
-                    var tapuDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModule == "Construction" && d.ProjectId == draft.Id && d.Category == "Resmi Evraklar");
+                    var tapuDoc = _context.DocumentArchives.FirstOrDefault(d => d.SourceModule == "Construction" && d.ProjectId == draft.Id && (d.Category == "Resmi Evraklar" || d.Title.Contains("Tapu")));
                     if (tapuDoc != null) {
                         ViewBag.TapuDocumentUrl = tapuDoc.DocumentUrl;
                     }
@@ -500,23 +507,21 @@ namespace GMK360.Web.Controllers
 
                 var agencyId = await GetUserAgencyIdAsync();
 
-                if (agencyId == null) return Json(new { success = false, message = "Yetkisiz eriÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â¼ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸im." });
+                if (agencyId == null) return Json(new { success = false, message = "Yetkisiz erişim." });
 
-
-
-                if (model.DraftProjectId <= 0) return Json(new { success = false, message = "Proje ID bulunamadÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±. LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼tfen ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶nce projeyi baÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸latÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±n." });
+                if (model.DraftProjectId <= 0) return Json(new { success = false, message = "Proje ID bulunamadı. Lütfen önce projeyi başlatın." });
                 var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == model.DraftProjectId);
-                if (project == null) return Json(new { success = false, message = "Proje bulunamadÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±." });
-                if (project.IsDataLocked) return Json(new { success = false, message = "Bu proje bÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼tÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§e kontrolÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ iÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§in kilitlenmiÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸tir, veriler deÃƒÆ’Ã¢â‚¬ÂÃƒâ€¦Ã‚Â¸iÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸tirilemez." });
+                if (project == null) return Json(new { success = false, message = "Proje bulunamadı." });
+                if (project.IsDataLocked) return Json(new { success = false, message = "Bu proje bütçe kontrolü için kilitlenmiştir, veriler değiştirilemez." });
 
-                // Update fields
-                project.Description = model.Description;
-                project.Address = model.Address;
-                project.StartDate = model.StartDate;
-                if (model.EndDate > DateTime.MinValue) project.EndDate = model.EndDate;
+                // Update fields safely - DB columns Address and Description do not allow nulls
+                project.Description = model.Description ?? "";
+                project.Address = !string.IsNullOrWhiteSpace(model.Address) ? model.Address.Trim() : (project.Address ?? "");
+                project.StartDate = model.StartDate.Year > 1900 ? model.StartDate : (project.StartDate.Year > 1900 ? project.StartDate : DateTime.Today);
+                if (model.EndDate > DateTime.MinValue && model.EndDate.Year > 1900) project.EndDate = model.EndDate;
                 // project.Status removed to prevent unwanted status changes.
-                project.ProjectType = model.ProjectType;
-                project.ProjectOriginId = model.ProjectOriginId > 0 ? model.ProjectOriginId : null;
+                if (!string.IsNullOrEmpty(model.ProjectType)) project.ProjectType = model.ProjectType;
+                project.ProjectOriginId = model.ProjectOriginId > 0 ? model.ProjectOriginId : (project.ProjectOriginId ?? 0);
                 project.IsNewDesignForExisting = model.IsNewDesignForExisting;
                 project.EskiKatSayisi = model.EskiKatSayisi;
                 project.EskiDaireSayisi = model.EskiDaireSayisi;
@@ -539,10 +544,9 @@ namespace GMK360.Web.Controllers
                         project.Longitude = lng;
                     }
                 }
-                
-                await _context.SaveChangesAsync();
 
-                string baseFolder = Path.Combine(_hostEnvironment.WebRootPath, "uploads", $"Agency_{agencyId.Value}", $"Project_{project.Id}");
+                string webRoot = _hostEnvironment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+                string baseFolder = Path.Combine(webRoot, "uploads", $"Agency_{agencyId.Value}", $"Project_{project.Id}");
                 string imagesFolder = Path.Combine(baseFolder, "images");
                 string docsFolder = Path.Combine(baseFolder, "documents");
                 Directory.CreateDirectory(imagesFolder);
@@ -552,20 +556,22 @@ namespace GMK360.Web.Controllers
                 string safeProjName = string.Join("_", project.Name.Split(Path.GetInvalidFileNameChars()));
                 safeProjName = safeProjName.Replace(" ", "_");
 
-                // --- 1. COVER IMAGE (GELECEGİ HALİ) ---
+                // --- 1. COVER IMAGE (3D RENDER / GELECEĞİ HALİ) ---
                 if (model.CoverImageFile != null && model.CoverImageFile.Length > 0)
                 {
-                    // Find and remove old archive and file if exists
-                    var oldArchive = await _context.DocumentArchives.FirstOrDefaultAsync(d => d.ProjectId == project.Id && d.Title == "Proje Görseli (Geleceği Hali)");
-                    if (oldArchive != null)
+                    var oldArchives = await _context.DocumentArchives
+                        .Where(d => d.ProjectId == project.Id && (d.Title.Contains("Gelecek") || d.Title.Contains("Render") || d.Title.Contains("Proje Görseli")))
+                        .ToListAsync();
+                    foreach (var oldArchive in oldArchives)
                     {
-                        var oldFilePath = Path.Combine(_hostEnvironment.WebRootPath, oldArchive.DocumentUrl.TrimStart('/'));
-                        if (System.IO.File.Exists(oldFilePath)) System.IO.File.Delete(oldFilePath);
+                        var oldFilePath = Path.Combine(webRoot, oldArchive.DocumentUrl.TrimStart('/'));
+                        if (System.IO.File.Exists(oldFilePath)) { try { System.IO.File.Delete(oldFilePath); } catch {} }
                         _context.DocumentArchives.Remove(oldArchive);
                     }
 
                     string extension = Path.GetExtension(model.CoverImageFile.FileName);
-                    string standardizedName = $"{safeProjName}_GelecekHali_1{extension}";
+                    if (string.IsNullOrEmpty(extension)) extension = ".jpg";
+                    string standardizedName = $"{safeProjName}_3D_Render_GelecekHali{extension}";
                     string filePath = Path.Combine(imagesFolder, standardizedName);
                     
                     using (var fileStream = new FileStream(filePath, FileMode.Create))
@@ -576,12 +582,13 @@ namespace GMK360.Web.Controllers
                     {
                         AgencyId = agencyId.Value,
                         ProjectId = project.Id,
-                        Title = "Proje Görseli (Geleceği Hali)",
+                        Title = "Proje Görseli (3D Render / Geleceği Hali)",
                         Category = "Bina Görselleri",
                         SourceModule = "Construction",
                         DocumentUrl = $"/uploads/Agency_{agencyId.Value}/Project_{project.Id}/images/{standardizedName}",
                         FileName = standardizedName,
                         FileExtension = extension,
+                        Year = DateTime.Now.Year,
                         UploadDate = DateTime.UtcNow,
                         Status = "Tamamlandı"
                     };
@@ -589,19 +596,28 @@ namespace GMK360.Web.Controllers
                     project.CoverImageUrl = archive.DocumentUrl;
                 }
 
-                // --- 2. CURRENT STATE IMAGE (MEVCUT DURUM / İLK HALİ) ---
+                // --- 2. CURRENT STATE IMAGE (BOŞ ARSA VEYA YIKILACAK ESKİ YAPI) ---
                 if (model.CurrentStateImageFile != null && model.CurrentStateImageFile.Length > 0)
                 {
-                    var oldArchive = await _context.DocumentArchives.FirstOrDefaultAsync(d => d.ProjectId == project.Id && d.Title == "Mevcut Durum Görseli (İlk Hali)");
-                    if (oldArchive != null)
+                    var oldArchives = await _context.DocumentArchives
+                        .Where(d => d.ProjectId == project.Id && (d.Title.Contains("Mevcut") || d.Title.Contains("Eski") || d.Title.Contains("Arsa") || d.Title.Contains("Saha")))
+                        .ToListAsync();
+                    foreach (var oldArchive in oldArchives)
                     {
-                        var oldFilePath = Path.Combine(_hostEnvironment.WebRootPath, oldArchive.DocumentUrl.TrimStart('/'));
-                        if (System.IO.File.Exists(oldFilePath)) System.IO.File.Delete(oldFilePath);
+                        var oldFilePath = Path.Combine(webRoot, oldArchive.DocumentUrl.TrimStart('/'));
+                        if (System.IO.File.Exists(oldFilePath)) { try { System.IO.File.Delete(oldFilePath); } catch {} }
                         _context.DocumentArchives.Remove(oldArchive);
                     }
 
                     string extension = Path.GetExtension(model.CurrentStateImageFile.FileName);
-                    string standardizedName = $"{safeProjName}_EskiHali_1{extension}";
+                    if (string.IsNullOrEmpty(extension)) extension = ".jpg";
+
+                    bool isKentselDonusum = project.ProjectOriginId == 1;
+                    string docTitle = isKentselDonusum ? "Yıkılacak Eski Yapı Görseli" : "Arsa / Saha Görseli (Boş Hali)";
+                    string standardizedName = isKentselDonusum 
+                        ? $"{safeProjName}_Yikilacak_Eski_Yapi{extension}" 
+                        : $"{safeProjName}_Bos_Arsa_Saha{extension}";
+
                     string filePath = Path.Combine(imagesFolder, standardizedName);
                     
                     using (var fileStream = new FileStream(filePath, FileMode.Create))
@@ -612,12 +628,13 @@ namespace GMK360.Web.Controllers
                     {
                         AgencyId = agencyId.Value,
                         ProjectId = project.Id,
-                        Title = "Mevcut Durum Görseli (İlk Hali)",
+                        Title = docTitle,
                         Category = "Bina Görselleri",
                         SourceModule = "Construction",
                         DocumentUrl = $"/uploads/Agency_{agencyId.Value}/Project_{project.Id}/images/{standardizedName}",
                         FileName = standardizedName,
                         FileExtension = extension,
+                        Year = DateTime.Now.Year,
                         UploadDate = DateTime.UtcNow,
                         Status = "Tamamlandı"
                     };
@@ -628,16 +645,19 @@ namespace GMK360.Web.Controllers
                 // --- 3. TAPU DOCUMENT (TAPU BELGESİ) ---
                 if (model.TapuDocumentFile != null && model.TapuDocumentFile.Length > 0)
                 {
-                    var oldArchive = await _context.DocumentArchives.FirstOrDefaultAsync(d => d.ProjectId == project.Id && d.Title == "Tapu Belgesi");
-                    if (oldArchive != null)
+                    var oldArchives = await _context.DocumentArchives
+                        .Where(d => d.ProjectId == project.Id && (d.Category == "Resmi Evraklar" || d.Title.Contains("Tapu")))
+                        .ToListAsync();
+                    foreach (var oldArchive in oldArchives)
                     {
-                        var oldFilePath = Path.Combine(_hostEnvironment.WebRootPath, oldArchive.DocumentUrl.TrimStart('/'));
-                        if (System.IO.File.Exists(oldFilePath)) System.IO.File.Delete(oldFilePath);
+                        var oldFilePath = Path.Combine(webRoot, oldArchive.DocumentUrl.TrimStart('/'));
+                        if (System.IO.File.Exists(oldFilePath)) { try { System.IO.File.Delete(oldFilePath); } catch {} }
                         _context.DocumentArchives.Remove(oldArchive);
                     }
 
                     string extension = Path.GetExtension(model.TapuDocumentFile.FileName);
-                    string standardizedName = $"{safeProjName}_TapuBelgesi{extension}";
+                    if (string.IsNullOrEmpty(extension)) extension = ".pdf";
+                    string standardizedName = $"{safeProjName}_Tapu_Belgesi{extension}";
                     string filePath = Path.Combine(docsFolder, standardizedName);
                     
                     using (var fileStream = new FileStream(filePath, FileMode.Create))
@@ -654,6 +674,7 @@ namespace GMK360.Web.Controllers
                         DocumentUrl = $"/uploads/Agency_{agencyId.Value}/Project_{project.Id}/documents/{standardizedName}",
                         FileName = standardizedName,
                         FileExtension = extension,
+                        Year = DateTime.Now.Year,
                         UploadDate = DateTime.UtcNow,
                         Status = "Tamamlandı"
                     };
