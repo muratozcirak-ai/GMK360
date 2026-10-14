@@ -718,10 +718,22 @@ namespace GMK360.Web.Controllers
                     CompanyName = model.CompanyName,
                     TaxNumber = model.TaxNumber,
                     Subdomain = model.Subdomain,
-                    ThemePrimaryColor = model.ThemePrimaryColor,
+                    ThemePrimaryColor = model.ThemePrimaryColor ?? "#0f172a",
                     ThemeSecondaryColor = "#ffffff",
-                    
-                    
+                    Address = !string.IsNullOrEmpty(model.TaxOffice) ? $"{model.TaxOffice} V.D." : "Merkez",
+                    WhatsAppNumber = model.PhoneNumber ?? "-",
+                    AuthCertificateNo = "MUAF",
+                    IsMinistryVerified = false,
+                    LogoUrl = "/uploads/agencies/default-logo.png",
+                    PackageLimit = 100,
+                    CustomDomain = "-",
+                    FontFamily = "Inter",
+                    BannerUrl = "-",
+                    FooterLogoUrl = "-",
+                    FaviconUrl = "-",
+                    ThemeAccentColor = "#ffffff",
+                    IsActive = true,
+                    CreatedAt = System.DateTime.UtcNow,
                     ContractStartDate = System.DateTime.UtcNow,
                     ContractEndDate = System.DateTime.UtcNow.AddYears(1)
                 };
@@ -745,7 +757,11 @@ namespace GMK360.Web.Controllers
                 var consultant = new AgencyConsultant
                 {
                     AgencyId = agency.Id,
-                    UserId = user.Id
+                    UserId = user.Id,
+                    IsActive = true,
+                    Role = AgencyRole.Owner,
+                    StartDate = System.DateTime.UtcNow,
+                    CreatedAt = System.DateTime.UtcNow
                 };
                 _context.AgencyConsultants.Add(consultant);
                 
