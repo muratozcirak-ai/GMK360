@@ -382,11 +382,19 @@
 
                         <!-- YENİ BİNA BÖLÜMÜ -->
                         <div id="newBlocksSection" class="mb-4">
-                            <h5 class="fw-bold text-primary mb-3"><i class="ph ph-crane me-2"></i> YENİ (YAPILACAK) YAPILAR</h5>
-                            <div class="row mb-4 align-items-end bg-primary bg-opacity-10 p-4 rounded-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="fw-bold text-primary mb-0"><i class="ph ph-crane me-2"></i> YENİ (İNŞA EDİLECEK) YAPILAR & BLOKLAR</h5>
+                                <span id="step2AutoSaveBadge" class="badge bg-success-subtle text-success border border-success-subtle d-none"><i class="ph ph-check-circle me-1"></i> Kaydedildi</span>
+                            </div>
+                            <div class="row mb-4 align-items-end bg-primary bg-opacity-10 p-4 rounded-4 border border-primary border-opacity-25">
                                 <div class="col-md-12">
-                                    <label class="form-label fw-bold text-primary">İnşa Edilecek Yeni Yapı Sayısı</label>
-                                    <input type="number" id="newBlockCount" class="form-control form-control-lg rounded-3 border-primary border-opacity-50" min="1" max="20" value="@(Model.TargetBlocks != null && Model.TargetBlocks.Any() ? Model.TargetBlocks.Count : 1)" oninput="generateNewBlocks()" />
+                                    <label class="form-label fw-bold text-primary fs-6 mb-1">
+                                        İnşa Edilecek Bağımsız Yapı (Temel / Hafriyat Kütlesi) Sayısı
+                                    </label>
+                                    <div class="text-muted small mb-2">
+                                        <i class="ph ph-info me-1 text-primary"></i> Ayrı temel ve hafriyat çukuru açılacak her kitle <strong>1 Yapı</strong>'dır. Bir yapının altında ortak temel/baza podyumu, üstünde ise 1 veya daha fazla bağımsız kule/blok yükselebilir.
+                                    </div>
+                                    <input type="number" id="newBlockCount" class="form-control form-control-lg rounded-3 border-primary border-opacity-50 fw-bold text-primary" min="1" max="20" value="@(Model.TargetBlocks != null && Model.TargetBlocks.Any() ? Model.TargetBlocks.Count : 1)" oninput="generateNewBlocks()" />
                                 </div>
                             </div>
                             <div id="newBlocksContainer">
@@ -395,111 +403,148 @@
                                     int i = 0;
                                     foreach (var b in Model.TargetBlocks)
                                     {
-                                        <div class="card border border-2 border-primary border-opacity-25 shadow-sm rounded-4 mb-3 block-item-new">
+                                        <div class="card border border-2 border-primary border-opacity-25 shadow-sm rounded-4 mb-4 block-item-new">
                                             <div class="card-body p-4">
-                                                <h5 class="fw-bold text-primary border-bottom pb-2 mb-3"><i class="ph ph-building me-2"></i> @(i+1). Yeni Yapı</h5>
+                                                <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                                                    <h5 class="fw-bold text-primary mb-0 block-card-title">
+                                                        <i class="ph ph-building me-2"></i> @(i+1). Yeni Yapı
+                                                    </h5>
+                                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle layout-badge">@(b.LayoutPattern ?? "Yapı Kütlesi")</span>
+                                                </div>
                                                 <div class="row g-3">
-                                                    <div class="col-md-12 col-lg-4">
-                                                        <label class="form-label small fw-bold">Yeni Yapı Adı</label>
-                                                        <input type="text" name="TargetBlocks[@i].BlockName" class="form-control fw-bold" value="@b.BlockName" />
-                                                    </div>
                                                     <div class="col-12 col-lg-4">
-                                                        <label class="form-label small fw-bold">Temel / Baza Durumu</label>
-                                                        <select name="TargetBlocks[@i].LayoutPattern" class="form-select mt-1" onchange="handleLayoutPatternChange(this)">
+                                                        <label class="form-label small fw-bold">Temel / Baza Durumu (Mimari Tarz)</label>
+                                                        <select name="TargetBlocks[@i].LayoutPattern" class="form-select mt-1 fw-semibold" onchange="handleLayoutPatternChange(this)">
                                                             <option value="" selected="@(string.IsNullOrEmpty(b.LayoutPattern))">Mimari Tarz (Seçiniz)</option>
                                                             <option value="Tekil Yapı" selected="@(b.LayoutPattern == "Tekil Yapı")">Tekil Yapı (Standart)</option>
+                                                            <option value="Ortak Baza" selected="@(b.LayoutPattern == "Ortak Baza")">Ortak Baza + Kuleler (Podyum & Rezidans)</option>
                                                             <option value="Bitişik Nizam" selected="@(b.LayoutPattern == "Bitişik Nizam")">Bitişik Nizam (Tevhit)</option>
-                                                            <option value="Ortak Baza" selected="@(b.LayoutPattern == "Ortak Baza")">Ortak Baza (Kule Altı)</option>
-                                                            <option value="Kule" selected="@(b.LayoutPattern == "Kule")">Kule (Baza Üstü)</option>
                                                         </select>
                                                     </div>
+                                                    <div class="col-md-12 col-lg-4">
+                                                        <label class="form-label small fw-bold block-name-label">@(b.LayoutPattern == "Ortak Baza" ? "Baza / Podyum Adı" : "Yeni Yapı Adı")</label>
+                                                        <input type="text" name="TargetBlocks[@i].BlockName" class="form-control fw-bold" value="@b.BlockName" placeholder="Örn: Ortak Baza veya A Blok" />
+                                                    </div>
                                                     <div class="col-12 col-lg-4">
-                                                        <label class="form-label small fw-bold">Taban (m²)</label>
+                                                        <label class="form-label small fw-bold base-area-label">Taban Oturumu / Temel Alanı (m²)</label>
                                                         <input type="number" name="TargetBlocks[@i].BaseArea" class="form-control" placeholder="Örn: 200" min="1" value="@b.BaseArea" />
                                                     </div>
                                                 </div>
                                                 
-                                                <div class="row g-3 mt-3 tech-details" style="display: none; padding-top: 15px; border-top: 1px dashed #ccc;">
-                                                    <div class="col-6 col-lg-3">
-                                                        <label class="form-label small fw-bold">Kat Sayısı</label>
-                                                        <input type="number" name="TargetBlocks[@i].TotalFloors" class="form-control" min="0" value="@b.TotalFloors" />
+                                                <div class="tech-details mt-4" style="display: @(string.IsNullOrEmpty(b.LayoutPattern) ? "none" : "block");">
+                                                    <div class="baza-section-badge p-2 mb-3 rounded-3 bg-primary bg-opacity-10 text-primary fw-bold small d-flex align-items-center">
+                                                        <i class="ph ph-storefront me-2 fs-5"></i>
+                                                        <span class="baza-badge-text">@(b.LayoutPattern == "Ortak Baza" ? "1. BÖLÜM: ORTAK BAZA & PODYUM DETAYLARI (Temel, Otopark & Ticari Katlar)" : "BLOK DETAYLARI (Kat, Daire ve Fonksiyon Dağılımı)")</span>
                                                     </div>
-                                                    <div class="col-6 col-lg-2">
-                                                        <label class="form-label small fw-bold">Daire</label>
-                                                        <input type="number" name="TargetBlocks[@i].TotalApartments" class="form-control" value="@b.TotalApartments"  />
-                                                    </div>
-                                                    <div class="col-6 col-lg-2">
-                                                        <label class="form-label small fw-bold">Dükkan</label>
-                                                        <input type="number" name="TargetBlocks[@i].TotalShops" class="form-control" value="@b.TotalShops"  />
-                                                    </div>
-                                                    <div class="col-6 col-lg-3">
-                                                        <label class="form-label small fw-bold">Bodrum Kat</label>
-                                                        <input type="number" name="TargetBlocks[@i].BasementFloors" class="form-control" value="@b.BasementFloors"  />
-                                                    </div>
-                                                    <div class="col-6 col-lg-1">
-                                                        <label class="form-label small fw-bold">Zemin Kat</label>
-                                                        <div class="form-check form-switch mt-1">
-                                                            <input class="form-check-input" type="checkbox" name="TargetBlocks[@i].HasGroundFloor" value="true" checked="@b.HasGroundFloor">
-<input type="hidden" name="TargetBlocks[@i].HasGroundFloor" value="false" />
+                                                    <div class="row g-3">
+                                                        <div class="col-6 col-lg-3">
+                                                            <label class="form-label small fw-bold total-floors-label">@(b.LayoutPattern == "Ortak Baza" ? "Baza Kat Sayısı (Ticari/AVM)" : "Kat Sayısı")</label>
+                                                            <input type="number" name="TargetBlocks[@i].TotalFloors" class="form-control" min="0" value="@b.TotalFloors" />
+                                                            <span class="text-muted very-small floors-hint d-block mt-1">@(b.LayoutPattern == "Ortak Baza" ? "Zemin + asma katlar" : "")</span>
                                                         </div>
-                                                    </div>
-                                                    <div class="col-6 col-lg-1">
-                                                        <label class="form-label small fw-bold">Çatı Katı</label>
-                                                        <div class="form-check form-switch mt-1">
-                                                            <input class="form-check-input" type="checkbox" name="TargetBlocks[@i].HasRoof" value="true" checked="@b.HasRoof">
-<input type="hidden" name="TargetBlocks[@i].HasRoof" value="false" />
+                                                        <div class="col-6 col-lg-2">
+                                                            <label class="form-label small fw-bold apartments-label">@(b.LayoutPattern == "Ortak Baza" ? "Daire (Varsa)" : "Daire")</label>
+                                                            <input type="number" name="TargetBlocks[@i].TotalApartments" class="form-control" value="@b.TotalApartments" />
+                                                        </div>
+                                                        <div class="col-6 col-lg-2">
+                                                            <label class="form-label small fw-bold shops-label">@(b.LayoutPattern == "Ortak Baza" ? "Dükkan / Ticari (Adet)" : "Dükkan")</label>
+                                                            <input type="number" name="TargetBlocks[@i].TotalShops" class="form-control" value="@b.TotalShops" />
+                                                        </div>
+                                                        <div class="col-6 col-lg-3">
+                                                            <label class="form-label small fw-bold basement-label">@(b.LayoutPattern == "Ortak Baza" ? "Bodrum Kat (Otopark/Sığınak)" : "Bodrum Kat")</label>
+                                                            <input type="number" name="TargetBlocks[@i].BasementFloors" class="form-control" value="@b.BasementFloors" />
+                                                            <span class="text-muted very-small basement-hint d-block mt-1">@(b.LayoutPattern == "Ortak Baza" ? "Otopark, sığınak" : "")</span>
+                                                        </div>
+                                                        <div class="col-6 col-lg-1">
+                                                            <label class="form-label small fw-bold ground-label">Zemin Kat</label>
+                                                            <div class="form-check form-switch mt-1">
+                                                                <input class="form-check-input" type="checkbox" name="TargetBlocks[@i].HasGroundFloor" value="true" checked="@b.HasGroundFloor">
+                                                                <input type="hidden" name="TargetBlocks[@i].HasGroundFloor" value="false" />
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-6 col-lg-1">
+                                                            <label class="form-label small fw-bold roof-label">@(b.LayoutPattern == "Ortak Baza" ? "Podyum Terası" : "Çatı Katı")</label>
+                                                            <div class="form-check form-switch mt-1">
+                                                                <input class="form-check-input" type="checkbox" name="TargetBlocks[@i].HasRoof" value="true" checked="@b.HasRoof">
+                                                                <input type="hidden" name="TargetBlocks[@i].HasRoof" value="false" />
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                                 
-                                                <div class="sub-blocks-container mt-4 pt-3 border-top border-primary border-opacity-25" style="display: none;">
-                                                    <div class="row">
-                                                        <div class="col-12 col-lg-4">
-                                                            <label class="form-label small fw-bold text-primary sub-block-label">Kaç Kule / Blok Var?</label>
-                                                            <input type="number" class="form-control form-control-sm" min="0" max="10" value="@(b.SubBlocks != null ? b.SubBlocks.Count : 0)" oninput="generateSubBlocks(this, 'TargetBlocks', @i)" />
+                                                <div class="sub-blocks-container mt-4 pt-3 border-top border-primary border-opacity-25" style="display: @(b.LayoutPattern == "Ortak Baza" || b.LayoutPattern == "Bitişik Nizam" ? "block" : "none");">
+                                                    <div class="sub-blocks-section-badge p-2 mb-3 rounded-3 bg-success bg-opacity-10 text-success fw-bold small d-flex align-items-center">
+                                                        <i class="ph ph-buildings me-2 fs-5"></i>
+                                                        <span class="sub-badge-text">@(b.LayoutPattern == "Ortak Baza" ? "2. BÖLÜM: BAZA ÜZERİNDE YÜKSELEN KULELER (Rezidans Blokları)" : "BİTİŞİK NİZAM BLOKLAR")</span>
+                                                    </div>
+                                                    <div class="row mb-3 align-items-center">
+                                                        <div class="col-12 col-md-6 col-lg-4">
+                                                            <label class="form-label small fw-bold text-success sub-block-label">@(b.LayoutPattern == "Ortak Baza" ? "Bu Bazanın Üstünde Kaç Kule Yükseliyor?" : "Kaç Blok Var?")</label>
+                                                            <input type="number" class="form-control form-control-sm rounded-3 border-success border-opacity-50 fw-bold" min="0" max="10" value="@(b.SubBlocks != null ? b.SubBlocks.Count : 0)" oninput="generateSubBlocks(this, 'TargetBlocks', @i)" />
                                                         </div>
+                                                        <div class="col-12 col-md-6 col-lg-8">
+                                                            <div class="text-muted small">
+                                                                <i class="ph ph-lightbulb text-warning me-1"></i> Kulelerin bodrum ve zemin katları Ortak Baza'ya entegredir. Kulelerde doğrudan normal konut katlarını tanımlayabilirsiniz.
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                     
                                                     <div class="sub-blocks-list">
                                                         @if (b.SubBlocks != null && b.SubBlocks.Any()) {
                                                             for (int j = 0; j < b.SubBlocks.Count; j++) {
                                                                 var sb = b.SubBlocks[j];
                                                                 string labelName = (b.LayoutPattern != null && b.LayoutPattern.Contains("Ortak Baza")) ? "Kule" : "Blok";
-                                                                <div class="card border border-secondary border-opacity-25 shadow-sm rounded-4 mt-3 bg-light">
+                                                                <div class="card border border-success border-opacity-25 shadow-sm rounded-4 mt-3 bg-white">
                                                                     <div class="card-body p-3">
-                                                                        <h6 class="fw-bold text-secondary mb-3"><i class="ph ph-buildings me-2"></i> @(j+1). @labelName</h6>
-                                                                        <div class="row g-2">
+                                                                        <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                                                                            <h6 class="fw-bold text-success mb-0">
+                                                                                <i class="ph ph-buildings me-2"></i> @(j+1). @labelName (@sb.BlockName)
+                                                                            </h6>
+                                                                            <span class="badge bg-success-subtle text-success border border-success-subtle">Kule / Blok</span>
+                                                                        </div>
+                                                                        <div class="row g-2 align-items-start">
                                                                             <div class="col-6 col-lg-3">
-                                                                                <label class="form-label small fw-bold">Adı</label>
-                                                                                <input type="text" name="TargetBlocks[@i].SubBlocks[@j].BlockName" class="form-control form-control-sm" value="@sb.BlockName" />
+                                                                                <label class="form-label small fw-bold">Kule / Blok Adı</label>
+                                                                                <input type="text" name="TargetBlocks[@i].SubBlocks[@j].BlockName" class="form-control form-control-sm fw-bold" value="@sb.BlockName" placeholder="Örn: A Blok" />
                                                                             </div>
                                                                             <div class="col-6 col-lg-2">
                                                                                 <label class="form-label small fw-bold">Kat Sayısı</label>
-                                                                                <input type="number" name="TargetBlocks[@i].SubBlocks[@j].TotalFloors" class="form-control form-control-sm" min="0" value="@sb.TotalFloors" />
+                                                                                <input type="number" name="TargetBlocks[@i].SubBlocks[@j].TotalFloors" class="form-control form-control-sm" min="0" value="@sb.TotalFloors" placeholder="Örn: 16" />
+                                                                                <span class="text-muted very-small d-block mt-1">Normal kat</span>
                                                                             </div>
                                                                             <div class="col-6 col-lg-2">
-                                                                                <label class="form-label small fw-bold">Daire</label>
-                                                                                <input type="number" name="TargetBlocks[@i].SubBlocks[@j].TotalApartments" class="form-control form-control-sm" value="@sb.TotalApartments" />
+                                                                                <label class="form-label small fw-bold">Daire (Konut)</label>
+                                                                                <input type="number" name="TargetBlocks[@i].SubBlocks[@j].TotalApartments" class="form-control form-control-sm" value="@sb.TotalApartments" placeholder="Örn: 64" />
+                                                                                <span class="text-muted very-small d-block mt-1">Toplam daire</span>
                                                                             </div>
                                                                             <div class="col-6 col-lg-2">
                                                                                 <label class="form-label small fw-bold">Dükkan</label>
-                                                                                <input type="number" name="TargetBlocks[@i].SubBlocks[@j].TotalShops" class="form-control form-control-sm" value="@sb.TotalShops" />
+                                                                                <input type="number" name="TargetBlocks[@i].SubBlocks[@j].TotalShops" class="form-control form-control-sm" value="@sb.TotalShops" placeholder="0" />
+                                                                                <span class="text-muted very-small d-block mt-1">Bazadaysa 0</span>
                                                                             </div>
                                                                             <div class="col-6 col-lg-3">
                                                                                 <label class="form-label small fw-bold">Bodrum Kat</label>
-                                                                                <input type="number" name="TargetBlocks[@i].SubBlocks[@j].BasementFloors" class="form-control form-control-sm" value="@sb.BasementFloors" />
+                                                                                <input type="number" name="TargetBlocks[@i].SubBlocks[@j].BasementFloors" class="form-control form-control-sm" value="@sb.BasementFloors" placeholder="0" />
+                                                                                <span class="text-muted very-small d-block mt-1">Ortak bazadadır</span>
                                                                             </div>
-                                                                            <div class="col-6 col-lg-2 mt-3">
-                                                                                <label class="form-label small fw-bold">Zemin Kat</label>
+                                                                            <div class="col-6 col-lg-3 mt-2">
+                                                                                <label class="form-label small fw-bold d-block">Zemin Kat</label>
                                                                                 <div class="form-check form-switch">
                                                                                     <input class="form-check-input" type="checkbox" name="TargetBlocks[@i].SubBlocks[@j].HasGroundFloor" value="true" checked="@sb.HasGroundFloor">
-<input type="hidden" name="TargetBlocks[@i].SubBlocks[@j].HasGroundFloor" value="false" />
+                                                                                    <input type="hidden" name="TargetBlocks[@i].SubBlocks[@j].HasGroundFloor" value="false" />
                                                                                 </div>
+                                                                                <span class="text-muted very-small">Baza üstü ise kapalı</span>
                                                                             </div>
-                                                                            <div class="col-6 col-lg-2 mt-3">
-                                                                                <label class="form-label small fw-bold">Çatı Katı</label>
-                                                                                <div class="form-check form-switch">
-                                                                                    <input class="form-check-input" type="checkbox" name="TargetBlocks[@i].SubBlocks[@j].HasRoof" value="true" checked="@sb.HasRoof">
-<input type="hidden" name="TargetBlocks[@i].SubBlocks[@j].HasRoof" value="false" />
+                                                                            <div class="col-6 col-lg-4 mt-2">
+                                                                                <label class="form-label small fw-bold d-block">Çatı Katı / Çatı Tipi</label>
+                                                                                <div class="d-flex align-items-center gap-2">
+                                                                                    <div class="form-check form-switch mb-0">
+                                                                                        <input class="form-check-input" type="checkbox" name="TargetBlocks[@i].SubBlocks[@j].HasRoof" value="true" checked="@sb.HasRoof" onchange="toggleRoofHint(this)">
+                                                                                        <input type="hidden" name="TargetBlocks[@i].SubBlocks[@j].HasRoof" value="false" />
+                                                                                    </div>
+                                                                                    <span class="small roof-status-text fw-medium @(sb.HasRoof ? "text-success" : "text-muted")">
+                                                                                        @(sb.HasRoof ? "Çatı Katı / Dubleks Var" : "Düz Tabliye (Çatı Yok)")
+                                                                                    </span>
                                                                                 </div>
                                                                             </div>
                                                                         </div>
@@ -508,7 +553,6 @@
                                                             }
                                                         }
                                                     </div>
-                                                </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -970,130 +1014,209 @@ window.onerror = function(message, source, lineno, colno, error) {
         }
     }
 
-    function handleLayoutPatternChange(selectElem, skipSave) {
-            var val = selectElem.value;
-            var container = selectElem.closest('.card-body'); 
-            var cardHeader = container.closest('.card').querySelector('.card-header h5, .card-body > h5');
-            var techDetails = container.querySelector('.tech-details');
-            var subBlocksContainer = container.querySelector('.sub-blocks-container');
-            
-            var headerText = cardHeader ? cardHeader.innerText : "";
-            var numberPrefixMatch = headerText.match(/^\d+\./);
-            var numberPrefix = numberPrefixMatch ? numberPrefixMatch[0] : "";
-            var isOld = container.closest('.block-item-old') !== null;
-            var defaultBaseName = isOld ? "Eski Yapı" : "Yeni Yapı";
-
-            function setTechDetailsVisible(isVisible) {
-                if(techDetails) {
-                    techDetails.style.display = isVisible ? 'flex' : 'none';
-                    var inputs = techDetails.querySelectorAll('input');
-                    inputs.forEach(inp => {
-                        inp.removeAttribute('required');
-                    });
-                }
-            }
-
-            if (val.includes('Tekil') || val.includes('Bağımsız')) {
-                setTechDetailsVisible(true);
-                if(cardHeader) cardHeader.innerHTML = '<i class="ph ph-building me-2"></i> ' + numberPrefix + ' ' + defaultBaseName + ' <span class="badge bg-secondary ms-2">Tekil Yapı</span>';
-                if(subBlocksContainer) subBlocksContainer.style.display = 'none';
-            } else if (val.includes('Biti')) {
-                setTechDetailsVisible(false);
-                if(cardHeader) cardHeader.innerHTML = '<i class="ph ph-buildings me-2"></i> ' + numberPrefix + ' Bitişik Nizam Tabanı';
-                if(subBlocksContainer) {
-                    subBlocksContainer.style.display = 'block';
-                    var label = subBlocksContainer.querySelector('.sub-block-label');
-                    if(label) label.innerText = 'Kaç Blok Var?';
-                }
-            } else if (val.includes('Ortak Baza')) {
-                setTechDetailsVisible(true);
-                if(cardHeader) cardHeader.innerHTML = '<i class="ph ph-intersect me-2"></i> ' + numberPrefix + ' Ortak Baza';
-                if(subBlocksContainer) {
-                    subBlocksContainer.style.display = 'block';
-                    var label = subBlocksContainer.querySelector('.sub-block-label');
-                    if(label) label.innerText = 'Kaç Kule Var?';
-                }
+    function toggleRoofHint(chk) {
+        var textElem = chk.closest('div.d-flex').querySelector('.roof-status-text');
+        if (textElem) {
+            if (chk.checked) {
+                textElem.className = 'small roof-status-text fw-medium text-success';
+                textElem.innerText = 'Çatı Katı / Dubleks Var';
             } else {
-                setTechDetailsVisible(false);
-                if(cardHeader) cardHeader.innerHTML = '<i class="ph ph-building me-2"></i> ' + numberPrefix + ' ' + defaultBaseName;
-                if(subBlocksContainer) subBlocksContainer.style.display = 'none';
+                textElem.className = 'small roof-status-text fw-medium text-muted';
+                textElem.innerText = 'Düz Tabliye (Çatı Yok)';
             }
-            
-            var inputElem = subBlocksContainer ? subBlocksContainer.querySelector('input[type="number"]') : null;
-            if (!skipSave && inputElem && parseInt(inputElem.value) > 0) {
-                var prefix = isOld ? 'ExistingBlocks' : 'TargetBlocks';
-                var nameAttr = selectElem.getAttribute('name'); 
-                var parentIndexMatch = nameAttr.match(/\[(\d+)\]/);
-                var parentIndex = parentIndexMatch ? parentIndexMatch[1] : 0;
-                generateSubBlocks(inputElem, prefix, parentIndex);
-            }
+        }
+        if (typeof autoSaveStep2 === 'function') autoSaveStep2();
+    }
 
-            if (!skipSave && typeof autoSaveStep2 === 'function') autoSaveStep2();
+    function handleLayoutPatternChange(selectElem, skipSave) {
+        var val = selectElem.value;
+        var container = selectElem.closest('.card-body'); 
+        var card = container.closest('.card');
+        var cardHeader = card.querySelector('.card-header h5, .card-body > h5, .block-card-title');
+        var layoutBadge = card.querySelector('.layout-badge');
+        var techDetails = container.querySelector('.tech-details');
+        var subBlocksContainer = container.querySelector('.sub-blocks-container');
+        var blockNameInput = container.querySelector('input[name$=".BlockName"]');
+        
+        var headerText = cardHeader ? cardHeader.innerText : "";
+        var numberPrefixMatch = headerText.match(/^\d+\./);
+        var numberPrefix = numberPrefixMatch ? numberPrefixMatch[0] : "";
+        var isOld = container.closest('.block-item-old') !== null;
+        var defaultBaseName = isOld ? "Eski Yapı" : "Yeni Yapı";
+
+        function setTechDetailsVisible(isVisible) {
+            if(techDetails) {
+                techDetails.style.display = isVisible ? 'block' : 'none';
+                var inputs = techDetails.querySelectorAll('input');
+                inputs.forEach(inp => {
+                    inp.removeAttribute('required');
+                });
+            }
         }
 
-        function generateSubBlocks(inputElem, prefix, parentIndex) {
-            const count = parseInt(inputElem.value) || 0;
-            const container = inputElem.closest('.sub-blocks-container').querySelector('.sub-blocks-list');
-            container.innerHTML = ''; 
-            const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        var bazaBadgeText = container.querySelector('.baza-badge-text');
+        var totalFloorsLabel = container.querySelector('.total-floors-label');
+        var floorsHint = container.querySelector('.floors-hint');
+        var apartmentsLabel = container.querySelector('.apartments-label');
+        var shopsLabel = container.querySelector('.shops-label');
+        var basementLabel = container.querySelector('.basement-label');
+        var basementHint = container.querySelector('.basement-hint');
+        var groundLabel = container.querySelector('.ground-label');
+        var roofLabel = container.querySelector('.roof-label');
+        var subBadge = container.querySelector('.sub-badge-text');
+        var subBlockLabel = container.querySelector('.sub-block-label');
+
+        if (val.includes('Tekil') || val.includes('Standart')) {
+            setTechDetailsVisible(true);
+            if(cardHeader) cardHeader.innerHTML = '<i class="ph ph-building me-2"></i> ' + numberPrefix + ' ' + defaultBaseName + ' <span class="badge bg-secondary ms-2">Tekil Yapı</span>';
+            if(layoutBadge) { layoutBadge.className = 'badge bg-secondary-subtle text-secondary border border-secondary-subtle layout-badge'; layoutBadge.innerText = 'Tekil Yapı'; }
+            if(bazaBadgeText) bazaBadgeText.innerHTML = 'BLOK DETAYLARI (Kat, Daire ve Fonksiyon Dağılımı)';
+            if(totalFloorsLabel) totalFloorsLabel.innerText = 'Toplam Kat Sayısı';
+            if(floorsHint) floorsHint.innerText = 'Normal kat adedi';
+            if(apartmentsLabel) apartmentsLabel.innerText = 'Daire Sayısı';
+            if(shopsLabel) shopsLabel.innerText = 'Dükkan (Varsa)';
+            if(basementLabel) basementLabel.innerText = 'Bodrum Kat';
+            if(basementHint) basementHint.innerText = '';
+            if(groundLabel) groundLabel.innerText = 'Zemin Kat';
+            if(roofLabel) roofLabel.innerText = 'Çatı Katı';
+            if(blockNameInput && (blockNameInput.value === 'Ortak Baza' || blockNameInput.value === '')) {
+                blockNameInput.value = isOld ? "Eski Bina" : (numberPrefix ? numberPrefix.replace('.', '') + ". Blok" : "A Blok");
+            }
+            if(subBlocksContainer) subBlocksContainer.style.display = 'none';
+        } else if (val.includes('Ortak Baza')) {
+            setTechDetailsVisible(true);
+            if(cardHeader) cardHeader.innerHTML = '<i class="ph ph-intersect me-2 text-primary"></i> ' + numberPrefix + ' Ortak Baza & Podyum (Temel & Ticari Kitle)';
+            if(layoutBadge) { layoutBadge.className = 'badge bg-primary-subtle text-primary border border-primary-subtle layout-badge'; layoutBadge.innerText = 'Ortak Baza & Kuleler'; }
+            if(bazaBadgeText) bazaBadgeText.innerHTML = '1. BÖLÜM: ORTAK BAZA & PODYUM DETAYLARI (Temel, Otopark & Ticari Katlar)';
+            if(totalFloorsLabel) totalFloorsLabel.innerText = 'Baza Kat Sayısı (Ticari/AVM)';
+            if(floorsHint) floorsHint.innerText = 'Zemin + asma katlar';
+            if(apartmentsLabel) apartmentsLabel.innerText = 'Daire (Varsa)';
+            if(shopsLabel) shopsLabel.innerText = 'Dükkan / Ticari (Adet)';
+            if(basementLabel) basementLabel.innerText = 'Bodrum Kat (Otopark/Sığınak)';
+            if(basementHint) basementHint.innerText = 'Ortak otopark, sığınak';
+            if(groundLabel) groundLabel.innerText = 'Zemin Kat';
+            if(roofLabel) roofLabel.innerText = 'Podyum Terası / Peyzaj';
+            if(blockNameInput && (blockNameInput.value.includes('Blok') || blockNameInput.value === '' || blockNameInput.value === 'Tek Blok')) {
+                blockNameInput.value = isOld ? "Eski Baza" : "Ortak Baza";
+            }
+            if(subBlocksContainer) {
+                subBlocksContainer.style.display = 'block';
+                if(subBadge) subBadge.innerHTML = '2. BÖLÜM: BAZA ÜZERİNDE YÜKSELEN KULELER (Rezidans Blokları)';
+                if(subBlockLabel) subBlockLabel.innerText = 'Bu Bazanın Üstünde Kaç Kule Yükseliyor?';
+            }
+        } else if (val.includes('Biti')) {
+            setTechDetailsVisible(false);
+            if(cardHeader) cardHeader.innerHTML = '<i class="ph ph-buildings me-2"></i> ' + numberPrefix + ' Bitişik Nizam Tabanı';
+            if(layoutBadge) { layoutBadge.className = 'badge bg-info-subtle text-info border border-info-subtle layout-badge'; layoutBadge.innerText = 'Bitişik Nizam'; }
+            if(blockNameInput && (blockNameInput.value === 'Ortak Baza' || blockNameInput.value === '')) {
+                blockNameInput.value = isOld ? "Eski Bitişik Yapı" : "Bitişik Bloklar";
+            }
+            if(subBlocksContainer) {
+                subBlocksContainer.style.display = 'block';
+                if(subBadge) subBadge.innerHTML = 'BİTİŞİK NİZAM BLOKLAR';
+                if(subBlockLabel) subBlockLabel.innerText = 'Bu Temelde Kaç Bitişik Blok Var?';
+            }
+        } else {
+            setTechDetailsVisible(false);
+            if(cardHeader) cardHeader.innerHTML = '<i class="ph ph-building me-2"></i> ' + numberPrefix + ' ' + defaultBaseName;
+            if(subBlocksContainer) subBlocksContainer.style.display = 'none';
+        }
+        
+        var inputElem = subBlocksContainer ? subBlocksContainer.querySelector('input[type="number"]') : null;
+        if (val.includes('Ortak Baza') || val.includes('Biti')) {
+            if (inputElem && (!inputElem.value || parseInt(inputElem.value) <= 0)) {
+                inputElem.value = 2;
+            }
+        }
+        if (!skipSave && inputElem && parseInt(inputElem.value) > 0) {
+            var prefix = isOld ? 'ExistingBlocks' : 'TargetBlocks';
+            var nameAttr = selectElem.getAttribute('name'); 
+            var parentIndexMatch = nameAttr.match(/\[(\d+)\]/);
+            var parentIndex = parentIndexMatch ? parentIndexMatch[1] : 0;
+            generateSubBlocks(inputElem, prefix, parentIndex);
+        }
+
+        if (!skipSave && typeof autoSaveStep2 === 'function') autoSaveStep2();
+    }
+
+    function generateSubBlocks(inputElem, prefix, parentIndex) {
+        const count = parseInt(inputElem.value) || 0;
+        const container = inputElem.closest('.sub-blocks-container').querySelector('.sub-blocks-list');
+        container.innerHTML = ''; 
+        const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        
+        const layoutPattern = inputElem.closest('.card-body').querySelector('select[name$=".LayoutPattern"]').value;
+        const isKule = layoutPattern.includes('Ortak Baza');
+        const labelName = isKule ? 'Kule' : 'Blok';
+        
+        for (let j = 0; j < count; j++) {
+            const defaultName = letters[j] + " Blok";
+            const namePrefix = prefix + "[" + parentIndex + "].SubBlocks[" + j + "]";
             
-            const layoutPattern = inputElem.closest('.card-body').querySelector('select[name$=".LayoutPattern"]').value;
-            const isKule = layoutPattern.includes('Ortak Baza');
-            const labelName = isKule ? 'Kule' : 'Blok';
-            
-            for (let j = 0; j < count; j++) {
-                const defaultName = letters[j] + " " + labelName;
-                const namePrefix = prefix + "[" + parentIndex + "].SubBlocks[" + j + "]";
-                
-                const html = `
-                <div class="card border border-secondary border-opacity-25 shadow-sm rounded-4 mt-3 bg-light">
-                    <div class="card-body p-3">
-                        <h6 class="fw-bold text-secondary mb-3"><i class="ph ph-buildings me-2"></i> ${j+1}. ${labelName}</h6>
-                        <div class="row g-2">
-                            <div class="col-6 col-lg-3">
-                                <label class="form-label small fw-bold">Adı</label>
-                                <input type="text" name="${namePrefix}.BlockName" class="form-control form-control-sm" value="${defaultName}" />
+            const html = `
+            <div class="card border border-success border-opacity-25 shadow-sm rounded-4 mt-3 bg-white">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                        <h6 class="fw-bold text-success mb-0">
+                            <i class="ph ph-buildings me-2"></i> ${j+1}. ${labelName} (${defaultName})
+                        </h6>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">Kule / Blok</span>
+                    </div>
+                    <div class="row g-2 align-items-start">
+                        <div class="col-6 col-lg-3">
+                            <label class="form-label small fw-bold">Kule / Blok Adı</label>
+                            <input type="text" name="${namePrefix}.BlockName" class="form-control form-control-sm fw-bold" value="${defaultName}" placeholder="Örn: A Blok" />
+                        </div>
+                        <div class="col-6 col-lg-2">
+                            <label class="form-label small fw-bold">Kat Sayısı</label>
+                            <input type="number" name="${namePrefix}.TotalFloors" class="form-control form-control-sm" min="0" placeholder="Örn: 16" />
+                            <span class="text-muted very-small d-block mt-1">Normal kat</span>
+                        </div>
+                        <div class="col-6 col-lg-2">
+                            <label class="form-label small fw-bold">Daire (Konut)</label>
+                            <input type="number" name="${namePrefix}.TotalApartments" class="form-control form-control-sm" value="0" placeholder="Örn: 64" />
+                            <span class="text-muted very-small d-block mt-1">Toplam daire</span>
+                        </div>
+                        <div class="col-6 col-lg-2">
+                            <label class="form-label small fw-bold">Dükkan</label>
+                            <input type="number" name="${namePrefix}.TotalShops" class="form-control form-control-sm" value="0" />
+                            <span class="text-muted very-small d-block mt-1">${isKule ? 'Bazadaysa 0' : 'Ticari adet'}</span>
+                        </div>
+                        <div class="col-6 col-lg-3">
+                            <label class="form-label small fw-bold">Bodrum Kat</label>
+                            <input type="number" name="${namePrefix}.BasementFloors" class="form-control form-control-sm" value="0" />
+                            <span class="text-muted very-small d-block mt-1">${isKule ? 'Ortak bazadadır' : 'Bodrum adedi'}</span>
+                        </div>
+                        <div class="col-6 col-lg-3 mt-2">
+                            <label class="form-label small fw-bold d-block">Zemin Kat</label>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="${namePrefix}.HasGroundFloor" value="true" ${isKule ? '' : 'checked'}>
+                                <input type="hidden" name="${namePrefix}.HasGroundFloor" value="false" />
                             </div>
-                            <div class="col-6 col-lg-2">
-                                <label class="form-label small fw-bold">Kat Sayısı</label>
-                                <input type="number" name="${namePrefix}.TotalFloors" class="form-control form-control-sm" min="0" />
-                            </div>
-                            <div class="col-6 col-lg-2">
-                                <label class="form-label small fw-bold">Daire</label>
-                                <input type="number" name="${namePrefix}.TotalApartments" class="form-control form-control-sm" value="0"  />
-                            </div>
-                            <div class="col-6 col-lg-2">
-                                <label class="form-label small fw-bold">Dükkan</label>
-                                <input type="number" name="${namePrefix}.TotalShops" class="form-control form-control-sm" value="0"  />
-                            </div>
-                            <div class="col-6 col-lg-3">
-                                <label class="form-label small fw-bold">Bodrum Kat</label>
-                                <input type="number" name="${namePrefix}.BasementFloors" class="form-control form-control-sm" value="0"  />
-                            </div>
-                            <div class="col-6 col-lg-2 mt-3">
-                                <label class="form-label small fw-bold">Zemin Kat</label>
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" name="${namePrefix}.HasGroundFloor" value="true" checked>
-<input type="hidden" name="${namePrefix}.HasGroundFloor" value="false" />
+                            <span class="text-muted very-small">${isKule ? 'Baza üstü ise kapalı' : 'Zemin giriş'}</span>
+                        </div>
+                        <div class="col-6 col-lg-4 mt-2">
+                            <label class="form-label small fw-bold d-block">Çatı Katı / Çatı Tipi</label>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input" type="checkbox" name="${namePrefix}.HasRoof" value="true" checked onchange="toggleRoofHint(this)">
+                                    <input type="hidden" name="${namePrefix}.HasRoof" value="false" />
                                 </div>
-                            </div>
-                            <div class="col-6 col-lg-2 mt-3">
-                                <label class="form-label small fw-bold">Çatı Katı</label>
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" name="${namePrefix}.HasRoof" value="true" checked>
-<input type="hidden" name="${namePrefix}.HasRoof" value="false" />
-                                </div>
+                                <span class="small roof-status-text fw-medium text-success">
+                                    Çatı Katı / Dubleks Var
+                                </span>
                             </div>
                         </div>
                     </div>
                 </div>
-                `;
-                container.insertAdjacentHTML('beforeend', html);
-            }
-            if (typeof autoSaveStep2 === 'function') autoSaveStep2();
+            </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
         }
+        if (typeof autoSaveStep2 === 'function') autoSaveStep2();
+    }
 
-        function generateNewBlocks() {
+    function generateNewBlocks() {
         const count = parseInt(document.getElementById('newBlockCount').value) || 0;
         const container = document.getElementById('newBlocksContainer');
         const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -1107,74 +1230,95 @@ window.onerror = function(message, source, lineno, colno, error) {
             for (let i = currentCount; i < count; i++) {
                 const defaultName = count === 1 ? "Tek Blok" : letters[i] + " Blok";
                 const html = `
-                    <div class="card border border-2 border-primary border-opacity-25 shadow-sm rounded-4 mb-3 block-item-new">
+                    <div class="card border border-2 border-primary border-opacity-25 shadow-sm rounded-4 mb-4 block-item-new">
                         <div class="card-body p-4">
-                            <h5 class="fw-bold text-primary border-bottom pb-2 mb-3"><i class="ph ph-building me-2"></i> ${i+1}. Yeni Yapı</h5>
-                              <div class="row g-3">
-                                  <div class="col-md-12 col-lg-4">
-                                      <label class="form-label small fw-bold">Yeni Yapı Adı</label>
-                                      <input type="text" name="TargetBlocks[${i}].BlockName" class="form-control fw-bold" value="${defaultName}" />
-                                  </div>
-                                  <div class="col-12 col-lg-4">
-                                      <label class="form-label small fw-bold">Temel / Baza Durumu</label>
-                                      <select name="TargetBlocks[${i}].LayoutPattern" class="form-select mt-1" onchange="handleLayoutPatternChange(this)">
-                                          <option value="" selected>Mimari Tarz (Seçiniz)</option>
-                                          <option value="Tekil Yapı">Tekil Yapı (Standart)</option>
-                                          <option value="Bitişik Nizam">Bitişik Nizam (Tevhit)</option>
-                                          <option value="Ortak Baza">Ortak Baza (Kule Altı)</option>
-                                          <option value="Kule">Kule (Baza Üstü)</option>
-                                      </select>
-                                  </div>
-                                  <div class="col-12 col-lg-4">
-                                      <label class="form-label small fw-bold">Taban (m²)</label>
-                                      <input type="number" name="TargetBlocks[${i}].BaseArea" class="form-control" placeholder="Örn: 200" min="0" />
-                                  </div>
-                              </div>
-                              
-                              <div class="row g-3 mt-3 tech-details" style="display: none; padding-top: 15px; border-top: 1px dashed #ccc;">
-                                  <div class="col-6 col-lg-3">
-                                      <label class="form-label small fw-bold">Kat Sayısı</label>
-                                      <input type="number" name="TargetBlocks[${i}].TotalFloors" class="form-control" min="0" />
-                                  </div>
-                                  <div class="col-6 col-lg-2">
-                                      <label class="form-label small fw-bold">Daire</label>
-                                      <input type="number" name="TargetBlocks[${i}].TotalApartments" class="form-control"  />
-                                  </div>
-                                  <div class="col-6 col-lg-2">
-                                      <label class="form-label small fw-bold">Dükkan</label>
-                                      <input type="number" name="TargetBlocks[${i}].TotalShops" class="form-control" value="0"  />
-                                  </div>
-                                  <div class="col-6 col-lg-3">
-                                      <label class="form-label small fw-bold">Bodrum Kat</label>
-                                      <input type="number" name="TargetBlocks[${i}].BasementFloors" class="form-control" value="0"  />
-                                  </div>
-                                  <div class="col-6 col-lg-1">
-                                      <label class="form-label small fw-bold">Zemin Kat</label>
-                                      <div class="form-check form-switch mt-1">
-                                          <input class="form-check-input" type="checkbox" name="TargetBlocks[${i}].HasGroundFloor" value="true" checked>
-<input type="hidden" name="TargetBlocks[${i}].HasGroundFloor" value="false" />
-                                      </div>
-                                  </div>
-                                  <div class="col-6 col-lg-1">
-                                      <label class="form-label small fw-bold">Çatı Katı</label>
-                                      <div class="form-check form-switch mt-1">
-                                          <input class="form-check-input" type="checkbox" name="TargetBlocks[${i}].HasRoof" value="true" checked>
-<input type="hidden" name="TargetBlocks[${i}].HasRoof" value="false" />
-                                      </div>
-                                  </div>
-                              </div>
-                              
-                              <div class="sub-blocks-container mt-4 pt-3 border-top border-primary border-opacity-25" style="display: none;">
-                                  <div class="row">
-                                      <div class="col-12 col-lg-4">
-                                          <label class="form-label small fw-bold text-primary sub-block-label">Kaç Kule / Blok Var?</label>
-                                          <input type="number" class="form-control form-control-sm" min="0" max="10" value="0" oninput="generateSubBlocks(this, 'TargetBlocks', ${i})" />
-                                      </div>
-                                  
-                                  <div class="sub-blocks-list"></div>
-                              </div>
-                          </div>
-                      </div>`;
+                            <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                                <h5 class="fw-bold text-primary mb-0 block-card-title">
+                                    <i class="ph ph-building me-2"></i> ${i+1}. Yeni Yapı
+                                </h5>
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle layout-badge">Yapı Kütlesi</span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-12 col-lg-4">
+                                    <label class="form-label small fw-bold">Temel / Baza Durumu (Mimari Tarz)</label>
+                                    <select name="TargetBlocks[${i}].LayoutPattern" class="form-select mt-1 fw-semibold" onchange="handleLayoutPatternChange(this)">
+                                        <option value="" selected>Mimari Tarz (Seçiniz)</option>
+                                        <option value="Tekil Yapı">Tekil Yapı (Standart)</option>
+                                        <option value="Ortak Baza">Ortak Baza + Kuleler (Podyum & Rezidans)</option>
+                                        <option value="Bitişik Nizam">Bitişik Nizam (Tevhit)</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-12 col-lg-4">
+                                    <label class="form-label small fw-bold block-name-label">Yeni Yapı Adı</label>
+                                    <input type="text" name="TargetBlocks[${i}].BlockName" class="form-control fw-bold" value="${defaultName}" placeholder="Örn: Ortak Baza veya A Blok" />
+                                </div>
+                                <div class="col-12 col-lg-4">
+                                    <label class="form-label small fw-bold base-area-label">Taban Oturumu / Temel Alanı (m²)</label>
+                                    <input type="number" name="TargetBlocks[${i}].BaseArea" class="form-control" placeholder="Örn: 200" min="0" />
+                                </div>
+                            </div>
+                            
+                            <div class="tech-details mt-4" style="display: none;">
+                                <div class="baza-section-badge p-2 mb-3 rounded-3 bg-primary bg-opacity-10 text-primary fw-bold small d-flex align-items-center">
+                                    <i class="ph ph-storefront me-2 fs-5"></i>
+                                    <span class="baza-badge-text">1. BÖLÜM: ORTAK BAZA & PODYUM DETAYLARI</span>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-6 col-lg-3">
+                                        <label class="form-label small fw-bold total-floors-label">Kat Sayısı</label>
+                                        <input type="number" name="TargetBlocks[${i}].TotalFloors" class="form-control" min="0" />
+                                        <span class="text-muted very-small floors-hint d-block mt-1"></span>
+                                    </div>
+                                    <div class="col-6 col-lg-2">
+                                        <label class="form-label small fw-bold apartments-label">Daire</label>
+                                        <input type="number" name="TargetBlocks[${i}].TotalApartments" class="form-control" />
+                                    </div>
+                                    <div class="col-6 col-lg-2">
+                                        <label class="form-label small fw-bold shops-label">Dükkan</label>
+                                        <input type="number" name="TargetBlocks[${i}].TotalShops" class="form-control" value="0" />
+                                    </div>
+                                    <div class="col-6 col-lg-3">
+                                        <label class="form-label small fw-bold basement-label">Bodrum Kat</label>
+                                        <input type="number" name="TargetBlocks[${i}].BasementFloors" class="form-control" value="0" />
+                                        <span class="text-muted very-small basement-hint d-block mt-1"></span>
+                                    </div>
+                                    <div class="col-6 col-lg-1">
+                                        <label class="form-label small fw-bold ground-label">Zemin Kat</label>
+                                        <div class="form-check form-switch mt-1">
+                                            <input class="form-check-input" type="checkbox" name="TargetBlocks[${i}].HasGroundFloor" value="true" checked>
+                                            <input type="hidden" name="TargetBlocks[${i}].HasGroundFloor" value="false" />
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-lg-1">
+                                        <label class="form-label small fw-bold roof-label">Çatı Katı</label>
+                                        <div class="form-check form-switch mt-1">
+                                            <input class="form-check-input" type="checkbox" name="TargetBlocks[${i}].HasRoof" value="true" checked>
+                                            <input type="hidden" name="TargetBlocks[${i}].HasRoof" value="false" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="sub-blocks-container mt-4 pt-3 border-top border-primary border-opacity-25" style="display: none;">
+                                <div class="sub-blocks-section-badge p-2 mb-3 rounded-3 bg-success bg-opacity-10 text-success fw-bold small d-flex align-items-center">
+                                    <i class="ph ph-buildings me-2 fs-5"></i>
+                                    <span class="sub-badge-text">2. BÖLÜM: BAZA ÜZERİNDE YÜKSELEN KULELER</span>
+                                </div>
+                                <div class="row mb-3 align-items-center">
+                                    <div class="col-12 col-md-6 col-lg-4">
+                                        <label class="form-label small fw-bold text-success sub-block-label">Kaç Kule / Blok Var?</label>
+                                        <input type="number" class="form-control form-control-sm rounded-3 border-success border-opacity-50 fw-bold" min="0" max="10" value="0" oninput="generateSubBlocks(this, 'TargetBlocks', ${i})" />
+                                    </div>
+                                    <div class="col-12 col-md-6 col-lg-8">
+                                        <div class="text-muted small">
+                                            <i class="ph ph-lightbulb text-warning me-1"></i> Kulelerin bodrum ve zemin katları Ortak Baza'ya entegredir.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="sub-blocks-list"></div>
+                            </div>
+                        </div>
+                    </div>`;
                 container.insertAdjacentHTML('beforeend', html);
             }
         }
@@ -1418,6 +1562,12 @@ window.onerror = function(message, source, lineno, colno, error) {
         let autoSaveTimer = null;
         function autoSaveStep2() {
             clearTimeout(autoSaveTimer);
+            var badge = document.getElementById('step2AutoSaveBadge');
+            if(badge) {
+                badge.classList.remove('d-none');
+                badge.className = "badge bg-warning-subtle text-warning border border-warning-subtle";
+                badge.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" style="width: 0.75rem; height: 0.75rem;"></span> Kaydediliyor...';
+            }
             autoSaveTimer = setTimeout(() => {
                 var form = document.getElementById('wizardForm');
                 var formData = new FormData(form);
@@ -1429,8 +1579,26 @@ window.onerror = function(message, source, lineno, colno, error) {
                 .then(data => {
                     if(data.success) {
                         console.log("Auto-save başarılı: 2. Aşama");
+                        if(badge) {
+                            badge.className = "badge bg-success-subtle text-success border border-success-subtle";
+                            badge.innerHTML = '<i class="ph ph-check-circle me-1"></i> ✓ Otomatik Kaydedildi';
+                            setTimeout(() => {
+                                if(badge) badge.classList.add('d-none');
+                            }, 2500);
+                        }
+                    } else {
+                        if(badge) {
+                            badge.className = "badge bg-danger-subtle text-danger border border-danger-subtle";
+                            badge.innerHTML = '<i class="ph ph-warning-circle me-1"></i> Kaydedilemedi';
+                        }
                     }
-                }).catch(err => console.error("Auto-save hatası", err));
+                }).catch(err => {
+                    console.error("Auto-save hatası", err);
+                    if(badge) {
+                        badge.className = "badge bg-danger-subtle text-danger border border-danger-subtle";
+                        badge.innerHTML = '<i class="ph ph-warning-circle me-1"></i> Sunucu Hatası';
+                    }
+                });
             }, 800); // 800ms bekler, peş peşe yazarken yormaz
         }
 
@@ -1458,7 +1626,7 @@ window.onerror = function(message, source, lineno, colno, error) {
                     }
                 });
                 step2.addEventListener('change', function(e) {
-                    if(e.target.tagName === 'SELECT') {
+                    if(e.target.tagName === 'SELECT' || e.target.type === 'checkbox' || e.target.type === 'radio') {
                         autoSaveStep2();
                     }
                 });
