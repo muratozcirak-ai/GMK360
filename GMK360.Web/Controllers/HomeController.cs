@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using GMK360.Web.Models;
 
@@ -17,8 +17,24 @@ public class HomeController : Controller
         }
 
         public IActionResult Index() {
-        return View();
-    }
+            if (User.Identity != null && User.Identity.IsAuthenticated && Request.Query["landing"] != "true")
+            {
+                if (User.IsInRole("SuperAdmin") || User.IsInRole("Admin"))
+                {
+                    return RedirectToAction("Index", "Admin");
+                }
+                if (User.IsInRole("InsaatFirmasi"))
+                {
+                    return RedirectToAction("Construction", "Dashboard");
+                }
+                if (User.IsInRole("Corporate"))
+                {
+                    return RedirectToAction("Corporate", "Dashboard");
+                }
+                return RedirectToAction("Index", "CustomerDashboard");
+            }
+            return View();
+        }
 
     public IActionResult KurucuOfis()
     {

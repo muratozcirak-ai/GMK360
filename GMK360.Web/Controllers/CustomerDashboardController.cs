@@ -228,6 +228,20 @@ namespace GMK360.Web.Controllers
         {
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Challenge();
+
+            // AKILLI YÖNLENDİRME (Smart Auto-Forwarding):
+            // Eğer kullanıcı İnşaat Firması ise ve doğrudan hub parametresi (?hub=true) vermediyse
+            // ve başka bir bireysel modülü (mülk, kiracı veya bina yöneticiliği) yoksa doğrudan Şantiye ERP panosuna yönlendir.
+            if (User.IsInRole("InsaatFirmasi") && Request.Query["hub"] != "true")
+            {
+                var hasOtherModules = await _context.PropertyUsers.AnyAsync(pu => pu.UserId == user.Id && pu.EndDate == null)
+                                   || await _context.Buildings.AnyAsync(b => b.ManagerUserId == user.Id);
+
+                if (!hasOtherModules)
+                {
+                    return RedirectToAction("Construction", "Dashboard");
+                }
+            }
             return View();
         }
 
