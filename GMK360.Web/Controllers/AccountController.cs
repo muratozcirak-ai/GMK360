@@ -104,12 +104,25 @@ namespace GMK360.Web.Controllers
                         // }
                     }
 
-                    // GÃœVENÄ°LÄ°R CÄ°HAZ VEYA HATA DURUMLARI (Normal Login AkÄ±ÅŸÄ±)
-                    // KullanÄ±cÄ± bulunduysa, her zaman UserName ile login dene (Email veya Phone yerine UserName)
+                    // Kurumsal hesapların rollerini garantiye al (Cookie'ye işlensin)
+                    if (user.UserType == UserType.Corporate)
+                    {
+                        if (!await _userManager.IsInRoleAsync(user, "Corporate"))
+                        {
+                            await _userManager.AddToRoleAsync(user, "Corporate");
+                        }
+                        if (!await _userManager.IsInRoleAsync(user, "InsaatFirmasi"))
+                        {
+                            await _userManager.AddToRoleAsync(user, "InsaatFirmasi");
+                        }
+                    }
+
+                    // GÜVENİLİR CİHAZ VEYA HATA DURUMLARI (Normal Login Akışı)
+                    // Kullanıcı bulunduysa, her zaman UserName ile login dene (Email veya Phone yerine UserName)
                     var result = await _signInManager.PasswordSignInAsync(user.UserName, model.Password, model.RememberMe, lockoutOnFailure: true);
                     
-                                    if (result.Succeeded)
-                {
+                    if (result.Succeeded)
+                    {
 
                         // Check if the user is an Admin or SuperAdmin FIRST
                         if (await _userManager.IsInRoleAsync(user, "SuperAdmin") || await _userManager.IsInRoleAsync(user, "Admin")) { return RedirectToAction("Index", "Admin"); }
@@ -430,6 +443,18 @@ namespace GMK360.Web.Controllers
                         await _walletService.AddGiftCreditAsync(user.Id, 50m, 30, "Hoşgeldin Hediyesi");
                     }
 
+                    if (user.UserType == UserType.Corporate)
+                    {
+                        if (!await _userManager.IsInRoleAsync(user, "Corporate"))
+                        {
+                            await _userManager.AddToRoleAsync(user, "Corporate");
+                        }
+                        if (!await _userManager.IsInRoleAsync(user, "InsaatFirmasi"))
+                        {
+                            await _userManager.AddToRoleAsync(user, "InsaatFirmasi");
+                        }
+                    }
+
                     await _signInManager.SignInAsync(user, isPersistent: false);
                     return RedirectToAction("Index", "Dashboard");
                 }
@@ -710,8 +735,16 @@ namespace GMK360.Web.Controllers
             }
 
             var result = await _userManager.CreateAsync(user, model.Password);
-                            if (result.Succeeded)
+            if (result.Succeeded)
+            {
+                if (!await _userManager.IsInRoleAsync(user, "Corporate"))
                 {
+                    await _userManager.AddToRoleAsync(user, "Corporate");
+                }
+                if (!await _userManager.IsInRoleAsync(user, "InsaatFirmasi"))
+                {
+                    await _userManager.AddToRoleAsync(user, "InsaatFirmasi");
+                }
 
                 var agency = new Agency
                 {
@@ -797,7 +830,14 @@ namespace GMK360.Web.Controllers
             return View(model);
         }
 
-        // VKN ModÃ¼l 10 DoÄŸrulama AlgoritmasÄ±
+        [HttpGet]
+        public IActionResult AccessDenied(string? returnUrl = null)
+        {
+            ViewBag.ReturnUrl = returnUrl;
+            return View();
+        }
+
+        // VKN Modül 10 Doğrulama Algoritması
         private bool ValidateVkn(string vkn)
         {
             if (string.IsNullOrEmpty(vkn) || vkn.Length != 10 || !long.TryParse(vkn, out _)) 

@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Identity;
@@ -15,11 +15,13 @@ namespace GMK360.Web.Controllers
     [RequireOnboarding] public class DashboardController : Controller
     {
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly ApplicationDbContext _context;
 
-        public DashboardController(UserManager<ApplicationUser> userManager, ApplicationDbContext context)
+        public DashboardController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager, ApplicationDbContext context)
         {
             _userManager = userManager;
+            _signInManager = signInManager;
             _context = context;
         }
 
@@ -27,6 +29,19 @@ namespace GMK360.Web.Controllers
         public async Task<IActionResult> Hub()
         {
             var user = await _userManager.GetUserAsync(User);
+            if (user != null && user.UserType == UserType.Corporate && !User.IsInRole("Corporate"))
+            {
+                if (!await _userManager.IsInRoleAsync(user, "Corporate"))
+                {
+                    await _userManager.AddToRoleAsync(user, "Corporate");
+                }
+                if (!await _userManager.IsInRoleAsync(user, "InsaatFirmasi"))
+                {
+                    await _userManager.AddToRoleAsync(user, "InsaatFirmasi");
+                }
+                await _signInManager.RefreshSignInAsync(user);
+            }
+
             ViewBag.ActiveModules = user?.ActiveModules ?? "";
             return View();
         }
@@ -112,10 +127,18 @@ namespace GMK360.Web.Controllers
             return View(viewModel);
         }
 
-        [Authorize(Roles = "InsaatFirmasi,Admin,Corporate")]
         public async Task<IActionResult> Construction()
         {
-            var userId = _userManager.GetUserId(User);
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Challenge();
+
+            bool isAuthorized = User.IsInRole("InsaatFirmasi") || User.IsInRole("Admin") || User.IsInRole("Corporate") || user.UserType == UserType.Corporate;
+            if (!isAuthorized)
+            {
+                return RedirectToAction("AccessDenied", "Account");
+            }
+
+            var userId = user.Id;
             var consultant = await _context.AgencyConsultants.Include(c => c.Agency).FirstOrDefaultAsync(c => c.UserId == userId && c.IsActive);
             if (consultant == null) return View();
 
