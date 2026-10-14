@@ -1,4 +1,4 @@
-﻿@model IEnumerable<GMK360.Core.Entities.Construction.AgencyWorker>
+@model IEnumerable<GMK360.Core.Entities.Construction.AgencyWorker>
 @{
     Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
     ViewData["Title"] = "Şantiye Puantaj ve Yoklama";
@@ -26,33 +26,45 @@
     }
 
     <div class="row mb-4 align-items-center">
-        <div class="col-md-5">
+        <div class="col-lg-4 col-md-5">
             <h3 class="fw-bold text-dark mb-0"><i class="bi bi-calendar-check text-primary me-2"></i> Günlük Puantaj</h3>
             <p class="text-muted mb-0">@ViewBag.ProjectName - Tarih: @ViewBag.TargetDate</p>
         </div>
-        <div class="col-md-3 text-center">
+        <div class="col-lg-4 col-md-3 text-center my-2 my-md-0">
             <!-- YEMEK BİLDİRİM KARTI -->
-            <div class="bg-warning bg-opacity-10 border border-warning rounded-pill py-2 px-3 d-inline-block shadow-sm">
-                <span class="fw-bold text-dark"><i class="bi bi-cup-hot-fill text-warning me-2"></i> Bugünkü Yemek Çıkarımı:</span>
-                <span class="fw-bold fs-5 text-danger ms-1" id="foodCounter">0</span> <span class="text-muted">Porsiyon</span>
+            <div class="bg-warning bg-opacity-10 border border-warning rounded-pill py-2 px-3 d-inline-flex align-items-center gap-2 shadow-sm">
+                <span class="fw-bold text-dark"><i class="bi bi-cup-hot-fill text-warning me-1"></i> Yemek:</span>
+                <span class="fw-bold fs-5 text-danger" id="foodCounter">0</span> <span class="text-muted small">Porsiyon</span>
+                
+                <button type="button" class="btn btn-sm btn-success rounded-pill px-2 py-1 ms-2" onclick="shareCateringWhatsApp()" title="Yemek Şirketine WhatsApp ile Bildir">
+                    <i class="bi bi-whatsapp"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-2 py-1" onclick="openSmsModal('Catering')" title="Yemek Şirketine SMS ile Bildir">
+                    <i class="bi bi-chat-text"></i>
+                </button>
             </div>
         </div>
-        <div class="col-md-4 text-md-end">
-            <button class="btn btn-outline-success fw-bold rounded-pill px-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#quickAddModal">
-                <i class="bi bi-person-plus-fill me-1"></i> Yeni Eleman Ekle
+        <div class="col-lg-4 col-md-4 text-md-end d-flex flex-wrap align-items-center justify-content-md-end gap-1">
+            <button class="btn btn-success fw-bold rounded-pill px-3 shadow-sm btn-sm" onclick="sharePuantajWhatsApp()" title="Puantaj Raporunu WhatsApp ile Paylaş">
+                <i class="bi bi-whatsapp me-1"></i> WhatsApp
+            </button>
+            <button class="btn btn-outline-primary fw-bold rounded-pill px-3 shadow-sm btn-sm" onclick="openSmsModal('General')" title="Şantiye SMS Bildirimi Gönder">
+                <i class="bi bi-chat-text-fill me-1"></i> SMS
+            </button>
+            <button class="btn btn-outline-success fw-bold rounded-pill px-3 shadow-sm btn-sm" data-bs-toggle="modal" data-bs-target="#quickAddModal">
+                <i class="bi bi-person-plus-fill me-1"></i> Eleman Ekle
             </button>
             
-            <button class="btn btn-danger fw-bold ms-2 shadow-sm rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#cashRequestModal" title="Şantiye Acil Nakit/Kasa Talebi">
+            <button class="btn btn-danger fw-bold shadow-sm rounded-pill px-3 btn-sm" data-bs-toggle="modal" data-bs-target="#cashRequestModal" title="Şantiye Acil Nakit/Kasa Talebi">
                 <i class="bi bi-cash-stack"></i> Nakit
             </button>
-            <button class="btn btn-warning text-dark fw-bold ms-2 shadow-sm rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#dailyLogModal" title="Şantiye Günlük Jurnali">
+            <button class="btn btn-warning text-dark fw-bold shadow-sm rounded-pill px-3 btn-sm" data-bs-toggle="modal" data-bs-target="#dailyLogModal" title="Şantiye Günlük Jurnali">
                 <i class="bi bi-journal-text"></i> Jurnal
             </button>
-            <input type="date" class="form-control d-inline-block w-auto ms-2" id="dateSelector" value="@ViewBag.TargetDate" onchange="changeDate(this.value)">
-            <button class="btn btn-primary fw-bold ms-2 shadow-sm rounded-pill px-4" onclick="savePuantaj()">
+            <input type="date" class="form-control form-control-sm d-inline-block w-auto" id="dateSelector" value="@ViewBag.TargetDate" onchange="changeDate(this.value)">
+            <button class="btn btn-primary fw-bold shadow-sm rounded-pill px-3 btn-sm" onclick="savePuantaj()">
                 <i class="bi bi-save me-1"></i> Kaydet
             </button>
-
         </div>
     </div>
 
@@ -123,7 +135,12 @@
                                     decimal overtime = ts?.OvertimeHours ?? 0;
                                     string selectedPhase = ts?.PhaseName ?? "";
 
-                                    <tr class="team-member-@groupIdForJs worker-row" data-worker-id="@worker.Id">
+                                    <tr class="team-member-@groupIdForJs worker-row" 
+                                        data-worker-id="@worker.Id"
+                                        data-worker-name="@worker.FullName"
+                                        data-worker-team="@(isSubcontractorGroup ? (worker.SubcontractorName ?? "Taşeron") : (worker.TeamName ?? "Firma Ekibi"))"
+                                        data-worker-type="@worker.WorkerType"
+                                        data-worker-phone="@worker.PhoneNumber">
                                         <td class="ps-5">
                                             <div class="d-flex align-items-center">
                                                 <div class="avatar @(isSubcontractorGroup ? "bg-warning" : "bg-primary") text-white rounded-circle me-3 d-flex align-items-center justify-content-center fw-bold" style="width: 40px; height: 40px;">
@@ -131,7 +148,13 @@
                                                 </div>
                                                 <div>
                                                     <h6 class="mb-0 fw-bold">@worker.FullName</h6>
-                                                    <small class="text-muted">@worker.IdentityNumber</small>
+                                                    <small class="text-muted">
+                                                        @worker.IdentityNumber
+                                                        @if(!string.IsNullOrEmpty(worker.PhoneNumber) && worker.PhoneNumber != "Bilinmiyor")
+                                                        {
+                                                            <span class="ms-2 text-primary fw-semibold"><i class="bi bi-telephone"></i> @worker.PhoneNumber</span>
+                                                        }
+                                                    </small>
                                                 </div>
                                             </div>
                                         </td>
@@ -295,6 +318,11 @@
                             <input type="text" name="profession" class="form-control" placeholder="Örn: Kalıpçı Ustası" />
                         </div>
 
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Telefon Numarası</label>
+                            <input type="tel" name="phoneNumber" class="form-control" placeholder="Örn: 0532 123 45 67" />
+                        </div>
+
                         <!-- Kendi Personelimiz ise Ekip (Çavuş) -->
                         <div class="col-12" id="teamNameField">
                             <label class="form-label fw-bold">Bağlı Olduğu Ekip / Çavuş</label>
@@ -333,6 +361,68 @@
                     <button type="submit" class="btn btn-primary fw-bold rounded-pill px-4"><i class="bi bi-save me-1"></i> Kaydet ve Ekle</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- SMS GÖNDERİM MODAL -->
+<div class="modal fade" id="smsModal" tabindex="-1" aria-labelledby="smsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header border-0 pb-0 pt-4 px-4">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary">
+                        <i class="bi bi-chat-text-fill fs-3"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark" id="smsModalLabel">Şantiye SMS Bildirim Merkezi</h5>
+                        <p class="text-muted small mb-0">Catering firmasına, ustalara veya şirket merkezine SMS gönderin.</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body p-4">
+                <!-- Şablon Seçici Butonlar -->
+                <div class="d-flex gap-1 mb-3 bg-light p-1 rounded-3">
+                    <button type="button" class="btn btn-sm btn-white flex-fill fw-bold shadow-xs active sms-type-btn" id="btnSmsTabCatering" onclick="selectSmsTemplate('Catering', this)">
+                        🍲 Catering
+                    </button>
+                    <button type="button" class="btn btn-sm flex-fill fw-semibold sms-type-btn" id="btnSmsTabAbsentee" onclick="selectSmsTemplate('Absentee', this)">
+                        ❌ Gelmeyenler
+                    </button>
+                    <button type="button" class="btn btn-sm flex-fill fw-semibold sms-type-btn" id="btnSmsTabSummary" onclick="selectSmsTemplate('Summary', this)">
+                        📊 Puantaj
+                    </button>
+                    <button type="button" class="btn btn-sm flex-fill fw-semibold sms-type-btn" id="btnSmsTabCustom" onclick="selectSmsTemplate('Custom', this)">
+                        ✍️ Özel
+                    </button>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-dark small">Alıcı Telefon Numarası</label>
+                    <input type="tel" class="form-control rounded-3 border-2" id="smsTargetPhone" placeholder="05XXXXXXXXX" />
+                    <div class="form-text small text-muted">Telefon numarasını başında 0 olacak şekilde giriniz (Örn: 05321234567).</div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="form-label fw-bold text-dark small mb-0">SMS Mesaj Metni</label>
+                        <span class="small text-muted" id="smsCharCount">0 Karakter (1 SMS)</span>
+                    </div>
+                    <textarea class="form-control rounded-3 border-2" id="smsMessageBody" rows="4" oninput="updateSmsCharCount()"></textarea>
+                </div>
+
+                <div class="alert alert-info py-2 px-3 small rounded-3 d-flex align-items-center gap-2 mb-0">
+                    <i class="bi bi-info-circle-fill fs-5"></i>
+                    <span>Sistem entegre NetGsm SMS geçidi üzerinden mesajı iletir. Test modunda SMS log konsoluna yazılır.</span>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0 pb-4 px-4 d-flex justify-content-between">
+                <button type="button" class="btn btn-outline-secondary rounded-pill px-3" data-bs-dismiss="modal">Kapat</button>
+                <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" id="btnSubmitSms" onclick="sendSmsNotification()">
+                    <i class="bi bi-send-fill me-1"></i> SMS Gönder
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -422,6 +512,195 @@
                 }
             })
             .catch(err => alert('Bir hata oluştu.'));
+        }
+
+        var projectName = "@Html.Raw(ViewBag.ProjectName ?? "Proje")";
+        var targetDateStr = "@ViewBag.TargetDate";
+        var currentProjectId = @ViewBag.ProjectId;
+        var currentSmsType = 'Catering';
+
+        function shareCateringWhatsApp() {
+            var count = document.getElementById('foodCounter').innerText.trim() || '0';
+            var msg = `🍲 *GMK360 ŞANTİYE YEMEK / İAŞE SİPARİŞİ*\n` +
+                      `📍 *Proje:* ${projectName}\n` +
+                      `📅 *Tarih:* ${targetDateStr}\n` +
+                      `🍽️ *Talep Edilen Yemek:* ${count} Porsiyon\n\n` +
+                      `Lütfen öğle servisini saat 12:00'ye kadar şantiye yemekhanesine ulaştırınız.\n` +
+                      `Teşekkürler. - Şantiye Şefliği`;
+
+            var url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+            window.open(url, '_blank');
+        }
+
+        function sharePuantajWhatsApp() {
+            var foodCount = document.getElementById('foodCounter').innerText.trim() || '0';
+            var rows = document.querySelectorAll('.worker-row');
+            
+            var totalCount = rows.length;
+            var presentCount = 0;
+            var firmCount = 0;
+            var subCount = 0;
+            var totalOvertime = 0;
+            var absentees = [];
+            var teamStats = {};
+
+            rows.forEach(function(r) {
+                var m = r.querySelector('.chk-morning') ? r.querySelector('.chk-morning').checked : false;
+                var a = r.querySelector('.chk-afternoon') ? r.querySelector('.chk-afternoon').checked : false;
+                var ot = parseFloat(r.querySelector('.input-overtime')?.value) || 0;
+                var name = r.getAttribute('data-worker-name') || 'Çalışan';
+                var team = r.getAttribute('data-worker-team') || 'Genel Ekip';
+                var type = r.getAttribute('data-worker-type') || 'Firma Personeli';
+
+                if (m || a) {
+                    presentCount++;
+                    if (type === 'Taşeron Personeli') subCount++; else firmCount++;
+                    totalOvertime += ot;
+                    teamStats[team] = (teamStats[team] || 0) + 1;
+                } else {
+                    absentees.push(name);
+                }
+            });
+
+            var msg = `🏗️ *GMK360 GÜNLÜK ŞANTİYE PUANTAJ RAPORU*\n` +
+                      `📍 *Proje:* ${projectName}\n` +
+                      `📅 *Tarih:* ${targetDateStr}\n\n` +
+                      `🍲 *Bugünkü İaşe / Yemek:* ${foodCount} Porsiyon\n` +
+                      `👥 *Sahadaki Mevcut:* ${presentCount} Kişi (${firmCount} Kendi Personelimiz, ${subCount} Taşeron)\n\n` +
+                      `📊 *EKİP DAĞILIMI:*\n`;
+
+            for (var t in teamStats) {
+                msg += `• ${t}: ${teamStats[t]} Kişi\n`;
+            }
+
+            if (totalOvertime > 0) {
+                msg += `\n⏰ *Toplam Fazla Mesai:* ${totalOvertime} Saat\n`;
+            }
+
+            if (absentees.length > 0) {
+                msg += `\n❌ *Bugün Gelmeyenler (${absentees.length} Kişi):*\n`;
+                var displayAbs = absentees.slice(0, 10).join(', ');
+                msg += displayAbs;
+                if (absentees.length > 10) msg += ` ve ${absentees.length - 10} kişi daha.`;
+                msg += `\n`;
+            }
+
+            msg += `\nGMK360 Şantiye Yönetim Sistemi ile otomatik oluşturuldu.`;
+            var url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+            window.open(url, '_blank');
+        }
+
+        function openSmsModal(initialType) {
+            currentSmsType = initialType || 'Catering';
+            var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('smsModal'));
+            modal.show();
+
+            var btnId = 'btnSmsTab' + (currentSmsType === 'General' ? 'Summary' : currentSmsType);
+            var btn = document.getElementById(btnId) || document.getElementById('btnSmsTabCatering');
+            selectSmsTemplate(currentSmsType === 'General' ? 'Summary' : currentSmsType, btn);
+        }
+
+        function selectSmsTemplate(type, btn) {
+            currentSmsType = type;
+            document.querySelectorAll('.sms-type-btn').forEach(function(b) {
+                b.classList.remove('active', 'btn-white', 'shadow-xs', 'fw-bold');
+                b.classList.add('fw-semibold');
+            });
+            if (btn) {
+                btn.classList.add('active', 'btn-white', 'shadow-xs', 'fw-bold');
+                btn.classList.remove('fw-semibold');
+            }
+
+            var foodCount = document.getElementById('foodCounter').innerText.trim() || '0';
+            var rows = document.querySelectorAll('.worker-row');
+            var presentCount = 0;
+            var overtimeTotal = 0;
+            var absentees = [];
+
+            rows.forEach(function(r) {
+                var m = r.querySelector('.chk-morning')?.checked;
+                var a = r.querySelector('.chk-afternoon')?.checked;
+                var ot = parseFloat(r.querySelector('.input-overtime')?.value) || 0;
+                var name = r.getAttribute('data-worker-name') || '';
+                if (m || a) {
+                    presentCount++;
+                    overtimeTotal += ot;
+                } else if (name) {
+                    absentees.push(name);
+                }
+            });
+
+            var body = '';
+            if (type === 'Catering') {
+                body = `[GMK360] ${projectName} santiyemiz icin ${targetDateStr} tarihinde toplam ${foodCount} porsiyon yemek hazirlanmasini rica ederiz.`;
+            } else if (type === 'Absentee') {
+                var absList = absentees.slice(0, 5).join(', ');
+                body = `[GMK360] ${projectName} santiyemizde bugun (${targetDateStr}) yoklamada eksik personeller tespit edilmistir: ${absList || 'Yok'}.`;
+            } else if (type === 'Summary') {
+                body = `[GMK360] ${projectName} - ${targetDateStr}: Sahada ${presentCount} personel mevcut, ${foodCount} iase porsiyonu, ${overtimeTotal} sa mesai kaydedildi.`;
+            } else if (type === 'Custom') {
+                body = `[GMK360] ${projectName} Santiyesi: `;
+            }
+
+            document.getElementById('smsMessageBody').value = body;
+            updateSmsCharCount();
+        }
+
+        function updateSmsCharCount() {
+            var text = document.getElementById('smsMessageBody').value;
+            var count = text.length;
+            var smsParts = Math.ceil(count / 155) || 1;
+            document.getElementById('smsCharCount').innerText = `${count} Karakter (${smsParts} SMS)`;
+        }
+
+        function sendSmsNotification() {
+            var phone = document.getElementById('smsTargetPhone').value.trim();
+            var text = document.getElementById('smsMessageBody').value.trim();
+            var btn = document.getElementById('btnSubmitSms');
+
+            if (!phone) {
+                alert('Lütfen alıcı telefon numarasını giriniz.');
+                return;
+            }
+            if (!text) {
+                alert('Lütfen SMS metnini giriniz.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = `<i class="bi bi-hourglass-split me-1"></i> Gönderiliyor...`;
+
+            fetch('/DailyTimesheet/SendSmsNotification', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    ProjectId: currentProjectId,
+                    PhoneNumber: phone,
+                    MessageText: text,
+                    NotificationType: currentSmsType
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="bi bi-send-fill me-1"></i> SMS Gönder`;
+
+                if (data && data.success) {
+                    alert(`SMS Bildirimi Başarılı!\n${data.message}`);
+                    var modal = bootstrap.Modal.getInstance(document.getElementById('smsModal'));
+                    if (modal) modal.hide();
+                } else {
+                    alert(`SMS gönderilemedi: ${data?.message || 'Bilinmeyen hata'}`);
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                btn.disabled = false;
+                btn.innerHTML = `<i class="bi bi-send-fill me-1"></i> SMS Gönder`;
+                alert('Sunucu ile iletişim kurulamadı.');
+            });
         }
     </script>
 }

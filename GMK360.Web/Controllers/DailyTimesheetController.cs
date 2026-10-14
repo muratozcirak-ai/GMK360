@@ -1,4 +1,4 @@
-﻿using GMK360.Core.Entities.Construction;
+using GMK360.Core.Entities.Construction;
 using GMK360.Core.Entities.Identity;
 using GMK360.Data.Contexts;
 using Microsoft.AspNetCore.Authorization;
@@ -18,11 +18,16 @@ namespace GMK360.Web.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly GMK360.Web.Services.Sms.ISmsService _smsService;
 
-        public DailyTimesheetController(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
+        public DailyTimesheetController(
+            ApplicationDbContext context, 
+            UserManager<ApplicationUser> userManager,
+            GMK360.Web.Services.Sms.ISmsService smsService)
         {
             _context = context;
             _userManager = userManager;
+            _smsService = smsService;
         }
 
         private async Task<int?> GetUserAgencyIdAsync()
@@ -80,6 +85,7 @@ namespace GMK360.Web.Controllers
             [FromForm] string firstName, 
             [FromForm] string lastName, 
             [FromForm] string identityNumber, 
+            [FromForm] string phoneNumber,
             [FromForm] string profession, 
             [FromForm] string teamName, 
             [FromForm] decimal dailyWage,
@@ -97,7 +103,7 @@ namespace GMK360.Web.Controllers
                 FirstName = firstName,
                 LastName = lastName,
                 IdentityNumber = identityNumber ?? "Bilinmiyor",
-                PhoneNumber = "Bilinmiyor",
+                PhoneNumber = string.IsNullOrWhiteSpace(phoneNumber) ? "Bilinmiyor" : phoneNumber.Trim(),
                 Profession = profession ?? (isSubcontractor ? "Taşeron İşi" : "Düz İşçi"),
                 TeamName = isSubcontractor ? null : (string.IsNullOrEmpty(teamName) ? "Bağımsız Çalışanlar" : teamName),
                 SubcontractorName = isSubcontractor ? subcontractorName : null,
@@ -242,6 +248,36 @@ namespace GMK360.Web.Controllers
 
             return View(projectSummaries);
         }
+
+        [HttpPost("SendSmsNotification")]
+        public async Task<IActionResult> SendSmsNotification([FromBody] SendSmsRequest request)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            if (request == null || string.IsNullOrWhiteSpace(request.PhoneNumber) || string.IsNullOrWhiteSpace(request.MessageText))
+            {
+                return BadRequest(new { success = false, message = "Telefon numarası ve mesaj metni gereklidir." });
+            }
+
+            try
+            {
+                var result = await _smsService.SmsGonderAsync(request.PhoneNumber.Trim(), request.MessageText.Trim());
+                return Ok(new { success = true, message = result });
+            }
+            catch (Exception ex)
+            {
+                return Ok(new { success = false, message = $"SMS gönderilirken hata oluştu: {ex.Message}" });
+            }
+        }
+    }
+
+    public class SendSmsRequest
+    {
+        public int ProjectId { get; set; }
+        public string PhoneNumber { get; set; }
+        public string MessageText { get; set; }
+        public string NotificationType { get; set; }
     }
 
     public class TimesheetSaveRequest

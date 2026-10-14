@@ -197,19 +197,36 @@
                 <p class="text-muted small mb-0">Görevler zamansal sırasına göre dizilmiştir. Her görevin sahadaki kritik kuralı kırmızı kutuda vurgulanmıştır.</p>
             </div>
 
-            <!-- Hızlı Filtre Butonları -->
-            <div class="btn-group rounded-pill p-1 bg-light border" role="group">
-                <button type="button" class="btn btn-sm rounded-pill px-3 fw-semibold active btn-filter" onclick="filterTasks('all', this)">
-                    Tümü (@totalTasks)
-                </button>
-                <button type="button" class="btn btn-sm rounded-pill px-3 fw-semibold btn-filter" onclick="filterTasks('pre', this)">
-                    Ön Hazırlık (T-) (@preTasks)
-                </button>
-                <button type="button" class="btn btn-sm rounded-pill px-3 fw-semibold btn-filter" onclick="filterTasks('dayzero', this)">
-                    Uygulama (T 0) (@dayZeroTasks)
-                </button>
-                <button type="button" class="btn btn-sm rounded-pill px-3 fw-semibold btn-filter" onclick="filterTasks('post', this)">
-                    Takip & Kabul (T+) (@postTasks)
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <!-- Rol Filtresi -->
+                <select class="form-select form-select-sm rounded-pill border-2" id="roleFilterSelect" onchange="filterByRole(this.value)" style="width: auto;" title="Sorumlu Kişi/Birim Filtresi">
+                    <option value="all">Tüm Sorumlular</option>
+                    <option value="Şef">👷 Şantiye Şefi</option>
+                    <option value="Satın Alma">🏢 Satın Alma</option>
+                    <option value="Laboratuvar">🔬 Laboratuvar / Denetim</option>
+                    <option value="İSG">⚠️ İSG Uzmanı</option>
+                    <option value="Taşeron">👷 Taşeron & Usta</option>
+                </select>
+
+                <!-- Hızlı Zaman Filtre Butonları -->
+                <div class="btn-group rounded-pill p-1 bg-light border" role="group">
+                    <button type="button" class="btn btn-sm rounded-pill px-3 fw-semibold active btn-filter" onclick="filterTasks('all', this)">
+                        Tümü (@totalTasks)
+                    </button>
+                    <button type="button" class="btn btn-sm rounded-pill px-3 fw-semibold btn-filter" onclick="filterTasks('pre', this)">
+                        T- (@preTasks)
+                    </button>
+                    <button type="button" class="btn btn-sm rounded-pill px-3 fw-semibold btn-filter" onclick="filterTasks('dayzero', this)">
+                        T 0 (@dayZeroTasks)
+                    </button>
+                    <button type="button" class="btn btn-sm rounded-pill px-3 fw-semibold btn-filter" onclick="filterTasks('post', this)">
+                        T+ (@postTasks)
+                    </button>
+                </div>
+
+                <!-- WhatsApp Toplu Paylaşım Butonu -->
+                <button type="button" class="btn btn-success btn-sm rounded-pill px-3 fw-bold shadow-xs text-white" onclick="shareAllTasksWhatsApp()" title="Tüm görevleri WhatsApp grubuna gönder">
+                    <i class="fab fa-whatsapp me-1 fs-6"></i> WhatsApp'a İlet
                 </button>
             </div>
         </div>
@@ -233,7 +250,7 @@
                             ? "border-warning" 
                             : (t.OffsetDays == 0 ? "border-danger border-2" : "border-success");
 
-                        <div class="card border rounded-4 p-4 mb-3 shadow-xs hover-shadow transition-all task-item task-@filterType @borderCardClass bg-white" data-tasktype="@filterType">
+                        <div class="card border rounded-4 p-4 mb-3 shadow-xs hover-shadow transition-all task-item task-@filterType @borderCardClass bg-white" data-tasktype="@filterType" data-role="@t.Role">
                             <div class="row align-items-start g-3">
                                 <!-- Sol Kolon: Zaman ve Ofset Rozeti -->
                                 <div class="col-lg-3 col-md-4 border-end-md">
@@ -304,6 +321,18 @@
                                     <div class="d-flex flex-column gap-2">
                                         <button type="button" class="btn btn-outline-success rounded-pill px-3 fw-bold btn-sm btn-done-toggle" onclick="toggleTaskDone(this)">
                                             <i class="far fa-check-circle me-1"></i> Görevi Tamamla
+                                        </button>
+                                        <button type="button" class="btn btn-outline-success rounded-pill px-3 fw-semibold btn-sm shadow-xs" 
+                                                onclick="shareSingleTaskWhatsApp(this)"
+                                                data-title="@t.Title" 
+                                                data-offset="@t.OffsetLabel" 
+                                                data-targetdate="@t.TargetDate.ToString("dd MMMM yyyy")" 
+                                                data-role="@t.Role" 
+                                                data-warning="@t.CriticalWarning" 
+                                                data-item="@t.SourceItem"
+                                                data-category="@t.Category"
+                                                title="Bu görevi WhatsApp ile ilgili kişiye gönder">
+                                            <i class="fab fa-whatsapp me-1 text-success"></i> WhatsApp'la İlet
                                         </button>
 
                                         <!-- Taşeron / Pazar Yeri Köprüsü (Aşama 4) -->
@@ -486,8 +515,11 @@
         window.location.href = `/Metraj/SiteAgenda/${currentProjectId}?profileId=${currentProfileId}&baseDate=${newDate}`;
     }
 
+    var currentTimeFilter = 'all';
+    var currentRoleFilter = 'all';
+
     function filterTasks(type, btn) {
-        // Buton stillerini güncelle
+        currentTimeFilter = type;
         document.querySelectorAll('.btn-filter').forEach(function(b) {
             b.classList.remove('active', 'btn-primary');
             b.classList.add('btn-light');
@@ -496,20 +528,86 @@
             btn.classList.add('active', 'btn-primary');
             btn.classList.remove('btn-light');
         }
+        applyFilters();
+    }
 
+    function filterByRole(role) {
+        currentRoleFilter = role;
+        applyFilters();
+    }
+
+    function applyFilters() {
         var items = document.querySelectorAll('.task-item');
         items.forEach(function(card) {
-            if (type === 'all') {
+            var taskType = card.getAttribute('data-tasktype') || '';
+            var taskRole = card.getAttribute('data-role') || '';
+
+            var matchTime = (currentTimeFilter === 'all' || taskType === currentTimeFilter);
+            var matchRole = (currentRoleFilter === 'all' || taskRole.toLowerCase().indexOf(currentRoleFilter.toLowerCase()) !== -1);
+
+            if (matchTime && matchRole) {
                 card.classList.remove('d-none');
             } else {
-                var taskType = card.getAttribute('data-tasktype');
-                if (taskType === type) {
-                    card.classList.remove('d-none');
-                } else {
-                    card.classList.add('d-none');
-                }
+                card.classList.add('d-none');
             }
         });
+    }
+
+    function shareSingleTaskWhatsApp(btn) {
+        var title = btn.getAttribute('data-title') || '';
+        var offset = btn.getAttribute('data-offset') || '';
+        var targetDate = btn.getAttribute('data-targetdate') || '';
+        var role = btn.getAttribute('data-role') || '';
+        var warning = btn.getAttribute('data-warning') || '';
+        var item = btn.getAttribute('data-item') || '';
+        var category = btn.getAttribute('data-category') || '';
+
+        var msg = `🏗️ *GMK360 ŞANTİYE GÖREVİ*\n` +
+                  `📍 *Proje:* ${currentProjectName}\n` +
+                  `📅 *Tarih:* ${targetDate} (${offset})\n` +
+                  `👷 *Sorumlu:* ${role}\n` +
+                  `📌 *İmalat:* ${item} (${category})\n\n` +
+                  `📝 *Görev:* ${title}\n` +
+                  `⚠️ *Sahadaki Hayati Kural:* ${warning}\n\n` +
+                  `Lütfen şantiye sahasında gerekli hazırlık ve kontrolleri sağlayınız.`;
+
+        var url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+        window.open(url, '_blank');
+    }
+
+    function shareAllTasksWhatsApp() {
+        var visibleCards = document.querySelectorAll('.task-item:not(.d-none)');
+        if (visibleCards.length === 0) {
+            alert('Paylaşılacak görev bulunamadı.');
+            return;
+        }
+
+        var baseDateVal = document.getElementById("baseDateInput") ? document.getElementById("baseDateInput").value : "";
+        var msg = `🏗️ *GMK360 OTONOM ŞANTİYE AJANDASI*\n` +
+                  `📍 *Proje:* ${currentProjectName}\n` +
+                  `📅 *Ana İmalat Tarihi (T 0):* ${baseDateVal}\n` +
+                  `📋 *Aktif Görev Listesi (${visibleCards.length} Görev):*\n\n`;
+
+        var count = 0;
+        visibleCards.forEach(function(card) {
+            if (count < 15) {
+                var titleEl = card.querySelector('h5');
+                var offsetBadge = card.querySelector('.badge.fs-6');
+                var title = titleEl ? titleEl.innerText.trim() : '';
+                var offset = offsetBadge ? offsetBadge.innerText.trim() : '';
+                var role = card.getAttribute('data-role') || '';
+                msg += `• [${offset}] ${title} (${role})\n`;
+                count++;
+            }
+        });
+
+        if (visibleCards.length > 15) {
+            msg += `\n... ve ${visibleCards.length - 15} görev daha.\n`;
+        }
+
+        msg += `\nDetaylı kontrol listesi, şartnameler ve kabul kriterleri GMK360 Şantiye Portalında aktiftir.`;
+        var url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+        window.open(url, '_blank');
     }
 
     function toggleTaskDone(btn) {
