@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using GMK360.Data.Contexts;
@@ -117,6 +117,49 @@ namespace GMK360.Web.Controllers
 
             TempData["SuccessMessage"] = "Teklifiniz ve mesajınız başarıyla iletildi!";
             return RedirectToAction(nameof(Detail), new { id = jobId });
+        }
+
+        // POST: Marketplace/QuickCreate (Otonom DNA & Ajanda İhale Başlatıcı)
+        [HttpPost]
+        [IgnoreAntiforgeryToken]
+        public async Task<IActionResult> QuickCreate([FromBody] QuickJobDto dto)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Title))
+                return BadRequest(new { success = false, message = "İhale başlığı zorunludur." });
+
+            var user = await _userManager.GetUserAsync(User);
+            string userId = user?.Id;
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                // Fallback demo kullanıcısı
+                var firstUser = await _userManager.Users.FirstOrDefaultAsync();
+                userId = firstUser?.Id ?? "system";
+            }
+
+            var job = new MarketplaceJob
+            {
+                Title = dto.Title.Trim(),
+                Description = dto.Description ?? "",
+                JobType = string.IsNullOrWhiteSpace(dto.JobType) ? "Genel İnşaat" : dto.JobType,
+                Location = string.IsNullOrWhiteSpace(dto.Location) ? "Türkiye Geneli" : dto.Location,
+                CreatedByUserId = userId,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
+
+            _context.MarketplaceJobs.Add(job);
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true, jobId = job.Id, title = job.Title });
+        }
+
+        public class QuickJobDto
+        {
+            public string Title { get; set; }
+            public string Description { get; set; }
+            public string JobType { get; set; }
+            public string Location { get; set; }
         }
     }
 }

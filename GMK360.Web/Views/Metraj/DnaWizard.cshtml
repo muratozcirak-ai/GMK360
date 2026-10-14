@@ -8,6 +8,7 @@
     var step1 = ViewBag.Step1 as GMK360.Core.Entities.Construction.Workflows.DnaTemplateStep;
     var allSteps = ViewBag.AllSteps as List<GMK360.Core.Entities.Construction.Workflows.DnaTemplateStep>;
     var existingProfile = ViewBag.ExistingProfile as GMK360.Core.Entities.Construction.Workflows.ProjectDnaProfile;
+    var initialStartStep = ViewBag.StartStep as int?;
 }
 
 <div class="container-fluid py-4 px-4 bg-light min-vh-100">
@@ -29,7 +30,16 @@
             </div>
         </div>
 
-        <div class="d-flex align-items-center gap-3 mt-2 mt-md-0">
+        <div class="d-flex align-items-center gap-2 mt-2 mt-md-0 flex-wrap">
+            <button type="button" class="btn btn-outline-primary rounded-pill px-3 py-2 btn-sm fw-semibold shadow-xs" onclick="openCheckPointModal()" title="Şantiye Aşaması Değiştir">
+                <i class="fas fa-crosshairs me-1 text-primary"></i> <span id="checkPointStageLabel">Şantiye Aşaması: Tüm Adımlar</span> <i class="fas fa-sliders-h ms-1 text-muted small"></i>
+            </button>
+            <a href="/Metraj/SiteAgenda/@projectId?profileId=@(existingProfile != null ? existingProfile.Id : 0)" 
+               id="btnGoSiteAgenda" 
+               class="btn btn-outline-dark rounded-pill px-3 py-2 btn-sm fw-semibold shadow-xs" 
+               title="Otonom Şantiye Ajandası">
+                <i class="fas fa-calendar-alt text-primary me-1"></i> Otonom Ajanda
+            </a>
             <span id="autosaveBadge" class="badge bg-light text-muted border px-3 py-2 rounded-pill shadow-xs">
                 <i class="fas fa-cloud me-1 text-primary"></i> Otomatik Kayıt Hazır
             </span>
@@ -538,10 +548,189 @@
     </div>
 </div>
 
+<!-- 🚩 SİSTEME SIZMA (CHECK-POINT) MODALI -->
+<div class="modal fade" id="checkPointModal" tabindex="-1" aria-labelledby="checkPointModalLabel" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header border-0 pb-0 pt-4 px-4">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary">
+                        <i class="fas fa-crosshairs fa-2x"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark" id="checkPointModalLabel">Şantiyeniz Şu An Hangi Aşamada?</h5>
+                        <p class="text-muted small mb-0">GMK360 Akıllı Sızma: Projenizin mevcut durumunu seçin, sistem önceki adımları tamamlandı kabul edip doğrudan odaklanmanız gereken aşamayı açsın.</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="row g-3">
+                    <!-- Kart 1: Sıfır Şantiye & Ruhsat -->
+                    <div class="col-md-6">
+                        <div class="card h-100 border rounded-4 p-3 check-card" onclick="applyCheckPoint(0, 'Ruhsat & Sıfır Şantiye')">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="bg-info bg-opacity-10 text-info p-3 rounded-3 fs-4">
+                                    <i class="fas fa-drafting-compass"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <h6 class="fw-bold text-dark mb-0">Ruhsat & Sıfır Şantiye</h6>
+                                        <span class="badge bg-info bg-opacity-10 text-info border border-info rounded-pill small">Adım 0-1</span>
+                                    </div>
+                                    <p class="text-muted small mb-2">Statik projeler, arsa analizi, ihata teli, şantiye elektriği & suyu hazırlıkları.</p>
+                                    <span class="btn btn-sm btn-outline-info rounded-pill px-3 fw-semibold">Buradan Başla <i class="fas fa-arrow-right ms-1"></i></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Kart 2: Temel & Kaba İnşaat -->
+                    <div class="col-md-6">
+                        <div class="card h-100 border rounded-4 p-3 check-card" onclick="applyCheckPoint(2, 'Temel & Kaba İnşaat')">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="bg-warning bg-opacity-10 text-warning p-3 rounded-3 fs-4">
+                                    <i class="fas fa-cubes"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <h6 class="fw-bold text-dark mb-0">Temel & Kaba İnşaat</h6>
+                                        <span class="badge bg-warning bg-opacity-10 text-warning border border-warning rounded-pill small">Adım 2-3</span>
+                                    </div>
+                                    <p class="text-muted small mb-2">Kot 0 temel yalıtımı, perde beton, kaba yapı iskeleti, dış ve iç duvar imalatları.</p>
+                                    <span class="btn btn-sm btn-outline-warning rounded-pill px-3 fw-semibold text-dark">Buradan Başla <i class="fas fa-arrow-right ms-1"></i></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Kart 3: İnce İşler & Yaşam Alanı -->
+                    <div class="col-md-6">
+                        <div class="card h-100 border rounded-4 p-3 check-card border-primary bg-primary bg-opacity-10" onclick="applyCheckPoint(4, 'İnce İşler & Yaşam Alanı')">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="bg-primary text-white p-3 rounded-3 fs-4 shadow-sm">
+                                    <i class="fas fa-paint-roller"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <h6 class="fw-bold text-primary mb-0">İnce İşler & Yaşam Alanı</h6>
+                                        <span class="badge bg-primary text-white rounded-pill small">Adım 4-7</span>
+                                    </div>
+                                    <p class="text-muted small mb-2">Lamine parke, seramik, alçı & boya, asma tavan, kapı/pencere doğramaları ve tesisat.</p>
+                                    <span class="btn btn-sm btn-primary rounded-pill px-3 fw-bold text-white shadow-xs">Buradan Başla <i class="fas fa-arrow-right ms-1"></i></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Kart 4: Peyzaj & Teslimat -->
+                    <div class="col-md-6">
+                        <div class="card h-100 border rounded-4 p-3 check-card" onclick="applyCheckPoint(8, 'Peyzaj & Teslimat')">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="bg-success bg-opacity-10 text-success p-3 rounded-3 fs-4">
+                                    <i class="fas fa-tree"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <h6 class="fw-bold text-dark mb-0">Peyzaj & Teslimat</h6>
+                                        <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill small">Adım 8-9</span>
+                                    </div>
+                                    <p class="text-muted small mb-2">Ortak alanlar, asansör, çevre düzenleme, peyzaj ve geçici kabul hazırlıkları.</p>
+                                    <span class="btn btn-sm btn-outline-success rounded-pill px-3 fw-semibold">Buradan Başla <i class="fas fa-arrow-right ms-1"></i></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0 pb-4 px-4 d-flex justify-content-between">
+                <span class="text-muted small"><i class="fas fa-info-circle me-1"></i> Önceki adımlar istediğiniz an incelenebilir ve düzenlenebilir.</span>
+                <button type="button" class="btn btn-link text-muted text-decoration-none fw-semibold btn-sm" onclick="applyCheckPoint(0, 'Tüm Adımlar')">
+                    Tüm Adımları Kendim Görmek İstiyorum &rarr;
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .check-card {
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+        border: 2px solid #e9ecef !important;
+    }
+    .check-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.08) !important;
+        border-color: #6f42c1 !important;
+    }
+    .step-passed {
+        opacity: 0.8 !important;
+        background-color: #f8f9fa !important;
+    }
+</style>
+
 <script>
     var currentProjectId = @(projectId ?? 0);
     var currentProfileId = @(existingProfile != null ? existingProfile.Id : 0);
+    var currentStartStep = @(initialStartStep.HasValue ? initialStartStep.Value : -1);
     var autosaveTimer = null;
+
+    function openCheckPointModal() {
+        var modalEl = document.getElementById("checkPointModal");
+        if (modalEl) {
+            var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
+    }
+
+    function applyCheckPoint(stepOrder, stageTitle, skipSave) {
+        currentStartStep = stepOrder;
+
+        // 1. Üst bardaki aşama etiketini güncelle
+        var labelEl = document.getElementById("checkPointStageLabel");
+        if (labelEl) {
+            labelEl.innerText = "Aşama: " + (stageTitle || ("Adım " + stepOrder));
+        }
+
+        // 2. Sol menüdeki adımları güncelle (Önceki adımlara 'Geçmiş Aşama' rozeti ver)
+        var tabLinks = document.querySelectorAll('#stepTabsList a.list-group-item');
+        tabLinks.forEach(function(link) {
+            var href = link.getAttribute('href');
+            if (!href) return;
+            var order = parseInt(href.replace('#pill_step', ''));
+            if (isNaN(order)) return;
+
+            var existingBadge = link.querySelector('.checkpoint-badge');
+            if (existingBadge) existingBadge.remove();
+
+            if (stepOrder > 0 && order < stepOrder) {
+                link.classList.add('step-passed');
+                var span = document.createElement('span');
+                span.className = 'badge bg-success bg-opacity-10 text-success border border-success rounded-pill float-end small me-1 checkpoint-badge';
+                span.innerHTML = '<i class="fas fa-check me-1"></i>Geçmiş';
+                link.appendChild(span);
+            } else {
+                link.classList.remove('step-passed');
+            }
+        });
+
+        // 3. İlgili sekmeye odaklan
+        var targetLink = document.querySelector('#stepTabsList a[href="#pill_step' + stepOrder + '"]');
+        switchStepTab(stepOrder, targetLink);
+
+        // 4. Modalı kapat
+        var modalEl = document.getElementById("checkPointModal");
+        if (modalEl) {
+            var modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+        }
+
+        // 5. Otomatik kaydı tetikle
+        if (!skipSave) {
+            triggerAutoSave();
+        }
+    }
 
     function switchStepTab(order, elem) {
         // 1. Sidebar tab active durumunu güncelle
@@ -550,6 +739,9 @@
         });
         if (elem) {
             elem.classList.add('active');
+        } else {
+            var found = document.querySelector('#stepTabsList a[href="#pill_step' + order + '"]');
+            if (found) found.classList.add('active');
         }
 
         // 2. Tüm tab-pane içeriklerini gizle
@@ -731,6 +923,30 @@
     document.addEventListener("DOMContentLoaded", function() {
         updateSmartCalculation();
         applyConditionalVisibility();
+
+        if (currentStartStep >= 0) {
+            var stepTitles = {
+                0: "Ruhsat & Sıfır Şantiye",
+                1: "Saha Analizi",
+                2: "Temel & Kaba İnşaat",
+                3: "Gövde & Duvar",
+                4: "İnce İşler & Yaşam Alanı",
+                5: "Çatı & Tepe",
+                6: "Doğrama & Cephe",
+                7: "Tesisat & Enerji",
+                8: "Peyzaj & Teslimat",
+                9: "Geçici Kabul"
+            };
+            var title = stepTitles[currentStartStep] || ("Adım " + currentStartStep);
+            applyCheckPoint(currentStartStep, title, true);
+        } else {
+            var isNewProfile = @(existingProfile == null ? "true" : "false");
+            if (isNewProfile) {
+                setTimeout(function() {
+                    openCheckPointModal();
+                }, 400);
+            }
+        }
     });
 
     function onSingleChange(questionId) {
@@ -877,6 +1093,7 @@
                 ProfileId: currentProfileId,
                 ProjectId: currentProjectId,
                 Name: name,
+                StartStep: (currentStartStep >= 0 ? currentStartStep : null),
                 Details: details
             })
         })
@@ -908,6 +1125,10 @@
                 }
                 var statusText = document.getElementById("profileStatusText");
                 if (statusText) statusText.innerText = "Taslak (Kaldığınız Yerden Devam Edebilirsiniz)";
+                var btnAgenda = document.getElementById("btnGoSiteAgenda");
+                if (btnAgenda) {
+                    btnAgenda.href = `/Metraj/SiteAgenda/${currentProjectId}?profileId=${currentProfileId}`;
+                }
             }
         })
         .catch(err => {
@@ -936,6 +1157,7 @@
                 ProfileId: currentProfileId,
                 ProjectId: currentProjectId,
                 Name: name,
+                StartStep: (currentStartStep >= 0 ? currentStartStep : null),
                 Details: details
             })
         })
@@ -948,8 +1170,9 @@
                 return;
             }
             if (data && data.success) {
-                alert("Tebrikler! DNA Profiliniz başarıyla tamamlandı ve kaydedildi.");
-                window.location.href = "/Metraj/ProjectDNA/" + currentProjectId;
+                var pid = data.profileId || currentProfileId;
+                alert("Tebrikler! DNA Profiliniz başarıyla kaydedildi. Şimdi Otonom Şantiye Ajandanıza yönlendiriliyorsunuz.");
+                window.location.href = `/Metraj/SiteAgenda/${currentProjectId}?profileId=${pid}`;
             } else {
                 alert("Kayıt sırasında bir hata oluştu.");
             }

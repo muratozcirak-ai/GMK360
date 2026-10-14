@@ -1,0 +1,542 @@
+@model dynamic
+@{
+    ViewData["Title"] = "Otonom Şantiye Ajandası";
+    Layout = "~/Views/Shared/_ProjectLayout.cshtml";
+    var projectId = ViewData["ProjectId"];
+    var projectName = ViewData["ProjectName"] ?? "Proje";
+    var profile = ViewBag.Profile as GMK360.Core.Entities.Construction.Workflows.ProjectDnaProfile;
+    var allProfiles = ViewBag.AllProfiles as List<GMK360.Core.Entities.Construction.Workflows.ProjectDnaProfile>;
+    var baseDate = (DateTime)(ViewBag.BaseDate ?? DateTime.Today.AddDays(7));
+    var tasks = ViewBag.Tasks as List<GMK360.Web.Services.Construction.DnaTriggerTask> ?? new List<GMK360.Web.Services.Construction.DnaTriggerTask>();
+
+    int totalTasks = tasks.Count;
+    int preTasks = tasks.Count(t => t.OffsetDays < 0);
+    int dayZeroTasks = tasks.Count(t => t.OffsetDays == 0);
+    int postTasks = tasks.Count(t => t.OffsetDays > 0);
+}
+
+<div class="container-fluid py-4 px-4 bg-light min-vh-100">
+
+    <!-- ÜST BİLGİ VE NAVİGASYON -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 bg-white p-3 rounded-4 shadow-sm border">
+        <div class="d-flex align-items-center gap-3">
+            <a href="/Metraj/ProjectDNA/@projectId" class="btn btn-outline-secondary rounded-pill px-3 fw-bold btn-sm">
+                <i class="fas fa-arrow-left me-1"></i> DNA Yönetimine Dön
+            </a>
+            @if (profile != null)
+            {
+                <a href="/Metraj/DnaWizard/@projectId?profileId=@profile.Id" class="btn btn-outline-primary rounded-pill px-3 fw-bold btn-sm">
+                    <i class="fas fa-sliders-h me-1"></i> Sihirbazı Düzenle
+                </a>
+            }
+            <div>
+                <h4 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                    <i class="fas fa-calendar-alt text-primary"></i>
+                    <span>Otonom Şantiye Şefi & Günlük Ajanda</span>
+                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-1 rounded-pill fs-6 fw-semibold">
+                        <i class="fas fa-city me-1"></i> @projectName
+                    </span>
+                </h4>
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2 mt-2 mt-md-0 flex-wrap">
+            @if (profile != null)
+            {
+                <form id="syncForm" method="post" action="/Metraj/SyncSiteAgenda">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="projectId" value="@projectId" />
+                    <input type="hidden" name="profileId" value="@profile.Id" />
+                    <input type="hidden" name="baseDate" value="@baseDate.ToString("yyyy-MM-dd")" id="formBaseDate" />
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" style="background-color: #6f42c1; border-color: #6f42c1;">
+                        <i class="fas fa-calendar-plus me-2"></i> Şantiye Takvimine / Ajandaya Aktar
+                    </button>
+                </form>
+            }
+        </div>
+    </div>
+
+    <!-- BAŞARI MESAJI -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-4 border-0 shadow-sm p-3 mb-4" role="alert">
+            <i class="fas fa-check-circle me-2 fs-5"></i> <strong>Harika!</strong> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
+        </div>
+    }
+
+    <!-- KONTROL VE ANA TARİH (T GÜNÜ) SEÇİCİ KARTI -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-4 border-start border-5 border-primary">
+            <div class="row align-items-center g-3">
+                <!-- Aktif Profil Seçimi -->
+                <div class="col-lg-4 col-md-6">
+                    <label class="form-label fw-bold text-dark small mb-1">
+                        <i class="fas fa-dna text-primary me-1"></i>Aktif DNA Profili:
+                    </label>
+                    <select class="form-select border-2" onchange="changeProfile(this.value)">
+                        @if (allProfiles != null && allProfiles.Any())
+                        {
+                            foreach (var p in allProfiles)
+                            {
+                                if (profile != null && p.Id == profile.Id)
+                                {
+                                    <option value="@p.Id" selected>@p.Name (@p.Status)</option>
+                                }
+                                else
+                                {
+                                    <option value="@p.Id">@p.Name (@p.Status)</option>
+                                }
+                            }
+                        }
+                        else
+                        {
+                            <option value="">Varsayılan Standart DNA</option>
+                        }
+                    </select>
+                </div>
+
+                <!-- T Günü (İmalat Başlangıç Tarihi) -->
+                <div class="col-lg-4 col-md-6">
+                    <label class="form-label fw-bold text-dark small mb-1">
+                        <i class="fas fa-flag-checkered text-danger me-1"></i>Ana İmalat Tarihi (T Günü):
+                    </label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-2 text-primary fw-bold">T 0</span>
+                        <input type="date" class="form-control form-control-lg border-2" id="baseDateInput" 
+                               value="@baseDate.ToString("yyyy-MM-dd")" onchange="updateBaseDate(this.value)" />
+                    </div>
+                </div>
+
+                <!-- Zeka Bilgilendirmesi -->
+                <div class="col-lg-4 mt-3 mt-lg-0">
+                    <div class="p-3 bg-light rounded-3 border">
+                        <div class="small fw-bold text-dark d-flex align-items-center gap-1 mb-1">
+                            <i class="fas fa-brain text-primary"></i> GMK360 Sıfır Sürtünme Motoru
+                        </div>
+                        <p class="small text-muted mb-0">
+                            Sadece <strong>T Günü</strong> tarihini seçtiniz. Sistem DNA'nızdaki malzemelere göre 
+                            <strong>T-7'den T+28'e</strong> kadar tüm hazırlık, kalite ve test görevlerini otomatik hesapladı.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- METRİK KARTLARI -->
+    <div class="row g-3 mb-4">
+        <!-- Toplam Görev -->
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-bottom border-4 border-primary">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small fw-semibold">Toplam Görev</div>
+                        <div class="fs-3 fw-bold text-dark">@totalTasks</div>
+                    </div>
+                    <div class="bg-primary bg-opacity-10 text-primary p-3 rounded-circle fs-4">
+                        <i class="fas fa-tasks"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ön Hazırlık (T-) -->
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-bottom border-4 border-warning">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small fw-semibold">Ön Hazırlık (T-)</div>
+                        <div class="fs-3 fw-bold text-warning">@preTasks</div>
+                    </div>
+                    <div class="bg-warning bg-opacity-10 text-warning p-3 rounded-circle fs-4">
+                        <i class="fas fa-hourglass-start"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ana İmalat & İSG (T 0) -->
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-bottom border-4 border-danger">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small fw-semibold">Ana İmalat & İSG (T 0)</div>
+                        <div class="fs-3 fw-bold text-danger">@dayZeroTasks</div>
+                    </div>
+                    <div class="bg-danger bg-opacity-10 text-danger p-3 rounded-circle fs-4">
+                        <i class="fas fa-hard-hat"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Takip & Yasal Kabul (T+) -->
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-bottom border-4 border-success">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small fw-semibold">Takip & Kabul (T+)</div>
+                        <div class="fs-3 fw-bold text-success">@postTasks</div>
+                    </div>
+                    <div class="bg-success bg-opacity-10 text-success p-3 rounded-circle fs-4">
+                        <i class="fas fa-clipboard-check"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FİLTRE VE GÖREV ZAMAN TÜNELİ -->
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-header bg-white border-0 p-4 pb-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+                <h5 class="fw-bold text-dark mb-1">
+                    <i class="fas fa-stream text-primary me-2"></i>Otonom Şantiye Akış Çizelgesi
+                </h5>
+                <p class="text-muted small mb-0">Görevler zamansal sırasına göre dizilmiştir. Her görevin sahadaki kritik kuralı kırmızı kutuda vurgulanmıştır.</p>
+            </div>
+
+            <!-- Hızlı Filtre Butonları -->
+            <div class="btn-group rounded-pill p-1 bg-light border" role="group">
+                <button type="button" class="btn btn-sm rounded-pill px-3 fw-semibold active btn-filter" onclick="filterTasks('all', this)">
+                    Tümü (@totalTasks)
+                </button>
+                <button type="button" class="btn btn-sm rounded-pill px-3 fw-semibold btn-filter" onclick="filterTasks('pre', this)">
+                    Ön Hazırlık (T-) (@preTasks)
+                </button>
+                <button type="button" class="btn btn-sm rounded-pill px-3 fw-semibold btn-filter" onclick="filterTasks('dayzero', this)">
+                    Uygulama (T 0) (@dayZeroTasks)
+                </button>
+                <button type="button" class="btn btn-sm rounded-pill px-3 fw-semibold btn-filter" onclick="filterTasks('post', this)">
+                    Takip & Kabul (T+) (@postTasks)
+                </button>
+            </div>
+        </div>
+
+        <div class="card-body p-4 pt-2">
+            @if (!tasks.Any())
+            {
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-calendar-times fa-3x mb-3 text-secondary opacity-50"></i>
+                    <h6 class="fw-bold">Bu profile ait görev bulunamadı</h6>
+                    <p class="small">Lütfen DNA Sihirbazından malzeme ve imalat seçimlerini kaydediniz.</p>
+                </div>
+            }
+            else
+            {
+                <div class="task-feed">
+                    @foreach (var t in tasks)
+                    {
+                        string filterType = t.OffsetDays < 0 ? "pre" : (t.OffsetDays == 0 ? "dayzero" : "post");
+                        string borderCardClass = t.OffsetDays < 0 
+                            ? "border-warning" 
+                            : (t.OffsetDays == 0 ? "border-danger border-2" : "border-success");
+
+                        <div class="card border rounded-4 p-4 mb-3 shadow-xs hover-shadow transition-all task-item task-@filterType @borderCardClass bg-white" data-tasktype="@filterType">
+                            <div class="row align-items-start g-3">
+                                <!-- Sol Kolon: Zaman ve Ofset Rozeti -->
+                                <div class="col-lg-3 col-md-4 border-end-md">
+                                    <div class="d-flex flex-column gap-2">
+                                        <div>
+                                            <span class="badge @(t.OffsetDays < 0 ? "bg-warning text-dark" : (t.OffsetDays == 0 ? "bg-danger text-white shadow-xs" : "bg-success text-white")) fs-6 px-3 py-2 rounded-pill fw-bold">
+                                                <i class="far fa-clock me-1"></i> @t.OffsetLabel
+                                            </span>
+                                        </div>
+                                        <div class="fw-bold text-dark fs-6 mt-1">
+                                            <i class="far fa-calendar-alt text-primary me-1"></i>
+                                            @t.TargetDate.ToString("dd MMMM yyyy")
+                                        </div>
+                                        <div class="small text-muted">
+                                            @t.TargetDate.ToString("dddd")
+                                        </div>
+                                        
+                                        <!-- İlgili DNA Kalemi -->
+                                        <div class="mt-2 pt-2 border-top">
+                                            <div class="small text-muted fw-semibold">Tetikleyen DNA:</div>
+                                            <span class="badge bg-light text-dark border px-2 py-1 rounded-pill small mt-1 text-wrap text-start">
+                                                <i class="fas fa-dna text-primary me-1"></i>@t.SourceItem
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Orta Kolon: Görev Tanımı ve Sahadaki Altın Kural -->
+                                <div class="col-lg-6 col-md-5">
+                                    <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                                        <span class="badge @t.RoleBadgeClass px-3 py-1 rounded-pill fw-semibold">
+                                            <i class="fas fa-user-shield me-1"></i> @t.Role
+                                        </span>
+                                        <span class="badge @t.CategoryBadgeClass px-2 py-1 rounded-pill small">
+                                            @t.Category
+                                        </span>
+                                    </div>
+
+                                    <h5 class="fw-bold text-dark mb-2">@t.Title</h5>
+                                    <p class="text-secondary small mb-3">@t.Description</p>
+
+                                    <!-- ⚠️ SAHADAKİ KRİTİK UYARI KUTUSU -->
+                                    <div class="alert alert-danger bg-danger bg-opacity-10 border-start border-4 border-danger py-2 px-3 rounded-3 mb-3 small text-danger">
+                                        <i class="fas fa-exclamation-triangle me-1 fw-bold"></i>
+                                        <strong>Sahadaki Hayati Kural:</strong> @t.CriticalWarning
+                                    </div>
+
+                                    <!-- KONTROL MADDELERİ (CHECKLIST) -->
+                                    @if (t.CheckItems != null && t.CheckItems.Any())
+                                    {
+                                        <div class="bg-light p-3 rounded-3 border">
+                                            <div class="small fw-bold text-dark mb-2"><i class="fas fa-clipboard-check text-success me-1"></i>Kontrol Listesi:</div>
+                                            <ul class="list-unstyled mb-0">
+                                                @foreach (var chk in t.CheckItems)
+                                                {
+                                                    <li class="mb-1 small text-dark d-flex align-items-center">
+                                                        <input class="form-check-input me-2 mt-0 task-chk" type="checkbox" onchange="checkTaskItem(this)">
+                                                        <span>@chk</span>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </div>
+                                    }
+                                </div>
+
+                                <!-- Sağ Kolon: Aksiyon ve Taşeron/Pazar Yeri Bağlantısı -->
+                                <div class="col-lg-3 col-md-3 text-lg-end text-start">
+                                    <div class="d-flex flex-column gap-2">
+                                        <button type="button" class="btn btn-outline-success rounded-pill px-3 fw-bold btn-sm btn-done-toggle" onclick="toggleTaskDone(this)">
+                                            <i class="far fa-check-circle me-1"></i> Görevi Tamamla
+                                        </button>
+
+                                        <!-- Taşeron / Pazar Yeri Köprüsü (Aşama 4) -->
+                                        <div class="p-2 bg-light rounded-3 border text-start mt-2">
+                                            <div class="small text-muted fw-semibold mb-1">
+                                                <i class="fas fa-hard-hat text-primary me-1"></i>Usta & Ekip Durumu:
+                                            </div>
+                                            <div class="fw-bold text-dark small mb-2">@t.ProfessionName</div>
+                                            <button type="button" 
+                                                    class="btn btn-primary rounded-pill btn-sm w-100 fw-semibold mb-1 shadow-xs" 
+                                                    style="background-color: #6f42c1; border-color: #6f42c1;"
+                                                    onclick="openTenderModal('@t.ProfessionName', '@t.SourceItem', '@t.SourcePhase', '@t.Title', this)">
+                                                <i class="fas fa-bullhorn me-1"></i> Birim Fiyat İhalesi Aç
+                                            </button>
+                                            <a href="/Marketplace?search=@Uri.EscapeDataString(t.ProfessionName)" target="_blank" 
+                                               class="btn btn-outline-secondary btn-sm rounded-pill w-100 fw-semibold">
+                                                <i class="fas fa-store me-1"></i> Açık Pazarda Ara
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- 🚀 BİRİM FİYAT İHALESİ (PAZAR YERİ) MODALI -->
+<div class="modal fade" id="tenderModal" tabindex="-1" aria-labelledby="tenderModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header border-0 pb-0 pt-4 px-4">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary">
+                        <i class="fas fa-bullhorn fa-2x"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark" id="tenderModalLabel">Pazar Yeri Birim Fiyat İhalesi</h5>
+                        <p class="text-muted small mb-0">Miktarsız Çerçeve İhalesi: Ustalara m² birim fiyat teklifi sordurun.</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-dark small">İhale Başlığı</label>
+                    <input type="text" class="form-control rounded-3" id="tenderTitle" />
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark small">İş Branşı</label>
+                        <input type="text" class="form-control rounded-3" id="tenderJobType" readonly />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark small">Şantiye Lokasyonu</label>
+                        <input type="text" class="form-control rounded-3" id="tenderLocation" value="İstanbul / Kadıköy" />
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-dark small">Şartname & İş Tanımı</label>
+                    <textarea class="form-control rounded-3" id="tenderDescription" rows="4"></textarea>
+                    <div class="form-text small text-muted">
+                        <i class="fas fa-info-circle me-1"></i> Bu talep açık pazarda ilgili branştaki taşeronlara düşecek ve m² birim fiyat tekliflerini toplayacaktır.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0 pb-4 px-4 d-flex justify-content-between">
+                <button type="button" class="btn btn-outline-secondary rounded-pill px-3" data-bs-dismiss="modal">Vazgeç</button>
+                <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" id="btnPublishTender" onclick="publishTender()" style="background-color: #6f42c1; border-color: #6f42c1;">
+                    <i class="fas fa-paper-plane me-1"></i> İhaleyi Canlı Pazara Gönder
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .hover-shadow:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.08) !important;
+    }
+    .transition-all {
+        transition: all 0.2s ease-in-out;
+    }
+    .task-completed {
+        background-color: #f8f9fa !important;
+        opacity: 0.75;
+        border-color: #198754 !important;
+    }
+    .task-completed h5 {
+        text-decoration: line-through;
+        color: #6c757d !important;
+    }
+</style>
+
+<script>
+    var currentProjectId = @(projectId ?? 0);
+    var currentProfileId = @(profile != null ? profile.Id : 0);
+    var currentProjectName = '@projectName';
+    var activeTenderBtn = null;
+
+    function openTenderModal(prof, item, phase, taskTitle, btn) {
+        activeTenderBtn = btn;
+        document.getElementById("tenderJobType").value = prof || "Genel Taşeron";
+        document.getElementById("tenderTitle").value = `[${currentProjectName}] ${item} - Birim Fiyat İhalesi`;
+        document.getElementById("tenderDescription").value = 
+            `GMK360 DNA Şartnamesi uyarınca; şantiyemizde yapılacak "${item}" (${phase}) imalatı için yetkili taşeronlardan 1 m² işçilik veya temin+montaj birim fiyat tekliflerini bekliyoruz.\n\nİlgili Görev: ${taskTitle}\nSözleşme Tipi: m² Birim Fiyat Çerçeve Anlaşması.`;
+        
+        var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById("tenderModal"));
+        modal.show();
+    }
+
+    function publishTender() {
+        var btn = document.getElementById("btnPublishTender");
+        var title = document.getElementById("tenderTitle").value.trim();
+        var jobType = document.getElementById("tenderJobType").value.trim();
+        var location = document.getElementById("tenderLocation").value.trim();
+        var desc = document.getElementById("tenderDescription").value.trim();
+
+        if (!title) {
+            alert("Lütfen ihale başlığını giriniz.");
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin me-1"></i> İhale Açılıyor...`;
+
+        fetch("/Marketplace/QuickCreate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                Title: title,
+                Description: desc,
+                JobType: jobType,
+                Location: location
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = `<i class="fas fa-paper-plane me-1"></i> İhaleyi Canlı Pazara Gönder`;
+            
+            var modal = bootstrap.Modal.getInstance(document.getElementById("tenderModal"));
+            if (modal) modal.hide();
+
+            if (data && data.success) {
+                if (activeTenderBtn) {
+                    activeTenderBtn.className = "btn btn-success btn-sm rounded-pill w-100 fw-semibold mb-1";
+                    activeTenderBtn.innerHTML = `<i class="fas fa-check-circle me-1"></i> İhale Açıldı (#${data.jobId})`;
+                    activeTenderBtn.onclick = function() {
+                        window.open('/Marketplace/Detail/' + data.jobId, '_blank');
+                    };
+                }
+                alert("Tebrikler! İhaleniz GMK360 Açık Pazar Yerinde başarıyla yayınlandı. İhale No: #" + data.jobId);
+            } else {
+                alert("İhale oluşturulurken bir hata meydana geldi.");
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            btn.disabled = false;
+            btn.innerHTML = `<i class="fas fa-paper-plane me-1"></i> İhaleyi Canlı Pazara Gönder`;
+            alert("Sunucuya bağlanılamadı.");
+        });
+    }
+
+    function changeProfile(newProfileId) {
+        if (!newProfileId) return;
+        var dateVal = document.getElementById("baseDateInput").value;
+        window.location.href = `/Metraj/SiteAgenda/${currentProjectId}?profileId=${newProfileId}&baseDate=${dateVal}`;
+    }
+
+    function updateBaseDate(newDate) {
+        if (!newDate) return;
+        var formDate = document.getElementById("formBaseDate");
+        if (formDate) formDate.value = newDate;
+        window.location.href = `/Metraj/SiteAgenda/${currentProjectId}?profileId=${currentProfileId}&baseDate=${newDate}`;
+    }
+
+    function filterTasks(type, btn) {
+        // Buton stillerini güncelle
+        document.querySelectorAll('.btn-filter').forEach(function(b) {
+            b.classList.remove('active', 'btn-primary');
+            b.classList.add('btn-light');
+        });
+        if (btn) {
+            btn.classList.add('active', 'btn-primary');
+            btn.classList.remove('btn-light');
+        }
+
+        var items = document.querySelectorAll('.task-item');
+        items.forEach(function(card) {
+            if (type === 'all') {
+                card.classList.remove('d-none');
+            } else {
+                var taskType = card.getAttribute('data-tasktype');
+                if (taskType === type) {
+                    card.classList.remove('d-none');
+                } else {
+                    card.classList.add('d-none');
+                }
+            }
+        });
+    }
+
+    function toggleTaskDone(btn) {
+        var card = btn.closest('.task-item');
+        if (!card) return;
+
+        if (card.classList.contains('task-completed')) {
+            card.classList.remove('task-completed');
+            btn.className = "btn btn-outline-success rounded-pill px-3 fw-bold btn-sm btn-done-toggle";
+            btn.innerHTML = `<i class="far fa-check-circle me-1"></i> Görevi Tamamla`;
+        } else {
+            card.classList.add('task-completed');
+            btn.className = "btn btn-success text-white rounded-pill px-3 fw-bold btn-sm btn-done-toggle";
+            btn.innerHTML = `<i class="fas fa-check-circle me-1"></i> Tamamlandı`;
+        }
+    }
+
+    function checkTaskItem(cb) {
+        var span = cb.nextElementSibling;
+        if (span) {
+            if (cb.checked) {
+                span.style.textDecoration = "line-through";
+                span.classList.add("text-muted");
+            } else {
+                span.style.textDecoration = "none";
+                span.classList.remove("text-muted");
+            }
+        }
+    }
+</script>

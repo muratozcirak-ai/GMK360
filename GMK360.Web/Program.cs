@@ -1,4 +1,4 @@
-﻿using GMK360.Data.Contexts;
+using GMK360.Data.Contexts;
 using GMK360.Core.Entities.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
@@ -139,6 +139,7 @@ builder.Services.AddSingleton<GMK360.Web.Routing.SeoRouteTransformer>();
 builder.Services.AddScoped<GMK360.Core.Interfaces.IFinancialEngineService, GMK360.Web.Services.FinancialEngineService>();
 builder.Services.AddScoped<GMK360.Web.Services.IValuationService, GMK360.Web.Services.ValuationService>();
 builder.Services.AddScoped<GMK360.Web.Services.ISeoService, GMK360.Web.Services.SeoService>();
+builder.Services.AddScoped<GMK360.Web.Services.Construction.DnaTimeOffsetService>();
 
 // Register Background Services
 builder.Services.AddHostedService<LocationIntelligenceWorker>();

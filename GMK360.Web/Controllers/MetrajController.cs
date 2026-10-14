@@ -11,10 +11,12 @@ namespace GMK360.Web.Controllers
     public class MetrajController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly GMK360.Web.Services.Construction.DnaTimeOffsetService _dnaTimeOffsetService;
 
-        public MetrajController(ApplicationDbContext context)
+        public MetrajController(ApplicationDbContext context, GMK360.Web.Services.Construction.DnaTimeOffsetService dnaTimeOffsetService)
         {
             _context = context;
+            _dnaTimeOffsetService = dnaTimeOffsetService;
         }
 
         public IActionResult Index(int projectId, int? recipeId)
@@ -62,7 +64,7 @@ namespace GMK360.Web.Controllers
         }
 
         // YENİ TAM SAYFA DNA SİHİRBAZI (YENİ SEKME)
-        public IActionResult DnaWizard(int id, int? profileId)
+        public IActionResult DnaWizard(int id, int? profileId, int? startStep = null)
         {
             var project = _context.ConstructionProjects.FirstOrDefault(p => p.Id == id);
             if (project == null) return NotFound();
@@ -134,6 +136,17 @@ namespace GMK360.Web.Controllers
                 }
             }
 
+            int? effectiveStartStep = startStep;
+            if (!effectiveStartStep.HasValue && ViewBag.ExistingProfile != null)
+            {
+                var prof = ViewBag.ExistingProfile as ProjectDnaProfile;
+                if (prof != null && int.TryParse(prof.ExtraField1, out int sStep))
+                {
+                    effectiveStartStep = sStep;
+                }
+            }
+            ViewBag.StartStep = effectiveStartStep;
+
             return View();
         }
 
@@ -142,6 +155,7 @@ namespace GMK360.Web.Controllers
             public int? ProfileId { get; set; }
             public int ProjectId { get; set; }
             public string Name { get; set; }
+            public int? StartStep { get; set; }
             public List<DnaProfileDetailDto> Details { get; set; }
         }
 
@@ -207,7 +221,8 @@ namespace GMK360.Web.Controllers
                     Name = trimmedName,
                     Status = "Taslak",
                     CreatedBy = User.Identity?.Name ?? "Admin",
-                    CreatedDate = DateTime.UtcNow
+                    CreatedDate = DateTime.UtcNow,
+                    ExtraField1 = data.StartStep?.ToString()
                 };
                 _context.ProjectDnaProfiles.Add(profile);
             }
@@ -215,6 +230,10 @@ namespace GMK360.Web.Controllers
             {
                 profile.Name = trimmedName;
                 profile.Status = "Taslak";
+                if (data.StartStep.HasValue)
+                {
+                    profile.ExtraField1 = data.StartStep.Value.ToString();
+                }
                 if (profile.Details != null && profile.Details.Any())
                 {
                     _context.ProjectDnaDetails.RemoveRange(profile.Details);
@@ -313,16 +332,21 @@ namespace GMK360.Web.Controllers
                 {
                     ProjectId = data.ProjectId,
                     Name = trimmedName,
-                    Status = "DXF Bekliyor",
+                    Status = "DNA Tamamlandı",
                     CreatedBy = User.Identity?.Name ?? "Admin",
-                    CreatedDate = DateTime.UtcNow
+                    CreatedDate = DateTime.UtcNow,
+                    ExtraField1 = data.StartStep?.ToString()
                 };
                 _context.ProjectDnaProfiles.Add(profile);
             }
             else
             {
                 profile.Name = trimmedName;
-                profile.Status = "DXF Bekliyor";
+                profile.Status = "DNA Tamamlandı";
+                if (data.StartStep.HasValue)
+                {
+                    profile.ExtraField1 = data.StartStep.Value.ToString();
+                }
                 if (profile.Details != null && profile.Details.Any())
                 {
                     _context.ProjectDnaDetails.RemoveRange(profile.Details);
@@ -455,6 +479,74 @@ namespace GMK360.Web.Controllers
                 }).ToList();
 
             return Json(types);
+        }
+
+        // =================================================================================
+        // OTONOM ŞANTİYE ŞEFİ AJANDASI (T-, T, T+ ZAMAN TÜNELİ)
+        // =================================================================================
+        public async Task<IActionResult> SiteAgenda(int id, int? profileId, DateTime? baseDate)
+        {
+            var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == id);
+            if (project == null) return NotFound();
+
+            ViewData["ProjectId"] = id;
+            ViewData["ProjectName"] = project.Name;
+
+            ProjectDnaProfile profile = null;
+            if (profileId.HasValue && profileId.Value > 0)
+            {
+                profile = await _context.ProjectDnaProfiles
+                    .Include(p => p.Details)
+                        .ThenInclude(d => d.Profession)
+                    .FirstOrDefaultAsync(p => p.Id == profileId.Value && p.ProjectId == id);
+            }
+
+            if (profile == null)
+            {
+                profile = await _context.ProjectDnaProfiles
+                    .Include(p => p.Details)
+                        .ThenInclude(d => d.Profession)
+                    .Where(p => p.ProjectId == id)
+                    .OrderByDescending(p => p.CreatedDate)
+                    .FirstOrDefaultAsync();
+            }
+
+            ViewBag.Profile = profile;
+            var effectiveBaseDate = baseDate ?? DateTime.Today.AddDays(7);
+            ViewBag.BaseDate = effectiveBaseDate;
+
+            // Diğer profilleri de dropdown için gönder
+            ViewBag.AllProfiles = await _context.ProjectDnaProfiles
+                .Where(p => p.ProjectId == id)
+                .OrderByDescending(p => p.CreatedDate)
+                .ToListAsync();
+
+            var tasks = _dnaTimeOffsetService.GenerateTasksForProfile(profile, effectiveBaseDate);
+            ViewBag.Tasks = tasks;
+
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SyncSiteAgenda(int projectId, int profileId, DateTime baseDate)
+        {
+            int agencyId = 1;
+            var agencyIdClaim = User.FindFirst("AgencyId")?.Value;
+            if (int.TryParse(agencyIdClaim, out int aid)) agencyId = aid;
+
+            var profile = await _context.ProjectDnaProfiles
+                .Include(p => p.Details)
+                .FirstOrDefaultAsync(p => p.Id == profileId && p.ProjectId == projectId);
+
+            if (profile != null)
+            {
+                var tasks = _dnaTimeOffsetService.GenerateTasksForProfile(profile, baseDate);
+                int count = await _dnaTimeOffsetService.SyncTasksToAgendaAsync(agencyId, projectId, tasks);
+                TempData["SuccessMessage"] = $"{count} adet otonom şantiye görevi sistem ajandanıza (takvime) başarıyla işlendi!";
+            }
+
+            return RedirectToAction(nameof(SiteAgenda), new { id = projectId, profileId = profileId, baseDate = baseDate.ToString("yyyy-MM-dd") });
         }
     }
 }
