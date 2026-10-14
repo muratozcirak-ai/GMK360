@@ -2,13 +2,14 @@
 
 @{
     Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
-    ViewData["Title"] = ViewBag.IsExisting == true ? "Sosyal Donatılar (Eski Durum)" : "Sosyal Donatılar (Hedef Durum)";
+    bool isEx = ViewBag.IsExisting == true;
+    ViewData["Title"] = isEx ? "Sosyal Donatılar (Eski Durum)" : "Sosyal Donatılar (Hedef Durum)";
 }
 
 <div class="d-flex justify-content-between align-items-center mb-5">
     <div>
-        <h3 class="fw-bolder text-dark mb-1">Sosyal Donatılar ve Dış Alanlar <span class="badge badge-light-@(ViewBag.IsExisting == true ? "danger" : "primary") ms-2 fs-5">@(ViewBag.IsExisting == true ? "ESKİ (YIKILACAK) DURUM" : "YENİ (HEDEF) DURUM")</span></h3>
-        <span class="text-muted fw-bold fs-6">@Model.Name - @Model.Amenities.Count() Alan Bulunuyor</span>
+        <h3 class="fw-bolder text-dark mb-1">Sosyal Donatılar ve Dış Alanlar <span class="badge badge-light-@(isEx ? "danger" : "primary") ms-2 fs-5">@(isEx ? "ESKİ (YIKILACAK) DURUM" : "YENİ (HEDEF) DURUM")</span></h3>
+        <span class="text-muted fw-bold fs-6">@Model.Name - @(Model.Amenities?.Count(a => a.IsExisting == isEx) ?? 0) Alan Bulunuyor</span>
     </div>
     <div>
         <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-secondary rounded-pill me-2">
@@ -25,8 +26,6 @@
     </div>
 }
 
-
-
 <div class="card shadow-sm rounded-4 border-0 mb-5">
     <div class="card-body p-5">
         <div class="row g-5">
@@ -35,6 +34,7 @@
                 <h5 class="fw-bold mb-4"><i class="bi bi-aspect-ratio text-primary me-2"></i>Genel Arazi Bilgisi</h5>
                 <form asp-action="UpdateProjectLandArea" method="post">
                     <input type="hidden" name="projectId" value="@Model.Id" />
+                    <input type="hidden" name="isExisting" value="@(isEx ? "true" : "false")" />
                     <input type="hidden" name="landscapeArea" value="" /> <!-- Removed landscape area -->
                     
                     <div class="mb-4">
@@ -56,7 +56,6 @@
                 
                 @{
                     double totalLand = Model.TotalLandArea ?? 0;
-                    bool isEx = ViewBag.IsExisting == true;
                     double totalBlocksFootprint = Model.Blocks?.Where(b => b.IsExistingBuilding == isEx && b.ParentBuildingId == null).Sum(b => b.BaseArea ?? 0) ?? 0;
                     double totalAmenities = Model.Amenities?.Where(a => a.IsExisting == isEx).Sum(a => a.SquareMeters ?? 0) ?? 0;
                     double remainingSpace = totalLand - totalBlocksFootprint - totalAmenities;
@@ -130,26 +129,27 @@
             <div class="card-body pt-4">
                 <form asp-action="AddAmenity" method="post">
                     <input type="hidden" name="projectId" value="@Model.Id" />
+                    <input type="hidden" name="isExisting" value="@(isEx ? "true" : "false")" />
                     
                     <div class="mb-4">
-                        <label class="form-label fw-bold fs-7">Alan Adı (Örn: Çocuk Parkı)</label>
-                        <input type="text" name="name" class="form-control form-control-solid rounded-3" required />
+                        <label class="form-label fw-bold fs-7">Alan Adı (Örn: Çocuk Parkı, Açık Otopark, Çit)</label>
+                        <input type="text" name="name" class="form-control form-control-solid rounded-3" placeholder="Örn: Çocuk Oyun Parkı" required />
                     </div>
 
                     <input type="hidden" name="type" value="Dış Alan" />
 
                     <div class="mb-4">
                         <label class="form-label fw-bold fs-7">Metrekare (m²) - Opsiyonel</label>
-                        <input type="number" step="0.1" name="squareMeters" class="form-control form-control-solid rounded-3" />
+                        <input type="number" step="0.1" name="squareMeters" class="form-control form-control-solid rounded-3" placeholder="Örn: 150" />
                     </div>
 
                     <div class="mb-4">
                         <label class="form-label fw-bold fs-7">Kısa Açıklama - Opsiyonel</label>
-                        <textarea name="description" class="form-control form-control-solid rounded-3" rows="2"></textarea>
+                        <textarea name="description" class="form-control form-control-solid rounded-3" rows="2" placeholder="Örn: Kauçuk zemin, salıncak ve kaydırak takımı"></textarea>
                     </div>
 
                     <button type="submit" class="btn btn-primary w-100 rounded-pill shadow-sm">
-                        <i class="bi bi-plus"></i> Alana Ekle
+                        <i class="bi bi-plus-lg me-1"></i> Alana Ekle
                     </button>
                 </form>
             </div>
@@ -160,10 +160,13 @@
     <div class="col-md-8">
         <div class="card shadow-sm rounded-4 border-0 h-100">
             <div class="card-header bg-white border-0 pt-5 pb-0">
-                <h5 class="fw-bold mb-0"><i class="bi bi-tree me-2 text-success"></i> Dış Alan Listesi</h5>
+                <h5 class="fw-bold mb-0"><i class="bi bi-tree me-2 text-success"></i> Dış Alan Listesi (@(isEx ? "Eski Yapı" : "Yeni Hedef"))</h5>
             </div>
             <div class="card-body">
-                @if (Model.Amenities.Any())
+                @{
+                    var currentAmenities = Model.Amenities?.Where(a => a.IsExisting == isEx).OrderBy(a => a.Type).ThenBy(a => a.Name).ToList() ?? new List<GMK360.Core.Entities.Construction.ProjectAmenity>();
+                }
+                @if (currentAmenities.Any())
                 {
                     <div class="table-responsive">
                         <table class="table table-row-dashed table-row-gray-300 align-middle gs-0 gy-4">
@@ -177,7 +180,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var item in Model.Amenities.Where(a => a.IsExisting == isEx).OrderBy(a => a.Type).ThenBy(a => a.Name))
+                                @foreach (var item in currentAmenities)
                                 {
                                     <tr>
                                         <td>
@@ -222,6 +225,7 @@
                                                 <form asp-action="ToggleAmenityStatus" method="post" class="me-2">
                                                     <input type="hidden" name="amenityId" value="@item.Id" />
                                                     <input type="hidden" name="projectId" value="@Model.Id" />
+                                                    <input type="hidden" name="isExisting" value="@(isEx ? "true" : "false")" />
                                                     <button type="submit" class="btn btn-icon btn-light-@(item.IsCompleted ? "warning" : "success") btn-sm" title="@(item.IsCompleted ? "Planlandı Yap" : "Tamamlandı Yap")">
                                                         <i class="bi bi-@(item.IsCompleted ? "arrow-counterclockwise" : "check2-all")"></i>
                                                     </button>
@@ -232,6 +236,7 @@
                                                 <form asp-action="DeleteAmenity" method="post" onsubmit="return confirm('Bu açık alanı silmek istediğinize emin misiniz?');">
                                                     <input type="hidden" name="amenityId" value="@item.Id" />
                                                     <input type="hidden" name="projectId" value="@Model.Id" />
+                                                    <input type="hidden" name="isExisting" value="@(isEx ? "true" : "false")" />
                                                     <button type="submit" class="btn btn-icon btn-light-danger btn-sm">
                                                         <i class="bi bi-trash"></i>
                                                     </button>
@@ -248,7 +253,7 @@
                 {
                     <div class="alert alert-secondary text-center mt-5">
                         <i class="bi bi-info-circle fs-3 d-block mb-2"></i>
-                        Henüz hiç sosyal donatı / açık alan eklenmemiş. Soldaki formu kullanarak ekleyebilirsiniz.
+                        Henüz hiç sosyal donatı / dış alan eklenmemiş. Soldaki formu kullanarak Açık Otopark, Çocuk Parkı, Kamelya, Çevre Çiti gibi alanlar ekleyebilirsiniz.
                     </div>
                 }
             </div>
@@ -268,6 +273,7 @@
                 <form asp-action="EditAmenity" method="post">
                     <input type="hidden" name="projectId" value="@Model.Id" />
                     <input type="hidden" name="amenityId" id="editAmenityId" />
+                    <input type="hidden" name="isExisting" value="@(isEx ? "true" : "false")" />
                     
                     <div class="mb-3">
                         <label class="form-label fw-bold">Alan Adı</label>

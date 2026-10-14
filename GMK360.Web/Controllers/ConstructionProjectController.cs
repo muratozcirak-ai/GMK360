@@ -1313,127 +1313,71 @@ namespace GMK360.Web.Controllers
         }
 
         public async Task<IActionResult> Amenities(int projectId, bool isExisting = false)
-
         {
-
             var agencyId = await GetUserAgencyIdAsync();
-
             if (agencyId == null) return Unauthorized();
 
-
-
             var project = await _context.ConstructionProjects
-
                 .Include(p => p.Amenities)
-
                 .Include(p => p.Blocks)
-
                 .FirstOrDefaultAsync(p => p.Id == projectId);
 
-
-
             if (project == null || project.AgencyId != agencyId)
-
                 return NotFound();
 
-
-
+            ViewBag.IsExisting = isExisting;
             return View(project);
-
         }
 
-
-
         [HttpPost]
-
-                [HttpPost]
-
         public async Task<IActionResult> EditAmenity(int projectId, int amenityId, string name, double? squareMeters, string description, bool isExisting = false)
-
         {
-
             var amenity = await _context.ProjectAmenities.FindAsync(amenityId);
-
             if (amenity != null)
-
             {
-
                 amenity.Name = name;
-
                 amenity.SquareMeters = squareMeters;
-
                 amenity.Description = description;
-
                 _context.Update(amenity);
-
                 await _context.SaveChangesAsync();
-
+                TempData["SuccessMessage"] = "Dış alan donatısı başarıyla güncellendi.";
             }
 
             return RedirectToAction(nameof(Amenities), new { projectId = projectId, isExisting = isExisting });
-
         }
 
         [HttpPost]
-
         public async Task<IActionResult> AddAmenity(int projectId, string name, string type, double? squareMeters, string description, bool isExisting = false)
-
         {
-
             var amenity = new GMK360.Core.Entities.Construction.ProjectAmenity
-
             {
-
                 ConstructionProjectId = projectId,
-
                 Name = name,
-
                 Type = type,
-
                 SquareMeters = squareMeters,
-
-                Description = description
-
+                Description = description,
+                IsExisting = isExisting
             };
 
-
-
             _context.ProjectAmenities.Add(amenity);
-
             await _context.SaveChangesAsync();
 
-
-
-            TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
-
+            TempData["SuccessMessage"] = "Dış alan donatısı başarıyla eklendi.";
             return RedirectToAction(nameof(Amenities), new { projectId = projectId, isExisting = isExisting });
-
         }
 
-
-
         [HttpPost]
-
         public async Task<IActionResult> DeleteAmenity(int amenityId, int projectId, bool isExisting = false)
-
         {
-
             var amenity = await _context.ProjectAmenities.FindAsync(amenityId);
-
             if (amenity != null)
-
             {
-
                 _context.ProjectAmenities.Remove(amenity);
-
                 await _context.SaveChangesAsync();
-
-                TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
-
+                TempData["SuccessMessage"] = "Dış alan donatısı silindi.";
             }
 
             return RedirectToAction(nameof(Amenities), new { projectId = projectId, isExisting = isExisting });
-
         }
 
 
