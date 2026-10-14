@@ -19,9 +19,15 @@ namespace GMK360.Web.Controllers
             _context = context;
         }
 
-        [HttpGet("ProjectFinance/Index/{projectId}")]
-        public async Task<IActionResult> Index(int projectId)
+        [HttpGet("ProjectFinance/Index/{projectId?}")]
+        [HttpGet("ProjectFinance")]
+        public async Task<IActionResult> Index(int? projectId = null)
         {
+            if (!projectId.HasValue)
+            {
+                return RedirectToAction("Index", "FinancialStrategy");
+            }
+
             var project = await _context.ConstructionProjects
                 .Include(p => p.Blocks)
                 .Include(p => p.BudgetItems)

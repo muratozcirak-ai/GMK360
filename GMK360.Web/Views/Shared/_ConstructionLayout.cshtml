@@ -1,6 +1,15 @@
-﻿@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Identity
 @using GMK360.Core.Entities.Identity
+@using Microsoft.EntityFrameworkCore
 @inject UserManager<ApplicationUser> UserManager
+@inject GMK360.Data.Contexts.ApplicationDbContext DbContext
+@{
+    var currentUser = await UserManager.GetUserAsync(User);
+    var currentConsultant = currentUser != null ? await DbContext.AgencyConsultants.Include(c => c.Agency).FirstOrDefaultAsync(c => c.UserId == currentUser.Id && c.IsActive) : null;
+    var currentAgency = currentConsultant?.Agency ?? (ViewBag.Agency as GMK360.Core.Entities.Agency);
+    var currentCompanyName = currentAgency?.CompanyName ?? "Şantiye & İnşaat ERP";
+    var hasLogo = !string.IsNullOrEmpty(currentAgency?.LogoUrl) && !currentAgency.LogoUrl.Contains("default-logo");
+}
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -42,8 +51,15 @@
                 </a>
                 
                 <span class="fs-3 text-muted mx-3">|</span>
-                <i class="bi bi-buildings fs-4 text-primary me-2"></i>
-                <span class="fw-bold fs-4 text-uppercase text-dark" style="letter-spacing: 0px;">DENGEHAM İNŞAAT</span>
+                @if (hasLogo)
+                {
+                    <img src="@currentAgency.LogoUrl" alt="@currentCompanyName" style="height: 38px; max-width: 140px; object-fit: contain;" class="me-2 rounded shadow-sm border p-1 bg-white" />
+                }
+                else
+                {
+                    <i class="bi bi-buildings fs-4 text-primary me-2"></i>
+                }
+                <span class="fw-bold fs-4 text-uppercase text-dark" style="letter-spacing: 0px;">@currentCompanyName</span>
             </div>
             
             <!-- SAĞ: PROFİL & BİLGİ MENÜSÜ -->
@@ -220,7 +236,7 @@
                             </h2>
                             <div id="colKurumsal" class="accordion-collapse collapse" data-bs-parent="#sidebarAccordion">
                                 <div class="list-group list-group-flush" style="font-size: 0.9rem;">
-                                    <a href="/ProjectFinance/Index" class="list-group-item list-group-item-action border-0 ps-5"><i class="bi bi-arrow-right-short text-secondary"></i> Karar Destek</a>
+                                    <a href="/FinancialStrategy/Index" class="list-group-item list-group-item-action border-0 ps-5"><i class="bi bi-arrow-right-short text-secondary"></i> Karar Destek</a>
                                     <a href="/B2BPurchasing/Index" class="list-group-item list-group-item-action border-0 ps-5"><i class="bi bi-arrow-right-short text-secondary"></i> B2B Satın Alma</a>
                                     <a href="/DocumentArchive/Index?context=construction" class="list-group-item list-group-item-action border-0 ps-5"><i class="bi bi-arrow-right-short text-secondary"></i> Evrak & Belge Arşivi</a>
                                     <a href="/Dashboard/SiteYonetimi" class="list-group-item list-group-item-action border-0 ps-5"><i class="bi bi-arrow-right-short text-secondary"></i> Kurumsal Web Sitem (CMS)</a>
