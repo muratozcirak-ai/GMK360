@@ -178,7 +178,9 @@
                                             </div>
                                         </div>
                                     <div class="col-md-6">
-                                        <label class="form-label fw-bold">Mevcut Durum Görseli (İlk Hali)</label>
+                                        <label class="form-label fw-bold">
+                                            @(Model.ProjectOriginId == 1 ? "Yıkılacak Eski Yapı Görseli (Opsiyonel)" : "Arsa / Saha Görseli (Boş Hali - Opsiyonel)")
+                                        </label>
                                         <div class="input-group">
                                               <input asp-for="CurrentStateImageFile" type="file" class="form-control bg-light" accept="image/jpeg,image/png,application/pdf" />
                                               @try {
@@ -190,10 +192,14 @@
                                                   <span>Hata: @ex.Message</span>
                                               }
                                           </div>
-                                          <div class="form-text text-muted">Şantiyenin/arazinin şu anki hali (JPG/PNG).</div>
+                                          <div class="form-text text-muted">
+                                              @(Model.ProjectOriginId == 1 
+                                                  ? "Varsa yıkım öncesi eski yapının fotoğrafını yükleyebilirsiniz (JPG/PNG/PDF)." 
+                                                  : "İnşaat başlamadan önceki boş arsa veya sahanın fotoğrafı (portföy ve pazarlama için çok değerlidir).")
+                                          </div>
                                       </div>
                                       <div class="col-md-6">
-                                        <label class="form-label fw-bold">Proje Görseli (Geleceği Hali)</label>
+                                        <label class="form-label fw-bold">Proje Görseli (3D Render / Gelecekteki Hali - Opsiyonel)</label>
                                         <div class="input-group">
                                               <input asp-for="CoverImageFile" type="file" class="form-control bg-light" accept="image/jpeg,image/png,application/pdf" />
                                               @try {
@@ -205,20 +211,20 @@
                                                   <span>Hata: @ex.Message</span>
                                               }
                                           </div>
-                                          <div class="form-text text-muted">Mimari 3D render görselini seçin (JPG/PNG).</div>
+                                          <div class="form-text text-muted">Tamamlandığındaki mimari 3D render veya konsept görseli (JPG/PNG).</div>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label small fw-bold">Tapu Belgesi</label>
-                                    <input type="file" name="TapuDocumentFile" class="form-control rounded-3 border-primary" accept="image/*,.pdf" @(string.IsNullOrEmpty((string)ViewBag.TapuDocumentUrl) ? "required" : "") />
+                                    <label class="form-label small fw-bold">Tapu Belgesi (Opsiyonel)</label>
+                                    <input type="file" name="TapuDocumentFile" class="form-control rounded-3 border-primary" accept="image/*,.pdf" />
                                     @if (!string.IsNullOrEmpty((string)ViewBag.TapuDocumentUrl))
                                     {
                                         <div class="mt-2"><a href="@ViewBag.TapuDocumentUrl" target="_blank" class="btn btn-sm btn-outline-success"><i class="bi bi-check-circle"></i> Yüklü Belgeyi Gör</a> <small class="text-muted">(Değiştirmek isterseniz yeni dosya seçin)</small></div>
                                     }
                                     else
                                     {
-                                        <div class="form-text text-primary"><i class="bi bi-shield-check"></i> Tapu belgesi (PDF/Görsel) zorunludur.</div>
+                                        <div class="form-text text-muted"><i class="bi bi-file-earmark-text"></i> Tapu senedi veya ada/parsel krokisi (PDF/Görsel - daha sonra da yüklenebilir).</div>
                                     }
-                                    </div>
+                                </div>
                                 </div>
                             </div>
                         </div>
@@ -760,6 +766,9 @@ window.onerror = function(message, source, lineno, colno, error) {
                 var pos = marker.getLatLng();
                 document.getElementById('latInput').value = pos.lat.toFixed(6);
                 document.getElementById('lngInput').value = pos.lng.toFixed(6);
+                if (typeof autoSaveStep1 === 'function') {
+                    autoSaveStep1();
+                }
             }
             var mapModal = bootstrap.Modal.getInstance(document.getElementById('mapModal'));
             if(mapModal) mapModal.hide();
@@ -1383,6 +1392,29 @@ window.onerror = function(message, source, lineno, colno, error) {
         // ========================================================
         // CANLI AUTO-SAVE MOTORU (DEBOUNCE İLE)
         // ========================================================
+        let autoSaveStep1Timer = null;
+        function autoSaveStep1() {
+            clearTimeout(autoSaveStep1Timer);
+            autoSaveStep1Timer = setTimeout(() => {
+                var form = document.getElementById('wizardForm');
+                if (!form) return;
+                var draftInput = document.getElementById('DraftProjectId');
+                if (!draftInput || !draftInput.value || parseInt(draftInput.value) <= 0) return;
+
+                var formData = new FormData(form);
+                fetch('/ConstructionProject/SaveStep1', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if(data.success) {
+                        console.log("Auto-save başarılı: 1. Aşama (Künye, Adres ve Konum)");
+                    }
+                }).catch(err => console.error("Auto-save 1. Aşama hatası", err));
+            }, 800); // 800ms bekler, peş peşe yazarken sunucuyu yormaz
+        }
+
         let autoSaveTimer = null;
         function autoSaveStep2() {
             clearTimeout(autoSaveTimer);
@@ -1402,12 +1434,31 @@ window.onerror = function(message, source, lineno, colno, error) {
             }, 800); // 800ms bekler, peş peşe yazarken yormaz
         }
 
-        // Tüm Step 2 girişlerini dinle (input, select)
+        // Tüm Step 1 ve Step 2 girişlerini dinle (input, select, textarea)
         document.addEventListener('DOMContentLoaded', function() {
+            var step1 = document.getElementById('step1');
+            if(step1) {
+                step1.addEventListener('input', function(e) {
+                    if((e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') && e.target.type !== 'file') {
+                        autoSaveStep1();
+                    }
+                });
+                step1.addEventListener('change', function(e) {
+                    if((e.target.tagName === 'SELECT' || e.target.type === 'date') && e.target.type !== 'file') {
+                        autoSaveStep1();
+                    }
+                });
+            }
+
             var step2 = document.getElementById('step2');
             if(step2) {
                 step2.addEventListener('input', function(e) {
                     if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
+                        autoSaveStep2();
+                    }
+                });
+                step2.addEventListener('change', function(e) {
+                    if(e.target.tagName === 'SELECT') {
                         autoSaveStep2();
                     }
                 });
