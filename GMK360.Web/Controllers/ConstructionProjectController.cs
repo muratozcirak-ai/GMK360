@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 
 using Microsoft.AspNetCore.Identity;
 
@@ -260,7 +260,7 @@ namespace GMK360.Web.Controllers
 
         // GET: ConstructionProject/Create
         [HttpPost]
-        public async Task<IActionResult> InitProject(string projectName, int statusId, string projectType)
+        public async Task<IActionResult> InitProject(string projectName, int statusId, string projectType, int? projectOriginId = null)
         {
             var agencyId = await GetUserAgencyIdAsync();
             if (agencyId == null) return Unauthorized();
@@ -271,6 +271,7 @@ namespace GMK360.Web.Controllers
                 AgencyId = agencyId.Value,
                 Status = (GMK360.Core.Entities.Construction.ProjectStatus)statusId,
                 ProjectType = projectType,
+                ProjectOriginId = projectOriginId ?? 0,
                 Address = "", // DB requires not null
                 Description = "", // DB requires not null
                 
