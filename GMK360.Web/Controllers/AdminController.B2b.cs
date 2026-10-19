@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using GMK360.Data.Contexts;
@@ -140,6 +140,46 @@ namespace GMK360.Web.Controllers
             await _context.SaveChangesAsync();
 
             return RedirectToAction("B2bList", new { type = listType });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> UpgradeB2bToPro(int id, string returnType = "firma")
+        {
+            var company = await _context.B2bCompanies
+                .Include(c => c.AddedByAgency)
+                    .ThenInclude(a => a.AgencyConsultants)
+                .FirstOrDefaultAsync(c => c.Id == id);
+
+            if (company == null) return NotFound();
+
+            company.InvitationStatus = B2bInvitationStatus.Pro;
+            company.IsVerified = true;
+
+            // Referans olan Müteahhit Şirket Sahibine (Patrona) Kazan-Kazan Ödülü
+            if (company.AddedByAgency != null)
+            {
+                var owner = company.AddedByAgency.AgencyConsultants
+                    .FirstOrDefault(c => c.Role == GMK360.Core.Entities.AgencyRole.Owner);
+
+                var ownerUserId = owner?.UserId ?? company.AddedByAgency.AgencyConsultants.FirstOrDefault()?.UserId;
+                
+                if (!string.IsNullOrEmpty(ownerUserId))
+                {
+                    var walletTx = new GMK360.Core.Entities.Identity.UserWalletTransaction
+                    {
+                        ApplicationUserId = ownerUserId,
+                        Amount = 500m,
+                        TransactionType = "ReferralBonus",
+                        Description = $"{company.Name} firması PRO üyeliğe geçti! (B2B Referans Primi)",
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _context.Add(walletTx);
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"{company.Name} başarıyla PRO statüsüne yükseltildi! Referans olan {company.AddedByAgency?.CompanyName ?? "müteahhit"} şirket sahibine referans payı tanımlandı.";
+            return RedirectToAction(nameof(B2bList), new { type = returnType });
         }
     }
 }

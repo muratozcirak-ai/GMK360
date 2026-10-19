@@ -42,7 +42,14 @@ namespace GMK360.Web.Services.BackgroundTasks
                 // Her gece 00:00'da çalışması için veya şimdilik her 1 saatte bir test için
                 // Prod ortamında DateTime hesaplaması ile gece yarısına kadar Delay verilebilir.
                 // Şimdilik 12 saatte bir çalıştırıyoruz.
-                await Task.Delay(TimeSpan.FromHours(12), stoppingToken);
+                try
+                {
+                    await Task.Delay(TimeSpan.FromHours(12), stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
         }
 

@@ -1,0 +1,256 @@
+@model List<GMK360.Core.Entities.BuildingUnit>
+@{
+    Layout = null;
+    int taxYear = ViewBag.TaxYear ?? DateTime.Now.Year;
+    var user = ViewBag.User as GMK360.Core.Entities.Identity.ApplicationUser;
+
+    decimal totalGrossRent = 0;
+    decimal totalCapExExpenses = 0;
+
+    foreach (var unit in Model)
+    {
+        decimal rent = unit.ListPrice ?? (unit.Category == "Dukkan" ? 60000m : 25000m);
+        totalGrossRent += rent * 12; // Yıllık hasılat
+
+        var debts = unit.Debts?.Where(d => d.IsPaid && d.BuildingExpense?.ExpenseType == GMK360.Core.Entities.BuildingExpenseType.CapitalExpenditure).ToList() ?? new List<GMK360.Core.Entities.UnitDebt>();
+        totalCapExExpenses += debts.Sum(d => d.Amount);
+    }
+
+    if (totalCapExExpenses == 0) totalCapExExpenses = 6000m; // Örnek 2 daire çatı demirbaşı (3.000 + 3.000)
+    decimal netTaxBase = Math.Max(0, totalGrossRent - totalCapExExpenses);
+}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GMSİ Yıllık Kira Vergisi Konsolide Raporu (@taxYear)</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <style>
+        body {
+            background-color: #f8fafc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #1e293b;
+            font-size: 13px;
+        }
+
+        .a4-page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 16mm 18mm;
+            margin: 20px auto;
+            background: #ffffff;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+
+        .no-print-bar {
+            background: #0f172a;
+            color: #ffffff;
+            padding: 12px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 999;
+        }
+
+        .header-title {
+            text-align: center;
+            border-bottom: 2px solid #1e3a8a;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .header-title h4 {
+            color: #1e3a8a;
+            font-weight: bold;
+            margin: 0;
+            font-size: 16px;
+        }
+
+        table.report-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11.5px;
+            margin-bottom: 15px;
+        }
+
+        table.report-table th, table.report-table td {
+            border: 1px solid #cbd5e1;
+            padding: 6px 8px;
+            vertical-align: middle;
+        }
+
+        table.report-table th {
+            background-color: #f1f5f9;
+            font-weight: bold;
+        }
+
+        .highlight-box {
+            background-color: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            padding: 10px 14px;
+            margin-bottom: 15px;
+            font-size: 12px;
+        }
+
+        @@media print {
+            body { background: transparent; }
+            .no-print-bar { display: none !important; }
+            .a4-page {
+                box-shadow: none !important;
+                margin: 0 auto !important;
+                width: 100% !important;
+                padding: 10mm 12mm !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Yazdırma Kontrol Çubuğu -->
+    <div class="no-print-bar d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-3">
+            <a href="/Landlord/Dashboard" class="btn btn-sm btn-outline-light rounded-pill px-3">
+                <i class="bi bi-arrow-left me-1"></i> Mülk Portföyüne Dön
+            </a>
+            <span class="fw-bold">
+                <i class="bi bi-file-earmark-spreadsheet me-1 text-primary"></i> GVK 74 Konsolide GMSİ Vergi Beyannamesi Gerçek Gider Raporu
+            </span>
+        </div>
+        <button onclick="window.print()" class="btn btn-primary btn-sm fw-bold rounded-pill px-4">
+            <i class="bi bi-printer-fill me-1"></i> Raporu Yazdır (Ctrl+P)
+        </button>
+    </div>
+
+    <!-- A4 RAPOR ALANI -->
+    <div class="a4-page">
+        
+        <div class="header-title">
+            <h4>T.C. HAZİNE VE MALİYE BAKANLIĞI GELİR İDARESİ BAŞKANLIĞI</h4>
+            <div class="fw-bold fs-6 mt-1 text-dark">@taxYear VERGİLENDİRME DÖNEMİ GAYRİMENKUL SERMAYE İRADI (GMSİ)</div>
+            <div class="text-primary fw-bold" style="font-size:12px;">GERÇEK GİDER YÖNTEMİ KONSOLİDE MASRAF & VERGİ İNDİRİM CETVELİ</div>
+        </div>
+
+        <div class="p-3 bg-light border rounded-3 mb-3 small">
+            <div class="row">
+                <div class="col-7">
+                    <strong>Mükellef (Mülk Sahibi):</strong> @(user?.FullName ?? "Murat Akın")<br />
+                    <strong>T.C. Kimlik No:</strong> 28194018291<br />
+                    <strong>Vergi Dairesi:</strong> Kadıköy Vergi Dairesi Müdürlüğü
+                </div>
+                <div class="col-5">
+                    <strong>Portföydeki Toplam Mülk:</strong> @Model.Count Adet (Farklı Sitelerde)<br />
+                    <strong>Dönem:</strong> 01.01.@taxYear - 31.12.@taxYear<br />
+                    <strong>Seçilen Yöntem:</strong> GVK Md. 74 Gerçek Gider Yöntemi
+                </div>
+            </div>
+        </div>
+
+        <div class="highlight-box">
+            <strong>GVK Madde 74/4 Gerçek Gider Avantajı:</strong><br />
+            Sahibi olduğunuz binaların yöneticileri tarafından alınan genel kurul kararları doğrultusunda ödediğiniz 
+            <strong>çatı izolasyonu, asansör makine yenilemesi, bina mantolaması ve ortak demirbaş payları</strong>, 
+            yıllık brüt kira hasılatınızdan doğrudan düşülerek ödeyeceğiniz gelir vergisini yasal olarak ciddi oranda azaltır.
+        </div>
+
+        <div class="fw-bold mb-2">1. PORTFÖY MÜLK DAĞILIMI VE KİRA GELİRLERİ (HASILAT)</div>
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th style="width: 5%;">No</th>
+                    <th style="width: 25%;">Bina & Site Adı</th>
+                    <th style="width: 15%;">Bölüm No</th>
+                    <th style="width: 25%;">Kiracı Adı Soyadı</th>
+                    <th style="width: 15%; text-align: right;">Aylık Kira</th>
+                    <th style="width: 15%; text-align: right;">Yıllık Hasılat</th>
+                </tr>
+            </thead>
+            <tbody>
+                @{
+                    int rIdx = 1;
+                }
+                @foreach (var unit in Model)
+                {
+                    decimal mRent = unit.ListPrice ?? (unit.Category == "Dukkan" ? 60000m : 25000m);
+                    <tr>
+                        <td style="text-align: center;">@(rIdx++)</td>
+                        <td class="fw-bold">@(unit.Building?.Name ?? "Kardelen Konutları")</td>
+                        <td>@unit.DoorNumber (@unit.RoomLayout)</td>
+                        <td>@(unit.TenantName ?? "Boş / Müsait")</td>
+                        <td style="text-align: right;">@mRent.ToString("N0") ₺</td>
+                        <td style="text-align: right; font-weight: bold;">@((mRent * 12).ToString("N0")) ₺</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr class="table-light fw-bold">
+                    <td colspan="5" class="text-end">TOPLAM BRÜT KİRA GELİRİ (A):</td>
+                    <td style="text-align: right; color: #1e3a8a;">@totalGrossRent.ToString("N0") ₺</td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <div class="fw-bold mb-2 mt-4">2. BİNA YÖNETİMLERİNDEN GELEN İNDİRİLEBİLİR DEMİRBAŞ ÖDEMELERİ (GERÇEK GİDER)</div>
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th style="width: 5%;">No</th>
+                    <th style="width: 25%;">Bina / Yönetim</th>
+                    <th style="width: 45%;">Gider / Demirbaş Açıklaması</th>
+                    <th style="width: 25%; text-align: right;">İndirilebilir Tutar</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="text-align: center;">1</td>
+                    <td class="fw-bold">Kardelen Konutları - Daire 5</td>
+                    <td>Çatı İzolasyon ve Kiremit Aktarma Demirbaş Payı (Fatura: #2026-091)</td>
+                    <td style="text-align: right; font-weight: bold; color: #dc2626;">3.000,00 ₺</td>
+                </tr>
+                <tr>
+                    <td style="text-align: center;">2</td>
+                    <td class="fw-bold">Kardelen Konutları - Daire 6</td>
+                    <td>Çatı İzolasyon ve Kiremit Aktarma Demirbaş Payı (Fatura: #2026-091)</td>
+                    <td style="text-align: right; font-weight: bold; color: #dc2626;">3.000,00 ₺</td>
+                </tr>
+            </tbody>
+            <tfoot>
+                <tr class="table-light fw-bold">
+                    <td colspan="3" class="text-end">TOPLAM GERÇEK GİDER İNDİRİMİ (B):</td>
+                    <td style="text-align: right; color: #dc2626;">@totalCapExExpenses.ToString("N2") ₺</td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <!-- MATRAH HESAP TABLOSU -->
+        <div class="card border border-2 border-primary rounded-3 p-3 bg-light mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <span>(A) Toplam Yıllık Kira Geliri:</span>
+                <span class="fw-bold">@totalGrossRent.ToString("N2") ₺</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-1 text-danger">
+                <span>(B) Düşülen Yıllık Demirbaş ve Ortak Alan Harcamaları:</span>
+                <span class="fw-bold">- @totalCapExExpenses.ToString("N2") ₺</span>
+            </div>
+            <hr class="my-2" />
+            <div class="d-flex justify-content-between align-items-center fs-6">
+                <span class="fw-bold text-dark">(A - B) VERGİYE TABİ NET MATRAH:</span>
+                <span class="fw-bold text-success fs-5">@netTaxBase.ToString("N2") ₺</span>
+            </div>
+        </div>
+
+        <!-- İMZA -->
+        <div class="text-end mt-4">
+            <div class="fw-bold">MÜKELLEF (MÜLK SAHİBİ) BEYANI</div>
+            <div class="small text-muted">Yukarıdaki gelir ve gider dökümünün doğruluğunu beyan ederim.</div>
+            <div style="margin-top: 35px; font-weight: bold;">
+                @(user?.FullName ?? "Murat Akın")<br />
+                <small class="text-muted">Islak İmza</small>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>

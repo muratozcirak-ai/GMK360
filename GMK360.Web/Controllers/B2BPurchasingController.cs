@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using GMK360.Data.Contexts;
 using Microsoft.AspNetCore.Identity;
@@ -18,11 +18,13 @@ namespace GMK360.Web.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly GMK360.Web.Services.B2BSupplierSyncService _supplierSyncService;
 
-        public B2BPurchasingController(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
+        public B2BPurchasingController(ApplicationDbContext context, UserManager<ApplicationUser> userManager, GMK360.Web.Services.B2BSupplierSyncService supplierSyncService)
         {
             _context = context;
             _userManager = userManager;
+            _supplierSyncService = supplierSyncService;
         }
 
         private async Task<int?> GetUserAgencyIdAsync()
@@ -192,6 +194,51 @@ namespace GMK360.Web.Controllers
                     
                 if (quote == null || (!User.IsInRole("Admin") && quote.RequesterAgencyId != agencyId)) 
                     return NotFound();
+
+                var currentUserId = _userManager.GetUserId(User) ?? "";
+                await _supplierSyncService.AutoSyncExistingNetworkContactsAsync(quote.RequesterAgencyId, currentUserId);
+
+                GMK360.Core.Entities.Construction.ConstructionProject project = null;
+                if (quote.SourceModule == "PhaseZeroDocument")
+                {
+                    var doc = await _context.ProjectLegalDocuments
+                        .Include(d => d.ConstructionProject)
+                        .FirstOrDefaultAsync(d => d.Id == quote.SourceReferenceId);
+                    project = doc?.ConstructionProject;
+                }
+                else if (quote.SourceModule == "ConstructionProject" && quote.SourceReferenceId > 0)
+                {
+                    project = await _context.ConstructionProjects.FindAsync(quote.SourceReferenceId);
+                }
+                ViewBag.Project = project;
+
+                byte contactType = _supplierSyncService.DetermineContactType(quote.Title);
+                var recommendedQuery = _context.B2bCompanies
+                    .Include(c => c.Contacts)
+                    .Include(c => c.CompanyCategories)
+                        .ThenInclude(cc => cc.DefinitionValue)
+                    .AsQueryable();
+
+                if (contactType == 8 || contactType == 4)
+                {
+                    recommendedQuery = recommendedQuery.Where(c => c.IsEngineering);
+                }
+                else if (contactType == 3)
+                {
+                    recommendedQuery = recommendedQuery.Where(c => c.IsSupplier);
+                }
+                else
+                {
+                    recommendedQuery = recommendedQuery.Where(c => c.IsSubcontractor);
+                }
+
+                var invitedCompanyNames = quote.Invites.Where(i => i.NetworkContact != null).Select(i => i.NetworkContact.CompanyName.Trim().ToLower()).ToList();
+                var uninvitedQuery = recommendedQuery.Where(c => !invitedCompanyNames.Contains(c.Name.Trim().ToLower()));
+                var totalEligibleCount = await uninvitedQuery.CountAsync();
+                var recommended = await uninvitedQuery.Take(6).ToListAsync();
+
+                ViewBag.TotalEligibleMarketCompaniesCount = totalEligibleCount;
+                ViewBag.RecommendedCompanies = recommended;
                     
                 ViewBag.Warehouses = await _context.Warehouses.Where(w => w.AgencyId == quote.RequesterAgencyId).ToListAsync();
                 ViewBag.Catalogs = await _context.MaterialCatalogs.Where(c => c.AgencyId == quote.RequesterAgencyId).OrderBy(c => c.Name).ToListAsync();
@@ -211,7 +258,15 @@ namespace GMK360.Web.Controllers
 
                 [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AcceptAndComplete(int quoteRequestId, int inviteId, int warehouseId, string assignedUserId, int[] inviteItemIds, decimal[] acceptedQuantities)
+        public async Task<IActionResult> AcceptAndComplete(
+            int quoteRequestId, 
+            int inviteId, 
+            int warehouseId, 
+            string assignedUserId, 
+            int[] inviteItemIds, 
+            decimal[] acceptedQuantities,
+            bool isPaidUpfront = false,
+            DateTime? dueDate = null)
         {
             try 
             {
@@ -280,42 +335,59 @@ namespace GMK360.Web.Controllers
 
                 _context.InventoryReceipts.Add(receipt);
                 
-                if (invite.NetworkContactId > 0 && actualInvoiceAmount > 0)
+                if (actualInvoiceAmount == 0 && invite.OfferedPrice.HasValue && invite.OfferedPrice.Value > 0)
                 {
-                    var currentAccount = await _context.SupplierCurrentAccounts
-                        .FirstOrDefaultAsync(a => a.AgencyId == agencyId.Value && a.PhonebookContactId == invite.NetworkContactId);
-                        
-                    if (currentAccount == null)
+                    actualInvoiceAmount = invite.OfferedPrice.Value;
+                }
+
+                if (invite.NetworkContact != null && actualInvoiceAmount > 0)
+                {
+                    int? projId = (quote.SourceModule == "ConstructionProject" && quote.SourceReferenceId > 0) ? quote.SourceReferenceId : null;
+                    if (quote.SourceModule == "PhaseZeroDocument")
                     {
-                        currentAccount = new GMK360.Core.Entities.Finance.SupplierCurrentAccount
-                        {
-                            AgencyId = agencyId.Value,
-                            PhonebookContactId = invite.NetworkContactId,
-                            CurrentBalance = 0
-                        };
-                        _context.SupplierCurrentAccounts.Add(currentAccount);
-                        await _context.SaveChangesAsync(); 
+                        var doc = await _context.ProjectLegalDocuments.FindAsync(quote.SourceReferenceId);
+                        projId = doc?.ConstructionProjectId;
                     }
-                    
-                    currentAccount.CurrentBalance += actualInvoiceAmount;
-                    
-                    var transaction = new GMK360.Core.Entities.Finance.SupplierAccountTransaction
-                    {
-                        SupplierCurrentAccountId = currentAccount.Id,
-                        TransactionDate = DateTime.UtcNow,
-                        Type = GMK360.Core.Entities.Finance.SupplierTransactionType.PurchaseInvoice,
-                        Amount = actualInvoiceAmount,
-                        BalanceAfterTransaction = currentAccount.CurrentBalance,
-                        Description = $"B2B Kısmi/Tam Onay - İhale #{quote.Id}",
-                        DocumentReference = receipt.DocumentNumber,
-                        CreatedByUserId = _userManager.GetUserId(User) ?? ""
-                    };
-                    _context.SupplierAccountTransactions.Add(transaction);
+
+                    var syncResult = await _supplierSyncService.EnsureSupplierSynchronizedAsync(
+                        agencyId.Value,
+                        _userManager.GetUserId(User) ?? "",
+                        invite.NetworkContact.CompanyName,
+                        invite.NetworkContact.ContactPerson,
+                        invite.NetworkContact.PhoneNumber,
+                        invite.NetworkContact.Email,
+                        quote.Title);
+
+                    await _supplierSyncService.OpenOrUpdateCurrentAccountAsync(
+                        agencyId.Value,
+                        syncResult.PhonebookContact.Id,
+                        projId,
+                        actualInvoiceAmount,
+                        $"B2B İhale Onayı #{quote.Id} - {quote.Title}",
+                        receipt.DocumentNumber,
+                        _userManager.GetUserId(User) ?? "",
+                        isPaidUpfront: isPaidUpfront,
+                        dueDate: dueDate);
+
+                    // Şantiye Kara Defterine Teslimat & İmalat Takibi Görevi Ekle
+                    var targetDeliveryDate = dueDate ?? DateTime.UtcNow.AddDays(7);
+                    var paymentTermsText = isPaidUpfront ? "Peşin Ödendi" : $"Vadeli (Vade: {targetDeliveryDate:dd.MM.yyyy})";
+                    await _supplierSyncService.CreateDeliveryAgendaRecordAsync(
+                        agencyId.Value,
+                        projId,
+                        syncResult.PhonebookContact.Id,
+                        invite.NetworkContact.CompanyName,
+                        quote.Title,
+                        actualInvoiceAmount,
+                        paymentTermsText,
+                        targetDeliveryDate);
                 }
                 
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = $"Teklif onaylandı! {actualInvoiceAmount.ToString("N2")} ? cari hesaba işlendi.";
+                TempData["SuccessMessage"] = isPaidUpfront 
+                    ? $"Teklif onaylandı! {actualInvoiceAmount:N2} ₺ peşin ödendi olarak cari hesaba ve şantiye kara defterine işlendi."
+                    : $"Teklif onaylandı! {actualInvoiceAmount:N2} ₺ vadeli olarak cari hesaba ve şantiye kara defterine işlendi.";
                 return RedirectToAction("Details", new { id = quote.Id });
             }
             catch (Exception ex)
@@ -339,35 +411,28 @@ namespace GMK360.Web.Controllers
 
                 var user = await _userManager.GetUserAsync(User);
 
-                // Create Shadow Contact
-                var contact = new B2BNetworkContact
-                {
-                    OwnerAgencyId = agencyId.Value,
-                    AddedByUserId = user?.Id ?? "",
-                    CompanyName = companyName ?? "Bilinmeyen Firma",
-                    ContactPerson = contactPerson ?? "",
-                    PhoneNumber = phoneNumber ?? "",
-                    Email = email ?? "",
-                    SectorCategory = "Tedarikçi",
-                    CreatedAt = DateTime.UtcNow
-                };
+                var syncResult = await _supplierSyncService.EnsureSupplierSynchronizedAsync(
+                    agencyId.Value,
+                    user?.Id ?? "",
+                    companyName,
+                    contactPerson,
+                    phoneNumber,
+                    email,
+                    quote.Title);
 
-                _context.B2BNetworkContacts.Add(contact);
-                await _context.SaveChangesAsync();
-
-                // Create Invite
                 var invite = new B2BQuoteInvite
                 {
                     QuoteRequestId = quoteId,
-                    NetworkContactId = contact.Id,
+                    NetworkContactId = syncResult.NetworkContact.Id,
                     Status = QuoteInviteStatus.Pending,
+                    AccessToken = Guid.NewGuid().ToString("N"),
                     OfferNotes = ""
                 };
 
                 _context.B2BQuoteInvites.Add(invite);
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = companyName + " başarıyla gölge tedarikçi olarak eklendi ve davet oluşturuldu.";
+                TempData["SuccessMessage"] = companyName + " başarıyla rehbere ve sisteme eklendi, davet oluşturuldu.";
                 return RedirectToAction("Details", new { id = quoteId });
             }
             catch (Exception ex)
@@ -376,7 +441,189 @@ namespace GMK360.Web.Controllers
                 return RedirectToAction("Details", new { id = quoteId });
             }
         }
-}
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> InviteExistingB2bCompany(int quoteId, int b2bCompanyId)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var quote = await _context.B2BQuoteRequests.FirstOrDefaultAsync(q => q.Id == quoteId);
+            if (quote == null || quote.RequesterAgencyId != agencyId) return NotFound();
+
+            var company = await _context.B2bCompanies.Include(c => c.Contacts).FirstOrDefaultAsync(c => c.Id == b2bCompanyId);
+            if (company == null) return NotFound();
+
+            var primaryContact = company.Contacts.FirstOrDefault();
+            var syncResult = await _supplierSyncService.EnsureSupplierSynchronizedAsync(
+                agencyId.Value,
+                _userManager.GetUserId(User) ?? "",
+                company.Name,
+                primaryContact?.FullName ?? company.Name,
+                primaryContact?.MobilePhone ?? "",
+                primaryContact?.Email ?? "",
+                quote.Title);
+
+            var invite = new B2BQuoteInvite
+            {
+                QuoteRequestId = quoteId,
+                NetworkContactId = syncResult.NetworkContact.Id,
+                Status = QuoteInviteStatus.Pending,
+                AccessToken = Guid.NewGuid().ToString("N"),
+                OfferNotes = ""
+            };
+
+            _context.B2BQuoteInvites.Add(invite);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"{company.Name} başarıyla ihaleye davet edildi!";
+            return RedirectToAction(nameof(Details), new { id = quoteId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ConfirmInspectionAppointment(
+            int inviteId, 
+            DateTime? confirmedDate, 
+            DateTime? appointmentDate, 
+            string? appointmentTime, 
+            string? managerNotes)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var invite = await _context.B2BQuoteInvites
+                .Include(i => i.NetworkContact)
+                .Include(i => i.QuoteRequest)
+                .FirstOrDefaultAsync(i => i.Id == inviteId);
+            if (invite == null || invite.QuoteRequest.RequesterAgencyId != agencyId) return NotFound();
+
+            // Tarih ve saat birleştirme
+            DateTime finalDate = confirmedDate ?? DateTime.Today.AddDays(1).AddHours(10);
+            if (appointmentDate.HasValue)
+            {
+                finalDate = appointmentDate.Value.Date;
+                if (!string.IsNullOrWhiteSpace(appointmentTime) && TimeSpan.TryParse(appointmentTime, out var ts))
+                {
+                    finalDate = finalDate.Add(ts);
+                }
+                else
+                {
+                    finalDate = finalDate.AddHours(10);
+                }
+            }
+
+            var notes = string.IsNullOrWhiteSpace(managerNotes) ? "Şantiye şefi usta ile teyit etti." : managerNotes.Trim();
+
+            // Şantiye Kara Defteri'ne (AgendaRecord) KESİN KAYIT aç
+            await _supplierSyncService.CreateDiscoveryAgendaRecordAsync(
+                inviteId, 
+                finalDate, 
+                invite.NetworkContact?.ContactPerson, 
+                notes);
+
+            // Teklif notunu kesinleşti olarak güncelle
+            invite.OfferNotes = $"[RANDEVU KESİNLEŞTİ] Tarih: {finalDate:dd.MM.yyyy HH:mm} | Not: {notes}";
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"Saha keşif randevusu ({finalDate:dd.MM.yyyy HH:mm}) teyit edildi ve Şantiye Kara Defteri'ne (Ajandaya) işlendi.";
+            return RedirectToAction(nameof(Details), new { id = invite.QuoteRequestId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> BroadcastQuoteToMarketplace(int quoteId)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var quote = await _context.B2BQuoteRequests
+                .Include(q => q.Invites).ThenInclude(i => i.NetworkContact)
+                .FirstOrDefaultAsync(q => q.Id == quoteId);
+            if (quote == null || quote.RequesterAgencyId != agencyId) return NotFound();
+
+            byte contactType = _supplierSyncService.DetermineContactType(quote.Title);
+            var query = _context.B2bCompanies
+                .Include(c => c.Contacts)
+                .AsQueryable();
+
+            if (contactType == 8 || contactType == 4)
+            {
+                query = query.Where(c => c.IsEngineering);
+            }
+            else if (contactType == 3)
+            {
+                query = query.Where(c => c.IsSupplier);
+            }
+            else
+            {
+                query = query.Where(c => c.IsSubcontractor);
+            }
+
+            var invitedCompanyNames = quote.Invites
+                .Where(i => i.NetworkContact != null)
+                .Select(i => i.NetworkContact.CompanyName.Trim().ToLower())
+                .ToList();
+
+            var eligibleCompanies = await query
+                .Where(c => !invitedCompanyNames.Contains(c.Name.Trim().ToLower()))
+                .ToListAsync();
+
+            if (!eligibleCompanies.Any())
+            {
+                TempData["ErrorMessage"] = "Bu sektörde henüz davet edilmemiş açık pazar yeri firması bulunamadı.";
+                return RedirectToAction(nameof(Details), new { id = quoteId });
+            }
+
+            var currentUserId = _userManager.GetUserId(User) ?? "";
+            int count = 0;
+            var smsService = HttpContext.RequestServices.GetService<GMK360.Web.Services.Sms.ISmsService>();
+
+            foreach (var company in eligibleCompanies)
+            {
+                var primaryContact = company.Contacts.FirstOrDefault();
+                var syncResult = await _supplierSyncService.EnsureSupplierSynchronizedAsync(
+                    agencyId.Value,
+                    currentUserId,
+                    company.Name,
+                    primaryContact?.FullName ?? company.Name,
+                    primaryContact?.MobilePhone ?? "",
+                    primaryContact?.Email ?? "",
+                    quote.Title);
+
+                var invite = new B2BQuoteInvite
+                {
+                    QuoteRequestId = quoteId,
+                    NetworkContactId = syncResult.NetworkContact.Id,
+                    Status = QuoteInviteStatus.Pending,
+                    AccessToken = Guid.NewGuid().ToString("N"),
+                    OfferNotes = "[AÇIK İHALE] Pazar Yeri Genel Duyurusu"
+                };
+
+                _context.B2BQuoteInvites.Add(invite);
+                count++;
+
+                // SMS Entegrasyonu (Numara varsa sessizce arka planda tetikle)
+                if (smsService != null && primaryContact != null && !string.IsNullOrWhiteSpace(primaryContact.MobilePhone))
+                {
+                    try
+                    {
+                        var portalUrl = $"{Request.Scheme}://{Request.Host}/B2BPartnerPortal/Invite/{invite.AccessToken}";
+                        var msg = $"GMK360 Pazar Yeri: {quote.Title} ihalesi açıldı! Teklif vermek için tıklayın: {portalUrl}";
+                        _ = Task.Run(() => smsService.SmsGonderAsync(primaryContact.MobilePhone, msg));
+                    }
+                    catch { /* SMS hatası ana akışı engellemesin */ }
+                }
+            }
+
+            quote.Status = "Published";
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"Açık İhale Pazar Yerine Duyuruldu! İlgili sektördeki {count} firmaya teklif daveti başarıyla iletildi.";
+            return RedirectToAction(nameof(Details), new { id = quoteId });
+        }
+    }
 }
 
 

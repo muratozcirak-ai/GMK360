@@ -3,63 +3,305 @@
     Layout = "~/Views/Shared/_ProjectLayout.cshtml";
     var projectId = ViewData["ProjectId"];
     var savedProfiles = ViewBag.SavedProfiles as List<GMK360.Core.Entities.Construction.Workflows.ProjectDnaProfile>;
+    var project = ViewBag.Project as GMK360.Core.Entities.Construction.ConstructionProject;
+    var parametricTakeoff = ViewBag.ParametricTakeoff as List<GMK360.Web.Controllers.MetrajController.ParametricTakeoffItemDto>;
+
+    var blocks = project?.Blocks?.Where(b => !b.IsExistingBuilding).ToList() ?? new List<GMK360.Core.Entities.Building>();
+    var rootBlocks = blocks.Where(b => b.ParentBuildingId == null).ToList();
+    double totalLand = project?.TotalLandArea ?? 0;
+    double baseArea = rootBlocks.Sum(b => b.BaseArea ?? 0);
+    if (baseArea <= 0 && blocks.Any()) baseArea = blocks.Sum(b => b.BaseArea ?? 0);
+    if (baseArea <= 0) baseArea = project?.EskiBinaOturumAlani ?? (totalLand > 0 ? totalLand * 0.40 : 500);
+
+    double taksRate = totalLand > 0 ? (baseArea / totalLand) * 100 : 0;
+    int maxFloors = blocks.Any() ? blocks.Max(b => (b.TotalFloors ?? 0) + b.BasementFloors) : (project?.TotalFloors ?? 5);
+    int maxBasement = blocks.Any() ? blocks.Max(b => b.BasementFloors) : 2;
+    int totalApartments = blocks.Sum(b => b.TotalApartments);
+    if (totalApartments <= 0) totalApartments = project?.TargetTotalApartments ?? 0;
+    int totalShops = blocks.Sum(b => b.TotalShops);
+    if (totalShops <= 0) totalShops = project?.TargetTotalShops ?? 0;
+
+    var latestProf = savedProfiles?.FirstOrDefault();
+    var latestDetails = latestProf?.Details?.ToList() ?? new List<GMK360.Core.Entities.Construction.Workflows.ProjectDnaDetail>();
+
+    var zeminItem = latestDetails.FirstOrDefault(d => d.SelectedItem.Contains("Zemin") || d.SelectedItem.Contains("Kaya") || d.SelectedItem.Contains("Kum"))?.SelectedItem ?? "Yumuşak / Kumlu Zemin";
+    var ihataItem = latestDetails.FirstOrDefault(d => d.SelectedItem.Contains("Sac") || d.SelectedItem.Contains("Tel Örgü") || d.SelectedItem.Contains("Pano"))?.SelectedItem ?? "Trapez Sac Kaplama";
+    var ihataLen = latestDetails.FirstOrDefault(d => d.SelectedItem.Contains("Çevre Sınırı Toplam") || (d.SelectedItem.Contains("İhata") && d.SelectedItem.Contains(":")) )?.SelectedItem ?? $"~{Math.Round(4 * Math.Sqrt(totalLand > 0 ? totalLand : 3600), 0)} mt";
+    var molozItem = latestDetails.FirstOrDefault(d => d.SelectedItem.Contains("Yıkım") || d.SelectedItem.Contains("Moloz") || d.SelectedItem.Contains("Enkaz"))?.SelectedItem ?? (project?.EskiKatSayisi > 0 ? "Eski Yapı Yıkımı & Moloz Var" : "Temiz Arsa");
+    var kapiItem = latestDetails.FirstOrDefault(d => d.SelectedItem.Contains("Kapı"))?.SelectedItem ?? "Sürgülü Sac Kapı (Raylı 6m)";
+    var elektrikItem = latestDetails.FirstOrDefault(d => d.SelectedItem.Contains("Elektrik") || d.SelectedItem.Contains("Abonelik") || d.SelectedItem.Contains("Jeneratör"))?.SelectedItem ?? "Şantiye Aboneliği + TMŞ Pano";
+    var suItem = latestDetails.FirstOrDefault(d => d.SelectedItem.Contains("Su") || d.SelectedItem.Contains("Depo") || d.SelectedItem.Contains("Hidrofor"))?.SelectedItem ?? "15T Su Deposu + 3 HP Hidrofor";
+    var structures = ViewBag.Structures as List<GMK360.Core.Entities.Building> ?? rootBlocks;
+    var activeStructure = ViewBag.ActiveStructure as GMK360.Core.Entities.Building ?? structures?.FirstOrDefault();
+    var workflowSteps = ViewBag.WorkflowSteps as List<GMK360.Web.Controllers.MetrajController.WorkflowStepItemDto>;
 }
 
 <div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <!-- ÜST BAŞLIK VE AKSİYONLAR -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>
-            <h3 class="fw-bold text-dark mb-0"><i class="fas fa-dna text-primary me-2"></i>DNA Profili Yönetimi (Konfigüratör)</h3>
-            <p class="text-muted small mt-1 mb-0">Şantiyenin mimari ve statik profillerini (DNA) oluşturarak piyasa araştırması başlatın.</p>
-        </div>
-        <div class="d-flex gap-2"><button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#newConfigModal"><i class="fas fa-plus me-2"></i> Yeni DNA Profili Üret</button><a href="/Metraj/DnaWizard/@projectId" target="_blank" class="btn btn-primary fw-bold shadow-sm" style="background-color: #6f42c1; border-color: #6f42c1;"><i class="fas fa-magic me-2"></i> Profil Üret</a></div>
-    </div>
-
-    <!-- DXF CIZIM SARTNAMESI BILGILENDIRME ALANI -->
-    <div class="alert alert-info border-0 shadow-sm d-flex align-items-center mb-4 rounded-4" style="background-color: #f0f7ff;" role="alert">
-        <div class="me-4">
-            <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary">
-                <i class="fas fa-drafting-compass fa-2x"></i>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="badge bg-success text-white px-2 py-1 rounded-pill fw-bold" style="font-size:0.75rem;">
+                    <i class="bi bi-cpu-fill me-1"></i>KANAT 2 : HESAPLAMA & İHALE MOTORU
+                </span>
+                <span class="badge bg-light text-muted border px-2 py-1 rounded-pill" style="font-size:0.75rem;">
+                    Proje #@projectId : @(project?.Name ?? "Proje")
+                </span>
             </div>
+            <h3 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                <i class="fas fa-dna text-success"></i>
+                <span>Proje DNA Profili (Hesaplama & İhale Masası)</span>
+            </h3>
+            <p class="text-muted small mt-1 mb-0">Tek gerçek kaynak: GMK360 Veritabanı. Kat ve daire metrajları üzerinde malzeme & işçilik senaryolarını hesaplayın, toptan tedarikçi ve taşeron ihalelerini başlatın.</p>
         </div>
-        <div class="flex-grow-1">
-            <h6 class="fw-bold mb-1 text-dark">GMK360 AutoCAD DXF Cizim Sartnamesi</h6>
-            <p class="mb-0 small text-muted">Asagidaki 3 farkli DXF Okuma Motorunun sifir hata ve yapay zeka entegrasyonuyla calisabilmesi icin, firmanizda cizim yapan mimar ve muhendislerin uymasi gereken AutoCAD Katman (Layer) kurallari kilavuzudur.</p>
-        </div>
-        <div class="ms-3">
-            <button class="btn btn-primary fw-bold rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#sartnameModal">
-                <i class="fas fa-book-open me-2"></i> Sartnameyi Incele
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <a href="/Metraj/DrawingArchive?projectId=@projectId" class="btn btn-outline-primary rounded-pill px-3 shadow-sm fw-bold">
+                <i class="bi bi-folder2-open me-1 text-primary"></i> Kanat 1: Çizim Arşivi & Kabul &rarr;
+            </a>
+            <button type="button" class="btn btn-primary rounded-pill px-4 py-2 fw-bold shadow-sm" onclick="openNewProfileModal()">
+                <i class="fas fa-plus me-1"></i> Yeni Senaryo / Profil
             </button>
         </div>
     </div>
 
-    <!-- PROFIL LISTESI (MIMARI) -->
-    <div class="card shadow-sm border-0 rounded-4 mb-4 border-top border-4 border-primary">
-        <div class="card-header bg-white border-bottom p-4 d-flex justify-content-between align-items-center">
-            <div>
-                <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-list-ul me-2 text-primary"></i>Üretilen Mimari DNA Profilleri</h5>
-                <p class="text-muted small mb-0 mt-1">Farklı statik ve mimari kombinasyonlar (DNA'lar) oluşturarak bütçe alternatifleri yaratın.</p>
+
+    <!-- KÜNYE & PARAMETRİK KEŞİF BİLGİ ŞERİDİ (KOMPAKT & COLLAPSIBLE) -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white">
+        <div class="card-body p-3 d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="p-2 rounded-3 bg-success bg-opacity-10 text-success">
+                    <i class="fas fa-layer-group fs-5"></i>
+                </div>
+                <div>
+                    <div class="d-flex align-items-center gap-2">
+                        <h6 class="fw-bold text-dark mb-0">Proje Yapı Künyesi & Saha Koşulları</h6>
+                        <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill small">
+                            <i class="fas fa-check-circle me-1"></i> Künye Eşleşti
+                        </span>
+                    </div>
+                    <small class="text-muted">Mimari ve çevresel saha parametreleri</small>
+                </div>
             </div>
-            <div>
-                <button class="btn btn-primary fw-bold shadow-sm">
-                    <i class="fas fa-file-import me-2"></i> Mimari DXF'i Oku ve Profillere Dağıt
+
+            <!-- ORTA: SAYFAYA DÜZGÜN YAYILAN METRİK ROZETLERİ -->
+            <div class="d-none d-xl-flex align-items-center gap-2 flex-wrap justify-content-center">
+                <span class="badge bg-light text-dark border px-3 py-2 rounded-pill shadow-xs">
+                    <i class="fas fa-ruler-combined text-primary me-1"></i><strong>@(totalLand > 0 ? totalLand.ToString("N0") + " m²" : "-")</strong> Arsa
+                </span>
+                <span class="badge bg-light text-dark border px-3 py-2 rounded-pill shadow-xs">
+                    <i class="fas fa-vector-square text-success me-1"></i><strong>@(baseArea > 0 ? baseArea.ToString("N0") + " m²" : "-")</strong> Taban (%@taksRate.ToString("N1"))
+                </span>
+                <span class="badge bg-light text-dark border px-3 py-2 rounded-pill shadow-xs">
+                    <i class="fas fa-building text-info me-1"></i><strong>@maxFloors Kat</strong> <small class="text-muted">(@maxBasement Bodrum)</small>
+                </span>
+                <span class="badge bg-light text-dark border px-3 py-2 rounded-pill shadow-xs">
+                    <i class="fas fa-home text-warning me-1"></i><strong>@(totalApartments) Daire</strong>, <strong>@(totalShops) Dükkan</strong>
+                </span>
+            </div>
+
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <button class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-semibold shadow-xs" data-bs-toggle="modal" data-bs-target="#sartnameModal">
+                    <i class="fas fa-drafting-compass me-1"></i> DXF Şartnamesi
+                </button>
+                <button class="btn btn-sm btn-outline-warning text-dark rounded-pill px-3 fw-bold shadow-xs" onclick="openParametricModalForProfile(null, 'Varsayılan Proje DNA')">
+                    <i class="fas fa-calculator me-1"></i> Parametrik Keşif (@(parametricTakeoff?.Count ?? 0) Kalem)
+                </button>
+                <button class="btn btn-sm btn-light border rounded-pill px-3 fw-semibold text-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#projectCockpitCollapse" aria-expanded="false" aria-controls="projectCockpitCollapse">
+                    <i class="fas fa-sliders-h me-1 text-primary"></i> Künye Detayları <i class="fas fa-chevron-down ms-1"></i>
                 </button>
             </div>
         </div>
+
+        <!-- COLLAPSE İÇERİĞİ (VARSAYILAN: GİZLİ / COLLAPSED) -->
+        <div class="collapse border-top" id="projectCockpitCollapse">
+            <div class="card-body p-4 bg-light bg-opacity-50">
+                <div class="row g-3">
+                    <!-- SOL KOLON: YAPI ÖZETİ (MİMARİ BOYUTLAR) -->
+                    <div class="col-lg-6">
+                        <div class="bg-white p-3 rounded-4 border shadow-xs h-100">
+                            <div class="d-flex align-items-center mb-3 text-primary">
+                                <i class="fas fa-building me-2"></i>
+                                <strong class="text-dark">Mimari Yapı Boyutları (Künye)</strong>
+                            </div>
+                            <div class="row g-2 small">
+                                <div class="col-6 col-md-4">
+                                    <div class="p-2 rounded-3 bg-light border">
+                                        <div class="text-muted small">Toplam Arsa</div>
+                                        <div class="fw-bold text-dark fs-6">@(totalLand > 0 ? totalLand.ToString("N0") + " m²" : "Belirtilmedi")</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="p-2 rounded-3 bg-light border">
+                                        <div class="text-muted small">Yapı Tabanı (TAKS)</div>
+                                        <div class="fw-bold text-dark fs-6">@(baseArea > 0 ? baseArea.ToString("N0") + " m²" : "0 m²") <small class="text-muted">(@taksRate.ToString("N1")%)</small></div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="p-2 rounded-3 bg-light border">
+                                        <div class="text-muted small">Dış & Bahçe Alanı</div>
+                                        <div class="fw-bold text-dark fs-6">@((totalLand > baseArea ? (totalLand - baseArea) : 0).ToString("N0")) m²</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="p-2 rounded-3 bg-light border">
+                                        <div class="text-muted small">Maksimum Kat</div>
+                                        <div class="fw-bold text-dark fs-6">@maxFloors Kat <small class="text-muted">(@maxBasement Bodrum)</small></div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="p-2 rounded-3 bg-light border">
+                                        <div class="text-muted small">Blok Sayısı</div>
+                                        <div class="fw-bold text-dark fs-6">@(blocks.Count > 0 ? blocks.Count + " Blok/Yapı" : "Tek Yapı")</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="p-2 rounded-3 bg-light border">
+                                        <div class="text-muted small">Bağımsız Bölüm</div>
+                                        <div class="fw-bold text-dark fs-6">@(totalApartments) Daire, @(totalShops) Dükkan</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SAĞ KOLON: ÇEVRESEL SAHA FAKTÖRLERİ -->
+                    <div class="col-lg-6">
+                        <div class="bg-white p-3 rounded-4 border shadow-xs h-100">
+                            <div class="d-flex align-items-center mb-3 text-warning">
+                                <i class="fas fa-map-marked-alt text-warning me-2"></i>
+                                <strong class="text-dark">Saha & Çevresel Faktörler (DNA Adım 1)</strong>
+                            </div>
+                            <div class="row g-2 small">
+                                <div class="col-6 col-md-4">
+                                    <div class="p-2 rounded-3 bg-light border">
+                                        <div class="text-muted small"><i class="fas fa-mountain text-secondary me-1"></i>Zemin Karakteri</div>
+                                        <div class="fw-bold text-dark text-truncate" title="@zeminItem">@zeminItem</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="p-2 rounded-3 bg-light border">
+                                        <div class="text-muted small"><i class="fas fa-border-all text-primary me-1"></i>Çevre İhata / Çit</div>
+                                        <div class="fw-bold text-dark text-truncate" title="@ihataItem">@ihataLen (@ihataItem)</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="p-2 rounded-3 bg-light border">
+                                        <div class="text-muted small"><i class="fas fa-door-closed text-danger me-1"></i>Şantiye Kapısı</div>
+                                        <div class="fw-bold text-dark text-truncate" title="@kapiItem">@kapiItem</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="p-2 rounded-3 bg-light border">
+                                        <div class="text-muted small"><i class="fas fa-trash-alt text-warning me-1"></i>Moloz & Yıkım</div>
+                                        <div class="fw-bold text-dark text-truncate" title="@molozItem">@molozItem</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="p-2 rounded-3 bg-light border">
+                                        <div class="text-muted small"><i class="fas fa-shield-alt text-info me-1"></i>Zemin İksası</div>
+                                        <div class="fw-bold text-dark text-truncate">Mini Kazık / Şoring</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="p-2 rounded-3 bg-light border">
+                                        <div class="text-muted small"><i class="fas fa-plug text-warning me-1"></i>Geçici MEP</div>
+                                        <div class="fw-bold text-dark text-truncate">Pano + 15T Su Deposu</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ALT ÇAĞRI ŞERİDİ -->
+                <div class="mt-3 p-3 bg-warning bg-opacity-10 border border-warning rounded-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-magic text-warning fa-2x me-3"></i>
+                        <div>
+                            <strong class="text-dark">AutoCAD DXF Dosyası Olmadan Parametrik İhale & Keşif Hazır!</strong>
+                            <div class="small text-muted">Yukarıdaki yapı boyutları ve çevresel faktörler harmanlanarak <strong>@(parametricTakeoff?.Count ?? 0) temel ihale ve malzeme kalemi</strong> anında hesaplandı.</div>
+                        </div>
+                    </div>
+                    <div>
+                        <button class="btn btn-warning fw-bold text-dark px-4 rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#parametricTakeoffModal">
+                            <i class="fas fa-calculator me-1"></i> Parametrik İhale Listesini İncele (@(parametricTakeoff?.Count ?? 0) Kalem)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- DXF CIZIM SARTNAMESI BILGILENDIRME ALANI (COLLAPSE İÇİNDE) -->
+                <div class="alert alert-info border-0 shadow-sm d-flex align-items-center mt-3 mb-0 rounded-3" style="background-color: #f0f7ff;" role="alert">
+                    <div class="me-3">
+                        <div class="bg-primary bg-opacity-10 p-2 rounded-circle text-primary">
+                            <i class="fas fa-drafting-compass fa-lg"></i>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1">
+                        <strong class="text-dark small d-block">GMK360 AutoCAD DXF Çizim Şartnamesi</strong>
+                        <span class="small text-muted">DXF çizimi hazır olduğunda mimari ve tesisat katmanlarından net oda metrajlarını süzmek için kılavuzdur. DXF olmadan da yukarıdaki parametrik motorla ihalelerinizi hemen başlatabilirsiniz.</span>
+                    </div>
+                    <div class="ms-2">
+                        <button class="btn btn-sm btn-primary fw-bold rounded-pill shadow-sm text-nowrap" data-bs-toggle="modal" data-bs-target="#sartnameModal">
+                            <i class="fas fa-book-open me-1"></i> Şartnameyi İncele
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- PROFIL LISTESI (MIMARI) -->
+    <div class="card shadow-sm border-0 rounded-4 mb-4 border-top border-4 border-primary">
+        <div class="card-header bg-white border-bottom p-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div>
+                <h5 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                    <i class="fas fa-list-ul text-primary"></i>
+                    <span>Üretilen Mimari DNA Profilleri</span>
+                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary rounded-pill fs-6 px-3">
+                        @(savedProfiles?.Count ?? 0) Profil
+                    </span>
+                </h5>
+                <p class="text-muted small mb-0 mt-1">Farklı statik ve mimari kombinasyonlar (DNA'lar) oluşturarak bütçe alternatifleri yaratın.</p>
+            </div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <a href="/Metraj/DnaWizard/@projectId" target="_blank" class="btn text-white fw-bold shadow-sm rounded-pill px-3" style="background-color: #6f42c1; border-color: #6f42c1;">
+                    <i class="fas fa-magic me-1"></i> + Profil Sihirbazı
+                </a>
+                <button class="btn btn-primary fw-bold shadow-sm rounded-pill px-3">
+                    <i class="fas fa-file-import me-1"></i> Mimari DXF'i Oku ve Dağıt
+                </button>
+                <button class="btn btn-sm btn-light border rounded-pill px-3 text-secondary fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#dnaProfilesCollapse" aria-expanded="true" aria-controls="dnaProfilesCollapse" title="Daralt / Genişlet">
+                    <i class="fas fa-sliders-h text-primary me-1"></i> Tablo <i class="fas fa-chevron-up ms-1"></i>
+                </button>
+            </div>
+        </div>
+        <div class="collapse show" id="dnaProfilesCollapse">
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0" id="configTable">
+                <table class="table table-hover align-middle mb-0" id="configTable" style="table-layout: fixed; width: 100%;">
+                    <colgroup>
+                        <col style="width: 50px;">
+                        <col style="width: 20%;">
+                        <col style="width: 40%;">
+                        <col style="width: 10%;">
+                        <col style="width: 30%;">
+                    </colgroup>
                     <thead class="bg-light text-secondary small">
                         <tr>
                             <th class="px-4 py-3" style="width: 50px;">
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="selectAll" checked onchange="toggleAllConfigs(this)">
+                                    @{
+                                        var approvedProfilesCount = savedProfiles?.Count(x => x.Status == "Tamamlandı") ?? 0;
+                                    }
+                                    <input class="form-check-input" type="checkbox" id="selectAll" @(approvedProfilesCount > 0 ? "checked" : "disabled") onchange="toggleAllConfigs(this)" title="@(approvedProfilesCount > 0 ? "Tüm onaylı profilleri seç" : "Henüz onaylı profil yok")">
                                 </div>
                             </th>
                             <th class="py-3">Profil Adı</th>
-                            <th class="py-3">Temel & Gövde</th>
-                            <th class="py-3">Tesisat & İnce İşler</th>
-                            <th class="py-3">Durum</th>
-                            <th class="py-3 text-end px-4">İşlem</th>
+                            <th class="py-3">Mimari & Statik Kararlar</th>
+                            <th class="py-3 text-center">Durum</th>
+                            <th class="py-3 text-end px-4">Profile Ait İş Akışı, Plan & İşlemler</th>
                         </tr>
                     </thead>
                     <tbody id="configListBody">
@@ -67,52 +309,103 @@
                         {
                             foreach (var p in savedProfiles)
                             {
+                                var isCompleted = (p.Status == "Tamamlandı");
                                 <tr>
                                     <td class="px-4">
                                         <div class="form-check">
-                                            <input class="form-check-input config-item-cb" type="checkbox" value="@p.Id" checked onchange="updateSelectedCount()">
+                                            @if (isCompleted)
+                                            {
+                                                <input class="form-check-input config-item-cb" type="checkbox" value="@p.Id" checked onchange="updateSelectedCount()">
+                                            }
+                                            else
+                                            {
+                                                <input class="form-check-input" type="checkbox" disabled title="B2B teklifine göndermek için önce profili sihirbazda onaylayıp tamamlayınız.">
+                                            }
                                         </div>
                                     </td>
                                     <td>
-                                        <div class="fw-bold text-dark fs-6">@p.Name</div>
-                                        <div class="small text-muted">
-                                            <i class="far fa-calendar-alt me-1"></i> @p.CreatedDate.ToString("dd.MM.yyyy HH:mm")
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="p-2 rounded-3 bg-primary bg-opacity-10 text-primary">
+                                                <i class="fas fa-dna fs-6"></i>
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold text-dark fs-6">@p.Name</div>
+                                                <div class="small text-muted">
+                                                    <i class="far fa-calendar-alt me-1"></i> @p.CreatedDate.ToString("dd.MM.yyyy HH:mm")
+                                                </div>
+                                            </div>
                                         </div>
                                     </td>
                                     <td>
-                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-1 rounded-pill small fw-semibold">
-                                            <i class="fas fa-layer-group me-1"></i> 20 Kalem Statik + @(p.Details?.Count ?? 0) Seçim
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-light text-muted border px-2 py-1 small">
-                                            <i class="fas fa-clock me-1"></i> DXF Bekliyor
-                                        </span>
-                                    </td>
-                                    <td>
-                                        @if (p.Status == "Taslak")
+                                        <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-1 rounded-pill small fw-semibold">
+                                                <i class="fas fa-layer-group me-1"></i> 20 Kalem Statik
+                                            </span>
+                                            <span class="badge bg-info bg-opacity-10 text-info border border-info px-3 py-1 rounded-pill small fw-semibold">
+                                                <i class="fas fa-sliders-h me-1"></i> @(p.Details?.Count ?? 0) Karar
+                                            </span>
+                                        </div>
+                                        @if (p.Details != null && p.Details.Any())
                                         {
-                                            <span class="badge bg-warning bg-opacity-25 text-dark border border-warning px-3 py-1 rounded-pill fw-bold">
-                                                <i class="fas fa-edit me-1 text-warning"></i> Taslak
+                                            <div class="d-flex flex-wrap gap-1 mt-1">
+                                                @foreach (var d in p.Details.Take(4))
+                                                {
+                                                    <span class="badge bg-light text-dark border px-2 py-1 small fw-normal" title="@d.SelectedItem">
+                                                        <i class="fas fa-check text-success me-1"></i>@d.SelectedItem
+                                                    </span>
+                                                }
+                                                @if (p.Details.Count > 4)
+                                                {
+                                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border px-2 py-1 small" title="Tüm kararlar için Düzenle'ye tıklayın">
+                                                        +@(p.Details.Count - 4) detay daha
+                                                    </span>
+                                                }
+                                            </div>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        @if (!isCompleted)
+                                        {
+                                            <span class="badge bg-warning bg-opacity-25 text-dark border border-warning px-3 py-2 rounded-pill fw-bold" title="Bu profil henüz tamamlanmadı, taslak aşamasındadır.">
+                                                <i class="fas fa-pencil-ruler me-1 text-warning"></i> Taslak
                                             </span>
                                         }
                                         else
                                         {
-                                            <span class="badge bg-success bg-opacity-10 text-success border border-success px-3 py-1 rounded-pill fw-bold">
+                                            <span class="badge bg-success bg-opacity-10 text-success border border-success px-3 py-2 rounded-pill fw-bold">
                                                 <i class="fas fa-check-circle me-1"></i> @p.Status
                                             </span>
                                         }
                                     </td>
                                     <td class="text-end px-4">
-                                        <a href="/Metraj/SiteAgenda/@projectId?profileId=@p.Id" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold me-1" style="background-color: #6f42c1; border-color: #6f42c1;">
-                                            <i class="fas fa-calendar-check me-1"></i> Otonom Ajanda
-                                        </a>
-                                        <a href="/Metraj/DnaWizard/@projectId?profileId=@p.Id" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold me-1">
-                                            <i class="fas fa-pen me-1"></i> Düzenle
-                                        </a>
-                                        <button type="button" onclick="deleteProfile(@p.Id)" class="btn btn-sm btn-outline-danger rounded-pill px-2" title="Sil">
-                                            <i class="fas fa-trash-alt"></i>
-                                        </button>
+                                        <div class="d-inline-flex align-items-center gap-1 flex-wrap justify-content-end">
+                                            @if (!isCompleted)
+                                            {
+                                                <!-- Taslak profil için SADECE Tamamlama ve Silme aksiyonları -->
+                                                <a href="/Metraj/DnaWizard/@projectId?profileId=@p.Id" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-primary rounded-pill px-4 py-2 fw-bold shadow-xs text-nowrap" title="Reçeteyi tamamlamak ve onaylamak için sihirbaza gidin">
+                                                    <i class="fas fa-magic me-1"></i> Profili Tamamla (Sihirbaz)
+                                                </a>
+                                                <button type="button" onclick="deleteProfile(@p.Id)" class="btn btn-sm btn-outline-danger rounded-pill px-3 py-2" title="Taslağı Sil">
+                                                    <i class="fas fa-trash-alt"></i>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <!-- Onaylı profil için İş Akışı & Tedarik Masası linki (YENİ SEKMEDE) -->
+                                                <a href="/Metraj/BuildingWorkflow/@projectId?profileId=@p.Id" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-success rounded-pill px-3 py-2 fw-bold shadow-sm text-nowrap" title="Bu reçeteye göre yapı bazlı iş akışını, malzeme alım sıralamasını ve kadro puantaj planını aç">
+                                                    <i class="fas fa-external-link-alt me-1"></i> Şantiye İş Akışı & Tedarik Masası &rarr;
+                                                </a>
+                                                <a href="/Metraj/SiteAgenda/@projectId?profileId=@p.Id" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-primary rounded-pill px-3 py-2 fw-bold text-nowrap" style="background-color: #6f42c1; border-color: #6f42c1;" title="Bu profile ait şantiye takvimini ajandaya işle">
+                                                    <i class="fas fa-calendar-check me-1"></i> Otonom Ajanda
+                                                </a>
+                                                <a href="/Metraj/DnaWizard/@projectId?profileId=@p.Id" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-2 fw-bold text-nowrap" title="Sihirbazda Reçeteyi İncele / Düzenle">
+                                                    <i class="fas fa-pen me-1"></i> Düzenle
+                                                </a>
+                                                <button type="button" onclick="deleteProfile(@p.Id)" class="btn btn-sm btn-outline-danger rounded-pill px-3 py-2" title="Sil">
+                                                    <i class="fas fa-trash-alt"></i>
+                                                </button>
+                                            }
+                                        </div>
                                     </td>
                                 </tr>
                             }
@@ -130,110 +423,165 @@
                 </div>
             }
         </div>
-        <div class="card-footer bg-light border-top p-3 d-flex justify-content-between align-items-center">
-            <span class="text-muted small"><i class="fas fa-info-circle me-1"></i> Sadece seçili profiller (alternatifler) B2B fiyatlandırma departmanına gönderilir.</span>
-            <button class="btn btn-success fw-bold px-4" id="btnB2bMimari" @(savedProfiles != null && savedProfiles.Any() ? "" : "disabled")>
-                <i class="fas fa-paper-plane me-2"></i> Seçili (<span id="selectedCount">@(savedProfiles?.Count ?? 0)</span>) Profil İçin B2B'den Teklif İste
-            </button>
+            <div class="card-footer bg-light border-top p-3 d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <div class="text-muted small">
+                    <i class="fas fa-info-circle me-1 text-primary"></i> 
+                    Onaylanan profillerinizi şantiyedeki bağımsız yapılara (A Blok, Ortak Baza vb.) uygulamak ve malzeme/kadro planı çıkarmak için <strong>Şantiye Masası</strong>'na geçebilirsiniz.
+                </div>
+                @{
+                    var completedCount = savedProfiles?.Count(x => x.Status == "Tamamlandı") ?? 0;
+                    var firstCompletedId = savedProfiles?.FirstOrDefault(x => x.Status == "Tamamlandı")?.Id;
+                }
+                <div class="d-flex align-items-center gap-2">
+                    <a href="/Metraj/BuildingWorkflow/@projectId@(firstCompletedId.HasValue ? $"?profileId={firstCompletedId}" : "")" 
+                       target="_blank" rel="noopener noreferrer"
+                       class="btn btn-primary fw-bold px-4 rounded-pill shadow-sm">
+                        <i class="fas fa-external-link-alt me-2"></i> Şantiye İş Akışı & Yapı Masası'na Git &rarr;
+                    </a>
+                    <button class="btn btn-success fw-bold px-4 rounded-pill shadow-sm" id="btnB2bMimari" @(completedCount > 0 ? "" : "disabled")>
+                        <i class="fas fa-paper-plane me-2"></i> Seçili (<span id="selectedCount">@completedCount</span>) Profille B2B Teklifi İste
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- TESİSAT VE ELEKTRİK (MEP) DXF MOTORU -->
     <div class="card shadow-sm border-0 rounded-4 mb-4 border-top border-4 border-warning">
-        <div class="card-header bg-white border-bottom p-4 d-flex justify-content-between align-items-center">
+        <div class="card-header bg-white border-bottom p-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
             <div>
-                <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-network-wired text-warning me-2"></i>Tesisat, Elektrik ve Altyapı İhtiyaç Listesi</h5>
+                <h5 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                    <i class="fas fa-network-wired text-warning"></i>
+                    <span>Tesisat, Elektrik ve Altyapı İhtiyaç Listesi (MEP)</span>
+                </h5>
                 <p class="text-muted small mb-0 mt-1">Bu tablo Mimari DNA'dan bağımsızdır. Doğrudan Mekanik/Elektrik projelerindeki net metrajları fire payıyla hesaplar.</p>
             </div>
-            <div>
-                <button class="btn btn-warning fw-bold text-dark shadow-sm">
-                    <i class="fas fa-file-import me-2"></i> Tesisat/Elektrik DXF'ini Oku
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <button class="btn btn-warning fw-bold text-dark shadow-sm rounded-pill px-3">
+                    <i class="fas fa-file-import me-1"></i> Tesisat/Elektrik DXF'ini Oku
+                </button>
+                <button class="btn btn-sm btn-light border rounded-pill px-3 text-secondary fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#mepCollapse" aria-expanded="false" aria-controls="mepCollapse" title="Daralt / Genişlet">
+                    <i class="fas fa-sliders-h text-warning me-1"></i> Tablo <i class="fas fa-chevron-down ms-1"></i>
                 </button>
             </div>
         </div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="bg-light text-secondary small">
-                        <tr>
-                            <th class="px-4 py-3">Kategori</th>
-                            <th class="py-3">Malzeme / Ekipman Cinsi</th>
-                            <th class="py-3 text-center">Net Metraj</th>
-                            <th class="py-3 text-center">Fire Payı</th>
-                            <th class="py-3 text-center fw-bold text-dark">Toplam İhtiyaç</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!-- Örnek Görünüm (Boş State) -->
-                        <tr>
-                            <td colspan="5" class="text-center p-5">
-                                <i class="fas fa-drafting-compass fa-3x text-muted mb-3 opacity-25"></i>
-                                <h6 class="fw-bold text-dark">Henüz MEP (Tesisat) Projesi Okutulmadı</h6>
-                                <p class="text-muted small mb-0">Kablo, boru, anahtar ve priz gibi altyapı metrajlarını süzmek için yukarıdaki "DXF'i Oku" butonunu kullanın.</p>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+        <div class="collapse" id="mepCollapse">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-secondary small">
+                            <tr>
+                                <th class="px-4 py-3">Kategori</th>
+                                <th class="py-3">Malzeme / Ekipman Cinsi</th>
+                                <th class="py-3 text-center">Net Metraj</th>
+                                <th class="py-3 text-center">Fire Payı</th>
+                                <th class="py-3 text-center fw-bold text-dark">Toplam İhtiyaç</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Örnek Görünüm (Boş State) -->
+                            <tr>
+                                <td colspan="5" class="text-center p-5">
+                                    <i class="fas fa-drafting-compass fa-3x text-muted mb-3 opacity-25"></i>
+                                    <h6 class="fw-bold text-dark">Henüz MEP (Tesisat) Projesi Okutulmadı</h6>
+                                    <p class="text-muted small mb-0">Kablo, boru, anahtar ve priz gibi altyapı metrajlarını süzmek için yukarıdaki "DXF'i Oku" butonunu kullanın.</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
-        <div class="card-footer bg-light border-top p-3 text-end">
-            <button class="btn btn-success fw-bold px-4" disabled>
-                <i class="fas fa-paper-plane me-2"></i> Tüm Tesisat İhtiyacını B2B'ye Gönder (Teklif İste)
-            </button>
+            <div class="card-footer bg-light border-top p-3 text-end">
+                <button class="btn btn-success fw-bold px-4" disabled>
+                    <i class="fas fa-paper-plane me-2"></i> Tüm Tesisat İhtiyacını B2B'ye Gönder (Teklif İste)
+                </button>
+            </div>
         </div>
     </div>
 
-    <!-- 3. MOTOR: DAİRE TİPLERİ VE MAHAL LİSTESİ (CRM ŞABLONLARI) -->
+    <!-- 3. MOTOR: DAİRE TİPLERİ VE MAHAL LİSTESİ (CRM ŞABLONLARI) -->
     <div class="card shadow-sm border-0 rounded-4 mb-4 border-top border-4 border-danger">
-        <div class="card-header bg-white border-bottom p-4 d-flex justify-content-between align-items-center">
+        <div class="card-header bg-white border-bottom p-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
             <div>
-                <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-vector-square text-danger me-2"></i>Daire Tipi ve Mahal Listesi (Tip Plan) Motoru</h5>
-                <p class="text-muted small mb-0 mt-1">Mimari DXF'ten daire tiplerini (Örn: 3+1 A Tipi) ve oda ölçülerini okuyarak CRM'de kullanılacak 'Şablonları' oluşturur.</p>
+                <h5 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                    <i class="fas fa-vector-square text-danger"></i>
+                    <span>Daire Tipi ve Mahal Listesi (Tip Plan) Motoru</span>
+                </h5>
+                <p class="text-muted small mb-0 mt-1">Mimari DXF'ten daire tiplerini (Örn: 3+1 A Tipi) ve oda ölçülerini okuyarak CRM'de kullanılacak şablonları oluşturur.</p>
             </div>
-            <div>
-                <button class="btn btn-danger fw-bold text-white shadow-sm">
-                    <i class="fas fa-ruler-combined me-2"></i> Daire Tiplerini DXF'ten Oku
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <button class="btn btn-danger fw-bold text-white shadow-sm rounded-pill px-3">
+                    <i class="fas fa-ruler-combined me-1"></i> Daire Tiplerini DXF'ten Oku
+                </button>
+                <button class="btn btn-sm btn-light border rounded-pill px-3 text-secondary fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#crmCollapse" aria-expanded="false" aria-controls="crmCollapse" title="Daralt / Genişlet">
+                    <i class="fas fa-sliders-h text-danger me-1"></i> Tablo <i class="fas fa-chevron-down ms-1"></i>
                 </button>
             </div>
         </div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="bg-light text-secondary small">
-                        <tr>
-                            <th class="px-4 py-3">Daire Tipi (Model)</th>
-                            <th class="py-3 text-center">Toplam Hacim</th>
-                            <th class="py-3 text-center">Oda / Mahal Sayısı</th>
-                            <th class="py-3">Örnek Odalar (Özet)</th>
-                            <th class="py-3 text-end px-4">Durum</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!-- Örnek Görünüm (Boş State) -->
-                        <tr>
-                            <td colspan="5" class="text-center p-5">
-                                <i class="fas fa-border-all fa-3x text-muted mb-3 opacity-25"></i>
-                                <h6 class="fw-bold text-dark">Henüz Mimari DXF'ten Tip Planlar Okutulmadı</h6>
-                                <p class="text-muted small mb-0">Binadaki daire modellerini ve iç ölçülerini (Salon, Yatak Odası m2) çıkarmak için DXF'i okutun.</p>
-                            </td>
-                        </tr>
-                        <!-- Taslak Dolu Satır Örneği (Yorum Satırında)
-                        <tr class="opacity-50">
-                            <td class="px-4 fw-bold">A Tipi (3+1 Kuzey)</td>
-                            <td class="text-center">145 mÂ² Brüt</td>
-                            <td class="text-center">8 Mahal</td>
-                            <td class="small text-muted">Salon (30mÂ²), Mutfak (15mÂ²), Ebeveyn (20mÂ²) ...</td>
-                            <td class="text-end px-4"><span class="badge bg-info">CRM İçin Hazır</span></td>
-                        </tr>
-                        -->
-                    </tbody>
-                </table>
+        <div class="collapse" id="crmCollapse">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-secondary small">
+                            <tr>
+                                <th class="px-4 py-3">Daire Tipi (Model)</th>
+                                <th class="py-3 text-center">Toplam Hacim</th>
+                                <th class="py-3 text-center">Oda / Mahal Sayısı</th>
+                                <th class="py-3">Örnek Odalar (Özet)</th>
+                                <th class="py-3 text-end px-4">Durum</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Örnek Görünüm (Boş State) -->
+                            <tr>
+                                <td colspan="5" class="text-center p-5">
+                                    <i class="fas fa-border-all fa-3x text-muted mb-3 opacity-25"></i>
+                                    <h6 class="fw-bold text-dark">Henüz Mimari DXF'ten Tip Planlar Okutulmadı</h6>
+                                    <p class="text-muted small mb-0">Binadaki daire modellerini ve iç ölçülerini (Salon, Yatak Odası m2) çıkarmak için DXF'i okutun.</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer bg-light border-top p-3 text-start">
+                <span class="text-muted small">
+                    <i class="fas fa-info-circle text-primary me-1"></i> <strong>Bilgi:</strong> Burada oluşturulan "Daire Tipleri", Satış/CRM sayfasında listelenen birebir dairelerin (Daire 1, Daire 2) üzerine şablon olarak giydirilecektir. B2B bütçesi çıkarmaz, CRM için metraj oluşturur.
+                </span>
             </div>
         </div>
-        <div class="card-footer bg-light border-top p-3 text-start">
-            <span class="text-muted small">
-                <i class="fas fa-info-circle text-primary me-1"></i> <strong>Bilgi:</strong> Burada oluşturulan "Daire Tipleri", Satış/CRM sayfasında listelenen birebir dairelerin (Daire 1, Daire 2) üzerine şablon olarak giydirilecektir. B2B bütçesi çıkarmaz, CRM için metraj oluşturur.
-            </span>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- 🚀 ŞANTİYE İCRA & BAŞLATMA MASASI (PROJENİN TÜM DNA'SI BURADA HARMANLANIR) -->
+    <!-- ========================================================================= -->
+    <div class="card border-0 shadow-lg rounded-4 mb-5 text-white overflow-hidden" style="background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #0d6efd 100%);">
+        <div class="card-body p-4 p-lg-5">
+            <div class="row align-items-center g-4">
+                <div class="col-lg-8">
+                    <div class="d-flex align-items-center gap-3 mb-2 flex-wrap">
+                        <span class="badge bg-warning text-dark px-3 py-2 rounded-pill fw-bold fs-6 shadow-sm">
+                            <i class="fas fa-check-double me-1"></i> Tüm DNA Hazır (Mimari + Tesisat + Daire Tipleri)
+                        </span>
+                        <span class="badge bg-white bg-opacity-25 text-white px-3 py-2 rounded-pill small">
+                            <i class="fas fa-shield-alt me-1"></i> İzole Yapı / Blok Kontrolü
+                        </span>
+                    </div>
+                    <h3 class="fw-bold text-white mb-2">Şantiye İş Akışı, Malzeme Tedarik & Kadro Masası</h3>
+                    <p class="text-white-50 mb-0 fs-6">
+                        Statik kararlar, mekanik/elektrik ihtiyaçlar ve daire mahalleri tamamlandı. Şimdi projenin sahadaki hangi yapısından (<strong>A Blok</strong>, <strong>B&C Blok</strong> veya <strong>Ortak Baza</strong>) başlayacağınızı belirleyin; malzeme sipariş planını, usta kadrolarını ve şantiye takvimini izole olarak yönetin.
+                    </p>
+                </div>
+                <div class="col-lg-4 text-lg-end text-center">
+                    <a href="/Metraj/BuildingWorkflow/@projectId" target="_blank" rel="noopener noreferrer" class="btn btn-warning text-dark btn-lg fw-bold px-4 py-3 rounded-pill shadow-lg text-nowrap d-inline-flex align-items-center gap-2">
+                        <i class="fas fa-external-link-alt"></i>
+                        <span>Şantiye Masasını Yeni Sekmede Aç &rarr;</span>
+                    </a>
+                    <div class="small text-white-50 mt-2">
+                        <i class="far fa-window-restore me-1"></i> Sayfanız kaybolmaz, yan sekmede rahatça çalışırsınız.
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -307,263 +655,239 @@
     </div>
 </div>
 
-<!-- YENİ DNA PROFİLİ MODALI --><!-- YENİ DNA PROFİLİ MODALI (ESKİ STATİK) -->
-<div class="modal fade" id="newConfigModal" tabindex="-1">
+<!-- DXF / CAD ÇİZİM VE KAT PLANI TESLİM ŞARTNAMESİ MODALI -->
+<div class="modal fade" id="sartnameModal" tabindex="-1" aria-labelledby="sartnameModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content border-0 shadow-lg rounded-4">
-            <div class="modal-header bg-dark text-white border-0 p-4 sticky-top">
-                <h5 class="modal-title fw-bold"><i class="fas fa-building text-primary me-2"></i>Yeni DNA Profili (Master Şablon)</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-4 bg-light">
-                <div class="mb-4 bg-white p-3 rounded-3 shadow-sm border-start border-4 border-primary">
-                    <label class="form-label fw-bold text-dark">DNA Profilinin Adı</label>
-                    <input type="text" class="form-control form-control-lg border-1" id="configNameOld" placeholder="Örn: Ultra Lüks Konfigürasyon">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <!-- HEADER -->
+            <div class="modal-header bg-primary text-white border-0 py-3 px-4 d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="bg-white bg-opacity-20 p-2 rounded-3">
+                        <i class="fas fa-drafting-compass fa-2x"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold mb-0 text-white" id="sartnameModalLabel">
+                            Mimari Kat Planı & DXF/CAD Çizim Teslim Şartnamesi
+                        </h5>
+                        <small class="text-white-50">GMK-CAD-SPEC-2026-V1 &bull; Proje: <strong>@(project?.Name ?? "Şantiye Projesi")</strong></small>
+                    </div>
                 </div>
-                <div class="accordion shadow-sm" id="dnaAccordionOld">
-                    <!-- ADIM 0 -->
-                    <div class="accordion-item border-0 mb-2 rounded-3 overflow-hidden">
-                        <h2 class="accordion-header">
-                            <button class="accordion-button collapsed bg-white fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#oldAdim0">
-                                <i class="fas fa-lock text-danger me-2"></i> Adım 0: Mecburi Statik ve Taşıyıcılar (Sabit Alan)
-                            </button>
-                        </h2>
-                        <div id="oldAdim0" class="accordion-collapse collapse" data-bs-parent="#dnaAccordionOld">
-                            <div class="accordion-body bg-light">
-                                <div class="alert alert-danger mb-4"><i class="fas fa-exclamation-circle me-2"></i> Bu kalemler DXF'ten (Statik Projeden) sistem tarafından mecburi çekilmektedir. Değiştirilemez.</div>
-                                <div class="mb-3"><label class="form-label text-muted small">Taşıyıcı Beton</label><input type="text" class="form-control bg-white" value="Radye Temel ve Kat Betonu (DXF)" readonly></div>
-                                <div class="mb-3"><label class="form-label text-muted small">Taşıyıcı Donatı</label><input type="text" class="form-control bg-white" value="Nervürlü Taşıyıcı Donatı Çeliği (DXF)" readonly></div>
-                                <div class="mb-3"><label class="form-label text-muted small">Kalıp Sistemi</label><input type="text" class="form-control bg-white" value="Kalıp ve İskele İşçiliği (DXF)" readonly></div>
-                                <div class="mb-4"><label class="form-label text-muted small">Donatı Ekipmanları</label><input type="text" class="form-control bg-white" value="Paspayları ve Filizler (DXF)" readonly></div>
-                                <h6 class="fw-bold text-danger mb-3"><i class="fas fa-layer-group me-2"></i>Döşeme Sistemi (Asmolen / Kaset)</h6>
-                                <div class="row g-3">
-                                    <div class="col-md-6"><label class="form-label fw-bold text-dark small">1. Dolgu Malzemesi</label><select class="form-select border-0 shadow-sm"><option value="">-- Dolgu Seçin --</option></select></div>
-                                    <div class="col-md-6"><label class="form-label fw-bold text-dark small">2. Taşıyıcı (Nervür) Tekniği</label><select class="form-select border-0 shadow-sm"><option value="">-- Teknik Seçin --</option></select></div>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-sm btn-light rounded-pill px-3 fw-bold shadow-xs" onclick="printSartname()">
+                        <i class="fas fa-print me-1 text-primary"></i> Yazdır / PDF
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-light rounded-pill px-3 fw-bold" onclick="copySartname()">
+                        <i class="fas fa-copy me-1"></i> Kopyala
+                    </button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+                </div>
+            </div>
+
+            <!-- BODY -->
+            <div class="modal-body p-4" id="sartnamePrintArea" style="background-color: #fbfbfb;">
+                <div class="alert alert-primary bg-opacity-10 border border-primary border-opacity-25 rounded-3 p-3 mb-4">
+                    <div class="d-flex align-items-start gap-2">
+                        <i class="fas fa-info-circle text-primary fs-5 mt-1"></i>
+                        <div class="small">
+                            <strong>Müteahhit ve Şantiye Mühendisleri İçin Kılavuz:</strong> Bu şartnameyi projenizin mimari müellifine veya dışarıdan hizmet aldığınız mimarlık ofisine teslim ediniz. Mimarlar, AutoCAD içinde <code>WBLOCK</code> komutuyla kat planlarını tek tıkla ve saniyeler içinde bu formata uygun olarak dışa aktarabilirler.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MADDE 1 -->
+                <div class="card border-0 shadow-xs rounded-3 mb-3">
+                    <div class="card-body p-3">
+                        <h6 class="fw-bold text-dark mb-2 d-flex align-items-center gap-2">
+                            <span class="badge bg-primary rounded-circle px-2">1</span>
+                            <span>Temel Kural: Kat Bazında Dışa Aktarım (WBLOCK Kuralı)</span>
+                        </h6>
+                        <p class="small text-muted mb-2">
+                            Tüm bina katlarını tek bir devasa DWG dosyasında üst üste teslim etmeyiniz. GMK360 sistemi projeyi kat kat ve blok blok işler. Her bloğun her katı bağımsız bir dosya olarak teslim edilmelidir.
+                        </p>
+                        <div class="bg-light p-2 rounded-2 border small font-monospace">
+                            <strong>Dosya İsimlendirme Standardı:</strong><br/>
+                            &bull; <code>E_Blok_1_Normal_Kat.dxf</code> (veya Tip Kat ise: <code>E_Blok_Tip_Kat.dxf</code>)<br/>
+                            &bull; <code>D_Blok_Zemin_Kat.dxf</code><br/>
+                            &bull; <code>Ortak_Baza_Bodrum_1.dxf</code>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MADDE 2 -->
+                <div class="card border-0 shadow-xs rounded-3 mb-3">
+                    <div class="card-body p-3">
+                        <h6 class="fw-bold text-dark mb-2 d-flex align-items-center gap-2">
+                            <span class="badge bg-primary rounded-circle px-2">2</span>
+                            <span>Mahal ve Oda İsimlendirme Kuralları (MTEXT / TEXT)</span>
+                        </h6>
+                        <div class="alert alert-warning py-2 px-3 small border-0 rounded-2 mb-2 d-flex align-items-center gap-2">
+                            <i class="fas fa-exclamation-triangle text-warning fs-5"></i>
+                            <div><strong>DİKKAT: Oda İsimleri Kesinlikle Yazılmalıdır!</strong> Mimarlar bazen duvarları çizip içine isim yazmayı unutmaktadır. İsimsiz kapalı alanlar sistemde mahal olarak eşleşmez. Her odanın merkezine mutlaka oda adı ve m² alanı yazılmalıdır.</div>
+                        </div>
+                        <p class="small text-muted mb-2">
+                            <strong>Kat Tipleri Ayrımı:</strong> Bodrum katlar (otopark/sığınak), zemin kat (dükkan/lobi), normal tip katlar (daireler) ve çatı katı ayrı bağımsız DXF olarak verilmelidir.
+                        </p>
+                        <p class="small text-muted mb-2">
+                            Her odanın merkezinde standart Türkçe bağımsız bir metin bulunmalı ve altına m² alanı yazılmalıdır:
+                        </p>
+                        <div class="row g-2 small">
+                            <div class="col-md-4">
+                                <div class="p-2 border rounded bg-light">
+                                    <strong class="text-primary d-block">Yaşam Alanları:</strong>
+                                    <code>SALON</code>, <code>YATAK ODASI 1</code>, <code>YATAK ODASI 2</code>, <code>MUTFAK</code>, <code>GİYİNME ODASI</code>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="p-2 border rounded bg-light">
+                                    <strong class="text-primary d-block">Islak Hacimler:</strong>
+                                    <code>BANYO</code>, <code>EBEVEYN BANYO</code>, <code>ALATURKA WC</code>, <code>ÇAMAŞIR ODASI</code>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="p-2 border rounded bg-light">
+                                    <strong class="text-primary d-block">Ortak & Açık Alanlar:</strong>
+                                    <code>KAT HOLÜ</code>, <code>MERDİVEN EVİ</code>, <code>YANGIN HOLÜ</code>, <code>BALKON 1</code>, <code>BALKON 2</code>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- ADIM 1 -->
-                    <div class="accordion-item border-0 mb-2 rounded-3 overflow-hidden">
-                        <h2 class="accordion-header">
-                            <button class="accordion-button collapsed bg-white fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#oldAdim1">
-                                <i class="fas fa-layer-group text-primary me-2"></i> Adım 1: Kot 0 (Zemin, Temel ve Perde İzolasyonu)
-                            </button>
-                        </h2>
-                        <div id="oldAdim1" class="accordion-collapse collapse" data-bs-parent="#dnaAccordionOld">
-                            <div class="accordion-body bg-light">
-                                <div class="alert alert-info">Bu orijinal statik adımdır. Yeni dinamik form "Profil Üret" butonundadır.</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- ADIM 2 -->
-                    <div class="accordion-item border-0 mb-2 rounded-3 overflow-hidden">
-                        <h2 class="accordion-header">
-                            <button class="accordion-button collapsed bg-white fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#oldAdim2">
-                                <i class="fas fa-cubes text-warning me-2"></i> Adım 2: Gövde (Duvar, Yalıtım ve Dış Cephe Boyası)
-                            </button>
-                        </h2>
-                        <div id="oldAdim2" class="accordion-collapse collapse" data-bs-parent="#dnaAccordionOld">
-                            <div class="accordion-body bg-light">
-                                <div class="alert alert-info">Gövde adımı statik...</div>
-                            </div>
-                        </div>
-                    </div>
+                </div>
 
-                    <!-- ADIM 3 -->
-                    <div class="accordion-item border-0 mb-2 rounded-3 overflow-hidden">
-                        <h2 class="accordion-header">
-                            <button class="accordion-button collapsed bg-white fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#oldAdim3">
-                                <i class="fas fa-paint-roller text-info me-2"></i> Adım 3: İç Mekan ve Dekorasyon (Yaşam Alanı)
-                            </button>
-                        </h2>
-                        <div id="oldAdim3" class="accordion-collapse collapse" data-bs-parent="#dnaAccordionOld">
-                            <div class="accordion-body bg-light">
-                                <div class="mb-4"><label class="form-label fw-bold text-dark small">Sıva ve Temel Şap Karakteri</label><select class="form-select border-0 shadow-sm"><option>Kaba Sıva + Alçı Sıva / Standart Şap</option></select></div>
-                                <div class="mb-4"><label class="form-label fw-bold text-dark small">İç Cephe Boya Karakteri</label><select class="form-select border-0 shadow-sm"><option>Standart Plastik (Mat) Boya</option></select></div>
+                <!-- MADDE 3 -->
+                <div class="card border-0 shadow-xs rounded-3 mb-3">
+                    <div class="card-body p-3">
+                        <h6 class="fw-bold text-dark mb-2 d-flex align-items-center gap-2">
+                            <span class="badge bg-primary rounded-circle px-2">3</span>
+                            <span>Kapı ve Doğrama Standartları (Standart vs. Özel İmalat)</span>
+                        </h6>
+                        <p class="small text-muted mb-2">
+                            Sistem fabrikasyon seri üretim kapılar ile atölye imalatı özel kapıları otomatik ayrıştırır:
+                        </p>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered mb-0 small">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Kapı Tipi</th>
+                                        <th>Standart Ölçü (En × Boy)</th>
+                                        <th>Etiket / Blok Adı</th>
+                                        <th>Kullanım Alanı</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="fw-bold">Daire Çelik Kapısı</td>
+                                        <td>100 × 210 cm</td>
+                                        <td><span class="badge bg-dark">D0</span> veya <code>CELIK_KAPI</code></td>
+                                        <td>Daire Ana Giriş</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">İç Oda Kapısı</td>
+                                        <td>90 × 210 cm</td>
+                                        <td><span class="badge bg-primary">D1</span> veya <code>KAPI_90</code></td>
+                                        <td>Salon, Yatak Odası, Mutfak</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Islak Hacim Kapısı</td>
+                                        <td>75 × 210 cm / 80 × 210 cm</td>
+                                        <td><span class="badge bg-info text-dark">D2</span> veya <code>KAPI_75</code></td>
+                                        <td>Banyo, Ebeveyn Banyo, WC</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Yangın Güvenlik Kapısı</td>
+                                        <td>100 × 210 cm</td>
+                                        <td><span class="badge bg-danger">DY</span> veya <code>YANGIN_KAPISI</code></td>
+                                        <td>Panik Barlı, 60-90 dk Dayanımlı</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold text-warning-emphasis">Özel İmalat Kapı</td>
+                                        <td>Standart Dışı Ölçü</td>
+                                        <td><span class="badge bg-warning text-dark">DOZEL</span> veya <code>DOZEL_110x230</code></td>
+                                        <td>Atölye İmalatı (Siparişe Özel)</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MADDE 4 & 5 -->
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <div class="card border-0 shadow-xs rounded-3 h-100">
+                            <div class="card-body p-3">
+                                <h6 class="fw-bold text-dark mb-2 d-flex align-items-center gap-2">
+                                    <span class="badge bg-primary rounded-circle px-2">4</span>
+                                    <span>Merdiven ve Kat Ortak Alanları</span>
+                                </h6>
+                                <ul class="small text-muted ps-3 mb-0">
+                                    <li class="mb-1"><strong>Merdiven Basamakları:</strong> Basamak çizgileri tek tek çizilmeli (16-18 rıht). Çıkış yönü oku gösterilmelidir.</li>
+                                    <li class="mb-1"><strong>Tırabzan / Küpeşte:</strong> Merdiven iniş hattı açıkça belli olmalıdır.</li>
+                                    <li><strong>Kat Holü & Yangın Dolabı:</strong> Yangın dolabı ve şaft kapakları blok veya metin olarak gösterilmelidir.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card border-0 shadow-xs rounded-3 h-100">
+                            <div class="card-body p-3">
+                                <h6 class="fw-bold text-dark mb-2 d-flex align-items-center gap-2">
+                                    <span class="badge bg-primary rounded-circle px-2">5</span>
+                                    <span>Tavsiye Edilen Katmanlar (Layers)</span>
+                                </h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-borderless small mb-0">
+                                        <tbody>
+                                            <tr><td><code>MIM_DUVAR</code></td><td class="text-muted">Duvar Çizgileri</td></tr>
+                                            <tr><td><code>MIM_KAPI</code></td><td class="text-muted">Kapı Kanat & Yayları</td></tr>
+                                            <tr><td><code>MIM_PENCERE</code></td><td class="text-muted">Doğrama & Denizlikler</td></tr>
+                                            <tr><td><code>MIM_MAHAL</code></td><td class="text-muted">Oda İsimleri ve Alanlar</td></tr>
+                                            <tr><td><code>MIM_MERDIVEN</code></td><td class="text-muted">Basamak Çizgileri</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- MADDE 6: MİMARA AUTOCAD İPUCU -->
+                <div class="card border-0 shadow-xs rounded-3 bg-light border">
+                    <div class="card-body p-3">
+                        <h6 class="fw-bold text-dark mb-1 d-flex align-items-center gap-2">
+                            <i class="fas fa-magic text-success"></i>
+                            <span>Mimar İçin 10 Saniyede AutoCAD'den Çıkarma Kılavuzu:</span>
+                        </h6>
+                        <ol class="small text-muted ps-3 mb-0 mt-2">
+                            <li class="mb-1">AutoCAD'de ilgili kat planının etrafını <strong>seçim kutusu (window)</strong> içine alın.</li>
+                            <li class="mb-1">Komut satırına <code>WBLOCK</code> yazıp <strong>Enter</strong> tuşuna basın.</li>
+                            <li class="mb-1">Dosya formatı olarak <strong>AutoCAD 2018 DXF</strong> (veya DWG), dosya adı olarak <code>E_Blok_1_Kat.dxf</code> yazıp <strong>OK</strong> butonuna tıklayın.</li>
+                            <li><em>İpucu:</em> Kaydetmeden önce <code>PURGE</code> komutunu çalıştırmanız dosya boyutunu %80 küçültecektir.</li>
+                        </ol>
+                    </div>
+                </div>
             </div>
-            <div class="modal-footer border-top p-3 bg-white sticky-bottom">
-                <button type="button" class="btn btn-outline-secondary fw-bold rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+
+            <!-- FOOTER -->
+            <div class="modal-footer bg-light border-0 py-3 px-4 d-flex justify-content-between align-items-center">
+                <div class="small text-muted">
+                    <i class="fas fa-shield-alt text-success me-1"></i> Bu şartname GMK360 B2B Satın Alma ve Taşeron Şartnameleriyle %100 uyumludur.
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-outline-primary rounded-pill px-4 fw-bold" onclick="copySartname()">
+                        <i class="fas fa-copy me-1"></i> Şartname Metnini Kopyala
+                    </button>
+                    <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" onclick="printSartname()">
+                        <i class="fas fa-print me-1"></i> Yazdır / PDF Olarak Kaydet
+                    </button>
+                    <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Kapat</button>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- DINAMIK DNA PROFİLİ MODALI (YENİ) -->
-<div class="modal fade" id="dynamicConfigModal" tabindex="-1">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content border-0 shadow-lg rounded-4">
-            <div class="modal-header bg-primary text-white border-0 p-4 sticky-top">
-                <h5 class="modal-title fw-bold"><i class="fas fa-magic text-light me-2"></i>Profil Üret (Dinamik Şablon)</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-4 bg-light">
-                <div class="mb-4 bg-white p-3 rounded-3 shadow-sm border-start border-4 border-primary">
-                    <label class="form-label fw-bold text-dark">DNA Profilinin Adı</label>
-                    <input type="text" class="form-control form-control-lg border-1" id="configName" placeholder="Örn: Yeni Dinamik Profil">
-                </div>
-                <div class="accordion shadow-sm" id="dnaAccordion">
-                    
-                    <!-- DINAMIK ADIM 0 (Sabit DXF Alanı) -->
-                    <div class="accordion-item border-0 mb-2 rounded-3 overflow-hidden">
-                        <h2 class="accordion-header">
-                            <button class="accordion-button collapsed bg-white fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#adim0">
-                                <i class="fas fa-lock text-danger me-2"></i> Adım 0: Mecburi Statik ve Taşıyıcılar (Sabit Alan)
-                            </button>
-                        </h2>
-                        <div id="adim0" class="accordion-collapse collapse" data-bs-parent="#dnaAccordion">
-                            <div class="accordion-body bg-light">
-                                <div class="alert alert-danger mb-4"><i class="fas fa-exclamation-circle me-2"></i> Bu kalemler DXF'ten (Statik Projeden) sistem tarafından mecburi çekilmektedir. Değiştirilemez.</div>
-                                <div class="mb-3"><label class="form-label text-muted small">Taşıyıcı Beton</label><input type="text" class="form-control bg-white" value="Radye Temel ve Kat Betonu (DXF)" readonly></div>
-                                <div class="mb-3"><label class="form-label text-muted small">Taşıyıcı Donatı</label><input type="text" class="form-control bg-white" value="Nervürlü Taşıyıcı Donatı Çeliği (DXF)" readonly></div>
-                                <div class="mb-3"><label class="form-label text-muted small">Kalıp Sistemi</label><input type="text" class="form-control bg-white" value="Kalıp ve İskele İşçiliği (DXF)" readonly></div>
-                                <div class="mb-4"><label class="form-label text-muted small">Donatı Ekipmanları</label><input type="text" class="form-control bg-white" value="Paspayları ve Filizler (DXF)" readonly></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- DINAMIK ADIM 1 -->
-                    <div class="accordion-item border-0 mb-2 rounded-3 overflow-hidden">
-                        <h2 class="accordion-header">
-                            <button class="accordion-button bg-white fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#adim1">
-                                <i class="fas fa-layer-group text-primary me-2"></i> Adım 1: Kot 0 (Zemin, Temel ve Perde İzolasyonu)
-                            </button>
-                        </h2>
-                        <div id="adim1" class="accordion-collapse collapse show" data-bs-parent="#dnaAccordion">
-                            <div class="accordion-body bg-light">
-                                @if(ViewBag.Step1 != null) {
-                                    var step1 = (GMK360.Core.Entities.Construction.Workflows.DnaTemplateStep)ViewBag.Step1;
-                                    foreach(var q in step1.Questions) {
-                                        <div class="mb-4 bg-white p-3 border rounded shadow-sm">
-                                            <label class="form-label fw-bold text-dark">@q.Title</label>
-                                            
-                                            @if(q.IsMultipleChoice) {
-                                                <div class="input-group mb-2 shadow-sm">
-                                                    <select class="form-select border-0 dynamic-dna-select" id="q_@q.Id">
-                                                        <option value="">-- Seçiniz --</option>
-                                                        @foreach(var opt in q.Options.OrderBy(o => o.OptionOrder)) {
-                                                            var profName = opt.Profession != null ? opt.Profession.Name : (q.Profession != null ? q.Profession.Name : "");
-                                                            <option value="@opt.Id" data-prof="@profName">@opt.OptionText</option>
-                                                        }
-                                                    </select>
-                                                    <button class="btn btn-primary fw-bold px-4" type="button" onclick="addDynamicLayer('list_@q.Id', 'q_@q.Id')"><i class="fas fa-plus"></i> Ekle</button>
-                                                </div>
-                                                <ul class="list-group list-group-flush dynamic-dna-list" id="list_@q.Id"></ul>
-                                            } else {
-                                                <select class="form-select border-0 dynamic-dna-single shadow-sm" id="q_@q.Id">
-                                                    <option value="">-- Seçiniz --</option>
-                                                    @foreach(var opt in q.Options.OrderBy(o => o.OptionOrder)) {
-                                                        var profName = opt.Profession != null ? opt.Profession.Name : (q.Profession != null ? q.Profession.Name : "");
-                                                        <option value="@opt.Id" data-prof="@profName">@opt.OptionText</option>
-                                                    }
-                                                </select>
-                                                <div class="mt-2" id="prof_q_@q.Id"></div>
-                                            }
-                                        </div>
-                                    }
-                                }
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer border-top p-3 bg-white sticky-bottom">
-                <button type="button" class="btn btn-outline-secondary fw-bold rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
-                <button type="button" class="btn btn-primary fw-bold rounded-pill px-5 shadow-sm" onclick="addConfiguration()">
-                    <i class="fas fa-check-circle me-2"></i> DNA Profilini Kaydet
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <script>
-    function addDynamicLayer(listId, selectId) {
-        var sel = document.getElementById(selectId);
-        var list = document.getElementById(listId);
-        if(!sel.value) return;
-        var text = sel.options[sel.selectedIndex].text;
-        var prof = sel.options[sel.selectedIndex].getAttribute("data-prof");
-        
-        var existing = list.querySelector("li[data-val='" + sel.value + "']");
-        if(existing) return;
-        
-        var li = document.createElement("li");
-        li.className = "list-group-item d-flex justify-content-between align-items-center bg-light border-0 mb-1 rounded";
-        li.setAttribute("data-val", sel.value);
-        li.innerHTML = `
-            <div>
-                <i class="fas fa-check-circle text-success me-2"></i><span class="fw-bold">${text}</span>
-                <div class="small mt-1 text-primary"><i class="fas fa-hard-hat me-1"></i> Kim Yapar: <strong>${prof}</strong></div>
-            </div>
-            <button class="btn btn-sm btn-outline-danger border-0" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
-        `;
-        list.appendChild(li);
-        sel.value = "";
-    }
-    
-    document.addEventListener("change", function(e) {
-        if(e.target && e.target.classList.contains("dynamic-dna-single")) {
-            var divId = "prof_" + e.target.id;
-            var div = document.getElementById(divId);
-            if(div) {
-                if(e.target.value) {
-                    var prof = e.target.options[e.target.selectedIndex].getAttribute("data-prof");
-                    div.innerHTML = `<span class="badge bg-primary px-3 py-2 mt-2 d-inline-block"><i class="fas fa-hard-hat me-1"></i> Kim Yapar: <strong>${prof}</strong></span>`;
-                } else {
-                    div.innerHTML = "";
-                }
-            }
-        }
-    });
-
-    function addConfiguration() {
-        var profileName = document.getElementById("configName").value.trim();
-        if(!profileName) {
-            alert("Lütfen profil adını giriniz.");
-            return;
-        }
-
-        var details = [];
-        
-        document.querySelectorAll(".dynamic-dna-list").forEach(function(ul) {
-            Array.from(ul.children).forEach(function(li) {
-                var val = li.getAttribute("data-val");
-                var text = li.querySelector("span").innerText;
-                details.push({ Phase: "Adım 1", SelectedItem: text, ValueId: parseInt(val) });
-            });
-        });
-
-        document.querySelectorAll(".dynamic-dna-single").forEach(function(sel) {
-            if(sel.value) {
-                var opt = sel.options[sel.selectedIndex];
-                details.push({ Phase: "Adım 1", SelectedItem: opt.text, ValueId: parseInt(sel.value) });
-            }
-        });
-
-        fetch("/Metraj/SaveDnaProfile", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                ProjectId: @(ViewData["ProjectId"] ?? "0"),
-                Name: profileName,
-                Details: details
-            })
-        }).then(res => {
-            if(res.ok) window.location.reload();
-            else alert("Kayıt sırasında hata oluştu.");
-        }).catch(err => {
-            console.error(err);
-            alert("Sunucuya bağlanılamadı.");
-        });
-    }
-
     function deleteProfile(id) {
         if(confirm("Profili silmek istediğinize emin misiniz?")) {
             fetch("/Metraj/DeleteDnaProfile/" + id, { method: "POST" })
@@ -583,4 +907,55 @@
         var btn = document.getElementById("btnB2bMimari");
         if(btn) btn.disabled = (count === 0);
     }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        updateSelectedCount();
+    });
+
+    function printSartname() {
+        var printContents = document.getElementById("sartnamePrintArea").innerHTML;
+        var printWindow = window.open('', '', 'height=800,width=900');
+        printWindow.document.write('<html><head><title>GMK360 Mimari CAD/DXF Teslim Şartnamesi</title>');
+        printWindow.document.write('<link rel="stylesheet" href="/lib/bootstrap/dist/css/bootstrap.min.css">');
+        printWindow.document.write('<style>body{padding:25px; font-family:sans-serif;} table{width:100%; border-collapse:collapse; margin-bottom:1rem;} th,td{border:1px solid #dee2e6; padding:6px 10px; font-size:12px;} th{background:#f8f9fa;}</style>');
+        printWindow.document.write('</head><body>');
+        printWindow.document.write('<div style="border-bottom:2px solid #0d6efd; padding-bottom:10px; margin-bottom:15px;">');
+        printWindow.document.write('<h3 style="margin:0; color:#0d6efd; font-size:20px;">GMK360 MİMARİ KAT PLANI VE CAD/DXF TESLİM ŞARTNAMESİ</h3>');
+        printWindow.document.write('<small style="color:#555;">Proje: @(project?.Name ?? "Şantiye Projesi") | Doküman No: GMK-CAD-SPEC-2026-V1</small></div>');
+        printWindow.document.write(printContents);
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(function() { printWindow.print(); printWindow.close(); }, 500);
+    }
+
+    function copySartname() {
+        var text = `GMK360 MİMARİ KAT PLANI VE CAD/DXF TESLİM ŞARTNAMESİ (GMK-CAD-SPEC-2026-V1)\nProje: @(project?.Name ?? "Şantiye Projesi")\n\n`
+            + `1. TEMEL KURAL: KAT BAZINDA DIŞA AKTARIM (WBLOCK KURALI)\n`
+            + `Tüm binayı tek bir dosyada vermeyiniz. Her katı bağımsız DXF olarak kaydediniz.\n`
+            + `Örn: E_Blok_1_Normal_Kat.dxf, D_Blok_Zemin_Kat.dxf\n\n`
+            + `2. MAHAL İSİMLENDİRME KURALLARI (MTEXT/TEXT)\n`
+            + `Her odanın merkezinde standart metin bulunmalı ve m² alanı yazılmalıdır: SALON, YATAK ODASI 1, YATAK ODASI 2, MUTFAK, BANYO, EBEVEYN BANYO, KAT HOLÜ, MERDİVEN EVİ.\n\n`
+            + `3. KAPI VE DOĞRAMA STANDARTLARI\n`
+            + `- Çelik Kapı: 100x210 cm (D0)\n`
+            + `- Oda Kapısı: 90x210 cm (D1)\n`
+            + `- Banyo/WC Kapısı: 75x210 cm (D2)\n`
+            + `- Yangın Kapısı: 100x210 cm Panik Barlı (DY)\n`
+            + `- Özel İmalat: Standart dışı ölçü net belirtilmelidir.\n\n`
+            + `4. MERDİVEN VE ORTAK ALANLAR\n`
+            + `Basamak çizgileri tek tek çizilmeli (16-18 rıht), çıkış yönü oku gösterilmelidir. Kat holü ve şaftlar net olmalıdır.\n\n`
+            + `5. MİMAR İÇİN AUTOCAD ÇIKARMA YOLU:\n`
+            + `Katı seçin -> WBLOCK yazıp Enter'a basın -> AutoCAD 2018 DXF olarak kaydedin.\n`;
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(function() {
+                alert("✅ Şartname panoya kopyalandı! Mimara WhatsApp veya E-Posta ile gönderebilirsiniz.");
+            }).catch(function() {
+                prompt("Şartname metnini kopyalayın:", text);
+            });
+        } else {
+            prompt("Şartname metnini kopyalayın:", text);
+        }
+    }
 </script>
+

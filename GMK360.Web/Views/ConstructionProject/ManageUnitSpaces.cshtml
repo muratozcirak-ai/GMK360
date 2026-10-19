@@ -2,7 +2,13 @@
 @{
     ViewData["Title"] = "Mahal ve Demirbaş Yönetimi";
     Layout = "~/Views/Shared/_Layout.cshtml";
-    string unitTitle = Model.Category == "OrtakAlan_Blok" ? "Blok Ortak Alanı" : (Model.Category == "Eklenti" ? "Eklenti" : $"Kat {Model.FloorLevel} - No {Model.DoorNumber}");
+    bool isCommonArea = Model.Category == "OrtakAlan_Blok" || Model.Category == "OrtakAlan";
+    bool isStorage = Model.Category == "Eklenti" || Model.Category == "Depo";
+    string unitTitle = isCommonArea 
+        ? $"Bina Ortak Alanı - {Model.RoomLayout ?? Model.DoorNumber}" 
+        : (isStorage 
+            ? $"Depo / Eklenti - No {Model.DoorNumber}" 
+            : $"Kat {Model.FloorLevel} - No {Model.DoorNumber}");
 }
 
 <div class="container-fluid mt-4">
@@ -10,12 +16,17 @@
         <div>
             <h4 class="fw-bold mb-1"><i class="bi bi-layers text-primary me-2"></i>Mahal ve Demirbaş Yönetimi</h4>
             <div class="text-muted small">
-                @Model.Building.ConstructionProject.Name / @Model.Building.BlockName / @unitTitle
+                @Model.Building.ConstructionProject.Name / @Model.Building.BlockName / <span class="fw-bold text-dark">@unitTitle</span>
             </div>
         </div>
-        <a asp-action="ManageBlock" asp-route-id="@Model.BuildingId" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left me-1"></i> Bloğa Dön
-        </a>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-primary rounded-pill px-3 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#cloneUnitModal">
+                <i class="bi bi-copy me-1"></i> @(isCommonArea ? "Bu Ortak Alanı Diğer Bloklara Çoğalt" : "Bu Daireyi Diğer Dairelere Klonla / Çoğalt")
+            </button>
+            <a asp-action="ManageBlock" asp-route-id="@Model.BuildingId" class="btn btn-outline-secondary rounded-pill px-3">
+                <i class="bi bi-arrow-left me-1"></i> Bloğa Dön
+            </a>
+        </div>
     </div>
 
     <div class="row">
@@ -23,7 +34,7 @@
         <div class="col-md-3">
             <div class="card border-0 shadow-sm rounded-4 mb-4">
                 <div class="card-header bg-white border-bottom-0 pt-4 pb-0 d-flex justify-content-between align-items-center">
-                    <h6 class="fw-bold mb-0">İç Mahaller (Odalar)</h6>
+                    <h6 class="fw-bold mb-0">@(isCommonArea ? "Tesis / Ortak Alan Bölümleri" : "İç Mahaller (Odalar)")</h6>
                     <button class="btn btn-sm btn-success rounded-pill" data-bs-toggle="modal" data-bs-target="#addSpaceModal">
                         <i class="bi bi-plus-lg"></i>
                     </button>
@@ -72,26 +83,53 @@
                     <p class="small">Veya sol üstteki + butonundan yeni bir mahal ekleyin (Örn: Salon, Şaft, Banyo)</p>
                 </div>
                 <div class="card-body d-none" id="rightPanelContent">
-                    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
-                        <h4 class="fw-bold mb-0 text-dark"><span id="spaceTitle">Oda Adı</span> <span id="viewTitle" class="badge bg-light text-primary border ms-2"></span></h4>
+                    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <h4 class="fw-bold mb-0 text-dark"><span id="spaceTitle">Oda Adı</span></h4>
+                            <span id="viewTitle" class="badge bg-light text-primary border"></span>
+                        </div>
+                        <div class="btn-group btn-group-sm rounded-pill shadow-sm" role="group">
+                            <button type="button" class="btn btn-primary" id="btnTabMeasurements" onclick="switchView('measurements')">
+                                <i class="bi bi-rulers me-1"></i> Ölçüler & Metraj
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" id="btnTabFixtures" onclick="switchView('fixtures')">
+                                <i class="bi bi-box me-1"></i> Ürünler & Demirbaşlar
+                            </button>
+                        </div>
                     </div>
                     
                     <div id="fixturesView" style="display:none;">
-                        <div class="d-flex justify-content-end mb-3">
-                            <button class="btn btn-sm btn-primary rounded-pill px-3" onclick="openAddFixtureModal()">
-                                <i class="bi bi-plus-lg me-1"></i> Yeni Ürün Ekle
-                            </button>
+                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                            <div id="commonAreaTemplatesGroup" style="display:none;">
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-info dropdown-toggle rounded-pill px-3 fw-bold shadow-sm" type="button" data-bs-toggle="dropdown">
+                                        <i class="bi bi-magic me-1"></i> Hazır Donanım / Tesisat Şablonu Yükle
+                                    </button>
+                                    <ul class="dropdown-menu shadow rounded-3 border-0">
+                                        <li><h6 class="dropdown-header">Bina & Tesis Donanım Şablonları</h6></li>
+                                        <li><a class="dropdown-item cursor-pointer" onclick="applyCommonFixturesTemplate('Su Deposu')"><i class="bi bi-droplet-fill text-primary me-2"></i>Su Deposu & Hidrofor Donanımı</a></li>
+                                        <li><a class="dropdown-item cursor-pointer" onclick="applyCommonFixturesTemplate('Sığınak')"><i class="bi bi-shield-shaded text-danger me-2"></i>Sığınak Havalandırma & Güvenlik Donanımı</a></li>
+                                        <li><a class="dropdown-item cursor-pointer" onclick="applyCommonFixturesTemplate('Jeneratör')"><i class="bi bi-lightning-charge-fill text-warning me-2"></i>Jeneratör Grubu & ATS Transfer Panosu</a></li>
+                                        <li><a class="dropdown-item cursor-pointer" onclick="applyCommonFixturesTemplate('Kazan Dairesi')"><i class="bi bi-fire text-danger me-2"></i>Kazan Dairesi & Sirkülasyon Pompaları</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="ms-auto">
+                                <button class="btn btn-sm btn-primary rounded-pill px-3 shadow-sm" onclick="openAddFixtureModal()">
+                                    <i class="bi bi-plus-lg me-1"></i> Yeni Ürün Ekle
+                                </button>
+                            </div>
                         </div>
                     <div class="table-responsive">
                         <table class="table table-hover align-middle">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Ürün / Demirbaş</th>
+                                    <th>Ürün / Demirbaş & Marka</th>
                                     <th>Kategori</th>
                                     <th>Adet / Ölçü</th>
-                                    <th>Tedarikçi</th>
-                                    <th>Teknik Servis</th>
-                                    <th>İşlem</th>
+                                    <th>Malzeme / Renk Opsiyonları</th>
+                                    <th>Tedarikçi / Servis / Garanti</th>
+                                    <th class="text-end">İşlem</th>
                                 </tr>
                             </thead>
                             <tbody id="fixturesTableBody">
@@ -163,7 +201,9 @@
                             <option value="Islak Hacim">Islak Hacim (Banyo/WC)</option>
                             <option value="Mutfak">Mutfak</option>
                             <option value="Balkon">Balkon / Teras</option>
-                            <option value="Tesisat">Tesisat / Şaft / Pano</option>
+                            <option value="Tesisat">Tesisat / Mekanik Şaft / Pano</option>
+                            <option value="Depo">Depo / Ardiye / Stok Bölümü</option>
+                            <option value="OrtakAlan">Bina Ortak Alanı (Su Deposu, Sığınak, Jeneratör)</option>
                             <option value="Dolaşım">Hol / Koridor / Merdiven</option>
                             <option value="Diğer">Diğer</option>
                         </select>
@@ -270,17 +310,28 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label fw-bold small">Ürün Adı (Serbest Metin)</label>
-                            <input type="text" name="itemName" class="form-control" placeholder="Örn: Ranza, Kombi, Asansör Motoru" required />
+                            <input type="text" name="itemName" class="form-control" placeholder="Örn: Lavabo Bataryası, Mutfak Dolabı, Kombi" required />
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label fw-bold small">Kategori</label>
                             <select name="category" class="form-select">
-                                <option value="Mobilya">Mobilya / Dekorasyon</option>
+                                <option value="Vitrifiye">Vitrifiye / Banyo</option>
+                                <option value="Zemin">Zemin & Parke</option>
+                                <option value="Doğrama">Kapı & Doğrama</option>
+                                <option value="Mobilya">Mobilya & Dolap</option>
                                 <option value="Beyaz Eşya">Beyaz Eşya / Ankastre</option>
                                 <option value="Tesisat">Mekanik / Tesisat</option>
                                 <option value="Elektrik">Elektrik / Elektronik</option>
                                 <option value="Diğer">Diğer</option>
                             </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Standart Marka</label>
+                            <input type="text" name="standardBrand" class="form-control" placeholder="Örn: Grohe, VitrA, E.C.A., Vaillant" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Standart Model / Seri</label>
+                            <input type="text" name="standardModel" class="form-control" placeholder="Örn: Eurosmart Cosmopolitan, ecoTEC Plus" />
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label fw-bold small">Miktar</label>
@@ -290,12 +341,17 @@
                                     <option value="Adet">Adet</option>
                                     <option value="m2">m²</option>
                                     <option value="Set">Set</option>
+                                    <option value="mt">mt</option>
                                 </select>
                             </div>
                         </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Tahmini Birim Fiyat (TL)</label>
+                            <input type="number" step="0.01" name="estimatedPrice" class="form-control" placeholder="Örn: 2450.00" />
+                        </div>
                         <div class="col-12 mb-3">
-                            <label class="form-label fw-bold small">Açıklama / Teknik Şartname <span class="text-muted fw-normal">(Teklif isterken firmalara bu açıklama gidecek)</span></label>
-                            <textarea name="maintenanceNotes" class="form-control" rows="2" placeholder="Örn: Demirden, kilitlenebilir, duvara monte edilecek..."></textarea>
+                            <label class="form-label fw-bold small">Şantiye Deposu / Stok Konumu & İmalat Açıklaması <span class="text-muted fw-normal">(Ustanın veya mal kabulün kolay bulması için)</span></label>
+                            <textarea name="maintenanceNotes" class="form-control" rows="2" placeholder="Örn: Zemin kat sol köşe, Ana Depo Raf 2B, Kilitli şantiye odası"></textarea>
                         </div>
                         <div class="col-12 mb-2">
                             <div class="form-check form-switch">
@@ -317,6 +373,14 @@
                             <label class="form-label fw-bold small">Teknik Servis</label>
                             <input type="text" name="technicalServiceName" class="form-control" placeholder="Servis Adı veya Telefon" />
                         </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small"><i class="bi bi-shield-check text-success me-1"></i>Garanti Bitiş Tarihi</label>
+                            <input type="date" name="warrantyExpiryDate" class="form-control" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small"><i class="bi bi-calendar-event text-warning me-1"></i>Periyodik Bakım / Servis Tarihi</label>
+                            <input type="date" name="nextMaintenanceDate" class="form-control" />
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer border-0 pt-0">
@@ -324,6 +388,254 @@
                     <button type="submit" class="btn btn-primary rounded-pill px-4">Kaydet</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+@{
+    var projectUnits = ViewBag.ProjectUnits as List<GMK360.Core.Entities.BuildingUnit> ?? new List<GMK360.Core.Entities.BuildingUnit>();
+    var totalSpacesCount = Model.Spaces?.Count ?? 0;
+    var totalMeasurementsCount = Model.Spaces?.Sum(s => s.Measurements?.Count ?? 0) ?? 0;
+    var totalFixturesCount = Model.Spaces?.Sum(s => s.Fixtures?.Count ?? 0) ?? 0;
+}
+
+<!-- Clone Unit Spaces Modal -->
+<div class="modal fade" id="cloneUnitModal" tabindex="-1" aria-labelledby="cloneUnitModalLabel" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white border-0 py-3 rounded-top-4">
+                <h5 class="modal-title fw-bold" id="cloneUnitModalLabel">
+                    <i class="bi bi-copy me-2"></i>Daireyi Klonla / Diğer Dairelere Çoğalt
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body p-4">
+                <!-- Source Unit Summary Card -->
+                <div class="card border-0 bg-primary bg-opacity-10 rounded-4 mb-4">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div>
+                                <span class="badge bg-primary text-white px-3 py-1 rounded-pill mb-1">Kaynak Daire</span>
+                                <h5 class="fw-bold text-dark mb-0">@Model.Building.BlockName - @unitTitle</h5>
+                                <div class="text-muted small mt-1">
+                                    <span class="me-3"><i class="bi bi-door-open me-1"></i>Tür: <strong>@(Model.RoomLayout ?? "Mesken")</strong></span>
+                                    <span class="me-3"><i class="bi bi-compass me-1"></i>Cephe: <strong>@(Model.FacadeDirection ?? "-")</strong></span>
+                                    @if(Model.GrossSquareMeters.HasValue && Model.GrossSquareMeters.Value > 0)
+                                    {
+                                        <span><i class="bi bi-rulers me-1"></i>Brüt: <strong>@Model.GrossSquareMeters m²</strong></span>
+                                    }
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <div class="d-flex gap-2">
+                                    <span class="badge bg-white text-primary border shadow-sm px-3 py-2">
+                                        <i class="bi bi-grid-fill me-1"></i>@totalSpacesCount Oda (Mahal)
+                                    </span>
+                                    <span class="badge bg-white text-success border shadow-sm px-3 py-2">
+                                        <i class="bi bi-rulers me-1"></i>@totalMeasurementsCount Ölçü
+                                    </span>
+                                    <span class="badge bg-white text-info border shadow-sm px-3 py-2">
+                                        <i class="bi bi-box me-1"></i>@totalFixturesCount Ürün/Demirbaş
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Overwrite Setting -->
+                <div class="form-check form-switch mb-4 p-3 bg-light rounded-3 border">
+                    <input class="form-check-input ms-0 me-3" type="checkbox" id="chkCloneOverwrite" checked style="width: 2.5em; height: 1.25em;">
+                    <label class="form-check-label fw-bold text-dark" for="chkCloneOverwrite">
+                        Hedef dairelerdeki mevcut mahallerin üzerine yaz (Sıfırla ve Birebir Kopyala)
+                    </label>
+                    <div class="text-muted small mt-1">
+                        İşaretli kalırsa hedef dairedeki eski odalar silinip bu dairenin odaları, ölçüleri ve malzeme seçimleri birebir aktarılır.
+                    </div>
+                </div>
+
+                <!-- Fast Filter Buttons -->
+                <div class="d-flex flex-wrap gap-2 mb-3 align-items-center bg-light p-2 rounded-3 border">
+                    <span class="small fw-bold text-muted me-1"><i class="bi bi-funnel me-1"></i>Hızlı Hedef Seçimi:</span>
+                    @if (!string.IsNullOrEmpty(Model.FacadeDirection) && Model.FacadeDirection != "-")
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill py-1 px-3 btn-clone-filter" data-filter="facade">
+                            <i class="bi bi-compass me-1"></i>Aynı Cephedekiler (@Model.FacadeDirection)
+                        </button>
+                    }
+                    @if (!string.IsNullOrEmpty(Model.RoomLayout) && Model.RoomLayout != "-")
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-success rounded-pill py-1 px-3 btn-clone-filter" data-filter="layout">
+                            <i class="bi bi-door-open me-1"></i>Aynı Tiptekiler (@Model.RoomLayout)
+                        </button>
+                    }
+                    <button type="button" class="btn btn-sm btn-outline-info rounded-pill py-1 px-3 btn-clone-filter" data-filter="sameblock">
+                        <i class="bi bi-building me-1"></i>Bu Bloğun Tüm Daireleri
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill py-1 px-3 btn-clone-filter" data-filter="all">
+                        <i class="bi bi-check-all me-1"></i>Tümünü Seç
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger rounded-pill py-1 px-3 btn-clone-filter" data-filter="clear">
+                        <i class="bi bi-x-circle me-1"></i>Temizle
+                    </button>
+                </div>
+
+                <!-- Target Units List -->
+                <label class="form-label fw-bold text-dark small border-bottom w-100 pb-2 mb-3">
+                    Hedef Daireleri Seçin (<span id="selectedCloneCount" class="text-primary fw-bold">0</span> daire seçildi)
+                </label>
+                <div class="row g-3" style="max-height: 380px; overflow-y: auto;">
+                    @if (!projectUnits.Any())
+                    {
+                        <div class="col-12">
+                            <div class="alert alert-warning text-center">
+                                Projede bu daire dışında başka bağımsız bölüm bulunamadı.
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        var groupedUnits = projectUnits.GroupBy(u => u.Building?.BlockName ?? "Ana Blok").OrderBy(g => g.Key);
+                        foreach (var group in groupedUnits)
+                        {
+                            <div class="col-md-6 mb-2">
+                                <div class="card border bg-white shadow-sm h-100">
+                                    <div class="card-header bg-light py-2 px-3 border-bottom d-flex justify-content-between align-items-center">
+                                        <h6 class="fw-bold text-primary mb-0"><i class="bi bi-building me-1"></i>@group.Key</h6>
+                                        <div class="form-check m-0">
+                                            <input class="form-check-input select-all-block-clone" type="checkbox" data-block-name="@group.Key" id="chk_block_@group.Key.Replace(" ", "")">
+                                            <label class="form-check-label small fw-bold" for="chk_block_@group.Key.Replace(" ", "")">Tümü</label>
+                                        </div>
+                                    </div>
+                                    <div class="card-body p-2 d-flex flex-column gap-1" style="max-height: 220px; overflow-y: auto;">
+                                        @foreach (var tu in group.OrderByDescending(x => x.FloorLevel).ThenBy(x => x.DoorNumber))
+                                        {
+                                            string chkId = $"chk_clone_u_{tu.Id}";
+                                            <div class="form-check d-flex align-items-center justify-content-between px-2 py-1 rounded hover-bg">
+                                                <div>
+                                                    <input class="form-check-input chk-clone-unit me-2" type="checkbox" value="@tu.Id" 
+                                                           data-block="@tu.BuildingId" 
+                                                           data-block-name="@group.Key"
+                                                           data-facade="@tu.FacadeDirection" 
+                                                           data-layout="@tu.RoomLayout" 
+                                                           id="@chkId">
+                                                    <label class="form-check-label small fw-bold" for="@chkId">
+                                                        Kat @tu.FloorLevel - No: @tu.DoorNumber
+                                                    </label>
+                                                </div>
+                                                <div class="d-flex gap-1 align-items-center">
+                                                    @if(!string.IsNullOrEmpty(tu.RoomLayout) && tu.RoomLayout != "-")
+                                                    {
+                                                        <span class="badge bg-light text-dark border small">@tu.RoomLayout</span>
+                                                    }
+                                                    @if(!string.IsNullOrEmpty(tu.FacadeDirection) && tu.FacadeDirection != "-")
+                                                    {
+                                                        <span class="badge bg-light text-muted border small">@tu.FacadeDirection</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+            <div class="modal-footer border-top-0 bg-light rounded-bottom-4 py-3">
+                <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" id="btnSubmitCloneUnits">
+                    <i class="bi bi-copy me-1"></i> Seçili Dairelere Klonla
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Manage Material Options Modal -->
+<div class="modal fade" id="manageOptionsModal" tabindex="-1" aria-labelledby="manageOptionsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header bg-gradient text-white border-0 py-3 rounded-top-4" style="background: linear-gradient(135deg, #0d6efd, #0dcaf0);">
+                <h5 class="modal-title fw-bold" id="manageOptionsModalLabel">
+                    <i class="bi bi-palette me-2"></i>Malzeme & Renk Opsiyonları
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body p-4">
+                <input type="hidden" id="optFixtureId" />
+                
+                <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                    <div>
+                        <span class="text-muted small">Seçili Demirbaş / Ürün:</span>
+                        <h5 class="fw-bold text-dark mb-0" id="optFixtureTitle">Ürün Adı</h5>
+                    </div>
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 rounded-pill small">
+                        <i class="bi bi-phone me-1"></i>SMS Doğrulama Desteği
+                    </span>
+                </div>
+
+                <!-- Existing Options List -->
+                <h6 class="fw-bold text-dark mb-2"><i class="bi bi-list-check text-primary me-1"></i>Tanımlı Seçenekler & Renkler</h6>
+                <div class="table-responsive mb-4">
+                    <table class="table table-sm table-hover align-middle border rounded">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Görsel</th>
+                                <th>Seçenek / Renk / Model</th>
+                                <th>Fiyat Farkı</th>
+                                <th>Durum</th>
+                                <th class="text-end">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody id="optionsTableBody">
+                            <tr><td colspan="5" class="text-center text-muted py-3">Henüz opsiyon eklenmemiş.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Add New Option Card -->
+                <div class="card border rounded-3 bg-light shadow-sm mb-3">
+                    <div class="card-body p-3">
+                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-plus-circle text-success me-1"></i>Yeni Seçenek / Renk Ekle</h6>
+                        <form id="addOptionForm" enctype="multipart/form-data">
+                            <div class="row g-2">
+                                <div class="col-md-5">
+                                    <label class="form-label small fw-bold mb-1">Seçenek Adı</label>
+                                    <input type="text" class="form-control form-control-sm" id="newOptName" placeholder="Örn: Masif Meşe, Mat Siyah, Granit" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold mb-1">Fiyat Farkı (TL) <span class="text-muted fw-normal">(Opsiyonel)</span></label>
+                                    <input type="number" step="0.01" class="form-control form-control-sm" id="newOptPriceDiff" placeholder="Talep gelince fiyatlandır">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold mb-1">Renk / Doku Görseli</label>
+                                    <input type="file" class="form-control form-control-sm" id="newOptImage" accept="image/*">
+                                </div>
+                                <div class="col-12 mt-2 d-flex justify-content-between align-items-center">
+                                    <div class="form-check m-0">
+                                        <input class="form-check-input" type="checkbox" id="newOptIsStandard">
+                                        <label class="form-check-label small fw-bold text-dark" for="newOptIsStandard">
+                                            Müteahhit Standart Seçeneği (Fiyat Farkı Yok)
+                                        </label>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-bold shadow-sm" id="btnSubmitNewOption">
+                                        <i class="bi bi-plus-lg me-1"></i> Seçeneği Kaydet
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="alert alert-info py-2 px-3 small rounded-3 mb-0">
+                    <i class="bi bi-info-circle-fill me-1"></i>
+                    <strong>Hatasız İmalat & SMS Güvencesi:</strong> Müşteri bu daireyi satın aldığında veya kiraladığında burada tanımlı seçeneklerden tercihini yapar. Seçim listesi alıcının telefonuna SMS OTP kodu ile onaylatılarak kayıt altına alınır; şantiyedeki usta doğrudan bu onaylı seçimi imal eder.
+                </div>
+            </div>
+            <div class="modal-footer border-top-0 bg-light rounded-bottom-4 py-2">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Kapat</button>
+            </div>
         </div>
     </div>
 </div>
@@ -340,14 +652,53 @@
         function switchView(view) {
             currentView = view;
             if(currentView === 'fixtures') {
+                $('#btnTabFixtures').addClass('active btn-primary').removeClass('btn-outline-primary');
+                $('#btnTabMeasurements').removeClass('active btn-primary').addClass('btn-outline-primary');
                 $('#viewTitle').html('<i class="bi bi-box"></i> Demirbaşlar');
                 $('#fixturesView').show();
                 $('#measurementsView').hide();
             } else {
+                $('#btnTabMeasurements').addClass('active btn-primary').removeClass('btn-outline-primary');
+                $('#btnTabFixtures').removeClass('active btn-primary').addClass('btn-outline-primary');
                 $('#viewTitle').html('<i class="bi bi-rulers"></i> Ölçüler');
                 $('#fixturesView').hide();
                 $('#measurementsView').show();
             }
+        }
+
+        function applyCommonFixturesTemplate(templateType) {
+            if (!currentSpaceId) {
+                alert("Lütfen önce bir mahal seçin.");
+                return;
+            }
+            if (!confirm(templateType + ' için önerilen donanım ve demirbaşlar bu mahale eklensin mi?')) return;
+
+            $.post('/ConstructionProject/AddCommonFixturesTemplate', {
+                spaceId: currentSpaceId,
+                templateType: templateType,
+                __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+            }).done(function(res) {
+                if (res.success) {
+                    alert(res.count + ' adet donanım başarıyla yüklendi.');
+                    loadSpace(currentSpaceId, currentSpaceName, currentSpaceType, 'fixtures');
+                } else {
+                    alert('Şablon yüklenirken bir sorun oluştu.');
+                }
+            }).fail(function() {
+                alert('Sunucu hatası: Şablon yüklenemedi.');
+            });
+        }
+
+        function showFixtureSpec(name, brand, model, qty, unit, loc, supplier, warranty, maintenance) {
+            let msg = '📋 MALZEME VE İMALAT ŞARTNAMESİ / FİYAT TALEBİ\n\n' +
+                      '• Ürün: ' + name + '\n' +
+                      '• Standart Marka / Model: ' + (brand ? brand + ' ' + (model || '') : 'Standart Belirtilmedi') + '\n' +
+                      '• Miktar: ' + qty + ' ' + unit + '\n' +
+                      '• Şantiye Depo / İmalat Konumu: ' + (loc || 'Belirtilmedi') + '\n' +
+                      '• Tercih Edilen Tedarikçi: ' + (supplier || 'Piyasa Araştırması Yapılacak (Fiyat Açık)') + '\n';
+            if (warranty) msg += '• Garanti Bitiş Tarihi: ' + warranty + '\n';
+            if (maintenance) msg += '• Periyodik Bakım / Servis: ' + maintenance + '\n';
+            alert(msg);
         }
 
         function loadSpace(spaceId, spaceName, spaceType, view = null) {
@@ -360,6 +711,19 @@
             $('#rightPanelEmpty').addClass('d-none');
             $('#rightPanelContent').removeClass('d-none');
             $('#spaceTitle').text(spaceName);
+
+            // Show common area template loader if facility room or common area
+            var sLower = (spaceName || '').toLowerCase();
+            var isFacility = (spaceType === 'OrtakAlan' || spaceType === 'Tesisat' || spaceType === 'Depo' || 
+                              sLower.indexOf('depo') !== -1 || sLower.indexOf('su') !== -1 || 
+                              sLower.indexOf('sığınak') !== -1 || sLower.indexOf('siginak') !== -1 || 
+                              sLower.indexOf('jeneratör') !== -1 || sLower.indexOf('jenerator') !== -1 || 
+                              sLower.indexOf('kazan') !== -1 || @(isCommonArea ? "true" : "false"));
+            if (isFacility) {
+                $('#commonAreaTemplatesGroup').show();
+            } else {
+                $('#commonAreaTemplatesGroup').hide();
+            }
             
             switchView(view ? view : 'measurements');
             
@@ -385,24 +749,62 @@
                       } else {
                           let html = '';
                           data.forEach(function(f) {
+                              let brandModel = '';
+                              if(f.standardBrand || f.standardModel) {
+                                  brandModel = `<div class="small text-muted"><i class="bi bi-tag-fill me-1 text-primary"></i>${f.standardBrand || ''} ${f.standardModel ? '- ' + f.standardModel : ''}</div>`;
+                              }
+                              let shelfCode = '';
+                              if(f.maintenanceNotes) {
+                                  shelfCode = `<div class="small text-secondary" title="Şantiye Depo / Raf"><i class="bi bi-geo-alt me-1 text-danger"></i>${f.maintenanceNotes}</div>`;
+                              }
+                              let estPrice = '';
+                              if(f.estimatedPrice) {
+                                  estPrice = `<div class="small fw-bold text-success mt-1">${Number(f.estimatedPrice).toLocaleString('tr-TR')} ₺</div>`;
+                              }
+
+                              let optsHtml = '';
+                              let optList = f.options || [];
+                              if(optList.length > 0) {
+                                  optsHtml = `<button class="btn btn-sm btn-outline-primary rounded-pill py-1 px-3 fw-bold shadow-sm" onclick="openOptionsModal(${f.id || f.Id}, '${(f.itemName || f.ItemName).replace(/'/g, "\\'")}', ${encodeURIComponent(JSON.stringify(optList))})"><i class="bi bi-palette me-1"></i>${optList.length} Opsiyon</button>`;
+                              } else {
+                                  optsHtml = `<button class="btn btn-sm btn-light border text-muted rounded-pill py-1 px-3" onclick="openOptionsModal(${f.id || f.Id}, '${(f.itemName || f.ItemName).replace(/'/g, "\\'")}', [])"><i class="bi bi-plus-circle me-1"></i>Opsiyon Ekle</button>`;
+                              }
+
+                              let warrantyBadge = '';
+                              if (f.warrantyExpiryDate) {
+                                  warrantyBadge = `<div class="small text-success mt-1" title="Garanti Bitiş Tarihi"><i class="bi bi-shield-check me-1"></i>Garanti: ${f.warrantyExpiryDate}</div>`;
+                              }
+                              let maintenanceBadge = '';
+                              if (f.nextMaintenanceDate) {
+                                  maintenanceBadge = `<div class="small text-warning-emphasis mt-1" title="Periyodik Bakım / Servis Tarihi"><i class="bi bi-calendar-event me-1"></i>Bakım: ${f.nextMaintenanceDate}</div>`;
+                              }
+
                               html += `<tr>
                                   <td class="fw-bold text-dark">
                                       ${!f.isCustomizable ? '<i class="bi bi-lock-fill text-danger me-1" title="Müşteri Değiştiremez"></i>' : ''}
                                       ${f.itemName || f.ItemName}
+                                      ${brandModel}
+                                      ${shelfCode}
                                   </td>
                                   <td><span class="badge bg-light text-dark border">${f.category || f.Category}</span></td>
                                   <td>
-                                      <div class="input-group input-group-sm" style="width: 130px;">
+                                      <div class="input-group input-group-sm" style="width: 120px;">
                                           <input type="number" step="0.01" class="form-control fw-bold text-primary" value="${f.quantity || f.Quantity}" onchange="updateFixtureQty(${f.id || f.Id}, this.value)" />
                                           <span class="input-group-text bg-light">${f.unit || f.Unit}</span>
                                       </div>
+                                      ${estPrice}
                                   </td>
-                                  <td>${f.supplierName ? f.supplierName : '-'}</td>
-                                  <td>${f.technicalServiceName ? f.technicalServiceName : '-'}</td>
+                                  <td>${optsHtml}</td>
                                   <td>
+                                      <div>${f.supplierName ? f.supplierName : '<span class="text-muted small">-</span>'}</div>
+                                      <div class="small text-muted">${f.technicalServiceName ? '<i class="bi bi-tools me-1"></i>' + f.technicalServiceName : ''}</div>
+                                      ${warrantyBadge}
+                                      ${maintenanceBadge}
+                                  </td>
+                                  <td class="text-end">
                                       <div class="btn-group">
-                                          <button class="btn btn-sm btn-outline-success fw-bold" onclick="alert('Teklif Modülü (İhale) yakında!\nAçıklama: ' + (f.maintenanceNotes || 'Yok'))"><i class="bi bi-tag me-1"></i>Fiyat İste</button>
-                                          <button class="btn btn-sm btn-light text-danger" onclick="deleteFixture(${f.id || f.Id})"><i class="bi bi-trash"></i></button>
+                                          <button class="btn btn-sm btn-outline-success fw-bold rounded-pill px-2 py-1 me-1 shadow-sm" onclick="showFixtureSpec('${(f.itemName || '').replace(/'/g, "\\'")}', '${(f.standardBrand || '').replace(/'/g, "\\'")}', '${(f.standardModel || '').replace(/'/g, "\\'")}', ${f.quantity || 1}, '${f.unit || 'Adet'}', '${(f.maintenanceNotes || '').replace(/'/g, "\\'")}', '${(f.supplierName || '').replace(/'/g, "\\'")}', '${f.warrantyExpiryDate || ''}', '${f.nextMaintenanceDate || ''}')" title="Tedarikçi / İhale Şartnamesi Hazırla"><i class="bi bi-file-earmark-text me-1"></i>Şartname</button>
+                                          <button class="btn btn-sm btn-light text-danger rounded-circle p-1" style="width:28px;height:28px;" onclick="deleteFixture(${f.id || f.Id})" title="Sil"><i class="bi bi-trash"></i></button>
                                       </div>
                                   </td>
                               </tr>`;
@@ -608,26 +1010,12 @@
                 $('#addMeasurementModal').modal('hide');
                 form[0].reset();
                 toastr.success('Ölçü eklendi');
-                loadSpace(currentSpaceId, currentSpaceName, currentSpaceType);
-            }).fail(function() {
-                toastr.error('Ölçü eklenirken hata oluştu');
-            });
-        }
-
-
-        function submitMeasurementForm(e) {
-            e.preventDefault();
-            var form = $('#addMeasurementForm');
-            $.post('/ConstructionProject/AddSpaceMeasurement', form.serialize())
-            .done(function() {
-                $('#addMeasurementModal').modal('hide');
-                form[0].reset();
-                toastr.success('Ölçü eklendi');
                 loadSpace(currentSpaceId, currentSpaceName, currentSpaceType, currentView);
             }).fail(function() {
                 toastr.error('Ölçü eklenirken hata oluştu');
             });
         }
+
         function openAddMeasurementModal() {
             if(currentSpaceId === 0) return;
             $('#measurementSpaceId').val(currentSpaceId);
@@ -638,6 +1026,244 @@
             if(currentSpaceId === 0) return;
             $('#fixtureSpaceId').val(currentSpaceId);
             $('#addFixtureModal').modal('show');
+        }
+
+        // Clone Unit Selection & Filter Logic
+        function updateSelectedCloneCount() {
+            var count = $('.chk-clone-unit:checked').length;
+            $('#selectedCloneCount').text(count);
+        }
+
+        $(document).on('change', '.chk-clone-unit', function() {
+            updateSelectedCloneCount();
+        });
+
+        $(document).on('change', '.select-all-block-clone', function() {
+            var blockName = $(this).data('block-name');
+            var isChecked = $(this).is(':checked');
+            $('.chk-clone-unit[data-block-name="' + blockName + '"]').prop('checked', isChecked);
+            updateSelectedCloneCount();
+        });
+
+        $(document).on('click', '.btn-clone-filter', function(e) {
+            e.preventDefault();
+            var filter = $(this).data('filter');
+            if (filter === 'all') {
+                $('.chk-clone-unit').prop('checked', true);
+                $('.select-all-block-clone').prop('checked', true);
+            } else if (filter === 'facade') {
+                var sourceFacade = '@(Model.FacadeDirection ?? "")';
+                $('.chk-clone-unit').prop('checked', false);
+                $('.select-all-block-clone').prop('checked', false);
+                if (sourceFacade && sourceFacade !== '-') {
+                    $('.chk-clone-unit[data-facade="' + sourceFacade + '"]').prop('checked', true);
+                }
+            } else if (filter === 'layout') {
+                var sourceLayout = '@(Model.RoomLayout ?? "")';
+                $('.chk-clone-unit').prop('checked', false);
+                $('.select-all-block-clone').prop('checked', false);
+                if (sourceLayout && sourceLayout !== '-') {
+                    $('.chk-clone-unit[data-layout="' + sourceLayout + '"]').prop('checked', true);
+                }
+            } else if (filter === 'sameblock') {
+                var sourceBlockId = '@Model.BuildingId';
+                $('.chk-clone-unit').prop('checked', false);
+                $('.select-all-block-clone').prop('checked', false);
+                $('.chk-clone-unit[data-block="' + sourceBlockId + '"]').prop('checked', true);
+            } else if (filter === 'clear') {
+                $('.chk-clone-unit').prop('checked', false);
+                $('.select-all-block-clone').prop('checked', false);
+            }
+            updateSelectedCloneCount();
+        });
+
+        $(document).on('click', '#btnSubmitCloneUnits', function() {
+            var selectedUnitIds = [];
+            $('.chk-clone-unit:checked').each(function() {
+                selectedUnitIds.push(parseInt($(this).val()));
+            });
+
+            if (selectedUnitIds.length === 0) {
+                alert("Lütfen kopyalamak istediğiniz en az bir hedef daire seçin!");
+                return;
+            }
+
+            var overwrite = $('#chkCloneOverwrite').is(':checked');
+            var btn = $(this);
+            var oldText = btn.html();
+            btn.html('<i class="spinner-border spinner-border-sm me-1"></i> Klonlanıyor...').prop('disabled', true);
+
+            $.ajax({
+                url: '/ConstructionProject/CloneUnitSpaces',
+                type: 'POST',
+                data: {
+                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val(),
+                    sourceUnitId: @Model.Id,
+                    targetUnitIds: selectedUnitIds,
+                    overwrite: overwrite
+                },
+                traditional: true,
+                success: function(res) {
+                    btn.html(oldText).prop('disabled', false);
+                    if (res.success) {
+                        alert(res.message);
+                        var modalEl = document.getElementById('cloneUnitModal');
+                        var modal = bootstrap.Modal.getInstance(modalEl);
+                        if (modal) modal.hide();
+                    } else {
+                        alert(res.message || 'Klonlama işlemi sırasında bir hata oluştu.');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    btn.html(oldText).prop('disabled', false);
+                    alert('HTTP Hatası: ' + xhr.status + ' - ' + error);
+                }
+            });
+        });
+
+        // MATERIAL OPTIONS LOGIC
+        let activeFixtureOptions = [];
+
+        function openOptionsModal(fixtureId, fixtureTitle, optList) {
+            $('#optFixtureId').val(fixtureId);
+            $('#optFixtureTitle').text(fixtureTitle);
+            
+            if (typeof optList === 'string') {
+                try {
+                    optList = JSON.parse(decodeURIComponent(optList));
+                } catch(e) {
+                    optList = [];
+                }
+            }
+            activeFixtureOptions = optList || [];
+            renderOptionsTable(activeFixtureOptions);
+            
+            // Reset new option inputs
+            $('#newOptName').val('');
+            $('#newOptPriceDiff').val('0');
+            $('#newOptIsStandard').prop('checked', false);
+            $('#newOptImage').val('');
+
+            var modal = new bootstrap.Modal(document.getElementById('manageOptionsModal'));
+            modal.show();
+        }
+
+        function renderOptionsTable(options) {
+            if(!options || options.length === 0) {
+                $('#optionsTableBody').html('<tr><td colspan="5" class="text-center text-muted py-3">Henüz opsiyon tanımlanmamış. Aşağıdaki formdan ilk seçeneği ekleyebilirsiniz.</td></tr>');
+                return;
+            }
+
+            let html = '';
+            options.forEach(function(o) {
+                let imgHtml = o.imageUrl 
+                    ? `<a href="${o.imageUrl}" target="_blank"><img src="${o.imageUrl}" class="rounded border" style="width: 40px; height: 40px; object-fit: cover;" /></a>` 
+                    : '<div class="bg-light text-muted rounded d-flex align-items-center justify-content-center border" style="width: 40px; height: 40px;"><i class="bi bi-image small"></i></div>';
+
+                let priceHtml = '';
+                if (o.isStandard) {
+                    priceHtml = '<span class="badge bg-light text-muted border">Standart (Fark Yok)</span>';
+                } else if (o.priceDifference !== null && o.priceDifference !== undefined && Number(o.priceDifference) > 0) {
+                    priceHtml = `<span class="badge bg-warning bg-opacity-10 text-dark border border-warning fw-bold">+${Number(o.priceDifference).toLocaleString('tr-TR')} ₺</span>`;
+                } else {
+                    priceHtml = '<span class="badge bg-secondary-subtle text-secondary border"><i class="bi bi-hourglass-split me-1"></i>Fiyat Belirlenecek</span>';
+                }
+
+                let statusBadge = o.isStandard 
+                    ? '<span class="badge bg-success-subtle text-success border border-success-subtle fw-bold"><i class="bi bi-check-circle me-1"></i>Standart</span>' 
+                    : '<span class="badge bg-primary-subtle text-primary border border-primary-subtle">Opsiyonel</span>';
+
+                html += `<tr>
+                    <td>${imgHtml}</td>
+                    <td class="fw-bold text-dark">${o.optionName}</td>
+                    <td>${priceHtml}</td>
+                    <td>${statusBadge}</td>
+                    <td class="text-end">
+                        <button type="button" class="btn btn-sm btn-light text-danger rounded-circle p-1" style="width: 28px; height: 28px;" onclick="deleteOption(${o.id})" title="Seçeneği Sil">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>`;
+            });
+            $('#optionsTableBody').html(html);
+        }
+
+        $(document).on('click', '#btnSubmitNewOption', function() {
+            var fId = $('#optFixtureId').val();
+            var name = $('#newOptName').val().trim();
+            var price = $('#newOptPriceDiff').val() || 0;
+            var isStd = $('#newOptIsStandard').is(':checked');
+            var imgFile = $('#newOptImage')[0].files[0];
+
+            if(!name) {
+                alert("Lütfen seçenek adını girin (Örn: Masif Meşe, Mat Siyah)");
+                return;
+            }
+
+            var formData = new FormData();
+            formData.append('__RequestVerificationToken', $('input[name="__RequestVerificationToken"]').val());
+            formData.append('fixtureId', fId);
+            formData.append('optionName', name);
+            formData.append('priceDifference', price);
+            formData.append('isStandard', isStd);
+            if(imgFile) {
+                formData.append('optionImage', imgFile);
+            }
+
+            var btn = $(this);
+            var oldText = btn.html();
+            btn.html('<i class="spinner-border spinner-border-sm me-1"></i> Kaydediliyor...').prop('disabled', true);
+
+            $.ajax({
+                url: '/ConstructionProject/AddFixtureOption',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(res) {
+                    btn.html(oldText).prop('disabled', false);
+                    if(res.success) {
+                        // Reload space to refresh state
+                        if(currentSpaceId) {
+                            loadSpace(currentSpaceId, currentSpaceName, currentSpaceType, 'fixtures');
+                        }
+                        var modalEl = document.getElementById('manageOptionsModal');
+                        var modal = bootstrap.Modal.getInstance(modalEl);
+                        if(modal) modal.hide();
+                    } else {
+                        alert(res.message || 'Hata oluştu');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    btn.html(oldText).prop('disabled', false);
+                    alert('Hata: ' + xhr.status + ' - ' + error);
+                }
+            });
+        });
+
+        function deleteOption(optionId) {
+            if(!confirm("Bu seçeneği silmek istediğinize emin misiniz?")) return;
+
+            $.ajax({
+                url: '/ConstructionProject/DeleteFixtureOption',
+                type: 'POST',
+                data: {
+                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val(),
+                    optionId: optionId
+                },
+                success: function(res) {
+                    if(res.success) {
+                        if(currentSpaceId) {
+                            loadSpace(currentSpaceId, currentSpaceName, currentSpaceType, 'fixtures');
+                        }
+                        var modalEl = document.getElementById('manageOptionsModal');
+                        var modal = bootstrap.Modal.getInstance(modalEl);
+                        if(modal) modal.hide();
+                    } else {
+                        alert(res.message || 'Silinemedi');
+                    }
+                }
+            });
         }
     </script>
 }

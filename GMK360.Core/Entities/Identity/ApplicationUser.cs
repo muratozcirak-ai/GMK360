@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 
 namespace GMK360.Core.Entities.Identity
 {
@@ -73,5 +73,8 @@ namespace GMK360.Core.Entities.Identity
         
         public virtual ICollection<UserSubscription> Subscriptions { get; set; } = new List<UserSubscription>();
         public virtual ICollection<BuildingManager> ManagedBuildings { get; set; } = new List<BuildingManager>();
+        
+        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+        public string FullName => !string.IsNullOrWhiteSpace(DisplayName) ? DisplayName : $"{FirstName} {LastName}".Trim();
     }
 }

@@ -1,4 +1,4 @@
-﻿@model GMK360.Core.Entities.B2B.B2BQuoteInvite
+@model GMK360.Core.Entities.B2B.B2BQuoteInvite
 @{
     Layout = null;
     var projectInfo = ViewBag.ProjectInfo as dynamic;
@@ -101,10 +101,14 @@
                                 </div>
                                 <hr>
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <span class="small text-muted"><i class="bi bi-geo-alt-fill text-danger"></i> @(string.IsNullOrEmpty(projectInfo.Address) ? "Adres Girilmemiş" : projectInfo.Address)</span>
+                                    <span class="small text-muted"><i class="bi bi-geo-alt-fill text-danger me-1"></i> @(string.IsNullOrEmpty(projectInfo.Address) ? "Adres Girilmemiş" : projectInfo.Address)</span>
                                     @if(projectInfo.Lat != null && projectInfo.Lng != null)
                                     {
-                                        <a href="https://maps.google.com/?q=@projectInfo.Lat.ToString(System.Globalization.CultureInfo.InvariantCulture),@projectInfo.Lng.ToString(System.Globalization.CultureInfo.InvariantCulture)" target="_blank" class="btn btn-sm btn-outline-danger rounded-pill px-3"><i class="bi bi-map"></i> Haritada Gör</a>
+                                        <a href="https://maps.google.com/?q=@projectInfo.Lat.ToString(System.Globalization.CultureInfo.InvariantCulture),@projectInfo.Lng.ToString(System.Globalization.CultureInfo.InvariantCulture)" target="_blank" class="btn btn-sm btn-outline-danger rounded-pill px-3 fw-bold"><i class="bi bi-geo-alt"></i> Haritada Yol Tarifi Al</a>
+                                    }
+                                    else if (!string.IsNullOrEmpty(projectInfo.Address))
+                                    {
+                                        <a href="https://maps.google.com/?q=@Uri.EscapeDataString(projectInfo.Address)" target="_blank" class="btn btn-sm btn-outline-danger rounded-pill px-3 fw-bold"><i class="bi bi-geo-alt"></i> Haritada Gör</a>
                                     }
                                 </div>
                             </div>
@@ -114,34 +118,230 @@
                         {
                             <!-- Fiyat Giriş Alanı -->
                             <div class="bg-white p-4 rounded-3 border border-primary shadow-sm">
-                                <h6 class="fw-bold mb-3">Sizin Teklifiniz (TL)</h6>
-                                <form method="post" action="/B2BPartnerPortal/SubmitQuote">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-tag-fill text-primary me-2"></i>Teklif ve Ödeme Koşullarınız</h5>
+                                    <span class="badge bg-light text-primary border"><i class="bi bi-shield-check"></i> Doğrudan Satınalmaya İletilir</span>
+                                </div>
+
+                                <form method="post" action="/B2BPartnerPortal/SubmitQuote" id="quoteForm">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="inviteId" value="@Model.Id" />
-                                    <div class="input-group input-group-lg mb-3">
-                                        <span class="input-group-text bg-light fw-bold text-muted">₺</span>
-                                        <input type="number" step="0.01" name="offeredPrice" class="form-control fw-bold text-dark" placeholder="Götürü veya Birim fiyatınızı giriniz..." required>
-                                        <button class="btn btn-primary px-4 fw-bold" type="submit"><i class="bi bi-send-fill me-2"></i> Teklifi İlet</button>
+
+                                    @if(Model.QuoteRequest?.Items != null && Model.QuoteRequest.Items.Any())
+                                    {
+                                        <!-- Çoklu Kalem Listesi -->
+                                        <div class="table-responsive mb-3 border rounded-3">
+                                            <table class="table table-sm table-hover align-middle mb-0">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>Kalem / Malzeme</th>
+                                                        <th class="text-center" style="width:120px;">Miktar</th>
+                                                        <th class="text-end" style="width:160px;">Birim Fiyat (₺)</th>
+                                                        <th class="text-end" style="width:140px;">Ara Toplam</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach(var item in Model.QuoteRequest.Items)
+                                                    {
+                                                        var existingInviteItem = Model.InviteItems?.FirstOrDefault(ii => ii.B2BQuoteItemId == item.Id);
+                                                        decimal currentUnitPrice = existingInviteItem?.OfferedUnitPrice ?? 0;
+                                                        <tr>
+                                                            <td>
+                                                                <div class="fw-bold">@(item.MaterialCatalog?.Name ?? item.Description ?? "Kalem")</div>
+                                                                @if(!string.IsNullOrEmpty(item.Description) && item.MaterialCatalog != null)
+                                                                {
+                                                                    <div class="small text-muted">@item.Description</div>
+                                                                }
+                                                            </td>
+                                                            <td class="text-center">
+                                                                <span class="badge bg-secondary">@item.Quantity @(item.MaterialCatalog?.DefaultUnit ?? "Adet")</span>
+                                                            </td>
+                                                            <td class="text-end">
+                                                                <input type="number" step="0.01" min="0" 
+                                                                       name="itemUnitPrices[@item.Id]" 
+                                                                       class="form-control form-control-sm text-end fw-bold item-unit-price" 
+                                                                       data-qty="@item.Quantity" 
+                                                                       data-itemid="@item.Id"
+                                                                       value="@(currentUnitPrice > 0 ? currentUnitPrice.ToString("0.00") : "")" 
+                                                                       placeholder="0.00" 
+                                                                       oninput="recalculateTotal()" />
+                                                            </td>
+                                                            <td class="text-end fw-bold text-dark item-subtotal" id="subtotal_@item.Id">
+                                                                0.00 ₺
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    }
+
+                                    @if (!string.IsNullOrEmpty(Model.OfferNotes) && Model.OfferNotes.Contains("[KEŞİF TALEBİ]"))
+                                    {
+                                        <div class="alert alert-warning border border-warning shadow-sm rounded-3 mb-3 p-3">
+                                            <div class="d-flex align-items-center mb-1">
+                                                <i class="bi bi-calendar-check-fill text-warning fs-4 me-2"></i>
+                                                <h6 class="fw-bold text-dark mb-0">Keşif & İnceleme Talebiniz Şantiyeye İletildi</h6>
+                                            </div>
+                                            <div class="small text-secondary mb-1">@Model.OfferNotes</div>
+                                            <div class="small text-success fw-bold"><i class="bi bi-check2-circle"></i> Şantiye yetkilisi randevuyu kesinleştirmek için sizinle iletişime geçecektir. Sahayı gördükten sonra da teklifinizi iletebilirsiniz.</div>
+                                        </div>
+                                    }
+
+                                    <!-- Toplam Fiyat -->
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold text-secondary small text-uppercase">Genel Teklif Tutarı</label>
+                                        <div class="input-group input-group-lg">
+                                            <span class="input-group-text bg-light fw-bold text-primary">₺</span>
+                                            <input type="number" step="0.01" name="offeredPrice" id="mainOfferedPrice" class="form-control fw-bold text-dark fs-4" placeholder="Teklif toplam tutarını giriniz..." required value="@(Model.OfferedPrice?.ToString("0.00") ?? "")">
+                                        </div>
+                                        <div class="d-flex align-items-center justify-content-between mt-2 px-1">
+                                            <div class="form-check form-switch mb-0">
+                                                <input class="form-check-input" type="checkbox" name="isVatIncluded" id="isVatIncluded" value="true" @(Model.IsVatIncludedGlobally ? "checked" : "")>
+                                                <label class="form-check-label fw-bold text-dark small" for="isVatIncluded">
+                                                    <i class="bi bi-receipt text-primary me-1"></i> Fiyatıma KDV Dahildir
+                                                </label>
+                                            </div>
+                                            <span class="small text-muted fst-italic">İşaretlenmezse tutar KDV Hariç kabul edilir.</span>
+                                        </div>
                                     </div>
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div class="form-text"><i class="bi bi-clock-history"></i> Fiyatınız şifreli olarak satınalma departmanına iletilecektir.</div>
-                                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('inspectionForm').submit();">
-                                            <i class="bi bi-calendar-event"></i> Sahayı Görmek İstiyorum (Keşif Talebi)
+
+                                    <!-- Ödeme Koşulu & Vade Tercihi (Kullanıcının Kritik İsteği) -->
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold text-secondary small text-uppercase"><i class="bi bi-wallet2 text-success me-1"></i> Ödeme Koşulu / Vade</label>
+                                            <select name="paymentTerm" class="form-select fw-bold border-success">
+                                                <option value="Peşin / Kasa-Banka Havalesi" selected>💵 Peşin / Kasa-Banka Havalesi</option>
+                                                <option value="Vadeli (30 Gün)">⏱️ Vadeli (30 Gün)</option>
+                                                <option value="Vadeli (60 Gün)">⏱️ Vadeli (60 Gün)</option>
+                                                <option value="Vadeli (90 Gün)">⏱️ Vadeli (90 Gün)</option>
+                                                <option value="İş Bitiminde / Rapor Tesliminde">📋 İş Bitiminde / Rapor Tesliminde</option>
+                                                <option value="Kredi Kartı Tek Çekim / Taksit">💳 Kredi Kartı Tek Çekim / Taksitli</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold text-secondary small text-uppercase"><i class="bi bi-chat-left-text me-1"></i> Teklif Açıklaması / Şartlar</label>
+                                            <input type="text" name="offerNotes" class="form-control" placeholder="Örn: Nakliye firmamıza aittir, 3 iş gününde teslim..." />
+                                        </div>
+                                    </div>
+
+                                    <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                                        @if (!string.IsNullOrEmpty(Model.OfferNotes) && Model.OfferNotes.Contains("[KEŞİF TALEBİ]"))
+                                        {
+                                            <button type="button" class="btn btn-warning text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#inspectionModal">
+                                                <i class="bi bi-calendar-check me-1"></i> Keşif Talebiniz İletildi (Güncelle)
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="btn btn-outline-warning text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#inspectionModal">
+                                                <i class="bi bi-calendar2-week me-1"></i> Sahayı Görmek İstiyorum (Keşif Randevusu Talebi)
+                                            </button>
+                                        }
+                                        <button class="btn btn-primary px-4 py-2 fw-bold shadow-sm" type="submit">
+                                            <i class="bi bi-send-fill me-2"></i> Teklifi İlet
                                         </button>
                                     </div>
                                 </form>
-                                <form id="inspectionForm" method="post" action="/B2BPartnerPortal/RequestInspection" style="display:none;">
-                                    @Html.AntiForgeryToken()
-                                    <input type="hidden" name="inviteId" value="@Model.Id" />
-                                </form>
                             </div>
+
+                            <!-- Saha Keşfi Randevu Modalı (Öneri & Talep Modalı) -->
+                            <div class="modal fade" id="inspectionModal" tabindex="-1" aria-labelledby="inspectionModalLabel" aria-hidden="true">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content border-0 shadow-lg">
+                                        <div class="modal-header bg-warning text-dark">
+                                            <h5 class="modal-title fw-bold" id="inspectionModalLabel">
+                                                <i class="bi bi-search me-2"></i> Şantiye Saha Keşfi & İnceleme Talebi
+                                            </h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+                                        </div>
+                                        <form method="post" action="/B2BPartnerPortal/RequestInspection">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="inviteId" value="@Model.Id" />
+                                            <div class="modal-body p-4">
+                                                <div class="alert alert-light border small text-muted mb-3">
+                                                    <i class="bi bi-info-circle text-primary me-1"></i> Fiyat vermeden önce şantiyede yerinde inceleme veya metraj tespiti yapmak istiyorsanız talebinizi iletebilirsiniz. Şantiye yetkilisi randevu gün ve saatini netleştirmek için sizinle iletişime geçecektir.
+                                                </div>
+
+                                                <div class="row g-2 mb-3">
+                                                    <div class="col-md-7">
+                                                        <label class="form-label fw-bold small text-uppercase">Önerilen Keşif Tarihi <span class="text-muted fw-normal">(Opsiyonel)</span></label>
+                                                        <input type="date" name="inspectionDateOnly" class="form-control" />
+                                                        <div class="form-text small">Tarihi şantiyeye bırakmak için boş bırakabilirsiniz.</div>
+                                                    </div>
+                                                    <div class="col-md-5">
+                                                        <label class="form-label fw-bold small text-uppercase">Saat Tercihi <span class="text-muted fw-normal">(Opsiyonel)</span></label>
+                                                        <select name="inspectionTimeOnly" class="form-select">
+                                                            <option value="" selected>Fark Etmez / Serbest</option>
+                                                            <option value="09:00 - 12:00">09:00 - 12:00 (Sabah)</option>
+                                                            <option value="13:00 - 15:00">13:00 - 15:00 (Öğle)</option>
+                                                            <option value="15:00 - 18:00">15:00 - 18:00 (İkindi)</option>
+                                                            <option value="10:00">10:00</option>
+                                                            <option value="11:00">11:00</option>
+                                                            <option value="14:00">14:00</option>
+                                                            <option value="15:00">15:00</option>
+                                                            <option value="16:00">16:00</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold small text-uppercase">Gelecek Yetkili / Usta</label>
+                                                    <input type="text" name="requestedByPerson" class="form-control" 
+                                                           value="@(Model.NetworkContact?.ContactPerson ?? "")" 
+                                                           placeholder="Şantiyeye gelecek ustanın / yetkilinin adı" />
+                                                </div>
+
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold small text-uppercase">Keşif Notu & Yapılacak İnceleme</label>
+                                                    <textarea name="notes" class="form-control" rows="3" 
+                                                              placeholder="Örn: Karot alma noktalarını ve kolon donatı taramasını yerinde inceleyip kesin metraj çıkartacağız."></textarea>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer bg-light">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                                                <button type="submit" class="btn btn-warning fw-bold text-dark">
+                                                    <i class="bi bi-send-check me-1"></i> Keşif Talebini Şantiyeye İlet
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <script>
+                                function recalculateTotal() {
+                                    var inputs = document.querySelectorAll('.item-unit-price');
+                                    if (!inputs || inputs.length === 0) return;
+                                    var grandTotal = 0;
+                                    inputs.forEach(function(inp) {
+                                        var qty = parseFloat(inp.getAttribute('data-qty')) || 0;
+                                        var unitPrice = parseFloat(inp.value) || 0;
+                                        var subtotal = qty * unitPrice;
+                                        grandTotal += subtotal;
+                                        var subtotalEl = document.getElementById('subtotal_' + inp.getAttribute('data-itemid'));
+                                        if (subtotalEl) {
+                                            subtotalEl.innerText = subtotal.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
+                                        }
+                                    });
+                                    if (grandTotal > 0) {
+                                        document.getElementById('mainOfferedPrice').value = grandTotal.toFixed(2);
+                                    }
+                                }
+                            </script>
                         }
                         else
                         {
                             <div class="bg-white p-4 rounded-3 border shadow-sm text-center">
-                                <i class="bi bi-check-circle text-success" style="font-size:3rem;"></i>
-                                <h5 class="fw-bold mt-2">Teklifiniz İletildi (@Model.OfferedPrice?.ToString("N2") TL)</h5>
-                                <p class="text-muted mb-0">Fiyatınız firma tarafından değerlendirilecektir. Onaylanması durumunda SMS ile bilgilendirileceksiniz.</p>
+                                <i class="bi bi-check-circle text-success" style="font-size:3.5rem;"></i>
+                                <h4 class="fw-bold mt-2 text-dark">Teklifiniz İletildi (@Model.OfferedPrice?.ToString("N2") TL)</h4>
+                                @if(!string.IsNullOrEmpty(Model.OfferNotes))
+                                {
+                                    <div class="badge bg-warning text-dark px-3 py-2 fs-6 mt-2 mb-3">
+                                        <i class="bi bi-info-circle me-1"></i> @Model.OfferNotes
+                                    </div>
+                                }
+                                <p class="text-muted mb-0">Teklifiniz müteahhit firma yetkilisi tarafından değerlendirilecektir. Onaylanması durumunda cari hesabınız ve şantiye takviminiz otomatik oluşturulacaktır.</p>
                             </div>
                         }
                     </div>

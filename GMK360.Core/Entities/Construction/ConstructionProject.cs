@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using GMK360.Core.Entities.Enums;
 using GMK360.Core.Entities;
@@ -113,6 +113,19 @@ public decimal AverageFlatSalePrice { get; set; } = 0; // Ortalama Daire Fiyatı
         public int? TargetTotalShops { get; set; }
         public int? TotalFloors { get; set; } // Bina Kaç Katlı
 
+        // Hiyerarşik Proje Yapısı (Master / Parent Project & Sub-Projects)
+        public int? ParentProjectId { get; set; }
+        public virtual ConstructionProject? ParentProject { get; set; }
+        public virtual ICollection<ConstructionProject> SubProjects { get; set; } = new List<ConstructionProject>();
+
+        public string? SubProjectCategory { get; set; } // "AnaProje", "DisSaha_Peyzaj", "SosyalDonati", "Asansor", "Altyapi", "OzelImalat"
+        public int? RelatedAmenityId { get; set; } // Projenin bir ProjectAmenity'sinden (Çocuk Parkı vb.) türetildiyse
+        public virtual ProjectAmenity? RelatedAmenity { get; set; }
+
+        // DXF & Çizim / İmalat Modeli (Mühendislik & Metraj vs Dökümantasyon & Teklif/RFQ)
+        public bool HasDxfDrawing { get; set; } = false;
+        public string? ProjectExecutionMode { get; set; } // "DxfEngineering" (DXF & Metraj Odaklı), "DocumentProcurement" (Dökümantasyon & Teklif/RFQ Odaklı)
+        public string? DxfFilePath { get; set; }
     }
 }
 

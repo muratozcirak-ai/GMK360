@@ -1,0 +1,425 @@
+@model IEnumerable<GMK360.Core.Entities.Construction.DemolitionSalvageItem>
+@{
+    Layout = "_ConstructionLayout";
+    ViewData["Title"] = "Yıkım & Söküm Hurda Kokpiti";
+    var projects = ViewBag.Projects as List<GMK360.Core.Entities.Construction.ConstructionProject> ?? new List<GMK360.Core.Entities.Construction.ConstructionProject>();
+    var selectedProject = ViewBag.SelectedProject as GMK360.Core.Entities.Construction.ConstructionProject;
+    int selectedProjId = (int)(ViewBag.SelectedProjectId ?? 0);
+    var activeTenders = ViewBag.ActiveTenders as List<GMK360.Core.Entities.B2B.B2BQuoteRequest> ?? new List<GMK360.Core.Entities.B2B.B2BQuoteRequest>();
+    decimal totalEstimated = (decimal)(ViewBag.TotalEstimatedValue ?? 0m);
+    decimal totalRealized = (decimal)(ViewBag.TotalRealizedRevenue ?? 0m);
+    int totalCount = (int)(ViewBag.TotalItemsCount ?? 0);
+    int depotCount = (int)(ViewBag.PendingDepotCount ?? 0);
+}
+
+<div class="container-fluid py-4">
+    <!-- ÜST BAŞLIK & PROJE SEÇİCİ -->
+    <div class="row align-items-center mb-4">
+        <div class="col-lg-6">
+            <h3 class="fw-bold text-dark mb-1">
+                <i class="bi bi-hammer text-danger me-2"></i> Yıkım, Hafriyat & Söküm Hurda Kokpiti
+            </h3>
+            <p class="text-muted mb-0 small">Kentsel dönüşüm eski bina varlıkları, hurda satışları ve tersine yıkım ihaleleri</p>
+        </div>
+        <div class="col-lg-6 text-lg-end mt-3 mt-lg-0">
+            <form method="get" action="/DemolitionSalvage/Index" class="d-inline-flex align-items-center gap-2">
+                <label class="fw-bold text-secondary small text-nowrap mb-0"><i class="bi bi-building me-1"></i> Şantiye:</label>
+                <select name="projectId" class="form-select fw-bold border-danger" onchange="this.form.submit()" style="min-width: 250px;">
+                    @foreach (var p in projects)
+                    {
+                        var isUrban = p.Blocks != null && p.Blocks.Any(b => b.IsExistingBuilding);
+                        <option value="@p.Id" selected="@(p.Id == selectedProjId)">
+                            @(isUrban ? "🏗️ " : "") @p.Name @(isUrban ? " (Kentsel Dönüşüm)" : "")
+                        </option>
+                    }
+                </select>
+            </form>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-4 shadow-sm" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-4 shadow-sm" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- İSTATİSTİK KARTLARI -->
+    <div class="row g-3 mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 bg-primary text-white p-3 h-100" style="background: linear-gradient(135deg, #1e3a8a, #2563eb);">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-white-50 small fw-bold text-uppercase">Tahmini Hurda Değeri</div>
+                        <h3 class="fw-bold mb-0 mt-1">@totalEstimated.ToString("N0") ₺</h3>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="bi bi-cash-stack fs-3 text-white"></i>
+                    </div>
+                </div>
+                <div class="small text-white-50 mt-2">
+                    <i class="bi bi-info-circle"></i> Söküm öncesi tahmini potansiyel
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 bg-success text-white p-3 h-100" style="background: linear-gradient(135deg, #065f46, #059669);">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-white-50 small fw-bold text-uppercase">Gerçekleşen Hurda Satış Geliri</div>
+                        <h3 class="fw-bold mb-0 mt-1">+@totalRealized.ToString("N0") ₺</h3>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="bi bi-arrow-up-right-circle fs-3 text-white"></i>
+                    </div>
+                </div>
+                <div class="small text-white-50 mt-2">
+                    <i class="bi bi-check2-circle"></i> Hurdacıya nakit satılan sökümler
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 bg-warning text-dark p-3 h-100" style="background: linear-gradient(135deg, #d97706, #f59e0b);">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-dark small fw-bold text-uppercase opacity-75">Depoda Bekleyen Sökümler</div>
+                        <h3 class="fw-bold mb-0 mt-1 text-dark">@depotCount Kalem</h3>
+                    </div>
+                    <div class="bg-white bg-opacity-50 rounded-circle p-3">
+                        <i class="bi bi-box-seam fs-3 text-dark"></i>
+                    </div>
+                </div>
+                <div class="small text-dark mt-2 opacity-75">
+                    <i class="bi bi-recycle"></i> Sökülüp depoya alınan sağlam malzemeler
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 bg-dark text-white p-3 h-100">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-white-50 small fw-bold text-uppercase">Toplam Varlık Envanteri</div>
+                        <h3 class="fw-bold mb-0 mt-1">@totalCount Kalem</h3>
+                    </div>
+                    <div class="bg-white bg-opacity-10 rounded-circle p-3">
+                        <i class="bi bi-building fs-3 text-warning"></i>
+                    </div>
+                </div>
+                <div class="small text-white-50 mt-2">
+                    <i class="bi bi-shield-check"></i> Petek, kombi, kapı, pencere, demir
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- STRATEJİK İHALE AKSİYONLARI BANNERI -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden" style="background: linear-gradient(135deg, #18181b, #27272a); color: white;">
+        <div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div>
+                <span class="badge bg-danger px-3 py-1 rounded-pill mb-2 fw-bold text-uppercase"><i class="bi bi-lightning-fill me-1"></i> Stratejik Karar Merkezi</span>
+                <h5 class="fw-bold mb-1">Eski Bina Söküm ve Yıkım Stratejinizi Seçin</h5>
+                <p class="text-white-50 small mb-0">
+                    Sökümleri hurdacılara ayrı satıp gelir elde edebilir, veya binayı hurda karşılığı yıkımcıya paket ihale edebilirsiniz.
+                </p>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <form method="post" action="/DemolitionSalvage/CreateScrapSaleTender">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="projectId" value="@selectedProjId" />
+                    <button type="submit" class="btn btn-success fw-bold px-3 py-2 rounded-pill shadow" onclick="return confirm('Eski bina hurda ve söküm malzemeleri için açık satış ihalesi başlatılacak. Onaylıyor musunuz?');">
+                        <i class="bi bi-megaphone-fill me-1"></i> Hurda Satış İhalesi Aç (+Gelir)
+                    </button>
+                </form>
+
+                <form method="post" action="/DemolitionSalvage/CreateDemolitionTender">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="projectId" value="@selectedProjId" />
+                    <button type="submit" class="btn btn-warning text-dark fw-bold px-3 py-2 rounded-pill shadow" onclick="return confirm('Hurda karşılığı yıkım ve hafriyat ihalesi başlatılacak. Yıkım firmaları teklif verecek. Onaylıyor musunuz?');">
+                        <i class="bi bi-truck-front-fill me-1"></i> Hurda Karşılığı Yıkım İhalesi Başlat
+                    </button>
+                </form>
+
+                @if (!Model.Any())
+                {
+                    <form method="post" action="/DemolitionSalvage/AutoGenerateEstimate">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="projectId" value="@selectedProjId" />
+                        <button type="submit" class="btn btn-outline-light fw-bold px-3 py-2 rounded-pill">
+                            <i class="bi bi-magic me-1"></i> Daire Sayısına Göre Otomatik Envanter Çıkar
+                        </button>
+                    </form>
+                }
+
+                <button class="btn btn-primary fw-bold px-3 py-2 rounded-pill shadow" data-bs-toggle="modal" data-bs-target="#addSalvageItemModal">
+                    <i class="bi bi-plus-lg me-1"></i> Yeni Kalem Ekle
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TABLO: SÖKÜM VE HURDA KALEMLERİ -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="fw-bold mb-0 text-dark">
+                <i class="bi bi-list-check text-primary me-2"></i> Eski Bina Söküm Varlıkları ve Malzeme Takip Tablosu
+            </h5>
+            <span class="badge bg-light text-secondary border px-3 py-2">@(Model.Count()) Kalem Listeleniyor</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Kategori</th>
+                        <th>Malzeme / Hurda Adı</th>
+                        <th>Tahmini Miktar</th>
+                        <th>Tahmini Birim Fiyat</th>
+                        <th>Toplam Potansiyel</th>
+                        <th>Güncel Durum</th>
+                        <th>Satış Bilgisi</th>
+                        <th class="text-end pe-4">İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Any())
+                    {
+                        foreach (var item in Model)
+                        {
+                            var rowBg = item.Status == "Satıldı" ? "bg-success bg-opacity-10" : "";
+                            <tr class="@rowBg">
+                                <td class="ps-4">
+                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary px-2 py-1 rounded-pill small">
+                                        @item.ItemCategory
+                                    </span>
+                                </td>
+                                <td>
+                                    <strong class="text-dark">@item.ItemName</strong>
+                                    @if (!string.IsNullOrEmpty(item.Notes))
+                                    {
+                                        <div class="small text-muted">@item.Notes</div>
+                                    }
+                                </td>
+                                <td>
+                                    <strong class="fs-6">@item.EstimatedQuantity.ToString("N0")</strong> <span class="text-muted small">@item.Unit</span>
+                                </td>
+                                <td>
+                                    @(item.EstimatedUnitPrice.HasValue ? item.EstimatedUnitPrice.Value.ToString("N2") + " ₺" : "-")
+                                </td>
+                                <td>
+                                    <strong class="text-primary">@((item.EstimatedQuantity * (item.EstimatedUnitPrice ?? 0)).ToString("N0")) ₺</strong>
+                                </td>
+                                <td>
+                                    @if (item.Status == "Satıldı")
+                                    {
+                                        <span class="badge bg-success rounded-pill px-3 py-1"><i class="bi bi-check-all"></i> Satıldı (+Gelir)</span>
+                                    }
+                                    else if (item.Status == "Söküldü / Depoda")
+                                    {
+                                        <span class="badge bg-warning text-dark rounded-pill px-3 py-1"><i class="bi bi-box-seam"></i> Depoda</span>
+                                    }
+                                    else if (item.Status == "Yıkımcıya Devredildi")
+                                    {
+                                        <span class="badge bg-info text-white rounded-pill px-3 py-1"><i class="bi bi-truck"></i> Yıkımcıda</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-light text-secondary border rounded-pill px-3 py-1">Binada Takılı</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (item.Status == "Satıldı")
+                                    {
+                                        <div class="fw-bold text-success">+@item.SoldTotalPrice?.ToString("N2") ₺</div>
+                                        <div class="small text-muted"><i class="bi bi-person me-1"></i> @item.BuyerName</div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small fst-italic">Henüz Satılmadı</span>
+                                    }
+                                </td>
+                                <td class="text-end pe-4">
+                                    @if (item.Status != "Satıldı")
+                                    {
+                                        <button class="btn btn-sm btn-success fw-bold rounded-pill px-3 me-1 shadow-sm" data-bs-toggle="modal" data-bs-target="#sellModal_@item.Id" title="Hurdacıya Satıldı Olarak İşle">
+                                            <i class="bi bi-cash me-1"></i> Sat
+                                        </button>
+                                        <div class="btn-group">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle rounded-pill" data-bs-toggle="dropdown">
+                                                Durum
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                                                <li>
+                                                    <form method="post" action="/DemolitionSalvage/UpdateStatus">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="itemId" value="@item.Id" />
+                                                        <input type="hidden" name="status" value="Söküldü / Depoda" />
+                                                        <button type="submit" class="dropdown-item"><i class="bi bi-box-seam text-warning me-2"></i> Depoya Alındı</button>
+                                                    </form>
+                                                </li>
+                                                <li>
+                                                    <form method="post" action="/DemolitionSalvage/UpdateStatus">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="itemId" value="@item.Id" />
+                                                        <input type="hidden" name="status" value="Yıkımcıya Devredildi" />
+                                                        <button type="submit" class="dropdown-item"><i class="bi bi-truck text-info me-2"></i> Yıkımcıya Devredildi</button>
+                                                    </form>
+                                                </li>
+                                                <li>
+                                                    <form method="post" action="/DemolitionSalvage/UpdateStatus">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="itemId" value="@item.Id" />
+                                                        <input type="hidden" name="status" value="Binada Takılı" />
+                                                        <button type="submit" class="dropdown-item"><i class="bi bi-arrow-counterclockwise text-secondary me-2"></i> Binada Takılı Yap</button>
+                                                    </form>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    }
+                                    <form method="post" action="/DemolitionSalvage/DeleteItem" class="d-inline" onsubmit="return confirm('Bu kalemi silmek istediğinize emin misiniz?');">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="itemId" value="@item.Id" />
+                                        <button type="submit" class="btn btn-sm btn-outline-danger border-0 rounded-circle ms-1" title="Sil">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+
+                                    <!-- SATIŞ MODALI -->
+                                    <div class="modal fade text-start" id="sellModal_@item.Id" tabindex="-1">
+                                        <div class="modal-dialog modal-dialog-centered">
+                                            <div class="modal-content border-0 shadow-lg rounded-4">
+                                                <div class="modal-header bg-success text-white border-0 py-3">
+                                                    <h5 class="modal-title fw-bold"><i class="bi bi-cash-coin me-2"></i> Hurda Satışını Kaydet</h5>
+                                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                                </div>
+                                                <form method="post" action="/DemolitionSalvage/MarkAsSold">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="itemId" value="@item.Id" />
+                                                    <div class="modal-body p-4">
+                                                        <div class="alert alert-light border small text-muted mb-3">
+                                                            <strong>@item.ItemName</strong> (@item.EstimatedQuantity @item.Unit) malzemesinin hurdacıya/satın alana satışını kaydediyorsunuz.
+                                                        </div>
+                                                        <div class="mb-3">
+                                                            <label class="form-label fw-bold small text-uppercase">Tahsil Edilen Toplam Tutar (TL) <span class="text-danger">*</span></label>
+                                                            <div class="input-group input-group-lg">
+                                                                <span class="input-group-text bg-light fw-bold text-success">₺</span>
+                                                                <input type="number" step="0.01" name="soldTotalPrice" class="form-control fw-bold fs-4 text-success" required placeholder="0.00" value="@((item.EstimatedQuantity * (item.EstimatedUnitPrice ?? 0)).ToString("0.00"))" />
+                                                            </div>
+                                                        </div>
+                                                        <div class="mb-3">
+                                                            <label class="form-label fw-bold small text-uppercase">Alıcı / Hurdacı Firma Adı <span class="text-danger">*</span></label>
+                                                            <input type="text" name="buyerName" class="form-control" required placeholder="Örn: Güven Hurdacılık - Ali Usta" />
+                                                        </div>
+                                                        <div class="mb-3">
+                                                            <label class="form-label fw-bold small text-uppercase">Satış / Fiş Açıklaması</label>
+                                                            <input type="text" name="notes" class="form-control" placeholder="Örn: Nakit tahsil edildi, kamyonla teslim alındı..." />
+                                                        </div>
+                                                    </div>
+                                                    <div class="modal-footer bg-light border-0">
+                                                        <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Vazgeç</button>
+                                                        <button type="submit" class="btn btn-success fw-bold rounded-pill px-4">
+                                                            <i class="bi bi-check2-circle me-1"></i> Satışı Onayla & Gelire Yaz
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="8" class="text-center py-5 text-muted">
+                                <i class="bi bi-box-seam fs-1 d-block mb-3 text-secondary opacity-50"></i>
+                                <h6>Bu şantiyede henüz kayıtlı söküm/hurda envanteri bulunmuyor.</h6>
+                                <p class="small text-muted mb-3">Yukarıdaki <strong>"Daire Sayısına Göre Otomatik Envanter Çıkar"</strong> butonuna basarak tek tıkla tahmini listeyi oluşturabilirsiniz.</p>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- YENİ KALEM EKLEME MODALI -->
+<div class="modal fade" id="addSalvageItemModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-primary text-white border-0 py-3">
+                <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle me-2"></i> Yeni Söküm / Hurda Kalemi Ekle</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="/DemolitionSalvage/AddItem">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="projectId" value="@selectedProjId" />
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-uppercase">Kategori <span class="text-danger">*</span></label>
+                        <select name="itemCategory" class="form-select" required>
+                            <option value="Kapı & Pencere">🚪 Kapı & Pencere</option>
+                            <option value="Isıtma & Tesisat" selected>♨️ Isıtma & Tesisat (Petek, Kombi)</option>
+                            <option value="Mutfak & Banyo">🍳 Mutfak & Banyo</option>
+                            <option value="Yapısal Hurda">🏗️ Yapısal Hurda (Demir, Sac, Profil)</option>
+                            <option value="Asansör & Makine">🛗 Asansör Motoru & Makine</option>
+                            <option value="Diğer">📦 Diğer</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-uppercase">Malzeme / Hurda Adı <span class="text-danger">*</span></label>
+                        <input type="text" name="itemName" class="form-control" required placeholder="Örn: Döküm Radyatör Petek" />
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-7">
+                            <label class="form-label fw-bold small text-uppercase">Miktar <span class="text-danger">*</span></label>
+                            <input type="number" step="0.01" name="quantity" class="form-control" required placeholder="Örn: 25" />
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label fw-bold small text-uppercase">Birim</label>
+                            <select name="unit" class="form-select">
+                                <option value="Adet" selected>Adet</option>
+                                <option value="Kg">Kg</option>
+                                <option value="Ton">Ton</option>
+                                <option value="m²">m²</option>
+                                <option value="Takım">Takım</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-uppercase">Tahmini Birim Fiyat (TL)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">₺</span>
+                            <input type="number" step="0.01" name="estimatedUnitPrice" class="form-control" placeholder="0.00" />
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-uppercase">Açıklama / Notlar</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="Örn: A blok 3. ve 4. katlardan çıkacak..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0">
+                    <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary fw-bold rounded-pill px-4">
+                        <i class="bi bi-save me-1"></i> Kalemi Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

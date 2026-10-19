@@ -1,8 +1,12 @@
 @model IEnumerable<GMK360.Core.Entities.Construction.ConstructionProject>
 @using GMK360.Core.Entities.Construction
+@inject Microsoft.AspNetCore.Identity.UserManager<GMK360.Core.Entities.Identity.ApplicationUser> UserManager
 @{
     ViewData["Title"] = "Şantiyelerimiz (Projeler)";
     Layout = "_ConstructionLayout";
+
+    var currentUser = await UserManager.GetUserAsync(User);
+    bool isDemolitionCompany = currentUser?.ActiveModules?.Contains("demolition") == true;
 
     var aktifler = Model.Where(x => x.Status == ProjectStatus.Aktif_Santiye).ToList();
     var anlasmaYapilanlar = Model.Where(x => x.Status == ProjectStatus.Anlasma_Yapildi).ToList();
@@ -18,9 +22,14 @@
             <h2 class="fw-bold mb-0 text-dark"><i class="bi bi-building text-primary me-2"></i> Şantiyelerimiz</h2>
             <p class="text-muted mb-0">Firmanızın geçmiş, güncel ve gelecek tüm projelerini buradan yönetin.</p>
         </div>
-        <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#initProjectModal">
-            <i class="bi bi-plus-lg me-1"></i> Yeni Proje (Şantiye) Aç
-        </button>
+        <div class="d-flex gap-2">
+            <a href="/Agenda/Index" class="btn btn-outline-warning text-dark fw-bold rounded-pill px-4 shadow-sm">
+                <i class="bi bi-journal-bookmark-fill text-warning me-1"></i> Şantiye Kara Defteri & Ajanda
+            </a>
+            <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#initProjectModal">
+                <i class="bi bi-plus-lg me-1"></i> Yeni Proje (Şantiye) Aç
+            </button>
+        </div>
     </div>
 
     <!-- Filtre Sekmeleri -->
@@ -133,14 +142,28 @@
                     <p class="text-muted small mb-4">Sisteme yeni bir proje kaydetmek için önce projenin adını belirleyin. <strong>Bu isim daha sonra değiştirilemez</strong> ve tüm resmi evraklar/klasörler bu isimle oluşturulur.</p>
                     
                     <div class="mb-3">
-                        <label for="projectName" class="form-label fw-bold">Proje Adı <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control form-control-lg rounded-3 mb-3" id="projectName" name="projectName" placeholder="Örn: Beyaz Konak Apartmanı" required autocomplete="off" />
+                        <label for="projectName" class="form-label fw-bold">Proje / Şantiye Adı <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-lg rounded-3 mb-3" id="projectName" name="projectName" placeholder="Örn: Özdilek Apartmanı" required autocomplete="off" />
                         
-                        <label for="projectOriginId" class="form-label fw-bold">Projenin Doğası <span class="text-danger">*</span></label>
-                        <select id="projectOriginId" name="projectOriginId" class="form-select form-select-lg rounded-3 mb-3" required>
-                            <option value="0">Sıfırdan İnşaat (Boş Arazi)</option>
-                            <option value="1">Kentsel Dönüşüm (Yıkılacak Eski Yapı Var)</option>
+                        <label for="projectOriginId" class="form-label fw-bold">İşin Türü / Faaliyet Kapsamı <span class="text-danger">*</span></label>
+                        <select id="projectOriginId" name="projectOriginId" class="form-select form-select-lg rounded-3 mb-2" required onchange="toggleProjectScopeHint(this.value)">
+                            @if (isDemolitionCompany)
+                            {
+                                <option value="5" selected>🚜 Müstakil Yıkım & Hafriyat İşi (Sadece Yıkım, Hurda & Kazı)</option>
+                                <option value="1">🏗️ Kentsel Dönüşüm (Yıkım + Yeni Yapı - 3'ü Bir Arada)</option>
+                                <option value="0">📐 Sıfırdan Yeni İnşaat (Boş Arazi)</option>
+                            }
+                            else
+                            {
+                                <option value="1" selected>🏗️ Kentsel Dönüşüm (Yıkılacak Eski Yapı Var)</option>
+                                <option value="0">📐 Sıfırdan İnşaat (Boş Arazi)</option>
+                                <option value="5">🚜 Müstakil Yıkım & Hafriyat İşi (Sadece Yıkım & Hurda)</option>
+                            }
                         </select>
+
+                        <div id="demolitionScopeHint" class="alert alert-warning py-2 px-3 small rounded-3 mb-3 @(isDemolitionCompany ? "" : "d-none")">
+                            <i class="bi bi-info-circle-fill me-1"></i> <strong>Yıkım & Hafriyat:</strong> Mimari oda/daire çizimleri ve arsa payları atlanır; doğrudan <strong>Söküm & Hurda Masası</strong> ve <strong>Kamyon Döküm Seferleri</strong> açılır.
+                        </div>
 
                         <label for="statusId" class="form-label fw-bold">Proje Durumu <span class="text-danger">*</span></label>
                         <select id="statusId" name="statusId" class="form-select form-select-lg rounded-3 mb-3" required>
@@ -149,24 +172,58 @@
                             <option value="3">Tamamlanmış Proje (Referans / Portföy)</option>
                         </select>
 
-                        <label for="projectType" class="form-label fw-bold">Ana Yapı Türü <span class="text-danger">*</span></label>
-                        <select id="projectType" name="projectType" class="form-select form-select-lg rounded-3" required>
-                            <option value="Apartman">Apartman</option>
-                            <option value="Site">Site / Kompleks</option>
-                            <option value="Ticari">Ticari / Ofis</option>
-                            <option value="Karma">Karma (Konut + Ticari)</option>
-                            <option value="Villa">Villa / Müstakil</option>
-                            <option value="Fabrika">Fabrika / Endüstriyel</option>
-                            <option value="Kamu">Kamu Binası / Tesis</option>
-                            <option value="Diger">Diğer</option>
-                        </select>
+                        <div id="projectTypeContainer" class="@(isDemolitionCompany ? "d-none" : "")">
+                            <label for="projectType" class="form-label fw-bold">Ana Yapı Türü <span class="text-danger">*</span></label>
+                            <select id="projectType" name="projectType" class="form-select form-select-lg rounded-3">
+                                <option value="Apartman">Apartman</option>
+                                <option value="Site">Site / Kompleks</option>
+                                <option value="Ticari">Ticari / Ofis</option>
+                                <option value="Karma">Karma (Konut + Ticari)</option>
+                                <option value="Villa">Villa / Müstakil</option>
+                                <option value="Fabrika">Fabrika / Endüstriyel</option>
+                                <option value="Kamu">Kamu Binası / Tesis</option>
+                                <option value="Diger">Diğer</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
-                    <button type="submit" class="btn btn-primary rounded-pill px-4"><i class="bi bi-arrow-right-circle me-1"></i> Oluştur ve Sihirbaza Git</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4" id="submitProjectBtn">
+                        <i class="bi @(isDemolitionCompany ? "bi-hammer" : "bi-arrow-right-circle") me-1"></i> @(isDemolitionCompany ? "Oluştur ve Yıkım Masasına Git" : "Oluştur ve Sihirbaza Git")
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <script>
+        function toggleProjectScopeHint(val) {
+            var hint = document.getElementById('demolitionScopeHint');
+            var btn = document.getElementById('submitProjectBtn');
+            var typeContainer = document.getElementById('projectTypeContainer');
+            if (val === '5') {
+                if (hint) hint.classList.remove('d-none');
+                if (typeContainer) typeContainer.classList.add('d-none');
+                if (btn) btn.innerHTML = '<i class="bi bi-hammer me-1"></i> Oluştur ve Yıkım Masasına Git';
+            } else {
+                if (hint) hint.classList.add('d-none');
+                if (typeContainer) typeContainer.classList.remove('d-none');
+                if (btn) btn.innerHTML = '<i class="bi bi-arrow-right-circle me-1"></i> Oluştur ve Sihirbaza Git';
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('openNew') === 'true') {
+                const modalEl = document.getElementById('initProjectModal');
+                if (modalEl) {
+                    const modal = new bootstrap.Modal(modalEl);
+                    modal.show();
+                }
+            }
+        });
+    </script>
+}

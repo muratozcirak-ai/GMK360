@@ -1,4 +1,4 @@
-﻿@model GMK360.Core.Entities.B2B.B2BQuoteRequest
+@model GMK360.Core.Entities.B2B.B2BQuoteRequest
 
 @{
     ViewData["Title"] = Model.Title;
@@ -11,11 +11,22 @@
             <h3 class="fw-bold mb-0">@Model.Title</h3>
             <div class="text-muted small">Alım Emri #@Model.Id | Oluşturulma: @Model.CreatedAt.ToString("dd MMM yyyy")</div>
         </div>
-        <div>
+        <div class="d-flex align-items-center gap-2">
             @if(Model.Status == "Draft" || Model.Status == "Published")
             {
+                var eligibleCount = (ViewBag.TotalEligibleMarketCompaniesCount as int?) ?? 0;
+                if (eligibleCount > 0)
+                {
+                    <form method="post" action="/B2BPurchasing/BroadcastQuoteToMarketplace" class="d-inline" onsubmit="return confirm('Pazar yerindeki ilgili sektörde bulunan ' + @eligibleCount + ' firmaya açık ihale duyurusu ve teklif bağlantısı gönderilecek. Onaylıyor musunuz?');">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="quoteId" value="@Model.Id" />
+                        <button type="submit" class="btn btn-warning text-dark fw-bold shadow-sm">
+                            <i class="bi bi-megaphone-fill me-1"></i> Pazar Yerine Açık İhale Duyur (@eligibleCount Firma)
+                        </button>
+                    </form>
+                }
                 <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#inviteSupplierModal">
-                    <i class="bi bi-person-plus me-1"></i> Yeni Tedarikçi Davet Et
+                    <i class="bi bi-person-plus me-1"></i> Özel / Gölge Firma Ekle
                 </button>
             }
             else
@@ -110,8 +121,20 @@
                                     {
                                         <tr>
                                             <td>
-                                                <strong>@invite.NetworkContact?.CompanyName</strong>
+                                                <div class="fw-bold text-dark">@invite.NetworkContact?.CompanyName</div>
                                                 <div class="small text-muted">@invite.NetworkContact?.ContactPerson</div>
+                                                @if (invite.OfferNotes != null && invite.OfferNotes.Contains("[AÇIK İHALE]"))
+                                                {
+                                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary small mt-1">
+                                                        <i class="bi bi-megaphone-fill me-1"></i> Pazar Yeri Açık İhale
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border small mt-1">
+                                                        <i class="bi bi-person-check-fill me-1"></i> Özel / Gölge Davet
+                                                    </span>
+                                                }
                                             </td>
                                             <td>
                                                 <div class="small">
@@ -131,32 +154,133 @@
                                                 }
                                             </td>
                                             <td>
-                                                                                                  @if (invite.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Pending)
-                                                  {
-                                                      <span class="badge bg-secondary">Bekliyor</span>
-                                                  }
-                                                  else if (invite.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Submitted)
-                                                  {
-                                                      <span class="badge bg-success">Teklif Geldi</span>
-                                                  }
-                                                  
-                                                  @if(!string.IsNullOrEmpty(invite.OfferNotes))
-                                                  {
-                                                      <div class="small text-danger mt-1 fw-bold" style="max-width:200px; white-space:normal;">
-                                                          <i class="bi bi-info-circle"></i> @invite.OfferNotes
-                                                      </div>
-                                                  }
+                                                @if (invite.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Pending)
+                                                {
+                                                    <span class="badge bg-secondary">Bekliyor</span>
+                                                }
                                                 else if (invite.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Submitted)
                                                 {
-                                                    <span class="badge bg-info">Fiyat Verildi</span>
+                                                    <span class="badge bg-success">Teklif Geldi</span>
                                                 }
                                                 else if (invite.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Accepted)
                                                 {
-                                                    <span class="badge bg-success">Onaylandı / Kazanıldı</span>
+                                                    <span class="badge bg-success"><i class="bi bi-check2-all"></i> Onaylandı / İşi Aldı</span>
+                                                    <a href="/Agenda/Index" class="btn btn-xs btn-outline-primary rounded-pill px-2 d-inline-block mt-1" style="font-size:0.75rem;"><i class="bi bi-journal-text me-1"></i> Ajanda Görevi</a>
+                                                }
+                                                
+                                                @if(!string.IsNullOrEmpty(invite.OfferNotes))
+                                                {
+                                                    <div class="small mt-1" style="max-width:280px; white-space:normal;">
+                                                        @if(invite.OfferNotes.Contains("[KEŞİF TALEBİ]"))
+                                                        {
+                                                            <div class="p-2 rounded bg-warning bg-opacity-25 border border-warning mb-2 shadow-xs">
+                                                                <strong class="text-dark small d-block mb-1"><i class="bi bi-bell-fill text-warning me-1"></i> Keşif Talebi Geldi!</strong>
+                                                                <span class="text-secondary small d-block mb-2">@invite.OfferNotes</span>
+                                                                <button type="button" class="btn btn-xs btn-warning text-dark fw-bold rounded-pill px-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#confirmInspectionModal_@invite.Id" style="font-size:0.75rem;">
+                                                                    <i class="bi bi-calendar-check me-1"></i> Randevuyu Kesinleştir
+                                                                </button>
+                                                            </div>
+
+                                                            <!-- Kesinleştirme Modalı -->
+                                                            <div class="modal fade text-start" id="confirmInspectionModal_@invite.Id" tabindex="-1">
+                                                                <div class="modal-dialog modal-dialog-centered">
+                                                                    <div class="modal-content border-0 shadow-lg rounded-4">
+                                                                        <div class="modal-header bg-warning text-dark border-0 py-3">
+                                                                            <h5 class="modal-title fw-bold"><i class="bi bi-calendar-check me-2"></i> Keşif Randevusunu Kesinleştir</h5>
+                                                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                                        </div>
+                                                                        <form method="post" action="/B2BPurchasing/ConfirmInspectionAppointment">
+                                                                            @Html.AntiForgeryToken()
+                                                                            <input type="hidden" name="inviteId" value="@invite.Id" />
+                                                                            <div class="modal-body p-4">
+                                                                                <div class="alert alert-light border small text-muted mb-3">
+                                                                                    <strong>@invite.NetworkContact?.CompanyName</strong> yetkilisiyle telefonda / WhatsApp'ta kararlaştırdığınız kesin buluşma gününü ve saatini giriniz.
+                                                                                </div>
+                                                                                <div class="row g-2 mb-3">
+                                                                                    <div class="col-7">
+                                                                                        <label class="form-label fw-bold small text-muted">
+                                                                                            <i class="bi bi-calendar-event text-dark me-1"></i> ŞANTİYE BULUŞMA TARİHİ
+                                                                                        </label>
+                                                                                        <input type="date" name="appointmentDate" class="form-control fw-bold rounded-3" value="@DateTime.Today.AddDays(1).ToString("yyyy-MM-dd")" required />
+                                                                                    </div>
+                                                                                    <div class="col-5">
+                                                                                        <label class="form-label fw-bold small text-muted">
+                                                                                            <i class="bi bi-clock text-dark me-1"></i> BULUŞMA SAATİ
+                                                                                        </label>
+                                                                                        <input type="time" name="appointmentTime" class="form-control fw-bold rounded-3" value="10:00" required />
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div class="mb-3">
+                                                                                    <label class="form-label fw-bold small text-muted">ŞANTİYE ŞEFİ NOTU (KARA DEFTERE İŞLENECEK)</label>
+                                                                                    <textarea name="managerNotes" class="form-control" rows="2" placeholder="Örn: Hasan Ustayla görüşüldü, sahada numune delimi için bekleniyor."></textarea>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div class="modal-footer bg-light border-0 p-3">
+                                                                                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Vazgeç</button>
+                                                                                <button type="submit" class="btn btn-warning rounded-pill px-4 fw-bold text-dark">
+                                                                                    <i class="bi bi-check2-circle me-1"></i> Onayla ve Kara Deftere Kaydet
+                                                                                </button>
+                                                                            </div>
+                                                                        </form>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        }
+                                                        else if(invite.OfferNotes.Contains("[RANDEVU KESİNLEŞTİ]"))
+                                                        {
+                                                            <div class="p-2 rounded bg-success bg-opacity-10 border border-success mb-1">
+                                                                <span class="badge bg-success mb-1"><i class="bi bi-calendar-check me-1"></i> Randevu Kesinleşti</span>
+                                                                <span class="small text-dark d-block">@invite.OfferNotes</span>
+                                                                <a href="/Agenda/Index" class="btn btn-xs btn-outline-dark rounded-pill px-2 mt-1 fw-bold" style="font-size:0.75rem;"><i class="bi bi-journal-bookmark-fill me-1"></i> Kara Defterde Gör</a>
+                                                            </div>
+                                                        }
+                                                        else if(invite.OfferNotes.Contains("[Ödeme:"))
+                                                        {
+                                                            var termEnd = invite.OfferNotes.IndexOf(']');
+                                                            var termText = termEnd > 0 ? invite.OfferNotes.Substring(1, termEnd - 1) : "";
+                                                            var noteRest = termEnd > 0 && invite.OfferNotes.Length > termEnd + 1 ? invite.OfferNotes.Substring(termEnd + 1).Trim() : "";
+                                                            <span class="badge bg-warning text-dark"><i class="bi bi-wallet2 me-1"></i>@termText</span>
+                                                            @if(!string.IsNullOrEmpty(noteRest)) { <span class="text-muted d-block mt-1">@noteRest</span> }
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted"><i class="bi bi-chat-left-dots me-1"></i>@invite.OfferNotes</span>
+                                                        }
+                                                    </div>
                                                 }
                                             </td>
                                             <td class="text-end">
-                                                <a href="/B2BPartnerPortal/Invite/@invite.AccessToken" target="_blank" class="btn btn-sm btn-outline-primary fw-bold me-2" title="Tedarikçi Davet Ekranını Aç (Yeni)"><i class="bi bi-person-workspace"></i> Partner Paneli (Simüle Et)</a>
+                                                <a href="/B2BPartnerPortal/Invite/@invite.AccessToken" target="_blank" class="btn btn-sm btn-outline-primary fw-bold me-1" title="Tedarikçi Davet Ekranını Aç (Simüle Et)"><i class="bi bi-person-workspace"></i> Partner Paneli</a>
+                                                @{
+                                                    var cleanPhone = (invite.NetworkContact?.PhoneNumber ?? "").Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
+                                                    if (cleanPhone.StartsWith("0")) cleanPhone = "90" + cleanPhone.Substring(1);
+                                                    else if (!cleanPhone.StartsWith("90") && !string.IsNullOrEmpty(cleanPhone)) cleanPhone = "90" + cleanPhone;
+
+                                                    var proj = ViewBag.Project as GMK360.Core.Entities.Construction.ConstructionProject;
+                                                    string mapsLink = "";
+                                                    if (proj != null && proj.Latitude.HasValue && proj.Longitude.HasValue)
+                                                    {
+                                                        mapsLink = $"https://www.google.com/maps?q={proj.Latitude},{proj.Longitude}";
+                                                    }
+                                                    else if (proj != null && !string.IsNullOrEmpty(proj.Address))
+                                                    {
+                                                        mapsLink = $"https://www.google.com/maps/search/?api=1&query={Uri.EscapeDataString(proj.Address)}";
+                                                    }
+
+                                                    var portalUrl = $"{Context.Request.Scheme}://{Context.Request.Host}/B2BPartnerPortal/Invite/{invite.AccessToken}";
+                                                    var waMsg = $"Merhaba {invite.NetworkContact?.CompanyName}, {(proj?.Name ?? Model.Title)} işi için teklifinizi ve incelemenizi bekliyoruz. " +
+                                                                (!string.IsNullOrEmpty(mapsLink) ? $"\nŞantiye Konumu: {mapsLink} " : "") +
+                                                                $"\nDetayları görüp hemen teklif vermek veya keşif randevusu istemek için tıklayınız: {portalUrl}";
+                                                }
+                                                @if(!string.IsNullOrEmpty(cleanPhone))
+                                                {
+                                                    <a href="https://wa.me/@cleanPhone?text=@Uri.EscapeDataString(waMsg)" target="_blank" class="btn btn-sm btn-success fw-bold me-1" title="WhatsApp ile Davet ve Konum Linki Gönder">
+                                                        <i class="bi bi-whatsapp"></i> WhatsApp
+                                                    </a>
+                                                }
+                                                <button type="button" class="btn btn-sm btn-outline-secondary me-2" onclick="navigator.clipboard.writeText('@portalUrl'); alert('Davet ve portal linki panoya kopyalandı:\n@portalUrl');" title="Özel Davet Linkini Kopyala">
+                                                    <i class="bi bi-clipboard"></i> Link
+                                                </button>
 												  <a href="/Offer/Submit/@invite.Id" target="_blank" class="btn btn-sm btn-outline-secondary me-2">
                                                     <i class="bi bi-box-arrow-up-right"></i> Formu Aç
                                                 </a>
@@ -251,6 +375,32 @@
                                             <option value="@cons.UserId">@cons.User.DisplayName (@cons.User.PhoneNumber)</option>
                                         }
                                     </select>
+                                </div>
+
+                                <div class="card p-3 bg-light border-0 rounded-3 mb-3">
+                                    <label class="form-label fw-bold small text-muted text-uppercase mb-2"><i class="bi bi-wallet2 text-success me-1"></i> Ödeme Şekli ve Cari Planı</label>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="radio" name="isPaidUpfront" id="purVadeli_@invite.Id" value="false" checked onclick="document.getElementById('purDueDateDiv_@invite.Id').style.display='block';" />
+                                        <label class="form-check-label fw-bold text-dark" for="purVadeli_@invite.Id">
+                                            Vadeli / Açık Hesap (Sonra Ödenecek)
+                                        </label>
+                                        <small class="d-block text-muted">Tedarikçi cari hesabına borç faturası işlenir, vade takvimine düşer.</small>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="isPaidUpfront" id="purPesin_@invite.Id" value="true" onclick="document.getElementById('purDueDateDiv_@invite.Id').style.display='none';" />
+                                        <label class="form-check-label fw-bold text-dark" for="purPesin_@invite.Id">
+                                            Peşin Ödendi (Kasa / Banka Çıkışı Yapıldı)
+                                        </label>
+                                        <small class="d-block text-muted">Ödeme dekontu işlenir, cari hesap bakiyesi sıfırlanır.</small>
+                                    </div>
+                                    <div class="mt-3" id="purDueDateDiv_@invite.Id">
+                                        <label class="form-label fw-bold small text-muted">ÖDEME VADESİ (SON ÖDEME GÜNÜ)</label>
+                                        <input type="date" name="dueDate" class="form-control" value="@DateTime.Now.AddDays(30).ToString("yyyy-MM-dd")" />
+                                    </div>
+                                </div>
+
+                                <div class="alert alert-warning py-2 px-3 small rounded-3 mb-3">
+                                    <i class="bi bi-journal-bookmark-fill me-1"></i> <strong>Şantiye Kara Defteri Entegrasyonu:</strong> Teklif onaylandığında, şantiye şefinin ajandasına teslimat karşılama ve denetim görevi otomatik açılacaktır.
                                 </div>
                                                                     </div>
                                                                     <div class="modal-footer bg-light">
@@ -384,81 +534,84 @@
     <div class="row mt-4">
         <div class="col-12">
             <div class="card shadow-sm border-0 bg-white" style="border-radius: 12px; overflow:hidden;">
-                <div class="card-header border-0 py-3 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: white;">
+                <div class="card-header border-0 py-3 d-flex justify-content-between align-items-center flex-wrap gap-2" style="background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: white;">
                     <div class="fw-bold fs-5">
-                        <i class="bi bi-stars text-warning me-2"></i> Pazar Yerinden Önerilen Firmalar
+                        <i class="bi bi-stars text-warning me-2"></i> Pazar Yeri Firmaları & Açık İhale Duyurusu
                     </div>
-                    <span class="badge bg-white text-primary rounded-pill px-3 py-2">GMK360 Akıllı Algoritma</span>
+                    <div class="d-flex align-items-center gap-2">
+                        @if (ViewBag.TotalEligibleMarketCompaniesCount != null && (int)ViewBag.TotalEligibleMarketCompaniesCount > 0 && (Model.Status == "Draft" || Model.Status == "Published"))
+                        {
+                            var totalEligible = (int)ViewBag.TotalEligibleMarketCompaniesCount;
+                            <form method="post" action="/B2BPurchasing/BroadcastQuoteToMarketplace" class="d-inline" onsubmit="return confirm('Pazar yerindeki ilgili sektörde bulunan ' + @totalEligible + ' firmaya açık ihale duyurusu ve teklif bağlantısı gönderilecek. Onaylıyor musunuz?');">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="quoteId" value="@Model.Id" />
+                                <button type="submit" class="btn btn-warning text-dark fw-bold px-3 py-1 shadow-sm">
+                                    <i class="bi bi-megaphone-fill me-1"></i> Tüm Sektöre Açık İhale Duyur (@totalEligible Firma)
+                                </button>
+                            </form>
+                        }
+                        <span class="badge bg-white text-primary rounded-pill px-3 py-2">GMK360 Akıllı Algoritma</span>
+                    </div>
                 </div>
                 <div class="card-body bg-light p-4">
                     <p class="text-muted small mb-4">
                         <i class="bi bi-info-circle me-1"></i> Sizin eklediğiniz firmalar dışında, aradığınız <strong>@Model.Title</strong> kategorisinde sistemimizde doğrulanmış ve yüksek puanlı bölgesel firmalar aşağıda listelenmiştir. Tek tıkla ihaleye davet edebilirsiniz.
                     </p>
                     
+                    @{
+                        var recs = ViewBag.RecommendedCompanies as List<GMK360.Core.Entities.B2b.B2bCompany> ?? new List<GMK360.Core.Entities.B2b.B2bCompany>();
+                    }
                     <div class="row g-3">
-                        <!-- Öneri 1 -->
-                        <div class="col-md-4">
-                            <div class="card h-100 border-0 shadow-sm" style="border-radius:10px; transition: transform 0.2s;">
-                                <div class="card-body position-relative">
-                                    <div class="position-absolute top-0 end-0 mt-2 me-2">
-                                        <span class="badge bg-success bg-opacity-10 text-success rounded-pill"><i class="bi bi-shield-check"></i> Doğrulanmış</span>
+                        @if (recs.Any())
+                        {
+                            foreach (var rec in recs)
+                            {
+                                var contact = rec.Contacts?.FirstOrDefault();
+                                <div class="col-md-4">
+                                    <div class="card h-100 border-0 shadow-sm" style="border-radius:10px; transition: transform 0.2s;">
+                                        <div class="card-body position-relative">
+                                            <div class="position-absolute top-0 end-0 mt-2 me-2">
+                                                @if(rec.InvitationStatus == GMK360.Core.Entities.B2b.B2bInvitationStatus.Pro)
+                                                {
+                                                    <span class="badge bg-warning text-dark rounded-pill"><i class="bi bi-star-fill text-warning"></i> PRO Firma</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-success bg-opacity-10 text-success rounded-pill"><i class="bi bi-shield-check"></i> Doğrulanmış</span>
+                                                }
+                                            </div>
+                                            <h6 class="fw-bold mb-1 mt-2">@rec.Name</h6>
+                                            <div class="text-warning small mb-2">
+                                                <i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i> 
+                                                <span class="text-muted ms-1">(@(rec.Rating > 0 ? rec.Rating.ToString("N1") : "5.0"))</span>
+                                            </div>
+                                            <p class="small text-muted mb-3">
+                                                <i class="bi bi-geo-alt"></i> @(rec.Branches?.FirstOrDefault()?.City ?? "Merkez"), @(rec.Branches?.FirstOrDefault()?.District ?? "Ana Bölge")
+                                                @if(contact != null && !string.IsNullOrEmpty(contact.MobilePhone)) {
+                                                    <br/><i class="bi bi-telephone text-primary"></i> @contact.MobilePhone
+                                                }
+                                            </p>
+                                            
+                                            <form method="post" action="/B2BPurchasing/InviteExistingB2bCompany">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="quoteId" value="@Model.Id" />
+                                                <input type="hidden" name="b2bCompanyId" value="@rec.Id" />
+                                                <button type="submit" class="btn btn-sm btn-outline-primary w-100 rounded-pill fw-bold">
+                                                    <i class="bi bi-send me-1"></i> Bunu da Davet Et
+                                                </button>
+                                            </form>
+                                        </div>
                                     </div>
-                                    <h6 class="fw-bold mb-1 mt-2">Zirve Yapı ve Zemin Laboratuvarı</h6>
-                                    <div class="text-warning small mb-2">
-                                        <i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-half"></i> 
-                                        <span class="text-muted ms-1">(4.8 / 12 İşlem)</span>
-                                    </div>
-                                    <p class="small text-muted mb-3"><i class="bi bi-geo-alt"></i> Merkez, Ana Bölge</p>
-                                    
-                                    <button class="btn btn-sm btn-outline-primary w-100 rounded-pill fw-bold" onclick="alert('Pazar Yeri entegrasyonu sağlandığında firma otomatik davet edilecektir.')">
-                                        <i class="bi bi-send me-1"></i> Bunu da Davet Et
-                                    </button>
                                 </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="col-12 text-center py-4 text-muted">
+                                <i class="bi bi-info-circle fs-3 d-block mb-2"></i>
+                                Bu kategoride sistemde henüz başka açık pazar yeri firması bulunamadı. Üstteki "Yeni Tedarikçi Davet Et" butonu ile dilediğiniz firmayı kolayca ekleyebilirsiniz.
                             </div>
-                        </div>
-                        
-                        <!-- Öneri 2 -->
-                        <div class="col-md-4">
-                            <div class="card h-100 border-0 shadow-sm" style="border-radius:10px; transition: transform 0.2s;">
-                                <div class="card-body position-relative">
-                                    <div class="position-absolute top-0 end-0 mt-2 me-2">
-                                        <span class="badge bg-success bg-opacity-10 text-success rounded-pill"><i class="bi bi-shield-check"></i> Doğrulanmış</span>
-                                    </div>
-                                    <h6 class="fw-bold mb-1 mt-2">Güven Karot ve Beton Delme</h6>
-                                    <div class="text-warning small mb-2">
-                                        <i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i> 
-                                        <span class="text-muted ms-1">(5.0 / 8 İşlem)</span>
-                                    </div>
-                                    <p class="small text-muted mb-3"><i class="bi bi-geo-alt"></i> Merkez, Ana Bölge</p>
-                                    
-                                    <button class="btn btn-sm btn-outline-primary w-100 rounded-pill fw-bold" onclick="alert('Pazar Yeri entegrasyonu sağlandığında firma otomatik davet edilecektir.')">
-                                        <i class="bi bi-send me-1"></i> Bunu da Davet Et
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Öneri 3 -->
-                        <div class="col-md-4">
-                            <div class="card h-100 border-0 shadow-sm" style="border-radius:10px; transition: transform 0.2s;">
-                                <div class="card-body position-relative">
-                                    <div class="position-absolute top-0 end-0 mt-2 me-2">
-                                        <span class="badge bg-secondary bg-opacity-10 text-secondary rounded-pill"><i class="bi bi-clock-history"></i> Yeni Katıldı</span>
-                                    </div>
-                                    <h6 class="fw-bold mb-1 mt-2">Teknik Denetim Hizmetleri A.Ş.</h6>
-                                    <div class="text-warning small mb-2">
-                                        <i class="bi bi-star text-muted"></i><i class="bi bi-star text-muted"></i><i class="bi bi-star text-muted"></i><i class="bi bi-star text-muted"></i><i class="bi bi-star text-muted"></i> 
-                                        <span class="text-muted ms-1">(Henüz değerlendirilmedi)</span>
-                                    </div>
-                                    <p class="small text-muted mb-3"><i class="bi bi-geo-alt"></i> Merkez, Ana Bölge</p>
-                                    
-                                    <button class="btn btn-sm btn-outline-primary w-100 rounded-pill fw-bold" onclick="alert('Pazar Yeri entegrasyonu sağlandığında firma otomatik davet edilecektir.')">
-                                        <i class="bi bi-send me-1"></i> Bunu da Davet Et
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        
+                        }
                     </div>
                 </div>
             </div>

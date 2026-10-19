@@ -1,0 +1,412 @@
+@model GMK360.Web.Models.TedarikciDashboardViewModel
+@{
+    ViewData["Title"] = Model.StoreName + " - Nalbur & Tedarikçi Masası";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<style>
+    :root {
+        --nalbur-primary: #b45309;
+        --nalbur-secondary: #d97706;
+        --whatsapp-green: #25D366;
+    }
+
+    body {
+        background-color: #f8fafc;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    .nalbur-hero {
+        background: linear-gradient(135deg, #451a03 0%, #b45309 60%, #d97706 100%);
+        color: white;
+        border-radius: 0 0 2rem 2rem;
+        box-shadow: 0 10px 25px -5px rgba(180, 83, 9, 0.35);
+    }
+
+    .card-modern {
+        border: none;
+        border-radius: 1.25rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        background: #ffffff;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .card-modern:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+    }
+
+    .nav-pills-nalbur .nav-link {
+        color: #475569;
+        font-weight: 700;
+        border-radius: 1rem;
+        padding: 0.75rem 1.25rem;
+        transition: all 0.2s;
+    }
+
+    .nav-pills-nalbur .nav-link.active {
+        background: var(--nalbur-primary);
+        color: white;
+        box-shadow: 0 4px 12px rgba(180, 83, 9, 0.3);
+    }
+
+    .btn-whatsapp {
+        background-color: var(--whatsapp-green);
+        color: white;
+        font-weight: 700;
+        border: none;
+    }
+    .btn-whatsapp:hover {
+        background-color: #128C7E;
+        color: white;
+    }
+</style>
+
+<div class="container-fluid p-0 mb-5">
+    
+    <!-- BİLDİRİM MESAJLARI -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="container mt-3">
+            <div class="alert alert-success alert-dismissible fade show rounded-4 shadow-sm border-0 d-flex align-items-center" role="alert">
+                <i class="bi bi-check-circle-fill fs-4 me-3 text-success"></i>
+                <div class="fw-semibold">@TempData["SuccessMessage"]</div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        </div>
+    }
+
+    <!-- NALBUR HERO BAŞLIĞI -->
+    <div class="nalbur-hero pt-4 pb-5 px-3 px-md-5">
+        <div class="container">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                <div>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                        <span class="badge bg-warning text-dark fw-bold rounded-pill px-3 py-1">
+                            <i class="bi bi-shop me-1"></i> Nalbur & Tedarikçi Masası
+                        </span>
+                        <span class="badge bg-light text-dark fw-bold rounded-pill px-3 py-1">
+                            <i class="bi bi-geo-alt-fill text-danger me-1"></i> @Model.DistrictName, @Model.NeighborhoodName
+                        </span>
+                        @if (Model.IsSeller && Model.IsSubcontractorToo)
+                        {
+                            <span class="badge bg-success text-white fw-bold rounded-pill px-3 py-1">
+                                <i class="bi bi-shield-check me-1"></i> Hibrit Firma (Hem Satıcı Hem Taşeron)
+                            </span>
+                        }
+                    </div>
+
+                    <h2 class="fw-bold mb-1 text-white">@Model.StoreName</h2>
+                    <p class="text-white-50 mb-0 fs-6">
+                        <i class="bi bi-person-fill text-warning me-1"></i> Yetkili: <strong>@Model.OwnerName</strong> 
+                        &bull; <i class="bi bi-telephone-fill text-success me-1"></i> @Model.PhoneNumber 
+                        &bull; <i class="bi bi-pin-map text-warning me-1"></i> @Model.Address
+                    </p>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+                    <button class="btn btn-warning text-dark fw-bold rounded-4 px-4 py-3 shadow" data-bs-toggle="modal" data-bs-target="#newCustomerModal">
+                        <i class="bi bi-person-plus-fill me-1"></i> Yeni Açık Hesap Aç
+                    </button>
+                    <a asp-action="AddSampleData" class="btn btn-outline-light rounded-4 px-3 py-3" title="Demo Verileri Yenile">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ANA İÇERİK -->
+    <div class="container" style="margin-top: -1.75rem;">
+
+        <!-- 1. KASA & AÇIK HESAP ÖZETİ -->
+        <div class="card-modern p-3 p-md-4 mb-4 border border-light">
+            <div class="row g-3">
+                <div class="col-6 col-lg-3">
+                    <div class="p-3 bg-light rounded-4 border">
+                        <small class="text-muted fw-bold text-uppercase d-block mb-1">Toplam Açık Hesap Alacağı</small>
+                        <h3 class="fw-bold text-danger mb-0">@Model.TotalOpenAccountReceivables.ToString("N0") <span class="fs-6">TL</span></h3>
+                        <small class="text-muted"><i class="bi bi-journal-text"></i> Usta & Müşteri Veresiyesi</small>
+                    </div>
+                </div>
+
+                <div class="col-6 col-lg-3">
+                    <div class="p-3 bg-light rounded-4 border border-start border-3 border-success">
+                        <small class="text-muted fw-bold text-uppercase d-block mb-1">Bu Ay Yapılan Tahsilat</small>
+                        <h3 class="fw-bold text-success mb-0">+@Model.TotalCollectedThisMonth.ToString("N0") <span class="fs-6">TL</span></h3>
+                        <small class="text-success fw-bold"><i class="bi bi-check2"></i> Kasa Girişi</small>
+                    </div>
+                </div>
+
+                <div class="col-6 col-lg-3">
+                    <div class="p-3 bg-light rounded-4 border border-start border-3 border-warning">
+                        <small class="text-muted fw-bold text-uppercase d-block mb-1">Aktif Açık Hesap</small>
+                        <h3 class="fw-bold text-dark mb-0">@Model.TotalActiveCustomersCount <span class="fs-6">Hesap</span></h3>
+                        <small class="text-muted"><i class="bi bi-people-fill"></i> Merkezi Tekil Havuzda</small>
+                    </div>
+                </div>
+
+                <div class="col-6 col-lg-3">
+                    <div class="p-3 text-white rounded-4" style="background: linear-gradient(135deg, #b45309 0%, #f59e0b 100%);">
+                        <small class="text-white-50 fw-bold text-uppercase d-block mb-1">Organik Öğrenilen Envanter</small>
+                        <h3 class="fw-bold text-white mb-0">@Model.TotalOrganicCatalogItemsCount <span class="fs-6">Kalem</span></h3>
+                        <small class="text-white fw-bold"><i class="bi bi-magic"></i> Yazdıkça Oluşan Katalog</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. SEKMELER -->
+        <ul class="nav nav-pills nav-pills-nalbur mb-4 gap-2" id="nalburTabs" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" id="accounts-tab" data-bs-toggle="pill" data-bs-target="#accounts-pane" type="button">
+                    <i class="bi bi-journal-text me-1"></i> Açık Hesap Defteri & Hızlı Giriş
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="catalog-tab" data-bs-toggle="pill" data-bs-target="#catalog-pane" type="button">
+                    <i class="bi bi-box-seam me-1"></i> Organik Envanter Kütüphanem (@Model.OrganicCatalog.Count)
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="referral-tab" data-bs-toggle="pill" data-bs-target="#referral-pane" type="button">
+                    <i class="bi bi-people-fill me-1"></i> "Ustan Var Mı?" Tavsiye Köprüsü
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="nalburTabsContent">
+
+            <!-- 1. SEKME: AÇIK HESAP DEFTERİ & HIZLI GİRİŞ -->
+            <div class="tab-pane fade show active" id="accounts-pane" role="tabpanel">
+                <div class="row g-4">
+                    <!-- Sol: Hızlı Yazma Kartı (Yazarken Öğrenen Akıllı Form) -->
+                    <div class="col-12 col-lg-5">
+                        <div class="card-modern p-4 border-top border-4 border-warning">
+                            <h5 class="fw-bold text-dark mb-1">
+                                <i class="bi bi-pencil-square text-warning me-2"></i> Hızlı Açık Hesap Hareketi
+                            </h5>
+                            <p class="text-muted small mb-3">Malzemeyi serbestçe yazın; sistem otomatik ürün envanterinize işlesin.</p>
+
+                            <form asp-action="AddFastTransaction" method="post">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold small text-muted">Kimin Hesabına Yazılacak?</label>
+                                    <select name="customerId" class="form-select form-select-lg rounded-3" required>
+                                        @foreach (var c in Model.Customers)
+                                        {
+                                            <option value="@c.Id">@c.FullName (@c.CurrentDebtBalance.ToString("N0") TL Borç)</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold small text-muted">Ne Verildi? (Serbestçe Yazın)</label>
+                                    <input type="text" name="rawInput" id="rawMaterialInput" class="form-control form-control-lg rounded-3" placeholder="Örn: Dyo tavan boyası 10 kilo 5000" required />
+                                    <small class="text-muted">Örn: <em>"1 kg 5'lik çivi 85"</em> veya <em>"100m 3x2.5 kablo"</em></small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold small text-muted">Tutar (TL)</label>
+                                    <input type="number" step="any" name="amount" id="rawAmountInput" class="form-control form-control-lg rounded-3 fw-bold text-danger" placeholder="Örn: 5000" required />
+                                </div>
+
+                                <div class="row g-2 mb-3">
+                                    <div class="col-6">
+                                        <button type="submit" name="transactionType" value="Malzeme Verildi (+Borç)" class="btn btn-danger w-100 fw-bold py-2 rounded-3">
+                                            <i class="bi bi-plus-lg me-1"></i> Malzeme Ver (+Borç)
+                                        </button>
+                                    </div>
+                                    <div class="col-6">
+                                        <button type="submit" name="transactionType" value="Tahsilat Yapıldı (-Alacak)" class="btn btn-success w-100 fw-bold py-2 rounded-3">
+                                            <i class="bi bi-cash-coin me-1"></i> Tahsilat Yap (-Borç)
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+
+                            <!-- HIZLI ÖNERİLER (ORGANİK KÜTÜPHANEDEN) -->
+                            <div class="border-top pt-3">
+                                <small class="fw-bold text-muted d-block mb-2"><i class="bi bi-magic me-1"></i> Sık Kullanılanlar (Tıklayınca Dolar):</small>
+                                <div class="d-flex flex-wrap gap-1">
+                                    @foreach (var item in Model.OrganicCatalog.Take(5))
+                                    {
+                                        <button type="button" class="btn btn-sm btn-light border rounded-pill" onclick="fillFastInput('@item.ItemName', '@item.LastSoldPrice')">
+                                            @item.ItemName (@item.LastSoldPrice TL)
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sağ: Müşteri Listesi & WhatsApp Ekstre Gönderme -->
+                    <div class="col-12 col-lg-7">
+                        <div class="card-modern p-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-people-fill text-primary me-2"></i>Açık Hesap Sahipleri</h5>
+                                <span class="badge bg-light text-dark border px-3 py-2 rounded-pill">@Model.Customers.Count Kayıtlı</span>
+                            </div>
+
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light small text-muted text-uppercase">
+                                        <tr>
+                                            <th>Müşteri / Usta</th>
+                                            <th>Tür</th>
+                                            <th class="text-end">Açık Hesap Borcu</th>
+                                            <th class="text-end">İşlem</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var c in Model.Customers)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <div class="fw-bold text-dark">@c.FullName</div>
+                                                    <small class="text-muted"><i class="bi bi-telephone"></i> @c.PhoneNumber</small>
+                                                </td>
+                                                <td><span class="badge bg-light text-dark border">@c.CustomerType</span></td>
+                                                <td class="text-end fw-bold text-danger fs-6">
+                                                    @c.CurrentDebtBalance.ToString("N0") TL
+                                                </td>
+                                                <td class="text-end">
+                                                    <a href="@c.WhatsAppEkstreUrl" target="_blank" class="btn btn-whatsapp btn-sm rounded-pill px-3" title="WhatsApp Bakiye Ekstresi Gönder">
+                                                        <i class="bi bi-whatsapp me-1"></i> Ekstre At
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. SEKME: ORGANİK ENVANTER KÜTÜPHANEM -->
+            <div class="tab-pane fade" id="catalog-pane" role="tabpanel">
+                <div class="card-modern p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-magic text-warning me-2"></i>Organik Envanter Kütüphanem</h5>
+                            <p class="text-muted small mb-0">Siz açık hesaba yazdıkça sistemin otomatik öğrendiği dükkan kataloğunuz.</p>
+                        </div>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3 py-2">
+                            Barkodsuz, Zahmetsiz Envanter
+                        </span>
+                    </div>
+
+                    <div class="row g-3">
+                        @foreach (var item in Model.OrganicCatalog)
+                        {
+                            <div class="col-12 col-md-6 col-lg-3">
+                                <div class="p-3 border rounded-4 bg-white shadow-sm h-100 d-flex flex-column justify-content-between">
+                                    <div>
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <span class="badge bg-secondary-subtle text-secondary rounded-pill small">@item.Category</span>
+                                            <small class="text-muted">@item.TimesUsedCount kez satıldı</small>
+                                        </div>
+                                        <h6 class="fw-bold text-dark mb-1">@item.ItemName</h6>
+                                        <small class="text-muted d-block">Marka: @item.Brand</small>
+                                    </div>
+                                    <div class="pt-2 border-top mt-3 d-flex justify-content-between align-items-center">
+                                        <small class="text-muted">Son Satış Fiyatı:</small>
+                                        <strong class="text-success fs-5">@item.LastSoldPrice?.ToString("N0") TL</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. SEKME: "USTAN VAR MI?" TAVSİYE KÖPRÜSÜ -->
+            <div class="tab-pane fade" id="referral-pane" role="tabpanel">
+                <div class="card-modern p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-share-fill text-success me-2"></i>"Ustan Var Mı?" Tavsiye & Yönlendirme Köprüsü</h5>
+                            <p class="text-muted small mb-0">Dükkana gelip usta soran müşterilerinize tek tıkla güvendiğiniz ustayı WhatsApp'tan yönlendirin.</p>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        @foreach (var u in Model.TrustedUstas)
+                        {
+                            <div class="col-12 col-md-6">
+                                <div class="p-3 border rounded-4 bg-white shadow-sm d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="rounded-circle bg-warning-subtle text-warning d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; font-size: 24px;">
+                                            <i class="bi bi-tools"></i>
+                                        </div>
+                                        <div>
+                                            <h6 class="fw-bold text-dark mb-0">@u.FullName</h6>
+                                            <small class="text-muted d-block">@u.TradeRole</small>
+                                            <small class="text-success"><i class="bi bi-star-fill text-warning"></i> @u.Rating Memnuniyet</small>
+                                        </div>
+                                    </div>
+                                    <a href="@u.WhatsAppRecommendUrl" target="_blank" class="btn btn-whatsapp btn-sm rounded-pill px-3">
+                                        <i class="bi bi-whatsapp me-1"></i> Müşteriye Öner
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- YENİ AÇIK HESAP AÇMA MODALI (MERKEZİ DEDUPLICATION İLE) -->
+<div class="modal fade" id="newCustomerModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold text-white"><i class="bi bi-person-plus-fill text-warning me-2"></i>Yeni Açık Hesap Aç</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="AddCustomer" method="post">
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Müşteri / Usta Adı Soyadı</label>
+                        <input type="text" name="fullName" class="form-control form-control-lg rounded-3" placeholder="Örn: Halil Usta (Tesisat)" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Telefon Numarası (Tekil Anahtar)</label>
+                        <input type="text" name="phoneNumber" class="form-control rounded-3" placeholder="Örn: 0532 111 22 33" required />
+                        <small class="text-muted">Bu numara ile sistem merkezinde mükerrer kayıt kontrolü yapılır.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Müşteri Türü</label>
+                        <select name="customerType" class="form-select rounded-3">
+                            <option value="Usta">Usta (Esnaf)</option>
+                            <option value="Taşeron">Taşeron Ekip</option>
+                            <option value="Bina Yöneticisi">Apartman / Site Yöneticisi</option>
+                            <option value="Bireysel Ev Sahibi">Bireysel Daire Sahibi</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Açılış Borç Bakiyesi (TL)</label>
+                        <input type="number" step="any" name="initialDebt" class="form-control rounded-3" value="0" />
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-warning text-dark fw-bold rounded-pill px-4">Hesabı Aç</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    function fillFastInput(name, price) {
+        document.getElementById('rawMaterialInput').value = name;
+        document.getElementById('rawAmountInput').value = price;
+    }
+</script>
+}

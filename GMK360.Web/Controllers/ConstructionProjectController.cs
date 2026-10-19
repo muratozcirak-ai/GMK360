@@ -97,7 +97,7 @@ namespace GMK360.Web.Controllers
                 .FirstOrDefaultAsync(a => a.UserId == user.Id);
             
             // ADMIN OVERRIDE FOR TESTING/CREATING PROJECTS
-            if (agencyConsultant == null && User.IsInRole("Admin"))
+            if (agencyConsultant == null && (User.IsInRole("Admin") || User.IsInRole("SuperAdmin")))
             {
                 var defaultAgency = await _context.Agencies.OrderBy(a => a.Id).FirstOrDefaultAsync();
                 return defaultAgency?.Id ?? 1;
@@ -225,13 +225,11 @@ namespace GMK360.Web.Controllers
                 
 
                 .Include(c => c.Amenities)
-
                 .Include(c => c.Tasks)
-
+                .Include(c => c.SubProjects)
+                .Include(c => c.ParentProject)
                 .Include(c => c.Blocks)
-
                     .ThenInclude(b => b.Units)
-
                 .FirstOrDefaultAsync(m => m.Id == id);
 
 
@@ -250,10 +248,11 @@ namespace GMK360.Web.Controllers
 
             }
 
-
+            bool hasDxfProfiles = await _context.DxfUnitTypeProfiles.AnyAsync(p => p.ProjectId == id);
+            ViewBag.HasDxf = project.HasDxfDrawing || hasDxfProfiles;
+            ViewBag.ExecutionMode = project.ProjectExecutionMode ?? ((project.HasDxfDrawing || hasDxfProfiles) ? "DxfEngineering" : "DocumentProcurement");
 
             return View(project);
-
         }
 
 
@@ -286,6 +285,32 @@ namespace GMK360.Web.Controllers
             string baseFolder = Path.Combine(webRoot, "uploads", $"Agency_{agencyId.Value}", $"Project_{project.Id}");
             Directory.CreateDirectory(Path.Combine(baseFolder, "images"));
             Directory.CreateDirectory(Path.Combine(baseFolder, "documents"));
+
+            // Müstakil Yıkım & Hafriyat Şantiyesi
+            if (projectOriginId == 5)
+            {
+                var currentUserId = _userManager.GetUserId(User) ?? "";
+                var existingBlock = new GMK360.Core.Entities.Building
+                {
+                    ConstructionProjectId = project.Id,
+                    Name = projectName + " (Yıkılacak Mevcut Yapı)",
+                    BlockName = "A Blok (Yıkım)",
+                    TotalFloors = 5,
+                    ManagerUserId = currentUserId,
+                    CityId = 34,
+                    DistrictId = 1,
+                    NeighborhoodId = 1,
+                    StreetName = "-",
+                    BuildingNumber = "-",
+                    IsExistingBuilding = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.Buildings.Add(existingBlock);
+                await _context.SaveChangesAsync();
+
+                TempData["SuccessMessage"] = "Yıkım ve hafriyat şantiyesi başarıyla oluşturuldu. Söküm ve hurda envanter masasına aktarıldınız.";
+                return RedirectToAction("Index", "DemolitionSalvage", new { projectId = project.Id });
+            }
 
             return RedirectToAction("Create", new { id = project.Id });
         }
@@ -1052,8 +1077,199 @@ namespace GMK360.Web.Controllers
 
         
 
-        // POST: ConstructionProject/AddConstructionTask
+        // POST: ConstructionProject/CreateSubProjectFromAmenity
+        [HttpPost]
+        public async Task<IActionResult> CreateSubProjectFromAmenity([FromBody] CreateSubProjectDto dto)
+        {
+            if (dto == null || dto.ParentProjectId <= 0)
+                return Json(new { success = false, message = "Geçersiz ana proje parametresi." });
 
+            var parent = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == dto.ParentProjectId);
+            if (parent == null)
+                return Json(new { success = false, message = "Ana proje bulunamadı." });
+
+            if (dto.AmenityId.HasValue && dto.AmenityId.Value > 0)
+            {
+                var existingSub = await _context.ConstructionProjects
+                    .FirstOrDefaultAsync(p => p.ParentProjectId == dto.ParentProjectId && p.RelatedAmenityId == dto.AmenityId);
+
+                if (existingSub != null)
+                {
+                    return Json(new { 
+                        success = true, 
+                        alreadyExists = true, 
+                        subProjectId = existingSub.Id, 
+                        subProjectName = existingSub.Name,
+                        message = $"'{existingSub.Name}' için zaten açık bir alt proje mevcut.",
+                        redirectUrl = $"/ConstructionProject/Details/{existingSub.Id}" 
+                    });
+                }
+            }
+
+            bool isDxfMode = dto.ExecutionMode == "DxfEngineering" || dto.HasDxf;
+            string category = !string.IsNullOrWhiteSpace(dto.Category) ? dto.Category : "SosyalDonati_DisSaha";
+            string projectName = !string.IsNullOrWhiteSpace(dto.CustomProjectName)
+                ? dto.CustomProjectName
+                : (!string.IsNullOrWhiteSpace(dto.AmenityName) ? $"{parent.Name} - {dto.AmenityName} İmalatı" : $"{parent.Name} - Alt İmalat Paketi");
+
+            string description = !string.IsNullOrWhiteSpace(dto.Description)
+                ? dto.Description
+                : (isDxfMode 
+                    ? $"{parent.Name} ana projesine bağlı, AutoCAD/DXF çizimi ve detaylı metrajı bulunan mühendislik alt projesidir."
+                    : $"{parent.Name} ana projesine bağlı, teknik şartname, malzeme kataloğu ve taşeron teklif toplama (RFQ) odaklı satınalma paketidir.");
+
+            var subProject = new ConstructionProject
+            {
+                Name = projectName,
+                Description = description,
+                ParentProjectId = parent.Id,
+                RelatedAmenityId = (dto.AmenityId.HasValue && dto.AmenityId.Value > 0) ? dto.AmenityId : null,
+                SubProjectCategory = category,
+                ProjectType = isDxfMode ? "Mühendislik & Metraj Projesi" : "Teklif & Dökümantasyon Paketi",
+                HasDxfDrawing = isDxfMode,
+                ProjectExecutionMode = isDxfMode ? "DxfEngineering" : "DocumentProcurement",
+                Status = ProjectStatus.Projelendirme_Teklif,
+                LifecycleStatus = GMK360.Core.Entities.Enums.ProjectLifecycleStatus.UnderConstruction,
+                AgencyId = parent.AgencyId,
+                Address = parent.Address,
+                CityId = parent.CityId,
+                DistrictId = parent.DistrictId,
+                NeighborhoodId = parent.NeighborhoodId,
+                StartDate = DateTime.Today,
+                SelectionDeadline = DateTime.Today.AddMonths(1),
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.ConstructionProjects.Add(subProject);
+            await _context.SaveChangesAsync();
+
+            if (isDxfMode)
+            {
+                var typeA = new GMK360.Core.Entities.Construction.Workflows.DxfUnitTypeProfile 
+                { 
+                    ProjectId = subProject.Id, 
+                    ModelName = $"{subProject.Name} - Detay Planı", 
+                    Category = "Özel İmalat", 
+                    TotalGrossArea = 100, 
+                    TotalNetArea = 85, 
+                    TotalSpaceCount = 2 
+                };
+                _context.DxfUnitTypeProfiles.Add(typeA);
+                await _context.SaveChangesAsync();
+
+                _context.DxfUnitSpaces.Add(new GMK360.Core.Entities.Construction.Workflows.DxfUnitSpace
+                {
+                    DxfUnitTypeProfileId = typeA.Id,
+                    SpaceName = "Ana İmalat Alanı",
+                    SpaceGroup = "İmalat Sahası",
+                    FloorArea = 85,
+                    CeilingArea = 85,
+                    GrossWallArea = 60,
+                    NetWallArea = 50,
+                    SkirtingLength = 30,
+                    WindowSillLength = 0,
+                    InteriorDoorCount = 1,
+                    WindowCount = 0
+                });
+                await _context.SaveChangesAsync();
+            }
+
+            return Json(new { 
+                success = true, 
+                subProjectId = subProject.Id, 
+                subProjectName = subProject.Name,
+                isDxfMode = isDxfMode,
+                message = $"'{subProject.Name}' ({ (isDxfMode ? "📐 Mühendislik & Metraj" : "📄 Teklif & Dökümantasyon") }) başarıyla açıldı!",
+                redirectUrl = $"/ConstructionProject/Details/{subProject.Id}" 
+            });
+        }
+
+        // POST: ConstructionProject/UploadProjectDxf
+        [HttpPost]
+        public async Task<IActionResult> UploadProjectDxf(int projectId, IFormFile? dxfFile)
+        {
+            var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == projectId);
+            if (project == null) return NotFound();
+
+            if (dxfFile != null && dxfFile.Length > 0)
+            {
+                var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", $"Project_{projectId}", "dxf");
+                if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
+
+                var ext = Path.GetExtension(dxfFile.FileName).ToLowerInvariant();
+                var uniqueName = $"drawing_{projectId}_{Guid.NewGuid().ToString("N").Substring(0, 8)}{ext}";
+                var filePath = Path.Combine(uploadsFolder, uniqueName);
+
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await dxfFile.CopyToAsync(stream);
+                }
+
+                project.HasDxfDrawing = true;
+                project.ProjectExecutionMode = "DxfEngineering";
+                project.DxfFilePath = $"/uploads/Project_{projectId}/dxf/{uniqueName}";
+                await _context.SaveChangesAsync();
+
+                var hasProfiles = await _context.DxfUnitTypeProfiles.AnyAsync(p => p.ProjectId == projectId);
+                if (!hasProfiles)
+                {
+                    var typeA = new GMK360.Core.Entities.Construction.Workflows.DxfUnitTypeProfile 
+                    { 
+                        ProjectId = projectId, 
+                        ModelName = $"{project.Name} - Tip Planı", 
+                        Category = "Özel İmalat", 
+                        TotalGrossArea = 120, 
+                        TotalNetArea = 100, 
+                        TotalSpaceCount = 2 
+                    };
+                    _context.DxfUnitTypeProfiles.Add(typeA);
+                    await _context.SaveChangesAsync();
+
+                    _context.DxfUnitSpaces.Add(new GMK360.Core.Entities.Construction.Workflows.DxfUnitSpace
+                    {
+                        DxfUnitTypeProfileId = typeA.Id,
+                        SpaceName = "Ana İmalat Alanı",
+                        SpaceGroup = "İmalat Sahası",
+                        FloorArea = 100,
+                        CeilingArea = 100,
+                        GrossWallArea = 70,
+                        NetWallArea = 60,
+                        SkirtingLength = 35,
+                        WindowSillLength = 0,
+                        InteriorDoorCount = 1,
+                        WindowCount = 0
+                    });
+                    await _context.SaveChangesAsync();
+                }
+
+                TempData["SuccessMessage"] = "AutoCAD / DXF çizimi başarıyla yüklendi! Proje detaylı mühendislik ve metraj moduna yükseltildi.";
+                return RedirectToAction(nameof(Details), new { id = projectId });
+            }
+
+            project.HasDxfDrawing = true;
+            project.ProjectExecutionMode = "DxfEngineering";
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Proje Detaylı Mühendislik ve Metraj moduna alındı.";
+            return RedirectToAction(nameof(Details), new { id = projectId });
+        }
+
+        // POST: ConstructionProject/SetDocumentProcurementMode
+        [HttpPost]
+        public async Task<IActionResult> SetDocumentProcurementMode(int projectId)
+        {
+            var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == projectId);
+            if (project == null) return NotFound();
+
+            project.HasDxfDrawing = false;
+            project.ProjectExecutionMode = "DocumentProcurement";
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Proje Teklif & Dökümantasyon (RFQ) moduna alındı.";
+            return RedirectToAction(nameof(Details), new { id = projectId });
+        }
+
+        // POST: ConstructionProject/AddConstructionTask
         [HttpPost]
 
         [ValidateAntiForgeryToken]
@@ -1175,13 +1391,39 @@ namespace GMK360.Web.Controllers
             }
 
             return RedirectToAction("ManageBlock", new { id = buildingId });
-
         }
 
-
-
-        
         [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> TransferToBuildingManagement(int buildingId)
+        {
+            var building = await _context.Buildings
+                .Include(b => b.Units)
+                .FirstOrDefaultAsync(b => b.Id == buildingId);
+
+            if (building == null) return NotFound("Blok / Yapı bulunamadı.");
+
+            var currentUserId = _userManager.GetUserId(User) ?? "";
+            if (string.IsNullOrEmpty(building.ManagerUserId))
+            {
+                building.ManagerUserId = currentUserId;
+            }
+            if (string.IsNullOrEmpty(building.CreatedByUserId))
+            {
+                building.CreatedByUserId = currentUserId;
+            }
+
+            building.OnboardingStep = 5; // Tamamen aktif
+            building.IsApproved = true;
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"🎉 Tebrikler! '{building.Name}' bloğu inşaat aşamasından KMK 634 Sayılı Kanuna uygun Bina & Site Yönetimine başarıyla devredildi.";
+            return RedirectToAction("Detail", "BuildingManager", new { id = building.Id });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> BulkGenerateEmptyUnits(int projectId, List<string> targetFloors, string category, int count)
         {
             var agencyId = await GetUserAgencyIdAsync();
@@ -1190,7 +1432,12 @@ namespace GMK360.Web.Controllers
             var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId);
             if (project == null && !User.IsInRole("Admin")) return Json(new { success = false, message = "Proje bulunamadı." });
 
-                        int addedCount = 0;
+            if (targetFloors == null || !targetFloors.Any())
+            {
+                return Json(new { success = false, message = "Lütfen en az bir kat seçin." });
+            }
+
+            int addedCount = 0;
             try {
                 foreach (var target in targetFloors)
                 {
@@ -1200,16 +1447,72 @@ namespace GMK360.Web.Controllers
                         var b = await _context.Buildings.FirstOrDefaultAsync(x => x.Id == buildingId && x.ConstructionProjectId == projectId);
                         if (b != null)
                         {
+                            var existingFloorUnits = await _context.BuildingUnits
+                                .Where(x => x.BuildingId == buildingId && x.FloorLevel == floorLevel)
+                                .ToListAsync();
+
                             for (int i = 0; i < count; i++)
                             {
+                                int seq = existingFloorUnits.Count + i + 1;
+                                string doorNo = "-";
+                                string layout = "Mesken";
+                                string actualCategory = category;
+
+                                if (category == "Dükkan")
+                                {
+                                    layout = "Dükkan";
+                                    doorNo = $"Dükkan {seq}";
+                                    actualCategory = "Dükkan";
+                                }
+                                else if (category == "Ofis")
+                                {
+                                    layout = "Ofis";
+                                    doorNo = $"Ofis {seq}";
+                                    actualCategory = "Ofis";
+                                }
+                                else if (category == "Depo" || category == "Eklenti")
+                                {
+                                    layout = "Depo / Ardiye";
+                                    doorNo = count == 1 ? "Ardiye / Depo" : $"Depo {seq}";
+                                    actualCategory = "Depo";
+                                }
+                                else if (category == "Sığınak" || category == "Su Deposu & Hidrofor" || category == "Kapalı Otopark" ||
+                                         category == "Açık Otopark" || category == "Jeneratör Odası" || category == "Kazan Dairesi" ||
+                                         category == "Yangın Pompa İstasyonu" || category == "Bina Giriş Holü" ||
+                                         category == "Asansör Makine Dairesi" || category == "Elektrik & Pano Odası" ||
+                                         category == "Ortak Alan (Genel)" || category.StartsWith("OrtakAlan"))
+                                {
+                                    actualCategory = "OrtakAlan";
+                                    string cleanName = category == "Ortak Alan (Genel)" ? "Ortak Alan" : category;
+                                    layout = cleanName;
+
+                                    bool alreadyExistsWithExactName = existingFloorUnits.Any(u => u.DoorNumber.Equals(cleanName, StringComparison.OrdinalIgnoreCase));
+                                    if (count == 1 && !alreadyExistsWithExactName)
+                                    {
+                                        doorNo = cleanName;
+                                    }
+                                    else
+                                    {
+                                        int commonCountInFloor = existingFloorUnits.Count(u => u.Category == "OrtakAlan" && u.DoorNumber.StartsWith(cleanName, StringComparison.OrdinalIgnoreCase));
+                                        doorNo = $"{cleanName} {commonCountInFloor + i + 1}";
+                                    }
+                                }
+                                else
+                                {
+                                    actualCategory = "Daire";
+                                    layout = "Mesken";
+                                    doorNo = "-";
+                                }
+
                                 var unit = new GMK360.Core.Entities.BuildingUnit
                                 {
                                     BuildingId = buildingId,
                                     FloorLevel = floorLevel,
-                                    Category = category,
-                                    DoorNumber = "-", 
+                                    FloorName = floorLevel == 0 ? "Zemin Kat" : (floorLevel < 0 ? $"{-floorLevel}. Bodrum" : $"{floorLevel}. Kat"),
+                                    Category = actualCategory,
+                                    DoorNumber = doorNo, 
                                     FacadeDirection = "-",
-                                    RoomLayout = category == "Dükkan" ? "Dükkan" : (category == "Ofis" ? "Ofis" : "Mesken")
+                                    RoomLayout = layout
                                 };
                                 _context.BuildingUnits.Add(unit);
                                 addedCount++;
@@ -1218,7 +1521,7 @@ namespace GMK360.Web.Controllers
                     }
                 }
                 await _context.SaveChangesAsync();
-                return Json(new { success = true, message = $"{addedCount} adet {category} başarıyla üretildi!" });
+                return Json(new { success = true, message = $"{addedCount} adet birim/alan ({category}) başarıyla üretildi!" });
             } catch (Exception ex) {
                 return Json(new { success = false, message = "Sunucu Hatası: " + (ex.InnerException != null ? ex.InnerException.Message : ex.Message) });
             }
@@ -1246,40 +1549,43 @@ namespace GMK360.Web.Controllers
 
             if (block == null) return NotFound();
 
-            
+            if (block.ParentBuildingId.HasValue)
+            {
+                return RedirectToAction(nameof(ManageBlock), new { id = block.ParentBuildingId.Value });
+            }
 
             if (!User.IsInRole("Admin") && block.ConstructionProject.AgencyId != agencyId)
-
             {
-
                 return Unauthorized();
-
             }
 
 
 
-            // Mimari grselleri ve kat planlarn getir
+            // Mimari görselleri ve kat planlarını getir (Ana blok ve alt kuleler dahil)
+            var allBuildingIds = new List<int> { id };
+            if (block.ChildBuildings != null && block.ChildBuildings.Any())
+            {
+                allBuildingIds.AddRange(block.ChildBuildings.Select(c => c.Id));
+            }
 
-            string floorEntityType = "BuildingFloor_" + id;
+            var floorEntityTypes = allBuildingIds.Select(bId => "BuildingFloor_" + bId).ToList();
 
             var architectureDocs = await _context.DmsDocuments
-
                 .Where(d => (d.EntityType == "Building" && d.EntityId == id) ||
-
-                            (d.EntityType == floorEntityType))
-
+                            floorEntityTypes.Contains(d.EntityType))
                 .ToListAsync();
 
-
-
             ViewBag.BlockImages = architectureDocs.Where(d => d.EntityType == "Building").ToList();
+            ViewBag.FloorPlans = architectureDocs.Where(d => floorEntityTypes.Contains(d.EntityType)).ToList();
 
-            ViewBag.FloorPlans = architectureDocs.Where(d => d.EntityType == floorEntityType).ToList();
-
-
+            ViewBag.Stakeholders = await _context.ProjectStakeholders
+                .Include(s => s.User)
+                .Where(s => s.ProjectId == block.ConstructionProjectId && !s.IsDeleted)
+                .OrderBy(s => s.Role)
+                .ThenBy(s => s.User.FirstName)
+                .ToListAsync();
 
             return View(block);
-
         }
 
 
@@ -1582,88 +1888,232 @@ namespace GMK360.Web.Controllers
 
                 [HttpPost]
 
+        [HttpPost]
         [ValidateAntiForgeryToken]
-
-        public async Task<IActionResult> UpdateBlockDetails(int Id, string BlockName, double? BaseArea, List<string> SelectedFeatures, string TechnicalFeatures, string Description, string InsulationType, int? ElevatorCount, string ParkingType)
-
+        public async Task<IActionResult> UpdateBlockDetails(
+            int Id, 
+            string BlockName, 
+            double? BaseArea, 
+            int? TotalFloors,
+            int? BasementFloors,
+            bool? HasGroundFloor,
+            bool? HasRoof,
+            string? RoofType,
+            List<string>? SelectedFeatures, 
+            string? TechnicalFeatures, 
+            string? Description, 
+            string? InsulationType, 
+            int? ElevatorCount, 
+            string? ParkingType,
+            int? KotOffset = null,
+            string? returnUrl = null)
         {
-
             var agencyId = await GetUserAgencyIdAsync();
-
             if (agencyId == null) return Unauthorized();
 
-
-
             var building = await _context.Buildings
-
                 .Include(b => b.ConstructionProject)
-
                 .FirstOrDefaultAsync(b => b.Id == Id);
 
-
-
-            if (building == null || building.ConstructionProject?.AgencyId != agencyId)
-
+            if (building == null || (!User.IsInRole("Admin") && building.ConstructionProject?.AgencyId != agencyId))
                 return NotFound();
 
-
-
             building.BlockName = BlockName;
-
+            building.Name = BlockName;
             building.BaseArea = BaseArea;
 
-            
+            if (TotalFloors.HasValue) building.TotalFloors = TotalFloors.Value;
+            if (BasementFloors.HasValue) building.BasementFloors = BasementFloors.Value;
+            if (HasGroundFloor.HasValue) building.HasGroundFloor = HasGroundFloor.Value;
+            if (HasRoof.HasValue) building.HasRoof = HasRoof.Value;
+            if (!string.IsNullOrEmpty(RoofType)) building.RoofType = RoofType;
 
             // Combine predefined checkboxes into a comma-separated string
-
             string combinedFeatures = "";
-
             if (SelectedFeatures != null && SelectedFeatures.Count > 0)
-
             {
-
                 combinedFeatures = string.Join(", ", SelectedFeatures);
-
             }
-
-            
 
             // If they also typed custom technical features, append them
-
             if (!string.IsNullOrEmpty(TechnicalFeatures))
-
             {
-
                 if (!string.IsNullOrEmpty(combinedFeatures)) combinedFeatures += ", ";
-
                 combinedFeatures += TechnicalFeatures;
-
             }
 
-            
-
             building.TechnicalFeatures = combinedFeatures;
-
             building.Description = Description;
-
             building.InsulationType = InsulationType;
-
             building.ElevatorCount = ElevatorCount;
-
             building.ParkingType = ParkingType;
 
-
+            // Kot Offset (Arazi eğimi / kademe farkı)
+            if (KotOffset.HasValue)
+            {
+                int offsetVal = KotOffset.Value;
+                if (offsetVal != 0)
+                {
+                    if (string.IsNullOrEmpty(building.AttachedToBlock))
+                    {
+                        building.AttachedToBlock = $"KotOffset:{offsetVal}";
+                    }
+                    else
+                    {
+                        if (System.Text.RegularExpressions.Regex.IsMatch(building.AttachedToBlock, @"(?:Kot|Offset)\s*[:=]\s*[+-]?\d+"))
+                        {
+                            building.AttachedToBlock = System.Text.RegularExpressions.Regex.Replace(building.AttachedToBlock, @"(?:Kot|Offset)\s*[:=]\s*[+-]?\d+", $"KotOffset:{offsetVal}");
+                        }
+                        else
+                        {
+                            building.AttachedToBlock += $" (KotOffset:{offsetVal})";
+                        }
+                    }
+                }
+                else
+                {
+                    if (!string.IsNullOrEmpty(building.AttachedToBlock))
+                    {
+                        building.AttachedToBlock = System.Text.RegularExpressions.Regex.Replace(building.AttachedToBlock, @"\s*\(?KotOffset:[+-]?\d+\)?", "").Trim();
+                    }
+                }
+            }
 
             _context.Update(building);
-
             await _context.SaveChangesAsync();
 
+            TempData["SuccessMessage"] = $"{BlockName} özellikleri başarıyla güncellendi.";
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction(nameof(ManageBlock), new { id = building.ParentBuildingId ?? Id });
+        }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteBlock(int id, int projectId)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
 
-            TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
+            var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == projectId && (p.AgencyId == agencyId || User.IsInRole("Admin")));
+            if (project == null) return NotFound();
 
-            return RedirectToAction(nameof(ManageBlock), new { id = Id });
+            var building = await _context.Buildings
+                .Include(b => b.ChildBuildings)
+                .Include(b => b.Units)
+                    .ThenInclude(u => u.Spaces)
+                        .ThenInclude(s => s.Measurements)
+                .Include(b => b.Units)
+                    .ThenInclude(u => u.Spaces)
+                        .ThenInclude(s => s.Fixtures)
+                .FirstOrDefaultAsync(b => b.Id == id && b.ConstructionProjectId == projectId);
 
+            if (building == null) return NotFound();
+
+            // Cascade delete child buildings/towers if any
+            if (building.ChildBuildings != null && building.ChildBuildings.Any())
+            {
+                foreach (var child in building.ChildBuildings.ToList())
+                {
+                    var childUnits = await _context.BuildingUnits
+                        .Include(u => u.Spaces).ThenInclude(s => s.Measurements)
+                        .Include(u => u.Spaces).ThenInclude(s => s.Fixtures)
+                        .Where(u => u.BuildingId == child.Id)
+                        .ToListAsync();
+
+                    foreach (var u in childUnits)
+                    {
+                        foreach (var s in u.Spaces)
+                        {
+                            _context.SpaceMeasurements.RemoveRange(s.Measurements);
+                            _context.SpaceFixtures.RemoveRange(s.Fixtures);
+                        }
+                        _context.UnitSpaces.RemoveRange(u.Spaces);
+                    }
+                    _context.BuildingUnits.RemoveRange(childUnits);
+                    _context.Buildings.Remove(child);
+                }
+            }
+
+            if (building.Units != null && building.Units.Any())
+            {
+                foreach (var u in building.Units)
+                {
+                    foreach (var s in u.Spaces)
+                    {
+                        _context.SpaceMeasurements.RemoveRange(s.Measurements);
+                        _context.SpaceFixtures.RemoveRange(s.Fixtures);
+                    }
+                    _context.UnitSpaces.RemoveRange(u.Spaces);
+                }
+                _context.BuildingUnits.RemoveRange(building.Units);
+            }
+
+            _context.Buildings.Remove(building);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"{building.BlockName} başarıyla silindi.";
+            return RedirectToAction(nameof(Details), new { id = projectId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddChildBlock(
+            int projectId,
+            int parentBuildingId,
+            string blockName,
+            double? baseArea,
+            int totalFloors,
+            int basementFloors,
+            bool hasGroundFloor,
+            bool hasRoof,
+            string? roofType,
+            int? elevatorCount,
+            string? parkingType,
+            string? insulationType,
+            string? technicalFeatures,
+            string? description,
+            int? kotOffset = null)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var parent = await _context.Buildings
+                .Include(b => b.ConstructionProject)
+                .FirstOrDefaultAsync(b => b.Id == parentBuildingId && b.ConstructionProjectId == projectId);
+
+            if (parent == null || (!User.IsInRole("Admin") && parent.ConstructionProject?.AgencyId != agencyId))
+                return Unauthorized();
+
+            var child = new GMK360.Core.Entities.Building
+            {
+                ConstructionProjectId = projectId,
+                ParentBuildingId = parentBuildingId,
+                Name = blockName,
+                BlockName = blockName,
+                BaseArea = baseArea,
+                TotalFloors = totalFloors,
+                BasementFloors = basementFloors,
+                HasGroundFloor = hasGroundFloor,
+                HasRoof = hasRoof,
+                RoofType = roofType,
+                ElevatorCount = elevatorCount,
+                ParkingType = parkingType,
+                InsulationType = insulationType,
+                TechnicalFeatures = technicalFeatures,
+                Description = description,
+                IsExistingBuilding = parent.IsExistingBuilding,
+                LayoutPattern = parent.LayoutPattern,
+                AttachedToBlock = (kotOffset.HasValue && kotOffset.Value != 0) ? $"KotOffset:{kotOffset.Value}" : null
+            };
+
+            _context.Buildings.Add(child);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"{blockName} kulesi/bloğu başarıyla eklendi!";
+            return RedirectToAction(nameof(Details), new { id = projectId });
         }
 
 
@@ -1752,8 +2202,7 @@ namespace GMK360.Web.Controllers
 
             await _context.SaveChangesAsync();
 
-            return RedirectToAction(nameof(ManageBlock), new { id = buildingId });
-
+            return RedirectToAction(nameof(ManageBlock), new { id = building.ParentBuildingId ?? buildingId });
         }
 
 
@@ -1825,176 +2274,180 @@ namespace GMK360.Web.Controllers
 
 
             var sourceUnitsQuery = _context.BuildingUnits
-
+                .Include(u => u.Spaces)
+                    .ThenInclude(s => s.Measurements)
+                .Include(u => u.Spaces)
+                    .ThenInclude(s => s.Fixtures)
+                        .ThenInclude(f => f.Options)
                 .Where(u => u.BuildingId == buildingId && u.FloorLevel == sourceFloorLevel);
 
-                
-
             if (selectedUnitIds != null && selectedUnitIds.Any()) {
-
                 sourceUnitsQuery = sourceUnitsQuery.Where(u => selectedUnitIds.Contains(u.Id));
-
             }
-
-            
 
             var sourceUnits = await sourceUnitsQuery.ToListAsync();
 
-
-
             if (!sourceUnits.Any())
-
-                return RedirectToAction(nameof(ManageBlock), new { id = buildingId });
-
-
+                return RedirectToAction(nameof(ManageBlock), new { id = building.ParentBuildingId ?? buildingId });
 
             var targetFloorsStr = targetFloorLevels.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
 
-
-
             foreach (var fStr in targetFloorsStr)
-
             {
-
                 if (int.TryParse(fStr.Trim(), out int targetLevel))
-
                 {
-
                     if (targetLevel == sourceFloorLevel) continue;
 
-
-
-                    // Hedef kattaki mevcut birimleri alalm ki akma kontrol yapabilelim
-
+                    // Hedef kattaki mevcut birimleri alalım ki çakışma kontrolü yapabilelim
                     var existingTargetUnits = await _context.BuildingUnits
-
                         .Where(u => u.BuildingId == buildingId && u.FloorLevel == targetLevel)
-
                         .ToListAsync();
 
-
-
                     var idMapping = new Dictionary<int, GMK360.Core.Entities.BuildingUnit>();
-
                     var clonedUnits = new List<GMK360.Core.Entities.BuildingUnit>();
 
-
-
-                    // 1. Aama: Birimleri kopyala (akma varsa atla)
-
+                    // 1. Aşama: Birimleri kopyala (çakışma varsa atla)
                     foreach (var u in sourceUnits)
-
                     {
-
-                        // akma Kontrol: Ayn isimde ve kategoride birim hedef katta varsa ATLA
-
+                        // Çakışma Kontrolü: Aynı isimde ve kategoride birim hedef katta varsa ATLA
                         bool alreadyExists = existingTargetUnits.Any(tu => 
-
                             tu.DoorNumber.ToLower() == u.DoorNumber.ToLower() && 
-
                             tu.Category == u.Category);
-
-                            
 
                         if (alreadyExists) continue;
 
-
-
                         var newUnit = new GMK360.Core.Entities.BuildingUnit
-
                         {
-
                             BuildingId = buildingId,
-
                             FloorLevel = targetLevel,
-
                             FloorName = targetLevel == 0 ? "Zemin Kat" : (targetLevel < 0 ? $"{targetLevel}. Bodrum" : $"{targetLevel}. Kat"),
-
                             DoorNumber = u.DoorNumber,
-
                             RoomLayout = u.RoomLayout,
-
                             GrossSquareMeters = u.GrossSquareMeters,
-
                             FacadeDirection = u.FacadeDirection,
-
                             UnitTypeId = u.UnitTypeId,
-
                             Category = u.Category,
-
                             IsCustomizable = u.IsCustomizable,
-
-                            OwnerName = null // Sahiplik bo kalr
-
+                            OwnerName = null // Sahiplik boş kalır
                         };
 
-                        
-
                         clonedUnits.Add(newUnit);
-
                         idMapping.Add(u.Id, newUnit);
-
                     }
 
-
-
-                    // nce veritabanna kaydedelim ki yeni ID'ler olusun
-
+                    // Önce veritabanına kaydedelim ki yeni ID'ler oluşsun
                     _context.BuildingUnits.AddRange(clonedUnits);
-
                     await _context.SaveChangesAsync();
 
-
-
-                    // 2. Aama: Eklentilerin ParentUnitId'lerini (Bal olduu daireyi) AKILLICA eletir!
-
+                    // 2. Aşama: Eklentilerin ParentUnitId'lerini (Bağlı olduğu daireyi) AKILLICA eşleştir!
                     foreach (var u in sourceUnits)
-
                     {
-
                         if (u.Category == "Eklenti" && u.ParentUnitId.HasValue)
-
                         {
-
-                            // Eer bu eklentinin bal olduu ana daire ayn kattaysa (kopyalananlar arasndaysa)
-
+                            // Eğer bu eklentinin bağlı olduğu ana daire aynı kattaysa (kopyalananlar arasındaysa)
                             if (idMapping.ContainsKey(u.ParentUnitId.Value))
-
                             {
-
-                                // Yeni eklentiyi bul
-
                                 var newEklenti = idMapping[u.Id];
-
-                                // Yeni ana daireyi bul
-
                                 var newParentDaire = idMapping[u.ParentUnitId.Value];
-
-                                
-
-                                // Yeni eklentiyi yeni daireye bala!
-
                                 newEklenti.ParentUnitId = newParentDaire.Id;
-
                             }
-
                         }
-
                     }
 
-                    
+                    // 3. Aşama: Mahaller (Spaces), Ölçüler (Measurements) ve Demirbaşları (Fixtures) kopyala
+                    foreach (var u in sourceUnits)
+                    {
+                        if (idMapping.ContainsKey(u.Id))
+                        {
+                            var targetUnit = idMapping[u.Id];
+                            if (u.Spaces != null && u.Spaces.Any())
+                            {
+                                foreach (var srcSpace in u.Spaces)
+                                {
+                                    var newSpace = new GMK360.Core.Entities.UnitSpace
+                                    {
+                                        BuildingUnitId = targetUnit.Id,
+                                        Name = srcSpace.Name,
+                                        Type = srcSpace.Type,
+                                        SquareMeters = srcSpace.SquareMeters,
+                                        PlanImagePath = srcSpace.PlanImagePath,
+                                        Description = srcSpace.Description,
+                                        Measurements = new List<GMK360.Core.Entities.SpaceMeasurement>(),
+                                        Fixtures = new List<GMK360.Core.Entities.SpaceFixture>()
+                                    };
 
-                    // Balantlar gncelle
+                                    if (srcSpace.Measurements != null)
+                                    {
+                                        foreach (var m in srcSpace.Measurements)
+                                        {
+                                            newSpace.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement
+                                            {
+                                                Category = m.Category,
+                                                Description = m.Description,
+                                                Width = m.Width,
+                                                Length = m.Length,
+                                                Height = m.Height,
+                                                Quantity = m.Quantity,
+                                                Unit = m.Unit
+                                            });
+                                        }
+                                    }
 
+                                    if (srcSpace.Fixtures != null)
+                                    {
+                                        foreach (var f in srcSpace.Fixtures)
+                                        {
+                                            var newFixture = new GMK360.Core.Entities.SpaceFixture
+                                            {
+                                                Category = f.Category,
+                                                ItemName = f.ItemName,
+                                                Quantity = f.Quantity,
+                                                Unit = f.Unit,
+                                                StandardBrand = f.StandardBrand,
+                                                StandardModel = f.StandardModel,
+                                                SupplierId = f.SupplierId,
+                                                SupplierName = f.SupplierName,
+                                                TechnicalServiceId = f.TechnicalServiceId,
+                                                TechnicalServiceName = f.TechnicalServiceName,
+                                                MaintenanceNotes = f.MaintenanceNotes,
+                                                EstimatedPrice = f.EstimatedPrice,
+                                                TotalPrice = f.TotalPrice,
+                                                IsCustomizable = f.IsCustomizable,
+                                                WarrantyExpiryDate = f.WarrantyExpiryDate,
+                                                NextMaintenanceDate = f.NextMaintenanceDate,
+                                                Options = new List<GMK360.Core.Entities.MaterialOption>()
+                                            };
+
+                                            if (f.Options != null)
+                                            {
+                                                foreach (var opt in f.Options)
+                                                {
+                                                    newFixture.Options.Add(new GMK360.Core.Entities.MaterialOption
+                                                    {
+                                                        OptionName = opt.OptionName,
+                                                        PriceDifference = opt.PriceDifference,
+                                                        ImageUrl = opt.ImageUrl,
+                                                        IsStandard = opt.IsStandard
+                                                    });
+                                                }
+                                            }
+
+                                            newSpace.Fixtures.Add(newFixture);
+                                        }
+                                    }
+
+                                    _context.UnitSpaces.Add(newSpace);
+                                }
+                            }
+                        }
+                    }
+
+                    // Bağlantıları ve mahalleri kaydet
                     await _context.SaveChangesAsync();
-
                 }
-
             }
 
-
-
-            return RedirectToAction(nameof(ManageBlock), new { id = buildingId });
+            return RedirectToAction(nameof(ManageBlock), new { id = building.ParentBuildingId ?? buildingId });
 
         }
 
@@ -2022,13 +2475,37 @@ namespace GMK360.Web.Controllers
             return RedirectToAction(nameof(ManageBlock), new { id = redirectId });
         }
 
-        public async Task<IActionResult> EditBuildingUnit(int unitId, string DoorNumber, string OwnerName, string UnitStructure, double? GrossSquareMeters, string FacadeDirection, decimal? ListPrice, string ListingType, string SalesStatus, string AssignedAgent, string SalesStage)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EditBuildingUnit(int unitId, string DoorNumber, string OwnerName, string UnitStructure, double? GrossSquareMeters, string FacadeDirection, decimal? ListPrice, string ListingType, string SalesStatus, string AssignedAgent, string SalesStage, string? Category = null, int? ParentUnitId = null, string? OwnerUserId = null)
         {
             var unit = await _context.BuildingUnits.Include(u => u.Building).FirstOrDefaultAsync(u => u.Id == unitId);
             if (unit == null) return NotFound();
 
             unit.DoorNumber = string.IsNullOrWhiteSpace(DoorNumber) ? unit.DoorNumber : DoorNumber;
-            unit.OwnerName = string.IsNullOrWhiteSpace(OwnerName) ? null : OwnerName;
+            
+            // Mülk Sahibi Eşleştirmesi
+            if (!string.IsNullOrWhiteSpace(OwnerUserId) && OwnerUserId != "__CUSTOM__")
+            {
+                unit.OwnerUserId = OwnerUserId;
+                var ownerUser = await _userManager.FindByIdAsync(OwnerUserId);
+                if (ownerUser != null)
+                {
+                    unit.OwnerName = $"{ownerUser.FirstName} {ownerUser.LastName}".Trim();
+                    unit.OwnerPhone = ownerUser.PhoneNumber;
+                    unit.OwnerEmail = ownerUser.Email;
+                }
+            }
+            else
+            {
+                unit.OwnerUserId = null;
+                unit.OwnerName = string.IsNullOrWhiteSpace(OwnerName) ? null : OwnerName;
+                if (string.IsNullOrWhiteSpace(unit.OwnerName))
+                {
+                    unit.OwnerPhone = null;
+                    unit.OwnerEmail = null;
+                }
+            }
             
             if (!string.IsNullOrWhiteSpace(UnitStructure))
             {
@@ -2048,10 +2525,250 @@ namespace GMK360.Web.Controllers
             unit.AssignedAgent = string.IsNullOrWhiteSpace(AssignedAgent) ? null : AssignedAgent;
             unit.SalesStage = string.IsNullOrWhiteSpace(SalesStage) ? null : SalesStage;
 
+            if (!string.IsNullOrWhiteSpace(Category))
+            {
+                unit.Category = Category;
+            }
+            if (ParentUnitId.HasValue)
+            {
+                unit.ParentUnitId = ParentUnitId.Value > 0 ? ParentUnitId.Value : null;
+            }
+
             await _context.SaveChangesAsync();
 
             return RedirectToAction(nameof(ManageBlock), new { id = unit.Building.ParentBuildingId ?? unit.BuildingId });
+        }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UploadFloorPlan(int buildingId, int floorLevel, IFormFile? planFile)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var building = await _context.Buildings
+                .Include(b => b.ConstructionProject)
+                .FirstOrDefaultAsync(b => b.Id == buildingId);
+            if (building == null) return NotFound();
+
+            if (planFile != null && planFile.Length > 0)
+            {
+                var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", $"Agency_{agencyId}", $"Project_{building.ConstructionProjectId}", "floorplans");
+                if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
+
+                var ext = Path.GetExtension(planFile.FileName).ToLowerInvariant();
+                var uniqueName = $"floorplan_b{buildingId}_f{floorLevel}_{Guid.NewGuid().ToString("N").Substring(0, 8)}{ext}";
+                var filePath = Path.Combine(uploadsFolder, uniqueName);
+
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await planFile.CopyToAsync(stream);
+                }
+
+                var docUrl = $"/uploads/Agency_{agencyId}/Project_{building.ConstructionProjectId}/floorplans/{uniqueName}";
+                string floorEntityType = "BuildingFloor_" + buildingId;
+
+                var existingDoc = await _context.DmsDocuments
+                    .FirstOrDefaultAsync(d => d.EntityType == floorEntityType && d.EntityId == floorLevel);
+
+                if (existingDoc != null)
+                {
+                    existingDoc.DocumentUrl = docUrl;
+                    existingDoc.FileExtension = ext;
+                    existingDoc.FileSizeBytes = planFile.Length;
+                    existingDoc.UploadDate = DateTime.UtcNow;
+                    _context.Update(existingDoc);
+                }
+                else
+                {
+                    var dmsDoc = new GMK360.Core.Entities.DmsDocument
+                    {
+                        EntityType = floorEntityType,
+                        EntityId = floorLevel,
+                        Title = $"{building.BlockName} - Kat {floorLevel} Kat Planı",
+                        DocumentUrl = docUrl,
+                        FileExtension = ext,
+                        FileSizeBytes = planFile.Length,
+                        UploadDate = DateTime.UtcNow,
+                        UploadedByUserId = _userManager.GetUserId(User) ?? ""
+                    };
+                    _context.DmsDocuments.Add(dmsDoc);
+                }
+
+                var archive = new GMK360.Core.Entities.DocumentArchive
+                {
+                    AgencyId = agencyId.Value,
+                    ProjectId = building.ConstructionProjectId,
+                    Title = $"{building.BlockName} - Kat {floorLevel} Kat Planı / Çizimi",
+                    Category = "Çizimler",
+                    SourceModule = "Construction",
+                    DocumentUrl = docUrl,
+                    FileName = uniqueName,
+                    FileExtension = ext,
+                    Year = DateTime.Now.Year,
+                    UploadDate = DateTime.UtcNow,
+                    Status = "Tamamlandı"
+                };
+                _context.DocumentArchives.Add(archive);
+
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = $"{building.BlockName} - Kat {floorLevel} için plan başarıyla yüklendi.";
+            }
+
+            return RedirectToAction(nameof(ManageBlock), new { id = building.ParentBuildingId ?? building.Id });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CloneUnitSpaces(int sourceUnitId, List<int> targetUnitIds, bool overwrite = true)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Json(new { success = false, message = "Yetkisiz işlem." });
+
+            if (targetUnitIds == null || !targetUnitIds.Any())
+            {
+                return Json(new { success = false, message = "Lütfen en az bir hedef daire seçin." });
+            }
+
+            var sourceUnit = await _context.BuildingUnits
+                .Include(u => u.Building).ThenInclude(b => b.ConstructionProject)
+                .Include(u => u.Spaces).ThenInclude(s => s.Measurements)
+                .Include(u => u.Spaces).ThenInclude(s => s.Fixtures).ThenInclude(f => f.Options)
+                .FirstOrDefaultAsync(u => u.Id == sourceUnitId);
+
+            if (sourceUnit == null)
+            {
+                return Json(new { success = false, message = "Kaynak daire bulunamadı." });
+            }
+
+            if (!User.IsInRole("Admin") && sourceUnit.Building?.ConstructionProject?.AgencyId != agencyId)
+            {
+                return Json(new { success = false, message = "Bu projede yetkiniz yok." });
+            }
+
+            var targetUnits = await _context.BuildingUnits
+                .Include(u => u.Spaces).ThenInclude(s => s.Measurements)
+                .Include(u => u.Spaces).ThenInclude(s => s.Fixtures).ThenInclude(f => f.Options)
+                .Where(u => targetUnitIds.Contains(u.Id))
+                .ToListAsync();
+
+            int clonedUnitsCount = 0;
+            int clonedSpacesCount = 0;
+
+            foreach (var target in targetUnits)
+            {
+                if (target.Id == sourceUnit.Id) continue;
+
+                if (overwrite && target.Spaces != null && target.Spaces.Any())
+                {
+                    foreach (var sp in target.Spaces.ToList())
+                    {
+                        if (sp.Measurements != null && sp.Measurements.Any())
+                        {
+                            _context.RemoveRange(sp.Measurements);
+                        }
+                        if (sp.Fixtures != null && sp.Fixtures.Any())
+                        {
+                            foreach (var fix in sp.Fixtures)
+                            {
+                                if (fix.Options != null && fix.Options.Any())
+                                {
+                                    _context.RemoveRange(fix.Options);
+                                }
+                            }
+                            _context.RemoveRange(sp.Fixtures);
+                        }
+                        _context.Remove(sp);
+                    }
+                }
+
+                foreach (var srcSpace in sourceUnit.Spaces)
+                {
+                    var newSpace = new GMK360.Core.Entities.UnitSpace
+                    {
+                        BuildingUnitId = target.Id,
+                        Name = srcSpace.Name,
+                        Type = srcSpace.Type,
+                        SquareMeters = srcSpace.SquareMeters,
+                        PlanImagePath = srcSpace.PlanImagePath,
+                        Description = srcSpace.Description,
+                        Measurements = new List<GMK360.Core.Entities.SpaceMeasurement>(),
+                        Fixtures = new List<GMK360.Core.Entities.SpaceFixture>()
+                    };
+
+                    if (srcSpace.Measurements != null)
+                    {
+                        foreach (var m in srcSpace.Measurements)
+                        {
+                            newSpace.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement
+                            {
+                                Category = m.Category,
+                                Description = m.Description,
+                                Width = m.Width,
+                                Length = m.Length,
+                                Height = m.Height,
+                                Quantity = m.Quantity,
+                                Unit = m.Unit
+                            });
+                        }
+                    }
+
+                    if (srcSpace.Fixtures != null)
+                    {
+                        foreach (var f in srcSpace.Fixtures)
+                        {
+                            var newFixture = new GMK360.Core.Entities.SpaceFixture
+                            {
+                                Category = f.Category,
+                                ItemName = f.ItemName,
+                                Quantity = f.Quantity,
+                                Unit = f.Unit,
+                                StandardBrand = f.StandardBrand,
+                                StandardModel = f.StandardModel,
+                                SupplierId = f.SupplierId,
+                                SupplierName = f.SupplierName,
+                                TechnicalServiceId = f.TechnicalServiceId,
+                                TechnicalServiceName = f.TechnicalServiceName,
+                                MaintenanceNotes = f.MaintenanceNotes,
+                                EstimatedPrice = f.EstimatedPrice,
+                                TotalPrice = f.TotalPrice,
+                                IsCustomizable = f.IsCustomizable,
+                                WarrantyExpiryDate = f.WarrantyExpiryDate,
+                                NextMaintenanceDate = f.NextMaintenanceDate,
+                                Options = new List<GMK360.Core.Entities.MaterialOption>()
+                            };
+
+                            if (f.Options != null)
+                            {
+                                foreach (var opt in f.Options)
+                                {
+                                    newFixture.Options.Add(new GMK360.Core.Entities.MaterialOption
+                                    {
+                                        OptionName = opt.OptionName,
+                                        PriceDifference = opt.PriceDifference,
+                                        ImageUrl = opt.ImageUrl,
+                                        IsStandard = opt.IsStandard
+                                    });
+                                }
+                            }
+
+                            newSpace.Fixtures.Add(newFixture);
+                        }
+                    }
+
+                    _context.Add(newSpace);
+                    clonedSpacesCount++;
+                }
+
+                clonedUnitsCount++;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Json(new { 
+                success = true, 
+                message = $"{clonedUnitsCount} adet hedef daireye toplam {clonedSpacesCount} mahal ve tüm ölçü/demirbaşlar başarıyla aktarıldı!" 
+            });
         }
 
 [HttpPost]
@@ -2672,43 +3389,34 @@ namespace GMK360.Web.Controllers
 
 
         public async Task<IActionResult> ManageUnitSpaces(int id)
-
         {
-
             var agencyId = await GetUserAgencyIdAsync();
-
             if (agencyId == null) return Unauthorized();
 
-
-
             var unit = await _context.BuildingUnits
-
                 .Include(u => u.Building)
-
                     .ThenInclude(b => b.ConstructionProject)
-
                 .Include(u => u.Spaces)
-
                 .FirstOrDefaultAsync(u => u.Id == id);
-
-
 
             if (unit == null) return NotFound();
 
-
-
             if (!User.IsInRole("Admin") && unit.Building.ConstructionProject.AgencyId != agencyId)
-
             {
-
                 return Unauthorized();
-
             }
 
+            var projectUnits = await _context.BuildingUnits
+                .Include(u => u.Building)
+                .Where(u => u.Building.ConstructionProjectId == unit.Building.ConstructionProjectId && u.Id != id)
+                .OrderBy(u => u.Building.BlockName)
+                .ThenBy(u => u.FloorLevel)
+                .ThenBy(u => u.DoorNumber)
+                .ToListAsync();
 
+            ViewBag.ProjectUnits = projectUnits;
 
             return View(unit);
-
         }
 
 
@@ -3258,33 +3966,27 @@ namespace GMK360.Web.Controllers
 
 
         [HttpPost]
-
         [ValidateAntiForgeryToken]
-
         public async Task<IActionResult> DeleteSpaceFixture(int id)
-
         {
-
             var agencyId = await GetUserAgencyIdAsync();
-
             if (agencyId == null) return Unauthorized();
 
-
-
-            var fixture = await _context.SpaceFixtures.FindAsync(id);
+            var fixture = await _context.SpaceFixtures
+                .Include(f => f.Options)
+                .FirstOrDefaultAsync(f => f.Id == id);
 
             if (fixture == null) return NotFound();
 
-
+            if (fixture.Options != null && fixture.Options.Any())
+            {
+                _context.RemoveRange(fixture.Options);
+            }
 
             _context.SpaceFixtures.Remove(fixture);
-
             await _context.SaveChangesAsync();
 
-
-
-            return Ok();
-
+            return Ok(new { success = true });
         }
 
 
@@ -3352,123 +4054,360 @@ namespace GMK360.Web.Controllers
 
 
             var fixtures = await _context.SpaceFixtures
-
                 .Include(f => f.Supplier)
-
                 .Include(f => f.TechnicalService)
-
+                .Include(f => f.Options)
                 .Where(f => f.UnitSpaceId == spaceId)
-
                 .Select(f => new {
-
                     id = f.Id,
-
                     itemName = f.ItemName,
-
                     category = f.Category,
-
                     quantity = f.Quantity,
-
                     unit = f.Unit,
-
+                    standardBrand = f.StandardBrand,
+                    standardModel = f.StandardModel,
                     supplierName = f.SupplierId != null ? f.Supplier.BusinessName : f.SupplierName,
-
                     technicalServiceName = f.TechnicalServiceId != null ? f.TechnicalService.BusinessName : f.TechnicalServiceName,
-
                     supplierId = f.SupplierId,
-
                     technicalServiceId = f.TechnicalServiceId,
-
                     warrantyExpiryDate = f.WarrantyExpiryDate,
-
+                    nextMaintenanceDate = f.NextMaintenanceDate,
                     maintenanceNotes = f.MaintenanceNotes,
-
-                    isCustomizable = f.IsCustomizable
-
+                    estimatedPrice = f.EstimatedPrice,
+                    totalPrice = f.TotalPrice,
+                    isCustomizable = f.IsCustomizable,
+                    options = f.Options.Select(o => new {
+                        id = o.Id,
+                        optionName = o.OptionName,
+                        priceDifference = o.PriceDifference,
+                        imageUrl = o.ImageUrl,
+                        isStandard = o.IsStandard
+                    }).ToList()
                 })
-
                 .ToListAsync();
 
-
-
             return Json(fixtures);
-
         }
 
-
-
         [HttpPost]
-
         [ValidateAntiForgeryToken]
-
-        public async Task<IActionResult> AddSpaceFixture(int spaceId, string itemName, string category, double quantity, string unit, string supplierName, string technicalServiceName, string maintenanceNotes, bool isCustomizable = false)
-
+        public async Task<IActionResult> AddSpaceFixture(
+            int spaceId, 
+            string itemName, 
+            string category, 
+            double quantity, 
+            string unit, 
+            string supplierName, 
+            string technicalServiceName, 
+            string maintenanceNotes, 
+            bool isCustomizable = false, 
+            string? standardBrand = null, 
+            string? standardModel = null, 
+            decimal? estimatedPrice = null, 
+            decimal? totalPrice = null,
+            DateTime? warrantyExpiryDate = null,
+            DateTime? nextMaintenanceDate = null)
         {
-
             var agencyId = await GetUserAgencyIdAsync();
-
             if (agencyId == null) return Unauthorized();
 
-
-
             var space = await _context.UnitSpaces
-
                 .Include(s => s.BuildingUnit)
-
                     .ThenInclude(u => u.Building)
-
                         .ThenInclude(b => b.ConstructionProject)
-
                 .FirstOrDefaultAsync(s => s.Id == spaceId);
 
-
-
             if (space == null || (!User.IsInRole("Admin") && space.BuildingUnit.Building.ConstructionProject.AgencyId != agencyId))
-
                 return Unauthorized();
 
-
-
-            // Check if supplier is registered (Shadow / CRM Logic) - for now just saving names
-
-            // Later we will implement full Shadow Account creation here if needed.
-
-            
-
             var fixture = new GMK360.Core.Entities.SpaceFixture
-
             {
-
                 UnitSpaceId = spaceId,
-
                 ItemName = itemName,
-
                 Category = category,
-
                 Quantity = quantity,
-
                 Unit = unit,
-
+                StandardBrand = standardBrand,
+                StandardModel = standardModel,
+                EstimatedPrice = estimatedPrice,
+                TotalPrice = totalPrice,
                 SupplierName = supplierName,
-
                 TechnicalServiceName = technicalServiceName,
-
                 MaintenanceNotes = maintenanceNotes,
-
+                WarrantyExpiryDate = warrantyExpiryDate,
+                NextMaintenanceDate = nextMaintenanceDate,
                 IsCustomizable = isCustomizable
-
             };
 
-
-
             _context.SpaceFixtures.Add(fixture);
-
             await _context.SaveChangesAsync();
 
-
-
             return RedirectToAction(nameof(ManageUnitSpaces), new { id = space.BuildingUnitId });
+        }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddCommonFixturesTemplate(int spaceId, string templateType)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var space = await _context.UnitSpaces
+                .Include(s => s.BuildingUnit)
+                    .ThenInclude(u => u.Building)
+                        .ThenInclude(b => b.ConstructionProject)
+                .FirstOrDefaultAsync(s => s.Id == spaceId);
+
+            if (space == null || (!User.IsInRole("Admin") && space.BuildingUnit.Building.ConstructionProject.AgencyId != agencyId))
+                return Unauthorized();
+
+            var fixturesToAdd = new List<GMK360.Core.Entities.SpaceFixture>();
+
+            if (templateType == "Su Deposu" || templateType.Contains("Su Deposu"))
+            {
+                fixturesToAdd.Add(new GMK360.Core.Entities.SpaceFixture
+                {
+                    UnitSpaceId = spaceId,
+                    ItemName = "Paslanmaz Çelik Modüler Su Deposu",
+                    Category = "Tesisat",
+                    Quantity = 1,
+                    Unit = "Adet",
+                    StandardBrand = "Standart",
+                    MaintenanceNotes = "Su Deposu Odası - Yıllık klorlama ve temizlik",
+                    IsCustomizable = false
+                });
+                fixturesToAdd.Add(new GMK360.Core.Entities.SpaceFixture
+                {
+                    UnitSpaceId = spaceId,
+                    ItemName = "Frekans Kontrollü Çift Pompalı Hidrofor Grubu",
+                    Category = "Tesisat",
+                    Quantity = 1,
+                    Unit = "Set",
+                    StandardBrand = "Wilo / Grundfos",
+                    MaintenanceNotes = "Hidrofor Kaidesi - 6 Aylık membran ve basınç kontrolü",
+                    IsCustomizable = false
+                });
+                fixturesToAdd.Add(new GMK360.Core.Entities.SpaceFixture
+                {
+                    UnitSpaceId = spaceId,
+                    ItemName = "Otomatik Klorlama ve Dozaj Ünitesi",
+                    Category = "Tesisat",
+                    Quantity = 1,
+                    Unit = "Adet",
+                    MaintenanceNotes = "Dozaj Hattı - Aylık klor seviye kontrolü",
+                    IsCustomizable = false
+                });
+                fixturesToAdd.Add(new GMK360.Core.Entities.SpaceFixture
+                {
+                    UnitSpaceId = spaceId,
+                    ItemName = "Otomatik Şamandıralı Dalgıç Drenaj Pompası",
+                    Category = "Tesisat",
+                    Quantity = 1,
+                    Unit = "Adet",
+                    MaintenanceNotes = "Drenaj Çukuru - 6 Aylık flatör kontrolü",
+                    IsCustomizable = false
+                });
+            }
+            else if (templateType == "Sığınak" || templateType.Contains("Sığınak"))
+            {
+                fixturesToAdd.Add(new GMK360.Core.Entities.SpaceFixture
+                {
+                    UnitSpaceId = spaceId,
+                    ItemName = "Mekanik Sığınak Havalandırma Cihazı & Radyoaktif Filtre",
+                    Category = "Tesisat",
+                    Quantity = 1,
+                    Unit = "Adet",
+                    MaintenanceNotes = "Sığınak Havalandırma Şaftı - Yıllık filtre testi",
+                    IsCustomizable = false
+                });
+                fixturesToAdd.Add(new GMK360.Core.Entities.SpaceFixture
+                {
+                    UnitSpaceId = spaceId,
+                    ItemName = "Kuru Kimyevi Tozlu Yangın Söndürme Tüpü (6 kg ABC)",
+                    Category = "Diğer",
+                    Quantity = 2,
+                    Unit = "Adet",
+                    MaintenanceNotes = "Sığınak Duvar Askısı - Yıllık dolum kontrolü",
+                    IsCustomizable = false
+                });
+                fixturesToAdd.Add(new GMK360.Core.Entities.SpaceFixture
+                {
+                    UnitSpaceId = spaceId,
+                    ItemName = "Acil Kaçış Yönlendirme ve Aydınlatma Kiti (Akü Destekli)",
+                    Category = "Elektrik",
+                    Quantity = 2,
+                    Unit = "Adet",
+                    MaintenanceNotes = "Çıkış Kapısı Üzeri - 6 Aylık akü testi",
+                    IsCustomizable = false
+                });
+                fixturesToAdd.Add(new GMK360.Core.Entities.SpaceFixture
+                {
+                    UnitSpaceId = spaceId,
+                    ItemName = "Acil Durum İlk Yardım Dolabı ve Katlanır Sedye",
+                    Category = "Diğer",
+                    Quantity = 1,
+                    Unit = "Set",
+                    MaintenanceNotes = "Sığınak Duvarı - 6 Aylık malzeme miat kontrolü",
+                    IsCustomizable = false
+                });
+            }
+            else if (templateType == "Jeneratör" || templateType.Contains("Jeneratör"))
+            {
+                fixturesToAdd.Add(new GMK360.Core.Entities.SpaceFixture
+                {
+                    UnitSpaceId = spaceId,
+                    ItemName = "Otomatik Kabinli Dizel Jeneratör Grubu",
+                    Category = "Elektrik",
+                    Quantity = 1,
+                    Unit = "Adet",
+                    StandardBrand = "Aksa / Teksan / Çukurova",
+                    MaintenanceNotes = "Jeneratör Kaidesi - 6 Aylık yağ ve filtre bakımı",
+                    IsCustomizable = false
+                });
+                fixturesToAdd.Add(new GMK360.Core.Entities.SpaceFixture
+                {
+                    UnitSpaceId = spaceId,
+                    ItemName = "Otomatik Transfer Panosu (ATS / Şebeke-Jeneratör)",
+                    Category = "Elektrik",
+                    Quantity = 1,
+                    Unit = "Adet",
+                    MaintenanceNotes = "Ana Dağıtım Panosu Yanı - Yıllık kontaktör kontrolü",
+                    IsCustomizable = false
+                });
+                fixturesToAdd.Add(new GMK360.Core.Entities.SpaceFixture
+                {
+                    UnitSpaceId = spaceId,
+                    ItemName = "Kritik Susturuculu Egzoz Hattı ve Titreşim Kompansatörü",
+                    Category = "Tesisat",
+                    Quantity = 1,
+                    Unit = "Hat",
+                    MaintenanceNotes = "Egzoz Şaftı",
+                    IsCustomizable = false
+                });
+            }
+            else if (templateType == "Kazan Dairesi" || templateType.Contains("Kazan"))
+            {
+                fixturesToAdd.Add(new GMK360.Core.Entities.SpaceFixture
+                {
+                    UnitSpaceId = spaceId,
+                    ItemName = "Kaskad Doğalgazlı Yoğuşmalı Kazan",
+                    Category = "Tesisat",
+                    Quantity = 2,
+                    Unit = "Adet",
+                    StandardBrand = "Viessmann / Buderus / Vaillant",
+                    MaintenanceNotes = "Kazan Kaidesi - Yıllık brülör ve baca temizliği",
+                    IsCustomizable = false
+                });
+                fixturesToAdd.Add(new GMK360.Core.Entities.SpaceFixture
+                {
+                    UnitSpaceId = spaceId,
+                    ItemName = "Frekans Kontrollü Islak Rotorlu Sirkülasyon Pompaları",
+                    Category = "Tesisat",
+                    Quantity = 2,
+                    Unit = "Adet",
+                    MaintenanceNotes = "Isıtma Kollektörü Hattı - 6 Aylık sızdırmazlık kontrolü",
+                    IsCustomizable = false
+                });
+                fixturesToAdd.Add(new GMK360.Core.Entities.SpaceFixture
+                {
+                    UnitSpaceId = spaceId,
+                    ItemName = "Membranlı Kapalı Genleşme Deposu",
+                    Category = "Tesisat",
+                    Quantity = 1,
+                    Unit = "Adet",
+                    MaintenanceNotes = "Kazan Dairesi - 6 Aylık ön gaz basınç kontrolü",
+                    IsCustomizable = false
+                });
+                fixturesToAdd.Add(new GMK360.Core.Entities.SpaceFixture
+                {
+                    UnitSpaceId = spaceId,
+                    ItemName = "Gaz Kaçak Alarm Dedektörü ve Selenoid Emniyet Vanası",
+                    Category = "Tesisat",
+                    Quantity = 1,
+                    Unit = "Set",
+                    MaintenanceNotes = "Doğalgaz Giriş Hattı - 6 Aylık alarm testi",
+                    IsCustomizable = false
+                });
+            }
+
+            if (fixturesToAdd.Any())
+            {
+                _context.SpaceFixtures.AddRange(fixturesToAdd);
+                await _context.SaveChangesAsync();
+            }
+
+            return Json(new { success = true, count = fixturesToAdd.Count });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddFixtureOption(int fixtureId, string optionName, decimal? priceDifference, bool isStandard, IFormFile? optionImage)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var fixture = await _context.SpaceFixtures
+                .Include(f => f.UnitSpace)
+                    .ThenInclude(s => s.BuildingUnit)
+                        .ThenInclude(u => u.Building)
+                            .ThenInclude(b => b.ConstructionProject)
+                .FirstOrDefaultAsync(f => f.Id == fixtureId);
+
+            if (fixture == null || (!User.IsInRole("Admin") && fixture.UnitSpace.BuildingUnit.Building.ConstructionProject.AgencyId != agencyId))
+                return Json(new { success = false, message = "Yetkisiz işlem." });
+
+            string? imageUrl = null;
+            if (optionImage != null && optionImage.Length > 0)
+            {
+                var folder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", $"Agency_{agencyId}", "options");
+                if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+                var ext = Path.GetExtension(optionImage.FileName).ToLowerInvariant();
+                var fileName = $"opt_{fixtureId}_{Guid.NewGuid().ToString("N").Substring(0, 8)}{ext}";
+                var filePath = Path.Combine(folder, fileName);
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await optionImage.CopyToAsync(stream);
+                }
+                imageUrl = $"/uploads/Agency_{agencyId}/options/{fileName}";
+            }
+
+            var option = new GMK360.Core.Entities.MaterialOption
+            {
+                SpaceFixtureId = fixtureId,
+                OptionName = optionName,
+                PriceDifference = priceDifference ?? 0,
+                IsStandard = isStandard,
+                ImageUrl = imageUrl
+            };
+
+            _context.MaterialOptions.Add(option);
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true, message = "Seçenek başarıyla eklendi!", optionId = option.Id });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteFixtureOption(int optionId)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var option = await _context.MaterialOptions
+                .Include(o => o.SpaceFixture)
+                    .ThenInclude(f => f.UnitSpace)
+                        .ThenInclude(s => s.BuildingUnit)
+                            .ThenInclude(u => u.Building)
+                                .ThenInclude(b => b.ConstructionProject)
+                .FirstOrDefaultAsync(o => o.Id == optionId);
+
+            if (option == null || (!User.IsInRole("Admin") && option.SpaceFixture.UnitSpace.BuildingUnit.Building.ConstructionProject.AgencyId != agencyId))
+                return Json(new { success = false, message = "Yetkisiz işlem." });
+
+            _context.MaterialOptions.Remove(option);
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true });
         }
 
 
@@ -3738,12 +4677,25 @@ namespace GMK360.Web.Controllers
                     return RedirectToAction("Details", new { id = projectId });
                 }
 
-                var existingUser = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phone || (!string.IsNullOrEmpty(email) && u.Email == email));
+                string cleanPhone = (phone ?? "").Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "").Trim();
+                if (!cleanPhone.StartsWith("+90") && !cleanPhone.StartsWith("0")) cleanPhone = "0" + cleanPhone;
 
-                if (existingUser == null)
+                var existingUser = await _userManager.Users.FirstOrDefaultAsync(u => 
+                    u.PhoneNumber == cleanPhone || u.PhoneNumber == phone || (!string.IsNullOrEmpty(email) && u.Email == email));
+
+                if (existingUser != null)
                 {
-                    string cleanPhone = phone.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
-                    if (!cleanPhone.StartsWith("+90") && !cleanPhone.StartsWith("0")) cleanPhone = "0" + cleanPhone;
+                    string existingFullName = $"{existingUser.FirstName} {existingUser.LastName}".Trim();
+                    string inputFullName = $"{firstName} {lastName}".Trim();
+
+                    if (!string.Equals(existingFullName, inputFullName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        TempData["ErrorMessage"] = $"Girilen telefon numarası ({phone}), sistemde kayıtlı olan '{existingFullName}' kullanıcısına aittir! Yeni bir paydaş oluşturmak için lütfen paydaşa ait farklı bir telefon numarası giriniz.";
+                        return RedirectToAction("Details", new { id = projectId });
+                    }
+                }
+                else
+                {
                     
                     string generatedUserName = string.IsNullOrEmpty(email) ? cleanPhone : email;
                     string generatedEmail = string.IsNullOrEmpty(email) ? $"{cleanPhone}@gmk360.local" : email;
@@ -3754,18 +4706,38 @@ namespace GMK360.Web.Controllers
                         Email = generatedEmail,
                         FirstName = firstName,
                         LastName = lastName,
-                        PhoneNumber = phone,
+                        PhoneNumber = cleanPhone,
                         EmailConfirmed = false,
-                        PhoneNumberConfirmed = false
+                        PhoneNumberConfirmed = false,
+                        UserType = (role == 1) ? GMK360.Core.Entities.Identity.UserType.PropertyOwner : GMK360.Core.Entities.Identity.UserType.Individual
                     };
 
                     var result = await _userManager.CreateAsync(existingUser, "Shadow.User2026!");
                     if (!result.Succeeded)
                     {
-                        TempData["ErrorMessage"] = "GÃƒÆ’Ã‚Â¶lge kullanÃƒâ€Ã‚Â±cÃƒâ€Ã‚Â± oluÃƒâ€¦Ã…Â¸turulurken hata oluÃƒâ€¦Ã…Â¸tu.";
+                        string errs = string.Join(", ", result.Errors.Select(e => e.Description));
+                        TempData["ErrorMessage"] = $"Gölge kullanıcı oluşturulurken hata oluştu: {errs}";
                         return RedirectToAction("Details", new { id = projectId });
                     }
-                    await _userManager.AddToRoleAsync(existingUser, "Musteri");
+
+                    // Gölge kullanıcı rol ataması
+                    try
+                    {
+                        var roleManager = HttpContext.RequestServices.GetService<RoleManager<GMK360.Core.Entities.Identity.ApplicationRole>>();
+                        if (roleManager != null)
+                        {
+                            if (!await roleManager.RoleExistsAsync("Customer"))
+                            {
+                                await roleManager.CreateAsync(new GMK360.Core.Entities.Identity.ApplicationRole { Name = "Customer" });
+                            }
+                        }
+
+                        if (!await _userManager.IsInRoleAsync(existingUser, "Customer"))
+                        {
+                            await _userManager.AddToRoleAsync(existingUser, "Customer");
+                        }
+                    }
+                    catch { /* Rol ataması ana süreci engellemez */ }
                 }
 
                 var existingStakeholder = await _context.ProjectStakeholders
@@ -3779,24 +4751,49 @@ namespace GMK360.Web.Controllers
                         UserId = existingUser.Id,
                         Role = (GMK360.Core.Entities.Construction.StakeholderRole)role,
                         SharePercentage = (role == 1) ? sharePercentage : null,
-                        Notes = "Firma tarafÃƒâ€Ã‚Â±ndan davet edildi (GÃƒÆ’Ã‚Â¶lge Onay Bekliyor)"
+                        Notes = "Firma tarafından davet edildi (Gölge Onay Bekliyor)",
+                        CreatedAt = DateTime.UtcNow,
+                        IsDeleted = false
                     };
                     
                     _context.ProjectStakeholders.Add(stakeholder);
                     await _context.SaveChangesAsync();
+
+                    try
+                    {
+                        var smsService = HttpContext.RequestServices.GetService<GMK360.Web.Services.Sms.ISmsService>();
+                        if (smsService != null)
+                        {
+                            string smsBody = $"Sayın {firstName} {lastName}, GMK360 inşaat projesine paydaş olarak eklendiniz. Sisteme giriş bilgileriniz: Kullanıcı: {existingUser.UserName} Şifre: Shadow.User2026!";
+                            await smsService.SmsGonderAsync(existingUser.PhoneNumber ?? phone, smsBody);
+                        }
+                    }
+                    catch { /* SMS hatası ana süreci engellemez */ }
                     
-                    TempData["SuccessMessage"] = $"{firstName} {lastName} projeye baÃƒâ€¦Ã…Â¸arÃƒâ€Ã‚Â±yla eklendi! Sisteme giriÃƒâ€¦Ã…Â¸ yapmasÃƒâ€Ã‚Â± iÃƒÆ’Ã‚Â§in SMS gÃƒÆ’Ã‚Â¶nderimi tetiklendi.";
+                    TempData["SuccessMessage"] = $"{firstName} {lastName} projeye başarıyla eklendi! (Gölge Kullanıcı: {existingUser.UserName} / Şifre: Shadow.User2026!)";
                 }
                 else
                 {
-                    TempData["ErrorMessage"] = "Bu kiÃƒâ€¦Ã…Â¸i zaten bu projenin paydaÃƒâ€¦Ã…Â¸Ãƒâ€Ã‚Â±!";
+                    if (existingStakeholder.IsDeleted)
+                    {
+                        existingStakeholder.IsDeleted = false;
+                        existingStakeholder.Role = (GMK360.Core.Entities.Construction.StakeholderRole)role;
+                        existingStakeholder.SharePercentage = (role == 1) ? sharePercentage : null;
+                        existingStakeholder.UpdatedAt = DateTime.UtcNow;
+                        await _context.SaveChangesAsync();
+                        TempData["SuccessMessage"] = $"{firstName} {lastName} projeye başarıyla yeniden dahil edildi!";
+                    }
+                    else
+                    {
+                        TempData["ErrorMessage"] = "Bu kişi zaten bu projenin paydaşı!";
+                    }
                 }
 
                 return RedirectToAction("Details", new { id = projectId });
             }
             catch (Exception ex)
             {
-                TempData["ErrorMessage"] = "Sistem HatasÃƒâ€Ã‚Â±: LÃƒÆ’Ã‚Â¼tfen bilgileri kontrol edin.";
+                TempData["ErrorMessage"] = "Sistem Hatası: " + ex.Message;
                 return RedirectToAction("Details", new { id = projectId });
             }
         }
@@ -3820,12 +4817,39 @@ namespace GMK360.Web.Controllers
                 
                 await _context.SaveChangesAsync();
                 
-                TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
+                TempData["SuccessMessage"] = "Paydaş bilgileri başarıyla güncellendi.";
                 return RedirectToAction("Details", new { id = projectId });
             }
             catch (System.Exception ex)
             {
-                TempData["ErrorMessage"] = "PaydaÃƒâ€¦Ã…Â¸ dÃƒÆ’Ã‚Â¼zenlenirken hata oluÃƒâ€¦Ã…Â¸tu: " + ex.Message;
+                TempData["ErrorMessage"] = "Paydaş düzenlenirken hata oluştu: " + ex.Message;
+                return projectId > 0 ? RedirectToAction("Details", new { id = projectId }) : RedirectToAction("Index");
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> DeleteStakeholder(int stakeholderId)
+        {
+            int projectId = 0;
+            try
+            {
+                var st = await _context.ProjectStakeholders.FirstOrDefaultAsync(s => s.Id == stakeholderId);
+                if (st == null)
+                {
+                    TempData["ErrorMessage"] = "Paydaş bulunamadı.";
+                    return RedirectToAction("Index");
+                }
+                
+                projectId = st.ProjectId;
+                st.IsDeleted = true;
+                await _context.SaveChangesAsync();
+                
+                TempData["SuccessMessage"] = "Paydaş projeden başarıyla kaldırıldı.";
+                return RedirectToAction("Details", new { id = projectId });
+            }
+            catch (System.Exception ex)
+            {
+                TempData["ErrorMessage"] = "Paydaş silinirken hata oluştu: " + ex.Message;
                 return projectId > 0 ? RedirectToAction("Details", new { id = projectId }) : RedirectToAction("Index");
             }
         }
@@ -3896,8 +4920,31 @@ namespace GMK360.Web.Controllers
             }
 
             // Fallback: If no location is set, just redirect to the details page with an alert
-            TempData["ErrorMessage"] = "Bu proje iin henüz bir konum/harita bilgisi girilmemi.";
+            TempData["ErrorMessage"] = "Bu proje için henüz bir konum/harita bilgisi girilmemiş.";
             return RedirectToAction("Details", new { id = id });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetLocationJson(int id)
+        {
+            var project = await _context.ConstructionProjects.FindAsync(id);
+            if (project == null) return NotFound();
+
+            string mapsUrl = !string.IsNullOrEmpty(project.GoogleMapsUrl)
+                ? project.GoogleMapsUrl
+                : (project.Latitude.HasValue && project.Longitude.HasValue
+                    ? $"https://www.google.com/maps/search/?api=1&query={project.Latitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)},{project.Longitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+                    : "");
+
+            return Json(new
+            {
+                id = project.Id,
+                name = project.Name,
+                address = project.Address ?? "Adres belirtilmemiş",
+                latitude = project.Latitude,
+                longitude = project.Longitude,
+                mapsUrl = mapsUrl
+            });
         }
 
         [HttpGet("ConstructionProject/Equipment/{id}")]
@@ -3955,5 +5002,18 @@ namespace GMK360.Web.Controllers
             TempData["SuccessMessage"] = "Kiralık araç talebi ve kullanım kaydı başarıyla eklendi!";
             return RedirectToAction("Equipment", new { id = projectId });
         }
-}
+    }
+
+    public class CreateSubProjectDto
+    {
+        public int ParentProjectId { get; set; }
+        public int? AmenityId { get; set; }
+        public string AmenityName { get; set; } = string.Empty;
+        public string? CustomProjectName { get; set; }
+        public string? Category { get; set; } // "SosyalDonati", "DisSaha_Peyzaj", "OzelImalat", "Altyapi", "Asansor", "Mekanik_Elektrik"
+        public string? ExecutionMode { get; set; } // "DxfEngineering" or "DocumentProcurement"
+        public bool HasDxf { get; set; }
+        public string? Description { get; set; }
+        public decimal? EstimatedBudget { get; set; }
+    }
 }

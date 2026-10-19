@@ -1,4 +1,4 @@
-﻿@model IEnumerable<GMK360.Core.Entities.B2b.B2bCompany>
+@model IEnumerable<GMK360.Core.Entities.B2b.B2bCompany>
 @{
     string listType = ViewBag.ListType as string ?? "firma";
     ViewData["Title"] = "GMK360 - " + ViewBag.PageTitle;
@@ -103,6 +103,11 @@
                                 <td class="px-4 py-3">
                                     <div class="fw-bold text-dark mb-1">@item.Name</div>
                                     <div class="small text-muted"><i class="ph-fill ph-identification-card me-1"></i>@(item.LegalStatus == GMK360.Core.Entities.B2b.LegalEntityType.Individual ? "Bireysel (Şahıs)" : "Tüzel Kişi (Şirket)")</div>
+                                    @if (item.Contacts != null && item.Contacts.Any())
+                                    {
+                                        var mainContact = item.Contacts.First();
+                                        <div class="small text-primary mt-1"><i class="bi bi-person me-1"></i>@mainContact.FullName - <i class="bi bi-telephone me-1"></i>@mainContact.MobilePhone</div>
+                                    }
                                 </td>
                                 <td class="px-4 py-3">
                                     <div class="d-flex flex-wrap gap-1">
@@ -153,18 +158,32 @@
                                     }
                                 </td>
                                 <td class="px-4 py-3 text-end">
-                                    @if(item.InvitationStatus == GMK360.Core.Entities.B2b.B2bInvitationStatus.Shadow)
-                                    {
-                                        <button class="btn btn-sm btn-primary fw-bold shadow-sm" onclick="alert('SMS/Mail Daveti Gönderilecek')">
-                                            <i class="bi bi-send-fill me-1"></i> Davet Gönder
-                                        </button>
-                                    }
-                                    else
-                                    {
-                                        <button class="btn btn-sm btn-light border text-muted">
-                                            <i class="bi bi-three-dots"></i>
-                                        </button>
-                                    }
+                                    <div class="d-flex justify-content-end align-items-center gap-1">
+                                        @if (item.Contacts != null && item.Contacts.Any() && !string.IsNullOrEmpty(item.Contacts.First().MobilePhone))
+                                        {
+                                            <a href="tel:@item.Contacts.First().MobilePhone" class="btn btn-sm btn-outline-success rounded-pill px-2" title="Ara: @item.Contacts.First().MobilePhone">
+                                                <i class="bi bi-telephone-fill"></i>
+                                            </a>
+                                            <a href="https://wa.me/@(item.Contacts.First().MobilePhone.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", ""))?text=@Uri.EscapeDataString($"Merhaba {item.Name}, GMK360 B2B Pazar Yeri yöneticisiyim. Profilinizi PRO'ya yükseltmek ve bölgenizdeki inşaat firmalarının ihalelerinden teklif almak ister misiniz?")" target="_blank" class="btn btn-sm btn-success rounded-pill px-2" title="WhatsApp ile İletişime Geç">
+                                                <i class="bi bi-whatsapp"></i>
+                                            </a>
+                                        }
+                                        @if(item.InvitationStatus != GMK360.Core.Entities.B2b.B2bInvitationStatus.Pro)
+                                        {
+                                            <form method="post" action="/Admin/UpgradeB2bToPro/@item.Id" class="m-0 p-0" onsubmit="return confirm('@item.Name firmasını PRO üyeliğe yükseltmek ve referans olan müteahhit patronuna 500 ₺ referans primi işlemek istiyor musunuz?');">
+                                                <input type="hidden" name="returnType" value="@listType" />
+                                                <button type="submit" class="btn btn-sm btn-warning text-dark fw-bold rounded-pill shadow-sm px-3" title="PRO Üyeliğe Yükselt & Patron Kazan-Kazan Payı Yaz">
+                                                    <i class="bi bi-star-fill text-dark me-1"></i> PRO Yap
+                                                </button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning bg-opacity-25 text-dark border border-warning px-3 py-2 fw-bold">
+                                                <i class="bi bi-patch-check-fill text-warning me-1"></i> PRO AKTİF
+                                            </span>
+                                        }
+                                    </div>
                                 </td>
                             </tr>
                         }

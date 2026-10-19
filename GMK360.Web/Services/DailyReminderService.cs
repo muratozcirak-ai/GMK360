@@ -40,7 +40,14 @@ namespace GMK360.Web.Services
 
                 // Normalde günde 1 kez (Örn: gece 02:00) çalışır.
                 // Test ortamı için 24 saat bekleteceğiz.
-                await Task.Delay(TimeSpan.FromHours(24), stoppingToken);
+                try
+                {
+                    await Task.Delay(TimeSpan.FromHours(24), stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
 
             _logger.LogInformation("DailyReminderService is stopping.");

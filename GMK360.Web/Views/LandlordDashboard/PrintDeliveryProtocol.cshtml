@@ -1,0 +1,260 @@
+@model GMK360.Core.Entities.BuildingUnit
+@{
+    Layout = null;
+    var fixtures = Model.Spaces?.SelectMany(s => s.Fixtures ?? new List<GMK360.Core.Entities.SpaceFixture>()).ToList() ?? new List<GMK360.Core.Entities.SpaceFixture>();
+}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Eşya, Demirbaş & Sayaç Teslim-Tesellüm Tutanağı - @Model.DoorNumber</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <style>
+        body {
+            background-color: #f8fafc;
+            font-family: 'Times New Roman', Times, serif;
+            color: #0f172a;
+            font-size: 13.5px;
+            line-height: 1.5;
+        }
+
+        .a4-page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 16mm 18mm;
+            margin: 20px auto;
+            background: #ffffff;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+
+        .no-print-bar {
+            background: #0f172a;
+            color: #ffffff;
+            padding: 12px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 999;
+            font-family: system-ui, sans-serif;
+        }
+
+        .header-title {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }
+
+        .header-title h4 {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 0;
+            text-transform: uppercase;
+        }
+
+        table.protocol-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-bottom: 14px;
+        }
+
+        table.protocol-table th, table.protocol-table td {
+            border: 1px solid #000;
+            padding: 6px 8px;
+            vertical-align: middle;
+        }
+
+        table.protocol-table th {
+            background-color: #f1f5f9;
+            font-weight: bold;
+        }
+
+        .sign-box {
+            margin-top: 30px;
+            display: flex;
+            justify-content: space-between;
+            text-align: center;
+        }
+
+        .sign-col {
+            width: 45%;
+        }
+
+        .sign-line {
+            margin-top: 40px;
+            border-top: 1px dashed #000;
+            padding-top: 5px;
+            font-weight: bold;
+        }
+
+        @@media print {
+            body { background: transparent; }
+            .no-print-bar { display: none !important; }
+            .a4-page {
+                box-shadow: none !important;
+                margin: 0 auto !important;
+                width: 100% !important;
+                padding: 12mm 15mm !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Yazdırma Kontrol Çubuğu -->
+    <div class="no-print-bar d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-3">
+            <a href="/Landlord/Dashboard" class="btn btn-sm btn-outline-light rounded-pill px-3">
+                <i class="bi bi-arrow-left me-1"></i> Mülk Portföyüne Dön
+            </a>
+            <span class="fw-bold">
+                <i class="bi bi-shield-check me-1 text-warning"></i> Daire İçi Eşya, Demirbaş & Sayaç Teslim-Tesellüm Tutanağı
+            </span>
+        </div>
+        <button onclick="window.print()" class="btn btn-warning btn-sm fw-bold rounded-pill px-4">
+            <i class="bi bi-printer-fill me-1"></i> Tutanağı Yazdır (Ctrl+P)
+        </button>
+    </div>
+
+    <!-- A4 RESMİ PROTOKOL SAYFASI -->
+    <div class="a4-page">
+        
+        <div class="header-title">
+            <h4>T.C. 6098 SAYILI TÜRK BORÇLAR KANUNU UYARINCA</h4>
+            <div class="fw-bold fs-6 mt-1">KONUT / ÇATIŞI İŞYERİ EŞYA, DEMİRBAŞ VE SAYAÇ TESLİM-TESELLÜM TUTANAĞI</div>
+            <small style="font-size: 11px; font-style: italic;">(Kira Sözleşmesinin Ayrılmaz Bir Eki Olarak 2 Nüsha Düzenlenmiştir)</small>
+        </div>
+
+        <div style="border: 1px solid #000; padding: 8px 12px; margin-bottom: 14px; font-size: 12.5px;">
+            <div class="row">
+                <div class="col-7">
+                    <strong>Kiralanan Mülk / Adres:</strong> @(Model.Building?.Name ?? "Kardelen Konutları"), @Model.DoorNumber, @(Model.Building?.StreetName ?? "Bağdat Cad."), No: @(Model.Building?.BuildingNumber ?? "44/A"), Kadıköy / İstanbul<br />
+                    <strong>Mülk Sahibi (Kiraya Veren):</strong> @(Model.OwnerName ?? "Murat Akın") (Tel: @(Model.OwnerPhone ?? "0533 100 2002"))<br />
+                    <strong>Kiracı (Teslim Alan):</strong> @(Model.TenantName ?? "Oğuz Şen") (Tel: @(Model.TenantPhone ?? "0542 999 0005"))
+                </div>
+                <div class="col-5">
+                    <strong>Teslim Tarihi:</strong> @DateTime.Today.ToString("dd MMMM yyyy, dddd")<br />
+                    <strong>Bölüm Niteliği:</strong> @(Model.RoomLayout ?? "3+1") @(Model.Category ?? "Daire") (@(Model.GrossSquareMeters ?? 125) m²)<br />
+                    <strong>Sözleşme Vadesi:</strong> 1 Yıl Süreli
+                </div>
+            </div>
+        </div>
+
+        <div class="fw-bold mb-1" style="font-size: 12.5px;">1. ELEKTRİK, SU VE DOĞALGAZ SAYAÇ İLK ENDEKS TESPİTİ:</div>
+        <table class="protocol-table">
+            <thead>
+                <tr>
+                    <th style="width: 25%;">Abonelik Türü</th>
+                    <th style="width: 30%;">Sayaç Seri / Tesisat No</th>
+                    <th style="width: 25%;">Anahtar Teslim Anındaki İlk Endeks</th>
+                    <th style="width: 20%;">Durum</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="fw-bold">Elektrik Sayacı</td>
+                    <td>00412891 / Tek Zamanlı</td>
+                    <td style="font-weight: bold; color: #1e3a8a;">1.450 kWh</td>
+                    <td>Mühürlü & Aktif</td>
+                </tr>
+                <tr>
+                    <td class="fw-bold">Su Sayacı</td>
+                    <td>082194 / İSKİ Şebeke</td>
+                    <td style="font-weight: bold; color: #1e3a8a;">320 m³</td>
+                    <td>Basınç Normal</td>
+                </tr>
+                <tr>
+                    <td class="fw-bold">Doğalgaz Sayacı</td>
+                    <td>009812 / İGDAŞ Mekanik</td>
+                    <td style="font-weight: bold; color: #1e3a8a;">850 m³</td>
+                    <td>Gaz Açık & Güvenli</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="fw-bold mb-1 mt-3" style="font-size: 12.5px;">2. DAİRE İÇİNDE BULUNAN SABİT VE HAREKETLİ DEMİRBAŞLAR:</div>
+        <table class="protocol-table">
+            <thead>
+                <tr>
+                    <th style="width: 5%;">No</th>
+                    <th style="width: 30%;">Demirbaş & Cihaz Tanımı</th>
+                    <th style="width: 25%;">Marka / Model / Seri No</th>
+                    <th style="width: 12%; text-align: center;">Miktar</th>
+                    <th style="width: 28%;">Fiziksel & Çalışma Durumu</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (fixtures.Any())
+                {
+                    int fixRow = 1;
+                    foreach (var f in fixtures)
+                    {
+                        <tr>
+                            <td style="text-align: center;">@(fixRow++)</td>
+                            <td class="fw-bold">@f.ItemName</td>
+                            <td>@(f.StandardBrand ?? "-") @(f.StandardModel ?? "")</td>
+                            <td style="text-align: center;">1 Adet</td>
+                            <td>@(f.MaintenanceNotes ?? "Çalışır vaziyette, hasarsız teslim edildi.")</td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td style="text-align: center;">1</td>
+                        <td class="fw-bold">Yoğuşmalı Kombi & Oda Termostatı</td>
+                        <td>Demirdöküm Nitromix P24 (Seri: 99182)</td>
+                        <td style="text-align: center;">1 Adet</td>
+                        <td>Yıllık bakımı yapıldı, petekler sıcak çalışıyor.</td>
+                    </tr>
+                    <tr>
+                        <td style="text-align: center;">2</td>
+                        <td class="fw-bold">Inverter Split Klima & Kumanda</td>
+                        <td>Daikin 12.000 BTU Sensira</td>
+                        <td style="text-align: center;">1 Adet</td>
+                        <td>Gaz basıncı tam, filtreler temiz, kumanda çalışıyor.</td>
+                    </tr>
+                    <tr>
+                        <td style="text-align: center;">3</td>
+                        <td class="fw-bold">3'lü Ankastre Mutfak Seti</td>
+                        <td>Siemens iQ300 (Ocak, Fırın, Davlumbaz)</td>
+                        <td style="text-align: center;">1 Set</td>
+                        <td>Tüm ocak gözleri, fırın tepsileri eksiksiz teslim edildi.</td>
+                    </tr>
+                }
+                <tr>
+                    <td style="text-align: center;">*</td>
+                    <td class="fw-bold">Anahtar ve Kumandalar</td>
+                    <td>Kale Kilit Yüksek Güvenlikli</td>
+                    <td style="text-align: center;">4 Adet</td>
+                    <td>2 Dış Kapı, 1 Posta Kutusu, 1 Otopark Kumandası</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div style="font-size: 11px; text-align: justify; margin-top: 15px; border-top: 1px solid #000; padding-top: 8px;">
+            <strong>TESLİM VE KABUL BEYANI:</strong> Yukarıda dökümü yapılan bağımsız bölüm, sayaç endeksleri ve demirbaş eşyalar, 
+            kiracı tarafından bizzat yerinde görülüp test edilerek tam, eksiksiz, temiz ve faal vaziyette teslim alınmıştır. Kiracı, tahliye anında 
+            aynı demirbaşları olağan kullanım yıpranması haricinde çalışır ve hasarsız olarak iade etmekle yükümlüdür.
+        </div>
+
+        <div class="sign-box">
+            <div class="sign-col">
+                <div class="fw-bold">KİRAYA VEREN (MÜLK SAHİBİ)</div>
+                <div>@(Model.OwnerName ?? "Murat Akın")</div>
+                <div class="sign-line">İmza</div>
+            </div>
+            <div class="sign-col">
+                <div class="fw-bold">TESLİM ALAN (KİRACI)</div>
+                <div>@(Model.TenantName ?? "Oğuz Şen")</div>
+                <div class="sign-line">İmza</div>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>

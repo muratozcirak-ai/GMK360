@@ -1,15 +1,489 @@
+@model GMK360.Web.Models.DailyRentalWorkspaceViewModel
 @{
-    ViewData["Title"] = "GMK360 - Günlük Kiralama & Pansiyon";
+    ViewData["Title"] = "Günlük Kiralama & Butik İşletme Yönetimi";
     Layout = "~/Views/Shared/_Layout.cshtml";
 }
 
-<div class="container-fluid py-4 px-2 px-md-4 bg-light min-vh-100">
-    <div class="d-flex flex-column justify-content-center align-items-center text-center mt-5" style="min-height: 50vh;">
-        <i class="ph ph-bed text-muted opacity-25" style="font-size: 8rem;"></i>
-        <h2 class="fw-bold mt-4 text-dark">Kayıtlı Tesisiniz Bulunmuyor</h2>
-        <p class="text-muted w-50">Otel, pansiyon veya günlük kiralık dairelerinizi buradan yönetebilirsiniz. Henüz bir tesis eklemediniz.</p>
-        <button class="btn btn-primary btn-lg rounded-pill px-5 mt-3 shadow-sm" style="background-color: #8b5cf6; border-color: #8b5cf6;">
-            <i class="ph ph-plus-circle me-2"></i>Yeni Tesis Ekle
-        </button>
+<div class="container-fluid py-4 px-3 px-md-5 bg-light min-vh-100">
+    <!-- Üst Bildirimler (Başarı/Hata) -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-4 shadow-sm border-0 mb-4" role="alert">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-check-circle-fill fs-4 me-3 text-success"></i>
+                <div class="fw-bold">@TempData["SuccessMessage"]</div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-4 shadow-sm border-0 mb-4" role="alert">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-exclamation-triangle-fill fs-4 me-3 text-danger"></i>
+                <div class="fw-bold">@TempData["ErrorMessage"]</div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (!Model.HasFacility)
+    {
+        <!-- DURUM 1: SIFIR MOCKUP - HENÜZ TESİS YOK (ONBOARDING KARŞILAMA) -->
+        <div class="row justify-content-center py-5">
+            <div class="col-lg-8 col-xl-7">
+                <div class="card border-0 shadow-sm rounded-4 text-center p-4 p-md-5 bg-white">
+                    <div class="mb-4">
+                        <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center p-4" style="width: 100px; height: 100px;">
+                            <i class="bi bi-houses-fill text-primary" style="font-size: 3rem;"></i>
+                        </div>
+                    </div>
+                    
+                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-3 py-2 rounded-pill fw-bold mb-3 d-inline-block mx-auto">
+                        <i class="bi bi-shield-check me-1"></i> KBS Emniyet Uyumlu Günlük Kiralama
+                    </span>
+
+                    <h2 class="fw-bold text-dark mb-3">Henüz Kayıtlı Bir Konaklama Tesisiniz Bulunmuyor</h2>
+                    
+                    <p class="text-muted fs-6 mb-4 px-md-3">
+                        Sistemimizde sahte veya uydurma verilerle vakit kaybetmezsiniz. 
+                        Elinizdeki apart, butik pansiyon, müstakil villa veya kiralık dairelerinizi 
+                        doğal işleyiş sırasına göre 2 dakikada tanımlayın:
+                    </p>
+
+                    <!-- Adım Sıralaması -->
+                    <div class="row g-3 text-start mb-4">
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded-3 bg-light h-100">
+                                <span class="badge bg-primary mb-2">1. ADIM</span>
+                                <h6 class="fw-bold text-dark mb-1">Varlık / Yeri Tanımla</h6>
+                                <p class="text-muted small mb-0">İşletmenizin veya mülkünüzün adını, türünü ve konumunu girin.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded-3 bg-light h-100">
+                                <span class="badge bg-success mb-2">2. ADIM</span>
+                                <h6 class="fw-bold text-dark mb-1">Oda / Daireleri Ekle</h6>
+                                <p class="text-muted small mb-0">Birimlerinizi (1+1, 2+1, Oda 101 vb.), kişi kapasitesi ve gecelik fiyatlarını belirleyin.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded-3 bg-light h-100">
+                                <span class="badge bg-dark mb-2">3. ADIM</span>
+                                <h6 class="fw-bold text-dark mb-1">Gör ve Yönet</h6>
+                                <p class="text-muted small mb-0">Gerçek odalarınızı görün, anında rezervasyon alın ve KBS bildirimini tamamlayın.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap justify-content-center gap-3">
+                        <a href="/DailyRental/SetupWizard" class="btn btn-primary btn-lg rounded-pill px-5 fw-bold shadow">
+                            <i class="bi bi-magic me-2"></i> 0'dan Tesis & Oda Kurulum Sihirbazını Başlat &rarr;
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- DURUM 2: KULLANICININ GERÇEK TESİSİ VE ODALARI (CANLI YÖNETİM MASASI) -->
+        
+        <!-- Başlık ve Hızlı Aksiyonlar -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+            <div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-1 rounded-pill fw-bold">
+                        <i class="bi bi-building-check me-1"></i> @Model.FacilityType
+                    </span>
+                    @if (!string.IsNullOrEmpty(Model.KbsFacilityCode))
+                    {
+                        <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 px-3 py-1 rounded-pill fw-bold">
+                            <i class="bi bi-shield-check me-1"></i> KBS Kod: @Model.KbsFacilityCode
+                        </span>
+                    }
+                </div>
+                <h2 class="fw-bold text-dark mt-2 mb-1">
+                    <i class="bi bi-houses text-primary me-2"></i> @Model.FacilityName
+                </h2>
+                <p class="text-muted small mb-0">
+                    <i class="bi bi-geo-alt-fill text-danger me-1"></i> @Model.Address &nbsp;|&nbsp;
+                    <i class="bi bi-clock me-1"></i> Giriş: @Model.CheckInTime - Çıkış: @Model.CheckOutTime
+                </p>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2">
+                <a href="/DailyRentalAgenda/Index" class="btn btn-outline-primary fw-bold rounded-pill px-4 shadow-sm">
+                    <i class="bi bi-calendar-range me-1"></i> Rezervasyon Ajandası / Takvim
+                </a>
+                <button type="button" class="btn btn-outline-success fw-bold rounded-pill px-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#addUnitModal">
+                    <i class="bi bi-plus-circle me-1"></i> + Yeni Daire / Oda Ekle
+                </button>
+                <a href="/DailyRental/SetupWizard" class="btn btn-outline-secondary rounded-pill px-3" title="Tesis Ayarları">
+                    <i class="bi bi-gear me-1"></i> Tesis Ayarları
+                </a>
+            </div>
+        </div>
+
+        <!-- Gerçek Metrik Kartları (Mock Değil) -->
+        <div class="row g-3 mb-4">
+            <div class="col-xl-3 col-md-6">
+                <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 me-3 d-flex align-items-center justify-content-center" style="width: 56px; height: 56px;">
+                            <i class="bi bi-door-open fs-3"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted small fw-bold text-uppercase">Tanımlı Birimler</span>
+                            <h3 class="fw-bold mb-0 text-dark">@Model.TotalUnitsCount <span class="fs-6 text-muted fw-normal">Oda / Daire</span></h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+                <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-success bg-opacity-10 text-success rounded-circle p-3 me-3 d-flex align-items-center justify-content-center" style="width: 56px; height: 56px;">
+                            <i class="bi bi-check2-circle fs-3"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted small fw-bold text-uppercase">Müsait Odalar</span>
+                            <h3 class="fw-bold mb-0 text-success">@Model.AvailableUnitsCount <span class="fs-6 text-muted fw-normal">Birim Hazır</span></h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+                <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-danger bg-opacity-10 text-danger rounded-circle p-3 me-3 d-flex align-items-center justify-content-center" style="width: 56px; height: 56px;">
+                            <i class="bi bi-person-fill-check fs-3"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted small fw-bold text-uppercase">Konaklayan / Dolu</span>
+                            <h3 class="fw-bold mb-0 text-danger">@Model.OccupiedUnitsCount <span class="fs-6 text-muted fw-normal">Birim Dolu</span></h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+                <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-warning bg-opacity-10 text-warning rounded-circle p-3 me-3 d-flex align-items-center justify-content-center" style="width: 56px; height: 56px;">
+                            <i class="bi bi-shield-lock fs-3"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted small fw-bold text-uppercase">KBS Bildirim Durumu</span>
+                            @if (!string.IsNullOrEmpty(Model.KbsFacilityCode))
+                            {
+                                <h5 class="fw-bold mb-0 text-success"><i class="bi bi-check-all"></i> Emniyet Aktif</h5>
+                            }
+                            else
+                            {
+                                <h5 class="fw-bold mb-0 text-warning"><i class="bi bi-info-circle"></i> Kod Bekleniyor</h5>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- BÖLÜM: Oda ve Daire Yönetim Masası (Kullanıcının Gerçek Odaları) -->
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-header bg-white border-0 pt-4 px-4 pb-0 d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="fw-bold text-dark mb-0">
+                        <i class="bi bi-grid text-primary me-2"></i> Tanımlı Oda ve Daireleriniz (@Model.Units.Count)
+                    </h5>
+                    <p class="text-muted small mb-0">Her birimin anlık durumunu görebilir, gecelik fiyatını inceleyebilir ve tek tıkla rezervasyon açabilirsiniz.</p>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill fw-bold" data-bs-toggle="modal" data-bs-target="#addUnitModal">
+                    <i class="bi bi-plus-lg me-1"></i> Yeni Birim Ekle
+                </button>
+            </div>
+            <div class="card-body p-4">
+                <div class="row g-3">
+                    @foreach (var unit in Model.Units)
+                    {
+                        <div class="col-xl-4 col-md-6">
+                            <div class="card border rounded-4 h-100 p-3 bg-white shadow-none transition-all">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <h5 class="fw-bold text-dark mb-0">@unit.UnitName</h5>
+                                        <small class="text-muted">
+                                            <i class="bi bi-layout-split me-1"></i> @unit.RoomLayout &nbsp;•&nbsp; 
+                                            <i class="bi bi-people me-1"></i> @unit.Capacity Kişilik
+                                        </small>
+                                    </div>
+                                    <span class="badge @unit.StatusBadgeClass rounded-pill px-3 py-2 fw-bold">
+                                        @unit.StatusText
+                                    </span>
+                                </div>
+
+                                <div class="bg-light p-2 rounded-3 my-2 text-center">
+                                    <span class="text-muted small d-block">Gecelik Taban Fiyat</span>
+                                    <span class="fs-4 fw-bold text-dark">@unit.DailyRate.ToString("N0") ₺</span>
+                                </div>
+
+                                @if (unit.IsOccupied && !string.IsNullOrEmpty(unit.CurrentGuestName))
+                                {
+                                    <div class="alert alert-danger p-2 rounded-3 mb-3 small">
+                                        <i class="bi bi-person-circle me-1"></i> <strong>@unit.CurrentGuestName</strong><br/>
+                                        @if (unit.CurrentCheckOutDate.HasValue)
+                                        {
+                                            <small>Çıkış Tarihi: @unit.CurrentCheckOutDate.Value.ToString("dd.MM.yyyy")</small>
+                                        }
+                                    </div>
+                                }
+
+                                <div class="d-flex gap-2 mt-auto">
+                                    <button type="button" class="btn btn-primary btn-sm rounded-pill flex-fill fw-bold" onclick="openReservationModal(@unit.Id, '@unit.UnitName', @unit.DailyRate)">
+                                        <i class="bi bi-calendar-plus me-1"></i> Rezervasyon Al
+                                    </button>
+                                    <form asp-action="ToggleUnitStatus" asp-controller="DailyRental" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="unitId" value="@unit.Id" />
+                                        <button type="submit" class="btn btn-outline-secondary btn-sm rounded-pill" title="Durumu Değiştir">
+                                            <i class="bi bi-arrow-repeat"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- BÖLÜM: Yaklaşan Gerçek Rezervasyonlar Listesi -->
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-header bg-white border-0 pt-4 px-4 pb-0 d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="fw-bold text-dark mb-0">
+                        <i class="bi bi-card-checklist text-primary me-2"></i> Rezervasyon Kayıtları & Misafir Listesi
+                    </h5>
+                    <p class="text-muted small mb-0">Gerçek müşteri girişleri, tutarları ve KBS emniyet bildirim durumu.</p>
+                </div>
+                <a href="/DailyRentalAgenda/Index" class="btn btn-sm btn-outline-secondary rounded-pill">
+                    <i class="bi bi-calendar3 me-1"></i> Takvimi Aç
+                </a>
+            </div>
+            <div class="card-body p-4">
+                @if (Model.Reservations == null || !Model.Reservations.Any())
+                {
+                    <div class="text-center py-4 text-muted">
+                        <i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i>
+                        <p class="mb-2">Henüz kayıtlı bir rezervasyon bulunmuyor.</p>
+                        <small>Yukarıdaki dairelerden birini seçerek <strong>"Rezervasyon Al"</strong> butonuna basabilirsiniz.</small>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Misafir Adı</th>
+                                    <th>Oda / Daire</th>
+                                    <th>Giriş Tarihi</th>
+                                    <th>Çıkış Tarihi</th>
+                                    <th>Gece</th>
+                                    <th>Toplam Tutar</th>
+                                    <th>KBS Bildirimi</th>
+                                    <th>Durum</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var res in Model.Reservations)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="fw-bold text-dark">@res.GuestName</div>
+                                            <small class="text-muted"><i class="bi bi-telephone me-1"></i>@res.GuestPhone</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-light text-dark border">@res.UnitName</span>
+                                        </td>
+                                        <td>@res.StartDate.ToString("dd.MM.yyyy")</td>
+                                        <td>@res.EndDate.ToString("dd.MM.yyyy")</td>
+                                        <td>@res.TotalNights Gece</td>
+                                        <td class="fw-bold text-success">@res.TotalPrice.ToString("N0") ₺</td>
+                                        <td>
+                                            @if (res.IsKbsReported)
+                                            {
+                                                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-2 py-1">
+                                                    <i class="bi bi-check-circle me-1"></i> Bildirildi
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-warning bg-opacity-10 text-dark border border-warning border-opacity-25 rounded-pill px-2 py-1">
+                                                    <i class="bi bi-exclamation-circle me-1"></i> Bekliyor
+                                                </span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill px-2 py-1">
+                                                @res.Status
+                                            </span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<!-- MODAL 1: HIZLI REZERVASYON ALMA -->
+<div class="modal fade" id="quickReservationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold text-dark">
+                    <i class="bi bi-calendar-plus text-primary me-2"></i> Yeni Rezervasyon Girişi
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="QuickAddReservation" asp-controller="DailyRental" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="modalUnitId" name="UnitId" />
+                <div class="modal-body p-4">
+                    <div class="alert alert-light border rounded-3 mb-3 py-2">
+                        <span class="text-muted small">Seçilen Birim:</span>
+                        <strong id="modalUnitName" class="text-dark d-block"></strong>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Misafir Adı Soyadı <span class="text-danger">*</span></label>
+                        <input type="text" name="GuestName" class="form-control rounded-3" placeholder="Örn: Ahmet Yılmaz" required />
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-bold small">Telefon Numarası <span class="text-danger">*</span></label>
+                            <input type="tel" name="GuestPhone" class="form-control rounded-3" placeholder="05xx xxx xx xx" required />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-bold small">TC / Pasaport No (KBS)</label>
+                            <input type="text" name="GuestIdNumber" class="form-control rounded-3" placeholder="Emniyet bildirimi için" />
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-bold small">Giriş Tarihi</label>
+                            <input type="date" name="StartDate" id="modalStartDate" class="form-control rounded-3" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-bold small">Çıkış Tarihi</label>
+                            <input type="date" name="EndDate" id="modalEndDate" class="form-control rounded-3" value="@DateTime.Today.AddDays(1).ToString("yyyy-MM-dd")" required />
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-bold small">Misafir Sayısı</label>
+                            <input type="number" name="GuestCount" class="form-control rounded-3" value="2" min="1" max="10" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-bold small">Toplam Tutar (₺)</label>
+                            <div class="input-group">
+                                <input type="number" name="TotalPrice" id="modalTotalPrice" class="form-control rounded-3" required />
+                                <span class="input-group-text bg-light">₺</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Ödeme Durumu</label>
+                        <select name="PaymentStatus" class="form-select rounded-3">
+                            <option value="Kapora">Kapora Alındı</option>
+                            <option value="Tamamlandi">Tamamı Ödendi</option>
+                            <option value="Bekliyor">Ödeme Bekliyor</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">
+                        <i class="bi bi-check-lg me-1"></i> Rezervasyonu Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
+
+<!-- MODAL 2: YENİ DAIRE / ODA EKLEME -->
+<div class="modal fade" id="addUnitModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold text-dark">
+                    <i class="bi bi-plus-circle text-success me-2"></i> Yeni Daire / Oda Ekle
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="AddSingleUnit" asp-controller="DailyRental" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="buildingId" value="@Model.FacilityId" />
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Birim / Daire / Oda Adı <span class="text-danger">*</span></label>
+                        <input type="text" name="unitName" class="form-control rounded-3" placeholder="Örn: Daire 3 (2+1) veya Oda 201" required />
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-bold small">Oda Düzeni</label>
+                            <select name="roomLayout" class="form-select rounded-3">
+                                <option value="1+0">1+0 (Stüdyo)</option>
+                                <option value="1+1" selected>1+1</option>
+                                <option value="2+1">2+1</option>
+                                <option value="3+1">3+1</option>
+                                <option value="Standart Oda">Standart Çift Kişilik</option>
+                                <option value="Suit Oda">Suit</option>
+                                <option value="Müstakil Villa">Müstakil Villa</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-bold small">Kapasite (Kişi)</label>
+                            <input type="number" name="capacity" class="form-control rounded-3" value="3" min="1" max="20" />
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Gecelik Taban Fiyat (₺)</label>
+                        <div class="input-group">
+                            <input type="number" name="dailyPrice" class="form-control rounded-3" value="2000" min="0" step="50" required />
+                            <span class="input-group-text bg-light">₺</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold">
+                        <i class="bi bi-plus-lg me-1"></i> Birimi Ekle
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openReservationModal(unitId, unitName, dailyRate) {
+        document.getElementById('modalUnitId').value = unitId;
+        document.getElementById('modalUnitName').textContent = unitName;
+        document.getElementById('modalTotalPrice').value = dailyRate;
+        const modal = new bootstrap.Modal(document.getElementById('quickReservationModal'));
+        modal.show();
+    }
+</script>

@@ -1,0 +1,1418 @@
+@model dynamic
+@{
+    Layout = "~/Views/Shared/_ProjectLayout.cshtml";
+    var project = ViewBag.Project as GMK360.Core.Entities.Construction.ConstructionProject;
+    int projectId = project?.Id ?? 0;
+    ViewData["ProjectId"] = projectId;
+    var structures = ViewBag.Structures as List<GMK360.Core.Entities.Building> ?? new List<GMK360.Core.Entities.Building>();
+    var activeStructure = ViewBag.ActiveStructure as GMK360.Core.Entities.Building ?? structures.FirstOrDefault();
+    var savedProfiles = ViewBag.SavedProfiles as List<GMK360.Core.Entities.Construction.Workflows.ProjectDnaProfile> ?? new List<GMK360.Core.Entities.Construction.Workflows.ProjectDnaProfile>();
+    var activeProfile = ViewBag.ActiveProfile as GMK360.Core.Entities.Construction.Workflows.ProjectDnaProfile ?? savedProfiles.FirstOrDefault();
+    ViewData["Title"] = $"{project?.Name ?? "Şantiye"} - Yapı Bazlı İş Akışı & Tedarik Masası";
+}
+
+<div class="container-fluid py-4">
+    <!-- ÜST NAVİGASYON VE BAŞLIK -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <a href="/Metraj/ProjectDNA/@projectId" class="btn btn-sm btn-outline-secondary rounded-pill px-3 shadow-xs">
+                    <i class="fas fa-arrow-left me-1"></i> Kanat 2: DNA Profillerine Dön
+                </a>
+                <span class="badge bg-success text-white px-3 py-1 rounded-pill fw-bold">
+                    <i class="fas fa-check-circle me-1"></i> Onaylı Reçete: @(activeProfile?.Name ?? "Varsayılan DNA Reçetesi")
+                </span>
+            </div>
+            <h3 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                <i class="fas fa-network-wired text-primary"></i>
+                <span>Şantiye İş Akışı, Malzeme Tedarik & Kadro Masası</span>
+            </h3>
+            <p class="text-muted small mt-1 mb-0">Müteahhit ve satın alma kontrol paneli. Başlayacağınız yapıyı seçin; malzeme alım sıralamasını ve ekip işbaşı takvimini izole olarak yönetin.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <div class="dropdown">
+                <button class="btn btn-light border dropdown-toggle rounded-pill px-3 fw-bold shadow-xs text-dark" type="button" data-bs-toggle="dropdown">
+                    <i class="fas fa-dna text-primary me-1"></i> Reçete Değiştir
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow">
+                    @foreach (var prof in savedProfiles.Where(p => p.Status == "Tamamlandı"))
+                    {
+                        <li>
+                            <a class="dropdown-item @(activeProfile != null && activeProfile.Id == prof.Id ? "active fw-bold" : "")" 
+                               href="/Metraj/BuildingWorkflow/@projectId?profileId=@prof.Id&buildingId=@(activeStructure?.Id ?? 0)">
+                                <i class="fas fa-check-circle me-2 text-success"></i> @prof.Name
+                            </a>
+                        </li>
+                    }
+                </ul>
+            </div>
+            <a href="/Metraj/SiteAgenda/@projectId?profileId=@(activeProfile?.Id ?? 0)&buildingId=@(activeStructure?.Id ?? 0)" target="_blank" rel="noopener noreferrer" class="btn btn-success rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-external-link-alt me-1"></i> Kara Defter & Ajanda &rarr;
+            </a>
+        </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- 🏗️ 1. ADIM: HANGİ YAPIDAN BAŞLIYORUZ? (ODAKLANMA KARTLARI) -->
+    <!-- ========================================================================= -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white overflow-hidden">
+        <div class="card-header bg-light border-bottom p-3 px-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <h6 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                    <i class="fas fa-cubes text-primary fs-5"></i>
+                    <span>1. Adım: Hangi Yapıdan Başlıyoruz? (Yapı & Temel İzolasyonu)</span>
+                </h6>
+                <small class="text-muted">Projenizdeki bağımsız temeller aşağıda listelenmiştir. Nereden başlayacaksanız o yapıya tıklayarak odaklanın.</small>
+            </div>
+            <span class="badge bg-danger text-white rounded-pill px-3 py-2 fw-semibold small">
+                <i class="fas fa-shield-alt me-1"></i> Şantiye Altın Kuralı: Yapılar Birbirine Karışamaz
+            </span>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-3" id="structureCardsContainer">
+                @if (structures != null && structures.Any())
+                {
+                    foreach (var s in structures)
+                    {
+                        bool isCurrent = (activeStructure != null && activeStructure.Id == s.Id);
+                        var childBlocks = s.ChildBuildings != null && s.ChildBuildings.Any() ? s.ChildBuildings.ToList() : new List<GMK360.Core.Entities.Building>();
+                        string sName = s.BlockName ?? s.Name;
+                        string childNames = childBlocks.Any() ? $" ({string.Join(" & ", childBlocks.Select(c => c.BlockName ?? c.Name))})" : "";
+                        int totalFloors = (s.TotalFloors ?? 0) + s.BasementFloors;
+                        double bArea = s.BaseArea ?? 0;
+                        int unitCount = (s.Units?.Count ?? 0) + childBlocks.Sum(c => c.Units?.Count ?? 0);
+
+                        <div class="col-lg-4 col-md-6">
+                            <div class="p-3 rounded-4 border-2 transition-card h-100 cursor-pointer structure-focus-card @(isCurrent ? "border-primary bg-primary bg-opacity-10 shadow-sm" : "border-light bg-light bg-opacity-50")"
+                                 onclick="selectFocusStructure(@s.Id, '@(sName + childNames)', this)"
+                                 data-building-id="@s.Id"
+                                 style="cursor: pointer; border-style: solid;">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="p-2 rounded-3 @(isCurrent ? "bg-primary text-white" : "bg-white text-secondary shadow-xs")">
+                                            <i class="fas fa-building fs-5"></i>
+                                        </div>
+                                        <div>
+                                            <h6 class="fw-bold text-dark mb-0">@sName@childNames</h6>
+                                            <small class="text-muted">@(childBlocks.Any() ? "Bitişik / Bloklu Yapı" : "Tekil Taşıyıcı Kule")</small>
+                                        </div>
+                                    </div>
+                                    <span class="badge @(isCurrent ? "bg-primary text-white" : "bg-secondary text-white") rounded-pill px-2 py-1 small">
+                                        @(isCurrent ? "✓ Odaklanılan Yapı" : "Seç")
+                                    </span>
+                                </div>
+                                <div class="row g-2 text-center mt-2 small">
+                                    <div class="col-4">
+                                        <div class="bg-white p-2 rounded-3 border shadow-xs">
+                                            <div class="text-muted small">Taban (TAKS)</div>
+                                            <div class="fw-bold text-dark">@(bArea > 0 ? bArea.ToString("N0") + " m²" : "Belirtilmedi")</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="bg-white p-2 rounded-3 border shadow-xs">
+                                            <div class="text-muted small">Kat Sayısı</div>
+                                            <div class="fw-bold text-dark">@(totalFloors > 0 ? totalFloors + " Kat" : "-")</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="bg-white p-2 rounded-3 border shadow-xs">
+                                            <div class="text-muted small">Bağımsız Bölüm</div>
+                                            <div class="fw-bold text-dark">@(unitCount > 0 ? unitCount + " Daire" : "-")</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- 📋 2. ADIM: SEÇİLEN YAPIYA ÖZEL İŞ AKIŞI, MALZEME & KADRO ÇALIŞMA MASASI -->
+    <!-- ========================================================================= -->
+    <div class="card shadow-sm border-0 rounded-4 mb-4 border-top border-4 border-primary overflow-hidden" id="workflowMasterCard">
+        <!-- AKTİF YAPI BİLGİ ŞERİDİ & AKSİYON BUTONLARI -->
+        <div class="card-header bg-white border-bottom p-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="rounded-circle bg-primary bg-opacity-10 p-3 text-primary">
+                    <i class="fas fa-layer-group fa-2x"></i>
+                </div>
+                <div>
+                    <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                        <span class="badge bg-primary text-white px-3 py-1 rounded-pill fw-bold fs-6" id="activeStructureTitleBadge">
+                            <i class="fas fa-building me-1"></i> Yapı: @(activeStructure?.BlockName ?? activeStructure?.Name ?? "A Blok")
+                        </span>
+                        <span class="badge bg-light text-dark border rounded-pill px-2 py-1" id="badgeStepCount">
+                            İnşaat Sıralaması: 4 Parça
+                        </span>
+                    </div>
+                    <small class="text-muted">
+                        Bu yapı için malzeme alım sıralaması, taşeron kadro ihtiyacı ve işbaşı takvimi aşağıda izole edilmiştir.
+                    </small>
+                </div>
+            </div>
+
+            <!-- ŞEF KONTROL VE AKSİYON ARAÇLARI -->
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <div class="d-flex align-items-center gap-2 bg-light p-1 px-3 rounded-pill border">
+                    <label class="small fw-bold text-dark mb-0"><i class="far fa-calendar-alt text-primary me-1"></i>İşbaşı Tarihi:</label>
+                    <input type="date" class="form-control form-control-sm border-0 bg-transparent fw-bold text-dark" id="workflowStartDateInput" value="@DateTime.Today.ToString("yyyy-MM-dd")" onchange="onStartDateChange()" style="width: 135px;">
+                </div>
+                
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 shadow-xs" onclick="loadWorkflowData()" title="Planı Yenile & Senkronize Et">
+                    <i class="fas fa-sync-alt me-1"></i> Yenile
+                </button>
+                <button type="button" class="btn btn-sm btn-success rounded-pill px-3 shadow-xs" onclick="openAddStepModal(1)">
+                    <i class="fas fa-plus me-1"></i> ➕ Yeni İmalat Ekle
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-dark rounded-pill px-2" onclick="expandCollapseAll(true)" title="Tüm akordeonları aç">Tümünü Aç</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2" onclick="expandCollapseAll(false)" title="Tüm akordeonları kapat">Kapat</button>
+            </div>
+        </div>
+
+        <!-- 3'LÜ ÇALIŞMA MASASI SEKMELERİ -->
+        <ul class="nav nav-tabs nav-fill bg-light border-bottom px-3 pt-2" id="workflowMasterTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active fw-bold py-3 text-primary border-bottom-0" id="tab-materials-btn" data-bs-toggle="tab" data-bs-target="#tab-materials-pane" type="button" role="tab">
+                    <i class="fas fa-boxes me-2"></i> 1. Malzeme Sıralaması & Alım Planı (B2B Satın Alma)
+                    <span class="badge bg-primary text-white ms-1 rounded-pill" id="badgeTotalMaterials">...</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link fw-bold py-3 text-dark border-bottom-0" id="tab-crews-btn" data-bs-toggle="tab" data-bs-target="#tab-crews-pane" type="button" role="tab">
+                    <i class="fas fa-hard-hat text-warning me-2"></i> 2. Branş Kadro Planı & Puantaj (İşbaşı & Ekipler)
+                    <span class="badge bg-warning text-dark ms-1 rounded-pill" id="badgeTotalCrews">...</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link fw-bold py-3 text-success border-bottom-0" id="tab-timeline-btn" data-bs-toggle="tab" data-bs-target="#tab-timeline-pane" type="button" role="tab">
+                    <i class="fas fa-calendar-check me-2"></i> 3. Otonom İş Akış Takvimi (Kat Kat Kovalama)
+                    <span class="badge bg-success text-white ms-1 rounded-pill">Domino Tetikleme</span>
+                </button>
+            </li>
+        </ul>
+
+        <div class="card-body p-0">
+            <div class="tab-content" id="workflowMasterTabContent">
+
+                <!-- ============================================================= -->
+                <!-- SEKME 1: MALZEME SIRALAMASI & ALIM PLANI -->
+                <!-- ============================================================= -->
+                <div class="tab-pane fade show active p-4" id="tab-materials-pane" role="tabpanel">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <div class="small text-muted">
+                            <i class="fas fa-info-circle text-primary me-1"></i>
+                            Malzemeler inşaat imalat sıralamasına göre 4 parçada dizilmiştir. Firma satın alma masası ne zaman ne alacağını buradan görür. Miktarları doğrudan düzenleyebilirsiniz.
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-dark rounded-pill px-3" onclick="toggleAllMaterials(true)">Tümünü Seç</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" onclick="toggleAllMaterials(false)">Temizle</button>
+                        </div>
+                    </div>
+
+                    <!-- 4 PARÇA MALZEME AKORDEON KONTEYNERİ -->
+                    <div id="materialAccordionsContainer">
+                        <div class="text-center p-5 text-muted">
+                            <div class="spinner-border text-primary me-2"></div>
+                            Malzeme alım planı yükleniyor...
+                        </div>
+                    </div>
+
+                    <!-- MALZEME AKSİYON BARI -->
+                    <div class="d-flex justify-content-between align-items-center mt-3 p-3 bg-light rounded-4 border">
+                        <div>
+                            <span class="badge bg-dark text-warning px-3 py-2 rounded-pill fw-bold fs-6">
+                                <span id="selectedMaterialCount">0</span> Malzeme Kalemi Seçili
+                            </span>
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-primary rounded-pill px-4 py-2 fw-bold shadow-sm" id="btnSendMaterialsB2B" onclick="sendWorkflowTrack('Material')">
+                                <i class="fas fa-shopping-cart me-2"></i> Seçilen Malzemeleri B2B Satın Alma İhalesine Gönder
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================= -->
+                <!-- SEKME 2: BRANŞ KADRO PLANI & PUANTAJ -->
+                <!-- ============================================================= -->
+                <div class="tab-pane fade p-4" id="tab-crews-pane" role="tabpanel">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <div class="small text-muted">
+                            <i class="fas fa-info-circle text-warning me-1"></i>
+                            <strong>Şantiye Şefi Giriş Alanları:</strong> Süre (Gün) ve Kadro (Kişi) sayılarını doğrudan kutulardan değiştirebilirsiniz. Toplam Adam-Gün anlık olarak otomatik hesaplanır.
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-dark rounded-pill px-3" onclick="toggleAllLabor(true)">Tümünü Seç</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" onclick="toggleAllLabor(false)">Temizle</button>
+                        </div>
+                    </div>
+
+                    <!-- 4 PARÇA KADRO AKORDEON KONTEYNERİ -->
+                    <div id="laborAccordionsContainer">
+                        <div class="text-center p-5 text-muted">
+                            <div class="spinner-border text-warning me-2"></div>
+                            Kadro ve taşeron planı yükleniyor...
+                        </div>
+                    </div>
+
+                    <!-- KADRO AKSİYON BARI -->
+                    <div class="d-flex justify-content-between align-items-center mt-3 p-3 bg-light rounded-4 border">
+                        <div>
+                            <span class="badge bg-dark text-warning px-3 py-2 rounded-pill fw-bold fs-6">
+                                <span id="selectedLaborCount">0</span> Ekip/Taşeron Kalemi Seçili
+                            </span>
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-warning text-dark rounded-pill px-4 py-2 fw-bold shadow-sm" id="btnSendLaborB2B" onclick="sendWorkflowTrack('Labor')">
+                                <i class="fas fa-users-cog me-2"></i> Seçilen Branşlar İçin Taşeron / Kadro Çağrısı Aç
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================= -->
+                <!-- SEKME 3: OTONOM İŞ AKIŞ TAKVİMİ & AJANDA -->
+                <!-- ============================================================= -->
+                <div class="tab-pane fade p-4" id="tab-timeline-pane" role="tabpanel">
+                    <!-- ÖZET KARTLARI -->
+                    <div class="card border-0 bg-success bg-opacity-10 border border-success rounded-4 p-3 mb-3">
+                        <div class="row g-2 text-center">
+                            <div class="col-6 col-sm-3">
+                                <div class="bg-white p-2 rounded-3 border shadow-xs">
+                                    <div class="text-muted small">Tahmini Toplam Süre</div>
+                                    <div class="fw-bold text-dark fs-6" id="wfTotalDays">...</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-sm-3">
+                                <div class="bg-white p-2 rounded-3 border shadow-xs">
+                                    <div class="text-muted small">İş Gücü Hacmi</div>
+                                    <div class="fw-bold text-dark fs-6" id="wfTotalManDays">...</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-sm-3">
+                                <div class="bg-white p-2 rounded-3 border shadow-xs">
+                                    <div class="text-muted small">Zirve Kadro</div>
+                                    <div class="fw-bold text-dark fs-6" id="wfMaxCrew">...</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-sm-3">
+                                <div class="bg-white p-2 rounded-3 border shadow-xs">
+                                    <div class="text-muted small">Tahmini Teslim Tarihi</div>
+                                    <div class="fw-bold text-success fs-6" id="wfEstCompletion">...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4 PARÇA TAKVİM AKORDEON KONTEYNERİ -->
+                    <div id="timelineAccordionsContainer">
+                        <div class="text-center p-5 text-muted">
+                            <div class="spinner-border text-success me-2"></div>
+                            Takvim çizelgesi yükleniyor...
+                        </div>
+                    </div>
+
+                    <!-- AJANDAYA İŞLEME BUTONU -->
+                    <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded-4 border mt-3">
+                        <div>
+                            <h6 class="fw-bold text-dark mb-0">Bu Planı Şantiye Ajandama & Kara Deftere İşle</h6>
+                            <small class="text-muted">Seçili yapıya ait tüm aşamaları, kat kovalama günlerini ve T- hazırlık kontrollerini puantaja işler.</small>
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-success btn-lg rounded-pill px-5 fw-bold shadow-sm" id="btnTriggerAgenda" onclick="triggerWorkflowToAgenda()">
+                                <i class="fas fa-rocket me-2"></i> Kara Deftere & Ajandaya İşle (Puantajı Başlat)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: YENİ İMALAT / İŞ KALEMİ EKLEME (ŞANTİYE ŞEFİ) -->
+<!-- ========================================================================= -->
+<div class="modal fade" id="addStepModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-primary text-white p-3 px-4">
+                <h6 class="modal-title fw-bold">
+                    <i class="fas fa-plus-circle me-1"></i> Yeni Şantiye İmalat Kalemi Ekle
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">İnşaat Parçası (Faz):</label>
+                    <select class="form-select form-select-sm" id="newStepPartIndex">
+                        <option value="1">1. Parça: Kaba İnşaat (Temel & Taşıyıcı İskelet)</option>
+                        <option value="2">2. Parça: Statik İnce (Kovalayan İşler - Duvar/Tesisat/Sıva)</option>
+                        <option value="3">3. Parça: Tercihe Göre İnce İşler (Daire İçi İmalatlar)</option>
+                        <option value="4">4. Parça: Demirbaş, Montaj & Dış Çevre (Teslim)</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Aşama / İmalat Başlığı:</label>
+                    <input type="text" class="form-control form-control-sm" id="newStepPhaseName" placeholder="Örn: Bodrum Kat Perde İzolasyonu ve Drenaj Hattı">
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">İş Branşı (Taşeron):</label>
+                        <input type="text" class="form-control form-control-sm" id="newStepProfession" placeholder="Örn: İzolasyoncu">
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label small fw-bold">Kadro (Kişi):</label>
+                        <input type="number" min="1" class="form-control form-control-sm text-center" id="newStepCrew" value="4">
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label small fw-bold">Süre (İş Günü):</label>
+                        <input type="number" min="1" class="form-control form-control-sm text-center" id="newStepDuration" value="5">
+                    </div>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">Sipariş Edilecek Malzeme:</label>
+                        <input type="text" class="form-control form-control-sm" id="newStepMaterialTitle" placeholder="Örn: Çift Kat Bitümlü Membran & Drenaj Levhası">
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label small fw-bold">Miktar:</label>
+                        <input type="number" min="0" step="any" class="form-control form-control-sm text-center" id="newStepQuantity" value="350">
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label small fw-bold">Birim:</label>
+                        <input type="text" class="form-control form-control-sm text-center" id="newStepUnit" value="m²">
+                    </div>
+                </div>
+                <div class="alert alert-info py-2 small mb-0">
+                    <i class="fas fa-info-circle me-1"></i> Bu imalata otomatik olarak <strong>Ön Hazırlık, İmalat, Kalite & Kür ve İSG</strong> 4 alt adımı şablon olarak bağlanacaktır.
+                </div>
+            </div>
+            <div class="modal-footer bg-light p-3">
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-sm btn-primary rounded-pill px-4 fw-bold" onclick="saveNewStep()">
+                    <i class="fas fa-check me-1"></i> İmalatı Kaydet & Ekle
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: YENİ ALT ADIM / KONTROL MADDESİ EKLEME -->
+<!-- ========================================================================= -->
+<div class="modal fade" id="addSubStepModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-dark text-white p-3 px-4">
+                <h6 class="modal-title fw-bold">
+                    <i class="fas fa-tasks me-1"></i> Yeni Saha Kontrol / Alt Adım Maddesi Ekle
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <input type="hidden" id="subStepTargetCode" value="">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">4 Hayati Ayaktan Hangisi?</label>
+                    <select class="form-select form-select-sm" id="subStepCategory">
+                        <option value="PrePreparation">1. Ön Hazırlık (T- Günler, Santral Siparişi, İzinler)</option>
+                        <option value="Execution">2. İmalat (Sahada Uygulama, Pompa, Vibratör)</option>
+                        <option value="QualityAndCuring">3. Kalite Kontrol & Kürlenme (Slump, Küpler, 7G/28G Lab, Sulama)</option>
+                        <option value="SafetyIsg">4. İSG Tedbirleri (KKD, Pompa Bom Mesafesi, Güvenlik Şeridi)</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Kontrol Maddesi / Alt Adım Başlığı:</label>
+                    <input type="text" class="form-control form-control-sm" id="subStepTitle" placeholder="Örn: 28 Günlük Basınç Laboratuvar Raporu Onayı">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Test / Numune Değeri (Opsiyonel):</label>
+                    <input type="text" class="form-control form-control-sm" id="subStepTestVal" placeholder="Örn: 18 cm Slump, 38.5 MPa Basınç, vb.">
+                </div>
+                <div class="mb-0">
+                    <label class="form-label small fw-bold">Şantiye Notu (Opsiyonel):</label>
+                    <input type="text" class="form-control form-control-sm" id="subStepNotes" placeholder="Örn: Yapı denetim onay tutanağı şantiye klasörüne eklendi">
+                </div>
+            </div>
+            <div class="modal-footer bg-light p-3">
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-sm btn-dark rounded-pill px-4 fw-bold" onclick="saveNewSubStep()">
+                    <i class="fas fa-check me-1"></i> Alt Adımı Ekle
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    var currentProjectId = @projectId;
+    var currentActiveProfileId = @(activeProfile?.Id ?? 0);
+    var currentActiveBuildingId = @(activeStructure?.Id ?? 0);
+    var currentActiveBuildingName = "@Html.Raw(activeStructure != null ? (activeStructure.BlockName ?? activeStructure.Name ?? "A Blok") : "A Blok")";
+    var cachedWorkflowSteps = [];
+    var currentWorkflowMode = "concrete"; // "concrete" or "empty"
+
+    var partDefinitions = [
+        {
+            index: 1,
+            name: "1. Kaba İnşaat (Temel & Taşıyıcı İskelet)",
+            badgeClass: "bg-primary text-white",
+            borderClass: "border-primary",
+            bgHeader: "bg-primary bg-opacity-10",
+            triggerRule: "İşbaşı ile başlar. Sırayla: Hafriyat -> Temel Yalıtımı -> Grobeton -> Radye Temel -> Karkas Katlar -> Çatı",
+            icon: "fa-layer-group",
+            collapsed: false
+        },
+        {
+            index: 2,
+            name: "2. Statik İnce (Kovalayan İşler)",
+            badgeClass: "bg-info text-dark",
+            borderClass: "border-info",
+            bgHeader: "bg-info bg-opacity-10",
+            triggerRule: "Kaba 2 kat önden gidince alttan başlar! (Örn: 2. kat tabliyesi dökülünce bodrum/zemin duvarları başlar)",
+            icon: "fa-running",
+            collapsed: false
+        },
+        {
+            index: 3,
+            name: "3. Daire İçi İnce İşler",
+            badgeClass: "bg-warning text-dark",
+            borderClass: "border-warning",
+            bgHeader: "bg-warning bg-opacity-10",
+            triggerRule: "Kat duvarları örülüp tesisat basınç ve sızdırmazlık testleri onaylandığında başlar!",
+            icon: "fa-paint-roller",
+            collapsed: true
+        },
+        {
+            index: 4,
+            name: "4. Demirbaş & Montaj (Teslim)",
+            badgeClass: "bg-success text-white",
+            borderClass: "border-success",
+            bgHeader: "bg-success bg-opacity-10",
+            triggerRule: "Daire içi boya ve parke bitince temiz montaj başlar (Kapılar, mutfak, vitrifiye, asansör)",
+            icon: "fa-door-open",
+            collapsed: true
+        }
+    ];
+
+    document.addEventListener("DOMContentLoaded", function () {
+        loadWorkflowData();
+    });
+
+    function selectFocusStructure(bId, bName, cardEl) {
+        currentActiveBuildingId = bId;
+        currentActiveBuildingName = bName;
+
+        // Kart stillerini güncelle
+        document.querySelectorAll(".structure-focus-card").forEach(el => {
+            el.className = "p-3 rounded-4 border-2 transition-card h-100 cursor-pointer structure-focus-card border-light bg-light bg-opacity-50";
+            var badge = el.querySelector(".badge");
+            if (badge) {
+                badge.className = "badge bg-secondary text-white rounded-pill px-2 py-1 small";
+                badge.innerText = "Seç";
+            }
+        });
+
+        if (cardEl) {
+            cardEl.className = "p-3 rounded-4 border-2 transition-card h-100 cursor-pointer structure-focus-card border-primary bg-primary bg-opacity-10 shadow-sm";
+            var badge = cardEl.querySelector(".badge");
+            if (badge) {
+                badge.className = "badge bg-primary text-white rounded-pill px-2 py-1 small";
+                badge.innerText = "✓ Odaklanılan Yapı";
+            }
+        }
+
+        // Başlık Rozetini Güncelle
+        var titleBadge = document.getElementById("activeStructureTitleBadge");
+        if (titleBadge) {
+            titleBadge.innerHTML = `<i class="fas fa-building me-1"></i> Yapı: ${bName}`;
+        }
+
+        loadWorkflowData();
+    }
+
+    function onStartDateChange() {
+        loadWorkflowData();
+    }
+
+    function loadWorkflowData() {
+        var startDateVal = document.getElementById("workflowStartDateInput")?.value || "";
+        var url = "/Metraj/GetParametricWorkflow?projectId=" + currentProjectId 
+                + (currentActiveProfileId ? "&profileId=" + currentActiveProfileId : "") 
+                + (currentActiveBuildingId ? "&buildingId=" + currentActiveBuildingId : "") 
+                + "&startDate=" + startDateVal;
+
+        var mCont = document.getElementById("materialAccordionsContainer");
+        if(mCont) mCont.innerHTML = `<div class="text-center p-5 text-muted"><div class="spinner-border text-primary me-2"></div><strong>${currentActiveBuildingName}</strong> için çalışma masası hazırlanıyor...</div>`;
+        var lCont = document.getElementById("laborAccordionsContainer");
+        if(lCont) lCont.innerHTML = `<div class="text-center p-5 text-muted"><div class="spinner-border text-warning me-2"></div><strong>${currentActiveBuildingName}</strong> için kadro planı hazırlanıyor...</div>`;
+        var tCont = document.getElementById("timelineAccordionsContainer");
+        if(tCont) tCont.innerHTML = `<div class="text-center p-5 text-muted"><div class="spinner-border text-success me-2"></div><strong>${currentActiveBuildingName}</strong> için takvim hazırlanıyor...</div>`;
+
+        fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                if(data && data.success) {
+                    cachedWorkflowSteps = data.steps || [];
+                    renderAllWorkflowTables(cachedWorkflowSteps, data.summary);
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                if(mCont) mCont.innerHTML = `<div class="alert alert-danger m-3">Veri yüklenirken hata oluştu.</div>`;
+            });
+    }
+
+    function renderAllWorkflowTables(steps, summary) {
+        var totalSteps = steps.length;
+        var badgeStep = document.getElementById("badgeStepCount");
+        if(badgeStep) badgeStep.innerText = totalSteps > 0 ? `${totalSteps} İmalat Kalemi` : "0 Kalem (Boş Çalışma Masası)";
+
+        var badgeM = document.getElementById("badgeTotalMaterials");
+        if(badgeM) badgeM.innerText = totalSteps + " Kalem";
+        var badgeL = document.getElementById("badgeTotalCrews");
+        if(badgeL) badgeL.innerText = totalSteps + " Branş";
+
+        recalculateGlobalSummary();
+
+        // 1. MALZEME AKORDEONU
+        renderMaterialAccordion(steps);
+
+        // 2. KADRO AKORDEONU
+        renderLaborAccordion(steps);
+
+        // 3. TAKVİM AKORDEONU
+        renderTimelineAccordion(steps);
+    }
+
+    // =========================================================================
+    // 1. SEKME: MALZEME TABLOSU RENDERER
+    // =========================================================================
+    function renderMaterialAccordion(steps) {
+        var matCont = document.getElementById("materialAccordionsContainer");
+        if(!matCont) return;
+
+        matCont.innerHTML = partDefinitions.map(p => {
+            var pSteps = steps.filter(s => (s.partIndex || 1) === p.index);
+
+            return `
+                <div class="card border mb-3 rounded-4 shadow-xs overflow-hidden ${p.borderClass}">
+                    <div class="card-header ${p.bgHeader} d-flex justify-content-between align-items-center p-3" 
+                         data-bs-toggle="collapse" 
+                         data-bs-target="#collapseMaterialPart${p.index}" 
+                         aria-expanded="${!p.collapsed}" 
+                         style="cursor: pointer;">
+                        <div class="d-flex align-items-center gap-3 flex-wrap">
+                            <span class="badge ${p.badgeClass} rounded-pill px-3 py-2 fw-bold fs-6">
+                                <i class="fas ${p.icon} me-1"></i> ${p.name}
+                            </span>
+                            <span class="badge ${pSteps.length > 0 ? 'bg-white text-dark border' : 'bg-secondary text-white'} rounded-pill px-2 py-1 small fw-semibold">
+                                ${pSteps.length} Kalem
+                            </span>
+                            <div class="small text-muted d-none d-lg-block">
+                                <i class="fas fa-bolt text-warning me-1"></i><strong>Alım Sırası:</strong> ${p.triggerRule}
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2" onclick="event.stopPropagation();">
+                            ${pSteps.length > 0 ? `
+                                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-1 small" onclick="togglePartMaterials(${p.index}, true)">Tümünü Seç</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-1 small" onclick="togglePartMaterials(${p.index}, false)">Temizle</button>
+                            ` : ''}
+                            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-2 py-1 small" onclick="openAddStepModal(${p.index})">
+                                <i class="fas fa-plus me-1"></i> İmalat Ekle
+                            </button>
+                            <i class="fas fa-chevron-down text-muted ms-1"></i>
+                        </div>
+                    </div>
+                    <div id="collapseMaterialPart${p.index}" class="collapse ${p.collapsed ? '' : 'show'}">
+                        <div class="card-body p-0">
+                            ${pSteps.length === 0 ? `
+                                <div class="p-4 text-center text-muted">
+                                    <i class="fas fa-box-open fa-2x mb-2 text-secondary opacity-50 d-block"></i>
+                                    <div class="small fw-semibold">Bu parçada henüz malzeme kalemi bulunmuyor.</div>
+                                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 mt-2" onclick="openAddStepModal(${p.index})">
+                                        <i class="fas fa-plus me-1"></i> Bu Parçaya Yeni İmalat & Malzeme Ekle
+                                    </button>
+                                </div>
+                            ` : `
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="table-light text-muted small text-uppercase">
+                                            <tr>
+                                                <th class="text-center px-3" style="width: 40px;">Seç</th>
+                                                <th>İşlem Sırası & Aşama</th>
+                                                <th>Kullanılacak Malzeme (DNA Seçimi)</th>
+                                                <th>Kimin Yaptığı (İş / Usta Branşı)</th>
+                                                <th>Nereden Alınır? (Esnaf / Tedarikçi Dükkanı)</th>
+                                                <th class="text-center" style="width: 140px;">Ölçü / Miktar</th>
+                                                <th class="text-center" style="width: 130px;">4 Alt Adım</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${pSteps.map(s => `
+                                                <tr>
+                                                    <td class="text-center px-3">
+                                                        <input type="checkbox" class="form-check-input material-step-check part-mat-check-${p.index}" value="${s.stepCode}" checked onchange="updateMaterialCounter()">
+                                                    </td>
+                                                    <td>
+                                                        <div class="fw-bold text-dark d-flex align-items-center gap-2">
+                                                            <span class="badge bg-secondary">${s.stepCode}</span>
+                                                            <span>${s.phaseName}</span>
+                                                        </div>
+                                                        <div class="small text-muted mt-1"><span class="badge bg-light text-secondary border">${s.stageCategory}</span></div>
+                                                    </td>
+                                                    <td>
+                                                        <div class="fw-bold text-primary">${s.materialTitle}</div>
+                                                        <div class="small text-muted">${s.materialDescription || ''}</div>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2 py-1 small fw-semibold">
+                                                            <i class="fas fa-hard-hat me-1"></i>${s.professionName || 'Usta / Taşeron'}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge bg-light text-dark border px-2 py-1 small fw-semibold">
+                                                            <i class="fas fa-store text-secondary me-1"></i>${s.supplierCategory || 'Tedarikçi'}
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        ${s.materialQuantity && s.materialQuantity > 0 ? `
+                                                            <span class="badge bg-white text-dark border fw-bold px-2 py-1">
+                                                                ${s.materialQuantity} ${s.materialUnit || ''}
+                                                            </span>
+                                                        ` : `
+                                                            <span class="badge bg-light text-muted border px-2 py-1 small" title="Kat yükseklikleri ve kesitler DXF'ten okunacaktır">
+                                                                <i class="fas fa-ruler-combined me-1 text-secondary"></i>DXF Bekliyor
+                                                            </span>
+                                                        `}
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-2 py-1 small" 
+                                                                data-bs-toggle="collapse" data-bs-target="#substeps-mat-${s.stepCode}">
+                                                            <i class="fas fa-list-check me-1"></i> Alt Adım (${s.subSteps ? s.subSteps.length : 0})
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                                <!-- 4 ALT ADIM DRAWER -->
+                                                <tr id="substeps-mat-${s.stepCode}" class="collapse">
+                                                    ${renderSubStepsDrawerHtml(s)}
+                                                </tr>
+                                            `).join("")}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join("");
+
+        updateMaterialCounter();
+    }
+
+    // =========================================================================
+    // 2. SEKME: KADRO & PUANTAJ TABLOSU RENDERER
+    // =========================================================================
+    function renderLaborAccordion(steps) {
+        var labCont = document.getElementById("laborAccordionsContainer");
+        if(!labCont) return;
+
+        labCont.innerHTML = partDefinitions.map(p => {
+            var pSteps = steps.filter(s => (s.partIndex || 1) === p.index);
+
+            return `
+                <div class="card border mb-3 rounded-4 shadow-xs overflow-hidden ${p.borderClass}">
+                    <div class="card-header ${p.bgHeader} d-flex justify-content-between align-items-center p-3" 
+                         data-bs-toggle="collapse" 
+                         data-bs-target="#collapseLaborPart${p.index}" 
+                         aria-expanded="${!p.collapsed}" 
+                         style="cursor: pointer;">
+                        <div class="d-flex align-items-center gap-3 flex-wrap">
+                            <span class="badge ${p.badgeClass} rounded-pill px-3 py-2 fw-bold fs-6">
+                                <i class="fas ${p.icon} me-1"></i> ${p.name}
+                            </span>
+                            <span class="badge ${pSteps.length > 0 ? 'bg-white text-dark border' : 'bg-secondary text-white'} rounded-pill px-2 py-1 small fw-semibold">
+                                ${pSteps.length} Branş
+                            </span>
+                            <div class="small text-muted d-none d-lg-block">
+                                <i class="fas fa-bolt text-warning me-1"></i><strong>İşbaşı Kuralı:</strong> ${p.triggerRule}
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2" onclick="event.stopPropagation();">
+                            ${pSteps.length > 0 ? `
+                                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-1 small" onclick="togglePartLabor(${p.index}, true)">Tümünü Seç</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-1 small" onclick="togglePartLabor(${p.index}, false)">Temizle</button>
+                            ` : ''}
+                            <button type="button" class="btn btn-sm btn-outline-warning text-dark rounded-pill px-2 py-1 small" onclick="openAddStepModal(${p.index})">
+                                <i class="fas fa-plus me-1"></i> Branş Ekle
+                            </button>
+                            <i class="fas fa-chevron-down text-muted ms-1"></i>
+                        </div>
+                    </div>
+                    <div id="collapseLaborPart${p.index}" class="collapse ${p.collapsed ? '' : 'show'}">
+                        <div class="card-body p-0">
+                            ${pSteps.length === 0 ? `
+                                <div class="p-4 text-center text-muted">
+                                    <i class="fas fa-hard-hat fa-2x mb-2 text-warning opacity-50 d-block"></i>
+                                    <div class="small fw-semibold">Bu parçada henüz kadro / taşeron kalemi bulunmuyor.</div>
+                                    <button type="button" class="btn btn-sm btn-outline-warning text-dark rounded-pill px-3 mt-2" onclick="openAddStepModal(${p.index})">
+                                        <i class="fas fa-plus me-1"></i> Bu Parçaya Ekip / Branş Ekle
+                                    </button>
+                                </div>
+                            ` : `
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="table-light text-muted small text-uppercase">
+                                            <tr>
+                                                <th class="text-center px-3" style="width: 40px;">Seç</th>
+                                                <th>Aşama & İmalat</th>
+                                                <th>Gereken Taşeron / Usta Branşı</th>
+                                                <th class="text-center" style="width: 130px;">Kadro (Şef Girişi)</th>
+                                                <th class="text-center" style="width: 130px;">Süre (Şef Girişi)</th>
+                                                <th class="text-center" style="width: 140px;">Hacim (Adam-Gün)</th>
+                                                <th class="text-center" style="width: 130px;">4 Alt Adım</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${pSteps.map(s => `
+                                                <tr>
+                                                    <td class="text-center px-3">
+                                                        <input type="checkbox" class="form-check-input labor-step-check part-lab-check-${p.index}" value="${s.stepCode}" checked onchange="updateLaborCounter()">
+                                                    </td>
+                                                    <td>
+                                                        <div class="fw-bold text-dark d-flex align-items-center gap-2">
+                                                            <span class="badge bg-secondary">${s.stepCode}</span>
+                                                            <span>${s.phaseName}</span>
+                                                        </div>
+                                                        <div class="small text-danger fw-semibold mt-1">
+                                                            <i class="fas fa-link me-1"></i>${s.criticalDependency || s.triggerRule}
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2 rounded-pill fw-bold small">
+                                                            <i class="fas fa-hard-hat me-1"></i> ${s.professionName}
+                                                        </span>
+                                                        <div class="small text-muted mt-1">${s.crewComposition || ''}</div>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <div class="d-flex align-items-center justify-content-center gap-1">
+                                                            <input type="number" min="1" class="form-control form-control-sm text-center fw-bold text-dark" 
+                                                                   style="width: 70px;" value="${s.crewSize}" 
+                                                                   oninput="updateStepCrew('${s.stepCode}', this.value)"
+                                                                   title="Sahaya Girecek Kişi Sayısı">
+                                                            <span class="small text-muted fw-bold">Kişi</span>
+                                                        </div>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <div class="d-flex align-items-center justify-content-center gap-1">
+                                                            <input type="number" min="1" class="form-control form-control-sm text-center fw-bold text-dark" 
+                                                                   style="width: 70px;" value="${s.durationDays}" 
+                                                                   oninput="updateStepDuration('${s.stepCode}', this.value)"
+                                                                   title="Planlanan İş Günü">
+                                                            <span class="small text-muted fw-bold">Gün</span>
+                                                        </div>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge bg-warning bg-opacity-25 text-dark border border-warning px-3 py-2 rounded-pill fs-6 fw-bold badge-mandays-${s.stepCode}">
+                                                            ${s.crewSize * s.durationDays} Adam-Gün
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-2 py-1 small" 
+                                                                data-bs-toggle="collapse" data-bs-target="#substeps-lab-${s.stepCode}">
+                                                            <i class="fas fa-list-check me-1"></i> Alt Adım (${s.subSteps ? s.subSteps.length : 0})
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                                <!-- 4 ALT ADIM DRAWER -->
+                                                <tr id="substeps-lab-${s.stepCode}" class="collapse">
+                                                    ${renderSubStepsDrawerHtml(s)}
+                                                </tr>
+                                            `).join("")}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join("");
+
+        updateLaborCounter();
+    }
+
+    // =========================================================================
+    // 3. SEKME: TAKVİM TABLOSU RENDERER
+    // =========================================================================
+    function renderTimelineAccordion(steps) {
+        var timeCont = document.getElementById("timelineAccordionsContainer");
+        if(!timeCont) return;
+
+        timeCont.innerHTML = partDefinitions.map(p => {
+            var pSteps = steps.filter(s => (s.partIndex || 1) === p.index);
+
+            return `
+                <div class="card border mb-3 rounded-4 shadow-xs overflow-hidden ${p.borderClass}">
+                    <div class="card-header ${p.bgHeader} d-flex justify-content-between align-items-center p-3" 
+                         data-bs-toggle="collapse" 
+                         data-bs-target="#collapseTimePart${p.index}" 
+                         aria-expanded="${!p.collapsed}" 
+                         style="cursor: pointer;">
+                        <div class="d-flex align-items-center gap-3 flex-wrap">
+                            <span class="badge ${p.badgeClass} rounded-pill px-3 py-2 fw-bold fs-6">
+                                <i class="fas ${p.icon} me-1"></i> ${p.name}
+                            </span>
+                            <span class="badge ${pSteps.length > 0 ? 'bg-white text-dark border' : 'bg-secondary text-white'} rounded-pill px-2 py-1 small fw-semibold">
+                                ${pSteps.length} Aşama
+                            </span>
+                            <div class="small text-muted d-none d-lg-block">
+                                <i class="fas fa-bolt text-warning me-1"></i><strong>Tetikleme:</strong> ${p.triggerRule}
+                            </div>
+                        </div>
+                        <div>
+                            <i class="fas fa-chevron-down text-muted ms-1"></i>
+                        </div>
+                    </div>
+                    <div id="collapseTimePart${p.index}" class="collapse ${p.collapsed ? '' : 'show'}">
+                        <div class="card-body p-0">
+                            ${pSteps.length === 0 ? `
+                                <div class="p-4 text-center text-muted">
+                                    <i class="far fa-calendar-times fa-2x mb-2 text-success opacity-50 d-block"></i>
+                                    <div class="small fw-semibold">Bu parçada takvime bağlanmış iş kalemi yok.</div>
+                                </div>
+                            ` : `
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="table-light text-muted small text-uppercase">
+                                            <tr>
+                                                <th>Aşama & İmalat</th>
+                                                <th class="text-center">Planlanan Tarih Aralığı</th>
+                                                <th class="text-center">Süre / Kadro</th>
+                                                <th>İlgili Taşeron / Kadro</th>
+                                                <th>T- Ön Kontrol Alarmı</th>
+                                                <th class="text-center">4 Alt Adım</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${pSteps.map(s => `
+                                                <tr>
+                                                    <td>
+                                                        <div class="fw-bold text-dark d-flex align-items-center gap-2">
+                                                            <span class="badge bg-secondary">${s.stepCode}</span>
+                                                            <span>${s.phaseName}</span>
+                                                        </div>
+                                                        <div class="small text-muted"><i class="fas fa-tag me-1"></i>${s.stageCategory}</div>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge bg-success bg-opacity-10 text-success border border-success px-3 py-2 rounded-pill fw-bold fs-6">
+                                                            <i class="far fa-calendar-alt me-1"></i> ${s.plannedDateRange || 'Tarih Hesaplanıyor'}
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-center fw-bold">
+                                                        <div>${s.durationDays} İş Günü</div>
+                                                        <span class="badge bg-light text-dark border small">${s.crewSize} Kişi</span>
+                                                    </td>
+                                                    <td>
+                                                        <div class="fw-bold text-dark small"><i class="fas fa-hard-hat text-primary me-1"></i>${s.professionName}</div>
+                                                        <div class="small text-muted">${s.crewComposition || ''}</div>
+                                                    </td>
+                                                    <td>
+                                                        <div class="p-2 rounded bg-light border small">
+                                                            <div class="text-danger fw-bold"><i class="fas fa-bell me-1"></i>T-${s.durationDays >= 5 ? 3 : 2} Malzeme & Kadro Teyidi</div>
+                                                            <div class="text-muted mt-1">${s.materialTitle}</div>
+                                                        </div>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-2 py-1 small" 
+                                                                data-bs-toggle="collapse" data-bs-target="#substeps-time-${s.stepCode}">
+                                                            <i class="fas fa-list-check me-1"></i> Alt Adım (${s.subSteps ? s.subSteps.length : 0})
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                                <!-- 4 ALT ADIM DRAWER -->
+                                                <tr id="substeps-time-${s.stepCode}" class="collapse">
+                                                    ${renderSubStepsDrawerHtml(s)}
+                                                </tr>
+                                            `).join("")}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join("");
+    }
+
+    // =========================================================================
+    // 4 AŞAMALI ŞANTİYE LİFECYCLE DRAWER RENDERER (HER KALEMİN ALTINA AÇILIR)
+    // =========================================================================
+    function renderSubStepsDrawerHtml(s) {
+        var subSteps = s.subSteps || [];
+
+        return `
+            <td colspan="7" class="p-3 bg-light bg-opacity-75">
+                <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
+                    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom flex-wrap gap-2">
+                        <div>
+                            <h6 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                                <span class="badge bg-primary text-white">${s.stepCode}</span>
+                                <span>${s.phaseName} - 4 Hayati Saha Aşaması & Kontrol Çizelgesi</span>
+                            </h6>
+                            <small class="text-muted">Şantiye şefinin sahada kontrol edeceği, numune alacağı ve belgeleyeceği 4 kritik evre.</small>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="openAddSubStepModal('${s.stepCode}')">
+                                <i class="fas fa-plus me-1"></i> Yeni Kontrol Maddesi Ekle
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <!-- 1. ÖN HAZIRLIK (T- GÜNLER) -->
+                        <div class="col-lg-3 col-md-6">
+                            <div class="border rounded-3 p-3 h-100 bg-light bg-opacity-25">
+                                <div class="fw-bold text-primary mb-2 small d-flex align-items-center gap-1 border-bottom pb-2">
+                                    <i class="fas fa-clipboard-check text-primary fs-6"></i> 1. Ön Hazırlık (T- Eksi Günler)
+                                </div>
+                                <div class="substeps-category-list">
+                                    ${renderSubStepsCategory(s.stepCode, subSteps, 'PrePreparation')}
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 2. İMALAT (UYGULAMA) -->
+                        <div class="col-lg-3 col-md-6">
+                            <div class="border rounded-3 p-3 h-100 bg-light bg-opacity-25">
+                                <div class="fw-bold text-warning text-dark mb-2 small d-flex align-items-center gap-1 border-bottom pb-2">
+                                    <i class="fas fa-tools text-warning fs-6"></i> 2. İmalat (Saha Uygulama)
+                                </div>
+                                <div class="substeps-category-list">
+                                    ${renderSubStepsCategory(s.stepCode, subSteps, 'Execution')}
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 3. KALİTE KONTROL & KÜRLENME -->
+                        <div class="col-lg-3 col-md-6">
+                            <div class="border rounded-3 p-3 h-100 bg-light bg-opacity-25">
+                                <div class="fw-bold text-success mb-2 small d-flex align-items-center gap-1 border-bottom pb-2">
+                                    <i class="fas fa-vial text-success fs-6"></i> 3. Kalite Kontrol & Kürlenme
+                                </div>
+                                <div class="substeps-category-list">
+                                    ${renderSubStepsCategory(s.stepCode, subSteps, 'QualityAndCuring')}
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 4. İSG VE TEDBİRLER -->
+                        <div class="col-lg-3 col-md-6">
+                            <div class="border rounded-3 p-3 h-100 bg-light bg-opacity-25">
+                                <div class="fw-bold text-danger mb-2 small d-flex align-items-center gap-1 border-bottom pb-2">
+                                    <i class="fas fa-hard-hat text-danger fs-6"></i> 4. İSG & Saha Güvenliği
+                                </div>
+                                <div class="substeps-category-list">
+                                    ${renderSubStepsCategory(s.stepCode, subSteps, 'SafetyIsg')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </td>
+        `;
+    }
+
+    function renderSubStepsCategory(stepCode, subSteps, category) {
+        var items = subSteps.filter(item => item.category === category);
+        if(items.length === 0) {
+            return `<div class="text-muted small fst-italic py-2">Bu aşamada henüz kontrol maddesi yok.</div>`;
+        }
+
+        return items.map((item, idx) => `
+            <div class="p-2 mb-2 bg-white rounded border shadow-xs">
+                <div class="form-check mb-1">
+                    <input class="form-check-input" type="checkbox" ${item.isCompleted ? 'checked' : ''} 
+                           id="chk-${stepCode}-${category}-${idx}"
+                           onchange="toggleSubStepCheck('${stepCode}', '${item.title.replace(/'/g, "\\'")}', this.checked)">
+                    <label class="form-check-label small fw-semibold text-dark" for="chk-${stepCode}-${category}-${idx}">
+                        ${item.title}
+                    </label>
+                </div>
+                ${item.testResultValue ? `
+                    <div class="small text-info fw-bold bg-info bg-opacity-10 p-1 px-2 rounded border border-info border-opacity-25 mt-1">
+                        <i class="fas fa-flask me-1"></i>${item.testResultValue}
+                    </div>
+                ` : ''}
+                ${item.notes ? `
+                    <div class="small text-muted mt-1">
+                        <i class="fas fa-comment-dots me-1 text-secondary"></i>${item.notes}
+                    </div>
+                ` : ''}
+                <div class="d-flex gap-1 mt-1 flex-wrap">
+                    ${item.photoUrl ? `
+                        <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill py-0 px-2 small" onclick="alert('📸 Saha Fotoğrafı: ${item.title}')">
+                            <i class="fas fa-camera me-1"></i> Foto
+                        </button>
+                    ` : ''}
+                    ${item.documentUrl ? `
+                        <button type="button" class="btn btn-xs btn-outline-dark rounded-pill py-0 px-2 small" onclick="alert('📄 Belge / Rapor: ${item.title}')">
+                            <i class="fas fa-file-pdf me-1"></i> Rapor
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `).join("");
+    }
+
+    function toggleSubStepCheck(stepCode, itemTitle, checked) {
+        var step = cachedWorkflowSteps.find(s => s.stepCode === stepCode);
+        if(step && step.subSteps) {
+            var item = step.subSteps.find(i => i.title === itemTitle);
+            if(item) {
+                item.isCompleted = checked;
+            }
+        }
+    }
+
+    // =========================================================================
+    // DİNAMİK ALAN GÜNCELLEMELERİ (INPUTLAR & REAL-TIME HESAPLAMA)
+    // =========================================================================
+    function updateStepQuantity(stepCode, val) {
+        var step = cachedWorkflowSteps.find(s => s.stepCode === stepCode);
+        if(step) {
+            step.materialQuantity = parseFloat(val) || 0;
+        }
+    }
+
+    function updateStepDuration(stepCode, val) {
+        var step = cachedWorkflowSteps.find(s => s.stepCode === stepCode);
+        if(step) {
+            step.durationDays = parseInt(val) || 1;
+            recalculateSummaryAndBadges(stepCode);
+        }
+    }
+
+    function updateStepCrew(stepCode, val) {
+        var step = cachedWorkflowSteps.find(s => s.stepCode === stepCode);
+        if(step) {
+            step.crewSize = parseInt(val) || 1;
+            recalculateSummaryAndBadges(stepCode);
+        }
+    }
+
+    function recalculateSummaryAndBadges(stepCode) {
+        var step = cachedWorkflowSteps.find(s => s.stepCode === stepCode);
+        if(step) {
+            var manDays = step.durationDays * step.crewSize;
+            step.totalManDays = manDays;
+            
+            // Tüm sekmelerdeki bu kalemin Adam-Gün rozetlerini anında güncelle
+            document.querySelectorAll(`.badge-mandays-${stepCode}`).forEach(el => {
+                el.innerText = manDays + " Adam-Gün";
+            });
+        }
+        
+        recalculateGlobalSummary();
+    }
+
+    function recalculateGlobalSummary() {
+        var totalDays = cachedWorkflowSteps.reduce((sum, s) => sum + (parseInt(s.durationDays) || 0), 0);
+        var totalMan = cachedWorkflowSteps.reduce((sum, s) => sum + ((parseInt(s.durationDays) || 0) * (parseInt(s.crewSize) || 0)), 0);
+        var maxCrew = cachedWorkflowSteps.reduce((max, s) => Math.max(max, (parseInt(s.crewSize) || 0)), 0);
+        
+        var elDays = document.getElementById("wfTotalDays");
+        if(elDays) elDays.innerText = "~" + totalDays + " İş Günü";
+        var elMan = document.getElementById("wfTotalManDays");
+        if(elMan) elMan.innerText = "~" + totalMan + " Adam-Gün";
+        var elCrew = document.getElementById("wfMaxCrew");
+        if(elCrew) elCrew.innerText = maxCrew + " Kişi";
+
+        var elComp = document.getElementById("wfEstCompletion");
+        if(elComp) {
+            var startDateVal = document.getElementById("workflowStartDateInput")?.value;
+            if(startDateVal && totalDays > 0) {
+                var d = new Date(startDateVal);
+                d.setDate(d.getDate() + totalDays);
+                elComp.innerText = d.toLocaleDateString("tr-TR");
+            } else {
+                elComp.innerText = "-";
+            }
+        }
+    }
+
+    // =========================================================================
+    // YENİ İMALAT VE ALT ADIM EKLEME MOTORU
+    // =========================================================================
+    function openAddStepModal(partIdx) {
+        var pSelect = document.getElementById("newStepPartIndex");
+        if(pSelect) pSelect.value = partIdx || 1;
+        var modalEl = document.getElementById("addStepModal");
+        var modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    }
+
+    function saveNewStep() {
+        var pIdx = parseInt(document.getElementById("newStepPartIndex").value) || 1;
+        var phaseName = document.getElementById("newStepPhaseName").value.trim();
+        if(!phaseName) {
+            alert("Lütfen imalat adını giriniz.");
+            return;
+        }
+        var profession = document.getElementById("newStepProfession").value.trim() || "İnşaat Ustası";
+        var crewSize = parseInt(document.getElementById("newStepCrew").value) || 4;
+        var durationDays = parseInt(document.getElementById("newStepDuration").value) || 5;
+        var matTitle = document.getElementById("newStepMaterialTitle").value.trim() || phaseName + " Malzemesi";
+        var matQty = parseFloat(document.getElementById("newStepQuantity").value) || 100;
+        var matUnit = document.getElementById("newStepUnit").value.trim() || "m²";
+
+        var codeNum = cachedWorkflowSteps.length + 1;
+        var stepCode = (pIdx === 1 ? "K-" : (pIdx === 2 ? "S-" : (pIdx === 3 ? "D-" : "M-"))) + (codeNum < 10 ? "0" + codeNum : codeNum);
+
+        var partDef = partDefinitions.find(p => p.index === pIdx) || partDefinitions[0];
+
+        var newStep = {
+            stepCode: stepCode,
+            order: codeNum,
+            phaseName: phaseName,
+            stageCategory: partDef.name,
+            partIndex: pIdx,
+            partName: partDef.name,
+            partBadgeClass: partDef.badgeClass,
+            triggerRule: "Şantiye planına göre başlar",
+            targetStructureName: currentActiveBuildingName,
+            targetBuildingId: currentActiveBuildingId,
+            materialTitle: matTitle,
+            materialDescription: phaseName + " için gerekli malzeme sevkiyatı ve sarfiyatı",
+            materialQuantity: matQty,
+            materialUnit: matUnit,
+            materialFormula: "Şantiye şefi girişi",
+            supplierCategory: "İlgili İmalat Tedarikçisi",
+            laborTitle: profession + " Ekibi",
+            professionName: profession,
+            crewComposition: crewSize + " Kişilik " + profession + " Ekibi",
+            crewSize: crewSize,
+            durationDays: durationDays,
+            totalManDays: crewSize * durationDays,
+            equipmentNeeded: "Standart şantiye el aletleri ve ekipmanı",
+            predecessors: "Önceki aşamanın teslimi",
+            criticalDependency: "İmalat kontrol tutanağı imzalanmadan bir sonraki işe geçilemez",
+            dnaSource: "Şantiye Şefi Girişi",
+            plannedStartDate: new Date(),
+            plannedEndDate: new Date(Date.now() + durationDays * 86400000),
+            plannedDateRange: "Tarih Girişe Göre Hesaplanır",
+            subSteps: [
+                { title: "T-3 Malzeme Siparişi & Sevkiyat Teyidi", category: "PrePreparation", isCompleted: false },
+                { title: "T-1 Yüzey Hazırlığı & Ön Kontrol", category: "PrePreparation", isCompleted: false },
+                { title: "Saha İmalat ve Uygulama", category: "Execution", isCompleted: false },
+                { title: "Kalite & Tolerans Kontrolü", category: "QualityAndCuring", isCompleted: false },
+                { title: "İSG ve KKD Denetimi", category: "SafetyIsg", isCompleted: true }
+            ]
+        };
+
+        cachedWorkflowSteps.push(newStep);
+        renderAllWorkflowTables(cachedWorkflowSteps);
+
+        var modalEl = document.getElementById("addStepModal");
+        var modal = bootstrap.Modal.getInstance(modalEl);
+        if(modal) modal.hide();
+
+        document.getElementById("newStepPhaseName").value = "";
+        document.getElementById("newStepMaterialTitle").value = "";
+    }
+
+    function openAddSubStepModal(stepCode) {
+        document.getElementById("subStepTargetCode").value = stepCode;
+        var modalEl = document.getElementById("addSubStepModal");
+        var modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    }
+
+    function saveNewSubStep() {
+        var stepCode = document.getElementById("subStepTargetCode").value;
+        var title = document.getElementById("subStepTitle").value.trim();
+        var category = document.getElementById("subStepCategory").value;
+        var testVal = document.getElementById("subStepTestVal").value.trim();
+        var notes = document.getElementById("subStepNotes").value.trim();
+
+        if(!title) {
+            alert("Lütfen kontrol maddesi başlığını giriniz.");
+            return;
+        }
+
+        var step = cachedWorkflowSteps.find(s => s.stepCode === stepCode);
+        if(step) {
+            if(!step.subSteps) step.subSteps = [];
+            step.subSteps.push({
+                title: title,
+                category: category,
+                isCompleted: false,
+                testResultValue: testVal || null,
+                notes: notes || null
+            });
+            renderAllWorkflowTables(cachedWorkflowSteps);
+        }
+
+        var modalEl = document.getElementById("addSubStepModal");
+        var modal = bootstrap.Modal.getInstance(modalEl);
+        if(modal) modal.hide();
+
+        document.getElementById("subStepTitle").value = "";
+        document.getElementById("subStepTestVal").value = "";
+        document.getElementById("subStepNotes").value = "";
+    }
+
+    function expandCollapseAll(expand) {
+        for (var i = 1; i <= 4; i++) {
+            ['collapseMaterialPart', 'collapseLaborPart', 'collapseTimePart'].forEach(prefix => {
+                var el = document.getElementById(prefix + i);
+                if (el) {
+                    var bs = bootstrap.Collapse.getInstance(el) || new bootstrap.Collapse(el, { toggle: false });
+                    if (expand) bs.show();
+                    else bs.hide();
+                }
+            });
+        }
+    }
+
+    function togglePartMaterials(partIdx, checked) {
+        document.querySelectorAll(".part-mat-check-" + partIdx).forEach(cb => cb.checked = checked);
+        updateMaterialCounter();
+    }
+
+    function togglePartLabor(partIdx, checked) {
+        document.querySelectorAll(".part-lab-check-" + partIdx).forEach(cb => cb.checked = checked);
+        updateLaborCounter();
+    }
+
+    function toggleAllMaterials(checked) {
+        document.querySelectorAll(".material-step-check").forEach(cb => cb.checked = checked);
+        updateMaterialCounter();
+    }
+
+    function updateMaterialCounter() {
+        var count = document.querySelectorAll(".material-step-check:checked").length;
+        var span = document.getElementById("selectedMaterialCount");
+        if(span) span.innerText = count;
+        var btn = document.getElementById("btnSendMaterialsB2B");
+        if(btn) btn.disabled = (count === 0);
+    }
+
+    function toggleAllLabor(checked) {
+        document.querySelectorAll(".labor-step-check").forEach(cb => cb.checked = checked);
+        updateLaborCounter();
+    }
+
+    function updateLaborCounter() {
+        var count = document.querySelectorAll(".labor-step-check:checked").length;
+        var span = document.getElementById("selectedLaborCount");
+        if(span) span.innerText = count;
+        var btn = document.getElementById("btnSendLaborB2B");
+        if(btn) btn.disabled = (count === 0);
+    }
+
+    function sendWorkflowTrack(track) {
+        var selector = track === "Labor" ? ".labor-step-check:checked" : ".material-step-check:checked";
+        var selectedCodes = Array.from(document.querySelectorAll(selector)).map(cb => cb.value);
+
+        if(selectedCodes.length === 0) {
+            alert("Lütfen en az bir aşama seçiniz.");
+            return;
+        }
+
+        var btnId = track === "Labor" ? "btnSendLaborB2B" : "btnSendMaterialsB2B";
+        var btn = document.getElementById(btnId);
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span> İhale Paketi Gönderiliyor...`;
+
+        fetch("/Metraj/SendWorkflowToB2B", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                ProjectId: currentProjectId,
+                ProfileId: currentActiveProfileId,
+                BuildingId: currentActiveBuildingId,
+                TargetTrack: track,
+                SelectedStepCodes: selectedCodes
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data && data.success) {
+                alert("🎉 " + data.message + "\n\nŞimdi B2B Satın Alma & Teklifler Masası yeni sekmede açılıyor.");
+                window.open("/B2BPurchasing/Index", "_blank");
+                btn.disabled = false;
+                btn.innerHTML = track === "Labor" 
+                    ? `<i class="fas fa-users-cog me-2"></i> Seçilen Branşlar İçin Taşeron / Kadro Çağrısı Aç`
+                    : `<i class="fas fa-shopping-cart me-2"></i> Seçilen Malzemeleri B2B Satın Alma İhalesine Gönder`;
+            } else {
+                alert("Hata: " + (data ? data.message : "İşlem yapılamadı."));
+                btn.disabled = false;
+                btn.innerHTML = track === "Labor" 
+                    ? `<i class="fas fa-users-cog me-2"></i> Seçilen Branşlar İçin Taşeron / Kadro Çağrısı Aç`
+                    : `<i class="fas fa-shopping-cart me-2"></i> Seçilen Malzemeleri B2B Satın Alma İhalesine Gönder`;
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Sunucuya bağlanırken bir hata oluştu.");
+            btn.disabled = false;
+        });
+    }
+
+    function triggerWorkflowToAgenda() {
+        var startDateVal = document.getElementById("workflowStartDateInput")?.value || "";
+        if(!startDateVal) {
+            alert("Lütfen bir işbaşı tarihi seçiniz.");
+            return;
+        }
+
+        var selectedCodes = Array.from(document.querySelectorAll(".material-step-check:checked")).map(cb => cb.value);
+        if(selectedCodes.length === 0) {
+            selectedCodes = cachedWorkflowSteps.map(s => s.stepCode);
+        }
+
+        if(selectedCodes.length === 0) {
+            alert("Ajandaya işlenecek hiçbir imalat kalemi bulunmuyor. Lütfen önce imalat ekleyiniz veya şablonu getiriniz.");
+            return;
+        }
+
+        var btn = document.getElementById("btnTriggerAgenda");
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span> Kara Deftere İşleniyor...`;
+
+        fetch("/Metraj/TriggerWorkflowAgenda", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                ProjectId: currentProjectId,
+                ProfileId: currentActiveProfileId,
+                BuildingId: currentActiveBuildingId,
+                StartDate: startDateVal,
+                SelectedStepCodes: selectedCodes
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data && data.success) {
+                alert("🚀 " + data.message + "\n\nŞantiye Ajandası ve Kara Defter yeni sekmede açılıyor.");
+                window.open("/Metraj/SiteAgenda/" + currentProjectId + "?baseDate=" + startDateVal 
+                            + (currentActiveProfileId ? "&profileId=" + currentActiveProfileId : "")
+                            + (currentActiveBuildingId ? "&buildingId=" + currentActiveBuildingId : ""), "_blank");
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fas fa-check-circle me-2 text-success"></i> Ajandaya İşlendi & Puantaj Başlatıldı`;
+            } else {
+                alert("Hata: " + (data ? data.message : "Ajandaya işlenemedi."));
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fas fa-rocket me-2"></i> Kara Deftere & Ajandaya İşle (Puantajı Başlat)`;
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Sunucuya bağlanırken bir hata oluştu.");
+            btn.disabled = false;
+        });
+    }
+</script>

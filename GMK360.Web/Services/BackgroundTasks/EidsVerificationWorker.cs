@@ -39,7 +39,14 @@ namespace GMK360.Web.Services.BackgroundTasks
 
                 // Her gece 03:00'te çalışması için 24 saat bekle (basit implementasyon)
                 // Daha gelişmiş bir yapı için Quartz.NET veya Hangfire kullanılabilir.
-                await Task.Delay(TimeSpan.FromHours(24), stoppingToken);
+                try
+                {
+                    await Task.Delay(TimeSpan.FromHours(24), stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
         }
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace GMK360.Core.Entities.Construction
@@ -24,14 +24,14 @@ namespace GMK360.Core.Entities.Construction
         [ForeignKey("AgencyId")]
         public virtual Agency Agency { get; set; }
 
-        public string Title { get; set; } // Örn: "Hasan Bey'le Temel Betonu Ön Görüşmesi"
-        public string Notes { get; set; } // Uzun hazırlık notları veya toplantı kararları
+        public string Title { get; set; } = string.Empty; // Örn: "Hasan Bey'le Temel Betonu Ön Görüşmesi"
+        public string Notes { get; set; } = string.Empty; // Uzun hazırlık notları veya toplantı kararları
         
         // Zaman Planlaması (Geçmiş kayıt veya gelecek planı)
         public DateTime EventDate { get; set; } 
         
         // Görsel/Sunum Eklentisi (Örn: "/uploads/agenda/sozlesme-taslagi.jpg")
-        public string ImageUrl { get; set; } 
+        public string ImageUrl { get; set; } = string.Empty; 
 
         public byte RecordTypeId { get; set; } = AgendaConstants.TypeGenelNot;
         public byte StatusId { get; set; } = AgendaConstants.StatusPlanlandi;

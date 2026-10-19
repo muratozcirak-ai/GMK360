@@ -1,49 +1,263 @@
 @model IEnumerable<GMK360.Core.Entities.Building>
 @{
-    ViewData["Title"] = "GMK360 - Yönetici Paneli";
+    ViewData["Title"] = "Bina & Site Yönetimi Genel Merkezi";
     Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var totalBuildings = ViewBag.TotalBuildings ?? Model?.Count() ?? 0;
+    var totalUnits = ViewBag.TotalUnits ?? 0;
+    var resUnits = ViewBag.ResidentialUnits ?? 0;
+    var comUnits = ViewBag.CommercialUnits ?? 0;
+    var occupiedUnits = ViewBag.OccupiedUnits ?? 0;
+    var emptyUnits = ViewBag.EmptyUnits ?? 0;
+    var totalPaid = (decimal)(ViewBag.TotalPaid ?? 0m);
+    var totalUnpaid = (decimal)(ViewBag.TotalUnpaid ?? 0m);
+    var totalExp = (decimal)(ViewBag.TotalExpenses ?? 0m);
+    var pendingTickets = ViewBag.PendingTicketsCount ?? 0;
+
+    decimal collectionRate = (totalPaid + totalUnpaid) > 0 ? (totalPaid / (totalPaid + totalUnpaid)) * 100 : 0;
 }
 
-<div class="container-fluid py-4 px-2 px-md-4 bg-light min-vh-100">
+<div class="container-fluid py-4 px-3 px-md-5 bg-light min-vh-100">
+    <!-- Üst Başlık & Hızlı Aksiyon Çubuğu -->
+    <div class="row align-items-center mb-4">
+        <div class="col-lg-6 mb-3 mb-lg-0">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-1 rounded-pill fw-bold">
+                    <i class="bi bi-shield-check me-1"></i> KMK Mevzuatına Uyumlu
+                </span>
+                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-3 py-1 rounded-pill fw-bold">
+                    <i class="bi bi-cash-stack me-1"></i> İkili Cari (Malik & Kiracı)
+                </span>
+            </div>
+            <h2 class="fw-bold text-dark mt-2 mb-1">
+                <i class="bi bi-building-gear text-success me-2"></i> Bina & Site Yönetimi Genel Merkezi
+            </h2>
+            <p class="text-muted mb-0">
+                Apartman ve site yönetim bütçeleri, daire & dükkan aidatları, demirbaş gider dağıtımı, noter karar defteri ve sakin talepleri
+            </p>
+        </div>
+        <div class="col-lg-6 text-lg-end d-flex flex-wrap justify-content-lg-end gap-2">
+            <form asp-action="AddSampleBuilding" asp-controller="BuildingManager" method="post" class="d-inline">
+                <button type="submit" class="btn btn-outline-warning text-dark fw-bold rounded-pill px-3 shadow-sm" title="10 Daire + 2 Zemin Dükkanlı, Çatı ve Aidat Çetelesi Hazır Örnek Site Yükler">
+                    <i class="bi bi-magic me-1"></i> + Örnek Site Yükle (Demo)
+                </button>
+            </form>
+            <a href="/BuildingManager/Aidatlar" class="btn btn-outline-primary fw-bold rounded-pill px-3 shadow-sm">
+                <i class="bi bi-cash-stack me-1"></i> Aidat Çetelesi
+            </a>
+            <a href="/BuildingManager/Giderler" class="btn btn-outline-danger fw-bold rounded-pill px-3 shadow-sm">
+                <i class="bi bi-receipt me-1"></i> Giderler & Faturalar
+            </a>
+            <a href="/BuildingManager/Sakinler" class="btn btn-outline-secondary fw-bold rounded-pill px-3 shadow-sm">
+                <i class="bi bi-people me-1"></i> Sakinler & Kiracılar
+            </a>
+            <a href="/BuildingManager/Onboarding" class="btn btn-success fw-bold rounded-pill px-4 shadow-sm">
+                <i class="bi bi-plus-lg me-1"></i> Yeni Bina / Site Ekle
+            </a>
+        </div>
+    </div>
+
+    <!-- Başarı Mesajı Bildirimi -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-4 shadow-sm border-0 mb-4" role="alert">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-check-circle-fill fs-4 me-3 text-success"></i>
+                <div class="fw-bold">@TempData["SuccessMessage"]</div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- Üst Yönetim Metrik Kartları -->
+    <div class="row g-3 mb-4">
+        <!-- 1. Yönetilen Binalar -->
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                <div class="d-flex align-items-center">
+                    <div class="bg-success bg-opacity-10 text-success rounded-circle p-3 me-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                        <i class="bi bi-buildings fs-3"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted small fw-bold text-uppercase">Yönetilen Siteler / Binalar</span>
+                        <h3 class="fw-bold mb-0 text-dark">@totalBuildings <span class="fs-6 text-muted fw-normal">Bina / Blok</span></h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Bağımsız Bölümler & Doluluk -->
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                <div class="d-flex align-items-center">
+                    <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 me-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                        <i class="bi bi-door-open fs-3"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted small fw-bold text-uppercase">Toplam Bağımsız Bölüm</span>
+                        <h3 class="fw-bold mb-0 text-primary">@totalUnits <span class="fs-6 text-muted fw-normal">Bölüm</span></h3>
+                        <small class="text-muted" style="font-size: 0.75rem;">
+                            <span class="text-success fw-bold">@occupiedUnits Dolu</span> / <span class="text-secondary">@emptyUnits Boş</span>
+                            (@resUnits Konut, @comUnits Dükkan)
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Toplanan Aidat & Tahsilat Oranı -->
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                <div class="d-flex align-items-center">
+                    <div class="bg-info bg-opacity-10 text-info rounded-circle p-3 me-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                        <i class="bi bi-cash-coin fs-3"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <span class="text-muted small fw-bold text-uppercase">Toplanan Aidat & Fon</span>
+                        <h3 class="fw-bold mb-0 text-success">@totalPaid.ToString("N0") ₺</h3>
+                        <div class="d-flex align-items-center gap-2 mt-1">
+                            <div class="progress flex-grow-1" style="height: 6px;">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: @collectionRate.ToString("0")%;"></div>
+                            </div>
+                            <small class="fw-bold text-muted" style="font-size:0.75rem;">%@collectionRate.ToString("0")</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Bekleyen Alacak & Yasal Faiz Uyarısı -->
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                <div class="d-flex align-items-center">
+                    <div class="bg-danger bg-opacity-10 text-danger rounded-circle p-3 me-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                        <i class="bi bi-exclamation-octagon fs-3"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted small fw-bold text-uppercase">Bekleyen Alacak (Gecikmiş)</span>
+                        <h3 class="fw-bold mb-0 text-danger">@totalUnpaid.ToString("N0") ₺</h3>
+                        <small class="text-danger fw-semibold" style="font-size: 0.72rem;">
+                            <i class="bi bi-info-circle me-1"></i>KMK Md.20/c: Aylık %5 Yasal Faiz
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Yönetilen Binalar Listesi -->
     @if (Model == null || !Model.Any())
     {
-        <div class="d-flex flex-column justify-content-center align-items-center text-center mt-5" style="min-height: 50vh;">
-            <i class="ph ph-buildings text-muted opacity-25" style="font-size: 8rem;"></i>
-            <h2 class="fw-bold mt-4 text-dark">Henüz Bir Binanız Yok</h2>
-            <p class="text-muted w-50">Sisteme henüz bir bina veya site eklemediniz. Hemen yeni bir bina ekleyerek aidat, gelir/gider, şikayet ve toplantı yönetimine başlayın.</p>
-            <a href="/BuildingManager/Onboarding" class="btn btn-primary btn-lg rounded-pill px-5 mt-3 shadow-sm">
-                <i class="ph ph-plus-circle me-2"></i>İlk Binanızı Ekleyin
-            </a>
+        <div class="card border-0 shadow-sm rounded-4 text-center p-5 bg-white mb-4">
+            <div class="mb-3">
+                <i class="bi bi-buildings text-success opacity-75" style="font-size: 4rem;"></i>
+            </div>
+            <h4 class="fw-bold text-dark">Henüz Kayıtlı Bir Bina veya Siteniz Yok</h4>
+            <p class="text-muted mx-auto" style="max-width: 620px;">
+                Apartmanınızı veya sitenizi sisteme tanımlayarak KMK mevzuatına uygun işletme bütçelerini oluşturabilir, 
+                ev sahibi (demirbaş) ve kiracı (aidat) carilerini ayrı takip edebilir ve noter tasdikli karar defterini tek tıkla yazdırabilirsiniz.
+            </p>
+            <div class="d-flex flex-wrap justify-content-center gap-3 mt-3">
+                <form asp-action="AddSampleBuilding" asp-controller="BuildingManager" method="post" class="d-inline">
+                    <button type="submit" class="btn btn-warning btn-lg fw-bold rounded-pill px-4 shadow-sm text-dark">
+                        <i class="bi bi-magic me-2"></i> Tek Tıkla Örnek Siteyi Yükle (12 Bağımsız Bölüm)
+                    </button>
+                </form>
+                <a href="/BuildingManager/Onboarding" class="btn btn-success btn-lg fw-bold rounded-pill px-4 shadow-sm">
+                    <i class="bi bi-plus-circle me-2"></i> Sıfırdan Yeni Bina Ekle
+                </a>
+            </div>
         </div>
     }
     else
     {
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h4 class="mb-1 fw-bold text-dark">🏢 Yönettiğim Binalar</h4>
-                <p class="text-muted mb-0">Toplam @Model.Count() bina yönetiyorsunuz.</p>
-            </div>
-            <a href="/BuildingManager/Onboarding" class="btn btn-primary rounded-pill px-4">
-                <i class="ph ph-plus me-1"></i> Yeni Bina Ekle
-            </a>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="fw-bold text-dark mb-0">
+                <i class="bi bi-building text-primary me-2"></i> Yönetim Portföyünüzdeki Binalar (@Model.Count())
+            </h4>
+            <span class="text-muted small">Her bina için bağımsız işletme projesi ve karar defteri tutulur.</span>
         </div>
 
-        <div class="row g-4">
+        <div class="row g-4 mb-4">
             @foreach (var building in Model)
             {
-                <div class="col-md-4">
-                    <div class="card border-0 shadow-sm rounded-4 h-100">
+                var units = building.Units ?? new List<GMK360.Core.Entities.BuildingUnit>();
+                var debts = units.SelectMany(u => u.Debts ?? new List<GMK360.Core.Entities.UnitDebt>()).ToList();
+                var bPaid = debts.Where(d => d.IsPaid).Sum(d => d.Amount);
+                var bUnpaid = debts.Where(d => !d.IsPaid).Sum(d => d.Amount);
+                var bTotal = bPaid + bUnpaid;
+                var bRate = bTotal > 0 ? (bPaid / bTotal) * 100 : 0;
+                var emptyCount = units.Count(u => u.IsEmpty);
+                var occupiedCount = units.Count(u => !u.IsEmpty);
+
+                <div class="col-xl-4 col-lg-6">
+                    <div class="card border-0 shadow-sm rounded-4 h-100 bg-white transition-all">
                         <div class="card-body p-4">
-                            <h5 class="fw-bold text-primary mb-1">@building.Name</h5>
-                            <p class="text-muted small"><i class="ph ph-map-pin me-1"></i> @building.Address</p>
-                            
-                            <div class="d-flex justify-content-between align-items-center mt-4">
-                                <span class="badge bg-light text-dark border">
-                                    <i class="ph ph-door"></i> @(building.Units?.Count ?? 0) Daire
+                            <!-- Bina Başlık & Durum -->
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-2 py-1 small fw-bold mb-1">
+                                        @(building.BlockName ?? "Ana Blok")
+                                    </span>
+                                    <h4 class="fw-bold text-dark mb-1">@building.Name</h4>
+                                    <p class="text-muted small mb-0">
+                                        <i class="bi bi-geo-alt-fill text-danger me-1"></i>@(building.StreetName ?? building.Address), No: @(building.BuildingNumber ?? "-")
+                                    </p>
+                                </div>
+                                <span class="badge bg-light text-dark border px-3 py-2 rounded-pill fw-bold">
+                                    <i class="bi bi-layers text-primary me-1"></i> @(building.TotalFloors ?? 1) Kat
                                 </span>
-                                <a href="/BuildingManager/Detail/@building.Id" class="btn btn-sm btn-outline-primary rounded-pill px-3">
-                                    Yönetim Paneli &rarr;
+                            </div>
+
+                            <!-- Daire & Doluluk İstatistikleri -->
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <div class="p-2 border rounded-3 bg-light text-center">
+                                        <small class="text-muted d-block" style="font-size:0.75rem;">BAĞIMSIZ BÖLÜM</small>
+                                        <span class="fs-5 fw-bold text-dark">@units.Count</span>
+                                        <small class="text-muted" style="font-size:0.7rem;">(@units.Count(u => u.Category == "Dukkan") Dükkan)</small>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="p-2 border rounded-3 bg-light text-center">
+                                        <small class="text-muted d-block" style="font-size:0.75rem;">DOLULUK DURUMU</small>
+                                        <span class="fs-5 fw-bold text-success">@occupiedCount Dolu</span>
+                                        <small class="text-muted" style="font-size:0.7rem;">(@emptyCount Boş)</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Aidat & Tahsilat Barı -->
+                            <div class="p-3 mb-3 bg-light bg-opacity-50 rounded-3 border">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="small fw-bold text-muted">Tahsilat Başarısı</span>
+                                    <span class="small fw-bold text-success">%@bRate.ToString("0")</span>
+                                </div>
+                                <div class="progress mb-2" style="height: 8px;">
+                                    <div class="progress-bar bg-success" role="progressbar" style="width: @bRate.ToString("0")%;"></div>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center small">
+                                    <span class="text-success fw-bold"><i class="bi bi-check-circle me-1"></i>@bPaid.ToString("N0") ₺ Toplanan</span>
+                                    <span class="text-danger fw-bold"><i class="bi bi-clock-history me-1"></i>@bUnpaid.ToString("N0") ₺ Bekleyen</span>
+                                </div>
+                            </div>
+
+                            <!-- Hızlı Aksiyon Butonları -->
+                            <div class="d-grid gap-2">
+                                <a href="/BuildingManager/Detail/@building.Id" class="btn btn-primary fw-bold rounded-pill py-2 shadow-sm">
+                                    <i class="bi bi-speedometer2 me-1"></i> Bina Yönetim Masasını Aç &rarr;
                                 </a>
+                                <div class="d-flex gap-2">
+                                    <a href="/BuildingManager/Aidatlar?buildingId=@building.Id" class="btn btn-sm btn-outline-success flex-fill fw-bold rounded-pill">
+                                        <i class="bi bi-cash me-1"></i> Aidatlar
+                                    </a>
+                                    <a href="/BuildingManager/Giderler?buildingId=@building.Id" class="btn btn-sm btn-outline-danger flex-fill fw-bold rounded-pill">
+                                        <i class="bi bi-receipt me-1"></i> Giderler
+                                    </a>
+                                    <a href="/BuildingManager/Sakinler?buildingId=@building.Id" class="btn btn-sm btn-outline-secondary flex-fill fw-bold rounded-pill">
+                                        <i class="bi bi-people me-1"></i> Sakinler
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -51,4 +265,88 @@
             }
         </div>
     }
+
+    <!-- Alt Yasal Mevzuat & Ayrı Modül Bilgilendirme Kartları -->
+    <div class="row g-4 mt-2">
+        <!-- Sol: KMK Hukuki Omurga Rehberi -->
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm rounded-4 p-4 bg-white h-100">
+                <h5 class="fw-bold text-dark mb-3">
+                    <i class="bi bi-bank text-primary me-2"></i> 634 Sayılı Kat Mülkiyeti Kanunu (KMK) Yasal İlkeleri
+                </h5>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="p-3 rounded-3 bg-light border h-100">
+                            <span class="fw-bold text-primary d-block mb-1">
+                                <i class="bi bi-file-earmark-ruled me-1"></i> KMK Madde 37 (İşletme Projesi)
+                            </span>
+                            <small class="text-muted">
+                                Tahmini yıllık bütçe hazırlanıp kat maliklerine tebliğ edilmeden aidat icrası yapılamaz. Tebliğden 7 gün sonra kesinleşir.
+                            </small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 rounded-3 bg-light border h-100">
+                            <span class="fw-bold text-danger d-block mb-1">
+                                <i class="bi bi-percent me-1"></i> KMK Madde 20/c (Yasal Gecikme Faizi)
+                            </span>
+                            <small class="text-muted">
+                                Gününde ödenmeyen aidat ve avans borçları için kanunen aylık <strong>%5 gecikme tazminatı</strong> işletilir.
+                            </small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 rounded-3 bg-light border h-100">
+                            <span class="fw-bold text-success d-block mb-1">
+                                <i class="bi bi-book-half me-1"></i> KMK Madde 32 (Noter Karar Defteri)
+                            </span>
+                            <small class="text-muted">
+                                Kararlar noter tasdikli deftere yazdırılıp ıslak imza atılmalıdır. Sistemimiz deftere tam oturan yapıştırma çıktısı verir.
+                            </small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 rounded-3 bg-light border h-100">
+                            <span class="fw-bold text-warning-emphasis d-block mb-1">
+                                <i class="bi bi-calculator me-1"></i> GVK Madde 74 (Gerçek Gider İndirimi)
+                            </span>
+                            <small class="text-muted">
+                                Ev sahiplerinin çatı, asansör ve demirbaş faturaları, yıllık Kira Gelir Vergisi (GMSİ) beyannamesinden kuruşu kuruşuna düşülür.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sağ: Ayrı Modül Mimari Notu -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm rounded-4 p-4 bg-navy text-white h-100" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="bg-warning bg-opacity-25 text-warning rounded-circle p-2 me-3">
+                        <i class="bi bi-diagram-3 fs-3"></i>
+                    </div>
+                    <div>
+                        <span class="badge bg-warning text-dark fw-bold rounded-pill px-2 py-1 mb-1">Mimari Ayrım</span>
+                        <h5 class="fw-bold text-white mb-0">Ultra Pro Mülk Sahibi Modülü</h5>
+                    </div>
+                </div>
+                <p class="text-white-50 small mb-3">
+                    Bu ekran sadece <strong>apartman ve siteleri yöneten yöneticiler</strong> içindir.
+                </p>
+                <div class="bg-white bg-opacity-10 rounded-3 p-3 mb-3 border border-white border-opacity-10 small">
+                    <div class="fw-bold text-warning mb-1"><i class="bi bi-person-check-fill me-1"></i> Ayrı Modül Olarak Konumlandırılmıştır:</div>
+                    Farklı binalarda 5-10 dairesi/dükkanı olan yatırımcılar için 
+                    <strong>"Çoklu Mülk & Kiracı Takip Kokpiti"</strong> ayrı bir bağımsız portal olarak çalışacak; 
+                    farklı binalardaki kiraları, aidat borçlarını ve GMSİ vergi indirimlerini tek merkezde toplayacaktır.
+                </div>
+                <div class="text-white-50 small mb-2">
+                    <i class="bi bi-arrow-repeat me-1 text-info"></i> Kiracı tahliyesinde daire anında Emlak Portalı'na kiralık ilanı olarak aktarılacaktır.
+                </div>
+                <a href="/Landlord/Dashboard" class="btn btn-warning text-dark fw-bold rounded-pill w-100 py-2 mt-2 shadow-sm">
+                    <i class="bi bi-person-workspace me-2"></i> Ultra Pro Mülk Sahibi Kokpiti'ne Git <i class="bi bi-arrow-right ms-1"></i>
+                </a>
+            </div>
+        </div>
+    </div>
 </div>

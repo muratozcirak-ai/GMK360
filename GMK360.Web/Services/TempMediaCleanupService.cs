@@ -35,7 +35,14 @@ namespace GMK360.Web.Services
                 }
 
                 // Run every 24 hours
-                await Task.Delay(TimeSpan.FromHours(24), stoppingToken);
+                try 
+                { 
+                    await Task.Delay(TimeSpan.FromHours(24), stoppingToken); 
+                } 
+                catch (OperationCanceledException) 
+                { 
+                    break; 
+                }
             }
 
             _logger.LogInformation("Temp Media Cleanup Service is stopping.");

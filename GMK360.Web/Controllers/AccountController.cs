@@ -50,6 +50,58 @@ namespace GMK360.Web.Controllers
             return View();
         }
 
+        // GET: /Account/QuickSuperAdminLogin
+        // Geliştirici ve Kurucu İçin Tek Tıkla Süper Kullanıcı (God Mode) Girişi
+        [HttpGet]
+        public async Task<IActionResult> QuickSuperAdminLogin(string returnUrl = null)
+        {
+            var user = await _userManager.FindByEmailAsync("kurucu@gmk360.com");
+            if (user == null)
+            {
+                user = new ApplicationUser
+                {
+                    UserName = "kurucu@gmk360.com",
+                    Email = "kurucu@gmk360.com",
+                    FirstName = "Süper",
+                    LastName = "Yönetici",
+                    EmailConfirmed = true,
+                    PhoneNumberConfirmed = true,
+                    IsEDevletVerified = true,
+                    UserType = UserType.Corporate
+                };
+                await _userManager.CreateAsync(user, "Gmk360!Super");
+            }
+
+            // Tüm rolleri tek kullanıcıya ata: Usta, Taşeron, Emlakçı, İnşaat, Bina, SuperAdmin
+            string[] roles = { 
+                "SuperAdmin", "Admin", "InsaatFirmasi", "Corporate", 
+                "Emlakci", "Danisman", "ServiceProvider", "Usta", 
+                "BinaYoneticisi", "Bireysel", "Sakin" 
+            };
+
+            var roleManager = HttpContext.RequestServices.GetService<RoleManager<ApplicationRole>>();
+            foreach (var r in roles)
+            {
+                if (roleManager != null && !await roleManager.RoleExistsAsync(r))
+                {
+                    await roleManager.CreateAsync(new ApplicationRole { Name = r });
+                }
+                if (!await _userManager.IsInRoleAsync(user, r))
+                {
+                    await _userManager.AddToRoleAsync(user, r);
+                }
+            }
+
+            await _signInManager.SignInAsync(user, isPersistent: true);
+
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+
+            return Redirect("/Dashboard/Index");
+        }
+
 
 
         [HttpPost]
@@ -460,10 +512,242 @@ namespace GMK360.Web.Controllers
                 }
             }
 
-            ModelState.AddModelError(string.Empty, "GeÃ§ersiz doÄŸrulama kodu.");
+            ModelState.AddModelError(string.Empty, "Geçersiz doğrulama kodu.");
             TempData.Keep("UserId");
             TempData.Keep("SmsOtpCode");
             return View();
+        }
+
+        // ==========================================
+        // HIZLI VE ENGELLERE TAKILMAYAN ÜYELİK (ONBOARDING)
+        // ==========================================
+        [HttpGet]
+        [AllowAnonymous]
+        public IActionResult QuickRegister(string? role)
+        {
+            if (User.Identity.IsAuthenticated)
+            {
+                return RedirectToAction("Index", "Dashboard");
+            }
+
+            var model = new QuickRegisterViewModel
+            {
+                SectorRole = !string.IsNullOrEmpty(role) ? role : "Insaat"
+            };
+
+            return View(model);
+        }
+
+        [HttpPost]
+        [AllowAnonymous]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> QuickRegister(
+            QuickRegisterViewModel model, 
+            [FromServices] RoleManager<ApplicationRole> roleManager)
+        {
+            if (!ModelState.IsValid)
+            {
+                return View(model);
+            }
+
+            string cleanEmail = model.Email.Trim().ToLowerInvariant();
+            string cleanPhone = model.PhoneNumber?.Trim() ?? "";
+
+            // E-posta kontrolü
+            var existingUser = await _userManager.FindByEmailAsync(cleanEmail);
+            if (existingUser != null)
+            {
+                ModelState.AddModelError("Email", "Bu e-posta adresiyle zaten kayıtlı bir hesap var. Lütfen giriş yapınız.");
+                return View(model);
+            }
+
+            // İsim ayrıştırma
+            string fullName = model.FullName?.Trim() ?? "Yetkili";
+            string firstName = fullName;
+            string lastName = "-";
+            int lastSpaceIndex = fullName.LastIndexOf(' ');
+            if (lastSpaceIndex > 0)
+            {
+                firstName = fullName.Substring(0, lastSpaceIndex).Trim();
+                lastName = fullName.Substring(lastSpaceIndex + 1).Trim();
+            }
+
+            // Sektöre göre rol ve modül belirleme
+            string assignedRole = "InsaatFirmasi";
+            string activeModules = "construction";
+            UserType userType = UserType.Corporate;
+
+            switch (model.SectorRole?.ToLowerInvariant())
+            {
+                case "yikim":
+                    assignedRole = "InsaatFirmasi";
+                    activeModules = "demolition,construction";
+                    userType = UserType.Corporate;
+                    break;
+                case "binayonetimi":
+                case "bina":
+                    assignedRole = "BinaYoneticisi";
+                    activeModules = "facility";
+                    userType = UserType.Corporate;
+                    break;
+                case "tedarikci":
+                case "tedarik":
+                    assignedRole = "Corporate";
+                    activeModules = "supplier,b2b";
+                    userType = UserType.Corporate;
+                    break;
+                case "usta":
+                case "taseron":
+                    assignedRole = "Usta";
+                    activeModules = "service,subcontractor";
+                    userType = UserType.Individual;
+                    break;
+                case "insaat":
+                default:
+                    assignedRole = "InsaatFirmasi";
+                    userType = UserType.Corporate;
+                    var scopeList = new List<string>();
+                    if (model.ScopeBuilding) scopeList.Add("construction");
+                    if (model.ScopeDemolition) scopeList.Add("demolition");
+                    if (model.ScopeExcavation) scopeList.Add("excavation");
+                    if (!scopeList.Any()) scopeList.Add("construction");
+                    activeModules = string.Join(",", scopeList);
+                    break;
+            }
+
+            var user = new ApplicationUser
+            {
+                UserName = cleanEmail,
+                Email = cleanEmail,
+                PhoneNumber = cleanPhone,
+                FirstName = firstName,
+                LastName = lastName,
+                DisplayName = model.CompanyName.Trim(),
+                UserType = userType,
+                ActiveModules = activeModules,
+                EmailConfirmed = true,
+                PhoneNumberConfirmed = true,
+                IsEDevletVerified = true
+            };
+
+            var createResult = await _userManager.CreateAsync(user, model.Password);
+            if (!createResult.Succeeded)
+            {
+                foreach (var error in createResult.Errors)
+                {
+                    ModelState.AddModelError(string.Empty, error.Description);
+                }
+                return View(model);
+            }
+
+            // Rol atama
+            if (!await roleManager.RoleExistsAsync(assignedRole))
+            {
+                await roleManager.CreateAsync(new ApplicationRole { Name = assignedRole });
+            }
+            await _userManager.AddToRoleAsync(user, assignedRole);
+
+            if (userType == UserType.Corporate && assignedRole != "Corporate")
+            {
+                if (!await roleManager.RoleExistsAsync("Corporate"))
+                {
+                    await roleManager.CreateAsync(new ApplicationRole { Name = "Corporate" });
+                }
+                await _userManager.AddToRoleAsync(user, "Corporate");
+            }
+
+            // Kurumsal Şirket (Agency) kaydı
+            string baseSubdomain = System.Text.RegularExpressions.Regex.Replace(model.CompanyName.ToLowerInvariant(), @"[^a-z0-9]", "");
+            if (string.IsNullOrEmpty(baseSubdomain)) baseSubdomain = "firma";
+            if (baseSubdomain.Length > 20) baseSubdomain = baseSubdomain.Substring(0, 20);
+            string subdomain = $"{baseSubdomain}-{Guid.NewGuid().ToString("N").Substring(0, 4)}";
+
+            var agency = new Agency
+            {
+                CompanyName = model.CompanyName.Trim(),
+                TaxNumber = "1111111111",
+                Subdomain = subdomain,
+                ThemePrimaryColor = "#0f172a",
+                ThemeSecondaryColor = "#ffffff",
+                Address = "Merkez",
+                WhatsAppNumber = cleanPhone,
+                AuthCertificateNo = "MUAF",
+                IsMinistryVerified = false,
+                LogoUrl = "/uploads/agencies/default-logo.png",
+                PackageLimit = 100,
+                CustomDomain = "-",
+                FontFamily = "Inter",
+                BannerUrl = "-",
+                FooterLogoUrl = "-",
+                FaviconUrl = "-",
+                ThemeAccentColor = "#f97316",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.Agencies.Add(agency);
+            await _context.SaveChangesAsync();
+
+            var consultant = new AgencyConsultant
+            {
+                AgencyId = agency.Id,
+                UserId = user.Id,
+                IsActive = true,
+                Role = AgencyRole.Owner,
+                StartDate = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.AgencyConsultants.Add(consultant);
+
+            var corporateProfile = new CorporateProfile
+            {
+                ApplicationUserId = user.Id,
+                CompanyName = model.CompanyName.Trim(),
+                TaxOffice = "Merkez",
+                TaxNumber = "1111111111"
+            };
+            _context.CorporateProfiles.Add(corporateProfile);
+
+            if (model.SectorRole?.ToLowerInvariant() == "binayonetimi" || model.SectorRole?.ToLowerInvariant() == "bina")
+            {
+                var mgmt = new ManagementCompany
+                {
+                    CompanyName = model.CompanyName.Trim(),
+                    Subdomain = subdomain,
+                    TaxNumber = "1111111111",
+                    ContactPhone = cleanPhone,
+                    ContactEmail = cleanEmail
+                };
+                _context.ManagementCompanies.Add(mgmt);
+            }
+
+            await _context.SaveChangesAsync();
+
+            // Oturum Aç
+            await _signInManager.SignInAsync(user, isPersistent: true);
+
+            TempData["SuccessMessage"] = $"Hoş geldiniz, {firstName}! Profiliniz ve çalışma alanınız hazırlandı.";
+
+            switch (model.SectorRole?.ToLowerInvariant())
+            {
+                case "yikim":
+                    return RedirectToAction("Index", "DemolitionSalvage");
+                case "binayonetimi":
+                case "bina":
+                    return RedirectToAction("Index", "BuildingManager");
+                case "tedarikci":
+                case "tedarik":
+                    return RedirectToAction("Index", "B2BPurchasing");
+                case "usta":
+                case "taseron":
+                    return RedirectToAction("Index", "SubcontractorContract");
+                case "insaat":
+                default:
+                    if (!model.ScopeBuilding && (model.ScopeDemolition || model.ScopeExcavation))
+                    {
+                        return RedirectToAction("Index", "DemolitionSalvage");
+                    }
+                    return RedirectToAction("Index", "ConstructionProject");
+            }
         }
 
         private string GenerateRandomReferralCode()

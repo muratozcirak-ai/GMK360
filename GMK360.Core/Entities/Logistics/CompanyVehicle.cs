@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace GMK360.Core.Entities.Logistics
@@ -14,6 +14,19 @@ namespace GMK360.Core.Entities.Logistics
         // Araç KM ve Saat Takibi
         public int CurrentKm { get; set; } = 0; // Güncel Kilometre
         public decimal CurrentWorkingHours { get; set; } = 0; // İş Makinaları için Güncel Çalışma Saati
+        
+        // Ruhsat Bilgileri
+        public string? RegistrationSerialNo { get; set; } // Ruhsat Belge Seri / Sıra No (Örn: AB 123456)
+        public string? RegistrationPhotoPath { get; set; } // Ruhsat Fotoğrafı (Ön/Arka)
+        
+        // Sigorta & Kasko Poliçe Bilgileri
+        public string? InsuranceCompany { get; set; } // Sigorta Şirketi (Allianz, Anadolu vb.)
+        public string? InsurancePolicyNo { get; set; } // Poliçe No
+        public DateTime? InsuranceExpiryDate { get; set; } // Poliçe Bitiş Tarihi
+        public string? InsurancePolicyPhotoPath { get; set; } // Poliçe Belgesi / Fotoğrafı
+        
+        // Muayene / Vize Takibi
+        public DateTime? InspectionExpiryDate { get; set; } // Tüvtürk Muayene Bitiş Tarihi
         
         public ICollection<VehicleAssignment> Assignments { get; set; }
         public ICollection<VehicleTask> Tasks { get; set; }

@@ -7,7 +7,8 @@ using GMK360.Data.Contexts;
 using Microsoft.EntityFrameworkCore;
 
 using GMK360.Web.ViewModels;
-
+using GMK360.Web.Models;
+using GMK360.Core.Entities;
 using GMK360.Web.Filters;
 namespace GMK360.Web.Controllers
 {
@@ -270,10 +271,104 @@ namespace GMK360.Web.Controllers
             return View();
         }
 
-        [Authorize(Roles = "CommercialRenter,Admin")]
-        public IActionResult CommercialRenter()
+        [Authorize(Roles = "CommercialRenter,Admin,SuperAdmin")]
+        public async Task<IActionResult> CommercialRenter()
         {
-            return View();
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var isSuperAdmin = User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
+
+            var query = _context.Buildings
+                .Include(b => b.Units)
+                .AsQueryable();
+
+            Building? facility = null;
+            if (!string.IsNullOrEmpty(userId))
+            {
+                facility = await query.FirstOrDefaultAsync(b => 
+                    (b.ManagerUserId == userId || b.CreatedByUserId == userId) && 
+                    (b.TechnicalFeatures == "DailyRental" || (b.Description != null && b.Description.Contains("Günlük Kiralık"))));
+            }
+
+            if (facility == null && isSuperAdmin)
+            {
+                facility = await query.FirstOrDefaultAsync(b => 
+                    b.TechnicalFeatures == "DailyRental" || (b.Description != null && b.Description.Contains("Günlük Kiralık")));
+            }
+
+            if (facility == null)
+            {
+                // Sıfır mock verili onboarding model
+                return View(new DailyRentalWorkspaceViewModel { HasFacility = false });
+            }
+
+            var units = facility.Units?
+                .Where(u => u.IsAvailableForDailyRent || u.Category == "DailyRental")
+                .OrderBy(u => u.DoorNumber)
+                .ToList() ?? new List<BuildingUnit>();
+
+            var unitIds = units.Select(u => u.Id).ToList();
+
+            var reservations = await _context.Reservations
+                .Include(r => r.TenantUser)
+                .Include(r => r.Guests)
+                .Include(r => r.Unit)
+                .Where(r => unitIds.Contains(r.UnitId) && r.ReservationStatus != ReservationStatus.Cancelled)
+                .OrderByDescending(r => r.StartDate)
+                .Take(10)
+                .ToListAsync();
+
+            var kbsSetting = await _context.KbsFacilitySettings
+                .FirstOrDefaultAsync(k => k.ApplicationUserId == (facility.ManagerUserId ?? userId) && k.IsActive);
+
+            var today = DateTime.Today;
+            var model = new DailyRentalWorkspaceViewModel
+            {
+                HasFacility = true,
+                FacilityId = facility.Id,
+                FacilityName = facility.Name,
+                FacilityType = facility.Description?.Contains("Pansiyon") == true ? "Butik Pansiyon" : 
+                               facility.Description?.Contains("Villa") == true ? "Müstakil Villa" : "Apart Otel / Daire Grubu",
+                Address = facility.Address ?? facility.StreetName ?? "Adres Tanımlı",
+                KbsFacilityCode = kbsSetting?.EgmFacilityCode,
+                TodayCheckInsCount = reservations.Count(r => r.StartDate.Date == today),
+                TodayCheckOutsCount = reservations.Count(r => r.EndDate.Date == today),
+                Units = units.Select(u => {
+                    var activeRes = reservations.FirstOrDefault(r => r.UnitId == u.Id && r.StartDate.Date <= today && r.EndDate.Date >= today);
+                    var firstGuest = activeRes?.Guests?.FirstOrDefault();
+                    var gFullName = firstGuest != null ? $"{firstGuest.FirstName} {firstGuest.LastName}".Trim() : null;
+                    return new DailyRentalUnitItemViewModel
+                    {
+                        Id = u.Id,
+                        UnitName = string.IsNullOrWhiteSpace(u.DoorNumber) ? $"Birim #{u.Id}" : u.DoorNumber,
+                        RoomLayout = u.RoomLayout ?? "Standart",
+                        Capacity = u.GrossSquareMeters.HasValue && u.GrossSquareMeters.Value > 0 ? (int)u.GrossSquareMeters.Value : 2,
+                        DailyRate = u.ListPrice ?? 1500m,
+                        IsOccupied = !u.IsEmpty || activeRes != null,
+                        CurrentGuestName = gFullName ?? activeRes?.TenantUser?.UserName,
+                        CurrentCheckOutDate = activeRes?.EndDate
+                    };
+                }).ToList(),
+                Reservations = reservations.Select(r => {
+                    var g = r.Guests?.FirstOrDefault();
+                    var gName = g != null ? $"{g.FirstName} {g.LastName}".Trim() : (r.TenantUser?.UserName ?? "İsimsiz Misafir");
+                    return new DailyRentalReservationItemViewModel
+                    {
+                        Id = r.Id,
+                        UnitId = r.UnitId,
+                        UnitName = r.Unit?.DoorNumber ?? $"Oda #{r.UnitId}",
+                        GuestName = gName,
+                        GuestPhone = r.TenantUser?.PhoneNumber ?? "-",
+                        GuestIdNumber = g?.TCIdentityNumberOrPassport,
+                        StartDate = r.StartDate,
+                        EndDate = r.EndDate,
+                        TotalPrice = r.TotalPrice,
+                        Status = r.ReservationStatus.ToString(),
+                        IsKbsReported = g != null && (!string.IsNullOrEmpty(g.TCIdentityNumberOrPassport) || g.IsReportedToKbs)
+                    };
+                }).ToList()
+            };
+
+            return View(model);
         }
 
         [Authorize(Roles = "Supplier,Admin")]

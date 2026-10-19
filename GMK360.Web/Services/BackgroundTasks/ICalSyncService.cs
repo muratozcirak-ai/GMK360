@@ -35,7 +35,14 @@ namespace GMK360.Web.Services.BackgroundTasks
                     _logger.LogError(ex, "iCal senkronizasyonunda hata oluştu.");
                 }
 
-                await Task.Delay(_syncInterval, stoppingToken);
+                try
+                {
+                    await Task.Delay(_syncInterval, stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
         }
 

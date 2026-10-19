@@ -117,6 +117,11 @@ builder.Services.AddScoped<IBuildingManagementService, GMK360.Web.Services.Build
 
 // Register newly created B2B and Rental Services
 builder.Services.AddScoped<GMK360.Core.Interfaces.ITradesmanService, GMK360.Core.Services.TradesmanService>();
+builder.Services.AddScoped<GMK360.Web.Services.IUstaWorkspaceService, GMK360.Web.Services.UstaWorkspaceService>();
+builder.Services.AddScoped<GMK360.Web.Services.ITaseronWorkspaceService, GMK360.Web.Services.TaseronWorkspaceService>();
+builder.Services.AddScoped<GMK360.Web.Services.ITedarikciWorkspaceService, GMK360.Web.Services.TedarikciWorkspaceService>();
+builder.Services.AddScoped<GMK360.Web.Services.IKurumsalB2BWorkspaceService, GMK360.Web.Services.KurumsalB2BWorkspaceService>();
+builder.Services.AddScoped<GMK360.Web.Services.IRealtorWorkspaceService, GMK360.Web.Services.RealtorWorkspaceService>();
 builder.Services.AddScoped<GMK360.Core.Interfaces.IPaymentGatewayService, GMK360.Core.Services.PaymentGatewayService>();
 builder.Services.AddScoped<GMK360.Core.Interfaces.IShortTermRentalService, GMK360.Web.Services.ShortTermRentalService>();
 builder.Services.AddScoped<GMK360.Core.Interfaces.IInvitationService, GMK360.Web.Services.InvitationService>();
@@ -138,6 +143,7 @@ builder.Services.AddScoped<GMK360.Core.Interfaces.INotificationService, GMK360.W
 builder.Services.AddSingleton<GMK360.Web.Routing.SeoRouteTransformer>();
 builder.Services.AddScoped<GMK360.Core.Interfaces.IFinancialEngineService, GMK360.Web.Services.FinancialEngineService>();
 builder.Services.AddScoped<GMK360.Web.Services.IValuationService, GMK360.Web.Services.ValuationService>();
+builder.Services.AddScoped<GMK360.Web.Services.B2BSupplierSyncService>();
 builder.Services.AddScoped<GMK360.Web.Services.ISeoService, GMK360.Web.Services.SeoService>();
 builder.Services.AddScoped<GMK360.Web.Services.Construction.DnaTimeOffsetService>();
 

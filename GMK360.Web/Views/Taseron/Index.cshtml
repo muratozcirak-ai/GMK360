@@ -1,0 +1,695 @@
+@model GMK360.Web.Models.TaseronDashboardViewModel
+@{
+    ViewData["Title"] = Model.CompanyTitle + " - Taşeron & Puantaj Kokpiti";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<style>
+    :root {
+        --taseron-primary: #1e3a8a;
+        --taseron-secondary: #0284c7;
+        --taseron-accent: #f97316;
+        --taseron-dark: #0f172a;
+        --whatsapp-green: #25D366;
+    }
+
+    body {
+        background-color: #f8fafc;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    .taseron-hero {
+        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 60%, #0369a1 100%);
+        color: white;
+        border-radius: 0 0 2rem 2rem;
+        box-shadow: 0 10px 25px -5px rgba(30, 58, 138, 0.35);
+    }
+
+    .card-modern {
+        border: none;
+        border-radius: 1.25rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        background: #ffffff;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .card-modern:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+    }
+
+    .puantaj-btn {
+        border-radius: 0.75rem;
+        font-weight: 700;
+        padding: 0.5rem 0.85rem;
+        font-size: 0.9rem;
+        transition: all 0.15s ease-in-out;
+    }
+
+    .stat-box {
+        border-radius: 1rem;
+        padding: 1.25rem;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+    }
+
+    .branch-pill {
+        background: rgba(255, 255, 255, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: white;
+        font-size: 0.82rem;
+        padding: 0.35rem 0.85rem;
+        border-radius: 9999px;
+        font-weight: 600;
+    }
+
+    .nav-pills-taseron .nav-link {
+        color: #475569;
+        font-weight: 700;
+        border-radius: 1rem;
+        padding: 0.75rem 1.25rem;
+        transition: all 0.2s;
+    }
+
+    .nav-pills-taseron .nav-link.active {
+        background: var(--taseron-primary);
+        color: white;
+        box-shadow: 0 4px 12px rgba(30, 58, 138, 0.3);
+    }
+
+    .btn-whatsapp {
+        background-color: var(--whatsapp-green);
+        color: white;
+        font-weight: 700;
+        border: none;
+    }
+    .btn-whatsapp:hover {
+        background-color: #128C7E;
+        color: white;
+    }
+</style>
+
+<div class="container-fluid p-0 mb-5">
+    
+    <!-- BİLDİRİM MESAJLARI -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="container mt-3">
+            <div class="alert alert-success alert-dismissible fade show rounded-4 shadow-sm border-0 d-flex align-items-center" role="alert">
+                <i class="bi bi-check-circle-fill fs-4 me-3 text-success"></i>
+                <div class="fw-semibold">@TempData["SuccessMessage"]</div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        </div>
+    }
+
+    <!-- TAŞERON HERO BAŞLIĞI -->
+    <div class="taseron-hero pt-4 pb-5 px-3 px-md-5">
+        <div class="container">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                <div>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                        <span class="badge bg-warning text-dark fw-bold rounded-pill px-3 py-1">
+                            <i class="bi bi-cone-striped me-1"></i> Şantiye & Taşeron Kokpiti
+                        </span>
+                        <span class="badge bg-info text-dark fw-bold rounded-pill px-3 py-1">
+                            <i class="bi bi-people-fill me-1"></i> @Model.TotalTeamSize Usta Sahada
+                        </span>
+                        <span class="badge bg-success text-white fw-bold rounded-pill px-3 py-1">
+                            <i class="bi bi-broadcast me-1"></i> Tüm Şehir İhalelerine Açık (250 TL/Ay Tek Aidat)
+                        </span>
+                    </div>
+
+                    <h2 class="fw-bold mb-1 text-white">@Model.CompanyTitle</h2>
+                    <p class="text-white-50 mb-2 fs-6">
+                        <i class="bi bi-person-fill text-warning me-1"></i> Yetkili: <strong>@Model.ManagerName</strong> 
+                        &bull; <i class="bi bi-telephone-fill text-success me-1"></i> @Model.PhoneNumber 
+                        &bull; <i class="bi bi-geo-alt-fill text-danger me-1"></i> @Model.CityName (@Model.DistrictName)
+                    </p>
+
+                    <!-- ÇOKLU BRANŞ ETİKETLERİ (TEK BRANŞA HAPSOLMAMA) -->
+                    <div class="d-flex flex-wrap gap-2 pt-1">
+                        @foreach (var br in Model.Branches)
+                        {
+                            <span class="branch-pill"><i class="bi bi-check2-circle me-1"></i> @br</span>
+                        }
+                    </div>
+                </div>
+
+                <!-- Hızlı Aksiyon Butonları -->
+                <div class="d-flex flex-column flex-sm-row gap-2">
+                    <form asp-action="BulkApproveToday" method="post" class="m-0">
+                        <button type="submit" class="btn btn-warning text-dark fw-bold rounded-4 px-4 py-3 shadow w-100" title="Tüm ustaları bugün tam gün sahada işaretle">
+                            <i class="bi bi-check-all fs-5 me-1"></i> Tüm Ekip Bugün Sahada
+                        </button>
+                    </form>
+                    <button class="btn btn-outline-light fw-bold rounded-4 px-3 py-3" data-bs-toggle="modal" data-bs-target="#newWorkerModal">
+                        <i class="bi bi-person-plus-fill me-1"></i> Yeni Usta Ekle
+                    </button>
+                    <a asp-action="AddSampleData" class="btn btn-outline-warning text-white rounded-4 px-3 py-3" title="Demo Verileri Yenile">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ANA İÇERİK -->
+    <div class="container" style="margin-top: -1.75rem;">
+
+        <!-- 1. TAŞERONUN NET KÂR PUSULASI (CEBİME NE KALDI?) -->
+        <div class="card-modern p-3 p-md-4 mb-4 border border-light">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h5 class="fw-bold mb-0 text-dark">
+                        <i class="bi bi-compass text-primary me-2"></i> Taşeronun Net Kâr Pusulası (Cebimdeki Para)
+                    </h5>
+                    <p class="text-muted small mb-0">Şantiye hakedişinizden usta puantajları, avanslar ve ekipman kiraları düşülmüş net kazancınız.</p>
+                </div>
+                <span class="badge bg-light text-dark border px-3 py-2 rounded-pill fw-bold">
+                    <i class="bi bi-cash-stack me-1"></i> Dönem Hakediş Analizi
+                </span>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-6 col-lg-3">
+                    <div class="stat-box">
+                        <small class="text-muted fw-bold text-uppercase d-block mb-1">Müteahhit Hakedişi</small>
+                        <h4 class="fw-bold text-dark mb-0">+@Model.CurrentPeriodHakedis.ToString("N0") <span class="fs-6">TL</span></h4>
+                        <small class="text-success fw-bold"><i class="bi bi-buildings"></i> @Model.Contracts.Count Aktif Şantiye</small>
+                    </div>
+                </div>
+
+                <div class="col-6 col-lg-3">
+                    <div class="stat-box border-start border-3 border-danger">
+                        <small class="text-muted fw-bold text-uppercase d-block mb-1">Ekip Puantaj Toplamı</small>
+                        <h4 class="fw-bold text-danger mb-0">-@Model.TotalWorkerWagesThisPeriod.ToString("N0") <span class="fs-6">TL</span></h4>
+                        <small class="text-muted"><i class="bi bi-people-fill"></i> @Model.TotalTeamSize Usta & Zanaatkâr</small>
+                    </div>
+                </div>
+
+                <div class="col-6 col-lg-3">
+                    <div class="stat-box border-start border-3 border-warning">
+                        <small class="text-muted fw-bold text-uppercase d-block mb-1">İskele, Direk & Sarf</small>
+                        <h4 class="fw-bold text-warning mb-0">-@Model.TotalEquipmentExpenseThisPeriod.ToString("N0") <span class="fs-6">TL</span></h4>
+                        <small class="text-muted"><i class="bi bi-tools"></i> Kiralama & Şantiye Sarf</small>
+                    </div>
+                </div>
+
+                <div class="col-6 col-lg-3">
+                    <div class="stat-box text-white" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%);">
+                        <small class="text-white-50 fw-bold text-uppercase d-block mb-1">Taşerona Kalan Net Kâr</small>
+                        <h3 class="fw-bold text-white mb-0">+@Model.NetProfitThisPeriod.ToString("N0") <span class="fs-6">TL</span></h3>
+                        <small class="text-white fw-bold"><i class="bi bi-graph-up-arrow"></i> % @Model.NetProfitMarginPercent.ToString("N0") Net Kâr Marjı</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. SEKMELER -->
+        <ul class="nav nav-pills nav-pills-taseron mb-4 gap-2" id="taseronTabs" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" id="puantaj-tab" data-bs-toggle="pill" data-bs-target="#puantaj-pane" type="button">
+                    <i class="bi bi-calendar-check me-1"></i> Günlük Puantaj Çetelesi (@Model.Workers.Count Usta)
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="contracts-tab" data-bs-toggle="pill" data-bs-target="#contracts-pane" type="button">
+                    <i class="bi bi-file-earmark-ruled me-1"></i> Şantiye Sözleşmeleri & Hakediş (@Model.Contracts.Count)
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="team-tab" data-bs-toggle="pill" data-bs-target="#team-pane" type="button">
+                    <i class="bi bi-person-lines-fill me-1"></i> Ekip & Avans Defteri
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="equipment-tab" data-bs-toggle="pill" data-bs-target="#equipment-pane" type="button">
+                    <i class="bi bi-tools me-1"></i> İskele, Direk & Sarf Gideri
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="taseronTabsContent">
+
+            <!-- 1. SEKME: GÜNLÜK PUANTAJ ÇETELESİ -->
+            <div class="tab-pane fade show active" id="puantaj-pane" role="tabpanel">
+                <div class="card-modern p-4 mb-4">
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+                        <div>
+                            <h5 class="fw-bold mb-1 text-dark">
+                                <i class="bi bi-clipboard2-check-fill text-primary me-2"></i>Bugünün Şantiye Puantajı (@DateTime.UtcNow.ToString("dd MMMM yyyy"))
+                            </h5>
+                            <p class="text-muted small mb-0">Her ustanın durumunu tek dokunuşla işaretleyin; yevmiye ve hakedişler anında güncellensin.</p>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <form asp-action="BulkApproveToday" method="post" class="m-0">
+                                <button type="submit" class="btn btn-success fw-bold rounded-pill px-4 shadow-sm">
+                                    <i class="bi bi-check2-all me-1"></i> Hepsine Tam Gün Yaz
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- USTA BAZLI HIZLI PUANTAJ KARTLARI -->
+                    <div class="row g-3 mb-4">
+                        @foreach (var worker in Model.Workers)
+                        {
+                            <div class="col-12 col-lg-6">
+                                <div class="p-3 border rounded-4 bg-white shadow-sm d-flex flex-column justify-content-between h-100">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="rounded-circle bg-primary-subtle text-primary fw-bold d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+                                                @(worker.FullName.Length > 2 ? worker.FullName.Substring(0, 2).ToUpper() : "US")
+                                            </div>
+                                            <div>
+                                                <h6 class="fw-bold text-dark mb-0">@worker.FullName</h6>
+                                                <span class="badge bg-secondary-subtle text-secondary rounded-pill small">@worker.TradeRole</span>
+                                            </div>
+                                        </div>
+                                        <div class="text-end">
+                                            <small class="text-muted d-block" style="font-size: 0.75rem;">Günlük Yevmiye</small>
+                                            <span class="fw-bold text-success">@worker.DailyWage.ToString("N0") TL</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- PUANTAJ BUTONLARI -->
+                                    <div class="d-flex flex-wrap gap-2 pt-2 border-top">
+                                        <form asp-action="RecordPuantaj" method="post" class="d-inline">
+                                            <input type="hidden" name="workerId" value="@worker.Id" />
+                                            <input type="hidden" name="workDayFactor" value="1.0" />
+                                            <button type="submit" class="btn btn-outline-success puantaj-btn">
+                                                <i class="bi bi-check-lg"></i> Tam Gün (1.0)
+                                            </button>
+                                        </form>
+
+                                        <form asp-action="RecordPuantaj" method="post" class="d-inline">
+                                            <input type="hidden" name="workerId" value="@worker.Id" />
+                                            <input type="hidden" name="workDayFactor" value="0.5" />
+                                            <button type="submit" class="btn btn-outline-warning puantaj-btn">
+                                                <i class="bi bi-clock-history"></i> Yarım Gün (0.5)
+                                            </button>
+                                        </form>
+
+                                        <form asp-action="RecordPuantaj" method="post" class="d-inline">
+                                            <input type="hidden" name="workerId" value="@worker.Id" />
+                                            <input type="hidden" name="workDayFactor" value="0.0" />
+                                            <button type="submit" class="btn btn-outline-danger puantaj-btn">
+                                                <i class="bi bi-x-lg"></i> Gelmedi (0)
+                                            </button>
+                                        </form>
+
+                                        <button class="btn btn-outline-primary puantaj-btn ms-auto" data-bs-toggle="modal" data-bs-target="#advanceModal-@worker.Id">
+                                            <i class="bi bi-cash-coin me-1"></i> Avans Ver
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- AVANS VERME MODAL -->
+                            <div class="modal fade" id="advanceModal-@worker.Id" tabindex="-1">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content rounded-4 border-0">
+                                        <div class="modal-header bg-primary text-white">
+                                            <h5 class="modal-title fw-bold text-white"><i class="bi bi-wallet2 me-2"></i>Avans / Harcırah Yaz: @worker.FullName</h5>
+                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form asp-action="AddAdvance" method="post">
+                                            <input type="hidden" name="workerId" value="@worker.Id" />
+                                            <div class="modal-body p-4">
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold small text-muted">Avans Tutarı (TL)</label>
+                                                    <input type="number" step="any" name="amount" class="form-control form-control-lg rounded-3 fw-bold text-primary" placeholder="Örn: 3000" required />
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold small text-muted">Ödeme Şekli</label>
+                                                    <select name="paymentType" class="form-select rounded-3">
+                                                        <option value="Elden Nakit Cuma Harçlığı">Elden Nakit Cuma Harçlığı</option>
+                                                        <option value="Banka Havalesi / EFT">Banka Havalesi / EFT</option>
+                                                    </select>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold small text-muted">Açıklama / Not</label>
+                                                    <input type="text" name="notes" class="form-control rounded-3" placeholder="Örn: 2. Hafta harçlığı" />
+                                                </div>
+                                                <div class="p-3 bg-light rounded-3 small">
+                                                    <i class="bi bi-info-circle text-primary me-1"></i> Bu tutar ustanın ay sonu net ödenecek hakedişinden otomatik mahsup edilecektir.
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer bg-light">
+                                                <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Vazgeç</button>
+                                                <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">Avansı Kaydet</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- SON PUANTAJ HAREKETLERİ TABLOSU -->
+                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-clock-history me-1"></i> Son Puantaj Kayıtları</h6>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light small text-muted text-uppercase">
+                                <tr>
+                                    <th>Tarih</th>
+                                    <th>Usta Adı</th>
+                                    <th>Branş</th>
+                                    <th>Çalışma Durumu</th>
+                                    <th>Şantiye / Not</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var entry in Model.RecentPuantajEntries)
+                                {
+                                    <tr>
+                                        <td class="small text-muted">@entry.Date.ToString("dd MMM yyyy")</td>
+                                        <td class="fw-bold text-dark">@entry.WorkerName</td>
+                                        <td><span class="badge bg-light text-dark border">@entry.TradeRole</span></td>
+                                        <td>
+                                            @if (entry.WorkDayFactor == 1.0)
+                                            {
+                                                <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3">
+                                                    Tam Gün (1.0)
+                                                </span>
+                                            }
+                                            else if (entry.WorkDayFactor == 0.5)
+                                            {
+                                                <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill px-3">
+                                                    Yarım Gün (0.5)
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-3">
+                                                    Gelmedi (0)
+                                                </span>
+                                            }
+                                            @if (entry.OvertimeHours > 0)
+                                            {
+                                                <span class="badge bg-primary text-white rounded-pill ms-1">+@entry.OvertimeHours Saat Mesai</span>
+                                            }
+                                        </td>
+                                        <td class="small text-muted">@entry.SiteLocation - @entry.Notes</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. SEKME: ŞANTİYE SÖZLEŞMELERİ & HAKEDİŞ -->
+            <div class="tab-pane fade" id="contracts-pane" role="tabpanel">
+                <div class="row g-4">
+                    @foreach (var c in Model.Contracts)
+                    {
+                        <div class="col-12 col-lg-6">
+                            <div class="card-modern p-4 h-100 border-start border-4 border-primary">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <span class="badge bg-primary text-white rounded-pill px-3 py-1 mb-2">@c.Status</span>
+                                        <h5 class="fw-bold text-dark mb-1">@c.ProjectName</h5>
+                                        <p class="text-muted small mb-0">
+                                            <i class="bi bi-buildings text-primary me-1"></i> Müteahhit: <strong>@c.ContractorCompany</strong>
+                                        </p>
+                                        <p class="text-muted small mb-2">
+                                            <i class="bi bi-person-badge text-secondary me-1"></i> @c.SiteManagerContact
+                                        </p>
+                                    </div>
+                                    <div class="text-end">
+                                        <small class="text-muted d-block">Toplam Sözleşme</small>
+                                        <span class="fs-5 fw-bold text-dark">@c.TotalContractAmount.ToString("N0") TL</span>
+                                    </div>
+                                </div>
+
+                                <div class="bg-light p-3 rounded-4 mb-3 border">
+                                    <div class="d-flex justify-content-between small mb-1">
+                                        <span class="text-muted">İş Kapsamı & Sözleşme Tipi:</span>
+                                        <strong class="text-dark">@c.WorkScope (@c.ContractType)</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between small mb-1">
+                                        <span class="text-muted">Tahsil Edilen Toplam Hakediş:</span>
+                                        <strong class="text-success">@c.CumulativeHakedisPaid.ToString("N0") TL</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between small border-top pt-1">
+                                        <span class="fw-bold text-dark">Bu Dönem Hakediş Talebi:</span>
+                                        <strong class="text-primary fs-6">@c.CurrentPeriodHakedisClaim.ToString("N0") TL</strong>
+                                    </div>
+                                </div>
+
+                                <!-- MÜTEAHHİT KESİNTİ KALKANI BİLGİSİ -->
+                                <div class="p-3 bg-warning-subtle border border-warning-subtle rounded-3 mb-3 small">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span>🛡️ Teminat Kesintisi (%@c.RetentionGuaranteeRate - Kabulde İade):</span>
+                                        <strong class="text-danger">-@c.RetentionDeductionAmount.ToString("N0") TL</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span>⚡ Şantiye Elektrik & Su Kesintisi:</span>
+                                        <strong class="text-danger">-@c.SiteElectricWaterDeduction.ToString("N0") TL</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between border-top border-warning pt-1">
+                                        <span class="fw-bold text-dark">Net Ödenecek Hakediş:</span>
+                                        <strong class="text-success fs-5">@c.NetPayableHakedis.ToString("N0") TL</strong>
+                                    </div>
+                                </div>
+
+                                <!-- AKSİYON BUTONLARI -->
+                                <div class="d-flex flex-wrap gap-2 pt-2 border-top">
+                                    <a href="@c.WhatsAppHakedisSummaryUrl" target="_blank" class="btn btn-whatsapp btn-sm px-3 flex-grow-1 d-flex align-items-center justify-content-center gap-1">
+                                        <i class="bi bi-whatsapp"></i> WhatsApp Hakediş Mutabakatı At
+                                    </a>
+                                    <a asp-action="PrintHakedisSheet" asp-route-id="@c.Id" target="_blank" class="btn btn-outline-secondary btn-sm px-3" title="Resmî İmzalı Hakediş Fişi">
+                                        <i class="bi bi-printer-fill me-1"></i> Fiş Yazdır
+                                    </a>
+                                    <button class="btn btn-outline-primary btn-sm px-3" data-bs-toggle="modal" data-bs-target="#newHakedisModal-@c.Id">
+                                        <i class="bi bi-plus-circle me-1"></i> Hakediş Çek
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- YENİ DÖNEM HAKEDİŞ ÇEKME MODALI -->
+                        <div class="modal fade" id="newHakedisModal-@c.Id" tabindex="-1">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content rounded-4 border-0">
+                                    <div class="modal-header bg-dark text-white">
+                                        <h5 class="modal-title fw-bold text-white"><i class="bi bi-cash-stack text-warning me-2"></i>Yeni Dönem Hakediş Talebi</h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <form asp-action="CreateHakedisClaim" method="post">
+                                        <input type="hidden" name="contractId" value="@c.Id" />
+                                        <div class="modal-body p-4">
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold small text-muted">Şantiye</label>
+                                                <input type="text" class="form-control rounded-3" value="@c.ProjectName" readonly />
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold small text-muted">Bu Dönem Hakediş Tutarı (TL)</label>
+                                                <input type="number" step="any" name="hakedisAmount" class="form-control form-control-lg rounded-3 fw-bold text-success" placeholder="Örn: 250000" required />
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold small text-muted">Tamamlanan İmalat & Metraj Açıklaması</label>
+                                                <textarea name="progressNotes" rows="2" class="form-control rounded-3" placeholder="Örn: 3. Kat tabliye betonu ve kolon kalıpları döküldü."></textarea>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer bg-light">
+                                            <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Vazgeç</button>
+                                            <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold">Hakedişi İşle & Mutabakat Hazırla</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- 3. SEKME: EKİP & AVANS DEFTERİ -->
+            <div class="tab-pane fade" id="team-pane" role="tabpanel">
+                <div class="card-modern p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-people-fill text-primary me-2"></i>Usta Ekip Kadrosu & Ay Sonu Maaş Dağılımı</h5>
+                            <p class="text-muted small mb-0">Ustanın çalıştığı gün x günlük yevmiye - alınan avans = <strong>Kalan Net Ödenecek Hakediş</strong>.</p>
+                        </div>
+                        <button class="btn btn-primary fw-bold rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#newWorkerModal">
+                            <i class="bi bi-person-plus-fill me-1"></i> Yeni Usta Ekle
+                        </button>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light small text-muted text-uppercase">
+                                <tr>
+                                    <th>Usta Adı Soyadı</th>
+                                    <th>Branş / Rol</th>
+                                    <th>Günlük Yevmiye</th>
+                                    <th>Bu Ay Çalışılan</th>
+                                    <th>Kazanılan Hakediş</th>
+                                    <th>Verilen Avans</th>
+                                    <th class="text-end">Kalan Net Ödenecek</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var w in Model.Workers)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="fw-bold text-dark">@w.FullName</div>
+                                            <small class="text-muted"><i class="bi bi-telephone"></i> @w.PhoneNumber</small>
+                                        </td>
+                                        <td><span class="badge bg-light text-dark border">@w.TradeRole</span></td>
+                                        <td class="fw-semibold">@w.DailyWage.ToString("N0") TL</td>
+                                        <td><strong>@w.DaysWorkedThisMonth Gün</strong></td>
+                                        <td class="text-primary fw-bold">@w.TotalWagesEarned.ToString("N0") TL</td>
+                                        <td class="text-danger fw-bold">-@w.TotalAdvancesTaken.ToString("N0") TL</td>
+                                        <td class="text-end fw-bold text-success fs-6">
+                                            @w.RemainingNetPayable.ToString("N0") TL
+                                        </td>
+                                        <td class="text-end">
+                                            <button class="btn btn-outline-primary btn-sm rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#advanceModal-@w.Id">
+                                                Avans Ver
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. SEKME: İSKELE, DİREK & SARF GİDERİ -->
+            <div class="tab-pane fade" id="equipment-pane" role="tabpanel">
+                <div class="card-modern p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-tools text-warning me-2"></i>Kiralık İskele, Direk & Şantiye Sarf Giderleri</h5>
+                            <p class="text-muted small mb-0">Taşeronun şantiyede kullandığı teleskopik direk, iskele ve sarf malzeme (bağ teli, çivi, paspayı) takibi.</p>
+                        </div>
+                        <button class="btn btn-warning text-dark fw-bold rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#newExpenseModal">
+                            <i class="bi bi-plus-lg me-1"></i> Yeni Gider Ekle
+                        </button>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light small text-muted text-uppercase">
+                                <tr>
+                                    <th>Tarih</th>
+                                    <th>Gider Kalemi</th>
+                                    <th>Tedarikçi / Kiralama Firması</th>
+                                    <th>Kategori</th>
+                                    <th class="text-end">Tutar</th>
+                                    <th>Durum</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var eq in Model.EquipmentExpenses)
+                                {
+                                    <tr>
+                                        <td class="small text-muted">@eq.Date.ToString("dd MMM yyyy")</td>
+                                        <td class="fw-bold text-dark">@eq.ItemName</td>
+                                        <td>@eq.SupplierName</td>
+                                        <td><span class="badge bg-light text-dark border">@eq.Category</span></td>
+                                        <td class="text-end fw-bold text-danger">-@eq.Amount.ToString("N0") TL</td>
+                                        <td><span class="badge bg-secondary-subtle text-secondary rounded-pill">@eq.Status</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODALLAR ================= -->
+
+<!-- YENİ USTA EKLEME MODALI -->
+<div class="modal fade" id="newWorkerModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold text-white"><i class="bi bi-person-plus-fill text-warning me-2"></i>Ekibe Yeni Usta / Zanaatkâr Ekle</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="AddWorker" method="post">
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Usta Adı Soyadı</label>
+                        <input type="text" name="fullName" class="form-control form-control-lg rounded-3" placeholder="Örn: Yusuf Usta" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Telefon Numarası</label>
+                        <input type="text" name="phoneNumber" class="form-control rounded-3" placeholder="Örn: 0542 111 22 33" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Uzmanlık / Rol</label>
+                        <select name="tradeRole" class="form-select rounded-3">
+                            <option value="Kalıp & Ahşap Ustası">Kalıp & Ahşap Ustası</option>
+                            <option value="Demir Donatı Ustası">Demir Donatı Ustası</option>
+                            <option value="Tuğla & Duvar Ustası">Tuğla & Duvar Ustası</option>
+                            <option value="Sertifikalı Kaynakçı">Sertifikalı Kaynakçı</option>
+                            <option value="Şap & Sıva Ustası">Şap & Sıva Ustası</option>
+                            <option value="İnşaat Kalfası">İnşaat Kalfası</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Günlük Standart Yevmiyesi (TL)</label>
+                        <input type="number" step="any" name="dailyWage" class="form-control form-control-lg rounded-3 fw-bold text-dark" placeholder="Örn: 1500" value="1500" required />
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">Ekibe Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- YENİ GİDER / KİRALAMA EKLEME MODALI -->
+<div class="modal fade" id="newExpenseModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title fw-bold"><i class="bi bi-cart-plus me-2"></i>Yeni İskele / Sarf Gideri Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="AddEquipmentExpense" method="post">
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Gider Kalemi / Malzeme</label>
+                        <input type="text" name="itemName" class="form-control rounded-3" placeholder="Örn: 150 adet teleskopik kalıp direği kirası" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Tedarikçi / Kiralama Firması</label>
+                        <input type="text" name="supplierName" class="form-control rounded-3" placeholder="Örn: Mega İskele Sanayi" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Kategori</label>
+                        <select name="category" class="form-select rounded-3">
+                            <option value="İskele & Makine Kiralama">İskele & Makine Kiralama</option>
+                            <option value="Sarf Malzeme (Tel, Çivi, Paspayı)">Sarf Malzeme (Tel, Çivi, Paspayı)</option>
+                            <option value="İş Güvenliği & KKD Ekipmanı">İş Güvenliği & KKD Ekipmanı</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Tutar (TL)</label>
+                        <input type="number" step="any" name="amount" class="form-control form-control-lg rounded-3 fw-bold text-danger" placeholder="Örn: 18000" required />
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-warning text-dark fw-bold rounded-pill px-4">Gideri Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

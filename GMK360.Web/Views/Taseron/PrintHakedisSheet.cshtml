@@ -1,0 +1,173 @@
+@model GMK360.Web.Models.TaseronContractViewModel
+@{
+    Layout = null;
+    var taseron = ViewBag.Taseron as GMK360.Web.Models.TaseronDashboardViewModel;
+}
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Resmi Hakediş Tutanağı - @Model.ProjectName</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" />
+    <style>
+        body {
+            background-color: #f8fafc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #1e293b;
+        }
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 20mm;
+            margin: 10mm auto;
+            background: white;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+        }
+        .header-box {
+            border-bottom: 2px solid #1e3a8a;
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+        }
+        .signature-box {
+            border: 1px dashed #cbd5e1;
+            border-radius: 8px;
+            height: 120px;
+            padding: 10px;
+            background: #fafafa;
+        }
+        @@media print {
+            body { background: white; margin: 0; }
+            .page { box-shadow: none; margin: 0; width: 100%; height: 100%; padding: 10mm; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="text-center py-3 no-print bg-dark text-white d-flex justify-content-center gap-3 align-items-center">
+        <span>Resmî Taşeron & Müteahhit Ara Hakediş Mutabakat Tutanağı</span>
+        <button onclick="window.print()" class="btn btn-warning fw-bold px-4 rounded-pill">
+            <i class="bi bi-printer-fill me-1"></i> Sayfayı Yazdır (A4 / PDF)
+        </button>
+        <button onclick="window.close()" class="btn btn-outline-light rounded-pill px-3">
+            Kapat
+        </button>
+    </div>
+
+    <div class="page">
+        <div class="header-box d-flex justify-content-between align-items-center">
+            <div>
+                <h3 class="fw-bold mb-0" style="color: #1e3a8a;">GMK360 &bull; TAŞERON HAKEDİŞ VE METRAJ TUTANAĞI</h3>
+                <small class="text-muted text-uppercase tracking-wider">İnşaat Taahhüt & Şantiye Ara İmalat Kabul Formu</small>
+            </div>
+            <div class="text-end">
+                <span class="badge bg-dark px-3 py-2 fs-6">Hakediş No: HKD-@Model.Id</span>
+                <small class="d-block text-muted mt-1">Tarih: @DateTime.UtcNow.ToString("dd.MM.yyyy")</small>
+            </div>
+        </div>
+
+        <!-- TARAFLAR -->
+        <div class="row g-4 mb-4">
+            <div class="col-6">
+                <div class="p-3 border rounded-3 bg-light h-100">
+                    <h6 class="fw-bold text-uppercase border-bottom pb-2 mb-2 text-dark">
+                        <i class="bi bi-cone-striped text-primary me-1"></i> Yüklenici (Taşeron Firma)
+                    </h6>
+                    <div class="mb-1"><strong>Taşeron:</strong> @taseron?.CompanyTitle</div>
+                    <div class="mb-1"><strong>Yetkili:</strong> @taseron?.ManagerName</div>
+                    <div class="mb-1"><strong>İletişim Tel:</strong> @taseron?.PhoneNumber</div>
+                    <div><strong>Bölge:</strong> @taseron?.CityName (@taseron?.DistrictName)</div>
+                </div>
+            </div>
+
+            <div class="col-6">
+                <div class="p-3 border rounded-3 bg-light h-100">
+                    <h6 class="fw-bold text-uppercase border-bottom pb-2 mb-2 text-dark">
+                        <i class="bi bi-buildings text-success me-1"></i> İşveren (Müteahhit Firma)
+                    </h6>
+                    <div class="mb-1"><strong>Firma Adı:</strong> @Model.ContractorCompany</div>
+                    <div class="mb-1"><strong>Şantiye / Proje:</strong> @Model.ProjectName</div>
+                    <div class="mb-1"><strong>Şantiye Sorumlusu:</strong> @Model.SiteManagerContact</div>
+                    <div><strong>Sözleşme Kapsamı:</strong> @Model.WorkScope</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- HAKEDİŞ DETAYLARI TABLOSU -->
+        <h6 class="fw-bold text-uppercase text-dark mb-2">1. İmalat ve Hakediş Dağılımı</h6>
+        <table class="table table-bordered mb-4">
+            <thead class="table-light">
+                <tr>
+                    <th>Sözleşme Tipi & Kapsam</th>
+                    <th>Toplam Metraj / Hacim</th>
+                    <th>Birim Fiyat</th>
+                    <th class="text-end">Bu Dönem Hakediş Talebi</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="fw-bold text-dark">@Model.WorkScope (@Model.ContractType)</td>
+                    <td>@Model.TotalQuantityMetraj.ToString("N0") m²</td>
+                    <td>@Model.UnitPrice.ToString("N0") TL</td>
+                    <td class="text-end fw-bold text-primary fs-5">+@Model.CurrentPeriodHakedisClaim.ToString("N0") TL</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- KESİNTİLER VE NET ÖDENECEK -->
+        <h6 class="fw-bold text-uppercase text-dark mb-2">2. Yasal Kesintiler ve Net Hakediş İcmali</h6>
+        <table class="table table-bordered mb-4">
+            <tbody>
+                <tr>
+                    <td>Brüt Dönem Hakediş Tutarı</td>
+                    <td class="text-end fw-bold">+@Model.CurrentPeriodHakedisClaim.ToString("N0") TL</td>
+                </tr>
+                <tr>
+                    <td>Teminat Kesintisi (%@Model.RetentionGuaranteeRate - Geçici Kabulde İade)</td>
+                    <td class="text-end text-danger fw-bold">-@Model.RetentionDeductionAmount.ToString("N0") TL</td>
+                </tr>
+                <tr>
+                    <td>Şantiye Elektrik & Su Katkı Payı</td>
+                    <td class="text-end text-danger fw-bold">-@Model.SiteElectricWaterDeduction.ToString("N0") TL</td>
+                </tr>
+                <tr class="table-light">
+                    <td>Stopaj / Gider Pusulası Kesintisi (Sözleşme Uyarınca Müteahhide Aittir)</td>
+                    <td class="text-end text-muted fw-bold">0,00 TL</td>
+                </tr>
+                <tr class="table-success">
+                    <td class="fw-bold fs-5 text-dark">TAŞERONA NET ÖDENECEK HAKEDİŞ</td>
+                    <td class="text-end fw-bold text-success fs-4">@Model.NetPayableHakedis.ToString("N0") TL</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="p-3 bg-light border rounded-3 mb-4 small">
+            <strong>Mutabakat Şartı:</strong> Taraflar yukarıda belirtilen metraj ve hakediş tutarları üzerinde şantiye mahallinde mutabık kalmıştır. Ödeme taraflar arasındaki sözleşme vadelerine uygun olarak taşeronun banka hesabına ifa edilecektir.
+        </div>
+
+        <!-- İMZA ALANLARI -->
+        <div class="row g-4 mt-4 pt-2">
+            <div class="col-6">
+                <div class="signature-box d-flex flex-column justify-content-between text-center">
+                    <span class="small fw-bold text-muted">Taşeron Firma Kaşe & İmza</span>
+                    <strong class="text-dark">@taseron?.CompanyTitle</strong>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="signature-box d-flex flex-column justify-content-between text-center">
+                    <span class="small fw-bold text-muted">Müteahhit Firma / Şantiye Şefi İmza</span>
+                    <strong class="text-dark">@Model.ContractorCompany</strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-5 pt-3 border-top text-muted small">
+            Bu tutanak GMK360 Dijital Şantiye ve Taşeron Yönetimi altyapısı ile oluşturulmuştur.
+        </div>
+    </div>
+
+</body>
+</html>

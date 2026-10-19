@@ -1,163 +1,1136 @@
-﻿@model IEnumerable<GMK360.Core.Entities.Construction.AgendaRecord>
+@model IEnumerable<GMK360.Core.Entities.Construction.AgendaRecord>
 @{
-    ViewData["Title"] = "CRM & Ajanda Yönetimi";
+    ViewData["Title"] = "Şantiye Kara Defteri & Ajanda";
     Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
-    var selectedDate = ViewBag.SelectedDate as DateTime?;
+
+    var selectedDate = (DateTime)ViewBag.SelectedDate;
+    var prevDate = (DateTime)ViewBag.PrevDate;
+    var nextDate = (DateTime)ViewBag.NextDate;
     var eventDates = ViewBag.EventDates as List<DateTime> ?? new List<DateTime>();
+    var upcomingRecords = ViewBag.UpcomingRecords as List<GMK360.Core.Entities.Construction.AgendaRecord> ?? new List<GMK360.Core.Entities.Construction.AgendaRecord>();
+    var allRecords = ViewBag.AllRecords as List<GMK360.Core.Entities.Construction.AgendaRecord> ?? new List<GMK360.Core.Entities.Construction.AgendaRecord>();
+    var activeProject = ViewBag.ActiveProject as GMK360.Core.Entities.Construction.ConstructionProject;
+    var projects = ViewBag.Projects as List<GMK360.Core.Entities.Construction.ConstructionProject> ?? new List<GMK360.Core.Entities.Construction.ConstructionProject>();
+    var staffList = ViewBag.StaffList as List<GMK360.Web.Controllers.AgendaStaffOption> ?? new List<GMK360.Web.Controllers.AgendaStaffOption>();
+    var viewMode = (string)(ViewBag.ViewMode ?? "timeline");
+    var isToday = selectedDate.Date == DateTime.Today;
+    int? projectId = ViewBag.ProjectId as int?;
 }
 
 <!-- FullCalendar CSS -->
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet" />
 
 <style>
-    .agenda-container {
-        display: flex;
-        height: calc(100vh - 120px);
-        gap: 20px;
-        background: #f8f9fa;
-        padding: 20px;
+    .agenda-nav-bar {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 14px 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        border: 1px solid #e5e7eb;
     }
-    
-    .left-panel {
-        width: 350px;
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
+    .agenda-card {
+        border-radius: 16px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        transition: all 0.2s ease;
     }
-
-    .calendar-card {
-        background: white;
-        border-radius: 12px;
-        padding: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    .agenda-card:hover {
+        box-shadow: 0 6px 16px rgba(0,0,0,0.06);
+        border-color: #cbd5e1;
     }
-    
-    .timeline-card {
-        background: white;
-        border-radius: 12px;
-        padding: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        flex: 1;
-        overflow-y: auto;
+    /* Saatli Çizelge Tablo Stilleri */
+    .timeline-table {
+        border-collapse: separate;
+        border-spacing: 0 10px;
     }
-
-    .right-panel {
-        flex: 1;
-        background: white;
-        border-radius: 12px;
-        padding: 25px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        overflow-y: auto;
+    .timeline-row {
+        background: #ffffff;
+        border-radius: 14px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+        border: 1px solid #e5e7eb;
+        transition: all 0.2s ease;
     }
-
-    .timeline-item {
-        padding: 12px;
-        border-left: 3px solid #007bff;
-        background: #fdfdfd;
-        margin-bottom: 10px;
-        cursor: pointer;
-        transition: all 0.2s;
-        border-radius: 0 8px 8px 0;
+    .timeline-row.has-event {
+        border-left: 6px solid #f59e0b !important;
+        background: #fffdf9;
     }
-    
-    .timeline-item:hover, .timeline-item.active {
-        background: #eef5ff;
-        border-left-color: #0056b3;
+    .timeline-row.has-event.delivery {
+        border-left: 6px solid #10b981 !important;
+        background: #f0fdf4;
     }
-
-    .timeline-time {
-        font-size: 0.85rem;
-        color: #6c757d;
-        margin-bottom: 4px;
+    .timeline-row.has-event.meeting {
+        border-left: 6px solid #3b82f6 !important;
+        background: #f8fafc;
     }
-
-    .timeline-title {
-        font-weight: 600;
-        color: #333;
-        font-size: 0.95rem;
+    .timeline-row.has-event.completed {
+        border-left: 6px solid #10b981 !important;
+        background: #f0fdf4;
     }
-
-    #agendaDetailsPlaceholder {
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .empty-state {
-        margin: auto;
+    .timeline-time-col {
+        width: 115px;
         text-align: center;
-        color: #adb5bd;
+        vertical-align: top;
+        padding: 18px 12px;
+        border-right: 1px dashed #e5e7eb;
     }
-    .empty-state i {
-        font-size: 3rem;
-        margin-bottom: 15px;
+    .timeline-content-col {
+        vertical-align: top;
+        padding: 16px 20px;
+    }
+    .timeline-empty-slot {
+        color: #94a3b8;
+        font-size: 0.9rem;
+    }
+    .timeline-empty-slot:hover {
+        background: #f8fafc;
+        border-radius: 12px;
     }
 
-    /* Takvim Nokta Stili */
+    /* Rozetler */
+    .badge-discovery {
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fde68a;
+    }
+    .badge-delivery {
+        background: #dcfce7;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+    }
+    .badge-meeting {
+        background: #e0e7ff;
+        color: #3730a3;
+        border: 1px solid #c7d2fe;
+    }
+
+    /* Mini Takvim Seçili & İşaretli Gün Stili */
     .fc-daygrid-dot-event {
-        background: #007bff;
+        background: #ef4444 !important;
         border: none;
         border-radius: 50%;
         width: 8px;
         height: 8px;
-        margin: 2px auto;
+        margin: 1px auto;
+    }
+    .fc .fc-button-primary {
+        background-color: #1e3a8a;
+        border-color: #1e3a8a;
+    }
+    .fc-day-today {
+        background: rgba(245, 158, 11, 0.12) !important;
+    }
+    .fc-day.has-agenda-event {
+        background-color: rgba(239, 68, 68, 0.10) !important;
+        border: 2px solid #ef4444 !important;
+        border-radius: 8px !important;
+    }
+    .fc-day.has-agenda-event .fc-daygrid-day-number {
+        background-color: #ef4444 !important;
+        color: #ffffff !important;
+        border-radius: 50% !important;
+        padding: 2px 7px !important;
+        font-weight: 800 !important;
+        display: inline-block;
+    }
+
+    /* Yıldız Puanlama */
+    .star-rating i {
+        font-size: 1.4rem;
+        color: #d1d5db;
+        cursor: pointer;
+        transition: color 0.15s ease;
+    }
+    .star-rating i.active, .star-rating i:hover {
+        color: #f59e0b;
+    }
+
+    /* Fotoğraf Thumbnail */
+    .agenda-thumb {
+        width: 72px;
+        height: 72px;
+        object-fit: cover;
+        border-radius: 10px;
+        border: 2px solid #e5e7eb;
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+    .agenda-thumb:hover {
+        transform: scale(1.05);
+        border-color: #3b82f6;
+    }
+
+    /* Ses Tanıma Nabız Animasyonu */
+    .speech-listening {
+        animation: pulse-red 1.2s infinite;
+    }
+    @@keyframes pulse-red {
+        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+        70% { transform: scale(1.04); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
     }
 </style>
 
-<div class="d-flex justify-content-between align-items-center mb-3 px-3 mt-3">
-    <h3 class="m-0"><i class="fas fa-calendar-alt text-primary me-2"></i> Yönetici Ajandası & CRM</h3>
-    <a href="/Agenda/Create" class="btn btn-primary rounded-pill shadow-sm">
-        <i class="fas fa-plus"></i> Yeni Kayıt Ekle
-    </a>
-</div>
-
-<div class="agenda-container">
-    <!-- Sol Panel: Takvim ve Zaman Akışı -->
-    <div class="left-panel">
-        
-        <div class="calendar-card">
-            <div id="miniCalendar"></div>
+<div class="container-fluid px-3 px-md-4 py-3">
+    <!-- Üst Başlık & Hızlı İşlemler -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="badge bg-warning bg-opacity-10 text-dark border border-warning border-opacity-25 px-3 py-1 rounded-pill fw-bold">
+                    <i class="bi bi-journal-bookmark-fill text-warning me-1"></i> Şantiye Günlüğü & Ajandası
+                </span>
+                @if (activeProject != null)
+                {
+                    <span class="badge bg-primary text-white px-3 py-1 rounded-pill fw-bold">
+                        <i class="bi bi-building me-1"></i> Proje: @activeProject.Name
+                    </span>
+                    <a href="/Agenda/Index?selectedDate=@selectedDate.ToString("yyyy-MM-dd")" class="small text-decoration-none text-muted" title="Filtreyi Temizle">(Tüm Şantiyeleri Göster)</a>
+                }
+            </div>
+            <h2 class="fw-bold text-dark mt-2 mb-1">
+                Şantiye Kara Defteri & Ajanda
+            </h2>
+            <p class="text-muted small mb-0">
+                Saha keşif randevuları, malzeme teslimatları, taşeron denetimleri ve gün sonu şantiye kararları
+            </p>
         </div>
 
-        <div class="timeline-card">
-            <h6 class="mb-3 border-bottom pb-2">
-                <i class="fas fa-list-ul me-2"></i> 
-                @(selectedDate.HasValue ? selectedDate.Value.ToString("dd MMM yyyy") + " Akışı" : "Yaklaşan Gündem")
-            </h6>
-            
-            <div id="timelineList">
-                @if (!Model.Any())
-                {
-                    <p class="text-muted small text-center mt-4">Bu güne ait kayıt bulunamadı.</p>
-                }
-                else
-                {
-                    foreach (var item in Model)
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <!-- Görünüm Seçici -->
+            <div class="btn-group rounded-pill p-1 bg-white border shadow-sm">
+                <a href="/Agenda/Index?viewMode=timeline&selectedDate=@selectedDate.ToString("yyyy-MM-dd")@(projectId.HasValue ? $"&projectId={projectId.Value}" : "")" 
+                   class="btn btn-sm rounded-pill px-3 fw-bold @(viewMode == "timeline" ? "btn-primary text-white" : "btn-light text-muted")"
+                   title="Saat Saat Gün Akışı">
+                    <i class="bi bi-clock-history me-1"></i> Saatli Tablo
+                </a>
+                <a href="/Agenda/Index?viewMode=cards&selectedDate=@selectedDate.ToString("yyyy-MM-dd")@(projectId.HasValue ? $"&projectId={projectId.Value}" : "")" 
+                   class="btn btn-sm rounded-pill px-3 fw-bold @(viewMode == "cards" ? "btn-primary text-white" : "btn-light text-muted")"
+                   title="Geniş Kartlar Görünümü">
+                    <i class="bi bi-card-text me-1"></i> Detaylı Kartlar
+                </a>
+                <a href="/Agenda/Index?viewMode=all@(projectId.HasValue ? $"&projectId={projectId.Value}" : "")" 
+                   class="btn btn-sm rounded-pill px-3 fw-bold @(viewMode == "all" ? "btn-primary text-white" : "btn-light text-muted")"
+                   title="Tüm Randevuları Listele">
+                    <i class="bi bi-list-check me-1"></i> Tüm Randevular (@allRecords.Count)
+                </a>
+            </div>
+
+            <a href="/Agenda/Create" class="btn btn-warning rounded-pill px-4 fw-bold shadow-sm text-dark">
+                <i class="bi bi-plus-lg me-1"></i> + Yeni Kayıt / Not Ekle
+            </a>
+        </div>
+    </div>
+
+    <!-- ŞANTİYE / YAPI FİLTRE BARISI -->
+    @if (projects.Any())
+    {
+        <div class="d-flex align-items-center gap-2 flex-wrap mb-3 p-2 bg-white rounded-4 border shadow-xs">
+            <span class="text-muted small fw-bold px-2">
+                <i class="bi bi-funnel-fill text-primary me-1"></i> Şantiye / Yapı:
+            </span>
+            <a href="/Agenda/Index?selectedDate=@selectedDate.ToString("yyyy-MM-dd")&viewMode=@viewMode" 
+               class="btn btn-sm rounded-pill px-3 @(!projectId.HasValue ? "btn-dark text-white fw-bold" : "btn-outline-secondary")">
+                Tüm Şantiyeler (@allRecords.Count)
+            </a>
+            @foreach (var proj in projects)
+            {
+                var countThisProject = allRecords.Count(r => r.ProjectId == proj.Id);
+                bool isProjActive = projectId == proj.Id;
+                <a href="/Agenda/Index?selectedDate=@selectedDate.ToString("yyyy-MM-dd")&projectId=@proj.Id&viewMode=@viewMode" 
+                   class="btn btn-sm rounded-pill px-3 @(isProjActive ? "btn-primary text-white fw-bold shadow-xs" : "btn-outline-secondary")">
+                    <i class="bi bi-building me-1"></i> @proj.Name 
+                    @if (countThisProject > 0)
                     {
-                        <div class="timeline-item" onclick="loadDetails(@item.Id, this)">
-                            <div class="timeline-time">
-                                <i class="far fa-clock"></i> @item.EventDate.ToString("HH:mm")
-                            </div>
-                            <div class="timeline-title">@item.Title</div>
-                            <small class="text-muted mt-1 d-block">
-                                @if(item.RecordTypeId == GMK360.Core.Entities.Construction.AgendaConstants.TypeMusteriGorusmesi) { <span class="badge bg-success">Müşteri</span> }
-                                @if(item.RecordTypeId == GMK360.Core.Entities.Construction.AgendaConstants.TypeTaseronToplantisi) { <span class="badge bg-warning text-dark">Taşeron</span> }
-                                @if(item.RecordTypeId == GMK360.Core.Entities.Construction.AgendaConstants.TypeSantiyeDenetimi) { <span class="badge bg-danger">Şantiye</span> }
-                                @if(item.RecordTypeId == GMK360.Core.Entities.Construction.AgendaConstants.TypeGenelNot) { <span class="badge bg-secondary">Not</span> }
-                            </small>
-                        </div>
+                        <span class="badge @(isProjActive ? "bg-white text-primary" : "bg-primary text-white") rounded-pill ms-1">@countThisProject</span>
                     }
-                }
+                </a>
+            }
+        </div>
+    }
+
+    <!-- GÜN GÜN ATLATMA NAVİGASYONU -->
+    @if (viewMode != "all")
+    {
+        <div class="agenda-nav-bar mb-3">
+            <div class="row align-items-center g-3">
+                <!-- Sol: Önceki Gün -->
+                <div class="col-auto">
+                    <a href="/Agenda/Index?selectedDate=@prevDate.ToString("yyyy-MM-dd")&viewMode=@viewMode@(projectId.HasValue ? $"&projectId={projectId.Value}" : "")" 
+                       class="btn btn-outline-secondary rounded-pill px-3 fw-bold shadow-xs" title="Önceki Güne Git (@prevDate.ToString("dd MMM"))">
+                        <i class="bi bi-chevron-left me-1"></i> Önceki Gün
+                    </a>
+                </div>
+
+                <!-- Orta: Gün Başlığı & Hızlı Tarih Seçici -->
+                <div class="col text-center">
+                    <div class="d-inline-flex align-items-center justify-content-center gap-2 flex-wrap">
+                        <span class="fs-4 fw-bold text-dark mb-0">
+                            📅 @selectedDate.ToString("dd MMMM yyyy, dddd")
+                        </span>
+                        @if (isToday)
+                        {
+                            <span class="badge bg-success rounded-pill px-3 py-1 fw-bold">BUGÜN</span>
+                        }
+                        else
+                        {
+                            <a href="/Agenda/Index?selectedDate=@DateTime.Today.ToString("yyyy-MM-dd")&viewMode=@viewMode@(projectId.HasValue ? $"&projectId={projectId.Value}" : "")" 
+                               class="btn btn-xs btn-outline-primary rounded-pill px-2" style="font-size:0.75rem;">
+                                <i class="bi bi-pin-angle-fill me-1"></i> Bugüne Dön
+                            </a>
+                        }
+
+                        <!-- Tarihe Zıpla Buton/Input -->
+                        <input type="date" class="form-control form-control-sm rounded-pill d-inline-block fw-bold ms-2" style="width: auto;" 
+                               value="@selectedDate.ToString("yyyy-MM-dd")" 
+                               onchange="window.location.href='/Agenda/Index?selectedDate=' + this.value + '&viewMode=@viewMode@(projectId.HasValue ? $"&projectId={projectId.Value}" : "")'" />
+                    </div>
+                </div>
+
+                <!-- Sağ: Sonraki Gün -->
+                <div class="col-auto text-end">
+                    <a href="/Agenda/Index?selectedDate=@nextDate.ToString("yyyy-MM-dd")&viewMode=@viewMode@(projectId.HasValue ? $"&projectId={projectId.Value}" : "")" 
+                       class="btn btn-outline-secondary rounded-pill px-3 fw-bold shadow-xs" title="Sonraki Güne Git (@nextDate.ToString("dd MMM"))">
+                        Sonraki Gün <i class="bi bi-chevron-right ms-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- ☀️ ŞANTİYE SAATLİK HAVA DURUMU & UYGUNLUK BARI -->
+    <div class="card border-0 shadow-sm rounded-4 p-3 mb-4 text-white" 
+         style="background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <span class="fs-1">☀️</span>
+                <div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <strong class="fs-5">İstanbul / Şantiye Sahası Hava Durumu</strong>
+                        <span class="badge bg-white text-primary rounded-pill fw-bold">22°C • Açık & Güneşli</span>
+                    </div>
+                    <small class="text-white-50">
+                        <i class="bi bi-wind me-1"></i> Rüzgar: 14 km/s (Kuzeydoğu) • <i class="bi bi-droplet-half me-1"></i> Nem: %52 • Yağış İhtimali: %0
+                    </small>
+                </div>
+            </div>
+
+            <!-- Şantiye İmalat Uygunluk Rozetleri -->
+            <div class="d-flex flex-wrap gap-2">
+                <span class="badge bg-success bg-opacity-25 border border-success border-opacity-50 text-white px-3 py-2 rounded-pill fw-semibold" title="Don ve aşırı sıcaklık riski yok">
+                    <i class="bi bi-check-circle-fill text-success me-1"></i> Hazır Beton: <strong>Mükemmel</strong>
+                </span>
+                <span class="badge bg-success bg-opacity-25 border border-success border-opacity-50 text-white px-3 py-2 rounded-pill fw-semibold" title="Zemin çamur değil, kuru ve stabil">
+                    <i class="bi bi-check-circle-fill text-success me-1"></i> Hafriyat & Yıkım: <strong>Kuru Zemin</strong>
+                </span>
+                <span class="badge bg-success bg-opacity-25 border border-success border-opacity-50 text-white px-3 py-2 rounded-pill fw-semibold" title="Rüzgar fırtına eşiğinin altında">
+                    <i class="bi bi-shield-check text-success me-1"></i> İskele & Kule Vinç: <strong>Güvenli</strong>
+                </span>
             </div>
         </div>
     </div>
 
-    <!-- Sağ Panel: Detay ve Sunum -->
-    <div class="right-panel" id="agendaDetailsPlaceholder">
-        <div class="empty-state">
-            <i class="far fa-calendar-check"></i>
-            <h5>Bir Kayıt Seçin</h5>
-            <p>Detayları, alınan kararları ve sunumları görüntülemek için sol taraftaki listeden bir öğeye tıklayın.</p>
+    <!-- BAŞARI / HATA MESAJLARI -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-4 shadow-sm mb-4" role="alert">
+            <i class="bi bi-check-circle-fill me-2 fs-5"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- ANA İÇERİK DÜZENİ: SOL GENİŞ GÖVDE (%70) - SAĞ TAKVİM & HATIRLATMALAR (%30) -->
+    <div class="row g-4">
+        <!-- SOL ANA PANEL (SAATLİ TABLO / KARTLAR / TÜMÜ) -->
+        <div class="col-xl-8 col-lg-7">
+
+            @if (viewMode == "all")
+            {
+                <!-- ================= TÜM RANDEVULAR TABLOSU (ÇETELE) ================= -->
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold text-dark mb-0">
+                            <i class="bi bi-list-stars text-warning me-2"></i> Şantiye Kara Defteri Tüm Randevular (@allRecords.Count)
+                        </h5>
+                        <a href="/Agenda/Index?viewMode=timeline" class="btn btn-sm btn-outline-primary rounded-pill">Saatli Tabloya Geç</a>
+                    </div>
+
+                    @if (!allRecords.Any())
+                    {
+                        <div class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i>
+                            <h6>Henüz ajandanızda kayıtlı bir randevu bulunmuyor.</h6>
+                            <p class="small">Tedarikçi ihalelerinden gelen keşif randevuları onaylandığında burada listelenir.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Tarih & Saat</th>
+                                        <th>Tür</th>
+                                        <th>Firma / Usta</th>
+                                        <th>Şantiye / Neden</th>
+                                        <th>Puan / Durum</th>
+                                        <th>İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var rec in allRecords)
+                                    {
+                                        bool isDisc = rec.Title != null && rec.Title.Contains("Saha Keşfi");
+                                        bool isDeliv = rec.Title != null && (rec.Title.Contains("Teslimat") || rec.Title.Contains("İmalat"));
+                                        bool isDone = rec.StatusId == GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi;
+
+                                        <tr class="@(isDone ? "table-light text-muted" : "")">
+                                            <td>
+                                                <div class="fw-bold text-dark">@rec.EventDate.ToString("dd.MM.yyyy")</div>
+                                                <small class="text-muted"><i class="bi bi-clock me-1"></i>@rec.EventDate.ToString("HH:mm")</small>
+                                            </td>
+                                            <td>
+                                                @if (isDisc)
+                                                {
+                                                    <span class="badge badge-discovery rounded-pill px-2 py-1"><i class="bi bi-search me-1"></i>Saha Keşfi</span>
+                                                }
+                                                else if (isDeliv)
+                                                {
+                                                    <span class="badge badge-delivery rounded-pill px-2 py-1"><i class="bi bi-truck me-1"></i>Teslimat</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-meeting rounded-pill px-2 py-1">Toplantı/Not</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="fw-bold">@(rec.Phonebook?.Name ?? "Tedarikçi")</div>
+                                                <small class="text-muted">@(rec.Phonebook?.AuthorizedPerson ?? "Yetkili") @(!string.IsNullOrEmpty(rec.Phonebook?.PhoneNumber) ? $"• {rec.Phonebook?.PhoneNumber}" : "")</small>
+                                            </td>
+                                            <td>
+                                                <div class="small fw-bold text-primary">@(rec.Project?.Name ?? "Genel Şantiye")</div>
+                                                <div class="small text-truncate" style="max-width: 250px;">@rec.Title</div>
+                                            </td>
+                                            <td>
+                                                @if (isDone)
+                                                {
+                                                    <span class="badge bg-success rounded-pill mb-1 d-inline-block"><i class="bi bi-check2"></i> Tamamlandı</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-warning text-dark rounded-pill mb-1 d-inline-block"><i class="bi bi-hourglass-split"></i> Planlandı</span>
+                                                }
+                                                @if (!string.IsNullOrEmpty(rec.Notes) && rec.Notes.Contains("Taşeron Puanı:"))
+                                                {
+                                                    var pIndex = rec.Notes.IndexOf("Taşeron Puanı:");
+                                                    var pLine = rec.Notes.Substring(pIndex).Split('\n').FirstOrDefault() ?? "";
+                                                    <div class="text-warning small fw-bold">@pLine.Replace("Taşeron Puanı:", "")</div>
+                                                }
+                                            </td>
+                                            <td>
+                                                <a href="/Agenda/Index?selectedDate=@rec.EventDate.ToString("yyyy-MM-dd")&viewMode=timeline" class="btn btn-sm btn-outline-secondary rounded-pill" title="O Güne Git">
+                                                    <i class="bi bi-arrow-right"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            }
+            else if (viewMode == "timeline")
+            {
+                <!-- ================= SAATLİ ŞANTİYE TABLOSU (ÇİZELGE GÖRÜNÜMÜ) ================= -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h5 class="fw-bold text-dark mb-0">
+                            <i class="bi bi-calendar-range-fill text-warning me-2"></i> @selectedDate.ToString("dd MMMM yyyy, dddd") — Şantiye Mesai Çizelgesi
+                        </h5>
+                        <small class="text-muted">Günün saatlik keşif randevuları, malzeme girişleri ve şantiye görev atamaları</small>
+                    </div>
+                    <span class="badge bg-light text-dark border px-3 py-2 rounded-pill fw-bold">
+                        Toplam @Model.Count() Kayıt / Randevu
+                    </span>
+                </div>
+
+                @if (!Model.Any())
+                {
+                    <div class="card border-0 shadow-sm rounded-4 p-4 text-center bg-white mb-3 border-start border-warning border-4">
+                        <div class="py-2">
+                            <i class="bi bi-calendar-event text-warning fs-1 mb-2 d-block"></i>
+                            <h5 class="fw-bold text-dark">Bu Güne (@selectedDate.ToString("dd MMMM yyyy")) Ait Planlanmış Kayıt Yok</h5>
+                            <p class="text-muted small mb-3">
+                                Ajandanızda bu gün için henüz onaylanmış keşif veya teslimat bulunmuyor. Aşağıdaki saat dilimlerine tıklayarak yeni randevu veya şantiye notu yazabilirsiniz.
+                            </p>
+                            @{
+                                var nextUpcoming = allRecords.Where(r => r.EventDate.Date > selectedDate.Date).OrderBy(r => r.EventDate).FirstOrDefault();
+                            }
+                            @if (nextUpcoming != null)
+                            {
+                                <a href="/Agenda/Index?selectedDate=@nextUpcoming.EventDate.ToString("yyyy-MM-dd")&viewMode=timeline@(projectId.HasValue ? $"&projectId={projectId.Value}" : "")" 
+                                   class="btn btn-sm btn-warning rounded-pill px-4 fw-bold text-dark shadow-sm">
+                                    <i class="bi bi-arrow-right-circle me-1"></i> En Yakın Randevuya Zıpla: @nextUpcoming.EventDate.ToString("dd MMMM") &rarr;
+                                </a>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Saat Saat Zaman Çizelgesi (08:00 - 18:00) -->
+                <div class="d-flex flex-column gap-3 mb-4">
+                    @for (int hour = 8; hour <= 18; hour++)
+                    {
+                        var startHourStr = $"{hour:D2}:00";
+                        var endHourStr = $"{hour + 1:D2}:00";
+                        var recordsInHour = Model.Where(r => r.EventDate.Hour == hour).OrderBy(r => r.EventDate).ToList();
+
+                        if (recordsInHour.Any())
+                        {
+                            foreach (var item in recordsInHour)
+                            {
+                                bool isDiscovery = item.Title != null && item.Title.Contains("Saha Keşfi");
+                                bool isDelivery = item.Title != null && (item.Title.Contains("Teslimat") || item.Title.Contains("İmalat"));
+                                bool isCompleted = item.StatusId == GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi;
+
+                                string rowClass = isCompleted ? "completed" :
+                                                  isDelivery ? "delivery" :
+                                                  isDiscovery ? "" : "meeting";
+
+                                var contactPhone = item.Phonebook?.PhoneNumber ?? "";
+                                var cleanPhone = contactPhone.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
+                                if (cleanPhone.StartsWith("0")) cleanPhone = "90" + cleanPhone.Substring(1);
+                                else if (!cleanPhone.StartsWith("90") && !string.IsNullOrEmpty(cleanPhone)) cleanPhone = "90" + cleanPhone;
+
+                                // Görevlendirme ayrıştırma
+                                string assignedStaff = "";
+                                string assignedPhone = "";
+                                string assignedNote = "";
+                                bool hasAssignment = false;
+                                if (!string.IsNullOrEmpty(item.Notes) && item.Notes.Contains("[GÖREVLENDİRME:"))
+                                {
+                                    hasAssignment = true;
+                                    var match = System.Text.RegularExpressions.Regex.Match(item.Notes, @"\[GÖREVLENDİRME:\s*(.*?)\s*\|\s*(?:Tel:\s*(.*?)\s*\|\s*)?(?:Talimat:|Not:)\s*(.*?)\s*\|");
+                                    if (match.Success)
+                                    {
+                                        assignedStaff = match.Groups[1].Value;
+                                        assignedPhone = match.Groups[2].Success ? match.Groups[2].Value : "";
+                                        assignedNote = match.Groups[3].Value;
+                                    }
+                                }
+
+                                // Fotoğrafları ayrıştırma
+                                var photos = !string.IsNullOrEmpty(item.ImageUrl) 
+                                    ? item.ImageUrl.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList() 
+                                    : new List<string>();
+
+                                <div class="timeline-row has-event @rowClass">
+                                    <div class="row g-0">
+                                        <!-- Sol Saat Rozeti -->
+                                        <div class="col-md-2 timeline-time-col bg-white rounded-start-4">
+                                            <span class="fs-4 fw-bold text-dark d-block">
+                                                @item.EventDate.ToString("HH:mm")
+                                            </span>
+                                            <small class="text-muted d-block">@startHourStr - @endHourStr</small>
+
+                                            @if (isDiscovery)
+                                            {
+                                                <span class="badge badge-discovery rounded-pill px-2 py-1 mt-2 fw-bold d-block" style="font-size:0.72rem;">
+                                                    <i class="bi bi-search me-1"></i> Saha Keşfi
+                                                </span>
+                                            }
+                                            else if (isDelivery)
+                                            {
+                                                <span class="badge badge-delivery rounded-pill px-2 py-1 mt-2 fw-bold d-block" style="font-size:0.72rem;">
+                                                    <i class="bi bi-truck me-1"></i> Teslimat
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-meeting rounded-pill px-2 py-1 mt-2 fw-bold d-block" style="font-size:0.72rem;">
+                                                    <i class="bi bi-people me-1"></i> Şantiye Notu
+                                                </span>
+                                            }
+
+                                            @if (isCompleted)
+                                            {
+                                                <span class="badge bg-success rounded-pill px-2 py-1 mt-2 d-block" style="font-size:0.7rem;">
+                                                    <i class="bi bi-check2-all"></i> Keşif Tamamlandı
+                                                </span>
+                                            }
+                                        </div>
+
+                                        <!-- Sağ İçerik Kolonu (Neden Gelecekler & Görevlendirme & Aksiyonlar) -->
+                                        <div class="col-md-10 timeline-content-col">
+                                            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+                                                <div>
+                                                    <!-- Şantiye / Yapı Etiketi -->
+                                                    @if (item.Project != null)
+                                                    {
+                                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-3 py-1 rounded-pill fw-bold mb-1">
+                                                            <i class="bi bi-building me-1"></i> Yapı: @item.Project.Name
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-light text-dark border px-3 py-1 rounded-pill fw-bold mb-1">
+                                                            <i class="bi bi-building me-1"></i> Genel Şantiye Sahası
+                                                        </span>
+                                                    }
+
+                                                    <!-- Neden Gelecekler? (Ana Başlık) -->
+                                                    <h5 class="fw-bold text-dark mb-1 mt-1">
+                                                        @item.Title
+                                                    </h5>
+                                                </div>
+
+                                                <div class="d-flex gap-2 align-items-center">
+                                                    @if (!isCompleted)
+                                                    {
+                                                        <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-bold shadow-xs" 
+                                                                onclick="openCompleteInspectionModal(@item.Id, '@item.Title.Replace("'", "\\'")')" 
+                                                                title="Keşfi tamamla, fotoğraf ve taşeron puanı gir">
+                                                            <i class="bi bi-check2-circle me-1"></i> Keşfi Tamamla & Tutanak Gir
+                                                        </button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-success bg-opacity-15 text-success border border-success border-opacity-25 px-3 py-2 rounded-pill fw-bold">
+                                                            <i class="bi bi-shield-check me-1"></i> Tutanak Mühürlendi
+                                                        </span>
+                                                    }
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" onclick="loadDetailsModal(@item.Id)">
+                                                        <i class="bi bi-eye me-1"></i> Detay
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <!-- Ziyaretçi / Tedarikçi Bilgi Şeridi -->
+                                            <div class="d-flex align-items-center gap-3 p-2 px-3 rounded-3 bg-white border mb-3 flex-wrap">
+                                                <div class="rounded-circle bg-warning bg-opacity-15 text-dark d-flex align-items-center justify-content-center fw-bold" style="width: 36px; height: 36px;">
+                                                    <i class="bi bi-person-badge"></i>
+                                                </div>
+                                                <div class="me-auto">
+                                                    <strong class="text-dark d-block">
+                                                        @(item.Phonebook?.Name ?? "Tedarikçi Firma / Usta")
+                                                    </strong>
+                                                    <small class="text-muted">
+                                                        Yetkili: <strong>@(item.Phonebook?.AuthorizedPerson ?? "Yetkili")</strong> 
+                                                        @(!string.IsNullOrEmpty(contactPhone) ? $"• Tel: {contactPhone}" : "")
+                                                    </small>
+                                                </div>
+                                                @if (!string.IsNullOrEmpty(contactPhone))
+                                                {
+                                                    <div class="d-flex gap-2">
+                                                        <a href="tel:@contactPhone" class="btn btn-xs btn-outline-secondary rounded-pill px-3" style="font-size:0.8rem;">
+                                                            <i class="bi bi-telephone-fill me-1 text-primary"></i> Ara
+                                                        </a>
+                                                        <a href="https://wa.me/@cleanPhone?text=@Uri.EscapeDataString($"Merhaba, {item.EventDate:dd.MM.yyyy HH:mm} tarihindeki {item.Project?.Name ?? "Şantiye"} keşif randevumuzla ilgili yazıyorum.")" 
+                                                           target="_blank" class="btn btn-xs btn-outline-success rounded-pill px-3" style="font-size:0.8rem;">
+                                                            <i class="bi bi-whatsapp me-1 text-success"></i> WhatsApp
+                                                        </a>
+                                                    </div>
+                                                }
+                                            </div>
+
+                                            <!-- Randevu Kapsamı & Geliş Nedeni Notu -->
+                                            @if (!string.IsNullOrWhiteSpace(item.Notes))
+                                            {
+                                                <div class="p-3 rounded-3 bg-light border mb-3">
+                                                    <small class="text-muted fw-bold d-block mb-1">
+                                                        <i class="bi bi-file-text-fill text-warning me-1"></i> GELİŞ AMACI & ŞANTİYE GÜNLÜK NOTU:
+                                                    </small>
+                                                    <div class="text-dark small" style="white-space: pre-line; line-height: 1.5;">@item.Notes</div>
+                                                </div>
+                                            }
+
+                                            <!-- SAHADAN YÜKLENEN FOTOĞRAFLAR & VİDEOLAR -->
+                                            @if (photos.Any())
+                                            {
+                                                <div class="p-3 rounded-3 bg-white border mb-3">
+                                                    <small class="text-dark fw-bold d-block mb-2">
+                                                        <i class="bi bi-camera-fill text-primary me-1"></i> Sahada Çekilen Keşif Fotoğrafları (@photos.Count):
+                                                    </small>
+                                                    <div class="d-flex flex-wrap gap-2">
+                                                        @foreach (var photo in photos)
+                                                        {
+                                                            <img src="@photo" class="agenda-thumb" alt="Saha Fotoğrafı" onclick="previewMedia('@photo')" />
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+
+                                            <!-- ŞANTİYE GÖREV ATAMASI BÖLÜMÜ -->
+                                            <div class="p-3 rounded-3 @(hasAssignment ? "bg-success bg-opacity-10 border border-success border-opacity-25" : "bg-warning bg-opacity-10 border border-warning border-opacity-25")">
+                                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                                    @if (hasAssignment)
+                                                    {
+                                                        <div>
+                                                            <span class="badge bg-success rounded-pill px-2 py-1 mb-1">
+                                                                <i class="bi bi-person-check-fill me-1"></i> Şantiye Karşılama Sorumlusu Atandı
+                                                            </span>
+                                                            <div class="fw-bold text-dark">
+                                                                👤 Sorumlu: @assignedStaff @(!string.IsNullOrEmpty(assignedPhone) ? $"({assignedPhone})" : "")
+                                                            </div>
+                                                            @if (!string.IsNullOrEmpty(assignedNote))
+                                                            {
+                                                                <small class="text-muted d-block mt-1">
+                                                                    <i class="bi bi-chat-dots me-1"></i> Talimat: @assignedNote
+                                                                </small>
+                                                            }
+                                                        </div>
+
+                                                        <!-- Görevliye Bildirim & Güncelleme Butonları -->
+                                                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                                                            @if (!string.IsNullOrEmpty(assignedPhone))
+                                                            {
+                                                                var cleanStaffPhone = assignedPhone.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
+                                                                if (cleanStaffPhone.StartsWith("0")) cleanStaffPhone = "90" + cleanStaffPhone.Substring(1);
+                                                                else if (!cleanStaffPhone.StartsWith("90") && !string.IsNullOrEmpty(cleanStaffPhone)) cleanStaffPhone = "90" + cleanStaffPhone;
+
+                                                                var staffWhatsappMsg = Uri.EscapeDataString($"Merhaba {assignedStaff}, {item.EventDate:dd.MM.yyyy HH:mm} tarihinde {item.Project?.Name ?? "Şantiye"} sahasında {item.Phonebook?.Name ?? "Tedarikçi"} ile randevunuz vardır. Talimat: {assignedNote}");
+
+                                                                <a href="https://wa.me/@cleanStaffPhone?text=@staffWhatsappMsg" target="_blank" 
+                                                                   class="btn btn-sm btn-outline-success rounded-pill px-3" title="Görevliye WhatsApp Gönder">
+                                                                    <i class="bi bi-whatsapp me-1"></i> Görevliye WhatsApp
+                                                                </a>
+                                                                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" 
+                                                                        onclick="sendSmsToStaff(@item.Id, '@assignedPhone', '@assignedStaff', '@item.EventDate.ToString("dd.MM.yyyy HH:mm")', '@(item.Phonebook?.Name ?? "Tedarikçi")')" 
+                                                                        title="Görevliye SMS Gönder">
+                                                                    <i class="bi bi-chat-dots-fill me-1"></i> SMS Gönder
+                                                                </button>
+                                                            }
+                                                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-bold" 
+                                                                    onclick="openAssignModal(@item.Id, '@item.Title.Replace("'", "\\'")', '@assignedStaff', '@assignedPhone', '@assignedNote.Replace("'", "\\'")')">
+                                                                <i class="bi bi-pencil-square me-1"></i> Değiştir
+                                                            </button>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <div>
+                                                            <span class="badge bg-warning text-dark rounded-pill px-2 py-1 mb-1">
+                                                                <i class="bi bi-exclamation-triangle-fill me-1"></i> Karşılama Sorumlusu Bekleniyor
+                                                            </span>
+                                                            <div class="small text-muted">
+                                                                Bu keşif için şantiyeden henüz bir personel veya saha mühendisi görevlendirilmedi.
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold shadow-xs" 
+                                                                    onclick="openAssignModal(@item.Id, '@item.Title.Replace("'", "\\'")', '', '', '')">
+                                                                <i class="bi bi-person-plus-fill me-1"></i> Şantiye Personeli Ata & Görevlendir
+                                                            </button>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <!-- Boş Saat Dilimi Satırı -->
+                            <div class="timeline-row">
+                                <div class="row g-0 align-items-center">
+                                    <div class="col-md-2 timeline-time-col bg-light rounded-start-4">
+                                        <span class="fw-bold text-muted">@startHourStr</span>
+                                        <small class="text-muted d-block opacity-75">@endHourStr</small>
+                                    </div>
+                                    <div class="col-md-10 timeline-content-col d-flex justify-content-between align-items-center">
+                                        <span class="timeline-empty-slot">
+                                            <i class="bi bi-dash-circle me-1 opacity-50"></i> Bu saat diliminde planlanmış bir randevu veya teslimat yok.
+                                        </span>
+                                        <a href="/Agenda/Create?hour=@hour" class="btn btn-xs btn-outline-secondary rounded-pill px-3" style="font-size:0.78rem;">
+                                            <i class="bi bi-plus-lg me-1"></i> Saat @startHourStr'a Not / Randevu Ekle
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            }
+            else
+            {
+                <!-- ================= DETAYLI KARTLAR GÖRÜNÜMÜ ================= -->
+                @if (!Model.Any())
+                {
+                    <div class="card border-0 shadow-sm rounded-4 text-center p-5 bg-white mb-4">
+                        <i class="bi bi-calendar-x text-muted opacity-50 fs-1 d-block mb-3"></i>
+                        <h4 class="fw-bold text-dark">Bu Güne Ait Planlanmış Kayıt Bulunmuyor</h4>
+                        <p class="text-muted">@selectedDate.ToString("dd MMMM yyyy, dddd") günü için ajandada randevu planlanmamış.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="d-flex flex-column gap-3 mb-4">
+                        @foreach (var item in Model)
+                        {
+                            bool isDiscovery = item.Title != null && item.Title.Contains("Saha Keşfi");
+                            bool isDelivery = item.Title != null && (item.Title.Contains("Teslimat") || item.Title.Contains("İmalat"));
+                            bool isCompleted = item.StatusId == GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi;
+
+                            string cardBorder = isDiscovery ? "border-start border-warning border-4" : 
+                                                isDelivery ? "border-start border-success border-4" : "border-start border-primary border-4";
+
+                            var contactPhone = item.Phonebook?.PhoneNumber ?? "";
+                            var cleanPhone = contactPhone.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
+                            if (cleanPhone.StartsWith("0")) cleanPhone = "90" + cleanPhone.Substring(1);
+                            else if (!cleanPhone.StartsWith("90") && !string.IsNullOrEmpty(cleanPhone)) cleanPhone = "90" + cleanPhone;
+
+                            <div class="agenda-card p-4 @cardBorder @(isCompleted ? "bg-light opacity-75" : "")">
+                                <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="fs-4 fw-bold text-dark">
+                                            <i class="bi bi-clock text-primary me-1"></i> @item.EventDate.ToString("HH:mm")
+                                        </span>
+                                        @if (isDiscovery)
+                                        {
+                                            <span class="badge badge-discovery rounded-pill px-3 py-1 fw-bold">
+                                                <i class="bi bi-search me-1"></i> Tedarikçi Saha Keşfi
+                                            </span>
+                                        }
+                                        else if (isDelivery)
+                                        {
+                                            <span class="badge badge-delivery rounded-pill px-3 py-1 fw-bold">
+                                                <i class="bi bi-truck me-1"></i> Malzeme & İmalat Teslimatı
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-meeting rounded-pill px-3 py-1 fw-bold">
+                                                <i class="bi bi-people me-1"></i> Taşeron Toplantısı
+                                            </span>
+                                        }
+
+                                        @if (isCompleted)
+                                        {
+                                            <span class="badge bg-success rounded-pill px-2 py-1"><i class="bi bi-check-all"></i> Keşif Tamamlandı</span>
+                                        }
+                                    </div>
+
+                                    @if (item.Project != null)
+                                    {
+                                        <span class="badge bg-light text-dark border px-3 py-2 rounded-pill fw-bold">
+                                            <i class="bi bi-building text-primary me-1"></i> @item.Project.Name
+                                        </span>
+                                    }
+                                </div>
+
+                                <h4 class="fw-bold text-dark mb-2">@item.Title</h4>
+
+                                @if (!string.IsNullOrWhiteSpace(item.Notes))
+                                {
+                                    <div class="p-3 rounded-3 bg-light border mb-3">
+                                        <small class="text-muted fw-bold d-block mb-1">
+                                            <i class="bi bi-chat-left-quote me-1"></i> GELİŞ AMACI & ŞANTİYE GÜNLÜK NOTU:
+                                        </small>
+                                        <div class="text-dark" style="white-space: pre-line;">@item.Notes</div>
+                                    </div>
+                                }
+
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 pt-2 border-top">
+                                    <div>
+                                        <strong class="text-dark d-block">@(item.Phonebook?.Name ?? "Tedarikçi / Usta")</strong>
+                                        <small class="text-muted">@(item.Phonebook?.AuthorizedPerson ?? "Yetkili") @(!string.IsNullOrEmpty(contactPhone) ? $"• {contactPhone}" : "")</small>
+                                    </div>
+
+                                    <div class="d-flex flex-wrap gap-2">
+                                        @if (!string.IsNullOrEmpty(contactPhone))
+                                        {
+                                            <a href="tel:@contactPhone" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
+                                                <i class="bi bi-telephone-fill me-1"></i> Ara
+                                            </a>
+                                            <a href="https://wa.me/@cleanPhone?text=@Uri.EscapeDataString($"Merhaba, {item.EventDate:dd.MM.yyyy HH:mm} tarihindeki şantiye keşif randevumuzla ilgili yazıyorum.")" 
+                                               target="_blank" class="btn btn-sm btn-outline-success rounded-pill px-3">
+                                                <i class="bi bi-whatsapp me-1"></i> WhatsApp
+                                            </a>
+                                        }
+                                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold" onclick="openAssignModal(@item.Id, '@item.Title.Replace("'", "\\'")', '', '', '')">
+                                            <i class="bi bi-person-plus me-1"></i> Görevlendir
+                                        </button>
+                                        @if (!isCompleted)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-bold" onclick="openCompleteInspectionModal(@item.Id, '@item.Title.Replace("'", "\\'")')">
+                                                <i class="bi bi-check2-circle me-1"></i> Keşfi Tamamla
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+
+        <!-- SAĞ PANEL: MİNİ TAKVİM & YAKLAŞAN RANDEVULAR (%30) -->
+        <div class="col-xl-4 col-lg-5">
+            <!-- 1. MİNİ TAKVİM (DOLU GÜNLER KIRMIZI VURGULU) -->
+            <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold text-dark mb-0">
+                        <i class="bi bi-calendar-event text-danger me-2"></i> Şantiye Takvimi
+                    </h6>
+                </div>
+                <div class="d-flex align-items-center justify-content-between mb-3 p-2 bg-light rounded-3 small">
+                    <span class="text-muted"><span class="badge bg-warning text-dark me-1">●</span> Bugün</span>
+                    <span class="text-danger fw-bold"><span class="badge bg-danger text-white me-1">●</span> Randevulu / Dolu Günler</span>
+                </div>
+                <div id="miniCalendar" style="min-height: 280px;"></div>
+            </div>
+
+            <!-- 2. İLERİ GÜNLERİN HATIRLATMASI (YAKLAŞAN RANDEVULAR) -->
+            <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold text-dark mb-0">
+                        <i class="bi bi-bell-fill text-warning me-2"></i> Yaklaşan Şantiye Randevuları
+                    </h6>
+                    <span class="badge bg-danger rounded-pill px-2">@upcomingRecords.Count</span>
+                </div>
+
+                @if (!upcomingRecords.Any())
+                {
+                    <p class="text-muted small text-center my-3">Yakın tarihte bekleyen bir randevu yok.</p>
+                }
+                else
+                {
+                    <div class="d-flex flex-column gap-2">
+                        @foreach (var up in upcomingRecords)
+                        {
+                            bool isSelected = up.EventDate.Date == selectedDate.Date;
+
+                            <a href="/Agenda/Index?selectedDate=@up.EventDate.ToString("yyyy-MM-dd")&viewMode=timeline@(projectId.HasValue ? $"&projectId={projectId.Value}" : "")" 
+                               class="p-3 rounded-3 border text-decoration-none transition-all @(isSelected ? "bg-warning bg-opacity-10 border-warning border-2" : "bg-light text-dark hover-light")">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <strong class="text-dark small">@(up.Phonebook?.Name ?? "Tedarikçi")</strong>
+                                    <span class="badge bg-danger rounded-pill" style="font-size:0.75rem;">
+                                        <i class="bi bi-clock me-1"></i>@up.EventDate.ToString("dd MMM HH:mm")
+                                    </span>
+                                </div>
+                                <div class="small fw-semibold text-dark mt-1">@up.Title</div>
+                                @if (up.Project != null)
+                                {
+                                    <small class="text-primary d-block mt-1 fw-bold" style="font-size: 0.75rem;">
+                                        <i class="bi bi-building"></i> @up.Project.Name
+                                    </small>
+                                }
+                            </a>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- 3. ŞANTİYE VE PROJELERE HIZLI DÖNÜŞ KÖPRÜSÜ -->
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-primary bg-opacity-10 border-primary border-opacity-25">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-circle bg-primary text-white p-3 d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                        <i class="bi bi-building-gear fs-4"></i>
+                    </div>
+                    <div>
+                        <h6 class="fw-bold text-dark mb-1">Şantiyenize Dönün</h6>
+                        <small class="text-muted d-block mb-2">İhaleleri, blok metrajlarını ve şantiye masasını yönetin.</small>
+                        <a href="/ConstructionProject" class="btn btn-xs btn-primary rounded-pill px-3 fw-bold">
+                            Şantiye Modülünü Aç &rarr;
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL 1: ŞANTİYE GÖREV ATAMASI MODALI ================= -->
+<div class="modal fade" id="assignTaskModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <form action="/Agenda/AssignTask" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="recordId" id="assignRecordId" />
+
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-person-check-fill text-primary me-2"></i> Şantiye Görevlisi Ata
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="p-3 bg-light rounded-3 mb-3 border">
+                        <small class="text-muted d-block fw-bold mb-1">İlgili Randevu & Şantiye:</small>
+                        <div class="fw-bold text-dark" id="assignRecordTitle"></div>
+                    </div>
+
+                    <!-- Personel Seçimi -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-dark small">Karşılayacak Şantiye Personeli:</label>
+                        <select class="form-select rounded-3" name="assignedUserId" id="assignStaffSelect" onchange="handleStaffSelectChange(this)">
+                            <option value="">-- Personel Listesinden Seçin --</option>
+                            @foreach (var staff in staffList)
+                            {
+                                <option value="@staff.UserId" data-name="@staff.FullName" data-phone="@staff.PhoneNumber">
+                                    @staff.FullName (@staff.RoleTitle) @(!string.IsNullOrEmpty(staff.PhoneNumber) ? $"• {staff.PhoneNumber}" : "")
+                                </option>
+                            }
+                            <option value="custom">✏️ Diğer / Manuel İsim Yaz</option>
+                        </select>
+                    </div>
+
+                    <div class="row g-2 mb-3" id="customStaffDiv" style="display:none;">
+                        <div class="col-md-7">
+                            <label class="form-label fw-bold text-dark small">Personel Adı Soyadı:</label>
+                            <input type="text" class="form-control rounded-3" name="staffName" id="assignStaffName" placeholder="Örn: Hasan Usta, Ali Şef" />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold text-dark small">Telefon No:</label>
+                            <input type="text" class="form-control rounded-3" name="staffPhone" id="assignStaffPhone" placeholder="05XX XXX XX XX" />
+                        </div>
+                    </div>
+
+                    <!-- Görev Talimatı / Notu & Sesle Yazma -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label fw-bold text-dark small mb-0">Şantiye Karşılama Talimatı / Görev Notu:</label>
+                            <button type="button" class="btn btn-xs btn-outline-danger rounded-pill px-2 py-1" id="micBtnAssign" onclick="toggleSpeechRecognition('assignTaskNote', 'micBtnAssign')">
+                                <i class="bi bi-mic-fill text-danger me-1"></i> 🎤 Bas & Konuş
+                            </button>
+                        </div>
+                        <textarea class="form-control rounded-3" name="taskNote" id="assignTaskNote" rows="3" 
+                                  placeholder="Örn: Tedarikçiyi saat 14:00'te şantiye kapısında karşıla. Yıkım alanını gezdir, karot raporunu incelet."></textarea>
+                    </div>
+
+                    <!-- Otomatik SMS Onayı -->
+                    <div class="form-check form-switch p-3 bg-light rounded-3 border">
+                        <input class="form-check-input ms-0 me-2" type="checkbox" name="sendSms" value="true" id="assignSendSms" checked />
+                        <label class="form-check-label fw-bold small text-dark" for="assignSendSms">
+                            <i class="bi bi-chat-text text-primary me-1"></i> Personele görev atama SMS'i otomatik gönderilsin
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">
+                        <i class="bi bi-check2-circle me-1"></i> Görevi Ata & Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL 2: KEŞİF TAMAMLAMA & SAHA TUTANAĞI MODALI ================= -->
+<div class="modal fade" id="completeInspectionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <form action="/Agenda/CompleteInspection" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="recordId" id="completeRecordId" />
+                <input type="hidden" name="rating" id="starRatingValue" value="5" />
+
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-check2-circle text-success me-2"></i> Keşif Tamamlama & Saha Tutanağı
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <div class="p-3 bg-light rounded-3 mb-3 border">
+                        <small class="text-muted d-block fw-bold mb-1">Tamamlanan Randevu:</small>
+                        <strong class="text-dark" id="completeRecordTitle"></strong>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <!-- Keşif Kararı -->
+                        <div class="col-md-7">
+                            <label class="form-label fw-bold text-dark small">Saha İnceleme Sonucu / Karar:</label>
+                            <select class="form-select rounded-3" name="resultDecision">
+                                <option value="Olumlu / Teklif Aşamasına Geçildi">✅ Olumlu — Teklife Uygun / Saha Uygun</option>
+                                <option value="Şartlı / Ek Bilgi ve Metraj Gerekli">⚠️ Şartlı — Ek Bilgi & Metraj İncelemesi İstendi</option>
+                                <option value="Olumsuz / Şartlar Karşılanmadı">❌ Olumsuz — Şantiye veya Taşeron Şartları Uyuşmadı</option>
+                            </select>
+                        </div>
+
+                        <!-- 1-5 Yıldız Puanlama -->
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold text-dark small">Taşeron Güvenilirlik & Puanı:</label>
+                            <div class="star-rating d-flex align-items-center gap-1 p-2 bg-light rounded-3 border" id="starContainer">
+                                <i class="bi bi-star-fill active" data-val="1"></i>
+                                <i class="bi bi-star-fill active" data-val="2"></i>
+                                <i class="bi bi-star-fill active" data-val="3"></i>
+                                <i class="bi bi-star-fill active" data-val="4"></i>
+                                <i class="bi bi-star-fill active" data-val="5"></i>
+                                <span class="ms-2 fw-bold text-dark small" id="ratingText">(5/5 Çok İyi)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sahadan Fotoğraf & Video Yükleme (Tablette Kamera Açar) -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-dark small">
+                            <i class="bi bi-camera-fill text-primary me-1"></i> Sahada Çekilen Fotoğraf & Video / Tutanak Ekle:
+                        </label>
+                        <input type="file" class="form-control rounded-3" name="mediaFiles" multiple accept="image/*,video/*,application/pdf" capture="environment" />
+                        <small class="text-muted">Tabletten veya telefondan doğrudan kamera ile çekip anında tutanağa ekleyebilirsiniz.</small>
+                    </div>
+
+                    <!-- Saha Notu / Tutanak & Sesle Konuşma -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label fw-bold text-dark small mb-0">Saha Keşif Notları & Teknik Tutanak:</label>
+                            <button type="button" class="btn btn-xs btn-outline-danger rounded-pill px-2 py-1" id="micBtnComplete" onclick="toggleSpeechRecognition('completeSiteNotes', 'micBtnComplete')">
+                                <i class="bi bi-mic-fill text-danger me-1"></i> 🎤 Bas & Konuş
+                            </button>
+                        </div>
+                        <textarea class="form-control rounded-3" name="siteNotes" id="completeSiteNotes" rows="4" 
+                                  placeholder="Örn: Parsel sınırları incelendi, arka cephede hafriyat kamyonu girişi için komşu istinat duvarına zarar verilmemesi uyarısı yapıldı. Usta metrajı doğruladı."></textarea>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold">
+                        <i class="bi bi-shield-check me-1"></i> Keşfi Tamamla ve Tutanağı Mühürle
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL 3: FOTOĞRAF / MEDYA BÜYÜTÜCÜ LIGHTBOX ================= -->
+<div class="modal fade" id="mediaPreviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 rounded-4 shadow bg-dark">
+            <div class="modal-header border-0 pb-0">
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center p-3">
+                <img src="" id="mediaPreviewImg" class="img-fluid rounded-3" style="max-height: 80vh;" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL 4: DETAY GÖRÜNTÜLEME MODALI ================= -->
+<div class="modal fade" id="agendaDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold text-dark">
+                    <i class="bi bi-journal-text text-primary me-2"></i> Şantiye Defter Kayıt Detayı
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4" id="modalDetailContent">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Kapat</button>
+            </div>
         </div>
     </div>
 </div>
@@ -169,69 +1142,227 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             var calendarEl = document.getElementById('miniCalendar');
-            
-            var eventDates = @Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(eventDates.Select(d => d.ToString("yyyy-MM-dd"))));
-            
-            var calendarEvents = eventDates.map(function(dateStr) {
-                return {
-                    start: dateStr,
-                    display: 'list-item', // Nokta görünümü
-                    color: '#007bff'
-                };
-            });
+            if (calendarEl) {
+                var eventDates = @Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(eventDates.Select(d => d.ToString("yyyy-MM-dd"))));
+                var initialDate = '@selectedDate.ToString("yyyy-MM-dd")';
 
-            var calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'dayGridMonth',
-                locale: 'tr',
-                headerToolbar: {
-                    left: 'prev',
-                    center: 'title',
-                    right: 'next'
-                },
-                height: 320,
-                events: calendarEvents,
-                dateClick: function(info) {
-                    window.location.href = '/Agenda/Index?selectedDate=' + info.dateStr;
+                var calendarEvents = [];
+                @foreach (var d in eventDates)
+                {
+                    var count = allRecords.Count(r => r.EventDate.Date == d.Date);
+                    <text>
+                    calendarEvents.push({
+                        start: '@d.ToString("yyyy-MM-dd")',
+                        title: '🔴 @count Randevu',
+                        color: '#ef4444',
+                        textColor: '#ffffff',
+                        display: 'block'
+                    });
+                    </text>
                 }
-            });
-            calendar.render();
-            
-            @if(selectedDate.HasValue)
-            {
-                <text>calendar.gotoDate('@selectedDate.Value.ToString("yyyy-MM-dd")');</text>
-            }
-        });
 
-        
-        // Canlı notların AJAX ile kaydedilmesi (Debounce ile)
-        let typingTimer;
-        const doneTypingInterval = 1000; // 1 saniye bekle
+                var calendar = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    initialDate: initialDate,
+                    locale: 'tr',
+                    height: 'auto',
+                    contentHeight: 280,
+                    headerToolbar: {
+                        left: 'prev,next',
+                        center: 'title',
+                        right: 'today'
+                    },
+                    events: calendarEvents,
+                    dayCellDidMount: function(arg) {
+                        var y = arg.date.getFullYear();
+                        var m = String(arg.date.getMonth() + 1).padStart(2, '0');
+                        var d = String(arg.date.getDate()).padStart(2, '0');
+                        var key = y + '-' + m + '-' + d;
 
-        $(document).on('input', '.live-note-input', function () {
-            clearTimeout(typingTimer);
-            let input = $(this);
-            let itemId = input.data('item-id');
-            let notes = input.val();
-            let statusEl = $('#status-' + itemId);
-            
-            statusEl.hide();
-
-            typingTimer = setTimeout(function () {
-                $.post('/Agenda/SaveLiveNotes', { itemId: itemId, notes: notes })
-                .done(function() {
-                    statusEl.fadeIn().delay(2000).fadeOut();
+                        if (eventDates.includes(key)) {
+                            arg.el.classList.add('has-agenda-event');
+                        }
+                    },
+                    dateClick: function(info) {
+                        window.location.href = '/Agenda/Index?selectedDate=' + info.dateStr + '&viewMode=@viewMode@(projectId.HasValue ? $"&projectId={projectId.Value}" : "")';
+                    }
                 });
-            }, doneTypingInterval);
+
+                calendar.render();
+            }
+
+            // Yıldız Puanlama Etkileşimi
+            const stars = document.querySelectorAll('#starContainer i');
+            const ratingValueInput = document.getElementById('starRatingValue');
+            const ratingText = document.getElementById('ratingText');
+            const labels = ["", "(1/5 Yetersiz)", "(2/5 Geliştirilmeli)", "(3/5 Orta)", "(4/5 İyi)", "(5/5 Çok İyi)"];
+
+            stars.forEach(star => {
+                star.addEventListener('click', function() {
+                    const val = parseInt(this.getAttribute('data-val'));
+                    ratingValueInput.value = val;
+                    ratingText.innerText = labels[val];
+                    stars.forEach(s => {
+                        const sVal = parseInt(s.getAttribute('data-val'));
+                        if (sVal <= val) {
+                            s.classList.add('active');
+                            s.classList.replace('bi-star', 'bi-star-fill');
+                        } else {
+                            s.classList.remove('active');
+                            s.classList.replace('bi-star-fill', 'bi-star');
+                        }
+                    });
+                });
+            });
         });
 
-        function loadDetails(id, element) {
-            $('.timeline-item').removeClass('active');
-            $(element).addClass('active');
+        // 🎤 SES TANIMA / DİKTE (Web Speech API)
+        function toggleSpeechRecognition(targetInputId, micButtonId) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                alert('Tarayıcınız ses tanımayı desteklemiyor. Klavyenizdeki mikrofon tuşunu kullanarak konuşabilirsiniz.');
+                return;
+            }
 
-            $('#agendaDetailsPlaceholder').html('<div class="empty-state"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Yükleniyor...</p></div>');
-            
+            const micBtn = document.getElementById(micButtonId);
+            const targetInput = document.getElementById(targetInputId);
+
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'tr-TR';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            if (micBtn) {
+                micBtn.innerHTML = '<i class="bi bi-record-circle-fill text-danger"></i> <span class="spinner-grow spinner-grow-sm text-danger" role="status"></span> Dinleniyor...';
+                micBtn.classList.add('speech-listening');
+            }
+
+            recognition.onresult = function(event) {
+                const transcript = event.results[0][0].transcript;
+                if (targetInput) {
+                    targetInput.value = (targetInput.value ? targetInput.value + ' ' : '') + transcript;
+                }
+            };
+
+            recognition.onerror = function(event) {
+                console.error('Ses tanıma hatası:', event.error);
+                resetMicBtn(micBtn);
+            };
+
+            recognition.onend = function() {
+                resetMicBtn(micBtn);
+            };
+
+            recognition.start();
+        }
+
+        function resetMicBtn(micBtn) {
+            if (micBtn) {
+                micBtn.innerHTML = '<i class="bi bi-mic-fill text-danger me-1"></i> 🎤 Bas & Konuş';
+                micBtn.classList.remove('speech-listening');
+            }
+        }
+
+        // Görev Atama Modalı
+        function openAssignModal(recordId, title, staffName, staffPhone, taskNote) {
+            document.getElementById('assignRecordId').value = recordId;
+            document.getElementById('assignRecordTitle').innerText = title;
+            document.getElementById('assignStaffName').value = staffName || '';
+            document.getElementById('assignStaffPhone').value = staffPhone || '';
+            document.getElementById('assignTaskNote').value = taskNote || '';
+
+            var select = document.getElementById('assignStaffSelect');
+            var matched = false;
+            if (staffName) {
+                for (var i = 0; i < select.options.length; i++) {
+                    if (select.options[i].getAttribute('data-name') === staffName) {
+                        select.selectedIndex = i;
+                        matched = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!matched) {
+                if (staffName) {
+                    select.value = 'custom';
+                    document.getElementById('customStaffDiv').style.display = 'flex';
+                } else {
+                    select.selectedIndex = 0;
+                    document.getElementById('customStaffDiv').style.display = 'none';
+                }
+            } else {
+                document.getElementById('customStaffDiv').style.display = 'none';
+            }
+
+            var modal = new bootstrap.Modal(document.getElementById('assignTaskModal'));
+            modal.show();
+        }
+
+        function handleStaffSelectChange(select) {
+            var customDiv = document.getElementById('customStaffDiv');
+            var nameInput = document.getElementById('assignStaffName');
+            var phoneInput = document.getElementById('assignStaffPhone');
+            if (select.value === 'custom') {
+                customDiv.style.display = 'flex';
+                nameInput.value = '';
+                phoneInput.value = '';
+                nameInput.focus();
+            } else {
+                customDiv.style.display = 'none';
+                var opt = select.options[select.selectedIndex];
+                nameInput.value = opt.getAttribute('data-name') || '';
+                phoneInput.value = opt.getAttribute('data-phone') || '';
+            }
+        }
+
+        // Keşif Tamamlama Modalı
+        function openCompleteInspectionModal(recordId, title) {
+            document.getElementById('completeRecordId').value = recordId;
+            document.getElementById('completeRecordTitle').innerText = title;
+            document.getElementById('completeSiteNotes').value = '';
+            var modal = new bootstrap.Modal(document.getElementById('completeInspectionModal'));
+            modal.show();
+        }
+
+        // Medya Önizleme Lightbox
+        function previewMedia(url) {
+            document.getElementById('mediaPreviewImg').src = url;
+            var modal = new bootstrap.Modal(document.getElementById('mediaPreviewModal'));
+            modal.show();
+        }
+
+        // Görevliye Tek Tıkla SMS Gönder
+        function sendSmsToStaff(recordId, phone, name, dateTime, supplier) {
+            if (!confirm(name + ' personeline SMS göndermek istiyor musunuz?')) return;
+            var msg = 'Sayın ' + name + ', ' + dateTime + ' randevusunda ' + supplier + ' karsilama goreviniz bulunmaktadir.';
+            $.post('/Agenda/SendStaffSms', { recordId: recordId, phone: phone, message: msg }, function(res) {
+                if (res.success) {
+                    alert('SMS başarıyla iletildi: ' + phone);
+                } else {
+                    alert('SMS gönderilemedi: ' + (res.message || 'Bilinmeyen hata'));
+                }
+            }).fail(function() {
+                alert('SMS servisine ulaşılamadı.');
+            });
+        }
+
+        function updateStatus(id, statusId) {
+            $.post('/Agenda/UpdateStatus', { id: id, statusId: statusId }, function(res) {
+                window.location.reload();
+            }).fail(function() {
+                alert('Durum güncellenirken bir hata oluştu.');
+            });
+        }
+
+        function loadDetailsModal(id) {
+            const modal = new bootstrap.Modal(document.getElementById('agendaDetailModal'));
+            modal.show();
+            $('#modalDetailContent').html('<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></div>');
             $.get('/Agenda/GetDetails/' + id, function(data) {
-                $('#agendaDetailsPlaceholder').html(data);
+                $('#modalDetailContent').html(data);
+            }).fail(function() {
+                $('#modalDetailContent').html('<div class="alert alert-danger">Kayıt detayları yüklenemedi.</div>');
             });
         }
     </script>

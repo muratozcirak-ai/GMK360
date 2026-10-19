@@ -1,5 +1,20 @@
 @model GMK360.Core.Entities.Construction.ConstructionProject
 
+@functions {
+    public int GetKotOffset(GMK360.Core.Entities.Building b) {
+        if (b == null) return 0;
+        if (!string.IsNullOrEmpty(b.AttachedToBlock)) {
+            var match = System.Text.RegularExpressions.Regex.Match(b.AttachedToBlock, @"(?:Kot|Offset)\s*[:=]\s*([+-]?\d+)");
+            if (match.Success && int.TryParse(match.Groups[1].Value, out int offset)) return offset;
+        }
+        if (!string.IsNullOrEmpty(b.TechnicalFeatures)) {
+            var match = System.Text.RegularExpressions.Regex.Match(b.TechnicalFeatures, @"(?:KotOffset|KotKaymasi)\s*[:=]\s*([+-]?\d+)");
+            if (match.Success && int.TryParse(match.Groups[1].Value, out int offset)) return offset;
+        }
+        return 0;
+    }
+}
+
 @{
     ViewData["Title"] = "Proje Detayı: " + Model.Name;
     Layout = "~/Views/Shared/_ProjectLayout.cshtml";
@@ -16,7 +31,16 @@
                 <span class="badge bg-danger ms-2 shadow-sm fs-6 align-middle"><i class="bi bi-lock-fill"></i> SİSTEM KİLİTLİ (Baseline)</span>
             }
         </h2>
-        <p class="text-muted mb-0"><i class="bi bi-geo-alt me-1"></i>@Model.Address</p>
+        <p class="text-muted mb-0 d-flex align-items-center gap-2">
+            <i class="bi bi-geo-alt-fill text-danger me-1"></i>
+            <span>@(string.IsNullOrWhiteSpace(Model.Address) ? "Adres belirtilmemiş" : Model.Address)</span>
+            @if(Model.Latitude != null && Model.Longitude != null)
+            {
+                <a href="https://www.google.com/maps?q=@Model.Latitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),@Model.Longitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)" target="_blank" class="badge bg-danger bg-opacity-10 text-danger text-decoration-none rounded-pill px-2 py-1 shadow-sm" title="Haritada Gör">
+                    <i class="bi bi-map-fill me-1"></i> Haritada Gör
+                </a>
+            }
+        </p>
     </div>
     <div>
         <a asp-action="Index" class="btn btn-outline-secondary rounded-pill px-3 me-2">
@@ -45,8 +69,172 @@
     </div>
 </div>
 
+@if (Model.ParentProjectId.HasValue && Model.ParentProject != null)
+{
+    <div class="alert alert-primary bg-primary bg-opacity-10 border-primary border-0 rounded-4 p-3 mb-3 d-flex align-items-center justify-content-between shadow-xs">
+        <div class="d-flex align-items-center">
+            <div class="rounded-circle bg-primary text-white p-2 me-3 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+                <i class="bi bi-diagram-3-fill fs-5"></i>
+            </div>
+            <div>
+                <span class="badge bg-primary text-white mb-1">ALT İMALAT PROJESİ</span>
+                <div class="fw-bold text-dark fs-6">Bu proje <u><a href="/ConstructionProject/Details/@Model.ParentProjectId" class="text-primary text-decoration-underline">@Model.ParentProject.Name</a></u> ana projesine bağlı bir alt imalat paketidir.</div>
+            </div>
+        </div>
+        <a href="/ConstructionProject/Details/@Model.ParentProjectId" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold">
+            <i class="bi bi-arrow-up-right-circle me-1"></i> Ana Projeye Git
+        </a>
+    </div>
 
+    @* ALT PROJE İMALAT MODELİ BİLGİLENDİRME KARTI *@
+    @if (Model.HasDxfDrawing || (ViewBag.ExecutionMode as string) == "DxfEngineering")
+    {
+        <div class="alert alert-success bg-success bg-opacity-10 border border-success border-opacity-25 rounded-4 p-3 mb-4 d-flex align-items-center justify-content-between shadow-xs">
+            <div class="d-flex align-items-center">
+                <div class="rounded-circle bg-success text-white p-2 me-3 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+                    <i class="bi bi-file-earmark-ruled-fill fs-5"></i>
+                </div>
+                <div>
+                    <span class="badge bg-success text-white mb-1 fw-bold"><i class="bi bi-rulers me-1"></i>DETAYLI MÜHENDİSLİK & METRAJ PROJESİ</span>
+                    <div class="fw-bold text-dark fs-6">Bu alt proje AutoCAD / DXF çizimi ve parametrik metraj altyapısına sahiptir.</div>
+                    <small class="text-muted">Statik karkas, mimari mahal listesi ve tesisat keşifleri bağımsız olarak hesaplanmaktadır.</small>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="/Metraj/DnaWizard/@Model.Id" target="_blank" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold">
+                    <i class="bi bi-magic me-1"></i> DNA Sihirbazı
+                </a>
+                <a href="/Metraj/Index?projectId=@Model.Id" target="_blank" class="btn btn-outline-success btn-sm rounded-pill px-3 fw-bold">
+                    <i class="bi bi-rulers me-1"></i> Metraj Detayı
+                </a>
+                <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-2" data-bs-toggle="modal" data-bs-target="#uploadDxfModal" title="Çizimi Güncelle">
+                    <i class="bi bi-upload"></i>
+                </button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-warning bg-warning bg-opacity-10 border border-warning border-opacity-25 rounded-4 p-3 mb-4 d-flex align-items-center justify-content-between shadow-xs">
+            <div class="d-flex align-items-center">
+                <div class="rounded-circle bg-warning text-dark p-2 me-3 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+                    <i class="bi bi-file-earmark-text-fill fs-5"></i>
+                </div>
+                <div>
+                    <span class="badge bg-warning text-dark mb-1 fw-bold"><i class="bi bi-receipt me-1"></i>TEKLİF & DÖKÜMANTASYON (RFQ) PAKETİ</span>
+                    <div class="fw-bold text-dark fs-6">Bu paket dökümantasyon, teknik şartname ve taşeron teklif toplama (RFQ) odaklıdır. CAD/DXF çizimi tanımlanmamıştır.</div>
+                    <small class="text-muted">Elinizde AutoCAD/DXF çizimi varsa, sisteme yükleyerek anında detaylı metraj ve mühendislik moduna yükseltebilirsiniz.</small>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#uploadDxfModal">
+                    <i class="bi bi-file-earmark-arrow-up me-1"></i> 📐 DXF Çizimi Yükle
+                </button>
+                <a href="/B2BPartnerPortal/Index" class="btn btn-outline-dark btn-sm rounded-pill px-3 fw-bold">
+                    <i class="bi bi-megaphone me-1"></i> RFQ Teklif Topla
+                </a>
+            </div>
+        </div>
+    }
+}
 
+@* ANA PROJE İÇİN: BAĞLI ALT PROJELER & İMALAT PAKETLERİ KARTI *@
+@if (!Model.ParentProjectId.HasValue)
+{
+    <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden">
+        <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="fw-bold text-dark mb-0">
+                    <i class="bi bi-diagram-3 text-primary me-2"></i>Bağlı Alt Projeler & İmalat Paketleri (@(Model.SubProjects?.Count ?? 0))
+                </h6>
+                <small class="text-muted">Ana projeye bağlı bağımsız yönetilen çevre, donatı, peyzaj ve özel imalat projeleri</small>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                @if (Model.SubProjects != null && Model.SubProjects.Any())
+                {
+                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary rounded-pill px-3 py-1 fw-bold">
+                        @Model.SubProjects.Count Alt Proje
+                    </span>
+                }
+                <button type="button" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold shadow-xs" data-bs-toggle="modal" data-bs-target="#createSubProjectModal">
+                    <i class="bi bi-plus-circle me-1"></i> Yeni Alt Proje / İmalat Paketi Ekle
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            @if (Model.SubProjects != null && Model.SubProjects.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr class="small text-muted text-uppercase">
+                                <th>Alt Proje Adı</th>
+                                <th>Kategori</th>
+                                <th>İmalat / Metraj Modeli</th>
+                                <th>Durum</th>
+                                <th>Başlangıç Tarihi</th>
+                                <th class="text-end">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var sub in Model.SubProjects)
+                            {
+                                bool subHasDxf = sub.HasDxfDrawing || sub.ProjectExecutionMode == "DxfEngineering";
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold text-dark"><i class="bi bi-folder2-open text-warning me-2"></i>@sub.Name</div>
+                                        <small class="text-muted">@sub.Description</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info bg-opacity-10 text-info border border-info rounded-pill px-2 py-1">
+                                            @(sub.SubProjectCategory ?? sub.ProjectType ?? "Alt İmalat")
+                                        </span>
+                                    </td>
+                                    <td>
+                                        @if (subHasDxf)
+                                        {
+                                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary rounded-pill px-2 py-1 fw-bold">
+                                                <i class="bi bi-file-earmark-ruled me-1"></i>📐 Mühendislik (DXF)
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary rounded-pill px-2 py-1 fw-bold">
+                                                <i class="bi bi-receipt me-1"></i>📄 Teklif & Döküman (RFQ)
+                                            </span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill px-2 py-1">
+                                            @sub.Status.ToString().Replace("_", " ")
+                                        </span>
+                                    </td>
+                                    <td>@sub.StartDate.ToString("dd.MM.yyyy")</td>
+                                    <td class="text-end">
+                                        <a href="/ConstructionProject/Details/@sub.Id" class="btn btn-outline-primary btn-sm rounded-pill px-3">
+                                            <i class="bi bi-box-arrow-in-up-right me-1"></i> Projeyi Aç
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="p-4 text-center">
+                    <div class="text-muted mb-2"><i class="bi bi-diagram-3 fs-1 text-secondary opacity-50"></i></div>
+                    <h6 class="fw-bold text-dark mb-1">Henüz Tanımlanmış Alt Proje veya İmalat Paketi Yok</h6>
+                    <p class="text-muted small mb-3">Çocuk parkı, peyzaj, güvenlik kulübesi, istinat duvarı gibi donatıları bağımsız bütçelendirip yönetmek için alt proje açabilirsiniz.</p>
+                    <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-4 fw-bold" data-bs-toggle="modal" data-bs-target="#createSubProjectModal">
+                        <i class="bi bi-plus-circle me-1"></i> İlk Alt Projeyi / İmalat Paketini Oluştur
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
 
 <div class="accordion mb-4 shadow-sm" id="accordionStakeholders">
     <div class="accordion-item border-0 rounded-4 overflow-hidden">
@@ -120,6 +308,12 @@
                                               <button type="button" class="btn btn-sm btn-outline-warning rounded-pill shadow-sm me-1" onclick="editStakeholder('@st.Id', '@st.Role', '@(st.SharePercentage.HasValue ? st.SharePercentage.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")')" title="Düzenle">
                                                   <i class="bi bi-pencil-square"></i>
                                               </button>
+                                              <form asp-action="DeleteStakeholder" asp-controller="ConstructionProject" method="post" class="d-inline" onsubmit="return confirm('Bu paydaşı projeden kaldırmak istediğinize emin misiniz?');">
+                                                  <input type="hidden" name="stakeholderId" value="@st.Id" />
+                                                  <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill shadow-sm me-1" title="Projeden Kaldır">
+                                                      <i class="bi bi-trash"></i>
+                                                  </button>
+                                              </form>
                                               <button class="btn btn-sm btn-outline-primary rounded-pill shadow-sm" title="Mesaj Gönder"><i class="bi bi-chat-dots"></i></button>
                                           </td>
                                       </tr>
@@ -273,10 +467,7 @@
     document.addEventListener('DOMContentLoaded', function() { toggleShareField(); });
 </script>
 
-<!-- PROJE FAZLARI VE ANA YÖNETİM (KİBAR LİSTE) -->
-  <div class="mb-4">
-      
-
+<!-- PROJE FAZLARI VE ANA YÖNETİM -->
 <!-- FİZİBİLİTE VE AŞAMA YÖNETİMİ (ACCORDION) -->
 <div class="accordion mb-4 shadow-sm rounded-4" id="accordionFizibilite">
     <div class="accordion-item border-0 rounded-4">
@@ -530,31 +721,6 @@
         </div>
     }
 }
-<!-- HARİTA VE ÇEVRE ÖZELLİKLERİ (BAÄIMSIZ) -->
-<div class="row g-4 mb-4">
-    <div class="col-12">
-        <div class="card border-0 shadow-sm rounded-4">
-            <div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
-                <div class="d-flex align-items-center">
-                    <i class="bi bi-geo-alt-fill text-danger fs-1 me-3"></i>
-                    <div>
-                        <h5 class="fw-bold mb-1">Konum Verileri ve Çevre Özellikleri</h5>
-                        <p class="text-muted small mb-0">Google Haritalar (Places API) üzerinden hastane, okul, park gibi çevre özellikleri buraya otomatik çekilecektir.</p>
-                    </div>
-                </div>
-                <div class="d-flex gap-2">
-                    @if(Model.Latitude != null && Model.Longitude != null)
-                    {
-                        <a href="https://www.google.com/maps?q=@Model.Latitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),@Model.Longitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)" target="_blank" class="btn btn-outline-danger rounded-pill shadow-sm">
-                            <i class="bi bi-geo-alt-fill me-1"></i> Lojistik Haritası
-                        </a>
-                    }
-                    <button type="button" class="btn btn-outline-secondary rounded-pill shadow-sm"><i class="bi bi-arrow-repeat me-1"></i> Haritadan Güncelle</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- ÖZET ALANLARI (COLLAPSIBLE) -->
 <div class="accordion mb-4 shadow-sm" id="accordionSummaries">
@@ -685,6 +851,79 @@
                                                 <div>
                                                     <div class="text-muted small fw-bold">Kat Sayısı</div>
                                                     <div class="fw-bold text-dark">Bodrum Dahil Max @eskiMaxKat Kat</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- ESKİ BİNA SÖKÜM VARLIKLARI & HURDA KOKPİTİ -->
+                                <div class="col-12 mt-3">
+                                    <div class="card border border-danger border-opacity-25 shadow-sm rounded-4 overflow-hidden bg-white">
+                                        <div class="card-header bg-danger bg-opacity-10 py-3 border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                            <div class="fw-bold text-dark fs-6">
+                                                <i class="bi bi-recycle text-danger me-2"></i> Eski Bina Söküm Varlıkları & Değerli Hurda Envanteri
+                                            </div>
+                                            <div class="d-flex gap-2">
+                                                @if (eskiKokBloklar != null && eskiKokBloklar.Any())
+                                                {
+                                                    <a href="/ConstructionProject/ManageBlock/@eskiKokBloklar.First().Id" class="btn btn-sm btn-outline-danger fw-bold rounded-pill px-3">
+                                                        <i class="bi bi-magic me-1"></i> Tipik Kat Sihirbazı
+                                                    </a>
+                                                }
+                                                <a href="/DemolitionSalvage/Index?projectId=@Model.Id" class="btn btn-sm btn-danger fw-bold rounded-pill shadow-sm px-3">
+                                                    <i class="bi bi-hammer me-1"></i> Hurda & Yıkım Kokpitini Aç
+                                                </a>
+                                            </div>
+
+                                        </div>
+                                        <div class="card-body p-3">
+                                            <div class="row g-2 text-center">
+                                                <div class="col-md-3">
+                                                    <div class="p-2 bg-light rounded-3 border">
+                                                        <div class="small text-muted fw-bold">Tahmini Kalorifer Petekleri</div>
+                                                        <div class="fs-5 fw-bold text-dark">@(eskiToplamDaire > 0 ? (eskiToplamDaire * 5) + " Adet" : "Analiz Ediliyor")</div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="p-2 bg-light rounded-3 border">
+                                                        <div class="small text-muted fw-bold">Kombi & Şofben</div>
+                                                        <div class="fs-5 fw-bold text-dark">@(eskiToplamDaire > 0 ? eskiToplamDaire + " Adet" : "Analiz Ediliyor")</div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="p-2 bg-light rounded-3 border">
+                                                        <div class="small text-muted fw-bold">Çelik & Ahşap Kapılar</div>
+                                                        <div class="fs-5 fw-bold text-dark">@(eskiToplamDaire > 0 ? (eskiToplamDaire * 5) + " Adet" : "Analiz Ediliyor")</div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="p-2 bg-light rounded-3 border">
+                                                        <div class="small text-muted fw-bold">Tahmini Hurda İnşaat Demiri</div>
+                                                        <div class="fs-5 fw-bold text-danger">@(totalLandEski > 0 ? (Math.Round(totalLandEski * 0.015, 1)) + " Ton" : "Analiz Ediliyor")</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top flex-wrap gap-2">
+                                                <span class="small text-muted">
+                                                    <i class="bi bi-info-circle text-primary me-1"></i> Bu binadaki sökümleri hurdacılara ayrı satıp gelir elde edebilir, ya da hurda karşılığı yıkım ihalesi başlatabilirsiniz.
+                                                </span>
+                                                <div class="d-flex gap-2">
+                                                    <form method="post" action="/DemolitionSalvage/CreateScrapSaleTender" class="d-inline">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="projectId" value="@Model.Id" />
+                                                        <button type="submit" class="btn btn-sm btn-outline-success fw-bold rounded-pill px-3 shadow-xs">
+                                                            <i class="bi bi-cash me-1"></i> Hurda Satış İhalesi (+Gelir)
+                                                        </button>
+                                                    </form>
+                                                    <form method="post" action="/DemolitionSalvage/CreateDemolitionTender" class="d-inline">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="projectId" value="@Model.Id" />
+                                                        <button type="submit" class="btn btn-sm btn-outline-warning text-dark fw-bold rounded-pill px-3 shadow-xs">
+                                                            <i class="bi bi-truck me-1"></i> Hurda Karşılığı Yıkım İhalesi
+                                                        </button>
+                                                    </form>
                                                 </div>
                                             </div>
                                         </div>
@@ -979,10 +1218,34 @@
                                         </span>
                                     }
                                 </div>
-                                <div>
+                                <div class="d-flex align-items-center gap-2">
                                     <span class="badge bg-white text-danger border border-danger-subtle px-3 py-2 rounded-pill small shadow-sm">
                                         @(children.Any() ? $"{children.Count} Bağımsız Kule / Blok" : "Müstakil Blok")
                                     </span>
+                                    <button type="button" class="btn btn-sm btn-white border shadow-sm rounded-circle p-1 btn-open-edit-block" 
+                                            data-id="@block.Id" 
+                                            data-name="@cleanBlockName" 
+                                            data-basearea="@(block.BaseArea ?? 0)" 
+                                            data-totalfloors="@(block.TotalFloors ?? 0)" 
+                                            data-basementfloors="@block.BasementFloors" 
+                                            data-hasground="@block.HasGroundFloor.ToString().ToLower()" 
+                                            data-hasroof="@block.HasRoof.ToString().ToLower()" 
+                                            data-rooftype="@block.RoofType" 
+                                            data-elevators="@(block.ElevatorCount ?? 0)" 
+                                            data-parking="@block.ParkingType" 
+                                            data-insulation="@block.InsulationType" 
+                                            data-features="@block.TechnicalFeatures" 
+                                            data-desc="@block.Description" 
+                                            data-kotoffset="@GetKotOffset(block)" 
+                                            title="Blok Özelliklerini Düzenle" style="width: 32px; height: 32px;">
+                                        <i class="bi bi-pencil text-danger"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-white border shadow-sm rounded-circle p-1 btn-open-delete-block" 
+                                            data-id="@block.Id" 
+                                            data-name="@cleanBlockName" 
+                                            title="Bloğu Sil" style="width: 32px; height: 32px;">
+                                        <i class="bi bi-trash text-danger"></i>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1045,7 +1308,12 @@
                             @if(children.Any())
                             {
                                 <div class="border-top pt-3 mt-3">
-                                    <h6 class="fw-bold text-dark mb-3"><i class="ph ph-buildings me-2 text-danger"></i>Alt Yapılar (Kuleler / Bloklar)</h6>
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h6 class="fw-bold text-dark mb-0"><i class="ph ph-buildings me-2 text-danger"></i>Alt Yapılar (Kuleler / Bloklar)</h6>
+                                        <button type="button" class="btn btn-sm btn-outline-danger rounded-pill fw-bold btn-add-child-tower shadow-sm" data-parent-id="@block.Id" data-parent-name="@cleanBlockName">
+                                            <i class="bi bi-plus-lg me-1"></i> Yeni Kule / Blok Ekle
+                                        </button>
+                                    </div>
                                     <div class="row g-3">
                                         @foreach(var child in children)
                                         {
@@ -1056,7 +1324,33 @@
                                                         <div>
                                                             <div class="d-flex justify-content-between align-items-center mb-2">
                                                                 <h6 class="fw-bold text-dark mb-0"><i class="bi bi-building text-danger me-1"></i>@cleanChildName</h6>
-                                                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle">@(child.TotalFloors ?? 0) Kat</span>
+                                                                <div class="d-flex align-items-center gap-1">
+                                                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">@(child.TotalFloors ?? 0) Kat</span>
+                                                                    <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1 btn-open-edit-block" 
+                                                                            data-id="@child.Id" 
+                                                                            data-name="@cleanChildName" 
+                                                                            data-basearea="@(child.BaseArea ?? 0)" 
+                                                                            data-totalfloors="@(child.TotalFloors ?? 0)" 
+                                                                            data-basementfloors="@child.BasementFloors" 
+                                                                            data-hasground="@child.HasGroundFloor.ToString().ToLower()" 
+                                                                            data-hasroof="@child.HasRoof.ToString().ToLower()" 
+                                                                            data-rooftype="@child.RoofType" 
+                                                                            data-elevators="@(child.ElevatorCount ?? 0)" 
+                                                                            data-parking="@child.ParkingType" 
+                                                                            data-insulation="@child.InsulationType" 
+                                                                            data-features="@child.TechnicalFeatures" 
+                                                                            data-desc="@child.Description" 
+                                                                            data-kotoffset="@GetKotOffset(child)" 
+                                                                            title="Kuleyi Düzenle">
+                                                                        <i class="bi bi-pencil"></i>
+                                                                    </button>
+                                                                    <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1 btn-open-delete-block" 
+                                                                            data-id="@child.Id" 
+                                                                            data-name="@cleanChildName" 
+                                                                            title="Kuleyi Sil">
+                                                                        <i class="bi bi-trash"></i>
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                             <div class="d-flex flex-wrap gap-1 mb-3">
                                                                 <span class="badge bg-light text-muted border small">@(child.BasementFloors > 0 ? $"{child.BasementFloors} Bodrum" : "Bodrumsuz")</span>
@@ -1110,10 +1404,33 @@
                                         </span>
                                     }
                                 </div>
-                                <div>
+                                <div class="d-flex align-items-center gap-2">
                                     <span class="badge bg-white text-primary border border-primary-subtle px-3 py-2 rounded-pill small shadow-sm">
                                         @(children.Any() ? $"{children.Count} Bağımsız Kule / Blok" : "Müstakil Blok")
                                     </span>
+                                    <button type="button" class="btn btn-sm btn-white border shadow-sm rounded-circle p-1 btn-open-edit-block" 
+                                            data-id="@block.Id" 
+                                            data-name="@cleanBlockName" 
+                                            data-basearea="@(block.BaseArea ?? 0)" 
+                                            data-totalfloors="@(block.TotalFloors ?? 0)" 
+                                            data-basementfloors="@block.BasementFloors" 
+                                            data-hasground="@block.HasGroundFloor.ToString().ToLower()" 
+                                            data-hasroof="@block.HasRoof.ToString().ToLower()" 
+                                            data-rooftype="@block.RoofType" 
+                                            data-elevators="@(block.ElevatorCount ?? 0)" 
+                                            data-parking="@block.ParkingType" 
+                                            data-insulation="@block.InsulationType" 
+                                            data-features="@block.TechnicalFeatures" 
+                                            data-desc="@block.Description" 
+                                            title="Blok Özelliklerini Düzenle" style="width: 32px; height: 32px;">
+                                        <i class="bi bi-pencil text-primary"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-white border shadow-sm rounded-circle p-1 btn-open-delete-block" 
+                                            data-id="@block.Id" 
+                                            data-name="@cleanBlockName" 
+                                            title="Bloğu Sil" style="width: 32px; height: 32px;">
+                                        <i class="bi bi-trash text-danger"></i>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1176,7 +1493,12 @@
                             @if(children.Any())
                             {
                                 <div class="border-top pt-3 mt-3">
-                                    <h6 class="fw-bold text-dark mb-3"><i class="ph ph-buildings me-2 text-primary"></i>Alt Yapılar (Kuleler / Bloklar)</h6>
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h6 class="fw-bold text-dark mb-0"><i class="ph ph-buildings me-2 text-primary"></i>Alt Yapılar (Kuleler / Bloklar)</h6>
+                                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill fw-bold btn-add-child-tower shadow-sm" data-parent-id="@block.Id" data-parent-name="@cleanBlockName">
+                                            <i class="bi bi-plus-lg me-1"></i> Yeni Kule / Blok Ekle
+                                        </button>
+                                    </div>
                                     <div class="row g-3">
                                         @foreach(var child in children)
                                         {
@@ -1187,7 +1509,32 @@
                                                         <div>
                                                             <div class="d-flex justify-content-between align-items-center mb-2">
                                                                 <h6 class="fw-bold text-dark mb-0"><i class="bi bi-building text-primary me-1"></i>@cleanChildName</h6>
-                                                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">@(child.TotalFloors ?? 0) Kat</span>
+                                                                <div class="d-flex align-items-center gap-1">
+                                                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">@(child.TotalFloors ?? 0) Kat</span>
+                                                                    <button type="button" class="btn btn-sm btn-link text-primary p-0 ms-1 btn-open-edit-block" 
+                                                                            data-id="@child.Id" 
+                                                                            data-name="@cleanChildName" 
+                                                                            data-basearea="@(child.BaseArea ?? 0)" 
+                                                                            data-totalfloors="@(child.TotalFloors ?? 0)" 
+                                                                            data-basementfloors="@child.BasementFloors" 
+                                                                            data-hasground="@child.HasGroundFloor.ToString().ToLower()" 
+                                                                            data-hasroof="@child.HasRoof.ToString().ToLower()" 
+                                                                            data-rooftype="@child.RoofType" 
+                                                                            data-elevators="@(child.ElevatorCount ?? 0)" 
+                                                                            data-parking="@child.ParkingType" 
+                                                                            data-insulation="@child.InsulationType" 
+                                                                            data-features="@child.TechnicalFeatures" 
+                                                                            data-desc="@child.Description" 
+                                                                            title="Kuleyi Düzenle">
+                                                                        <i class="bi bi-pencil"></i>
+                                                                    </button>
+                                                                    <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1 btn-open-delete-block" 
+                                                                            data-id="@child.Id" 
+                                                                            data-name="@cleanChildName" 
+                                                                            title="Kuleyi Sil">
+                                                                        <i class="bi bi-trash"></i>
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                             <div class="d-flex flex-wrap gap-1 mb-3">
                                                                 <span class="badge bg-light text-muted border small">@(child.BasementFloors > 0 ? $"{child.BasementFloors} Bodrum" : "Bodrumsuz")</span>
@@ -1439,3 +1786,554 @@ else
         </div>
     </div>
 </div>
+
+<!-- Edit Block / Tower Modal -->
+<div class="modal fade" id="editBlockModal" tabindex="-1" aria-labelledby="editBlockModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <form asp-action="UpdateBlockDetails" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="editBlockId" value="" />
+                <input type="hidden" name="returnUrl" value="@Url.Action("Details", new { id = Model.Id })" />
+                
+                <div class="modal-header bg-light border-0 py-3 rounded-top-4">
+                    <h5 class="modal-title fw-bold text-dark" id="editBlockModalLabel">
+                        <i class="bi bi-pencil-square text-primary me-2"></i>Blok / Kule Özelliklerini Düzenle
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+                </div>
+                
+                <div class="modal-body p-4">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label fw-bold small text-muted">Blok / Kule Adı <span class="text-danger">*</span></label>
+                            <input type="text" name="BlockName" id="editBlockName" class="form-control fw-bold" required />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold small text-muted">Taban Oturum Alanı (m²)</label>
+                            <div class="input-group">
+                                <input type="number" step="0.1" name="BaseArea" id="editBlockBaseArea" class="form-control" placeholder="Örn: 450" />
+                                <span class="input-group-text bg-light text-muted">m²</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-muted">Normal Kat</label>
+                            <input type="number" min="0" name="TotalFloors" id="editBlockTotalFloors" class="form-control" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-muted">Bodrum Kat</label>
+                            <input type="number" min="0" name="BasementFloors" id="editBlockBasementFloors" class="form-control" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-muted">Zemin Kat</label>
+                            <select name="HasGroundFloor" id="editBlockHasGround" class="form-select">
+                                <option value="true">Zemin Kat Var</option>
+                                <option value="false">Zemin Kat Yok</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-muted">Çatı Durumu</label>
+                            <select name="HasRoof" id="editBlockHasRoof" class="form-select">
+                                <option value="true">Çatılı</option>
+                                <option value="false">Çatısız / Teras</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small text-muted">Çatı Tipi</label>
+                            <select name="RoofType" id="editBlockRoofType" class="form-select">
+                                <option value="">Belirtilmemiş</option>
+                                <option value="Teras Çatı">Teras Çatı</option>
+                                <option value="Kırma Çatı">Kırma Çatı</option>
+                                <option value="Beşik Çatı">Beşik Çatı</option>
+                                <option value="Çelik Konstrüksiyon">Çelik Konstrüksiyon</option>
+                                <option value="Sundurma Çatı">Sundurma Çatı</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small text-muted">Asansör Sayısı</label>
+                            <input type="number" min="0" name="ElevatorCount" id="editBlockElevators" class="form-control" placeholder="Örn: 2" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small text-muted">Otopark Durumu</label>
+                            <select name="ParkingType" id="editBlockParking" class="form-select">
+                                <option value="">Belirtilmemiş</option>
+                                <option value="Kapalı Otopark">Kapalı Otopark</option>
+                                <option value="Açık Otopark">Açık Otopark</option>
+                                <option value="Açık ve Kapalı Otopark">Açık ve Kapalı Otopark</option>
+                                <option value="Yok">Yok</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Mantolama / Cephe Yalıtımı</label>
+                        <input type="text" name="InsulationType" id="editBlockInsulation" class="form-control" placeholder="Örn: Taş Yünü (150 kg/m³), EPS Mantolama, Mekanik Seramik" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Arazi Eğimi / Kot Kayması (Kat Sayısı Olarak)</label>
+                        <select name="KotOffset" id="editBlockKotOffset" class="form-select">
+                            <option value="0">0 - Düz Zemin / Referans Kot (Varsayılan)</option>
+                            <option value="-1">-1 Kat Aşağıda (Eğim Aşağı / Zemin komşunun bodrumuna denk)</option>
+                            <option value="-2">-2 Kat Aşağıda (Dik Eğim Aşağı)</option>
+                            <option value="-3">-3 Kat Aşağıda (Çok Dik Eğim Aşağı)</option>
+                            <option value="1">+1 Kat Yukarıda (Eğim Yukarı / Bodrum komşunun zeminine denk)</option>
+                            <option value="2">+2 Kat Yukarıda (Dik Eğim Yukarı)</option>
+                            <option value="3">+3 Kat Yukarıda (Çok Dik Eğim Yukarı)</option>
+                        </select>
+                        <div class="form-text small" style="font-size:11px;">Bitişik nizam bloklarda veya eğimli arazide kot hizalaması için.</div>
+                    </div>
+
+                    <div class="mb-3 p-3 bg-light rounded-3 border">
+                        <label class="form-label fw-bold text-primary mb-2 small">
+                            <i class="bi bi-ui-checks-grid me-1"></i> Donanım ve Ortak Tesisler
+                        </label>
+                        <div class="row g-2">
+                            @{
+                                string[] editPredefinedFeatures = { "Su Deposu", "Sığınak", "Jeneratör", "Fiber İnternet", "Uydu Sistemi", "Görüntülü Diyafon", "Şifreli Giriş", "Kamera Sistemi", "Akıllı Ev Altyapısı", "Engelli Rampası", "Yangın Merdiveni", "Paratoner" };
+                            }
+                            @foreach(var item in editPredefinedFeatures)
+                            {
+                                <div class="col-md-4 col-sm-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input edit-block-feature-chk" type="checkbox" name="SelectedFeatures" value="@item" id="chk_edit_@item.Replace(" ", "")" />
+                                        <label class="form-check-label text-dark small" for="chk_edit_@item.Replace(" ", "")">@item</label>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Ekstra Teknik Özellikler</label>
+                        <input type="text" name="TechnicalFeatures" id="editBlockFeatures" class="form-control" placeholder="Örn: Güneş Enerjisi Paneli, Gri Su Geri Kazanımı..." />
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-bold small text-muted">Açıklama / Notlar</label>
+                        <textarea name="Description" id="editBlockDesc" class="form-control" rows="2" placeholder="Blok veya kule ile ilgili mimari ve statik notlar..."></textarea>
+                    </div>
+                </div>
+                
+                <div class="modal-footer border-0 bg-light py-3 rounded-bottom-4">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">
+                        <i class="bi bi-check2-circle me-1"></i> Değişiklikleri Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Block Modal -->
+<div class="modal fade" id="deleteBlockModal" tabindex="-1" aria-labelledby="deleteBlockModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header bg-danger text-white border-0 py-3 rounded-top-4">
+                <h5 class="modal-title fw-bold" id="deleteBlockModalLabel">
+                    <i class="bi bi-trash3-fill me-2"></i>Bloğu Sil
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <form asp-action="DeleteBlock" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" id="deleteBlockId" value="" />
+                <input type="hidden" name="projectId" value="@Model.Id" />
+                <div class="modal-body p-4 text-center">
+                    <div class="text-danger mb-3">
+                        <i class="bi bi-exclamation-octagon" style="font-size: 3.5rem;"></i>
+                    </div>
+                    <h5 class="fw-bold text-dark mb-2"><span id="deleteBlockNameSpan" class="text-danger"></span> Yapısını Silmek İstediğinize Emin Misiniz?</h5>
+                    <p class="text-muted small mb-0">
+                        Bu işlem; bu bloğu, varsa altındaki tüm kuleleri, tanımlanmış katları, daireleri, mahal ölçülerini ve malzeme seçimlerini <strong>kalıcı olarak silecektir</strong>. Bu işlem geri alınamaz!
+                    </p>
+                </div>
+                <div class="modal-footer border-0 bg-light py-3 rounded-bottom-4">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">
+                        <i class="bi bi-trash me-1"></i> Evet, Kalıcı Olarak Sil
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Child Tower / Sub-Block Modal -->
+<div class="modal fade" id="addChildTowerModal" tabindex="-1" aria-labelledby="addChildTowerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <form asp-action="AddChildBlock" asp-controller="ConstructionProject" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="projectId" value="@Model.Id" />
+                <input type="hidden" name="parentBuildingId" id="addChildParentBuildingId" />
+
+                <div class="modal-header bg-primary text-white border-0 py-3 rounded-top-4">
+                    <h5 class="modal-title fw-bold" id="addChildTowerModalLabel">
+                        <i class="bi bi-building-add me-2"></i>Yeni Alt Yapı (Kule / Blok) Ekle
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-primary bg-primary bg-opacity-10 border-0 rounded-3 mb-4">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Üst Yapı: <strong id="addChildParentNameSpan" class="text-primary">-</strong> altına yeni bir bağımsız kule/blok ekliyorsunuz. Bu kulenin katları ortak baza veya iskelet üzerine inşa edilecektir.
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold text-dark small">Kule / Blok Adı</label>
+                            <input type="text" class="form-control" name="blockName" placeholder="Örn: B Blok, Batı Kulesi" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small">Taban Oturumu (m²)</label>
+                            <input type="number" step="0.01" class="form-control" name="baseArea" placeholder="Örn: 450">
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small">Normal Kat Sayısı</label>
+                            <input type="number" class="form-control" name="totalFloors" value="10" min="0" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small">Bodrum Kat Sayısı</label>
+                            <input type="number" class="form-control" name="basementFloors" value="0" min="0" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small">Zemin Kat</label>
+                            <select class="form-select" name="hasGroundFloor">
+                                <option value="false">Yok (Baza Üstü / 1. Kattan Başlar)</option>
+                                <option value="true">Var (Kendi Bağımsız Zemini Var)</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small">Çatı Yapısı</label>
+                            <select class="form-select" name="hasRoof">
+                                <option value="true">Çatılı / Teras Var</option>
+                                <option value="false">Çatısız / Düz Tabliye</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small">Çatı Tipi</label>
+                            <select class="form-select" name="roofType">
+                                <option value="Düz Teras Çatı (Tabliye)">Düz Teras Çatı (Tabliye)</option>
+                                <option value="Eğimli Kiremit / Sergili Çatı">Eğimli Kiremit / Sergili Çatı</option>
+                                <option value="Eğimli Sac / Sandviç Panel Çatı">Eğimli Sac / Sandviç Panel Çatı</option>
+                                <option value="Baza Üstü Ortak Teras / Peyzaj">Baza Üstü Ortak Teras / Peyzaj</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small">Arazi Eğimi / Kot Kayması</label>
+                            <select class="form-select" name="kotOffset">
+                                <option value="0" selected>0 (Aynı Düzlem / Hizalı)</option>
+                                <option value="-1">-1 Kat (1 Kat Aşağıda / Kot Farkı)</option>
+                                <option value="-2">-2 Kat (2 Kat Aşağıda)</option>
+                                <option value="-3">-3 Kat (3 Kat Aşağıda)</option>
+                                <option value="1">+1 Kat (1 Kat Yukarıda)</option>
+                                <option value="2">+2 Kat (2 Kat Yukarıda)</option>
+                                <option value="3">+3 Kat (3 Kat Yukarıda)</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small">Asansör Sayısı</label>
+                            <input type="number" class="form-control" name="elevatorCount" value="2" min="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small">Otopark Tipi</label>
+                            <select class="form-select" name="parkingType">
+                                <option value="Kapalı Yeraltı Otoparkı">Kapalı Yeraltı Otoparkı</option>
+                                <option value="Açık Otopark">Açık Otopark</option>
+                                <option value="Kapalı & Açık Karma">Kapalı & Açık Karma</option>
+                                <option value="Otopark Yok">Otopark Yok</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-dark small">Yalıtım / Mantolama</label>
+                            <select class="form-select" name="insulationType">
+                                <option value="Taşyünü Mantolama (A1 Sınıfı)">Taşyünü Mantolama (A1 Sınıfı)</option>
+                                <option value="EPS Karbonlu Mantolama">EPS Karbonlu Mantolama</option>
+                                <option value="Mekanik Seramik / Kompozit Cephe">Mekanik Seramik / Kompozit Cephe</option>
+                                <option value="Standart Yalıtım">Standart Yalıtım</option>
+                            </select>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-bold text-dark small">Kule Açıklaması / Mimari Notlar</label>
+                            <textarea class="form-control" name="description" rows="2" placeholder="Örn: Doğu cepheli kule, 1. kattan itibaren deniz manzaralı..."></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light py-3 rounded-bottom-4">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">
+                        <i class="bi bi-plus-lg me-1"></i> Kuleyi Oluştur ve Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- YENİ ALT PROJE / İMALAT PAKETİ EKLE MODAL -->
+<div class="modal fade" id="createSubProjectModal" tabindex="-1" aria-labelledby="createSubProjectModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-primary text-white border-0 py-3">
+                <h5 class="modal-title fw-bold" id="createSubProjectModalLabel">
+                    <i class="bi bi-diagram-3-fill me-2"></i>Yeni Alt Proje / İmalat Paketi Ekle
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body p-4 bg-light">
+                <form id="createSubProjectForm">
+                    <input type="hidden" id="subParentProjectId" value="@Model.Id" />
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-dark">Alt Proje / İmalat Paketi Adı <span class="text-danger">*</span></label>
+                        <input type="text" id="subProjectNameInput" class="form-control rounded-3" placeholder="Örn: Giriş Güvenlik Kulübesi, Çocuk Oyun Parkı, Açık Yüzme Havuzu, İstinat Duvarı" required />
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-dark">İmalat Kategorisi</label>
+                            <select id="subProjectCategorySelect" class="form-select rounded-3">
+                                <option value="SosyalDonati">Sosyal Donatı & Sosyal Tesis</option>
+                                <option value="DisSaha_Peyzaj">Dış Saha, Peyzaj & Yeşil Alan</option>
+                                <option value="OzelImalat">Özel İmalat (Giriş Takı, Kulübe, Havuz)</option>
+                                <option value="Altyapi">Altyapı, İstinat Duvarı & Çevre İhata</option>
+                                <option value="Mekanik_Elektrik">Mekanik, Elektrik, Trafo & Jeneratör</option>
+                                <option value="Asansor">Asansör & Taşıma Sistemleri</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-dark">Yaklaşık Bütçe (₺)</label>
+                            <input type="number" id="subProjectBudgetInput" class="form-control rounded-3" placeholder="Opsiyonel Tahmini Bütçe" />
+                        </div>
+                    </div>
+
+                    <!-- KRİTİK SEÇİM: DXF VS DÖKÜMAN -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold text-dark">İmalat & Metraj Modeli <span class="text-danger">*</span></label>
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <label class="card h-100 border p-3 rounded-3 shadow-xs position-relative" style="cursor: pointer;">
+                                    <div class="d-flex align-items-start gap-2">
+                                        <input type="radio" name="subExecutionMode" value="DocumentProcurement" class="form-check-input mt-1" checked />
+                                        <div>
+                                            <div class="fw-bold text-dark"><i class="bi bi-file-earmark-text text-secondary me-1"></i>Teklif & Döküman (RFQ)</div>
+                                            <small class="text-muted d-block mt-1">CAD/DXF çizimi olmayan hazır donatı alımları ve taşeron ihaleleri içindir (Şartname, teklif toplama, sözleşme takibi).</small>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="card h-100 border p-3 rounded-3 shadow-xs position-relative" style="cursor: pointer;">
+                                    <div class="d-flex align-items-start gap-2">
+                                        <input type="radio" name="subExecutionMode" value="DxfEngineering" class="form-check-input mt-1" />
+                                        <div>
+                                            <div class="fw-bold text-primary"><i class="bi bi-rulers text-primary me-1"></i>Mühendislik & Metraj (DXF)</div>
+                                            <small class="text-muted d-block mt-1">AutoCAD/DXF çizimi bulunan; statik karkası, bağımsız duvar ve mahal metrajları hesaplanacak yapılar içindir.</small>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-bold text-dark">Açıklama & Notlar</label>
+                        <textarea id="subProjectDescInput" class="form-control rounded-3" rows="2" placeholder="İmalat paketiyle ilgili teknik notlar..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer bg-white border-0 py-3">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Vazgeç</button>
+                <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold shadow-xs" onclick="submitCreateSubProject()">
+                    <i class="bi bi-check-circle me-1"></i> Alt Projeyi Başlat
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- AUTOCAD / DXF ÇİZİMİ YÜKLE MODAL -->
+<div class="modal fade" id="uploadDxfModal" tabindex="-1" aria-labelledby="uploadDxfModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-success text-white border-0 py-3">
+                <h5 class="modal-title fw-bold" id="uploadDxfModalLabel">
+                    <i class="bi bi-file-earmark-arrow-up-fill me-2"></i>AutoCAD / DXF Çizimi Yükle
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <form asp-action="UploadProjectDxf" method="post" enctype="multipart/form-data">
+                <input type="hidden" name="projectId" value="@Model.Id" />
+                <div class="modal-body p-4 bg-light">
+                    <div class="alert alert-info border-0 rounded-3 mb-3">
+                        <i class="bi bi-info-circle me-2"></i><strong>Mühendislik & Metraj Moduna Geçiş:</strong> Çiziminizi yüklediğinizde proje otomatik olarak detaylı mühendislik ve metraj moduna yükseltilir.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-dark">DXF / DWG Çizim Dosyası <span class="text-danger">*</span></label>
+                        <input type="file" name="dxfFile" class="form-control rounded-3" accept=".dxf,.dwg" required />
+                        <small class="text-muted">Desteklenen formatlar: .dxf, .dwg</small>
+                    </div>
+                </div>
+                <div class="modal-footer bg-white border-0 py-3">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold shadow-xs">
+                        <i class="bi bi-cloud-arrow-up-fill me-1"></i> Çizimi Yükle ve Başlat
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        // Add child tower handler
+        document.querySelectorAll('.btn-add-child-tower').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                var parentId = this.getAttribute('data-parent-id');
+                var parentName = this.getAttribute('data-parent-name');
+
+                document.getElementById('addChildParentBuildingId').value = parentId || '';
+                document.getElementById('addChildParentNameSpan').textContent = parentName || '';
+
+                var towerModal = new bootstrap.Modal(document.getElementById('addChildTowerModal'));
+                towerModal.show();
+            });
+        });
+
+        // Edit block handler
+        document.querySelectorAll('.btn-open-edit-block').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                var id = this.getAttribute('data-id');
+                var name = this.getAttribute('data-name');
+                var basearea = this.getAttribute('data-basearea');
+                var totalfloors = this.getAttribute('data-totalfloors');
+                var basementfloors = this.getAttribute('data-basementfloors');
+                var hasground = this.getAttribute('data-hasground');
+                var hasroof = this.getAttribute('data-hasroof');
+                var rooftype = this.getAttribute('data-rooftype');
+                var elevators = this.getAttribute('data-elevators');
+                var parking = this.getAttribute('data-parking');
+                var insulation = this.getAttribute('data-insulation');
+                var features = this.getAttribute('data-features') || '';
+                var desc = this.getAttribute('data-desc');
+                var kotoffset = this.getAttribute('data-kotoffset');
+
+                document.getElementById('editBlockId').value = id || '';
+                document.getElementById('editBlockName').value = name || '';
+                document.getElementById('editBlockBaseArea').value = (basearea && basearea != '0') ? basearea : '';
+                document.getElementById('editBlockTotalFloors').value = totalfloors || '0';
+                document.getElementById('editBlockBasementFloors').value = basementfloors || '0';
+                document.getElementById('editBlockHasGround').value = (hasground === 'true') ? 'true' : 'false';
+                document.getElementById('editBlockHasRoof').value = (hasroof === 'true') ? 'true' : 'false';
+                document.getElementById('editBlockRoofType').value = rooftype || '';
+                document.getElementById('editBlockElevators').value = (elevators && elevators != '0') ? elevators : '';
+                document.getElementById('editBlockParking').value = parking || '';
+                document.getElementById('editBlockInsulation').value = insulation || '';
+                document.getElementById('editBlockDesc').value = desc || '';
+                var kotSelect = document.getElementById('editBlockKotOffset');
+                if (kotSelect) {
+                    kotSelect.value = kotoffset || '0';
+                }
+
+                // Donanımlar checkbox matching
+                var featureList = features ? features.split(',').map(function(s) { return s.trim(); }) : [];
+                var extraFeatures = [];
+                document.querySelectorAll('.edit-block-feature-chk').forEach(function(chk) {
+                    if (featureList.indexOf(chk.value) !== -1) {
+                        chk.checked = true;
+                    } else {
+                        chk.checked = false;
+                    }
+                });
+                featureList.forEach(function(item) {
+                    var found = false;
+                    document.querySelectorAll('.edit-block-feature-chk').forEach(function(chk) {
+                        if (chk.value.toLowerCase() === item.toLowerCase()) found = true;
+                    });
+                    if (!found && item.length > 0) {
+                        extraFeatures.push(item);
+                    }
+                });
+                document.getElementById('editBlockFeatures').value = extraFeatures.join(', ');
+
+                var editModal = new bootstrap.Modal(document.getElementById('editBlockModal'));
+                editModal.show();
+            });
+        });
+
+        // Delete block handler
+        document.querySelectorAll('.btn-open-delete-block').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                var id = this.getAttribute('data-id');
+                var name = this.getAttribute('data-name');
+
+                document.getElementById('deleteBlockId').value = id || '';
+                document.getElementById('deleteBlockNameSpan').textContent = name || '';
+
+                var delModal = new bootstrap.Modal(document.getElementById('deleteBlockModal'));
+                delModal.show();
+            });
+        });
+    });
+
+    function submitCreateSubProject() {
+        var parentId = document.getElementById("subParentProjectId").value;
+        var name = document.getElementById("subProjectNameInput").value.trim();
+        if (!name) {
+            alert("Lütfen alt proje veya imalat paketi için bir isim giriniz.");
+            document.getElementById("subProjectNameInput").focus();
+            return;
+        }
+
+        var category = document.getElementById("subProjectCategorySelect").value;
+        var modeRadio = document.querySelector('input[name="subExecutionMode"]:checked');
+        var executionMode = modeRadio ? modeRadio.value : "DocumentProcurement";
+        var desc = document.getElementById("subProjectDescInput").value.trim();
+
+        fetch("/ConstructionProject/CreateSubProjectFromAmenity", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                ParentProjectId: parseInt(parentId),
+                CustomProjectName: name,
+                Category: category,
+                ExecutionMode: executionMode,
+                HasDxf: (executionMode === "DxfEngineering"),
+                Description: desc
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                if (data.redirectUrl) {
+                    window.location.href = data.redirectUrl;
+                } else {
+                    location.reload();
+                }
+            } else {
+                alert(data.message || "Alt proje oluşturulamadı.");
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Bağlantı hatası oluştu.");
+        });
+    }
+</script>

@@ -1,16 +1,92 @@
-﻿@using GMK360.Core.Entities.Construction
+@using GMK360.Core.Entities.Construction
 @model AgendaRecord
 
 <div class="card border-0 shadow-sm">
-    <div class="card-header bg-white">
-        <h4 class="mb-0 text-primary">@Model.Title</h4>
-        <p class="text-muted small mb-0"><i class="bi bi-clock"></i> @Model.EventDate.ToString("dd MMMM yyyy HH:mm")</p>
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <div>
+            @{
+                string badgeClass = Model.StatusId == AgendaConstants.StatusTamamlandi ? "bg-success" : 
+                                    Model.StatusId == AgendaConstants.StatusIptal ? "bg-danger" : "bg-primary";
+                string statusText = Model.StatusId == AgendaConstants.StatusTamamlandi ? "Tamamlandı / Karşılandı" : 
+                                    Model.StatusId == AgendaConstants.StatusIptal ? "İptal Edildi" : "Planlandı (Bekliyor)";
+            }
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="badge @badgeClass rounded-pill px-3 py-1 fw-bold" id="detailStatusBadge">@statusText</span>
+                @if (Model.Title != null && Model.Title.Contains("Saha Keşfi"))
+                {
+                    <span class="badge bg-warning text-dark rounded-pill px-3 py-1"><i class="bi bi-calendar2-check me-1"></i>Keşif Randevusu</span>
+                }
+                else if (Model.Title != null && (Model.Title.Contains("Teslimat") || Model.Title.Contains("İmalat")))
+                {
+                    <span class="badge bg-info text-dark rounded-pill px-3 py-1"><i class="bi bi-truck me-1"></i>Saha Teslimat Takibi</span>
+                }
+            </div>
+            <h4 class="mb-0 text-dark fw-bold">@Model.Title</h4>
+            <p class="text-muted small mb-0 mt-1"><i class="bi bi-clock"></i> @Model.EventDate.ToString("dd MMMM yyyy HH:mm")</p>
+        </div>
+        <div class="d-flex gap-2">
+            @if (Model.StatusId != AgendaConstants.StatusTamamlandi)
+            {
+                <button type="button" class="btn btn-success fw-bold btn-sm shadow-sm" onclick="updateAgendaStatus(@Model.Id, @AgendaConstants.StatusTamamlandi)">
+                    <i class="bi bi-check2-circle me-1"></i> Sahada Karşılandı / Tamamla
+                </button>
+            }
+            else
+            {
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="updateAgendaStatus(@Model.Id, @AgendaConstants.StatusPlanlandi)">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Geri Al (Planlandı)
+                </button>
+            }
+        </div>
     </div>
     <div class="card-body">
-        
+
+        <!-- Proje & Firma Kartları (Varsa) -->
+        @if (Model.Project != null || Model.Phonebook != null)
+        {
+            <div class="row g-3 mb-4">
+                @if (Model.Project != null)
+                {
+                    <div class="col-md-6">
+                        <div class="p-3 rounded-3 bg-light border h-100">
+                            <span class="text-muted small text-uppercase fw-bold"><i class="bi bi-building me-1"></i> Şantiye / Proje</span>
+                            <h6 class="fw-bold mb-1 mt-1 text-primary">@Model.Project.Name</h6>
+                            <p class="small text-muted mb-0"><i class="bi bi-geo-alt"></i> @(string.IsNullOrEmpty(Model.Project.Address) ? "Adres Girilmemiş" : Model.Project.Address)</p>
+                        </div>
+                    </div>
+                }
+                @if (Model.Phonebook != null)
+                {
+                    <div class="col-md-6">
+                        <div class="p-3 rounded-3 bg-light border h-100">
+                            <span class="text-muted small text-uppercase fw-bold"><i class="bi bi-person-lines-fill me-1"></i> Tedarikçi / Usta Bilgisi</span>
+                            <h6 class="fw-bold mb-1 mt-1 text-dark">@Model.Phonebook.Name</h6>
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <span class="small text-muted"><i class="bi bi-person"></i> @(Model.Phonebook.AuthorizedPerson ?? "Yetkili")</span>
+                                @if (!string.IsNullOrEmpty(Model.Phonebook.PhoneNumber))
+                                {
+                                    var cleanNum = Model.Phonebook.PhoneNumber.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
+                                    if (cleanNum.StartsWith("0")) cleanNum = "90" + cleanNum.Substring(1);
+                                    else if (!cleanNum.StartsWith("90")) cleanNum = "90" + cleanNum;
+                                    <div>
+                                        <a href="tel:@Model.Phonebook.PhoneNumber" class="btn btn-xs btn-primary rounded-pill px-2 py-1 small fw-bold me-1">
+                                            <i class="bi bi-telephone-fill"></i> Ara
+                                        </a>
+                                        <a href="https://wa.me/@cleanNum" target="_blank" class="btn btn-xs btn-success rounded-pill px-2 py-1 small fw-bold">
+                                            <i class="bi bi-whatsapp"></i> WhatsApp
+                                        </a>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
         <div class="mb-4">
-            <h6 class="text-secondary fw-bold text-uppercase" style="font-size:0.85rem;">Genel Toplantı Notu / Konusu</h6>
-            <p style="white-space: pre-wrap;">@Model.Notes</p>
+            <h6 class="text-secondary fw-bold text-uppercase" style="font-size:0.85rem;"><i class="bi bi-card-text me-1"></i> Görev / Randevu / Toplantı Detayları</h6>
+            <div class="p-3 bg-white border rounded-3 shadow-xs" style="white-space: pre-wrap; font-size: 0.95rem; line-height: 1.6;">@Model.Notes</div>
         </div>
 
         @if (Model.Items != null && Model.Items.Any())

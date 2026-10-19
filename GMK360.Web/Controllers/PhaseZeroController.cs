@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using GMK360.Data.Contexts;
 using GMK360.Core.Entities.Construction;
@@ -10,10 +10,12 @@ namespace GMK360.Web.Controllers
     public class PhaseZeroController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly GMK360.Web.Services.B2BSupplierSyncService _supplierSyncService;
 
-        public PhaseZeroController(ApplicationDbContext context)
+        public PhaseZeroController(ApplicationDbContext context, GMK360.Web.Services.B2BSupplierSyncService supplierSyncService)
         {
             _context = context;
+            _supplierSyncService = supplierSyncService;
         }
 
         [HttpGet("PhaseZero/Index/{projectId}")]
@@ -21,6 +23,7 @@ namespace GMK360.Web.Controllers
         {
             var project = await _context.ConstructionProjects.FindAsync(projectId);
             if (project == null) return NotFound();
+            await _supplierSyncService.AutoSyncExistingNetworkContactsAsync(project.AgencyId, User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "ProjeYöneticisi");
 
             ViewData["ProjectId"] = projectId;
             ViewData["ProjectName"] = project.Name;
@@ -151,21 +154,68 @@ namespace GMK360.Web.Controllers
         }
         
         [HttpPost]
-        public async Task<IActionResult> AcceptQuote(int documentId, int inviteId)
+        public async Task<IActionResult> AcceptQuote(int documentId, int inviteId, bool isPaidUpfront = false, DateTime? dueDate = null)
         {
-            var document = await _context.ProjectLegalDocuments.FindAsync(documentId);
+            var document = await _context.ProjectLegalDocuments
+                .Include(d => d.ConstructionProject)
+                .FirstOrDefaultAsync(d => d.Id == documentId);
             if (document == null) return NotFound();
 
-            var invite = await _context.B2BQuoteInvites.FindAsync(inviteId);
+            var invite = await _context.B2BQuoteInvites
+                .Include(i => i.NetworkContact)
+                .FirstOrDefaultAsync(i => i.Id == inviteId);
             if (invite == null) return NotFound();
 
             invite.IsFeasibilitySelected = true;
+            invite.Status = GMK360.Core.Entities.B2B.QuoteInviteStatus.Accepted;
             document.EstimatedCost = invite.OfferedPrice;
+            document.ActualCost = invite.OfferedPrice;
             document.Status = "İşlemde";
-            
+
+            var agencyId = document.ConstructionProject?.AgencyId ?? 1;
+            var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "ProjeYöneticisi";
+
+            if (invite.NetworkContact != null && invite.OfferedPrice.HasValue && invite.OfferedPrice.Value > 0)
+            {
+                var syncResult = await _supplierSyncService.EnsureSupplierSynchronizedAsync(
+                    agencyId,
+                    currentUserId,
+                    invite.NetworkContact.CompanyName,
+                    invite.NetworkContact.ContactPerson,
+                    invite.NetworkContact.PhoneNumber,
+                    invite.NetworkContact.Email,
+                    document.DocumentName);
+
+                await _supplierSyncService.OpenOrUpdateCurrentAccountAsync(
+                    agencyId,
+                    syncResult.PhonebookContact.Id,
+                    document.ConstructionProjectId,
+                    invite.OfferedPrice.Value,
+                    $"{document.DocumentName} - Teklif Kabulü",
+                    $"FAZ0-DOC-{document.Id}",
+                    currentUserId,
+                    isPaidUpfront,
+                    dueDate);
+
+                // Şantiye Kara Defterine Teslimat / İmalat Takibi Görevi Ekle
+                var targetDeliveryDate = dueDate ?? DateTime.UtcNow.AddDays(7);
+                var paymentTermsText = isPaidUpfront ? "Peşin Ödendi" : $"Vadeli (Vade: {targetDeliveryDate:dd.MM.yyyy})";
+                await _supplierSyncService.CreateDeliveryAgendaRecordAsync(
+                    agencyId,
+                    document.ConstructionProjectId,
+                    syncResult.PhonebookContact.Id,
+                    invite.NetworkContact.CompanyName,
+                    document.DocumentName,
+                    invite.OfferedPrice.Value,
+                    paymentTermsText,
+                    targetDeliveryDate);
+            }
+
             await _context.SaveChangesAsync();
-            
-            TempData["SuccessMessage"] = "Teklif başarıyla seçildi ve fizibilite güncellendi.";
+
+            TempData["SuccessMessage"] = isPaidUpfront 
+                ? $"Teklif kabul edildi! {invite.OfferedPrice:N2} ₺ tutar peşin olarak ödendi, şantiye kara defterine teslimat görevi işlendi."
+                : $"Teklif kabul edildi! {invite.OfferedPrice:N2} ₺ tutar vadeli olarak cari hesaba ve şantiye kara defterine teslimat görevi olarak işlendi.";
             return RedirectToAction(nameof(Index), new { projectId = document.ConstructionProjectId });
         }
 
@@ -209,5 +259,59 @@ namespace GMK360.Web.Controllers
         }
 
         
+
+        [HttpPost("PhaseZero/ConfirmInspectionAppointment")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ConfirmInspectionAppointment(
+            int inviteId, 
+            int documentId, 
+            DateTime? confirmedDate, 
+            DateTime? appointmentDate, 
+            string? appointmentTime, 
+            string? managerNotes)
+        {
+            var doc = await _context.ProjectLegalDocuments
+                .Include(d => d.ConstructionProject)
+                .FirstOrDefaultAsync(d => d.Id == documentId);
+            if (doc == null) return NotFound();
+
+            var agencyId = doc.ConstructionProject?.AgencyId ?? 1;
+            var invite = await _context.B2BQuoteInvites
+                .Include(i => i.NetworkContact)
+                .Include(i => i.QuoteRequest)
+                .FirstOrDefaultAsync(i => i.Id == inviteId);
+            if (invite == null) return NotFound();
+
+            // Tarih ve saat birleştirme
+            DateTime finalDate = confirmedDate ?? DateTime.Today.AddDays(1).AddHours(10);
+            if (appointmentDate.HasValue)
+            {
+                finalDate = appointmentDate.Value.Date;
+                if (!string.IsNullOrWhiteSpace(appointmentTime) && TimeSpan.TryParse(appointmentTime, out var ts))
+                {
+                    finalDate = finalDate.Add(ts);
+                }
+                else
+                {
+                    finalDate = finalDate.AddHours(10);
+                }
+            }
+
+            var notes = string.IsNullOrWhiteSpace(managerNotes) ? "Şantiye şefi usta ile teyit etti." : managerNotes.Trim();
+
+            // Şantiye Kara Defteri'ne (AgendaRecord) KESİN KAYIT aç
+            await _supplierSyncService.CreateDiscoveryAgendaRecordAsync(
+                inviteId, 
+                finalDate, 
+                invite.NetworkContact?.ContactPerson, 
+                notes);
+
+            invite.OfferNotes = $"[RANDEVU KESİNLEŞTİ] Tarih: {finalDate:dd.MM.yyyy HH:mm} | Not: {notes}";
+            doc.Status = "Keşif Randevusu Alındı";
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"Saha keşif randevusu ({finalDate:dd.MM.yyyy HH:mm}) teyit edildi ve Şantiye Kara Defteri'ne (Ajandaya) işlendi.";
+            return RedirectToAction("Index", new { projectId = doc.ConstructionProjectId });
+        }
     }
 }

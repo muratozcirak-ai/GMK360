@@ -1,53 +1,892 @@
+@model GMK360.Web.Models.RealtorDashboardViewModel
 @{
-    ViewData["Title"] = "Emlak Ofisim";
-    Layout = "~/Views/Shared/_IndividualLayout.cshtml"; // Gecici olarak ayni layout
+    ViewData["Title"] = "Emlak Masası & Saha CRM";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    var activeTab = Context.Request.Query["tab"].ToString();
+    if (string.IsNullOrEmpty(activeTab)) { activeTab = "listings"; }
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="fw-bold text-navy mb-0"><i class="bi bi-building me-2 text-primary"></i> Kurumsal Merkez �ss�</h2>
-    <a href="/Realtor/MultiPost" class="btn btn-primary fw-bold rounded-pill"><i class="bi bi-send me-1"></i> �lanlar� Da��t</a>
+<div class="container-fluid py-4 px-lg-4">
+    <!-- ÜST BİLGİ VE BAŞLIK ŞERİDİ -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill px-3 py-1">
+                    <i class="ph-bold ph-shield-check me-1"></i> Emlakçı & Broker Ekosistemi
+                </span>
+                <span class="badge bg-success rounded-pill px-3 py-1 fw-bold">
+                    <i class="ph-bold ph-infinity me-1"></i> %100 Sınırsız İlan & Sıfır Kota
+                </span>
+            </div>
+            <h2 class="fw-bold text-navy mb-0">@Model.AgencyName</h2>
+            <p class="text-muted small mb-0">@Model.BrokerName • Saha CRM, Portföy Hafızası ve Bölge İhtisası</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary rounded-pill px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#greetingModal">
+                <i class="ph-bold ph-whatsapp-logo text-success me-1"></i> Bayram/Tebrik Gönder
+            </button>
+            <button class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#newListingModal">
+                <i class="ph-bold ph-plus me-1"></i> Yeni Portföy Ekle
+            </button>
+        </div>
+    </div>
+
+    <!-- METRİK KARTLARI -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 bg-white border-top border-4 border-primary">
+                <div class="card-body p-3 p-lg-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted small fw-bold text-uppercase">Aktif Portföyüm</span>
+                        <div class="rounded-circle p-2 bg-primary bg-opacity-10 text-primary">
+                            <i class="ph-bold ph-buildings fs-5"></i>
+                        </div>
+                    </div>
+                    <h3 class="fw-bold text-navy mb-1">@Model.TotalListingsCount</h3>
+                    <div class="text-success small fw-medium"><i class="ph-bold ph-check me-1"></i> Kota Sınırı Yok</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 bg-white border-top border-4 border-danger">
+                <div class="card-body p-3 p-lg-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted small fw-bold text-uppercase">Gizli Pazarlıklar</span>
+                        <div class="rounded-circle p-2 bg-danger bg-opacity-10 text-danger">
+                            <i class="ph-bold ph-lock-key fs-5"></i>
+                        </div>
+                    </div>
+                    <h3 class="fw-bold text-danger mb-1">@Model.ActiveNegotiationsCount</h3>
+                    <div class="text-muted small">Alıcı/Satıcı Taktik Defteri</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 bg-white border-top border-4 border-warning">
+                <div class="card-body p-3 p-lg-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted small fw-bold text-uppercase">Saha Randevuları</span>
+                        <div class="rounded-circle p-2 bg-warning bg-opacity-10 text-warning">
+                            <i class="ph-bold ph-calendar-check fs-5"></i>
+                        </div>
+                    </div>
+                    <h3 class="fw-bold text-navy mb-1">@Model.UpcomingShowingsCount</h3>
+                    <div class="text-muted small">Yer Gösterme Çetelesi</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 bg-success bg-opacity-10 border border-success border-opacity-25">
+                <div class="card-body p-3 p-lg-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-success small fw-bold text-uppercase">Kazan-Kazan Payı</span>
+                        <div class="rounded-circle p-2 bg-success text-white">
+                            <i class="ph-bold ph-coins fs-5"></i>
+                        </div>
+                    </div>
+                    <h3 class="fw-bold text-success mb-1">@Model.PassiveIncome.AnnualRecurringEarnings.ToString("N0") ₺ <small class="fs-6">/yıl</small></h3>
+                    <div class="text-success small fw-bold">
+                        @if(Model.PassiveIncome.IsPlanFreeNow)
+                        {
+                            <span><i class="ph-bold ph-shield-check me-1"></i> Yıllık Aidatınız: 0 TL (BEDAVA)</span>
+                        }
+                        else
+                        {
+                            <span>@Model.PassiveIncome.ReferredLandlordsCount / @Model.PassiveIncome.TargetForFreePlan Daire (Bedava Olmaya Az Kaldı)</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success border-0 rounded-4 shadow-sm mb-4 d-flex align-items-center">
+            <i class="ph-fill ph-check-circle fs-4 me-2"></i>
+            <div>@TempData["SuccessMessage"]</div>
+        </div>
+    }
+
+    <!-- SEKMELER (TABS) -->
+    <ul class="nav nav-pills mb-4 p-1 bg-white rounded-pill shadow-sm d-inline-flex border" id="realtorPills" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link rounded-pill fw-bold px-4 @(activeTab == "listings" ? "active" : "")" data-bs-toggle="pill" data-bs-target="#tab-listings" type="button">
+                <i class="ph-bold ph-house-line me-2"></i> Portföyüm (@Model.Listings.Count)
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link rounded-pill fw-bold px-4 @(activeTab == "negotiation" ? "active" : "")" data-bs-toggle="pill" data-bs-target="#tab-negotiation" type="button">
+                <i class="ph-bold ph-lock-key me-2"></i> Gizli Pazarlık Defteri (@Model.NegotiationNotes.Count)
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link rounded-pill fw-bold px-4 @(activeTab == "showing" ? "active" : "")" data-bs-toggle="pill" data-bs-target="#tab-showing" type="button">
+                <i class="ph-bold ph-map-pin me-2"></i> Yer Gösterme & Saha Takvimi
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link rounded-pill fw-bold px-4 @(activeTab == "passive" ? "active" : "")" data-bs-toggle="pill" data-bs-target="#tab-passive" type="button">
+                <i class="ph-bold ph-handshake me-2"></i> Kazan-Kazan & Pasif Gelir
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link rounded-pill fw-bold px-4 @(activeTab == "tadilat" ? "active" : "")" data-bs-toggle="pill" data-bs-target="#tab-tadilat" type="button">
+                <i class="ph-bold ph-hammer me-2"></i> Tadilat Danışmanlığı
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link rounded-pill fw-bold px-4 @(activeTab == "broker" ? "active" : "")" data-bs-toggle="pill" data-bs-target="#tab-broker" type="button">
+                <i class="ph-bold ph-users-three me-2"></i> Mega Broker Ekibi
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link rounded-pill fw-bold px-4 @(activeTab == "projects" ? "active" : "")" data-bs-toggle="pill" data-bs-target="#tab-projects" type="button">
+                <i class="ph-bold ph-compass me-2"></i> Proje Lansman Vitrini
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="realtorPillsContent">
+        <!-- 1. PORTFÖY LİSTESİ -->
+        <div class="tab-pane fade @(activeTab == "listings" ? "show active" : "")" id="tab-listings" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                <div class="card-header bg-white border-bottom pt-4 pb-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                        <h5 class="fw-bold mb-0 text-navy"><i class="ph-bold ph-buildings text-primary me-2"></i>Aktif İlan Portföyü</h5>
+                        <p class="text-muted small mb-0">Sarı siteler gibi kota sınırınız yoktur; dilediğiniz kadar ilan yayınlayabilirsiniz.</p>
+                    </div>
+                    <span class="badge bg-light text-dark border px-3 py-2 rounded-pill">
+                        Sınırsız Vitrin • 0 TL Doping Tuzağı
+                    </span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light text-muted small">
+                            <tr>
+                                <th class="ps-4">PORTFÖY BAŞLIĞI</th>
+                                <th>TÜR / ODA</th>
+                                <th>LOKASYON</th>
+                                <th class="text-end">FİYAT</th>
+                                <th class="text-center">GÖRÜNTÜLENME</th>
+                                <th>ATANAN DANIŞMAN</th>
+                                <th class="text-center">DURUM</th>
+                                <th class="text-end pe-4">İŞLEMLER</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach(var item in Model.Listings)
+                            {
+                                <tr>
+                                    <td class="ps-4">
+                                        <div class="d-flex align-items-center">
+                                            <div class="rounded-3 p-2 bg-light text-primary me-3 border">
+                                                <i class="ph-fill ph-house-line fs-4"></i>
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold text-dark">@item.Title</div>
+                                                <small class="text-muted"><i class="ph-bold ph-calendar me-1"></i>@item.ListedDate.ToString("dd.MM.yyyy")</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-primary bg-opacity-10 text-primary">@item.ListingType</span>
+                                        <div class="small text-muted mt-1">@item.RoomCount • @item.AreaM2 m²</div>
+                                    </td>
+                                    <td><i class="ph-bold ph-map-pin text-danger me-1"></i>@item.Location</td>
+                                    <td class="text-end fw-bold text-navy fs-6">@item.Price.ToString("N0") ₺</td>
+                                    <td class="text-center">
+                                        <span class="badge bg-light text-dark border">
+                                            <i class="ph-bold ph-eye me-1"></i>@item.ViewCount
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info bg-opacity-10 text-info fw-medium">
+                                            <i class="ph-bold ph-user me-1"></i>@item.AssignedConsultantName
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-1">@item.Status</span>
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        <button class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" onclick="openAssignModal(@item.Id, '@item.Title')">
+                                            Danışmana Ata
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. GİZLİ PAZARLIK DEFTERİ -->
+        <div class="tab-pane fade @(activeTab == "negotiation" ? "show active" : "")" id="tab-negotiation" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+                <div class="card-header bg-white border-bottom pt-4 pb-3 px-4 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="fw-bold mb-0 text-danger"><i class="ph-bold ph-lock-key me-2"></i>"Alıcıya Ne Dedim? / Satıcıya Ne Dedim?" (Gizli Taktik Kasası)</h5>
+                        <p class="text-muted small mb-0">Hangi alıcıya ne söz verdiğinizi, ev sahibinin gerçek dip fiyatını tek ekranda tutun; pot kırmayı ve güven kaybını önleyin.</p>
+                    </div>
+                    <button class="btn btn-danger btn-sm rounded-pill px-4 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#newNegotiationModal">
+                        <i class="ph-bold ph-plus me-1"></i> Yeni Görüşme Ekle
+                    </button>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row g-4">
+                        @foreach(var note in Model.NegotiationNotes)
+                        {
+                            <div class="col-lg-6">
+                                <div class="card border border-2 border-danger border-opacity-25 rounded-4 shadow-sm h-100 bg-white">
+                                    <div class="card-header bg-light border-bottom d-flex justify-content-between align-items-center py-3 px-4">
+                                        <div class="fw-bold text-dark">
+                                            <i class="ph-bold ph-house me-1 text-primary"></i> @note.PropertyTitle
+                                        </div>
+                                        <span class="badge bg-danger rounded-pill px-3 py-1 small">Şifreli Kasa</span>
+                                    </div>
+                                    <div class="card-body p-4">
+                                        <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                                            <div>
+                                                <div class="fw-bold text-navy">@note.BuyerName</div>
+                                                <small class="text-muted"><i class="ph-bold ph-phone me-1"></i>@note.BuyerPhone</small>
+                                            </div>
+                                            <div class="text-end">
+                                                <div class="small text-muted">Alıcının Teklifi:</div>
+                                                <div class="fw-bold text-success fs-5">@note.BuyerOfferedPrice.ToString("N0") ₺</div>
+                                            </div>
+                                        </div>
+
+                                        <!-- ALICIYA VE SATICIYA SÖYLENENLER -->
+                                        <div class="row g-3 mb-3">
+                                            <div class="col-12">
+                                                <div class="p-3 rounded-3 bg-primary bg-opacity-10 border border-primary border-opacity-25">
+                                                    <div class="d-flex align-items-center text-primary fw-bold small mb-1">
+                                                        <i class="ph-bold ph-user-check me-1"></i> Alıcıya Ne Dedim?
+                                                    </div>
+                                                    <div class="text-dark small">@note.WhatIToldBuyer</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-12">
+                                                <div class="p-3 rounded-3 bg-danger bg-opacity-10 border border-danger border-opacity-25">
+                                                    <div class="d-flex justify-content-between align-items-center text-danger fw-bold small mb-1">
+                                                        <span><i class="ph-bold ph-user-focus me-1"></i> Satıcıya Ne Dedim?</span>
+                                                        <span class="badge bg-danger text-white">Dip Fiyat: @note.SellerBottomPrice.ToString("N0") ₺</span>
+                                                    </div>
+                                                    <div class="text-dark small">@note.WhatIToldSeller</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="p-2 rounded bg-light border small text-muted">
+                                            <i class="ph-bold ph-note-pencil me-1"></i><strong>Gizli Taktik Notu:</strong> @note.SecretNotes
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. YER GÖSTERME & SAHA TAKVİMİ -->
+        <div class="tab-pane fade @(activeTab == "showing" ? "show active" : "")" id="tab-showing" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+                <div class="card-header bg-white border-bottom pt-4 pb-3 px-4 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="fw-bold mb-0 text-navy"><i class="ph-bold ph-calendar-check text-warning me-2"></i>Yer Gösterme & Saha Ziyaret Çetelesi</h5>
+                        <p class="text-muted small mb-0">Müşteriyi gezdirdiğiniz daireleri, tutanak durumunu ve müşteri geri bildirimlerini kaydedin.</p>
+                    </div>
+                    <button class="btn btn-warning btn-sm rounded-pill px-4 fw-bold text-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#newShowingModal">
+                        <i class="ph-bold ph-plus me-1"></i> Yeni Randevu Ekle
+                    </button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light text-muted small">
+                            <tr>
+                                <th class="ps-4">TARİH & SAAT</th>
+                                <th>MÜŞTERİ</th>
+                                <th>GEZDİRİLEN MÜLK</th>
+                                <th>TUTANAK DURUMU</th>
+                                <th>MÜŞTERİ YORUMU & GERİ BİLDİRİMİ</th>
+                                <th class="text-center">TADİLAT İLGİSİ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach(var show in Model.ShowingAppointments)
+                            {
+                                <tr>
+                                    <td class="ps-4">
+                                        <div class="fw-bold text-navy">@show.AppointmentDate.ToString("dd MMM yyyy")</div>
+                                        <small class="text-muted">@show.AppointmentDate.ToString("HH:mm")</small>
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold text-dark">@show.ClientName</div>
+                                        <small class="text-muted">@show.ClientPhone</small>
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold text-primary">@show.PropertyTitle</div>
+                                        <small class="text-muted">@show.Location</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-1">
+                                            <i class="ph-bold ph-signature me-1"></i>@show.ShowingReportStatus
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="small text-dark">"@show.ClientFeedback"</span>
+                                    </td>
+                                    <td class="text-center">
+                                        @if(show.IsInterestedInRenovation)
+                                        {
+                                            <span class="badge bg-warning text-dark rounded-pill px-3 py-1">
+                                                <i class="ph-bold ph-hammer me-1"></i> Tadilat İstiyor
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-light text-muted">İstemiyor</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. KAZAN-KAZAN & PASİF GELİR ÇEMBERİ -->
+        <div class="tab-pane fade @(activeTab == "passive" ? "show active" : "")" id="tab-passive" role="tabpanel">
+            <div class="row g-4 mb-4">
+                <div class="col-lg-8">
+                    <div class="card border-0 shadow-sm rounded-4 p-4 bg-white h-100">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="bg-success text-white rounded-circle p-3 me-3 shadow-sm">
+                                <i class="ph-fill ph-handshake fs-2"></i>
+                            </div>
+                            <div>
+                                <h4 class="fw-bold text-navy mb-1">Kazan-Kazan: Emlakçıyı Ezen Değil, Kazandıran Ortaklık</h4>
+                                <p class="text-muted small mb-0">Sattığınız veya kiraladığınız dairelerin mal sahiplerini GMK360 Daire & Kiracı Takip Masası'na katın, her yıl düzenli pay alın.</p>
+                            </div>
+                        </div>
+
+                        <div class="p-3 bg-light rounded-4 mb-4 border">
+                            <div class="row align-items-center">
+                                <div class="col-md-7">
+                                    <h6 class="fw-bold mb-1">Bedava Plan Hedefi: 5 Daire</h6>
+                                    <p class="text-muted small mb-0">4-5 daire eklediğinizde yıllık sistem aidatınız <strong>0 TL (Tamamen Bedava)</strong> olur. Üzerine eklediğiniz her daire için ofisinize pasif gelir akar.</p>
+                                </div>
+                                <div class="col-md-5 text-end">
+                                    <button class="btn btn-success rounded-pill px-4 fw-bold" data-bs-toggle="modal" data-bs-target="#referLandlordModal">
+                                        <i class="ph-bold ph-plus me-1"></i> Mülk Sahibi Ekle
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="progress mt-3" style="height: 12px; border-radius: 6px;">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: @(Math.Min(100, (Model.PassiveIncome.ReferredLandlordsCount * 100 / Model.PassiveIncome.TargetForFreePlan)))%;"></div>
+                            </div>
+                            <div class="d-flex justify-content-between small text-muted mt-1">
+                                <span>Kayıtlı: @Model.PassiveIncome.ReferredLandlordsCount Mülk Sahibi</span>
+                                <span>Hedef: @Model.PassiveIncome.TargetForFreePlan Mülk (Aşıldı!)</span>
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="p-3 rounded-3 bg-white border text-center">
+                                    <div class="text-muted small">Yıllık Sistem Aidatı</div>
+                                    <div class="fw-bold fs-4 text-decoration-line-through text-muted">@Model.PassiveIncome.SymbolAnnualFee.ToString("N0") ₺</div>
+                                    <div class="badge bg-success">0 TL (BEDAVA)</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="p-3 rounded-3 bg-white border text-center">
+                                    <div class="text-muted small">Yıllık Düzenli Pasif Gelir</div>
+                                    <div class="fw-bold fs-4 text-success">@Model.PassiveIncome.AnnualRecurringEarnings.ToString("N0") ₺</div>
+                                    <div class="small text-muted">Her yıl yinelenir</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="p-3 rounded-3 bg-white border text-center">
+                                    <div class="text-muted small">Aylık Ortalama Katkı</div>
+                                    <div class="fw-bold fs-4 text-primary">@Model.PassiveIncome.MonthlyPassiveAverage.ToString("N0") ₺</div>
+                                    <div class="small text-muted">Ofis faturanızı karşılar</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card border-0 shadow-sm rounded-4 p-4 bg-primary text-white h-100">
+                        <h5 class="fw-bold mb-3"><i class="ph-bold ph-lightbulb me-2"></i>Neden Bu Model Eşsiz?</h5>
+                        <ul class="list-unstyled d-flex flex-column gap-3 small mb-0">
+                            <li><i class="ph-bold ph-check-circle me-2 text-warning"></i><strong>Tek Seferlik Değil:</strong> Mal sahibi her yıl aboneliğini yeniledikçe kazancınız hesabınıza otomatik yatar.</li>
+                            <li><i class="ph-bold ph-check-circle me-2 text-warning"></i><strong>Ofis Masraflarını Karşılar:</strong> 20 daire bağladığınızda ofisinizin telefon, internet ve kırtasiye masrafını GMK360 öder.</li>
+                            <li><i class="ph-bold ph-check-circle me-2 text-warning"></i><strong>Müşteri Bağınızı Korur:</strong> Ev sahibi dairedeki tadilat veya kira takibinde hep sizin referansınızı görür.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. TADİLAT DANIŞMANLIĞI & FİYAT TABLOSU -->
+        <div class="tab-pane fade @(activeTab == "tadilat" ? "show active" : "")" id="tab-tadilat" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h5 class="fw-bold text-navy mb-1"><i class="ph-bold ph-hammer text-warning me-2"></i>Emlakçı Danışmanlık: 3 Kademeli Tadilat Maliyet Tablosu</h5>
+                        <p class="text-muted small mb-0">Alıcı adayı "ev masraflı" dediğinde vazgeçmesin; GMK360 Usta ve Nalbur ağı fiyat garantisiyle hazır bütçe tablosu sunun.</p>
+                    </div>
+                </div>
+
+                @foreach(var quote in Model.RenovationQuotes)
+                {
+                    <div class="card border rounded-4 p-4 bg-light mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="fw-bold text-navy mb-0">@quote.PropertyTitle</h5>
+                            <span class="badge bg-warning text-dark"><i class="ph-bold ph-shield-check me-1"></i>@quote.NetworkSource</span>
+                        </div>
+                        <p class="text-muted small mb-4">Kapsam: @quote.ScopeSummary</p>
+
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="p-3 rounded-4 bg-white border text-center h-100">
+                                    <span class="badge bg-light text-secondary border mb-2">1. EKONOMİK PAKET</span>
+                                    <h4 class="fw-bold text-navy mb-1">@quote.EconomicPackageCost.ToString("N0") ₺</h4>
+                                    <p class="text-muted small mb-3">Boya, armatür değişimi, hafif kozmetik onarım.</p>
+                                    <button class="btn btn-outline-primary btn-sm rounded-pill w-100 fw-bold" onclick="copyAdvisory('@quote.PropertyTitle', 135)">
+                                        WhatsApp Metni Kopyala
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="p-3 rounded-4 bg-white border border-2 border-primary text-center h-100 shadow-sm">
+                                    <span class="badge bg-primary mb-2">2. STANDART (ÖNERİLEN)</span>
+                                    <h4 class="fw-bold text-primary mb-1">@quote.StandardPackageCost.ToString("N0") ₺</h4>
+                                    <p class="text-muted small mb-3">Mutfak dolabı, banyo seramik, bataryalar, su tesisatı, parke, boya.</p>
+                                    <button class="btn btn-primary btn-sm rounded-pill w-100 fw-bold" onclick="copyAdvisory('@quote.PropertyTitle', 135)">
+                                        WhatsApp Metni Kopyala
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="p-3 rounded-4 bg-white border text-center h-100">
+                                    <span class="badge bg-dark text-white mb-2">3. LÜKS KONSEPT</span>
+                                    <h4 class="fw-bold text-navy mb-1">@quote.LuxuryPackageCost.ToString("N0") ₺</h4>
+                                    <p class="text-muted small mb-3">Ada mutfak, ithal seramik, gizli aydınlatma, anahtar teslim.</p>
+                                    <button class="btn btn-outline-dark btn-sm rounded-pill w-100 fw-bold" onclick="copyAdvisory('@quote.PropertyTitle', 135)">
+                                        WhatsApp Metni Kopyala
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- 6. MEGA BROKER & REMAX DANIŞMAN EKİBİ -->
+        <div class="tab-pane fade @(activeTab == "broker" ? "show active" : "")" id="tab-broker" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+                <div class="card-header bg-white border-bottom pt-4 pb-3 px-4 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="fw-bold mb-0 text-navy"><i class="ph-bold ph-users-three text-primary me-2"></i>Remax / Mega Broker Danışman Takip & Portföy Dağıtımı</h5>
+                        <p class="text-muted small mb-0">Merkeze gelen satılık/kiralık taleplerini bölge danışmanlarınıza atayın; sahadaki performansı canlı izleyin.</p>
+                    </div>
+                    <span class="badge bg-primary rounded-pill px-3 py-2 fw-bold">Mega Ofis Modu Aktif</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light text-muted small">
+                            <tr>
+                                <th class="ps-4">DANIŞMAN ADI</th>
+                                <th>UZMANLIK BÖLGESİ</th>
+                                <th class="text-center">AKTİF PORTFÖY</th>
+                                <th class="text-center">BU AY KAPANAN SATIŞ</th>
+                                <th class="text-center">OFİS KOMİSYON PAYI</th>
+                                <th>İLETİŞİM</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach(var staff in Model.BrokerTeam)
+                            {
+                                <tr>
+                                    <td class="ps-4">
+                                        <div class="fw-bold text-navy">@staff.FullName</div>
+                                        <small class="text-muted">@staff.Title</small>
+                                    </td>
+                                    <td><i class="ph-bold ph-map-pin text-primary me-1"></i>@staff.SpecializedTerritory</td>
+                                    <td class="text-center">
+                                        <span class="badge bg-light text-dark border px-3 py-1">@staff.ActiveListingsCount İlan</span>
+                                    </td>
+                                    <td class="text-center fw-bold text-success">@staff.MonthlyDealsClosed İşlem</td>
+                                    <td class="text-center">
+                                        <span class="badge bg-info bg-opacity-10 text-info">
+                                            %@staff.CommissionSharePercent / %@(100 - staff.CommissionSharePercent)
+                                        </span>
+                                    </td>
+                                    <td><small class="text-muted">@staff.Phone</small></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7. PROJE LANSMAN VİTRİNİ -->
+        <div class="tab-pane fade @(activeTab == "projects" ? "show active" : "")" id="tab-projects" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+                <div class="card-header bg-white border-bottom pt-4 pb-3 px-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="fw-bold mb-0 text-navy"><i class="ph-bold ph-compass text-primary me-2"></i>Bölgenizdeki Devam Eden Projeler (Lansman Öncesi Ön Talep Kataloğu)</h5>
+                            <p class="text-muted small mb-0">Mevzuat kalkanı: Satış veya topraktan satış ibaresi olmadan, tamamen yasal mimari bilgilendirme ve ön görüşme toplama vitrini.</p>
+                        </div>
+                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-3 py-2 fw-bold">
+                            <i class="ph-bold ph-shield-check me-1"></i> Yasal Regülasyon Korumalı
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row g-4">
+                        @foreach(var proj in Model.ProjectPartnerships)
+                        {
+                            <div class="col-lg-6">
+                                <div class="card border rounded-4 shadow-sm bg-white h-100 p-4">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge bg-primary bg-opacity-10 text-primary fw-bold">@proj.PartnershipModel</span>
+                                        <span class="badge bg-light text-dark border"><i class="ph-bold ph-clock me-1"></i>Teslimat: @proj.EstimatedDelivery</span>
+                                    </div>
+                                    <h5 class="fw-bold text-navy mb-1">@proj.ProjectName</h5>
+                                    <p class="text-muted small mb-3">Müteahhit: <strong>@proj.ConstructionCompanyName</strong> • @proj.Territory</p>
+                                    
+                                    <div class="p-3 bg-light rounded-3 mb-3 small">
+                                        <i class="ph-bold ph-info me-1 text-primary"></i>@proj.ProjectHighlight
+                                    </div>
+
+                                    <div class="d-flex justify-content-between align-items-center pt-3 border-top">
+                                        <div>
+                                            <span class="small text-muted">Emlakçı Komisyon Oranı:</span>
+                                            <div class="fw-bold text-success fs-5">%@proj.CommissionRate</div>
+                                        </div>
+                                        <div>
+                                            <span class="small text-muted">Toplanan Ön Talep:</span>
+                                            <div class="fw-bold text-navy fs-5">@proj.PreDemandLeadsCount Kişi</div>
+                                        </div>
+                                        <a href="/Emlak" class="btn btn-outline-primary btn-sm rounded-pill fw-bold px-3">
+                                            Kataloğu Gör
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
 </div>
 
-<div class="row g-4 mb-4">
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm rounded-4 bg-primary text-white h-100">
-            <div class="card-body p-4">
-                <h6 class="opacity-75">Aktif �lanlar</h6>
-                <h2 class="fw-bold mb-0">124</h2>
-            </div>
+<!-- MODAL: YENİ PORTFÖY EKLE -->
+<div class="modal fade" id="newListingModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form action="/Realtor/CreateListing" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header border-0 pb-0 pt-4 px-4">
+                    <h5 class="modal-title fw-bold text-navy"><i class="ph-bold ph-plus-circle text-primary me-2"></i>Yeni Portföy Ekle (Sınırsız & Kotasız)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Portföy Başlığı</label>
+                        <input type="text" name="title" class="form-control rounded-3" placeholder="Örn: Moda Caddesi 3+1 Kombili Masrafsız" required />
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Tür</label>
+                            <select name="listingType" class="form-select rounded-3">
+                                <option value="Satılık Konut">Satılık Konut</option>
+                                <option value="Kiralık Daire">Kiralık Daire</option>
+                                <option value="Ticari / Ofis">Ticari / Ofis</option>
+                                <option value="Proje Portföyü">Proje Portföyü</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Lokasyon</label>
+                            <input type="text" name="location" class="form-control rounded-3" placeholder="Örn: Kadıköy / Caferağa" required />
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted">Fiyat (₺)</label>
+                            <input type="number" name="price" class="form-control rounded-3" placeholder="0" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted">Oda Sayısı</label>
+                            <input type="text" name="roomCount" class="form-control rounded-3" placeholder="3+1" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted">Net Alan (m²)</label>
+                            <input type="number" name="areaM2" class="form-control rounded-3" placeholder="120" required />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Atanan Danışman</label>
+                        <select name="assignedConsultant" class="form-select rounded-3">
+                            <option value="Ofis Portföyü">Ofis Portföyü (Genel)</option>
+                            @foreach(var staff in Model.BrokerTeam)
+                            {
+                                <option value="@staff.FullName">@staff.FullName (@staff.SpecializedTerritory)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0 px-4 pb-4">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">Portföyü Yayınla</button>
+                </div>
+            </form>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm rounded-4 bg-success text-white h-100">
-            <div class="card-body p-4">
-                <h6 class="opacity-75">Gelen Talepler</h6>
-                <h2 class="fw-bold mb-0">38</h2>
-            </div>
+</div>
+
+<!-- MODAL: GİZLİ PAZARLIK GÖRÜŞMESİ EKLE -->
+<div class="modal fade" id="newNegotiationModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form action="/Realtor/SaveNegotiationNote" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header border-0 pb-0 pt-4 px-4">
+                    <h5 class="modal-title fw-bold text-danger"><i class="ph-bold ph-lock-key me-2"></i>Gizli Görüşme & Pazarlık Kaydı</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">İlgili Mülk / Portföy</label>
+                            <select name="propertyTitle" class="form-select rounded-3">
+                                @foreach(var l in Model.Listings)
+                                {
+                                    <option value="@l.Title">@l.Title</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted">Alıcı Adı Soyadı</label>
+                            <input type="text" name="buyerName" class="form-control rounded-3" placeholder="Örn: Dr. Kemal Arslan" required />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted">Alıcı Telefonu</label>
+                            <input type="text" name="buyerPhone" class="form-control rounded-3" placeholder="0532..." required />
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="p-3 rounded-3 bg-primary bg-opacity-10 border border-primary border-opacity-25">
+                                <label class="form-label small fw-bold text-primary">Alıcının Telaffuz Ettiği Teklif (₺)</label>
+                                <input type="number" name="buyerOfferedPrice" class="form-control rounded-3 mb-2" placeholder="0" required />
+                                <label class="form-label small fw-bold text-primary">Alıcıya Ne Dedim? (Taktik Mesajı)</label>
+                                <textarea name="whatIToldBuyer" class="form-control rounded-3" rows="2" placeholder="Örn: Ev sahibinin 7.1M tabanı olduğunu ama tadilat masrafı için indirim isteyeceğimi söyledim..."></textarea>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="p-3 rounded-3 bg-danger bg-opacity-10 border border-danger border-opacity-25">
+                                <label class="form-label small fw-bold text-danger">Satıcının Gerçek Taban / Razı Fiyatı (₺)</label>
+                                <input type="number" name="sellerBottomPrice" class="form-control rounded-3 mb-2" placeholder="0" required />
+                                <label class="form-label small fw-bold text-danger">Satıcıya Ne Dedim? (Geri Bildirim)</label>
+                                <textarea name="whatIToldSeller" class="form-control rounded-3" rows="2" placeholder="Örn: Alıcının piyasa durgunluğundan 6.9M verdiğini ama 7.0M'e bitirebileceğimi belirttim..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Gizli Taktik Notu (Sadece Siz Görürsünüz)</label>
+                        <input type="text" name="secretNotes" class="form-control rounded-3" placeholder="Örn: Alıcının eşi mutfağı yenilemek istiyor, tadilat tablosuyla ikna edeceğiz." />
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0 px-4 pb-4">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold shadow-sm">Kayıt Et (Korumalı)</button>
+                </div>
+            </form>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm rounded-4 bg-warning text-dark h-100">
-            <div class="card-body p-4">
-                <h6 class="opacity-75">Dan��man Say�s�</h6>
-                <h2 class="fw-bold mb-0">5</h2>
-            </div>
+</div>
+
+<!-- MODAL: YER GÖSTERME RANDEVUSU EKLE -->
+<div class="modal fade" id="newShowingModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form action="/Realtor/SaveShowing" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header border-0 pb-0 pt-4 px-4">
+                    <h5 class="modal-title fw-bold text-warning"><i class="ph-bold ph-calendar-check me-2"></i>Yeni Yer Gösterme Randevusu</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Müşteri Ad Soyad</label>
+                            <input type="text" name="clientName" class="form-control rounded-3" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Müşteri Telefon</label>
+                            <input type="text" name="clientPhone" class="form-control rounded-3" required />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Gezdirilecek Daire</label>
+                        <select name="propertyTitle" class="form-select rounded-3">
+                            @foreach(var l in Model.Listings)
+                            {
+                                <option value="@l.Title">@l.Title (@l.Location)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Tarih ve Saat</label>
+                            <input type="datetime-local" name="appointmentDate" class="form-control rounded-3" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Daire Adresi / Konum</label>
+                            <input type="text" name="location" class="form-control rounded-3" placeholder="Örn: Caferağa Mah. No: 12" required />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Geri Bildirim / Müşteri Yorumu</label>
+                        <input type="text" name="feedback" class="form-control rounded-3" placeholder="Örn: Daireyi çok beğendi, banyoya baktı." />
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="interestedInRenovation" value="true" id="checkRenov" />
+                        <label class="form-check-label small fw-bold text-dark" for="checkRenov">Müşteri tadilat / masraf maliyeti istiyor</label>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0 px-4 pb-4">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-warning rounded-pill px-4 fw-bold text-dark shadow-sm">Randevuyu Kaydet</button>
+                </div>
+            </form>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm rounded-4 bg-dark text-white h-100">
-            <div class="card-body p-4 text-center d-flex flex-column justify-content-center">
-                <h6 class="opacity-75 mb-2">Web Siteniz</h6>
-                <a href="#" class="btn btn-sm btn-light rounded-pill text-dark fw-bold">Siteye Git <i class="bi bi-box-arrow-up-right"></i></a>
+</div>
+
+<!-- MODAL: MÜLK SAHİBİ EKLE (KAZAN-KAZAN) -->
+<div class="modal fade" id="referLandlordModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form action="/Realtor/AddReferralLandlord" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header border-0 pb-0 pt-4 px-4">
+                    <h5 class="modal-title fw-bold text-success"><i class="ph-bold ph-handshake me-2"></i>Mülk Sahibi Ekle (Kazan-Kazan)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="text-muted small">Evini sattığınız veya kiraya verdiğiniz müşteriyi GMK360'a ekleyin. Hem onlar ev masraflarını ücretsiz takip etsin, hem sizin aidatınız 0 TL olsun ve her yıl yinelenen pasif gelir kazanın.</p>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Ev Sahibi Ad Soyad</label>
+                        <input type="text" name="landlordName" class="form-control rounded-3" placeholder="Örn: Mehmet Bey" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Daire / Bina Adresi</label>
+                        <input type="text" name="propertyAddress" class="form-control rounded-3" placeholder="Örn: Moda Cad. Güneş Apt. No: 18 D: 4" required />
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0 px-4 pb-4">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold shadow-sm">Referans Havuzuna Ekle</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: BAYRAM TEBRİK ÜRETİCİ -->
+<div class="modal fade" id="greetingModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0 pt-4 px-4">
+                <h5 class="modal-title fw-bold text-navy"><i class="ph-bold ph-whatsapp-logo text-success me-2"></i>Müşteri Bayram & Özel Gün Tebriki</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-muted small">Portföyünüzdeki tüm alıcı ve satıcılarla bağı sıcak tutmak için otomatik tebrik şablonu:</p>
+                <div class="p-3 bg-light rounded-3 border mb-3">
+                    <p class="text-dark small mb-0" id="greetingTextSample">
+                        "Sayın Değerli Müşterimiz, sevdiklerinizle birlikte sağlıklı, huzurlu ve bereketli bayramlar dileriz. Yuvanızdan neşe ve huzur eksik olmasın. En içten dileklerimizle, @Model.BrokerName (@Model.AgencyName / GMK360 Ekosistemi)."
+                    </p>
+                </div>
+                <button class="btn btn-success rounded-pill w-100 fw-bold" onclick="copyGreeting()">
+                    <i class="ph-bold ph-copy me-1"></i> WhatsApp İçin Metni Kopyala
+                </button>
             </div>
         </div>
     </div>
 </div>
 
-<div class="card border-0 shadow-sm rounded-4">
-    <div class="card-header bg-white border-bottom p-4">
-        <h5 class="fw-bold mb-0">Son Eklenen �lanlar (Vitrin)</h5>
-    </div>
-    <div class="card-body p-4 text-center text-muted">
-        Hen�z ilan girmediniz.
+<!-- DANIŞMANA ATA MODALI (MEGA BROKER) -->
+<div class="modal fade" id="assignModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form action="/Realtor/AssignConsultant" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="listingId" id="assignListingId" />
+                <div class="modal-header border-0 pb-0 pt-4 px-4">
+                    <h5 class="modal-title fw-bold text-navy">Danışmana Portföy Devret</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="text-muted small" id="assignListingTitle"></p>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Bölge Danışmanını Seçin</label>
+                        <select name="consultantName" class="form-select rounded-3">
+                            @foreach(var staff in Model.BrokerTeam)
+                            {
+                                <option value="@staff.FullName">@staff.FullName (@staff.SpecializedTerritory)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0 px-4 pb-4">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">Danışmana Ata</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
+
+<script>
+    function openAssignModal(id, title) {
+        document.getElementById('assignListingId').value = id;
+        document.getElementById('assignListingTitle').innerText = 'Seçilen İlan: ' + title;
+        new bootstrap.Modal(document.getElementById('assignModal')).show();
+    }
+
+    function copyGreeting() {
+        const text = document.getElementById('greetingTextSample').innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            alert('Bayram tebrik metni panoya kopyalandı! WhatsApp Web veya telefonunuzdan müşterilerinize yapıştırabilirsiniz.');
+        });
+    }
+
+    function copyAdvisory(title, m2) {
+        fetch(`/Realtor/GetTadilatQuote?propertyTitle=${encodeURIComponent(title)}&m2=${m2}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    navigator.clipboard.writeText(data.text).then(() => {
+                        alert('Tadilat Danışmanlık Maliyet Özeti panoya kopyalandı! Alıcı veya satıcı müşterinize WhatsApp üzerinden gönderebilirsiniz.');
+                    });
+                }
+            });
+    }
+</script>

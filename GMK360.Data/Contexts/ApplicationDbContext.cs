@@ -213,7 +213,8 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         // ?n?aat ve ?antiye Y?netimi (Kentsel D?n???m ERP)
         public DbSet<GMK360.Core.Entities.Construction.AgencyPhonebook> AgencyPhonebooks { get; set; }
         public DbSet<ConstructionProject> ConstructionProjects { get; set; }
-public DbSet<GMK360.Core.Entities.Construction.ConstructionProjectExpense> ConstructionProjectExpenses { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.DemolitionSalvageItem> DemolitionSalvageItems { get; set; }
+        public DbSet<GMK360.Core.Entities.Construction.ConstructionProjectExpense> ConstructionProjectExpenses { get; set; }
         public DbSet<GMK360.Core.Entities.Construction.ProjectStakeholder> ProjectStakeholders { get; set; }
         public DbSet<GMK360.Core.Entities.Finance.ProjectCashRequest> ProjectCashRequests { get; set; }
         public DbSet<GMK360.Core.Entities.Logistics.CompanyVehicle> CompanyVehicles { get; set; }
@@ -1392,6 +1393,19 @@ public DbSet<GMK360.Core.Entities.Construction.ConstructionProjectExpense> Const
                 .WithMany(p => p.Blocks)
                 .HasForeignKey(b => b.ConstructionProjectId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // ConstructionProject Hiyerarşi (Master / Sub-Projects)
+            builder.Entity<ConstructionProject>()
+                .HasOne(p => p.ParentProject)
+                .WithMany(p => p.SubProjects)
+                .HasForeignKey(p => p.ParentProjectId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<ConstructionProject>()
+                .HasOne(p => p.RelatedAmenity)
+                .WithMany()
+                .HasForeignKey(p => p.RelatedAmenityId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Renovation Relationships (Cascade loop ?nleme)
             builder.Entity<RenovationRequest>()

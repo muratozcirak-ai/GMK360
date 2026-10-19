@@ -167,6 +167,81 @@ namespace GMK360.Web.Controllers
             // Tarihe göre sırala
             upcomingEvents = upcomingEvents.OrderBy(e => e.Date).ToList();
 
+            // 4. Hane Bütçesi & Fatura Çetelesi (Tek Daire / Aile Reisi Freemium Masası)
+            var liabilities = await _context.PropertyLiabilities
+                .Include(l => l.UtilityCompany)
+                .Include(l => l.LiabilityType)
+                .Where(l => propertyIds.Contains(l.PropertyId))
+                .ToListAsync();
+
+            var primaryProperty = properties.FirstOrDefault();
+            var householdBills = new System.Collections.Generic.List<HouseholdBillItem>();
+
+            if (liabilities.Any())
+            {
+                foreach (var l in liabilities)
+                {
+                    string cat = "Fatura";
+                    string icon = "ph-receipt";
+                    string badge = "primary";
+                    var lowerTitle = (l.Title ?? "").ToLower();
+                    
+                    if (lowerTitle.Contains("elektrik")) { cat = "Elektrik"; icon = "ph-lightning"; badge = "warning"; }
+                    else if (lowerTitle.Contains("gaz") || lowerTitle.Contains("doğalgaz") || lowerTitle.Contains("kombi")) { cat = "Doğalgaz"; icon = "ph-flame"; badge = "danger"; }
+                    else if (lowerTitle.Contains("su")) { cat = "Su"; icon = "ph-drop"; badge = "info"; }
+                    else if (lowerTitle.Contains("aidat")) { cat = "Aidat"; icon = "ph-buildings"; badge = "secondary"; }
+                    else if (lowerTitle.Contains("internet") || lowerTitle.Contains("wifi") || lowerTitle.Contains("fiber")) { cat = "İnternet"; icon = "ph-wifi-high"; badge = "primary"; }
+                    else if (lowerTitle.Contains("tv") || lowerTitle.Contains("digitürk") || lowerTitle.Contains("netflix") || lowerTitle.Contains("d-smart")) { cat = "TV/Yayın"; icon = "ph-television"; badge = "dark"; }
+                    else if (lowerTitle.Contains("telefon") || lowerTitle.Contains("gsm") || lowerTitle.Contains("turkcell") || lowerTitle.Contains("vodafone") || lowerTitle.Contains("türk telekom")) { cat = "GSM"; icon = "ph-device-mobile"; badge = "success"; }
+
+                    householdBills.Add(new HouseholdBillItem
+                    {
+                        Id = l.Id,
+                        Category = cat,
+                        Title = l.Title ?? "Fatura",
+                        SubscriberNo = l.ReferenceNumber ?? "-",
+                        DueDayOfMonth = l.DueDayOfMonth ?? 15,
+                        EstimatedMonthlyAmount = l.RecurringAmount ?? 0,
+                        LastPaidAmount = l.RecurringAmount,
+                        IsPaidThisMonth = (l.DueDayOfMonth.HasValue && l.DueDayOfMonth.Value > DateTime.UtcNow.Day) ? false : true,
+                        IconClass = icon,
+                        BadgeColor = badge,
+                        ProviderName = l.UtilityCompany?.Name ?? "Hizmet Kurumu"
+                    });
+                }
+            }
+            else
+            {
+                // Örnek hane bütçesi kalıpları (Kullanıcı sıfırdan gelince yol gösterici)
+                householdBills.AddRange(new[]
+                {
+                    new HouseholdBillItem { Id = 101, Category = "Elektrik", Title = "Ev Elektrik Faturası", SubscriberNo = "10482910", DueDayOfMonth = 12, EstimatedMonthlyAmount = 780, IconClass = "ph-lightning", BadgeColor = "warning", ProviderName = "Elektrik Dağıtım A.Ş." },
+                    new HouseholdBillItem { Id = 102, Category = "Doğalgaz", Title = "Doğalgaz & Isınma", SubscriberNo = "59201948", DueDayOfMonth = 18, EstimatedMonthlyAmount = 1450, IconClass = "ph-flame", BadgeColor = "danger", ProviderName = "Doğalgaz Dağıtım A.Ş." },
+                    new HouseholdBillItem { Id = 103, Category = "Su", Title = "Şebeke Su Faturası", SubscriberNo = "3829104", DueDayOfMonth = 20, EstimatedMonthlyAmount = 390, IconClass = "ph-drop", BadgeColor = "info", ProviderName = "Su ve Kanalizasyon İdaresi" },
+                    new HouseholdBillItem { Id = 104, Category = "Aidat", Title = "Apartman / Site Aidatı", SubscriberNo = "Daire No", DueDayOfMonth = 5, EstimatedMonthlyAmount = 650, IconClass = "ph-buildings", BadgeColor = "secondary", ProviderName = "Apartman Yönetimi" },
+                    new HouseholdBillItem { Id = 105, Category = "İnternet", Title = "Ev Fiber İnternet", SubscriberNo = "88291039", DueDayOfMonth = 22, EstimatedMonthlyAmount = 450, IconClass = "ph-wifi-high", BadgeColor = "primary", ProviderName = "Fiber İnternet" },
+                    new HouseholdBillItem { Id = 106, Category = "GSM", Title = "Aile Cep Telefonu Faturaları", SubscriberNo = "3 Hat", DueDayOfMonth = 25, EstimatedMonthlyAmount = 950, IconClass = "ph-device-mobile", BadgeColor = "success", ProviderName = "Mobil Operatör" }
+                });
+            }
+
+            var repairNeeds = new System.Collections.Generic.List<HouseholdRepairItem>
+            {
+                new HouseholdRepairItem { IssueTitle = "Kombi & Petek Yıllık Bakımı", Category = "Isıtma / Kombi", UrgencyLevel = "Sezonluk İhtiyaç", SuggestedActionUrl = "/Usta", ActionButtonText = "Kombi Ustası Çağır" },
+                new HouseholdRepairItem { IssueTitle = "Banyo & Mutfak Tesisat Kontrolü", Category = "Sıhhi Tesisat", UrgencyLevel = "Önleyici Bakım", SuggestedActionUrl = "/Usta", ActionButtonText = "Tesisatçı Bul" },
+                new HouseholdRepairItem { IssueTitle = "İç Cephe Boya Badana & Rutubet Tamiri", Category = "Boya & Alçı", UrgencyLevel = "İsteğe Bağlı", SuggestedActionUrl = "/Tedarikci", ActionButtonText = "Nalbur / Boya Fiyatı Gör" }
+            };
+
+            var householdBudget = new HouseholdBudgetCockpitViewModel
+            {
+                IsSingleApartmentFreeUser = properties.Count <= 1,
+                ApartmentName = primaryProperty?.Title ?? "Evim (Dairem)",
+                Bills = householdBills,
+                ActiveRepairNeeds = repairNeeds,
+                SeasonalAdvice = DateTime.UtcNow.Month >= 10 || DateTime.UtcNow.Month <= 3
+                    ? "Kış sezonu yaklaşıyor: Kombi ve petek temizliği ile faturanızda %20-25 tasarruf sağlayabilirsiniz."
+                    : "İlkbahar / Yaz sezonu: Balkon su yalıtımı ve klima filtre kontrollerinizi tamamlamanızı öneririz."
+            };
+
             var vm = new DigitalHomeDashboardViewModel
             {
                 Properties = properties,
@@ -175,7 +250,8 @@ namespace GMK360.Web.Controllers
                     TotalExpectedRentThisMonth = totalExpectedRent,
                     TotalExpensesThisMonth = totalExpenses,
                     UpcomingEvents = upcomingEvents
-                }
+                },
+                HouseholdBudget = householdBudget
             };
 
             return View(vm);

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
@@ -22,7 +22,17 @@ namespace GMK360.Web.Controllers
         {
             var accounts = await _context.Set<SupplierCurrentAccount>()
                 .Include(a => a.PhonebookContact)
+                .Include(a => a.Payments)
                 .ToListAsync();
+
+            ViewBag.UpcomingPayments = accounts
+                .SelectMany(a => a.Payments.Where(p => p.Status == PaymentStatus.Pending && p.DueDate != null).Select(p => new {
+                    Payment = p,
+                    SupplierName = a.PhonebookContact?.Name ?? "Tedarikçi",
+                    DaysLeft = (p.DueDate.Value.Date - DateTime.UtcNow.Date).Days
+                }))
+                .OrderBy(x => x.Payment.DueDate)
+                .ToList();
             
             return View(accounts);
         }

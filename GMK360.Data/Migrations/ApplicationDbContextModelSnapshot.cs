@@ -1441,6 +1441,9 @@ namespace GMK360.Data.Migrations
                     b.Property<string>("ParkingType")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("RoofType")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("StreetId")
                         .HasColumnType("int");
 
@@ -3913,6 +3916,70 @@ namespace GMK360.Data.Migrations
                     b.HasIndex("ProjectScheduleTaskId");
 
                     b.ToTable("DailyTimesheets");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.DemolitionSalvageItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("ActualQuantity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("BuyerName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ConstructionProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("EstimatedQuantity")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("EstimatedUnitPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ItemCategory")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("SoldDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("SoldTotalPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConstructionProjectId");
+
+                    b.ToTable("DemolitionSalvageItems");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.DocumentTemplate", b =>
@@ -12609,7 +12676,6 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Icon")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("IconClass")
@@ -15761,6 +15827,17 @@ namespace GMK360.Data.Migrations
                     b.Navigation("ConstructionProject");
 
                     b.Navigation("ProjectScheduleTask");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.Construction.DemolitionSalvageItem", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Construction.ConstructionProject", "ConstructionProject")
+                        .WithMany()
+                        .HasForeignKey("ConstructionProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ConstructionProject");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.DocumentTemplate", b =>

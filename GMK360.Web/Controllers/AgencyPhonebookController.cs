@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -16,11 +16,13 @@ namespace GMK360.Web.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly GMK360.Web.Services.B2BSupplierSyncService _supplierSyncService;
 
-        public AgencyPhonebookController(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
+        public AgencyPhonebookController(ApplicationDbContext context, UserManager<ApplicationUser> userManager, GMK360.Web.Services.B2BSupplierSyncService supplierSyncService)
         {
             _context = context;
             _userManager = userManager;
+            _supplierSyncService = supplierSyncService;
         }
 
         private async Task<int?> GetUserAgencyIdAsync()
@@ -34,6 +36,9 @@ namespace GMK360.Web.Controllers
         {
             var agencyId = await GetUserAgencyIdAsync();
             if (agencyId == null) return Unauthorized();
+
+            var currentUserId = _userManager.GetUserId(User) ?? "";
+            await _supplierSyncService.AutoSyncExistingNetworkContactsAsync(agencyId.Value, currentUserId);
 
             var query = _context.AgencyPhonebooks.Where(p => p.AgencyId == agencyId && !p.IsDeleted);
             
@@ -61,11 +66,13 @@ namespace GMK360.Web.Controllers
                 if (conn.B2bCompany != null)
                 {
                     byte contactType = 2; // Default: Taşeron Firma
-                    if (conn.B2bCompany.IsSupplier) contactType = 3; // Tedarikçi
-                    if (conn.B2bCompany.IsSubcontractor) contactType = 1; // Usta
+                    if (conn.B2bCompany.IsEngineering) contactType = 8; // Test Laboratuvarı / OSGB
+                    else if (conn.B2bCompany.IsSupplier) contactType = 3; // Tedarikçi
+                    else if (conn.B2bCompany.IsSubcontractor) contactType = 1; // Usta
                     
-                    // Sadece seçili filtreye uygun olanları ekle
-                    if (!type.HasValue || type.Value == contactType || type.Value == 0)
+                    // Sadece seçili filtreye uygun olanları ve listede mükerrer olmayanları ekle
+                    if ((!type.HasValue || type.Value == contactType || type.Value == 0) &&
+                        !contacts.Any(c => c.Name.Equals(conn.B2bCompany.Name, StringComparison.OrdinalIgnoreCase) || c.Name.Equals(conn.B2bCompany.Name + " (B2B)", StringComparison.OrdinalIgnoreCase)))
                     {
                         contacts.Add(new AgencyPhonebook
                         {
