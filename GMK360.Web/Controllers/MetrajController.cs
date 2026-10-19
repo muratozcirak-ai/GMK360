@@ -1043,16 +1043,34 @@ namespace GMK360.Web.Controllers
 
             var baseDate = startDate ?? DateTime.Today;
             var steps = GenerateParametricWorkflow(project, profile, baseDate, buildingId);
+            var siteSetupSteps = GenerateSiteSetupSteps(project, profile);
+            var siteHandoverSteps = GenerateSiteHandoverSteps(project, profile);
 
             int totalManDays = steps.Sum(s => s.TotalManDays);
             int maxCrew = steps.Any() ? steps.Max(s => s.CrewSize) : 0;
             int totalDurationDays = steps.Any() ? (int)(steps.Max(s => s.PlannedEndDate.Value) - steps.Min(s => s.PlannedStartDate.Value)).TotalDays + 1 : 0;
             var estimatedCompletion = steps.Any() ? steps.Max(s => s.PlannedEndDate.Value).ToString("dd.MM.yyyy") : "";
 
+            var allBlocks = project.Blocks?.Where(b => !b.IsExistingBuilding).ToList() ?? new List<GMK360.Core.Entities.Building>();
+            var targetStructure = buildingId.HasValue ? allBlocks.FirstOrDefault(b => b.Id == buildingId.Value) : allBlocks.FirstOrDefault(b => b.ParentBuildingId == null);
+
             return Json(new
             {
                 success = true,
                 steps = steps,
+                siteSetupSteps = siteSetupSteps,
+                siteHandoverSteps = siteHandoverSteps,
+                staticSummary = new
+                {
+                    concreteClass = "C30/37 Taşıyıcı Hazır Beton",
+                    rebarClass = "B420C Nervürlü Donatı Çeliği",
+                    foundationType = "Radye Genel Temel",
+                    structureType = "Betonarme Karkas (Kolon/Perde/Döşeme)",
+                    totalStructures = allBlocks.Count(b => b.ParentBuildingId == null),
+                    landArea = project.TotalLandArea ?? 0,
+                    baseArea = targetStructure?.BaseArea ?? 0,
+                    totalFloors = targetStructure != null ? (targetStructure.TotalFloors ?? 0) + targetStructure.BasementFloors : (project.TotalFloors ?? 5)
+                },
                 summary = new
                 {
                     totalManDays = totalManDays,
@@ -1995,188 +2013,23 @@ namespace GMK360.Web.Controllers
             // 1. PARÇA: KABA İNŞAAT (TEMEL & TAŞIYICI İSKELET)
             // =========================================================================
 
-            // K-01: Harita, Aplikasyon & Röper Alma (Adım 1)
+            // K-01: Derin Kazı (Hafriyat) & Zemin İksası (Shoring) (Adım 1)
             var k01Start = runDate;
-            var k01End = k01Start.AddDays(2);
+            var k01End = k01Start.AddDays(14);
             list.Add(new WorkflowStepItemDto
             {
                 StepCode = "K-01",
                 Order = stepOrderSeq++,
-                PhaseName = "Harita, Aplikasyon & Röper Alma",
-                StageCategory = "Saha Hazırlığı & Ölçüm",
-                PartIndex = p1Idx,
-                PartName = p1Name,
-                PartBadgeClass = p1Badge,
-                TriggerRule = "İşbaşı ile başlar",
-                TargetStructureName = targetStructureName,
-                TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Ahşap Kazıklar, Kireç Tozu ve Çelik Röper Çubukları",
-                MaterialDescription = "Arsa köşe poligonu, köşe kotları ve hafriyat sınırlarının kireçle işaretlenmesi.",
-                MaterialQuantity = 0,
-                MaterialUnit = "Takım",
-                MaterialFormula = "DXF Bekliyor (Mimari vaziyet ve köşe koordinatlarından belirlenecek)",
-                SupplierCategory = "Harita Mühendislik Ofisi / Topoğraf Ekipmanı",
-                LaborTitle = "Harita Mühendisi & Topoğraf Ekibi",
-                ProfessionName = "Harita Mühendisi / Topoğraf",
-                CrewComposition = "1 Harita Müh. + 1 Topoğraf + 2 Yardımcı/Amele",
-                CrewSize = 4,
-                DurationDays = 2,
-                EquipmentNeeded = "Total Station, Nivo, Lazer Metre, GPS Cihazı",
-                Predecessors = "İmar çapı ve mimari vaziyet planı kabulü",
-                CriticalDependency = "Köşe kazıkları çakılmadan ve röper alınmadan çevre ihata yapılamaz, hafriyat başlayamaz!",
-                DnaSource = "Adım 1: Saha Analizi & Aplikasyon",
-                PlannedStartDate = k01Start,
-                PlannedEndDate = k01End,
-                SubSteps = CreateSubSteps(
-                    "T-2 Belediye imar çapı, aplikasyon krokisi ve köşe koordinat listesi temini",
-                    "Total Station ve GPS ile parsel köşe kazıklarının çakılması ve bina taban sınır kireçlemesi",
-                    "İmar çekme mesafelerinin (ön/yan/arka bahçe) ve sabit röper kotunun doğrulanması",
-                    "Saha çevre güvenlik hattı ve komşu parsel sınır reflektörlü şeritlerinin çekilmesi"
-                )
-            });
-
-            // K-02: Şantiye Çevre İhatası & Raylı Güvenlik Giriş Kapısı (Adım 1)
-            var k02Start = k01End;
-            var k02End = k02Start.AddDays(4);
-            list.Add(new WorkflowStepItemDto
-            {
-                StepCode = "K-02",
-                Order = stepOrderSeq++,
-                PhaseName = "Şantiye Çevre İhatası & Raylı Güvenlik Giriş Kapısı",
-                StageCategory = "Saha Güvenliği & Çevreleme",
-                PartIndex = p1Idx,
-                PartName = p1Name,
-                PartBadgeClass = p1Badge,
-                TriggerRule = "Aplikasyon sınırlarına göre başlar",
-                TargetStructureName = targetStructureName,
-                TargetBuildingId = targetBuildingId,
-                MaterialTitle = $"{ihataMalzemesi} ve {kapiTipi}",
-                MaterialDescription = "Şantiye parsel çevresinin kapatılması, dikme direkleri, payandalar ve ana araç giriş kapısı.",
-                MaterialQuantity = 0,
-                MaterialUnit = "mt",
-                MaterialFormula = "DXF Bekliyor (Parsel çevre sınır ölçüsünden hesaplanacak)",
-                SupplierCategory = "Demir Çelik / Çit & Sac Bayisi",
-                LaborTitle = "Demir Doğrama ve Çit Montaj Ekibi",
-                ProfessionName = "Demir / Çit Ustası",
-                CrewComposition = "1 Demir Doğrama Formeni + 2 Kaynakçı + 2 Montaj İşçisi",
-                CrewSize = 5,
-                DurationDays = 4,
-                EquipmentNeeded = "Kaynak Makinesi, Profil Kesme, Matkap Takımları",
-                Predecessors = "Harita aplikasyon sınır tespiti",
-                CriticalDependency = "İşyeri ve belediye denetimi gereği çevre ihatası ve kapı olmadan şantiyeye makine sokulamaz!",
-                DnaSource = "Adım 1: Şantiye Çevre İhatası",
-                PlannedStartDate = k02Start,
-                PlannedEndDate = k02End,
-                SubSteps = CreateSubSteps(
-                    "T-2 İhata panoları, ankraj profilleri ve raylı kapı mekanizmasının şantiyeye sevki",
-                    "Direk ankrajlarının sabitlenmesi, çevre panolarının montajı ve raylı giriş kapısı montajı",
-                    "Rüzgar fırtına yüküne karşı payanda rijitliği ve kilit sistemi kontrolü",
-                    "Şantiye tanıtım tabelası, 'Yetkisiz Girilmez' levhaları ve acil toplanma noktası tabelası"
-                )
-            });
-
-            // K-03: Şantiye Geçici Elektrik, Su Altyapısı & Mobilizasyon (Adım 1)
-            var k03Start = k02End;
-            var k03End = k03Start.AddDays(3);
-            list.Add(new WorkflowStepItemDto
-            {
-                StepCode = "K-03",
-                Order = stepOrderSeq++,
-                PhaseName = "Şantiye Geçici Elektrik, Su Altyapısı & Mobilizasyon",
-                StageCategory = "Mobilizasyon & Altyapı",
-                PartIndex = p1Idx,
-                PartName = p1Name,
-                PartBadgeClass = p1Badge,
-                TriggerRule = "Çevreleme tamamlanınca başlar",
-                TargetStructureName = targetStructureName,
-                TargetBuildingId = targetBuildingId,
-                MaterialTitle = $"{elektrikTipi}, {suTipi} ve Şantiye Konteyner Kampı",
-                MaterialDescription = "Şantiye ana dağıtım panosu, sayaç/kofre, su deposu ve hidrofor sistemi, şantiye ofis ve yemekhanesi.",
-                MaterialQuantity = 0,
-                MaterialUnit = "Set",
-                MaterialFormula = "DXF Bekliyor (Şantiye yerleşim planından netleşecek)",
-                SupplierCategory = "Şantiye Altyapı & Konteyner Tedarikçisi",
-                LaborTitle = "Elektrik & Tesisat Altyapı Ekibi",
-                ProfessionName = "Şantiye Elektrik & Tesisatçısı",
-                CrewComposition = "1 Elektrik Ustası + 1 Tesisat Ustası + 1 Mobil Vinç Operatörü + 2 Yardımcı",
-                CrewSize = 5,
-                DurationDays = 3,
-                EquipmentNeeded = "Mobil Vinç, Topraklama Ölçüm Cihazı, Boru Kaynak Makinesi",
-                Predecessors = "Çevre ihatası ve emniyetli saha alanı",
-                CriticalDependency = "ŞANTİYE ALTIN KURALI: Elektrik ve su hazır olmadan yıkım yapılamaz, şantiye çalışamaz!",
-                DnaSource = "Adım 1: Elektrik, Su ve Mobilizasyon",
-                PlannedStartDate = k03Start,
-                PlannedEndDate = k03End,
-                SubSteps = CreateSubSteps(
-                    "T-3 Dağıtım şirketi geçici sayaç onayı, su bağlantı izni ve konteyner nakliye organizasyonu",
-                    "Konteynerlerin vinç ile yerleşimi, kaçak akım korumalı ana pano ve temiz su deposu montajı",
-                    "Pano topraklama meger ölçümü ve hidrofor tesisatı basınç testi",
-                    "Pano kilit altına alma, 6 kg ABC yangın söndürme tüpleri ve su taşkın drenajı"
-                )
-            });
-
-            // K-04 (Opsiyonel): Eski Yapı Yıkımı, Enkaz Sökümü & Moloz Bertarafı (Adım 1)
-            var prevEnd = k03End;
-            if (hasDemolition)
-            {
-                var k04Start = prevEnd;
-                var k04End = k04Start.AddDays(5);
-                prevEnd = k04End;
-                list.Add(new WorkflowStepItemDto
-                {
-                    StepCode = "K-04",
-                    Order = stepOrderSeq++,
-                    PhaseName = "Eski Yapı Yıkımı, Enkaz Sökümü & Moloz Bertarafı",
-                    StageCategory = "Yıkım & Moloz Temizliği",
-                    PartIndex = p1Idx,
-                    PartName = p1Name,
-                    PartBadgeClass = p1Badge,
-                    TriggerRule = "Elektrik/su kesme tutanağı onaylanınca başlar",
-                    TargetStructureName = targetStructureName,
-                    TargetBuildingId = targetBuildingId,
-                    MaterialTitle = "Yıkım Kırıcı Uçları, Toz Bastırma Tesisatı ve Moloz Nakliye Kamyonları",
-                    MaterialDescription = "Mevcut yapının kontrollü yıkımı, demirlerin hurdaya ayrıştırılması ve hafriyat döküm sahasına nakliyesi.",
-                    MaterialQuantity = 0,
-                    MaterialUnit = "m²",
-                    MaterialFormula = "DXF Bekliyor (Mevcut yapı rölevesinden netleşecek)",
-                    SupplierCategory = "Hafriyat & Yıkım Firması",
-                    LaborTitle = "Ağır Yıkım Ekibi",
-                    ProfessionName = "Yıkım Taşeronu",
-                    CrewComposition = "1 Yıkım Formeni + 1 Kırıcı Ekskavatör Op. + 1 Loder Op. + 6 Kamyon Şoförü + 2 Sulama/Hurda İşçisi",
-                    CrewSize = 11,
-                    DurationDays = 5,
-                    EquipmentNeeded = "30 Ton Paletli Kırıcı Ekskavatör, Loder, 6 Damperli Kamyon, Su Tankeri",
-                    Predecessors = "Bedaş/İski/İgdaş ana kesme tutanakları ve Belediye yıkım ruhsatı",
-                    CriticalDependency = "Çevre ve can güvenliği için elektrik/su/gaz kesilip onaylanmadan yıkıma başlanamaz!",
-                    DnaSource = "Adım 1: Yıkım & Enkaz",
-                    PlannedStartDate = k04Start,
-                    PlannedEndDate = k04End,
-                    SubSteps = CreateSubSteps(
-                        "T-3 Belediye yıkım ruhsatı, çevre koruma ağı ve asbest analizi teyidi",
-                        "Üstten alta kontrollü yıkım, hurda demir ayrıştırma ve molozun kamyonlara yüklenmesi",
-                        "Zemin seviyesi temizliği ve komşu bina bitişik nizam duvar tahribat kontrolü",
-                        "Toz bastırma su tankeri kullanımı, çevre yaya koruma koridoru ve güvenlik şeridi"
-                    )
-                });
-            }
-
-            // K-05: Derin Kazı (Hafriyat) & Güvenlik İksası (Shoring) (Adım 1)
-            var k05Start = prevEnd;
-            var k05End = k05Start.AddDays(14);
-            list.Add(new WorkflowStepItemDto
-            {
-                StepCode = "K-05",
-                Order = stepOrderSeq++,
-                PhaseName = "Derin Kazı (Hafriyat) & Güvenlik İksası (Shoring)",
+                PhaseName = "Derin Kazı (Hafriyat) & Zemin İksası (Shoring)",
                 StageCategory = "Hafriyat & Zemin İksası",
                 PartIndex = p1Idx,
                 PartName = p1Name,
                 PartBadgeClass = p1Badge,
-                TriggerRule = "Saha açılınca temel kazısı başlar",
+                TriggerRule = "Şantiye ortak saha hazırlığı tamamlanınca yapı tabanında başlar",
                 TargetStructureName = targetStructureName,
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = $"{zeminTipi} Kazısı ve Güvenlik İksa Perdesi",
-                MaterialDescription = "Kademeli hafriyat kazısı, döküm sahasına nakliye, hasır çelik ve püskürtme beton (shotcrete) iksa perdesi.",
+                MaterialTitle = $"{zeminTipi} Kazısı, İksa Hasır Çeliği ve Püskürtme Beton (Shotcrete)",
+                MaterialDescription = "Kademeli temel hafriyat kazısı, döküm sahasına nakliye, hasır çelik ve püskürtme beton (shotcrete) iksa perdesi.",
                 MaterialQuantity = 0,
                 MaterialUnit = "m³",
                 MaterialFormula = "DXF Bekliyor (Bodrum kat kesit yüksekliklerinden ve kazı kotundan hesaplanacak)",
@@ -2187,11 +2040,11 @@ namespace GMK360.Web.Controllers
                 CrewSize = 17,
                 DurationDays = 14,
                 EquipmentNeeded = "2 Ekskavatör (Kovalı & Kırıcılı), 1 Loder, 8 Damperli Kamyon, Shotcrete Pompası, Ankraj Delgi Makinesi",
-                Predecessors = "Mobilizasyonun tamamlanması ve kazı sınır kazıklarının çakılması",
+                Predecessors = "Şantiye ortak mobilizasyonunun ve köşe kazıklarının onaylanması",
                 CriticalDependency = "Yol ve komşu parsel şevlerinin göçmesini önlemek için kademeli iksa uygulanmadan derin kazıya girilemez!",
                 DnaSource = "Adım 1: Zemin & Hafriyat",
-                PlannedStartDate = k05Start,
-                PlannedEndDate = k05End,
+                PlannedStartDate = k01Start,
+                PlannedEndDate = k01End,
                 SubSteps = CreateSubSteps(
                     "T-3 Zemin etüdü raporu kontrolü, hafriyat döküm fişleri ve kazı güzergah izinleri teyidi",
                     "Kademeli kazı, kamyonlara yükleme, iksa perdesi hasır çelik ve püskürtme beton uygulaması",
@@ -2200,12 +2053,12 @@ namespace GMK360.Web.Controllers
                 )
             });
 
-            // K-06: Taban Tesviyesi, Mıcır Drenajı & C20/25 Grobeton (Adım 2 & Adım 0)
-            var k06Start = k05End;
-            var k06End = k06Start.AddDays(2);
+            // K-02: Taban Tesviyesi, Mıcır Drenajı & C20/25 Grobeton (Adım 2 & Adım 0)
+            var k02Start = k01End;
+            var k02End = k02Start.AddDays(2);
             list.Add(new WorkflowStepItemDto
             {
-                StepCode = "K-06",
+                StepCode = "K-02",
                 Order = stepOrderSeq++,
                 PhaseName = "Taban Tesviyesi, Mıcır Drenajı & C20/25 Grobeton",
                 StageCategory = "Temel Tabanı",
@@ -2230,8 +2083,8 @@ namespace GMK360.Web.Controllers
                 Predecessors = "Temel kazısının tamamlanması ve taban kotunun onaylanması",
                 CriticalDependency = "Grobeton mastarı düzgün atılmadan üzerine su yalıtım membranı serilemez!",
                 DnaSource = "Adım 2: Taban İmalatları (Grobeton)",
-                PlannedStartDate = k06Start,
-                PlannedEndDate = k06End,
+                PlannedStartDate = k02Start,
+                PlannedEndDate = k02End,
                 SubSteps = CreateSubSteps(
                     "T-2 Beton santrali grobeton siparişi ve silindir ile zemin sıkıştırması",
                     "Filon mıcır serimi, grobeton pompa dökümü ve mastarlı tesviye",
@@ -2240,14 +2093,14 @@ namespace GMK360.Web.Controllers
                 )
             });
 
-            // K-07: Çift Kat Membran Temel Bohçalama & Koruma Şapı (Adım 2)
-            var k07Start = k06End;
-            var k07End = k07Start.AddDays(5);
+            // K-03: Çift Kat Bitümlü Membran Temel Bohçalama & Koruma Şapı (Adım 2)
+            var k03Start = k02End;
+            var k03End = k03Start.AddDays(5);
             list.Add(new WorkflowStepItemDto
             {
-                StepCode = "K-07",
+                StepCode = "K-03",
                 Order = stepOrderSeq++,
-                PhaseName = "Çift Kat Membran Temel Bohçalama & Koruma Şapı",
+                PhaseName = "Çift Kat Bitümlü Membran Temel Bohçalama & Koruma Şapı",
                 StageCategory = "Temel Su Yalıtımı",
                 PartIndex = p1Idx,
                 PartName = p1Name,
@@ -2270,8 +2123,8 @@ namespace GMK360.Web.Controllers
                 Predecessors = "Grobetonun kuruması ve yüzey tozunun temizlenmesi",
                 CriticalDependency = "Su yalıtımı delinmeden üzerine donatı demiri konamaz; mutlaka koruma şapı/betonu atılmalıdır!",
                 DnaSource = "Adım 2: Temel Bohçalama",
-                PlannedStartDate = k07Start,
-                PlannedEndDate = k07End,
+                PlannedStartDate = k03Start,
+                PlannedEndDate = k03End,
                 SubSteps = CreateSubSteps(
                     "T-2 Bitüm astar, membran ruloları ve şaloma tüplerinin sevki",
                     "Astar uygulaması, çift kat şaşırtmalı şaloma yapıştırma ve pah çıtaları teşliki",
@@ -2280,92 +2133,332 @@ namespace GMK360.Web.Controllers
                 )
             });
 
-            // K-08: Temel Kalıp, Donatı Çeliği, Paspayı & Radye Temel Betonu (Adım 0)
+            // K-04: Radye Temel Ahşap / Çelik Dış Kalıbı & Su Tutucu Bant (Adım 0)
+            var k04Start = k03End;
+            var k04End = k04Start.AddDays(4);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "K-04",
+                Order = stepOrderSeq++,
+                PhaseName = "Radye Temel Ahşap / Çelik Dış Kalıbı & Su Tutucu Bant",
+                StageCategory = "Temel Kalıp",
+                PartIndex = p1Idx,
+                PartName = p1Name,
+                PartBadgeClass = p1Badge,
+                TriggerRule = "Koruma şapı kuruyunca temel kalıbı çakılır",
+                TargetStructureName = targetStructureName,
+                TargetBuildingId = targetBuildingId,
+                MaterialTitle = "Radye Temel Dış Kalıp Kerestesi, Plywood, Payandalar ve PVC Su Tutucu Bant",
+                MaterialDescription = "Radye temel yan perdeleri dış çevre kalıbının çakılması, köşegen payandalar ve soğuk derz su tutucu bant montajı.",
+                MaterialQuantity = 0,
+                MaterialUnit = "m²",
+                MaterialFormula = "DXF Bekliyor (Temel kalınlığı ve çevre ölçüsünden hesaplanacak)",
+                SupplierCategory = "Kalıp & Kereste Tedarikçisi",
+                LaborTitle = "Temel Kalıpçı Ekibi",
+                ProfessionName = "Kalıp Ustası",
+                CrewComposition = "1 Kalıp Formeni + 5 Kalıpçı Ustası + 2 Yardımcı",
+                CrewSize = 8,
+                DurationDays = 4,
+                EquipmentNeeded = "Daire Testere, Kalıp Krikoları, Lazer Hizalama",
+                Predecessors = "Bohçalama koruma şapı üzerine temel akslarının çırpı ipiyle işaretlenmesi",
+                CriticalDependency = "Kalıp şakülü ve rijit payandaları kontrol edilmeden demir donatı döşenmeye başlanamaz!",
+                DnaSource = "Adım 0: Statik Taşıyıcılar (Temel Kalıbı)",
+                PlannedStartDate = k04Start,
+                PlannedEndDate = k04End,
+                SubSteps = CreateSubSteps(
+                    "T-2 Kalıp kerestesi, plywood panolar ve su tutucu bantların sahaya indirilmesi",
+                    "Aks çizgilerine göre radye yan kalıbının montajı ve payanda tahkimatı",
+                    "Kalıp içi temizlik, kot nivo kontrolü ve su tutucu bant sabitleme kontrolü",
+                    "Kalıp çivi batmalarına karşı çelik burunlu tabanlı iş ayakkabısı denetimi"
+                )
+            });
+
+            // K-05: Radye Temel B420C Donatı Çeliği, Paspayları & Demir Vizesi (Adım 0)
+            var k05Start = k04End;
+            var k05End = k05Start.AddDays(7);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "K-05",
+                Order = stepOrderSeq++,
+                PhaseName = "Radye Temel B420C Donatı Çeliği, Paspayları & Demir Vizesi",
+                StageCategory = "Temel Donatı",
+                PartIndex = p1Idx,
+                PartName = p1Name,
+                PartBadgeClass = p1Badge,
+                TriggerRule = "Dış kalıp tamamlanınca donatı örülür",
+                TargetStructureName = targetStructureName,
+                TargetBuildingId = targetBuildingId,
+                MaterialTitle = "B420C Nervürlü Donatı Çeliği, Beton Paspayı Takozları ve Bağ Teli",
+                MaterialDescription = "Alt/üst çift sıra nervürlü hasır donatı, donatı sehpaları, kolon/perde filizleri, topraklama şeridi ve paspayları.",
+                MaterialQuantity = 0,
+                MaterialUnit = "Ton",
+                MaterialFormula = "DXF Bekliyor (Statik radye temel donatı planından hesaplanacak)",
+                SupplierCategory = "Demir Çelik Bayisi & Donatı Tedarikçisi",
+                LaborTitle = "Temel Demirci Ekibi",
+                ProfessionName = "Demirci Ustası",
+                CrewComposition = "1 Demir Formeni + 8 Demirci Ustası + 4 Bağlama İşçisi",
+                CrewSize = 13,
+                DurationDays = 7,
+                EquipmentNeeded = "Demir Bükme ve Kesme Tezgahı, Bağ Teli Kargaburunları",
+                Predecessors = "Radye dış kalıbı ve temel topraklama galvaniz şeridi montajı",
+                CriticalDependency = "Yapı Denetim ve Şantiye Şefi DEMİR VİZESİ imzalamadan hazır beton santraline sevk emri VERİLEMEZ!",
+                DnaSource = "Adım 0: Statik Taşıyıcılar (B420C Donatı)",
+                PlannedStartDate = k05Start,
+                PlannedEndDate = k05End,
+                SubSteps = CreateSubSteps(
+                    "T-3 Donatı çeliği çap, boy ve etiket kontrolü, paspayı takozlarının serimi",
+                    "Alt hasır, sehpalar, üst hasır bağlama ve kolon/perde filizlerinin montajı",
+                    "Demir aralıkları, kanca boyları ve Yapı Denetim Demir Vizesi kabulü",
+                    "Ağır demir taşıma ergonomisi, kesme tezgahı siperlikleri ve eldiven kullanımı"
+                )
+            });
+
+            // K-06: Radye Temel C30/37 Taşıyıcı Hazır Beton Dökümü & Vibrasyon (Adım 0)
+            var k06Start = k05End;
+            var k06End = k06Start.AddDays(2);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "K-06",
+                Order = stepOrderSeq++,
+                PhaseName = "Radye Temel C30/37 Taşıyıcı Hazır Beton Dökümü & Vibrasyon",
+                StageCategory = "Temel Beton Dökümü",
+                PartIndex = p1Idx,
+                PartName = p1Name,
+                PartBadgeClass = p1Badge,
+                TriggerRule = "Demir vizesi onaylandığı gün dökülür",
+                TargetStructureName = targetStructureName,
+                TargetBuildingId = targetBuildingId,
+                MaterialTitle = "C30/37 Taşıyıcı Hazır Beton (Su Geçirimsizlik Katkılı)",
+                MaterialDescription = "Monolitik soğuk derzsiz radye temel betonu dökümü, derin vibrasyon sıkıştırması ve mastarlama.",
+                MaterialQuantity = 0,
+                MaterialUnit = "m³",
+                MaterialFormula = "DXF Bekliyor (Statik radye hacim hesabından netleşecek)",
+                SupplierCategory = "Hazır Beton Santrali",
+                LaborTitle = "Temel Beton Döküm Ekibi",
+                ProfessionName = "Betoncu & Pompa Ekibi",
+                CrewComposition = "1 Şef + 2 Mobil Pompa Operatörü + 4 Vibratörcü + 4 Mastarcı",
+                CrewSize = 11,
+                DurationDays = 2,
+                EquipmentNeeded = "2 Mobil Beton Pompası, 4 Dalgıç Vibratör, Slump Konisi, Numune Küp Kalıpları",
+                Predecessors = "Demir vizesi onayı ve beton santrali döküm rezervasyonu",
+                CriticalDependency = "Her transmikserde slump testi yapılmalı ve Yapı Denetim gözetiminde 7/28 günlük küp numuneleri alınmalıdır!",
+                DnaSource = "Adım 0: Statik Taşıyıcılar (C30/37 Beton)",
+                PlannedStartDate = k06Start,
+                PlannedEndDate = k06End,
+                SubSteps = CreateSubSteps(
+                    "T-2 Santral transmikser rotası, yedek pompa ve laboratuvar numune hazırlığı",
+                    "Kademeli katman dökümü, derin vibrasyon ve lazer nivo ile yüzey mastarlama",
+                    "İrsaliye kontrolü, taze beton slump deneyi ve 6 adet küp numune alımı",
+                    "Pompa bomu elektrik hattı mesafesi, mikser manevra güvenlik elemanı"
+                )
+            });
+
+            // K-07: Temel Kürlenme, Islak Sulama & Dış Kalıp Sökümü (Adım 0)
+            var k07Start = k06End;
+            var k07End = k07Start.AddDays(7);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "K-07",
+                Order = stepOrderSeq++,
+                PhaseName = "Temel Kürlenme, Islak Sulama & Dış Kalıp Sökümü",
+                StageCategory = "Temel Kür & Bakım",
+                PartIndex = p1Idx,
+                PartName = p1Name,
+                PartBadgeClass = p1Badge,
+                TriggerRule = "Beton dökümü bitiminde anında başlar",
+                TargetStructureName = targetStructureName,
+                TargetBuildingId = targetBuildingId,
+                MaterialTitle = "Beton Kür Malzemesi (Kür Membranı) / Geotekstil Keçe ve Bol Su",
+                MaterialDescription = "Radye yüzeyinin çatlamasını önlemek için geotekstil keçe serimi, sıvı kür kimyasalı ve 7 gün kesintisiz sulama.",
+                MaterialQuantity = 0,
+                MaterialUnit = "m²",
+                MaterialFormula = "DXF Bekliyor (Temel üst yüzey alanından hesaplanacak)",
+                SupplierCategory = "Yapı Kimyasalları & Şantiye Malzemeleri",
+                LaborTitle = "Kürleme & Kalıp Söküm Ekibi",
+                ProfessionName = "Kürleme & Kalıp Söküm Ustası",
+                CrewComposition = "1 Formen + 2 Kürleme İşçisi + 3 Kalıp Söküm Ustası",
+                CrewSize = 6,
+                DurationDays = 7,
+                EquipmentNeeded = "Basınçlı Su Hortumları, Püskürtme Pompası, Manivela Levye",
+                Predecessors = "Beton dökümünün tamamlanması ve yüzey prizinin başlaması",
+                CriticalDependency = "Rötre çatlaklarını önlemek için ilk 7 gün boyunca beton yüzeyi kesinlikle kuru bırakılamaz!",
+                DnaSource = "Adım 0: Statik Taşıyıcılar (Beton Bakımı)",
+                PlannedStartDate = k07Start,
+                PlannedEndDate = k07End,
+                SubSteps = CreateSubSteps(
+                    "T-1 Geotekstil keçe ve kür kimyasalı hazırlığı, su hattı kontrolü",
+                    "Yüzey kür kimyasalı püskürtme, keçe serme, günde 3 defa ıslatma ve 48 saat sonra dış kalıp sökümü",
+                    "Beton yüzeyinde çatlak kontrolü ve sıcaklık gradyan takibi",
+                    "Gece sulaması aydınlatması ve kaygan zemin uyarı levhaları"
+                )
+            });
+
+            // K-08: Bodrum / Kat Kolon & Perde Kalıbı (Endüstriyel Çelik / Plywood) (Adım 0)
             var k08Start = k07End;
             var k08End = k08Start.AddDays(8);
             list.Add(new WorkflowStepItemDto
             {
                 StepCode = "K-08",
                 Order = stepOrderSeq++,
-                PhaseName = "Temel Kalıp, Donatı Çeliği, Paspayı & Radye Temel Betonu",
-                StageCategory = "Temel & Kaba İnşaat",
+                PhaseName = "Bodrum / Kat Kolon & Perde Kalıbı (Endüstriyel Çelik / Plywood)",
+                StageCategory = "Düşey Taşıyıcı Kalıp",
                 PartIndex = p1Idx,
                 PartName = p1Name,
                 PartBadgeClass = p1Badge,
-                TriggerRule = "Bohçalama koruma şapı kuruyunca başlar",
+                TriggerRule = "Temel priz alıp filizler doğrulanınca başlar",
                 TargetStructureName = targetStructureName,
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "C30/37 Taşıyıcı Hazır Beton ve B420C Nervürlü Donatı Çeliği",
-                MaterialDescription = "Radye temel ahşap/çelik dış kalıbı, çift sıra nervürlü donatı, sehpalar, paspayları ve monolitik beton dökümü.",
+                MaterialTitle = "Endüstriyel Çelik Çerçeveli Kolon/Perde Kalıp Panoları, Çirozlar ve Tie-Rod Milleri",
+                MaterialDescription = "Kolon ve perde düşey taşıyıcıların endüstriyel kalıplarının kurulması, tie-rod milleri, çiroz kilitlemeleri ve şakül payandaları.",
                 MaterialQuantity = 0,
-                MaterialUnit = "m³",
-                MaterialFormula = "DXF Bekliyor (Statik radye temel aplikasyon çiziminden hesaplanacak)",
-                SupplierCategory = "Demir Çelik Bayisi & Hazır Beton Santrali",
-                LaborTitle = "Demirci, Kalıpçı & Temel Beton Ekibi",
-                ProfessionName = "Demirci, Kalıpçı & Betoncu",
-                CrewComposition = "1 Şef + 6 Demirci + 4 Kalıpçı + 4 Betoncu + 2 Pompa Operatörü",
-                CrewSize = 17,
+                MaterialUnit = "m²",
+                MaterialFormula = "DXF Bekliyor (Kat yüksekliği ve kolon/perde çevrelerinden hesaplanacak)",
+                SupplierCategory = "Endüstriyel Kalıp & İskele Firması",
+                LaborTitle = "Düşey Kalıpçı Ekibi",
+                ProfessionName = "Kalıp Ustası",
+                CrewComposition = "1 Kalıp Formeni + 6 Kalıp Ustası + 3 Yardımcı",
+                CrewSize = 10,
                 DurationDays = 8,
-                EquipmentNeeded = "2 Mobil Pompa, 4 Vibratör, Slump Konisi, Numune Küp Kalıpları",
-                Predecessors = "Bohçalama koruma şapı, topraklama şeridi ve paspayı takozlarının serimi",
-                CriticalDependency = "Yapı Denetim demir vizesi imzalanmadan ve santral sevkiyatı planlanmadan beton dökülemez!",
-                DnaSource = "Adım 0: Statik Taşıyıcılar (Radye Temel)",
+                EquipmentNeeded = "Kule Vinç / Mobil Vinç, Lazer Şakül, Kalıp Yağı Pompası",
+                Predecessors = "Temel kolon/perde filiz akslarının lazerle kot ve kaçıklık kontrolü",
+                CriticalDependency = "Kalıp içi temizlik cepleri açılmalı, döküm öncesi dipteki talaş ve tel artıkları basınçlı suyla yıkanmalıdır!",
+                DnaSource = "Adım 0: Statik Taşıyıcılar (Düşey Kalıp)",
                 PlannedStartDate = k08Start,
                 PlannedEndDate = k08End,
                 SubSteps = CreateSubSteps(
-                    "T-3 Santral döküm rezervasyonu, demir çap ve boy donatı metraj kontrolü",
-                    "Temel dış kalıbı, donatı bağlama, paspayı takozu ve pompa ile radye dökümü",
-                    "İrsaliye kontrolü, slump testi, numune küp alımı ve 7 gün ıslak kür sulaması",
-                    "Pompa bom elektrik hattı mesafesi, vibratör kablo yalıtımları ve zorunlu KKD"
+                    "T-2 Kalıp panoları temizliği, kalıp yağı sürülmesi ve kule vinç halat kontrolleri",
+                    "Tek yüz kalıp kapatma, donatı sonrası çift yüz kapatma, tie-rod ve payanda ayarı",
+                    "Lazer şakül ile kolon ve perde düşeylik kontrolü (maksimum 3 mm tolerans)",
+                    "Kalıp iskelesi emniyet korkulukları ve kule vinç yük kaldırma güvenlik sahası"
                 )
             });
 
-            // K-09: Kat Karkas İskelet: Kolon/Perde Kalıp & Donatı, Kat Tabliyesi (Adım 0)
-            var k09Start = k08End;
-            var k09End = k09Start.AddDays(14);
+            // K-09: Bodrum / Kat Kolon & Perde B420C Donatı Çeliği (Adım 0)
+            var k09Start = k08Start.AddDays(2);
+            var k09End = k09Start.AddDays(7);
             list.Add(new WorkflowStepItemDto
             {
                 StepCode = "K-09",
                 Order = stepOrderSeq++,
-                PhaseName = $"Kat Karkas İskelet: Kolon/Perde Kalıp & Donatı, Kat Tabliyesi ({maxFloors} Kat)",
-                StageCategory = "Taşıyıcı İskelet",
+                PhaseName = "Bodrum / Kat Kolon & Perde B420C Donatı Çeliği",
+                StageCategory = "Düşey Taşıyıcı Donatı",
                 PartIndex = p1Idx,
                 PartName = p1Name,
                 PartBadgeClass = p1Badge,
-                TriggerRule = "Radye temel betonu priz alınca kat kat kovalama ile başlar",
+                TriggerRule = "Kolon/perde tek yüz kalıbı dikilince başlar",
                 TargetStructureName = targetStructureName,
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Kat Taşıyıcı C30/37 Hazır Beton, B420C Donatı Çeliği ve Endüstriyel Kalıp",
-                MaterialDescription = "Kolon, perde, kiriş ve kat döşeme kalıp, donatı ve beton döküm döngüsü.",
+                MaterialTitle = "B420C Boyuna Düşey Donatılar, Etriyeler, Çirozlar ve Plastik Paspayı Halka Takozları",
+                MaterialDescription = "Düşey kolon/perde ana donatılarının filizlerle bindirilmesi, deprem etriye sıklaştırmaları, çirozlar ve paspayı halkaları.",
                 MaterialQuantity = 0,
-                MaterialUnit = "m³",
-                MaterialFormula = "DXF Bekliyor (Statik kat kalıp ve donatı planlarından hesaplanacak)",
-                SupplierCategory = "Hazır Beton Santrali & Kalıp/İskele Tedarikçisi",
-                LaborTitle = "Kalıpçı, Demirci & Betonarme Ekibi",
-                ProfessionName = "Kalıpçı, Demirci & Betonarme Ustası",
-                CrewComposition = "1 Kalıp Formeni + 6 Kalıpçı + 6 Demirci + 3 Betoncu",
-                CrewSize = 16,
-                DurationDays = 14,
-                EquipmentNeeded = "Kule Vinç, Kolon/Perde Çelik Kalıpları, Dalgıç Vibratörler",
-                Predecessors = "Temel dökümü ve kolon/perde filizlerinin kontrolü",
-                CriticalDependency = "Kat betonu dökülmeden önce kat kenar güvenlik korkulukları ve asansör şaft kapakları takılmalıdır!",
-                DnaSource = "Adım 0: Statik Taşıyıcılar (Kat Karkas)",
+                MaterialUnit = "Ton",
+                MaterialFormula = "DXF Bekliyor (Statik kolon aplikasyon çizimlerinden hesaplanacak)",
+                SupplierCategory = "Demir Çelik Bayisi",
+                LaborTitle = "Düşey Donatı Demirci Ekibi",
+                ProfessionName = "Demirci Ustası",
+                CrewComposition = "1 Demir Formeni + 6 Demirci Ustası + 2 Bağlama İşçisi",
+                CrewSize = 9,
+                DurationDays = 7,
+                EquipmentNeeded = "Demir Bükme/Kesme Tezgahı, Paspayı Halkaları, Bağ Teli",
+                Predecessors = "Kalıp tek yüzünün dikilmesi ve paspaylarının yerleştirilmesi",
+                CriticalDependency = "Kolon alt ve üst etriye sıklaştırma bölgeleri statik projeye göre sayılmadan kalıp kapatılamaz!",
+                DnaSource = "Adım 0: Statik Taşıyıcılar (Düşey Donatı)",
                 PlannedStartDate = k09Start,
                 PlannedEndDate = k09End,
                 SubSteps = CreateSubSteps(
-                    "T-3 Kat kalıp planı, donatı filizleri ve kat santral döküm sırası teyidi",
-                    "Kolon/perde kalıp montajı, demir bağlama, tabliye iskelesi ve kat betonu dökümü",
-                    "Döşeme mastar kotları, şakül kontrolü, taze beton slump & küp numunesi ve kür sulaması",
-                    "Kat kenarları geçici güvenlik korkulukları, merdiven boşluğu kapakları ve paraşüt tipi emniyet kemeri"
+                    "T-2 Donatı çap/boy kontrolü ve etriye aralıklarının işaretlenmesi",
+                    "Düşey boy donatılarının bindirilmesi, etriye sıklaştırmaları ve çiroz bağlama",
+                    "Etriye kanca 135 derece kıvrım kontrolü, paspayı halkalarının denetimi",
+                    "Düşey donatı üzerinde çalışma emniyet kemeri ve tırmanma merdivenleri"
                 )
             });
 
-            // K-10: Çatı Taşıyıcı İskeleti, Su Yalıtımı, Parapet Harpuştası & Yağmur İnişleri (Adım 5)
-            var k10Start = k09End;
-            var k10End = k10Start.AddDays(8);
+            // K-10: Kat Döşeme & Kiriş Kalıbı ve Donatısı (Tabliye Hazırlığı) (Adım 0)
+            var k10Start = k08End;
+            var k10End = k10Start.AddDays(9);
             list.Add(new WorkflowStepItemDto
             {
                 StepCode = "K-10",
+                Order = stepOrderSeq++,
+                PhaseName = "Kat Döşeme & Kiriş Kalıbı ve Donatısı (Tabliye Hazırlığı)",
+                StageCategory = "Kat Tabliyesi Kalıp & Donatı",
+                PartIndex = p1Idx,
+                PartName = p1Name,
+                PartBadgeClass = p1Badge,
+                TriggerRule = "Düşey kolon/perdeler dikilince tabliye iskelesi kurulur",
+                TargetStructureName = targetStructureName,
+                TargetBuildingId = targetBuildingId,
+                MaterialTitle = "Teleskopik Dikmeler, H20 Ahşap Kirişler, Plywood Tabliye Panoları ve B420C Döşeme Hasır Donatısı",
+                MaterialDescription = "Masa tipi veya flanşlı döşeme iskelesi, H20 kirişler, plywood döşeme kalıbı, kiriş donatıları, tabliye hasırı ve sehpa montajı.",
+                MaterialQuantity = 0,
+                MaterialUnit = "m²",
+                MaterialFormula = "DXF Bekliyor (Kat brüt döşeme alanından hesaplanacak)",
+                SupplierCategory = "Kalıp/İskele Tedarikçisi & Demir Çelik Bayisi",
+                LaborTitle = "Tabliye Kalıp & Donatı Karma Ekibi",
+                ProfessionName = "Kalıpçı & Demirci Ustası",
+                CrewComposition = "1 Şef + 6 Kalıpçı + 6 Demirci + 4 Yardımcı",
+                CrewSize = 17,
+                DurationDays = 9,
+                EquipmentNeeded = "Kule Vinç, Lazer Kot Terazisi, İskele Çekiçleri, Demir Bağ Teli",
+                Predecessors = "Kolon/perde kalıplarının kapatılması ve düşey donatı vizesi",
+                CriticalDependency = "Döşeme elektrik buat/borulama hatları çekilmeden ve Yapı Denetim tabliye demir vizesi vermeden beton dökülemez!",
+                DnaSource = "Adım 0: Statik Taşıyıcılar (Kat Tabliyesi)",
+                PlannedStartDate = k10Start,
+                PlannedEndDate = k10End,
+                SubSteps = CreateSubSteps(
+                    "T-3 İskele dikme yük hesabı, plywood serme ve kiriş/döşeme donatılarının sevki",
+                    "Tabliye kalıp montajı, kiriş demirleri, döşeme donatısı ve elektrik buat borulaması",
+                    "Optik nivo ile döşeme ters sehim kontrolü ve Yapı Denetim Tabliye Vizesi",
+                    "Döşeme kenar güvenlik ağları, düşme durdurucu yaşam hatları ve tam koruma"
+                )
+            });
+
+            // K-11: Kat Karkas Taşıyıcı Beton Dökümü (Kolon, Perde & Tabliye C30/37) (Adım 0)
+            var k11Start = k10End;
+            var k11End = k11Start.AddDays(2);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "K-11",
+                Order = stepOrderSeq++,
+                PhaseName = $"Kat Karkas Taşıyıcı Beton Dökümü (Kolon, Perde & Tabliye C30/37) ({maxFloors} Kat Döngüsü)",
+                StageCategory = "Kat Karkas Beton Dökümü",
+                PartIndex = p1Idx,
+                PartName = p1Name,
+                PartBadgeClass = p1Badge,
+                TriggerRule = "Tabliye demir vizesi onaylanınca dökülür",
+                TargetStructureName = targetStructureName,
+                TargetBuildingId = targetBuildingId,
+                MaterialTitle = "C30/37 Taşıyıcı Hazır Beton (Kat Karkas)",
+                MaterialDescription = "Kolon, perde, kiriş ve döşemenin monolitik C30/37 hazır betonla dökülmesi, vibrasyonu ve helikopterli/mastarlı perdahı.",
+                MaterialQuantity = 0,
+                MaterialUnit = "m³",
+                MaterialFormula = "DXF Bekliyor (Kat brüt alan ve kolon kesit hacminden hesaplanacak)",
+                SupplierCategory = "Hazır Beton Santrali",
+                LaborTitle = "Karkas Beton Döküm Ekibi",
+                ProfessionName = "Betoncu & Pompa Ekibi",
+                CrewComposition = "1 Saha Şefi + 2 Pompa Operatörü + 4 Vibratörcü + 3 Mastarcı + 2 Kür İşçisi",
+                CrewSize = 12,
+                DurationDays = 2,
+                EquipmentNeeded = "Mobil / Sabit Dağıtıcı Beton Pompası, 4 Dalgıç Vibratör, Helikopter Perdah Makinesi",
+                Predecessors = "Tabliye vizesi, elektrik tesisat kontrolü ve kalıp altı dikme emniyeti",
+                CriticalDependency = "Döküm esnasında kalıp patlamasına karşı altta sürekli kalıp gözetmeni hazır bulundurulmalıdır!",
+                DnaSource = "Adım 0: Statik Taşıyıcılar (C30/37 Kat Karkas)",
+                PlannedStartDate = k11Start,
+                PlannedEndDate = k11End,
+                SubSteps = CreateSubSteps(
+                    "T-2 Santral transmikser sevkiyat akışı, pompa bom konumu ve kule vinç desteği",
+                    "Önce kolon/perdelerin kademeli dökümü ve vibrasyonu, ardından kiriş ve döşeme dökümü",
+                    "Lazer nivo mastar kotu, transmikser slump deneyi ve kat küp numunesi alımı",
+                    "Kalıp altı dikme gözetmeni, pompa borusu emniyet kelepçeleri ve gece aydınlatması"
+                )
+            });
+
+            // K-12: Çatı Taşıyıcı İskeleti, Su Yalıtımı, Parapet Harpuştası & Yağmur İnişleri (Adım 5)
+            var k12Start = k11End.AddDays(7);
+            var k12End = k12Start.AddDays(10);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "K-12",
                 Order = stepOrderSeq++,
                 PhaseName = "Çatı Taşıyıcı İskeleti, Su Yalıtımı, Parapet Harpuştası & Yağmur İnişleri",
                 StageCategory = "Çatı & Kapanış",
@@ -2380,23 +2473,23 @@ namespace GMK360.Web.Controllers
                 MaterialQuantity = 0,
                 MaterialUnit = "mt",
                 MaterialFormula = "DXF Bekliyor (Çatı planı ve parapet çevre uzunluğundan hesaplanacak)",
-                SupplierCategory = "Keresteci & Çatı İzolasyon Bayisi",
-                LaborTitle = "Çatı ve İzolasyon Ekibi",
-                ProfessionName = "Çatı & İzolasyon Ustası",
-                CrewComposition = "1 Çatı Formeni + 4 Çatı Ustası + 2 İzolasyoncu",
-                CrewSize = 7,
-                DurationDays = 8,
-                EquipmentNeeded = "Mobil Vinç / Halatlı Çatı Vinci, Kaynak Takımları, Şaloma",
-                Predecessors = "Son kat tabliye betonunun priz alması ve parapet kalıplarının sökümü",
-                CriticalDependency = "Çatı su yalıtımı ve dereleri tamamlanmadan alt katlara kaba ince işlere geçilemez!",
-                DnaSource = "Adım 5: Çatı & Su İzolasyonu",
-                PlannedStartDate = k10Start,
-                PlannedEndDate = k10End,
+                SupplierCategory = "Çatı Kaplama & Yalıtım Tedarikçisi",
+                LaborTitle = "Çatı Konstrüksiyon ve İzolasyon Ekibi",
+                ProfessionName = "Çatı Ustası",
+                CrewComposition = "1 Çatı Formeni + 4 Çatı Ustası + 2 Yalıtım Ustası + 2 Yardımcı",
+                CrewSize = 9,
+                DurationDays = 10,
+                EquipmentNeeded = "Mobil Vinç, Şaloma Takımları, Profil Kesme, Güvenlik Yaşam Hattı",
+                Predecessors = "Son kat tavan betonu dökümü ve parapet duvarlarının örülmesi",
+                CriticalDependency = "Çatı su yalıtımı ve dere inişleri tamamlanmadan bina içine su gireceğinden alt kat ince imalatlarına başlanamaz!",
+                DnaSource = "Adım 5: Çatı & Parapet",
+                PlannedStartDate = k12Start,
+                PlannedEndDate = k12End,
                 SubSteps = CreateSubSteps(
-                    "T-3 Çatı karkas malzemeleri, izolasyon membranları ve vinç planı",
-                    "Taşıyıcı iskelet montajı, OSB/tahta kaplama, su/ısı yalıtımı ve parapet harpuştaları",
-                    "Dere eğimleri, su tahliye testi ve harpuşta ek yeri sızdırmazlık kontrolü",
-                    "Çatı hattı yaşam hattı (life line), tam korumalı emniyet kemeri ve saçak güvenlik filesi"
+                    "T-3 Çatı konstrüksiyon statik projesi, kereste/çelik profil ve yalıtım malzemeleri sevki",
+                    "Taşıyıcı dikmelerin montajı, OSB kaplama, su yalıtım membranı ve parapet harpuştaları montajı",
+                    "Dere inişleri su sızdırmazlık testi ve rüzgar fırtına emniyet bağlantıları",
+                    "Çatı kenarı parapet güvenlik ağları, çelik yaşam hattı ve paraşüt tipi emniyet kemeri"
                 )
             });
 
@@ -2405,7 +2498,7 @@ namespace GMK360.Web.Controllers
             // =========================================================================
 
             // S-01: Dış ve İç Bölme Duvar Örümü & Hatıllar / Lentolar (Adım 3)
-            var s01Start = k08End.AddDays(7); // Kaba 2 kat önden gidince başlar
+            var s01Start = k11Start.AddDays(7); // Kaba 2 kat önden gidince alttan başlar
             var s01End = s01Start.AddDays(10);
             list.Add(new WorkflowStepItemDto
             {
@@ -3012,43 +3105,678 @@ namespace GMK360.Web.Controllers
                 )
             });
 
-            // M-06: Dış Çevre Düzenleme, Peyzaj, Bahçe Duvarı & Dış Aydınlatma (Adım 9)
-            var m06Start = s06End.AddDays(2);
-            var m06End = m06Start.AddDays(10);
+            // M-06: Daire Temizlikleri, İnce Kabul, Tesisat Testleri ve İskan / Teslim Hazırlığı
+            var m06Start = m05End.AddDays(2);
+            var m06End = m06Start.AddDays(7);
             list.Add(new WorkflowStepItemDto
             {
                 StepCode = "M-06",
                 Order = stepOrderSeq++,
-                PhaseName = "Dış Çevre Düzenleme, Peyzaj, Bahçe Duvarı & Dış Aydınlatma",
-                StageCategory = "Peyzaj & Çevre Düzenleme",
+                PhaseName = "Daire Temizlikleri, İnce Kabul, Tesisat Testleri ve İskan / Teslim Hazırlığı",
+                StageCategory = "Kabul & Teslim",
                 PartIndex = p4Idx,
                 PartName = p4Name,
                 PartBadgeClass = p4Badge,
-                TriggerRule = p4Trigger,
+                TriggerRule = "Tüm daire içi montajlar tamamlanınca başlar",
                 TargetStructureName = targetStructureName,
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Bahçe Duvarı Taşları, Kilit Parke Taşı, Bitkisel Toprak ve LED Dış Aydınlatma Projektörleri",
-                MaterialDescription = "Site bahçe çevre istinat duvarları, açık otopark kilit taşları, otomatik bahçe sulama, rulo çim ve çevre projektörleri.",
+                MaterialTitle = "İnşaat Sonrası Temizlik Kimyasalları, Koruma Kartonları ve Kabul Tutanakları",
+                MaterialDescription = "Cam, zemin ve dolapların endüstriyel temizliği, boya rötuşları, tesisat testleri ve bağımsız bölüm teslim tutanakları.",
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Vaziyet planı peyzaj ve sert zemin metrajlarından hesaplanacak)",
-                SupplierCategory = "Peyzaj Fidanlığı & Kilit Taşı Üreticisi",
-                LaborTitle = "Peyzaj ve Dış Saha Düzenleme Ekibi",
-                ProfessionName = "Peyzaj & Taş Ustası",
-                CrewComposition = "1 Peyzaj Mimarı / Formen + 4 Taş Ustası + 4 Bahçıvan/İşçi",
+                MaterialUnit = "Daire",
+                MaterialFormula = "DXF Bekliyor (Toplam bağımsız bölüm sayısından netleşecek)",
+                SupplierCategory = "Endüstriyel Temizlik & Şantiye Sarf Malzemeleri",
+                LaborTitle = "İnce Temizlik ve Kalite Kabul Ekibi",
+                ProfessionName = "Temizlik & Kalite Kontrol Ustası",
+                CrewComposition = "1 Kalite Kontrol Şefi + 6 Temizlik Personeli + 2 Rötuş Ustası",
                 CrewSize = 9,
-                DurationDays = 10,
-                EquipmentNeeded = "Mini Beko Loder, Kompaktör, Taş Kırma Giyotini, Çim Havalandırma",
-                Predecessors = "Ağır kule vinç sökümü, şantiye konteynerlerinin kaldırılması ve dış saha temizliği",
-                CriticalDependency = "Ağır şantiye makineleri sahadan çıkmadan peyzaj ve dış kaplamalar yapılamaz!",
-                DnaSource = "Adım 9: Peyzaj & Dış Çevre",
+                DurationDays = 7,
+                EquipmentNeeded = "Endüstriyel Vakum Makineleri, Buharlı Temizleyiciler, Lazer Kontrol Cihazları",
+                Predecessors = "Tüm ince işlerin, vitrifiye, mobilya ve kapı montajlarının bitmesi",
+                CriticalDependency = "Eksik ve kusur listesi (punch list) giderilmeden daire anahtarları teslim edilemez!",
+                DnaSource = "Yapı Yönetimi: Teslim ve İskan",
                 PlannedStartDate = m06Start,
                 PlannedEndDate = m06End,
                 SubSteps = CreateSubSteps(
-                    "T-3 Çevre düzenleme kot planı, kilit taşı ve bitkisel toprak sevki",
-                    "Bahçe duvarları, otopark/yürüyüş yolu parke taşları, otomatik sulama ve bitki dikimi",
-                    "Yağmur suyu çevre drenaj eğimleri ve çevre aydınlatma linye testi",
-                    "Saha çevre aydınlatması ve hendek emniyet şeritleri"
+                    "T-2 Daire bazlı punch list (kusur tespit tutanağı) oluşturulması",
+                    "Endüstriyel ince temizlik, harç/boya lekelerinin çıkarılması ve zemin koruması",
+                    "Elektrik sortileri, bataryalar ve pencere kanatlarının tek tek fonksiyon testi",
+                    "Islak zeminlerde kayma önlemleri ve temizlik kimyasalları güvenlik bilgi formu (MSDS)"
+                )
+            });
+
+            return list;
+        }
+
+        private static List<WorkflowSubStepDto> CreateWorkflowSubSteps(string prePrep, string exec, string quality, string isg)
+        {
+            return new List<WorkflowSubStepDto>
+            {
+                new WorkflowSubStepDto { Title = prePrep, Category = "PrePreparation", IsCompleted = false },
+                new WorkflowSubStepDto { Title = exec, Category = "Execution", IsCompleted = false },
+                new WorkflowSubStepDto { Title = quality, Category = "QualityAndCuring", IsCompleted = false },
+                new WorkflowSubStepDto { Title = isg, Category = "SafetyIsg", IsCompleted = false }
+            };
+        }
+
+        private List<WorkflowStepItemDto> GenerateSiteSetupSteps(ConstructionProject project, ProjectDnaProfile profile)
+        {
+            var list = new List<WorkflowStepItemDto>();
+            if (project == null) return list;
+
+            var details = profile?.Details?.ToList() ?? new List<ProjectDnaDetail>();
+
+            var ihataMatDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Sac") || d.SelectedItem.Contains("Tel Örgü") || d.SelectedItem.Contains("Pano") || d.SelectedItem.Contains("OSB"));
+            string ihataMalzemesi = ihataMatDetail != null ? ihataMatDetail.SelectedItem : "Trapez Sac / OSB Pano Çevre İhatası";
+
+            var kapiDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Kapı"));
+            string kapiTipi = kapiDetail != null ? kapiDetail.SelectedItem : "Sürgülü Raylı Sac Kapı (6.00m)";
+
+            var molozDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Yıkım") || d.SelectedItem.Contains("Moloz") || d.SelectedItem.Contains("Enkaz") || d.SelectedItem.Contains("Boş Arsa"));
+            bool isCleanPlot = molozDetail != null && (molozDetail.SelectedItem.Contains("Boş") || molozDetail.SelectedItem.Contains("Gerekmez") || molozDetail.SelectedItem.Contains("Yok"));
+            bool molozVar = molozDetail != null && !isCleanPlot && (molozDetail.SelectedItem.Contains("Yıkılacak") || molozDetail.SelectedItem.Contains("Moloz ve Çöp") || molozDetail.SelectedItem.Contains("Enkaz"));
+            bool hasDemolition = !isCleanPlot && (molozVar || (project.EskiToplamMetrekare.HasValue && project.EskiToplamMetrekare.Value > 0) || (project.EskiKatSayisi.HasValue && project.EskiKatSayisi.Value > 0));
+
+            var elektrikDetail = details.FirstOrDefault(d => (d.Phase.Contains("1") || d.Phase.Contains("Faz 1") || d.Phase.Contains("Adım 1")) && (d.SelectedItem.Contains("Elektrik") || d.SelectedItem.Contains("Abonelik") || d.SelectedItem.Contains("Trafo") || d.SelectedItem.Contains("Jeneratör")));
+            string elektrikTipi = elektrikDetail != null ? elektrikDetail.SelectedItem : "Şantiye Şebeke Aboneliği ve TMŞ Dağıtım Panosu";
+
+            var suDetail = details.FirstOrDefault(d => (d.Phase.Contains("1") || d.Phase.Contains("Faz 1") || d.Phase.Contains("Adım 1")) && (d.SelectedItem.Contains("Su") || d.SelectedItem.Contains("Depo") || d.SelectedItem.Contains("Hidrofor") || d.SelectedItem.Contains("Kuyu")));
+            string suTipi = suDetail != null ? suDetail.SelectedItem : "15 Tonluk Su Deposu ve 3 HP Otomatik Hidrofor";
+
+            DateTime curDate = DateTime.Today;
+
+            // S-01: Harita, Aplikasyon & Sabit Röper Kotu
+            var s01Start = curDate;
+            var s01End = s01Start.AddDays(2);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "S-01",
+                Order = 1,
+                PhaseName = "Harita, Aplikasyon & Sabit Röper Kotu",
+                StageCategory = "Ortak Saha Kurulumu",
+                PartIndex = 0,
+                PartName = "Şantiye Ortak Saha Kurulumu (Tüm Arsa)",
+                PartBadgeClass = "dark",
+                TriggerRule = "Şantiye işbaşında 1 defa yapılır, bloklara tekrarlamaz",
+                TargetStructureName = "Proje Geneli (Ortak Saha)",
+                MaterialTitle = "Ahşap Kazıklar, Kireç Tozu, Çelik Röper Çubukları ve Nivo Kot İşaretleri",
+                MaterialDescription = "Arsa köşe poligonu, köşe kotları, sabit röper noktası ve tüm blokların oturum sınırlarının kireçle işaretlenmesi.",
+                MaterialQuantity = 0,
+                MaterialUnit = "Takım",
+                MaterialFormula = "DXF Bekliyor (Mimari vaziyet ve köşe koordinatlarından belirlenecek)",
+                SupplierCategory = "Harita Mühendislik Ofisi / Topoğraf Ekipmanı",
+                LaborTitle = "Harita Mühendisi & Topoğraf Ekibi",
+                ProfessionName = "Harita Mühendisi / Topoğraf",
+                CrewComposition = "1 Harita Müh. + 1 Topoğraf + 2 Yardımcı",
+                CrewSize = 4,
+                DurationDays = 2,
+                EquipmentNeeded = "Total Station, Nivo, Lazer Metre, GPS Cihazı",
+                Predecessors = "İmar çapı ve mimari vaziyet planı kabulü",
+                CriticalDependency = "Sabit röper kotu alınmadan ve köşe kazıkları çakılmadan çevre ihata yapılamaz, şantiye başlayamaz!",
+                DnaSource = "Adım 1: Saha Analizi & Aplikasyon",
+                PlannedStartDate = s01Start,
+                PlannedEndDate = s01End,
+                SubSteps = CreateWorkflowSubSteps(
+                    "T-2 Belediye imar çapı, aplikasyon krokisi ve köşe koordinat listesi temini",
+                    "Total Station ve GPS ile parsel köşe kazıklarının çakılması ve sabit röper noktasının betona çakılması",
+                    "İmar çekme mesafelerinin ve sabit röper kotunun doğrulanması",
+                    "Saha çevre güvenlik hattı ve komşu parsel sınır reflektörlü şeritlerinin çekilmesi"
+                )
+            });
+
+            // S-02: Parsel Çevre İhatası & Raylı Araç Giriş Kapısı (OSB Pano / Tel Çit)
+            var s02Start = s01End;
+            var s02End = s02Start.AddDays(3);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "S-02",
+                Order = 2,
+                PhaseName = "Parsel Çevre İhatası & Raylı Araç Giriş Kapısı (OSB Pano / Tel Çit)",
+                StageCategory = "Ortak Saha Kurulumu",
+                PartIndex = 0,
+                PartName = "Şantiye Ortak Saha Kurulumu (Tüm Arsa)",
+                PartBadgeClass = "dark",
+                TriggerRule = "Aplikasyon sınırları çakılınca kurulur",
+                TargetStructureName = "Proje Geneli (Ortak Saha)",
+                MaterialTitle = $"{ihataMalzemesi} ve {kapiTipi}",
+                MaterialDescription = "Şantiye parsel çevresinin kapatılması, dikme direkleri, rüzgar payandaları ve ana araç giriş kapısı.",
+                MaterialQuantity = 0,
+                MaterialUnit = "mt",
+                MaterialFormula = "DXF Bekliyor (Parsel çevre sınır ölçüsünden hesaplanacak)",
+                SupplierCategory = "Demir Çelik / Çit & Sac Bayisi",
+                LaborTitle = "Demir Doğrama ve Çit Montaj Ekibi",
+                ProfessionName = "Demir / Çit Ustası",
+                CrewComposition = "1 Demir Doğrama Formeni + 2 Kaynakçı + 2 Montaj İşçisi",
+                CrewSize = 5,
+                DurationDays = 3,
+                EquipmentNeeded = "Kaynak Makinesi, Profil Kesme, Matkap Takımları",
+                Predecessors = "Harita aplikasyon sınır tespiti",
+                CriticalDependency = "İşyeri ve belediye denetimi gereği çevre ihatası ve kapı olmadan şantiyeye makine sokulamaz!",
+                DnaSource = "Adım 1: Şantiye Çevre İhatası",
+                PlannedStartDate = s02Start,
+                PlannedEndDate = s02End,
+                SubSteps = CreateWorkflowSubSteps(
+                    "T-2 İhata panoları, ankraj profilleri ve raylı kapı mekanizmasının şantiyeye sevki",
+                    "Direk ankrajlarının sabitlenmesi, çevre panolarının montajı ve raylı giriş kapısı montajı",
+                    "Rüzgar fırtına yüküne karşı payanda rijitliği ve kilit sistemi kontrolü",
+                    "Şantiye tanıtım tabelası, 'Yetkisiz Girilmez' levhaları ve acil toplanma noktası tabelası"
+                )
+            });
+
+            // S-03: Saha Yüzey Temizliği / Varsa Eski Yapı Yıkımı & Moloz Bertarafı
+            var s03Start = s02End;
+            var s03End = s03Start.AddDays(hasDemolition ? 5 : 2);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "S-03",
+                Order = 3,
+                PhaseName = hasDemolition ? "Eski Yapı Yıkımı, Enkaz Sökümü & Moloz Bertarafı" : "Saha Yüzey Temizliği, Moloz & Çöp Temizliği",
+                StageCategory = "Ortak Saha Kurulumu",
+                PartIndex = 0,
+                PartName = "Şantiye Ortak Saha Kurulumu (Tüm Arsa)",
+                PartBadgeClass = "dark",
+                TriggerRule = "Çevre ihata tamamlanınca temizlik/yıkım yapılır",
+                TargetStructureName = "Proje Geneli (Ortak Saha)",
+                MaterialTitle = hasDemolition ? "Yıkım Kırıcı Uçları, Toz Bastırma Tesisatı ve Moloz Nakliye Kamyonları" : "Yüzey Temizlik Kepçesi ve Moloz Taşıma Kamyonları",
+                MaterialDescription = hasDemolition ? "Mevcut yapının kontrollü yıkımı, hurda ayrıştırma ve molozun döküm sahasına nakliyesi." : "Boş arsa yüzeyindeki bitki, çöp, yüzey atıkları ve molozların temizlenmesi.",
+                MaterialQuantity = 0,
+                MaterialUnit = "m²",
+                MaterialFormula = "DXF Bekliyor (Arsa yüzey alanından hesaplanacak)",
+                SupplierCategory = "Hafriyat & Yıkım Firması",
+                LaborTitle = "Saha Temizlik & Yıkım Ekibi",
+                ProfessionName = "Yıkım / Hafriyat Ekibi",
+                CrewComposition = "1 Formen + 1 Ekskavatör Op. + 1 Loder Op. + 4 Kamyon Şoförü",
+                CrewSize = 7,
+                DurationDays = hasDemolition ? 5 : 2,
+                EquipmentNeeded = "Paletli Ekskavatör, Loder, 4 Kamyon, Toz Bastırma Su Arazözü",
+                Predecessors = "Çevre ihatası ve kapı güvenliğinin sağlanması",
+                CriticalDependency = "Yıkım varsa elektrik/su/doğalgaz kesme tutanakları olmadan işe başlanamaz!",
+                DnaSource = "Adım 1: Yıkım & Temizlik",
+                PlannedStartDate = s03Start,
+                PlannedEndDate = s03End,
+                SubSteps = CreateWorkflowSubSteps(
+                    "T-2 Belediye yıkım/temizlik izinleri ve nakliye fişleri kontrolü",
+                    "Yüzey temizliği / kontrollü yıkım ve malzemenin kamyonlara yüklenmesi",
+                    "Arsa kot seviyesinin temizlenmesi ve komşu parsel sınır kontrolü",
+                    "Toz bastırma sulaması ve çevre güvenlik şeridi denetimi"
+                )
+            });
+
+            // S-04: Şantiye Geçici Elektrik Aboneliği & TMŞ Dağıtım Panosu
+            var s04Start = s03End;
+            var s04End = s04Start.AddDays(3);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "S-04",
+                Order = 4,
+                PhaseName = "Şantiye Geçici Elektrik Aboneliği & TMŞ Dağıtım Panosu",
+                StageCategory = "Ortak Saha Kurulumu",
+                PartIndex = 0,
+                PartName = "Şantiye Ortak Saha Kurulumu (Tüm Arsa)",
+                PartBadgeClass = "dark",
+                TriggerRule = "Saha temizlenince altyapı panosu kurulur",
+                TargetStructureName = "Proje Geneli (Ortak Saha)",
+                MaterialTitle = $"{elektrikTipi}, Ana TMŞ Dağıtım Panosu, Kaçak Akım Röleleri ve Bakır Topraklama Çubukları",
+                MaterialDescription = "Elektrik dağıtım kurumundan geçici inşaat elektriği bağlantısı, kilitli sayaç panosu ve saha dağıtım kutuları.",
+                MaterialQuantity = 1,
+                MaterialUnit = "Takım",
+                MaterialFormula = "1 Adet Şantiye Ana Elektrik Altyapı Paketi",
+                SupplierCategory = "Elektrik Tesisat & Pano İmalatçısı",
+                LaborTitle = "Şantiye Elektrik Ekibi",
+                ProfessionName = "Elektrik Mühendisi / Tesisatçısı",
+                CrewComposition = "1 Elektrik Mühendisi + 2 Elektrik Ustası",
+                CrewSize = 3,
+                DurationDays = 3,
+                EquipmentNeeded = "Topraklama Meger Ölçüm Cihazı, Pano Montaj Takımları",
+                Predecessors = "Dağıtım şirketi proje onayı ve sayaç kabulü",
+                CriticalDependency = "300mA ana ve 30mA tali kaçak akım röleleri olmadan ve topraklama ölçümü yapılmadan şantiyeye enerji verilemez!",
+                DnaSource = "Adım 1: Geçici Elektrik",
+                PlannedStartDate = s04Start,
+                PlannedEndDate = s04End,
+                SubSteps = CreateWorkflowSubSteps(
+                    "T-3 Dağıtım şirketi onaylı proje, geçici inşaat tarifesi ve sayaç temini",
+                    "Kilitli ana TMŞ dağıtım panosu montajı, bakır topraklama çubukları çakımı ve kablolama",
+                    "Topraklama meger direnç testi (maksimum 2 Ohm) ve kaçak akım röle testi",
+                    "Pano kilit altına alma, yüksek gerilim uyarı levhası ve 6 kg CO2 yangın söndürme tüpü"
+                )
+            });
+
+            // S-05: İnşaat ve Kullanım Suyu Temini & Su Deposu / Hidrofor Tesisatı
+            var s05Start = s04Start;
+            var s05End = s05Start.AddDays(2);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "S-05",
+                Order = 5,
+                PhaseName = "İnşaat ve Kullanım Suyu Temini & Su Deposu / Hidrofor Tesisatı",
+                StageCategory = "Ortak Saha Kurulumu",
+                PartIndex = 0,
+                PartName = "Şantiye Ortak Saha Kurulumu (Tüm Arsa)",
+                PartBadgeClass = "dark",
+                TriggerRule = "Elektrik panosuyla eş zamanlı kurulur",
+                TargetStructureName = "Proje Geneli (Ortak Saha)",
+                MaterialTitle = $"{suTipi}, Şantiye Su Sayaç Grubu, Dağıtım Vanaları ve Don Korumalı Borulama",
+                MaterialDescription = "Şebeke inşaat suyu aboneliği, 15 tonluk polietilen/çelik su deposu, otomatik frekans kontrollü hidrofor ve ana dağıtım hattı.",
+                MaterialQuantity = 1,
+                MaterialUnit = "Takım",
+                MaterialFormula = "1 Adet Şantiye Su Depolama & Hidrofor Paketi",
+                SupplierCategory = "Su İdaresi & Sıhhi Tesisat / Pompa Bayisi",
+                LaborTitle = "Şantiye Mekanik Tesisat Ekibi",
+                ProfessionName = "Sıhhi Tesisat Ustası",
+                CrewComposition = "1 Tesisat Formeni + 2 Tesisat Ustası",
+                CrewSize = 3,
+                DurationDays = 2,
+                EquipmentNeeded = "Boru Kaynak Makinesi, Basınç Test Pompası",
+                Predecessors = "Su idaresi geçici inşaat suyu abonelik sözleşmesi",
+                CriticalDependency = "ŞANTİYE ALTIN KURALI: İnşaat suyu ve deposu hazır olmadan beton dökülemez ve şantiye çalışamaz!",
+                DnaSource = "Adım 1: Şantiye Suyu",
+                PlannedStartDate = s05Start,
+                PlannedEndDate = s05End,
+                SubSteps = CreateWorkflowSubSteps(
+                    "T-2 Su idaresi sayaç montajı ve şantiye su deposu nakliyesi",
+                    "Su deposu terazileme, hidrofor montajı, şantiye dağıtım vanaları ve test bağlantısı",
+                    "Hidrofor basınç ayarı (4-6 bar) ve su sızdırmazlık testi",
+                    "Depo taşma drenaj hattı ve kış dönemi don koruma izolasyonu"
+                )
+            });
+
+            // S-06: Kanalizasyon Bağlantısı & Mobil Kimyasal İşçi WC Kabinleri (Aranan madde 1!)
+            var s06Start = s05Start;
+            var s06End = s06Start.AddDays(2);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "S-06",
+                Order = 6,
+                PhaseName = "Kanalizasyon Bağlantısı & Mobil Kimyasal İşçi WC Kabinleri",
+                StageCategory = "Ortak Saha Kurulumu",
+                PartIndex = 0,
+                PartName = "Şantiye Ortak Saha Kurulumu (Tüm Arsa)",
+                PartBadgeClass = "dark",
+                TriggerRule = "Su hattı ile birlikte kurulur",
+                TargetStructureName = "Proje Geneli (Ortak Saha)",
+                MaterialTitle = "Mobil Foseptik / Kimyasal WC Kabinleri, 110-150mm PVC Kanalizasyon Boruları, Menhol ve Çekvalf",
+                MaterialDescription = "Şantiye personeli için hijyenik kimyasal mobil tuvalet kabinleri veya belediye kanalizasyon ana hattına çekvalfli deşarj bağlantısı.",
+                MaterialQuantity = 2,
+                MaterialUnit = "Kabin / Hat",
+                MaterialFormula = "2 Adet Mobil WC Kabini + Ana Şebeke Atık Su Bağlantısı",
+                SupplierCategory = "Mobil WC Kiralama / Sıhhi Tesisat & Altyapı Tedarikçisi",
+                LaborTitle = "Altyapı & Kanalizasyon Ekibi",
+                ProfessionName = "Altyapı / Sıhhi Tesisat Ustası",
+                CrewComposition = "1 Tesisat Ustası + 2 Altyapı İşçisi",
+                CrewSize = 3,
+                DurationDays = 2,
+                EquipmentNeeded = "Kanal Açma / Mini Kepçe, Boru Kaynak Aparatları",
+                Predecessors = "Belediye kanalizasyon kotu ve deşarj izni",
+                CriticalDependency = "İş sağlığı ve güvenliği kanunu uyarınca şantiye personeli için hijyenik WC ve atık su bağlantısı kurulmadan çalışma başlatılamaz!",
+                DnaSource = "İSG ve Şantiye Tesisat Standartları (Adım 1)",
+                PlannedStartDate = s06Start,
+                PlannedEndDate = s06End,
+                SubSteps = CreateWorkflowSubSteps(
+                    "T-2 Belediye atık su bağlantı izinleri ve kimyasal WC kabinlerinin şantiyeye sevki",
+                    "Kanalizasyon menhol bağlantısı, çekvalf montajı ve mobil WC kabinlerinin kurulumu",
+                    "Su akış eğimi ve geri tepme önleyici çekvalf sızdırmazlık kontrolü",
+                    "Hijyen dezenfeksiyon malzemeleri, sıvı sabunluklar ve düzenli vidanjör temizlik protokolü"
+                )
+            });
+
+            // S-07: Şantiye Kampı & Mobilizasyon: Ofis, Yatakhane, Yemekhane & Soyunma Konteynerleri (Aranan madde 2!)
+            var s07Start = s06End;
+            var s07End = s07Start.AddDays(3);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "S-07",
+                Order = 7,
+                PhaseName = "Şantiye Kampı & Mobilizasyon: Ofis, Yatakhane, Yemekhane & Soyunma Konteynerleri",
+                StageCategory = "Ortak Saha Kurulumu",
+                PartIndex = 0,
+                PartName = "Şantiye Ortak Saha Kurulumu (Tüm Arsa)",
+                PartBadgeClass = "dark",
+                TriggerRule = "Saha altyapısı hazır olunca konteynerler yerleştirilir",
+                TargetStructureName = "Proje Geneli (Ortak Saha)",
+                MaterialTitle = "Sandviç Panel Şantiye Konteynerleri (Ofis, Yatakhane, Yemekhane, Duş/Soyunma)",
+                MaterialDescription = "Yönetim ofisi, teknik ofis, işçi yatakhane ve dinlenme üniteleri, yemekhane masaları ve ranzalar.",
+                MaterialQuantity = 3,
+                MaterialUnit = "Ünite",
+                MaterialFormula = "3 Adet Sandviç Panel Yaşam ve Yönetim Konteyneri",
+                SupplierCategory = "Prefabrik Yapı & Şantiye Konteyner Üreticisi",
+                LaborTitle = "Mobilizasyon Kurulum Ekibi",
+                ProfessionName = "Prefabrik / Konteyner Montaj Ustası",
+                CrewComposition = "1 Mobil Vinç Operatörü + 3 Montaj Ustası",
+                CrewSize = 4,
+                DurationDays = 3,
+                EquipmentNeeded = "Mobil Vinç, Lazer Terazi, Çelik Bağlantı Elemanları",
+                Predecessors = "Konteyner altı mıcır/grobeton zemin platformunun hazırlanması",
+                CriticalDependency = "Kadroların yatma, yemek ve barınma alanları kurulmadan şantiyeye usta ve işçi kabul edilemez!",
+                DnaSource = "Şantiye Mobilizasyon Standartları (Adım 1)",
+                PlannedStartDate = s07Start,
+                PlannedEndDate = s07End,
+                SubSteps = CreateWorkflowSubSteps(
+                    "T-3 Konteyner zemin takozları, elektrik/su sortileri ve vinç sahası hazırlığı",
+                    "Konteynerlerin vinç ile indirilmesi, terazilenmesi, elektrik ve temiz su bağlantılarının yapılması",
+                    "Pencere/kapı yalıtımları, klimalar ve aydınlatma linye kontrolleri",
+                    "Acil toplanma alanı krokisi, ilk yardım ecza dolabı ve yangın söndürme tüpleri yerleşimi"
+                )
+            });
+
+            // S-08: Şantiye Çevre Aydınlatması, Güvenlik Kulübesi & 7/24 Mobil IP Kamera Sistemi
+            var s08Start = s07End;
+            var s08End = s08Start.AddDays(2);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "S-08",
+                Order = 8,
+                PhaseName = "Şantiye Çevre Aydınlatması, Güvenlik Kulübesi & 7/24 Mobil IP Kamera Sistemi",
+                StageCategory = "Ortak Saha Kurulumu",
+                PartIndex = 0,
+                PartName = "Şantiye Ortak Saha Kurulumu (Tüm Arsa)",
+                PartBadgeClass = "dark",
+                TriggerRule = "Mobilizasyon tamamlanınca güvenlik devreye alınır",
+                TargetStructureName = "Proje Geneli (Ortak Saha)",
+                MaterialTitle = "LED Saha Projektörleri, Güvenlik Bekçi Kulübesi, Gece Görüşlü 4K IP Kameralar ve 4G NVR Kayıt Ünitesi",
+                MaterialDescription = "Giriş kapısı güvenlik kabini, çevre ihata üzeri LED aydınlatmalar, şantiye alanını izleyen yüksek çözünürlüklü IP güvenlik kameraları.",
+                MaterialQuantity = 1,
+                MaterialUnit = "Sistem",
+                MaterialFormula = "1 Takım 7/24 Şantiye Kamera & Güvenlik Aydınlatma Paketi",
+                SupplierCategory = "Güvenlik Sistemleri & Elektrik Toptancısı",
+                LaborTitle = "Güvenlik & Kamera Montaj Ekibi",
+                ProfessionName = "Zayıf Akım & Kamera Teknisyeni",
+                CrewComposition = "1 Güvenlik Sistemleri Teknisyeni + 2 Elektrikçi",
+                CrewSize = 3,
+                DurationDays = 2,
+                EquipmentNeeded = "Merdiven / Platform, UTP Test Cihazı, Lazer Hizalama",
+                Predecessors = "Çevre ihatası ve şantiye ana elektrik panosu kurulumu",
+                CriticalDependency = "Gece aydınlatması ve kameralar aktif olmadan şantiye sahasına değerli demir, kablo ve inşaat malzemesi indirilemez!",
+                DnaSource = "Şantiye Güvenlik Standartları (Adım 1)",
+                PlannedStartDate = s08Start,
+                PlannedEndDate = s08End,
+                SubSteps = CreateWorkflowSubSteps(
+                    "T-2 Kamera kör nokta analizi, projektör direkleri ve kablo kanallarının çekilmesi",
+                    "IP kameraların direklere montajı, NVR kayıt cihazı kurulumu ve 4G uzaktan izleme aktivasyonu",
+                    "Gece görüş testi, projektör aydınlatma lüks seviyesi ve hareket algılama uyarı testi",
+                    "'7/24 Güvenlik Kamerasıyla İzlenmektedir' uyarı levhaları ve gece vardiya güvenlik nöbet defteri"
+                )
+            });
+
+            return list;
+        }
+
+        private List<WorkflowStepItemDto> GenerateSiteHandoverSteps(ConstructionProject project, ProjectDnaProfile profile)
+        {
+            var list = new List<WorkflowStepItemDto>();
+            if (project == null) return list;
+
+            DateTime curDate = DateTime.Today.AddMonths(8);
+
+            // P-01: Bahçe Altyapısı, Otomatik Sulama Tesisatı & Toprak Dolgusu
+            var p01Start = curDate;
+            var p01End = p01Start.AddDays(7);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "P-01",
+                Order = 1,
+                PhaseName = "Bahçe Altyapısı, Otomatik Sulama Tesisatı & Toprak Dolgusu",
+                StageCategory = "Site Çevre & Dış Saha",
+                PartIndex = 5,
+                PartName = "Proje Teslimi & Ortak Dış Alanlar",
+                PartBadgeClass = "secondary",
+                TriggerRule = "Kule vinç sökülüp ağır makineler sahadan çıkınca başlar",
+                TargetStructureName = "Proje Geneli (Dış Saha)",
+                MaterialTitle = "Bahçe Drenaj Boruları, Otomatik Sulama Solenoid Vanaları, Damlama Hatları ve Elenmiş Bitkisel Toprak",
+                MaterialDescription = "Saha çevre drenajı, otomatik zaman ayarlı sulama borulaması, gübreli bitkisel toprak serimi ve tesviyesi.",
+                MaterialQuantity = 0,
+                MaterialUnit = "m²",
+                MaterialFormula = "DXF Bekliyor (Vaziyet planı peyzaj alanından hesaplanacak)",
+                SupplierCategory = "Peyzaj Fidanlığı & Sulama Sistemleri Bayisi",
+                LaborTitle = "Bahçe Altyapı ve Toprak Düzenleme Ekibi",
+                ProfessionName = "Peyzaj & Sulama Ustası",
+                CrewComposition = "1 Peyzaj Mühendisi + 4 Bahçıvan / Altyapı İşçisi",
+                CrewSize = 5,
+                DurationDays = 7,
+                EquipmentNeeded = "Mini Kepçe, Kompaktör, Toprak Tırmığı",
+                Predecessors = "Bina dış cephe iskelelerinin sökülmesi ve şantiye sahasının molozlardan arındırılması",
+                CriticalDependency = "Ağır iş makineleri ve kule vinç sahadan ayrılmadan toprak dolgusu ve sulama boruları döşenemez!",
+                DnaSource = "Adım 9: Dış Çevre & Peyzaj",
+                PlannedStartDate = p01Start,
+                PlannedEndDate = p01End,
+                SubSteps = CreateWorkflowSubSteps(
+                    "T-3 Vaziyet kot planı, drenaj güzergahı ve bitkisel toprak sevki",
+                    "Drenaj borularının döşenmesi, otomatik sulama borulaması ve toprak tesviyesi",
+                    "Sulama hatları basınç testi ve drenaj su tahliye eğimi kontrolü",
+                    "Hendek kenarları güvenlik şeridi ve toz bastırma sulaması"
+                )
+            });
+
+            // P-02: Peyzaj Düzenlemesi, Çim Alanlar, Ağaçlandırma & Çiçeklendirme
+            var p02Start = p01End;
+            var p02End = p02Start.AddDays(8);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "P-02",
+                Order = 2,
+                PhaseName = "Peyzaj Düzenlemesi, Çim Alanlar, Ağaçlandırma & Çiçeklendirme",
+                StageCategory = "Site Çevre & Dış Saha",
+                PartIndex = 5,
+                PartName = "Proje Teslimi & Ortak Dış Alanlar",
+                PartBadgeClass = "secondary",
+                TriggerRule = "Toprak dolgusu ve sulama hazır olunca uygulanır",
+                TargetStructureName = "Proje Geneli (Dış Saha)",
+                MaterialTitle = "Rulo Çim (Hazır Çim Kalıpları), Yetişkin İbreli/Yapraklı Ağaçlar, Çalı Grupları ve Mevsimlik Çiçekler",
+                MaterialDescription = "Peyzaj projesine uygun yetişkin ağaç dikimi, çalı çitleri, çiçek tarhları ve preslenmiş rulo çim serimi.",
+                MaterialQuantity = 0,
+                MaterialUnit = "m²",
+                MaterialFormula = "DXF Bekliyor (Yeşil alan metrajlarından hesaplanacak)",
+                SupplierCategory = "Fidanlık & Peyzaj Botanik Merkezi",
+                LaborTitle = "Botanik & Bahçıvanlık Ekibi",
+                ProfessionName = "Peyzaj Mimarı / Bahçıvan",
+                CrewComposition = "1 Peyzaj Mimarı + 6 Bahçıvan",
+                CrewSize = 7,
+                DurationDays = 8,
+                EquipmentNeeded = "Çim Silindiri, Fidan Dikme Aparatları, Çim Havalandırma",
+                Predecessors = "Otomatik sulama tesisatının aktif çalışır durumda olması",
+                CriticalDependency = "Rulo çim serildiği ilk 10 gün boyunca sabah ve akşam otomatik sulama aksatılmamalıdır!",
+                DnaSource = "Adım 9: Dış Çevre & Peyzaj",
+                PlannedStartDate = p02Start,
+                PlannedEndDate = p02End,
+                SubSteps = CreateWorkflowSubSteps(
+                    "T-2 Fidan kök kontrolü, rulo çim tazelik kontrolü ve gübre hazırlığı",
+                    "Ağaç çukurlarının açılması, kazıklama/bağlama, çalı dikimi ve rulo çim serme",
+                    "Çim silindirleme düzgünlüğü ve ilk can suyu sulama kontrolü",
+                    "Ağır ağaç indirmelerinde halat güvenliği ve ergonomik taşıma"
+                )
+            });
+
+            // P-03: Çocuk Oyun Parkı & Kauçuk Zemin İmalatı
+            var p03Start = p02Start.AddDays(2);
+            var p03End = p03Start.AddDays(5);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "P-03",
+                Order = 3,
+                PhaseName = "Çocuk Oyun Parkı & Kauçuk Zemin İmalatı",
+                StageCategory = "Site Çevre & Dış Saha",
+                PartIndex = 5,
+                PartName = "Proje Teslimi & Ortak Dış Alanlar",
+                PartBadgeClass = "secondary",
+                TriggerRule = "Peyzaj zemin betonları dökülünce kurulur",
+                TargetStructureName = "Proje Geneli (Dış Saha)",
+                MaterialTitle = "TSE EN 1176 Sertifikalı Modüler Çocuk Oyun Grubu, Salıncak, Kaydırak ve 40mm EPDM Kauçuk Zemin Karo",
+                MaterialDescription = "Darbe emici kauçuk zemin kaplaması, statik ankrajlı kaydıraklı oyun kulesi, salıncaklar ve zıpzıplar.",
+                MaterialQuantity = 1,
+                MaterialUnit = "Takım",
+                MaterialFormula = "1 Takım Çocuk Oyun Parkı ve Güvenlikli Kauçuk Zemin",
+                SupplierCategory = "Çocuk Parkı & Kent Mobilyaları Üreticisi",
+                LaborTitle = "Oyun Parkı Montaj Ekibi",
+                ProfessionName = "Kent Mobilyaları Montaj Ustası",
+                CrewComposition = "1 Montaj Formeni + 3 Montaj Ustası",
+                CrewSize = 4,
+                DurationDays = 5,
+                EquipmentNeeded = "Ankraj Matkapları, Poliüretan Yapıştırıcı Ruloları",
+                Predecessors = "Oyun alanı alt beton plağının dökülmesi ve kuruması",
+                CriticalDependency = "TSE EN 1176-1177 çocuk güvenlik ve düşme yüksekliği standartlarına uygun olmayan ekipman kabul edilemez!",
+                DnaSource = "Adım 9: Sosyal Donatılar (Çocuk Parkı)",
+                PlannedStartDate = p03Start,
+                PlannedEndDate = p03End,
+                SubSteps = CreateWorkflowSubSteps(
+                    "T-2 TSE güvenlik sertifikası kontrolü, oyun elemanları ve kauçuk karoların sevki",
+                    "Zemin alt betonu üzerine kauçuk yapıştırma ve oyun kulesi ankraj montajı",
+                    "Darbe emicilik testi, cıvata başı plastik kapakları ve salıncak zincir kontrolü",
+                    "Çocuk güvenlik uyarı tabelaları ve yaş grubu etiketleri montajı"
+                )
+            });
+
+            // P-04: Ahşap Kamelyalar, Banklar & Dinlenme Alanları
+            var p04Start = p03Start.AddDays(1);
+            var p04End = p04Start.AddDays(4);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "P-04",
+                Order = 4,
+                PhaseName = "Ahşap Kamelyalar, Banklar & Dinlenme Alanları",
+                StageCategory = "Site Çevre & Dış Saha",
+                PartIndex = 5,
+                PartName = "Proje Teslimi & Ortak Dış Alanlar",
+                PartBadgeClass = "secondary",
+                TriggerRule = "Peyzaj sert zeminleri tamamlanınca monte edilir",
+                TargetStructureName = "Proje Geneli (Dış Saha)",
+                MaterialTitle = "Emprenyeli Çam Ahşap Kamelya (Çardak), Döküm Ayaklı Ahşap Park Bankları ve Çöp Kovaları",
+                MaterialDescription = "Site sakinleri dinlenme çardakları, gölgelikler, bahçe oturma bankları ve çevre çöp kutuları montajı.",
+                MaterialQuantity = 2,
+                MaterialUnit = "Takım",
+                MaterialFormula = "2 Adet Kamelya + 8 Adet Park Bankı + Çöp Kovaları",
+                SupplierCategory = "Ahşap Kent Mobilyaları İmalatçısı",
+                LaborTitle = "Ahşap Montaj Ekibi",
+                ProfessionName = "Marangoz / Ahşap Montaj Ustası",
+                CrewComposition = "1 Formen + 3 Ahşap Ustası",
+                CrewSize = 4,
+                DurationDays = 4,
+                EquipmentNeeded = "Akülü Vidalama Setleri, Lazer Terazi, Ankraj Dübelleri",
+                Predecessors = "Kamelya taban taş veya beton zemin kaplamalarının bitmesi",
+                CriticalDependency = "Açık hava koşullarına dayanıklı olması için tüm ahşap elemanlar vakum basınç emprenyeli olmalıdır!",
+                DnaSource = "Adım 9: Sosyal Donatılar (Kamelya & Bank)",
+                PlannedStartDate = p04Start,
+                PlannedEndDate = p04End,
+                SubSteps = CreateWorkflowSubSteps(
+                    "T-2 Emprenye sertifikası ve demonte kamelya parçalarının kontrolü",
+                    "Kamelya taşıyıcı dikmelerinin zemine çelik flanşla ankrajı ve çatı montajı",
+                    "Ahşap yüzey kıymık kontrolü, vernik/cila düzgünlüğü ve rüzgar rijitliği",
+                    "Elektrikli vidalama ve montaj emniyeti"
+                )
+            });
+
+            // P-05: Açık / Kapalı Otopark Zemin Epoksi Kaplaması & Şerit Çizgileri
+            var p05Start = p02End;
+            var p05End = p05Start.AddDays(6);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "P-05",
+                Order = 5,
+                PhaseName = "Açık / Kapalı Otopark Zemin Epoksi Kaplaması & Şerit Çizgileri",
+                StageCategory = "Site Çevre & Dış Saha",
+                PartIndex = 5,
+                PartName = "Proje Teslimi & Ortak Dış Alanlar",
+                PartBadgeClass = "secondary",
+                TriggerRule = "Otopark kaba inşaatı ve tavan tesisatları tamamlanınca yapılır",
+                TargetStructureName = "Proje Geneli (Dış Saha)",
+                MaterialTitle = "Solventsiz Epoksi Zemin Kaplaması, Kauçuk Kolon Köşe Koruyucuları, Araç Stoperleri ve Trafik Boyası",
+                MaterialDescription = "Otopark zemininde silim, astar, portakal kabuğu epoksi kaplama, numaralı park şeritleri ve yönlendirme okları.",
+                MaterialQuantity = 0,
+                MaterialUnit = "m²",
+                MaterialFormula = "DXF Bekliyor (Otopark planı ve araç park yeri adedinden hesaplanacak)",
+                SupplierCategory = "Epoksi Zemin Kimyasalları & Trafik Donanımları",
+                LaborTitle = "Epoksi Zemin ve Yol Çizgi Ekibi",
+                ProfessionName = "Epoksi Zemin Ustası",
+                CrewComposition = "1 Formen + 4 Epoksi Ustası + 2 Çizgi Ustası",
+                CrewSize = 7,
+                DurationDays = 6,
+                EquipmentNeeded = "Elmas Zemin Silim Makinesi, Vakumlu Endüstriyel Süpürge, Rulo ve Çizgi Makinesi",
+                Predecessors = "Otopark tavan yangın tesisatı ve aydınlatmalarının bitmesi",
+                CriticalDependency = "Epoksi uygulanacak zemin nemi <%4 olmalı ve yüzey tozu tamamen emilmiş olmalıdır!",
+                DnaSource = "Adım 8 & 9: Otopark İmalatları",
+                PlannedStartDate = p05Start,
+                PlannedEndDate = p05End,
+                SubSteps = CreateWorkflowSubSteps(
+                    "T-2 Zemin nem ölçümü, elmas uçlu silim makinesiyle beton pürüzlendirme",
+                    "Epoksi astar, ara kat ve tekstürlü son kat kaplama, park yeri çizgileri ve araç stoperi montajı",
+                    "Kaplama kalınlığı, yapışma testi ve şerit reflektif görünürlük kontrolü",
+                    "Kapalı alanda havalandırma fanı kullanımı ve organik buhar maskesi"
+                )
+            });
+
+            // P-06: Çevre Aydınlatma Direkleri, Bahçe Projektörleri & Güneş Enerjisi (GES)
+            var p06Start = p04End;
+            var p06End = p06Start.AddDays(4);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "P-06",
+                Order = 6,
+                PhaseName = "Çevre Aydınlatma Direkleri, Bahçe Projektörleri & Güneş Enerjisi (GES)",
+                StageCategory = "Site Çevre & Dış Saha",
+                PartIndex = 5,
+                PartName = "Proje Teslimi & Ortak Dış Alanlar",
+                PartBadgeClass = "secondary",
+                TriggerRule = "Peyzaj bitki dikimi bitiminde devreye alınır",
+                TargetStructureName = "Proje Geneli (Dış Saha)",
+                MaterialTitle = "Dekoratif LED Bahçe Aydınlatma Direkleri, Çim Üstü Bollard Lambalar, Fotoselli Projektörler ve Zaman Saati",
+                MaterialDescription = "Yürüyüş yolları 3m dekoratif aydınlatma direkleri, çim üstü yönlendirme spotları, fotoselli gece aydınlatma otomasyonu.",
+                MaterialQuantity = 0,
+                MaterialUnit = "Adet",
+                MaterialFormula = "DXF Bekliyor (Peyzaj elektrik aydınlatma projesinden netleşecek)",
+                SupplierCategory = "Dış Aydınlatma & Elektrik Toptancısı",
+                LaborTitle = "Dış Saha Elektrik & Otomasyon Ekibi",
+                ProfessionName = "Elektrik Ustası",
+                CrewComposition = "1 Formen + 3 Elektrik Ustası",
+                CrewSize = 4,
+                DurationDays = 4,
+                EquipmentNeeded = "Lazer Hizalama, Kablo Çekici Sustalar, Meger Test Cihazı",
+                Predecessors = "Peyzaj toprak altı elektrik koruge borularının hazır olması",
+                CriticalDependency = "IP65/IP67 dış ortam su geçirmezlik sertifikası olmayan armatürler bahçede kullanılamaz!",
+                DnaSource = "Adım 9: Çevre Aydınlatma",
+                PlannedStartDate = p06Start,
+                PlannedEndDate = p06End,
+                SubSteps = CreateWorkflowSubSteps(
+                    "T-2 Aydınlatma direk ankraj betonları, IP67 kablo ek mufları ve direk sevki",
+                    "Direklerin dikilmesi, armatür montajları, linye bağlantıları ve zaman saati panosu",
+                    "Gece ışık seviyesi kontrolü, fotosel devreye girme testi ve kaçak akım kontrolü",
+                    "Elektrik izolasyon eldivenleri ve direkte emniyetli montaj"
+                )
+            });
+
+            // P-07: Dış Çevre Bahçe Duvarı, Ferforje Korkuluklar & Otomatik Site Bahçe Kapısı
+            var p07Start = p05End;
+            var p07End = p07Start.AddDays(8);
+            list.Add(new WorkflowStepItemDto
+            {
+                StepCode = "P-07",
+                Order = 7,
+                PhaseName = "Dış Çevre Bahçe Duvarı, Ferforje Korkuluklar & Otomatik Site Bahçe Kapısı",
+                StageCategory = "Site Çevre & Dış Saha",
+                PartIndex = 5,
+                PartName = "Proje Teslimi & Ortak Dış Alanlar",
+                PartBadgeClass = "secondary",
+                TriggerRule = "Şantiye ihata telleri kaldırılınca kalıcı bahçe duvarı yapılır",
+                TargetStructureName = "Proje Geneli (Dış Saha)",
+                MaterialTitle = "Betonarme / Taş Bahçe Duvarı, Elektrostatik Boyalı Ferforje Korkuluklar, Motorlu Otomatik Yana Kayar Site Kapısı ve OGS/Plaka Tanıma",
+                MaterialDescription = "Kalıcı parsel çevre bahçe duvarı, harpuştası, üzerine ferforje panel çit, motorlu ana site giriş kapısı ve plaka tanıma sistemi.",
+                MaterialQuantity = 0,
+                MaterialUnit = "mt",
+                MaterialFormula = "DXF Bekliyor (Parsel çevre net uzunluğundan hesaplanacak)",
+                SupplierCategory = "Demir Doğrama & Otomatik Kapı / Taş Ocağı",
+                LaborTitle = "Bahçe Duvarı ve Otomatik Kapı Ekibi",
+                ProfessionName = "Taş Ustası & Metal / Otomasyon Ustası",
+                CrewComposition = "1 Formen + 4 Taş/Duvar Ustası + 2 Demirci + 1 Otomasyoncu",
+                CrewSize = 8,
+                DurationDays = 8,
+                EquipmentNeeded = "Betoniyer / Pompa, Kaynak Makineleri, Kapı Motoru Montaj Seti",
+                Predecessors = "Şantiye geçici çevre tel ve konteynerlerinin sahadan kaldırılması",
+                CriticalDependency = "Site araç giriş kapısında fotoselli sıkışma önleyici emniyet sensörü ve flaşör lamba zorunludur!",
+                DnaSource = "Adım 9: Çevre İhata ve Güvenlik",
+                PlannedStartDate = p07Start,
+                PlannedEndDate = p07End,
+                SubSteps = CreateWorkflowSubSteps(
+                    "T-3 Parsel sınır kadastro tespiti, ferforje korkuluk imalatı ve kapı motoru hazırlığı",
+                    "Bahçe duvarı betonu/taşı, ferforje korkuluk montajı ve otomatik motorlu sürgülü kapı montajı",
+                    "Kapı motoru tork ve fotosel güvenlik testi, plaka tanıma kamerası açısı",
+                    "Yol tarafı çalışma güvenlik bariyerleri ve reflektörlü yelekler"
                 )
             });
 
