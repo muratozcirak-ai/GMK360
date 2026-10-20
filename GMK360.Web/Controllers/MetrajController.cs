@@ -403,6 +403,19 @@ namespace GMK360.Web.Controllers
                 : structures.FirstOrDefault();
             ViewBag.ActiveStructure = activeStructure;
 
+            // ADIM 0 (Mecburi Statik ve Taşıyıcılar - 20 Soru / Kalem)
+            var step0 = await _context.DnaTemplateSteps
+                .AsNoTracking()
+                .Include(s => s.Questions)
+                    .ThenInclude(q => q.Profession)
+                .FirstOrDefaultAsync(s => s.StepOrder == 0 || s.Id == 2);
+
+            if (step0 != null && step0.Questions != null)
+            {
+                step0.Questions = step0.Questions.OrderBy(q => q.QuestionOrder).ToList();
+            }
+            ViewBag.Step0 = step0;
+
             return View();
         }
 
@@ -1118,7 +1131,8 @@ namespace GMK360.Web.Controllers
                 ? allSteps.Where(s => dto.SelectedStepCodes.Contains(s.StepCode)).ToList()
                 : allSteps;
 
-            if (!selectedSteps.Any()) return BadRequest(new { success = false, message = "Hiç aşama seçilmedi." });
+            bool isTradePackage = dto.TargetTrack == "TradePackage" || (dto.SelectedStepCodes != null && dto.SelectedStepCodes.Any(c => c.StartsWith("ADIM0-")));
+            if (!selectedSteps.Any() && !isTradePackage) return BadRequest(new { success = false, message = "Hiç aşama seçilmedi." });
 
             var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
             var consultant = await _context.AgencyConsultants.FirstOrDefaultAsync(c => c.UserId == userId);
@@ -1131,7 +1145,21 @@ namespace GMK360.Web.Controllers
                 : "";
             string rfpTitle = "";
 
-            if (targetTrack == "Labor")
+            if (isTradePackage)
+            {
+                var tradeCode = dto.SelectedStepCodes?.FirstOrDefault(c => c.StartsWith("ADIM0-"))?.Replace("ADIM0-", "") ?? "İnşaat";
+                rfpTitle = $"{project.Name} - {structPrefix}Toptan {tradeCode} İhale & Fiyat Bağlama Paketi (Adım 0 Statik Sabiti)";
+                sb.AppendLine($"### 🏛️ {project.Name} - {structPrefix}Toptan {tradeCode} İhale & Fiyat Kilitleme Paketi");
+                sb.AppendLine($"*Adım 0 Mecburi Statik ve Taşıyıcı DXF Parametrelerine Dayalı Proje Geneli Toptan Çerçeve Sözleşmesi*");
+                sb.AppendLine();
+                sb.AppendLine($"Bu ihale paketi, projenin tamamında kullanılacak olan **{tradeCode}** branşına ait tüm statik metraj ve teknik gereksinimleri kapsar.");
+                sb.AppendLine($"Müteahhit firma, şantiyeye başlamadan önce tedarikçi/taşeron firmadan sabit fiyat ve toptan birim fiyat garantisi talep etmektedir.");
+                sb.AppendLine();
+                sb.AppendLine($"| Veri Kaynağı | İlgili İş Branşı | Kapsam | Sözleşme Tipi |");
+                sb.AppendLine($"|---|---|---|---|");
+                sb.AppendLine($"| DXF / Statik Çizim | `{tradeCode}` | Projenin Tüm Yapıları ({project.Blocks?.Count ?? 1} Bağımsız Yapı) | Toptan Sabit Fiyat Sözleşmesi |");
+            }
+            else if (targetTrack == "Labor")
             {
                 rfpTitle = $"{project.Name} - {structPrefix}Taşeron & İş Gücü Çağrısı ({selectedSteps.Count} Aşama)";
                 sb.AppendLine($"### 👷 {project.Name} - {structPrefix}Taşeron & İş Gücü Hizmet Çağrısı");
@@ -1220,7 +1248,8 @@ namespace GMK360.Web.Controllers
                 ? allSteps.Where(s => dto.SelectedStepCodes.Contains(s.StepCode)).ToList()
                 : allSteps;
 
-            if (!selectedSteps.Any()) return BadRequest(new { success = false, message = "Hiç aşama seçilmedi." });
+            bool isTradePackage = dto.TargetTrack == "TradePackage" || (dto.SelectedStepCodes != null && dto.SelectedStepCodes.Any(c => c.StartsWith("ADIM0-")));
+            if (!selectedSteps.Any() && !isTradePackage) return BadRequest(new { success = false, message = "Hiç aşama seçilmedi." });
 
             var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
             var consultant = await _context.AgencyConsultants.FirstOrDefaultAsync(c => c.UserId == userId);
@@ -3876,6 +3905,7 @@ namespace GMK360.Web.Controllers
             public int ProjectId { get; set; }
             public int? ProfileId { get; set; }
             public int? BuildingId { get; set; }
+            public string? TargetTrack { get; set; }
             public DateTime StartDate { get; set; }
             public List<string> SelectedStepCodes { get; set; }
         }
