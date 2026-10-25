@@ -1,0 +1,621 @@
+@model GMK360.Web.Models.UnitMaterialSelectionViewModel
+@{
+    ViewData["Title"] = "Müşteri Malzeme Skalası & Karar Destek";
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+    var unit = Model.Unit;
+    var project = unit.Building.ConstructionProject;
+    string unitTitle = $"Kat {unit.FloorLevel} - No {unit.DoorNumber} ({unit.RoomLayout ?? "Mesken"})";
+    string ownerDisplayName = string.IsNullOrEmpty(unit.OwnerName) ? "Müteahhit Payı (Satılık)" : $"Hak Sahibi: {unit.OwnerName}";
+}
+
+<div class="container-fluid mt-3 pb-5">
+    <!-- Header Banner -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white overflow-hidden">
+        <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <a asp-action="ManageBlock" asp-route-id="@unit.BuildingId" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
+                            <i class="bi bi-arrow-left me-1"></i> Yapı Yönetimi
+                        </a>
+                        <a asp-action="ManageUnitSpaces" asp-route-id="@unit.Id" class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                            <i class="bi bi-door-open me-1"></i> İç Mekanlar & Demirbaşlar
+                        </a>
+                        <span class="badge bg-warning text-dark px-3 py-1 fs-6 rounded-pill fw-bold">
+                            <i class="bi bi-palette-fill me-1"></i> Aşama 3: Müşteri Malzeme Skalası
+                        </span>
+                    </div>
+                    <h3 class="fw-bold mb-1 text-dark">
+                        <i class="bi bi-palette2 text-warning me-2"></i>@unitTitle
+                    </h3>
+                    <div class="text-muted small d-flex flex-wrap align-items-center gap-3">
+                        <span><i class="bi bi-building me-1"></i>@project.Name &bull; @unit.Building.BlockName</span>
+                        <span><i class="bi bi-person-badge me-1"></i><strong class="text-dark">@ownerDisplayName</strong></span>
+                        @if (unit.GrossSquareMeters.HasValue && unit.GrossSquareMeters > 0)
+                        {
+                            <span><i class="bi bi-aspect-ratio me-1"></i>@unit.GrossSquareMeters m² Brüt @(unit.NetSquareMeters.HasValue ? $"({unit.NetSquareMeters} m² Net)" : "")</span>
+                        }
+                        @if (!string.IsNullOrEmpty(unit.OwnerPhone))
+                        {
+                            <span class="badge bg-light text-dark border"><i class="bi bi-telephone me-1"></i>@unit.OwnerPhone</span>
+                        }
+                    </div>
+                </div>
+
+                <!-- Stats Badges -->
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="p-3 bg-light rounded-4 text-center border" style="min-width: 140px;">
+                        <span class="text-muted small d-block">Onaylanan Seçim</span>
+                        <strong class="fs-4 text-success">@Model.ApprovedCategoriesCount</strong>
+                        <span class="text-muted">/ @Model.TotalCategoriesCount Kategori</span>
+                    </div>
+                    <div class="p-3 bg-light rounded-4 text-center border" style="min-width: 150px;">
+                        <span class="text-muted small d-block">Fiyat Farkı Toplamı</span>
+                        <strong class="fs-4 text-primary">@Model.TotalPriceDifference.ToString("N0") ₺</strong>
+                        <span class="badge bg-success-subtle text-success small d-block mt-1">Standartlar 0 ₺</span>
+                    </div>
+                    <a href="/ConstructionProject/UnitMaterialReport?buildingId=@unit.BuildingId" class="btn btn-outline-dark rounded-pill px-3 py-2 fw-semibold">
+                        <i class="bi bi-printer me-1"></i> İmalat Raporu
+                    </a>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            @{
+                int progressPercent = Model.TotalCategoriesCount > 0 ? (Model.ApprovedCategoriesCount * 100) / Model.TotalCategoriesCount : 0;
+            }
+            <div class="mt-4">
+                <div class="d-flex justify-content-between small text-muted mb-1">
+                    <span>Malzeme Karar Tamamlanma Oranı</span>
+                    <span class="fw-bold text-dark">%@progressPercent</span>
+                </div>
+                <div class="progress" style="height: 10px; border-radius: 5px;">
+                    <div class="progress-bar @(progressPercent == 100 ? "bg-success" : "bg-warning") progress-bar-striped progress-bar-animated"
+                         role="progressbar" style="width: @progressPercent%;" aria-valuenow="@progressPercent" aria-valuemin="0" aria-valuemuo="100"></div>
+                </div>
+            </div>
+
+            <!-- Legal Notice / Protocol Badge -->
+            <div class="alert alert-info border-0 rounded-4 mt-3 mb-0 py-2 px-3 small d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-shield-lock-fill fs-5 text-primary me-2"></i>
+                    <span>
+                        <strong>Hukuki Müşteri Protokolü:</strong> Firma standart skalasındaki tüm malzemeler <strong>0 ₺ (Fiyatsız)</strong> taahhütlüdür. Seçilen malzemeler müşteriye SMS OTP şifresi ile onaylatılarak kanuni imalat güvencesine alınır.
+                    </span>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-primary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#customRequestModal">
+                        <i class="bi bi-camera me-1"></i> Standart Dışı Fotoğraf Yükle
+                    </button>
+                    <button class="btn btn-sm btn-outline-dark rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#showroomModal">
+                        <i class="bi bi-shop me-1"></i> Showroom / Bayi Ziyareti
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback messages -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-4 shadow-sm" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>@TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-4 shadow-sm" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <!-- Categories & Materials Grid -->
+    @if (Model.GroupedCatalog != null && Model.GroupedCatalog.Any())
+    {
+        int categoryIndex = 0;
+        foreach (var categoryGroup in Model.GroupedCatalog)
+        {
+            categoryIndex++;
+            string categoryName = categoryGroup.Key;
+            var catalogItems = categoryGroup.Value;
+            Model.SelectionsByCategory.TryGetValue(categoryName, out var currentSelection);
+            bool hasConfirmedSelection = currentSelection != null && currentSelection.IsConfirmedViaSms;
+
+            <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden">
+                <div class="card-header bg-white py-3 px-4 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge @(hasConfirmedSelection ? "bg-success" : "bg-secondary") rounded-pill px-3 py-2 fs-6">
+                            @(hasConfirmedSelection ? "✓ Onaylandı" : $"{categoryIndex}. Adım")
+                        </span>
+                        <h5 class="fw-bold mb-0 text-dark">@categoryName</h5>
+                    </div>
+
+                    @if (hasConfirmedSelection)
+                    {
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 rounded-pill small fw-semibold">
+                                <i class="bi bi-shield-check me-1"></i> SMS Mühürlü
+                                @if (currentSelection.ConfirmedDate.HasValue)
+                                {
+                                    <span>(@currentSelection.ConfirmedDate.Value.ToString("dd.MM.yyyy") @(currentSelection.ConfirmedTime.HasValue ? currentSelection.ConfirmedTime.Value.ToString(@"hh\:mm") : ""))</span>
+                                }
+                            </span>
+                            @if (!string.IsNullOrEmpty(currentSelection.VerificationPhone))
+                            {
+                                <span class="badge bg-light text-dark border rounded-pill small">
+                                    <i class="bi bi-phone me-1"></i>@currentSelection.VerificationPhone
+                                </span>
+                            }
+                        </div>
+                    }
+                    else if (currentSelection != null && currentSelection.SelectionStatus == "FiyatBekliyor")
+                    {
+                        <span class="badge bg-warning text-dark px-3 py-2 rounded-pill">
+                            <i class="bi bi-clock-history me-1"></i> Özel Talep İnceleniyor (Fiyat Bekliyor)
+                        </span>
+                    }
+                    else if (currentSelection != null && currentSelection.SelectionStatus == "ShowroomSecimi")
+                    {
+                        <span class="badge bg-info-subtle text-info border border-info-subtle px-3 py-2 rounded-pill">
+                            <i class="bi bi-shop me-1"></i> Showroom Tercihi (@currentSelection.ShowroomSupplierName - @currentSelection.ShowroomProductCode)
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-light text-muted border rounded-pill px-3 py-2 small">
+                            Seçim Bekleniyor
+                        </span>
+                    }
+                </div>
+
+                <div class="card-body p-4">
+                    <!-- Current Special / Showroom Alert if active -->
+                    @if (currentSelection != null && !string.IsNullOrEmpty(currentSelection.CustomRequestImageUrl))
+                    {
+                        <div class="alert alert-warning border-0 rounded-4 p-3 mb-4 d-flex align-items-center gap-3">
+                            <img src="@currentSelection.CustomRequestImageUrl" alt="Özel İstek" class="rounded-3 shadow-sm" style="width: 100px; height: 75px; object-fit: cover;" />
+                            <div>
+                                <h6 class="fw-bold mb-1"><i class="bi bi-camera me-1"></i>Müşterinin Yüklediği Özel Görsel & Talep</h6>
+                                <p class="mb-1 small text-muted">@currentSelection.CustomRequestNotes</p>
+                                <span class="badge bg-dark">Fiyat Farkı: @(currentSelection.ApprovedPriceDifference.HasValue ? currentSelection.ApprovedPriceDifference.Value.ToString("N0") + " ₺" : "Müteahhit Belirleyecek")</span>
+                            </div>
+                        </div>
+                    }
+
+                    @if (currentSelection != null && !string.IsNullOrEmpty(currentSelection.ShowroomSupplierName))
+                    {
+                        <div class="alert alert-info border-0 rounded-4 p-3 mb-4 d-flex align-items-center gap-3">
+                            <div class="p-3 bg-white rounded-3 shadow-sm text-center" style="min-width: 80px;">
+                                <i class="bi bi-shop-window fs-2 text-primary"></i>
+                            </div>
+                            <div>
+                                <h6 class="fw-bold mb-1"><i class="bi bi-building-check me-1"></i>Showroom / Bayi Seçimi</h6>
+                                <p class="mb-1 small">
+                                    <strong>Bayi:</strong> @currentSelection.ShowroomSupplierName &bull; 
+                                    <strong>Ürün/Model Kodu:</strong> <span class="font-monospace fw-bold text-primary">@currentSelection.ShowroomProductCode</span>
+                                </p>
+                                <span class="badge bg-primary">Fiyat Farkı: @(currentSelection.ApprovedPriceDifference.HasValue ? currentSelection.ApprovedPriceDifference.Value.ToString("N0") + " ₺" : "0 ₺")</span>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Standard Material Cards -->
+                    <div class="row g-4">
+                        @foreach (var item in catalogItems)
+                        {
+                            bool isThisSelected = currentSelection != null && currentSelection.ProjectMaterialCatalogId == item.Id;
+                            bool isConfirmed = isThisSelected && currentSelection.IsConfirmedViaSms;
+
+                            <div class="col-md-6 col-lg-3">
+                                <div class="card h-100 border-2 rounded-4 overflow-hidden transition-all @(isConfirmed ? "border-success shadow bg-success-subtle bg-opacity-10" : (isThisSelected ? "border-warning shadow-sm" : "border-light bg-light bg-opacity-50"))"
+                                     style="transition: all 0.25s ease-in-out;">
+                                    
+                                    <!-- Image Preview -->
+                                    <div class="position-relative overflow-hidden" style="height: 180px; background-color: #f8f9fa;">
+                                        <img src="@item.ImageUrl" alt="@item.MaterialName" class="w-100 h-100 object-fit-cover transition-transform" 
+                                             style="cursor: pointer;" onclick="openImageModal('@item.ImageUrl', '@item.MaterialName')" />
+                                        
+                                        @if (item.PriceDifference == 0)
+                                        {
+                                            <span class="position-absolute top-0 start-0 m-2 badge bg-success shadow-sm rounded-pill px-3 py-1">
+                                                <i class="bi bi-check2-circle me-1"></i>0 ₺ Firma Standardı
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="position-absolute top-0 start-0 m-2 badge bg-primary shadow-sm rounded-pill px-3 py-1">
+                                                +@item.PriceDifference.ToString("N0") ₺ Fark
+                                            </span>
+                                        }
+
+                                        @if (isConfirmed)
+                                        {
+                                            <span class="position-absolute top-0 end-0 m-2 badge bg-success shadow-sm rounded-circle p-2" title="SMS ile Doğrulandı">
+                                                <i class="bi bi-shield-check fs-6 text-white"></i>
+                                            </span>
+                                        }
+                                    </div>
+
+                                    <!-- Content -->
+                                    <div class="card-body p-3 d-flex flex-column justify-content-between">
+                                        <div>
+                                            <h6 class="fw-bold mb-1 text-dark">@item.MaterialName</h6>
+                                            <p class="text-muted small mb-3" style="min-height: 40px;">
+                                                @item.Description
+                                            </p>
+                                        </div>
+
+                                        <div class="pt-2 border-top">
+                                            @if (isConfirmed)
+                                            {
+                                                <div class="d-grid gap-1">
+                                                    <div class="badge bg-success py-2 rounded-pill text-white fw-bold">
+                                                        <i class="bi bi-check-lg me-1"></i> SEÇİLDİ & MÜHÜRLENDİ
+                                                    </div>
+                                                    <span class="text-muted text-center" style="font-size: 0.75rem;">
+                                                        @currentSelection.ConfirmedDate?.ToString("dd.MM.yyyy") @currentSelection.ConfirmedTime?.ToString(@"hh\:mm")
+                                                    </span>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="d-flex gap-2">
+                                                    <button type="button" class="btn btn-warning flex-grow-1 rounded-pill fw-bold text-dark shadow-sm py-2"
+                                                            onclick="openSmsOtpModal(@unit.Id, @item.Id, '@item.MaterialName', '@(unit.OwnerPhone ?? "")')">
+                                                        <i class="bi bi-phone me-1"></i> Seç & SMS Onayla
+                                                    </button>
+                                                    <form asp-action="DirectConfirmSelection" method="post" class="d-inline" onsubmit="return confirm('Müteahhit doğrudan seçimi olarak onaylanacak. Devam edilsin mi?');">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="unitId" value="@unit.Id" />
+                                                        <input type="hidden" name="catalogId" value="@item.Id" />
+                                                        <button type="submit" class="btn btn-outline-secondary rounded-circle p-2" title="Müteahhit Doğrudan Onayı (SMS'siz)">
+                                                            <i class="bi bi-lightning-charge-fill text-warning"></i>
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="alert alert-info rounded-4 p-4 text-center">
+            <i class="bi bi-info-circle fs-2 d-block mb-2"></i>
+            Bu proje için henüz malzeme kataloğu tanımlanmamış.
+        </div>
+    }
+</div>
+
+<!-- ==================== MODALS ==================== -->
+
+<!-- 1. SMS OTP Onay Modalı -->
+<div class="modal fade" id="smsOtpModal" tabindex="-1" aria-labelledby="smsOtpModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="smsOtpModalLabel">
+                    <i class="bi bi-shield-check text-success me-2"></i>SMS ile Malzeme Onayı
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="text-center mb-4">
+                    <div class="p-3 bg-light rounded-circle d-inline-flex mb-2">
+                        <i class="bi bi-chat-left-dots-fill fs-1 text-primary"></i>
+                    </div>
+                    <h6 class="fw-bold mb-1" id="otpMaterialTitle">Seçilen Malzeme</h6>
+                    <p class="text-muted small">
+                        Hukuki güvence ve müteahhit-müşteri protokolü gereği, daire tercihleriniz SMS tek kullanımlık şifre (OTP) ile kayıt altına alınmaktadır.
+                    </p>
+                </div>
+
+                <!-- Step 1: Telefon Girişi -->
+                <div id="otpStepPhone">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Onay SMS'i Gönderilecek Telefon Numarası</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-telephone-fill text-muted"></i></span>
+                            <input type="tel" id="otpPhoneInput" class="form-control form-control-lg" placeholder="05XXXXXXXXX" maxlength="11" />
+                        </div>
+                        <span class="text-muted small">Daire hak sahibinin veya yetkilinin cep telefonunu giriniz.</span>
+                    </div>
+
+                    <button type="button" id="btnSendOtp" class="btn btn-primary w-100 rounded-pill py-2 fw-bold" onclick="sendOtpCode()">
+                        <i class="bi bi-send-fill me-1"></i> 4 Haneli Doğrulama Kodu Gönder
+                    </button>
+                </div>
+
+                <!-- Step 2: 4 Haneli Kod Doğrulama -->
+                <div id="otpStepCode" style="display: none;">
+                    <div class="alert alert-success border-0 rounded-4 py-2 px-3 small text-center mb-3">
+                        <span id="otpSentPhoneLabel"></span> numarasına SMS gönderildi.
+                        <div id="devOtpPreview" class="badge bg-warning text-dark mt-1 d-block fw-bold fs-6"></div>
+                    </div>
+
+                    <div class="mb-3 text-center">
+                        <label class="form-label fw-semibold small">SMS ile Gelen 4 Haneli Kodu Giriniz</label>
+                        <input type="text" id="otpCodeInput" class="form-control form-control-lg text-center fw-bold fs-3 letter-spacing-2"
+                               placeholder="----" maxlength="4" style="letter-spacing: 0.5rem;" />
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="button" id="btnVerifyOtp" class="btn btn-success rounded-pill py-2 fw-bold fs-6" onclick="verifyOtpCode()">
+                            <i class="bi bi-check-circle-fill me-1"></i> Tercihi Mühürle & Onayla
+                        </button>
+                        <button type="button" class="btn btn-link text-muted small" onclick="resendOtp()">
+                            Kodu tekrar gönder
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Hidden inputs -->
+                <input type="hidden" id="activeUnitId" value="" />
+                <input type="hidden" id="activeCatalogId" value="" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 2. Standart Dışı Özel Talep & Fotoğraf Yükleme Modalı -->
+<div class="modal fade" id="customRequestModal" tabindex="-1" aria-labelledby="customRequestModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form asp-action="SubmitCustomMaterialRequest" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="unitId" value="@unit.Id" />
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold" id="customRequestModalLabel">
+                        <i class="bi bi-camera text-primary me-2"></i>Standart Dışı Malzeme Talebi
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="text-muted small mb-3">
+                        Firma standart skalası dışında özel bir laminant, seramik veya mobilya rengi tercihiniz varsa fotoğrafını ve notunuzu ekleyebilirsiniz. Müteahhit teknik ekibimiz tedarik ve fiyat farkı analizini yapacaktır.
+                    </p>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Malzeme Kategorisi</label>
+                        <select name="category" class="form-select rounded-3" required>
+                            @foreach (var cat in Model.GroupedCatalog.Keys)
+                            {
+                                <option value="@cat">@cat</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Malzeme Fotoğrafı (Opsiyonel)</label>
+                        <input type="file" name="customImage" class="form-control rounded-3" accept="image/*" />
+                        <span class="text-muted small">İnternetten beğendiğiniz veya showroomda çektiğiniz fotoğraf.</span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Talep Notunuz & Marka/Model Detayı</label>
+                        <textarea name="customNotes" class="form-control rounded-3" rows="3" placeholder="Örn: Salon için Macar kesim 14mm lamine parke istiyoruz..." required></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Tahmini Bütçe / Fiyat Farkı (Varsa)</label>
+                        <div class="input-group">
+                            <input type="number" step="0.01" name="priceDifference" class="form-control rounded-start" placeholder="0.00" />
+                            <span class="input-group-text">₺</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">Talebi İlet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 3. Anlaşmalı Showroom / Bayi Ziyareti Modalı -->
+<div class="modal fade" id="showroomModal" tabindex="-1" aria-labelledby="showroomModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form asp-action="SubmitShowroomSelection" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="unitId" value="@unit.Id" />
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold" id="showroomModalLabel">
+                        <i class="bi bi-shop text-success me-2"></i>Anlaşmalı Showroom Seçimi
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="text-muted small mb-3">
+                        Müşterimiz anlaşmalı bayilerimizi (VitrA, AGT, Çamsan vb.) ziyaret ederek aynı markanın farklı bir modelini beğenmişse, bayi adı ve ürün kodunu girerek doğrudan sisteme işleyebilirsiniz.
+                    </p>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Malzeme Kategorisi</label>
+                        <select name="category" class="form-select rounded-3" required>
+                            @foreach (var cat in Model.GroupedCatalog.Keys)
+                            {
+                                <option value="@cat">@cat</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Ziyaret Edilen Showroom / Bayi</label>
+                        <select name="supplierName" class="form-select rounded-3" required>
+                            <option value="VitrA Showroom (Banyo & Seramik)">VitrA Showroom (Banyo & Seramik)</option>
+                            <option value="AGT Parke Dünyası">AGT Parke Dünyası</option>
+                            <option value="Çamsan Entegre Bayi">Çamsan Entegre Bayi</option>
+                            <option value="Çimstone & Belenco Yetkili Bayi">Çimstone & Belenco Yetkili Bayi</option>
+                            <option value="Lineadecor & Mutfak Showroom">Lineadecor & Mutfak Showroom</option>
+                            <option value="Dortek / Kale Kapı Showroom">Dortek / Kale Kapı Showroom</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Showroom Ürün / Model Kodu</label>
+                        <input type="text" name="productCode" class="form-control rounded-3" placeholder="Örn: VitrA Marmori K948483R 60x120 Calacatta" required />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Bayi Tarafından Belirlenen Fiyat Farkı</label>
+                        <div class="input-group">
+                            <input type="number" step="0.01" name="priceDifference" class="form-control rounded-start" placeholder="0.00" value="0" />
+                            <span class="input-group-text">₺</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold">Kaydet & Sisteme İşle</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 4. Büyük Görsel İnceleme Modalı -->
+<div class="modal fade" id="imagePreviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title fw-bold" id="imagePreviewTitle">Malzeme Görseli</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body p-3 text-center">
+                <img id="imagePreviewImg" src="" alt="Malzeme" class="img-fluid rounded-4 shadow-sm" style="max-height: 70vh;" />
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openImageModal(imgSrc, title) {
+            document.getElementById('imagePreviewImg').src = imgSrc;
+            document.getElementById('imagePreviewTitle').innerText = title;
+            new bootstrap.Modal(document.getElementById('imagePreviewModal')).show();
+        }
+
+        function openSmsOtpModal(unitId, catalogId, materialTitle, defaultPhone) {
+            document.getElementById('activeUnitId').value = unitId;
+            document.getElementById('activeCatalogId').value = catalogId;
+            document.getElementById('otpMaterialTitle').innerText = materialTitle;
+            document.getElementById('otpPhoneInput').value = defaultPhone || '';
+
+            // Reset steps
+            document.getElementById('otpStepPhone').style.display = 'block';
+            document.getElementById('otpStepCode').style.display = 'none';
+            document.getElementById('otpCodeInput').value = '';
+            document.getElementById('devOtpPreview').innerText = '';
+
+            new bootstrap.Modal(document.getElementById('smsOtpModal')).show();
+        }
+
+        function getAntiForgeryToken() {
+            var tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+            return tokenInput ? tokenInput.value : '';
+        }
+
+        function sendOtpCode() {
+            var unitId = parseInt(document.getElementById('activeUnitId').value);
+            var catalogId = parseInt(document.getElementById('activeCatalogId').value);
+            var phone = document.getElementById('otpPhoneInput').value.trim();
+
+            if (!phone || phone.length < 10) {
+                alert('Lütfen geçerli bir telefon numarası giriniz.');
+                return;
+            }
+
+            var btn = document.getElementById('btnSendOtp');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Gönderiliyor...';
+
+            fetch('/ConstructionProject/SendMaterialSelectionOtp', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': getAntiForgeryToken()
+                },
+                body: JSON.stringify({ unitId: unitId, catalogId: catalogId, phone: phone })
+            })
+            .then(res => res.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-send-fill me-1"></i> 4 Haneli Doğrulama Kodu Gönder';
+
+                if (data.success) {
+                    document.getElementById('otpStepPhone').style.display = 'none';
+                    document.getElementById('otpStepCode').style.display = 'block';
+                    document.getElementById('otpSentPhoneLabel').innerText = phone;
+                    if (data.otpPreview) {
+                        document.getElementById('devOtpPreview').innerText = 'Doğrulama Kodu: ' + data.otpPreview;
+                    }
+                    document.getElementById('otpCodeInput').focus();
+                } else {
+                    alert(data.message || 'SMS kodu gönderilirken bir hata oluştu.');
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-send-fill me-1"></i> 4 Haneli Doğrulama Kodu Gönder';
+                alert('İletişim hatası oluştu. Lütfen tekrar deneyiniz.');
+            });
+        }
+
+        function verifyOtpCode() {
+            var unitId = parseInt(document.getElementById('activeUnitId').value);
+            var catalogId = parseInt(document.getElementById('activeCatalogId').value);
+            var otp = document.getElementById('otpCodeInput').value.trim();
+
+            if (!otp || otp.length !== 4) {
+                alert('Lütfen 4 haneli doğrulama kodunu eksiksiz giriniz.');
+                return;
+            }
+
+            var btn = document.getElementById('btnVerifyOtp');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Doğrulanıyor...';
+
+            fetch('/ConstructionProject/ConfirmMaterialSelectionOtp', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': getAntiForgeryToken()
+                },
+                body: JSON.stringify({ unitId: unitId, catalogId: catalogId, otp: otp })
+            })
+            .then(res => res.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Tercihi Mühürle & Onayla';
+
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('smsOtpModal')).hide();
+                    location.reload();
+                } else {
+                    alert(data.message || 'Kod doğrulanamadı.');
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Tercihi Mühürle & Onayla';
+                alert('Hata oluştu. Lütfen tekrar deneyiniz.');
+            });
+        }
+
+        function resendOtp() {
+            document.getElementById('otpStepPhone').style.display = 'block';
+            document.getElementById('otpStepCode').style.display = 'none';
+        }
+    </script>
+}

@@ -1,0 +1,211 @@
+@model GMK360.Web.Models.UnitMaterialReportViewModel
+@{
+    ViewData["Title"] = "Taşeron Malzeme Dağıtım ve İmalat Raporu";
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+    var building = Model.Building;
+    var project = building.ConstructionProject;
+}
+
+<div class="container-fluid mt-3 pb-5">
+    <!-- Header Section (Screen only) -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white d-print-none">
+        <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <a asp-action="ManageBlock" asp-route-id="@building.Id" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
+                            <i class="bi bi-arrow-left me-1"></i> Yapı Yönetimine Dön
+                        </a>
+                        <span class="badge bg-warning text-dark px-3 py-1 fs-6 rounded-pill fw-bold">
+                            <i class="bi bi-clipboard2-check-fill me-1"></i> Taşeron İmalat Matrisi
+                        </span>
+                    </div>
+                    <h3 class="fw-bold mb-1 text-dark">
+                        <i class="bi bi-file-earmark-spreadsheet-fill text-warning me-2"></i>@project.Name - @building.BlockName
+                    </h3>
+                    <p class="text-muted small mb-0">
+                        Hak sahipleri ve müşterilerin SMS onaylı malzeme tercihleri, taşeron iş dağıtımı ve imalat sipariş özeti.
+                    </p>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-dark rounded-pill px-4 fw-bold shadow-sm" onclick="window.print()">
+                        <i class="bi bi-printer-fill me-1"></i> Yazdır / PDF Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Printable Header (Visible only on print) -->
+    <div class="d-none d-print-block mb-4 text-center border-bottom pb-3">
+        <h2 class="fw-bold mb-1">@project.Name - @building.BlockName</h2>
+        <h4 class="text-muted mb-1">MÜŞTERİ MALZEME SEÇİM PROTOKOLÜ & TAŞERON İMALAT LİSTESİ</h4>
+        <div class="small text-muted">
+            Tarih: @DateTime.Today.ToString("dd.MM.yyyy") | Toplam Bağımsız Bölüm: @Model.Units.Count
+        </div>
+    </div>
+
+    <!-- Trade / Subcontractor Summary Cards (Screen only) -->
+    @if (Model.SelectionsCountByMaterial.Any())
+    {
+        <div class="row g-3 mb-4 d-print-none">
+            <div class="col-12">
+                <h6 class="fw-bold text-dark mb-2">
+                    <i class="bi bi-pie-chart-fill text-primary me-2"></i>Toplu Sipariş & Taşeron Metraj Özeti
+                </h6>
+            </div>
+            @foreach (var item in Model.SelectionsCountByMaterial)
+            {
+                <div class="col-md-4 col-lg-3">
+                    <div class="p-3 bg-white rounded-4 border shadow-sm h-100 d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="small text-muted d-block text-truncate" style="max-width: 180px;" title="@item.Key">@item.Key</span>
+                            <span class="badge bg-primary-subtle text-primary fw-bold mt-1">Sipariş Sayısı</span>
+                        </div>
+                        <div class="text-end">
+                            <span class="fs-4 fw-bold text-dark">@item.Value</span>
+                            <span class="small text-muted d-block">Daire</span>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Matrix Table -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-white">
+        <div class="card-header bg-white py-3 px-4 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h5 class="fw-bold mb-0 text-dark">
+                <i class="bi bi-table me-2 text-primary"></i>Bağımsız Bölüm Bazlı Malzeme Tercihleri (@Model.Units.Count Daire / Dükkan)
+            </h5>
+            <div class="d-print-none small text-muted">
+                <span class="badge bg-success-subtle text-success me-2">● SMS Mühürlü</span>
+                <span class="badge bg-warning-subtle text-warning me-2">● Özel Talep</span>
+                <span class="badge bg-info-subtle text-info me-2">● Showroom</span>
+                <span class="badge bg-light text-muted border">○ Seçilmedi</span>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 70px;">No</th>
+                        <th>Kat / Tip</th>
+                        <th>Hak Sahibi / Durum</th>
+                        <th>Parke (Salon/Oda)</th>
+                        <th>Mutfak Dolabı</th>
+                        <th>Mutfak Tezgahı</th>
+                        <th>Banyo Seramiği</th>
+                        <th>İç Oda Kapısı</th>
+                        <th class="text-center d-print-none" style="width: 90px;">İşlem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var unit in Model.Units)
+                    {
+                        Model.SelectionsByUnitAndCategory.TryGetValue(unit.Id, out var uMap);
+                        string ownerLabel = string.IsNullOrEmpty(unit.OwnerName) ? "Müteahhit Payı" : unit.OwnerName;
+
+                        <tr>
+                            <td class="fw-bold text-dark fs-6">
+                                <span class="badge bg-light text-dark border">No @unit.DoorNumber</span>
+                            </td>
+                            <td>
+                                <div><strong>Kat @unit.FloorLevel</strong></div>
+                                <span class="badge bg-primary-subtle text-primary" style="font-size: 0.72rem;">@(unit.RoomLayout ?? "Mesken")</span>
+                                @if (unit.GrossSquareMeters.HasValue && unit.GrossSquareMeters > 0)
+                                {
+                                    <span class="text-muted" style="font-size: 0.72rem;">(@unit.GrossSquareMeters m²)</span>
+                                }
+                            </td>
+                            <td>
+                                <div class="fw-semibold text-dark">@ownerLabel</div>
+                                @if (!string.IsNullOrEmpty(unit.OwnerPhone))
+                                {
+                                    <span class="text-muted small">@unit.OwnerPhone</span>
+                                }
+                            </td>
+
+                            <!-- 1. Parke -->
+                            <td>
+                                @RenderSelectionCell(uMap, "Salon & Odalar Zemin (Laminant Parke)")
+                            </td>
+
+                            <!-- 2. Mutfak Dolabı -->
+                            <td>
+                                @RenderSelectionCell(uMap, "Mutfak Dolap Kapakları & Gövde")
+                            </td>
+
+                            <!-- 3. Mutfak Tezgahı -->
+                            <td>
+                                @RenderSelectionCell(uMap, "Mutfak Tezgahı & Alın Paneli")
+                            </td>
+
+                            <!-- 4. Banyo Seramiği -->
+                            <td>
+                                @RenderSelectionCell(uMap, "Banyo Zemin & Duvar Seramikleri")
+                            </td>
+
+                            <!-- 5. İç Oda Kapısı -->
+                            <td>
+                                @RenderSelectionCell(uMap, "İç Oda Kapıları")
+                            </td>
+
+                            <!-- İşlem -->
+                            <td class="text-center d-print-none">
+                                <a href="/ConstructionProject/UnitMaterialSelection/@unit.Id" class="btn btn-sm btn-outline-warning text-dark py-1 px-2 rounded-pill fw-semibold" title="Malzeme Seçimini Düzenle">
+                                    <i class="bi bi-pencil-square"></i> Düzenle
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@functions {
+    public Microsoft.AspNetCore.Html.IHtmlContent RenderSelectionCell(Dictionary<string, GMK360.Core.Entities.Construction.UnitMaterialSelection>? map, string category)
+    {
+        if (map != null && map.TryGetValue(category, out var sel))
+        {
+            string title = sel.ProjectMaterialCatalog?.MaterialName 
+                ?? (!string.IsNullOrEmpty(sel.ShowroomProductCode) ? $"{sel.ShowroomSupplierName} ({sel.ShowroomProductCode})" : "Özel İstek");
+
+            if (sel.IsConfirmedViaSms)
+            {
+                string dt = sel.ConfirmedDate?.ToString("dd.MM.yyyy") ?? "";
+                return new Microsoft.AspNetCore.Html.HtmlString(
+                    $"<div><span class='fw-semibold text-dark'>{title}</span></div>" +
+                    $"<span class='badge bg-success-subtle text-success border border-success-subtle' style='font-size:0.7rem;'><i class='bi bi-shield-check me-1'></i>SMS Onaylı ({dt})</span>"
+                );
+            }
+            else if (sel.SelectionStatus == "FiyatBekliyor")
+            {
+                return new Microsoft.AspNetCore.Html.HtmlString(
+                    $"<div><span class='fw-semibold text-dark'>{title}</span></div>" +
+                    $"<span class='badge bg-warning-subtle text-warning border border-warning-subtle' style='font-size:0.7rem;'><i class='bi bi-clock me-1'></i>Fiyat Bekliyor</span>"
+                );
+            }
+            else if (sel.SelectionStatus == "ShowroomSecimi")
+            {
+                return new Microsoft.AspNetCore.Html.HtmlString(
+                    $"<div><span class='fw-semibold text-dark'>{title}</span></div>" +
+                    $"<span class='badge bg-info-subtle text-info border border-info-subtle' style='font-size:0.7rem;'><i class='bi bi-shop me-1'></i>Showroom</span>"
+                );
+            }
+            else
+            {
+                return new Microsoft.AspNetCore.Html.HtmlString(
+                    $"<div><span class='text-dark'>{title}</span></div>" +
+                    $"<span class='badge bg-secondary-subtle text-secondary' style='font-size:0.7rem;'>Taslak</span>"
+                );
+            }
+        }
+
+        return new Microsoft.AspNetCore.Html.HtmlString("<span class='text-muted small fst-italic'>Standart Bekleniyor</span>");
+    }
+}
