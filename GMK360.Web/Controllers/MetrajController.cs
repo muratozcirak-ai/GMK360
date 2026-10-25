@@ -1,1353 +1,353 @@
-using System;
+﻿using System;
+
 using System.Collections.Generic;
+
 using System.Threading.Tasks;
+
 using System.Text;
+
 using GMK360.Data.Contexts;
+
 using GMK360.Core.Entities.Construction;
+
 using GMK360.Core.Entities.Construction.Workflows;
+
 using GMK360.Core.Entities.B2B;
+
 using Microsoft.AspNetCore.Mvc;
+
 using Microsoft.EntityFrameworkCore;
+
 using System.Linq;
 
+
+
 using System.IO;
+
 using Microsoft.AspNetCore.Http;
+
 using GMK360.Web.Models;
+
 using GMK360.Core.Entities;
 
+
+
 namespace GMK360.Web.Controllers
+
 {
+
     public class MetrajController : Controller
+
     {
+
         private readonly ApplicationDbContext _context;
+
         private readonly GMK360.Web.Services.Construction.DnaTimeOffsetService _dnaTimeOffsetService;
 
+
+
         public MetrajController(ApplicationDbContext context, GMK360.Web.Services.Construction.DnaTimeOffsetService dnaTimeOffsetService)
+
         {
+
             _context = context;
+
             _dnaTimeOffsetService = dnaTimeOffsetService;
+
         }
+
+
 
         public IActionResult Index(int projectId, int? recipeId)
+
         {
+
             return RedirectToAction(nameof(DrawingArchive), new { projectId = projectId });
+
         }
 
+
+
         // =================================================================================
-        // KANAT 1: DİJİTAL ÇİZİM ARŞİVİ & İLK KABUL MASASI
+
+        // KANAT 1: DÄ°JÄ°TAL Ã‡Ä°ZÄ°M ARÅÄ°VÄ° & Ä°LK KABUL MASASI
+
         // =================================================================================
-        public async Task<IActionResult> DrawingArchive(int? projectId, int? id)
+
+        public async Task<IActionResult> DrawingArchive(int? projectId, int? id, [FromQuery] FieldDecisionsDto? decisions = null)
+
         {
+
             int pId = projectId ?? id ?? 0;
+
             if (pId <= 0) return RedirectToAction("Index", "ConstructionProject");
+
+
 
             ViewData["ProjectId"] = pId;
 
+
+
             var project = await _context.ConstructionProjects
+
                 .Include(p => p.Blocks).ThenInclude(b => b.ChildBuildings).ThenInclude(c => c.Units)
+
                 .Include(p => p.Blocks).ThenInclude(b => b.Units)
+
                 .FirstOrDefaultAsync(p => p.Id == pId);
+
+
 
             if (project == null) return NotFound();
 
+
+
             ViewData["ProjectName"] = project.Name;
+
             ViewBag.Project = project;
 
-            // Tüm binaları/blokları topla (Ana baza/blok ve alt kuleler)
+
+
+            // TÃ¼m binalarÄ±/bloklarÄ± topla (Ana baza/blok ve alt kuleler)
+
             var allBuildings = new List<Building>();
+
             var parentBlocks = project.Blocks.Where(b => b.ParentBuildingId == null).ToList();
+
             
+
             foreach (var b in parentBlocks)
+
             {
+
                 allBuildings.Add(b);
+
                 if (b.ChildBuildings != null && b.ChildBuildings.Any())
+
                 {
+
                     allBuildings.AddRange(b.ChildBuildings);
+
                 }
+
             }
+
             foreach (var b in project.Blocks)
+
             {
+
                 if (!allBuildings.Any(x => x.Id == b.Id))
+
                 {
+
                     allBuildings.Add(b);
+
                 }
+
             }
+
+
 
             var allBuildingIds = allBuildings.Select(b => b.Id).Distinct().ToList();
+
             var floorEntityTypes = allBuildingIds.Select(bId => "BuildingFloor_" + bId).ToList();
 
-            // Kat Planı Belgelerini çek (DmsDocument)
+
+
+            // Kat PlanÄ± Belgelerini Ã§ek (DmsDocument)
+
             var floorPlanDocs = await _context.DmsDocuments
+
                 .Where(d => floorEntityTypes.Contains(d.EntityType))
+
                 .ToListAsync();
 
-            // Çizim Arşivi (DocumentArchive) belgelerini çek
+
+
+            // Ã‡izim ArÅŸivi (DocumentArchive) belgelerini Ã§ek
+
             var allDrawings = await _context.DocumentArchives
+
                 .Where(d => d.ProjectId == pId)
+
                 .OrderByDescending(d => d.UploadDate)
+
                 .ToListAsync();
 
-            // Kat Matrisini Oluştur
+
+
+            // Kat Matrisini OluÅŸtur
+
             var matrix = new List<FloorPlanMatrixItem>();
 
+
+
             foreach (var building in allBuildings)
+
             {
+
                 int totalSlabs = GetTotalSlabs(building);
+
                 var slabIndices = new HashSet<int>();
 
+
+
                 if (totalSlabs > 0)
+
                 {
+
                     for (int s = 1; s <= totalSlabs; s++)
+
                     {
+
                         slabIndices.Add(s);
+
                     }
+
                 }
+
                 else
+
                 {
+
                     slabIndices.Add(1);
+
                 }
+
+
 
                 if (building.Units != null && building.Units.Any())
+
                 {
+
                     foreach (var u in building.Units)
+
                     {
+
                         slabIndices.Add(u.FloorLevel);
+
                     }
+
                 }
 
+
+
                 foreach (var slabIdx in slabIndices.OrderBy(s => s))
+
                 {
+
                     string entityType = "BuildingFloor_" + building.Id;
+
                     var doc = floorPlanDocs.FirstOrDefault(d => d.EntityType == entityType && d.EntityId == slabIdx);
+
                     var unitsOnFloor = building.Units?.Where(u => u.FloorLevel == slabIdx).ToList() ?? new List<BuildingUnit>();
+
+
 
                     string floorName = GetFloorNameBySlabIndex(building, slabIdx);
 
+
+
                     matrix.Add(new FloorPlanMatrixItem
+
                     {
+
                         BuildingId = building.Id,
+
                         BlockName = building.BlockName ?? building.Name,
+
                         IsChildBuilding = building.ParentBuildingId.HasValue,
+
                         ParentBuildingId = building.ParentBuildingId,
+
                         FloorLevel = slabIdx,
+
                         FloorName = floorName,
+
                         UnitCount = unitsOnFloor.Count,
+
                         TotalGrossM2 = unitsOnFloor.Sum(u => u.GrossSquareMeters ?? 0),
+
                         TotalNetM2 = unitsOnFloor.Sum(u => u.NetSquareMeters ?? 0),
+
                         HasPlan = doc != null,
+
                         PlanUrl = doc?.DocumentUrl,
+
                         PlanFileName = doc?.Title,
+
                         PlanExtension = doc?.FileExtension,
+
                         PlanUploadDate = doc?.UploadDate,
+
                         PlanSizeBytes = doc?.FileSizeBytes
+
                     });
+
                 }
+
             }
+
+
 
             var model = new DrawingArchiveViewModel
+
             {
+
                 Project = project,
+
                 Blocks = allBuildings,
+
                 FloorMatrix = matrix,
+
                 AllDrawings = allDrawings,
+
                 ArchitecturalDrawings = allDrawings.Where(d => d.Category == "Mimari" || (d.Category != null && d.Category.Contains("Mimari"))).ToList(),
+
                 StructuralDrawings = allDrawings.Where(d => d.Category == "Statik" || (d.Category != null && d.Category.Contains("Statik"))).ToList(),
+
                 MechanicalDrawings = allDrawings.Where(d => d.Category == "Mekanik" || (d.Category != null && d.Category.Contains("Mekanik"))).ToList(),
+
                 ElectricalDrawings = allDrawings.Where(d => d.Category == "Elektrik" || (d.Category != null && d.Category.Contains("Elektrik"))).ToList(),
+
                 TotalFloorsCount = matrix.Count,
-                FloorsWithPlanCount = matrix.Count(m => m.HasPlan)
+
+                FloorsWithPlanCount = matrix.Count(m => m.HasPlan),
+                Decisions = decisions ?? new FieldDecisionsDto(),
+                MasterBomItems = GenerateMasterBomTakeoff(project, allDrawings, decisions)
+
             };
+
+
 
             return View(model);
+
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UploadDrawing(int projectId, string category, string title, int? buildingId, int? floorLevel, string? revision, IFormFile? file)
+        private List<MasterBomItemDto> GenerateMasterBomTakeoff(ConstructionProject project, List<DocumentArchive> allDrawings, FieldDecisionsDto? decisions = null)
         {
-            var project = await _context.ConstructionProjects.FindAsync(projectId);
-            if (project == null) return NotFound();
-
-            int agencyId = project.AgencyId;
-            var agencyClaim = User.FindFirst("AgencyId")?.Value;
-            if (int.TryParse(agencyClaim, out int aid)) agencyId = aid;
-
-            if (file != null && file.Length > 0)
-            {
-                var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", $"Agency_{agencyId}", $"Project_{projectId}", "drawings");
-                if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
-
-                var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-                var safeCategory = string.IsNullOrWhiteSpace(category) ? "Mimari" : category.Trim();
-                var uniqueName = $"{safeCategory}_{Guid.NewGuid().ToString("N").Substring(0, 8)}{ext}";
-                var filePath = Path.Combine(uploadsFolder, uniqueName);
-
-                using (var stream = new FileStream(filePath, FileMode.Create))
-                {
-                    await file.CopyToAsync(stream);
-                }
-
-                var docUrl = $"/uploads/Agency_{agencyId}/Project_{projectId}/drawings/{uniqueName}";
-                string cleanTitle = string.IsNullOrWhiteSpace(title) ? Path.GetFileNameWithoutExtension(file.FileName) : title.Trim();
-                string fullTitle = string.IsNullOrWhiteSpace(revision) ? cleanTitle : $"{cleanTitle} ({revision})";
-
-                var archive = new GMK360.Core.Entities.DocumentArchive
-                {
-                    AgencyId = agencyId,
-                    ProjectId = projectId,
-                    BuildingId = buildingId,
-                    Category = safeCategory,
-                    Title = fullTitle,
-                    FileName = file.FileName,
-                    FileExtension = ext,
-                    DocumentUrl = docUrl,
-                    UploadDate = DateTime.UtcNow,
-                    Year = DateTime.Now.Year,
-                    SourceModule = "Construction",
-                    Status = "İlk Kabul Onaylandı"
-                };
-                _context.DocumentArchives.Add(archive);
-
-                // Eğer bir kat planı seçildiyse DmsDocument ile Yapı Yönetimi Katına da bağla
-                if (buildingId.HasValue && floorLevel.HasValue)
-                {
-                    string floorEntityType = "BuildingFloor_" + buildingId.Value;
-                    var existingDoc = await _context.DmsDocuments
-                        .FirstOrDefaultAsync(d => d.EntityType == floorEntityType && d.EntityId == floorLevel.Value);
-
-                    if (existingDoc != null)
-                    {
-                        existingDoc.DocumentUrl = docUrl;
-                        existingDoc.FileExtension = ext;
-                        existingDoc.FileSizeBytes = file.Length;
-                        existingDoc.UploadDate = DateTime.UtcNow;
-                        existingDoc.Title = fullTitle;
-                        _context.Update(existingDoc);
-                    }
-                    else
-                    {
-                        var dmsDoc = new GMK360.Core.Entities.DmsDocument
-                        {
-                            EntityType = floorEntityType,
-                            EntityId = floorLevel.Value,
-                            Title = fullTitle,
-                            DocumentUrl = docUrl,
-                            FileExtension = ext,
-                            FileSizeBytes = file.Length,
-                            UploadDate = DateTime.UtcNow,
-                            UploadedByUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? ""
-                        };
-                        _context.DmsDocuments.Add(dmsDoc);
-                    }
-                }
-
-                await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = $"'{fullTitle}' çizimi başarıyla ilk kabul arşivine eklendi.";
-            }
-            else
-            {
-                TempData["ErrorMessage"] = "Lütfen geçerli bir dosya seçiniz.";
-            }
-
-            return RedirectToAction(nameof(DrawingArchive), new { projectId = projectId });
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteDrawing(int id, int projectId)
-        {
-            var archive = await _context.DocumentArchives.FirstOrDefaultAsync(d => d.Id == id && d.ProjectId == projectId);
-            if (archive != null)
-            {
-                _context.DocumentArchives.Remove(archive);
-                await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = "Çizim arşivden başarıyla kaldırıldı.";
-            }
-            return RedirectToAction(nameof(DrawingArchive), new { projectId = projectId });
-        }
-
-        private int GetTotalSlabs(Building b)
-        {
-            return b.BasementFloors + (b.HasGroundFloor ? 1 : 0) + (b.TotalFloors ?? 0) + (b.HasRoof ? 1 : 0);
-        }
-
-        private string GetFloorNameBySlabIndex(Building b, int slabIndex)
-        {
-            int current = 1;
-            int basements = b.BasementFloors;
-            if (slabIndex <= basements)
-            {
-                int bodrumNo = (basements - slabIndex) + 1;
-                return $"-{bodrumNo}. Bodrum";
-            }
-            current += basements;
-
-            if (b.HasGroundFloor)
-            {
-                if (slabIndex == current) return "Zemin Kat";
-                current++;
-            }
-
-            int totalF = b.TotalFloors ?? 0;
-            if (slabIndex < current + totalF)
-            {
-                int katNo = slabIndex - current + 1;
-                return $"{katNo}. Normal Kat";
-            }
-            current += totalF;
-
-            if (b.HasRoof && slabIndex == current)
-            {
-                return "Çatı Katı";
-            }
-
-            return $"{slabIndex}. Seviye";
-        }
-
-        
-        
-        public IActionResult ProjectDNA(int id)
-        {
-            ViewData["ProjectId"] = id;
-            
-            var project = _context.ConstructionProjects
-                .Include(p => p.Blocks)
-                .Include(p => p.Amenities)
-                .FirstOrDefault(p => p.Id == id);
-            if (project == null) return NotFound();
-
-            ViewBag.Project = project;
-            ViewData["ProjectName"] = project.Name;
-            
-            ViewBag.WallRecipes = _context.MaterialRecipes.ToList();
-            ViewBag.MasterMaterials = _context.MasterMaterials.ToList();
-            ViewBag.WorkGroups = _context.WorkGroupDefinitions.ToList();
-
-            // DINAMIK ADIM 1 VERISI
-            var step1 = _context.DnaTemplateSteps
-                .Include(s => s.Questions)
-                    .ThenInclude(q => q.Options)
-                        .ThenInclude(o => o.Profession)
-                .Include(s => s.Questions)
-                    .ThenInclude(q => q.Profession)
-                .FirstOrDefault(s => s.StepOrder == 1 || s.StepName.Contains("Adım 1") || s.Id == 3);
-
-            if (step1 != null)
-            {
-                step1.Questions = step1.Questions.OrderBy(q => q.QuestionOrder).ToList();
-            }
-
-            ViewBag.Step1 = step1;
-
-            // URETILEN PROFILLERI (KAYITLARI) CEK
-            var savedProfiles = _context.ProjectDnaProfiles
-                .Include(p => p.Details)
-                    .ThenInclude(d => d.Profession)
-                .Where(p => p.ProjectId == id)
-                .OrderByDescending(p => p.CreatedDate)
-                .ToList();
-
-            ViewBag.SavedProfiles = savedProfiles;
-
-            // YAPI / BLOK HİYERARŞİSİ (A Blok, Bitişik Bloklar, Ortak Baza)
-            var structures = project.Blocks.Where(b => b.ParentBuildingId == null && !b.IsExistingBuilding).ToList();
-            ViewBag.Structures = structures;
-            var defaultStructure = structures.FirstOrDefault();
-            ViewBag.ActiveStructure = defaultStructure;
-
-            // DXF'SİZ PARAMETRİK KEŞİF & İHALE LİSTESİ
-            var activeProfile = savedProfiles.FirstOrDefault();
-            ViewBag.ParametricTakeoff = GenerateParametricTakeoff(project, activeProfile);
-            ViewBag.WorkflowSteps = GenerateParametricWorkflow(project, activeProfile, DateTime.Today, defaultStructure?.Id);
-
-            return View();
-        }
-
-        // =================================================================================
-        // ŞANTİYE İŞ AKIŞI, MALZEME & KADRO MASASI (YAPI ODAKLI ÇALIŞMA MASASI)
-        // =================================================================================
-        public async Task<IActionResult> BuildingWorkflow(int id, int? profileId, int? buildingId)
-        {
-            var project = await _context.ConstructionProjects
-                .Include(p => p.Blocks).ThenInclude(b => b.ChildBuildings).ThenInclude(c => c.Units)
-                .Include(p => p.Blocks).ThenInclude(b => b.Units)
-                .Include(p => p.Amenities)
-                .FirstOrDefaultAsync(p => p.Id == id);
-
-            if (project == null) return NotFound();
-
-            ViewData["ProjectId"] = id;
-            ViewData["ProjectName"] = project.Name;
-            ViewBag.Project = project;
-
-            // Yapılar (A Blok, Bitişik Bloklar, Ortak Baza)
-            var structures = project.Blocks.Where(b => b.ParentBuildingId == null && !b.IsExistingBuilding).ToList();
-            ViewBag.Structures = structures;
-
-            // Kayıtlı Profiller
-            var savedProfiles = await _context.ProjectDnaProfiles
-                .Include(p => p.Details).ThenInclude(d => d.Profession)
-                .Where(p => p.ProjectId == id)
-                .OrderByDescending(p => p.CreatedDate)
-                .ToListAsync();
-
-            ViewBag.SavedProfiles = savedProfiles;
-            var activeProfile = profileId.HasValue 
-                ? savedProfiles.FirstOrDefault(p => p.Id == profileId.Value) 
-                : savedProfiles.FirstOrDefault(p => p.Status == "Tamamlandı") ?? savedProfiles.FirstOrDefault();
-            ViewBag.ActiveProfile = activeProfile;
-
-            // Seçili Yapı (varsayılan: parametre veya ilk yapı)
-            var activeStructure = buildingId.HasValue 
-                ? structures.FirstOrDefault(s => s.Id == buildingId.Value) 
-                : structures.FirstOrDefault();
-            ViewBag.ActiveStructure = activeStructure;
-
-            // ADIM 0 (Mecburi Statik ve Taşıyıcılar - 20 Soru / Kalem)
-            var step0 = await _context.DnaTemplateSteps
-                .AsNoTracking()
-                .Include(s => s.Questions)
-                    .ThenInclude(q => q.Profession)
-                .FirstOrDefaultAsync(s => s.StepOrder == 0 || s.Id == 2);
-
-            if (step0 != null && step0.Questions != null)
-            {
-                step0.Questions = step0.Questions.OrderBy(q => q.QuestionOrder).ToList();
-            }
-            ViewBag.Step0 = step0;
-
-            return View();
-        }
-
-        // YENİ TAM SAYFA DNA SİHİRBAZI (YENİ SEKME)
-        public IActionResult DnaWizard(int id, int? profileId, int? startStep = null)
-        {
-            var project = _context.ConstructionProjects
-                .Include(p => p.Blocks)
-                .Include(p => p.Amenities)
-                .FirstOrDefault(p => p.Id == id);
-            if (project == null) return NotFound();
-
-            ViewBag.Project = project;
-            ViewData["ProjectId"] = id;
-            ViewData["ProjectName"] = project.Name;
-
-            // ADIM 0 (Mecburi Statik ve Taşıyıcılar - 20 Soru)
-            var step0 = _context.DnaTemplateSteps
-                .AsNoTracking()
-                .Include(s => s.Questions)
-                    .ThenInclude(q => q.Profession)
-                .FirstOrDefault(s => s.StepOrder == 0 || s.Id == 2);
-
-            if (step0 != null && step0.Questions != null)
-            {
-                step0.Questions = step0.Questions.OrderBy(q => q.QuestionOrder).ToList();
-            }
-            ViewBag.Step0 = step0;
-
-            // ADIM 1 (Saha Analizi ve Şantiye Kurulumu)
-            var step1 = _context.DnaTemplateSteps
-                .AsNoTracking()
-                .Include(s => s.Questions)
-                    .ThenInclude(q => q.Options)
-                        .ThenInclude(o => o.Profession)
-                .Include(s => s.Questions)
-                    .ThenInclude(q => q.Profession)
-                .FirstOrDefault(s => s.StepOrder == 1 || s.Id == 3);
-
-            if (step1 != null && step1.Questions != null)
-            {
-                step1.Questions = step1.Questions.OrderBy(q => q.QuestionOrder).ToList();
-            }
-            ViewBag.Step1 = step1;
-
-            // TÜM ADIMLAR (Navigasyon ve Tüm Fazların Soruları/Seçenekleri İçin)
-            ViewBag.AllSteps = _context.DnaTemplateSteps
-                .AsNoTracking()
-                .Include(s => s.Questions)
-                    .ThenInclude(q => q.Options)
-                        .ThenInclude(o => o.Profession)
-                .Include(s => s.Questions)
-                    .ThenInclude(q => q.Profession)
-                .OrderBy(s => s.StepOrder)
-                .ToList();
-
-            // İŞ BRANŞLARI (Pazar Yeri Eşleştirmesi)
-            ViewBag.Professions = _context.DnaProfessions.OrderBy(p => p.Name).ToList();
-
-            // MEVCUT BİR TASLAK VEYA PROFİL VAR MI?
-            // NOT: profileId parametresi verilmişse (Düzenle tıklandıysa) o profili açar.
-            // Verilmediyse (Yeni Profil tıklandıysa) tertemiz YENİ bir profil açar; eski taslağa zorlamaz!
-            if (profileId.HasValue && profileId.Value > 0)
-            {
-                var existing = _context.ProjectDnaProfiles
-                    .Include(p => p.Details)
-                        .ThenInclude(d => d.Profession)
-                    .FirstOrDefault(p => p.Id == profileId.Value && p.ProjectId == id);
-                ViewBag.ExistingProfile = existing;
-            }
-            else
-            {
-                ViewBag.ExistingProfile = null;
-            }
-
-            int? effectiveStartStep = startStep;
-            if (!effectiveStartStep.HasValue && ViewBag.ExistingProfile != null)
-            {
-                var prof = ViewBag.ExistingProfile as ProjectDnaProfile;
-                if (prof != null && int.TryParse(prof.ExtraField1, out int sStep))
-                {
-                    effectiveStartStep = sStep;
-                }
-            }
-            ViewBag.StartStep = effectiveStartStep;
-
-            // PARAMETRİK KEŞİF LİSTESİ
-            var currProfile = ViewBag.ExistingProfile as ProjectDnaProfile;
-            ViewBag.ParametricTakeoff = GenerateParametricTakeoff(project, currProfile);
-            ViewBag.WorkflowSteps = GenerateParametricWorkflow(project, currProfile, DateTime.Today);
-
-            return View();
-        }
-
-        public class DnaProfileSaveDto
-        {
-            public int? ProfileId { get; set; }
-            public int ProjectId { get; set; }
-            public string Name { get; set; }
-            public int? StartStep { get; set; }
-            public List<DnaProfileDetailDto> Details { get; set; }
-        }
-
-        public class DnaProfileDetailDto
-        {
-            public string Phase { get; set; }
-            public string SelectedItem { get; set; }
-            public int ValueId { get; set; } // OptionId
-        }
-
-        [HttpGet]
-        public IActionResult CheckProfileName(int projectId, string name, int? profileId)
-        {
-            if (string.IsNullOrWhiteSpace(name)) return Json(new { exists = false });
-            var trimmed = name.Trim().ToLower();
-            bool exists = _context.ProjectDnaProfiles.Any(p =>
-                p.ProjectId == projectId &&
-                p.Name.Trim().ToLower() == trimmed &&
-                (!profileId.HasValue || p.Id != profileId.Value));
-            return Json(new { exists });
-        }
-
-        [HttpPost]
-        [IgnoreAntiforgeryToken]
-        public IActionResult AutoSaveProfile([FromBody] DnaProfileSaveDto data)
-        {
-            if (data == null || string.IsNullOrWhiteSpace(data.Name)) return BadRequest();
-
-            var trimmedName = data.Name.Trim();
-
-            ProjectDnaProfile profile = null;
-            if (data.ProfileId.HasValue && data.ProfileId.Value > 0)
-            {
-                profile = _context.ProjectDnaProfiles
-                    .Include(p => p.Details)
-                    .FirstOrDefault(p => p.Id == data.ProfileId.Value && p.ProjectId == data.ProjectId);
-            }
-
-            if (profile == null)
-            {
-                // Aynı isimde aktif bir taslak varsa onu devam ettir
-                profile = _context.ProjectDnaProfiles
-                    .Include(p => p.Details)
-                    .FirstOrDefault(p => p.ProjectId == data.ProjectId && p.Name.Trim().ToLower() == trimmedName.ToLower());
-            }
-
-            // Başka bir profille isim çakışması kontrolü
-            bool isDuplicate = _context.ProjectDnaProfiles.Any(p =>
-                p.ProjectId == data.ProjectId &&
-                p.Name.Trim().ToLower() == trimmedName.ToLower() &&
-                (profile == null || p.Id != profile.Id));
-
-            if (isDuplicate)
-            {
-                return Json(new { success = false, duplicate = true, message = "Bu isimde bir DNA profili bu projede zaten kayıtlı! Lütfen farklı bir isim belirleyiniz." });
-            }
-
-            if (profile == null)
-            {
-                profile = new ProjectDnaProfile
-                {
-                    ProjectId = data.ProjectId,
-                    Name = trimmedName,
-                    Status = "Taslak",
-                    CreatedBy = User.Identity?.Name ?? "Admin",
-                    CreatedDate = DateTime.UtcNow,
-                    ExtraField1 = data.StartStep?.ToString()
-                };
-                _context.ProjectDnaProfiles.Add(profile);
-            }
-            else
-            {
-                profile.Name = trimmedName;
-                profile.Status = "Taslak";
-                if (data.StartStep.HasValue)
-                {
-                    profile.ExtraField1 = data.StartStep.Value.ToString();
-                }
-                if (profile.Details != null && profile.Details.Any())
-                {
-                    _context.ProjectDnaDetails.RemoveRange(profile.Details);
-                }
-            }
-
-            _context.SaveChanges();
-
-            if (data.Details != null && data.Details.Any())
-            {
-                var optIds = data.Details.Select(d => d.ValueId).ToList();
-                var options = _context.DnaTemplateOptions.Where(o => optIds.Contains(o.Id)).ToList();
-                var questions = _context.DnaTemplateQuestions.Where(q => optIds.Contains(q.Id)).ToList();
-
-                foreach (var d in data.Details)
-                {
-                    var opt = options.FirstOrDefault(o => o.Id == d.ValueId);
-                    int? profId = opt?.DnaProfessionId;
-                    if (!profId.HasValue && opt != null)
-                    {
-                        var optQ = _context.DnaTemplateQuestions.Find(opt.DnaTemplateQuestionId);
-                        profId = optQ?.DnaProfessionId;
-                    }
-                    if (!profId.HasValue)
-                    {
-                        var qItem = questions.FirstOrDefault(q => q.Id == d.ValueId);
-                        profId = qItem?.DnaProfessionId;
-                    }
-
-                    decimal qty = 0;
-                    string unit = "Belirsiz";
-                    if (!string.IsNullOrEmpty(d.SelectedItem) && d.SelectedItem.Contains(":"))
-                    {
-                        var parts = d.SelectedItem.Split(':');
-                        if (parts.Length > 1)
-                        {
-                            var valStr = parts[1].Replace("m", "").Trim();
-                            decimal.TryParse(valStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out qty);
-                            unit = "mt";
-                        }
-                    }
-
-                    _context.ProjectDnaDetails.Add(new ProjectDnaDetail
-                    {
-                        ProfileId = profile.Id,
-                        Phase = d.Phase,
-                        SelectedItem = d.SelectedItem,
-                        DnaProfessionId = profId,
-                        Quantity = qty,
-                        Unit = unit
-                    });
-                }
-                _context.SaveChanges();
-            }
-
-            return Json(new { success = true, profileId = profile.Id });
-        }
-
-        [HttpPost]
-        [IgnoreAntiforgeryToken]
-        public IActionResult SaveDnaProfile([FromBody] DnaProfileSaveDto data)
-        {
-            if (data == null || string.IsNullOrWhiteSpace(data.Name)) return BadRequest();
-
-            var trimmedName = data.Name.Trim();
-
-            ProjectDnaProfile profile = null;
-            if (data.ProfileId.HasValue && data.ProfileId.Value > 0)
-            {
-                profile = _context.ProjectDnaProfiles
-                    .Include(p => p.Details)
-                    .FirstOrDefault(p => p.Id == data.ProfileId.Value && p.ProjectId == data.ProjectId);
-            }
-
-            if (profile == null)
-            {
-                profile = _context.ProjectDnaProfiles
-                    .Include(p => p.Details)
-                    .FirstOrDefault(p => p.ProjectId == data.ProjectId && p.Name.Trim().ToLower() == trimmedName.ToLower());
-            }
-
-            // Aynı isimde başka bir profil var mı kontrolü
-            bool isDuplicate = _context.ProjectDnaProfiles.Any(p =>
-                p.ProjectId == data.ProjectId &&
-                p.Name.Trim().ToLower() == trimmedName.ToLower() &&
-                (profile == null || p.Id != profile.Id));
-
-            if (isDuplicate)
-            {
-                return Json(new { success = false, duplicate = true, message = "Bu isimde bir DNA profili bu projede zaten kayıtlı! Lütfen farklı bir isim belirleyiniz." });
-            }
-
-            if (profile == null)
-            {
-                profile = new ProjectDnaProfile
-                {
-                    ProjectId = data.ProjectId,
-                    Name = trimmedName,
-                    Status = "DNA Tamamlandı",
-                    CreatedBy = User.Identity?.Name ?? "Admin",
-                    CreatedDate = DateTime.UtcNow,
-                    ExtraField1 = data.StartStep?.ToString()
-                };
-                _context.ProjectDnaProfiles.Add(profile);
-            }
-            else
-            {
-                profile.Name = trimmedName;
-                profile.Status = "DNA Tamamlandı";
-                if (data.StartStep.HasValue)
-                {
-                    profile.ExtraField1 = data.StartStep.Value.ToString();
-                }
-                if (profile.Details != null && profile.Details.Any())
-                {
-                    _context.ProjectDnaDetails.RemoveRange(profile.Details);
-                }
-            }
-
-            _context.SaveChanges();
-
-            if (data.Details != null && data.Details.Any())
-            {
-                var optIds = data.Details.Select(d => d.ValueId).ToList();
-                var options = _context.DnaTemplateOptions.Where(o => optIds.Contains(o.Id)).ToList();
-                var questions = _context.DnaTemplateQuestions.Where(q => optIds.Contains(q.Id)).ToList();
-
-                foreach (var d in data.Details)
-                {
-                    var opt = options.FirstOrDefault(o => o.Id == d.ValueId);
-                    int? profId = opt?.DnaProfessionId;
-                    if (!profId.HasValue && opt != null)
-                    {
-                        var optQ = _context.DnaTemplateQuestions.Find(opt.DnaTemplateQuestionId);
-                        profId = optQ?.DnaProfessionId;
-                    }
-                    if (!profId.HasValue)
-                    {
-                        var qItem = questions.FirstOrDefault(q => q.Id == d.ValueId);
-                        profId = qItem?.DnaProfessionId;
-                    }
-
-                    decimal qty = 0;
-                    string unit = "Belirsiz";
-                    if (!string.IsNullOrEmpty(d.SelectedItem) && d.SelectedItem.Contains(":"))
-                    {
-                        var parts = d.SelectedItem.Split(':');
-                        if (parts.Length > 1)
-                        {
-                            var valStr = parts[1].Replace("m", "").Trim();
-                            decimal.TryParse(valStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out qty);
-                            unit = "mt";
-                        }
-                    }
-
-                    _context.ProjectDnaDetails.Add(new ProjectDnaDetail
-                    {
-                        ProfileId = profile.Id,
-                        Phase = d.Phase,
-                        SelectedItem = d.SelectedItem,
-                        DnaProfessionId = profId,
-                        Quantity = qty,
-                        Unit = unit
-                    });
-                }
-                _context.SaveChanges();
-            }
-
-            return Json(new { success = true, profileId = profile.Id });
-        }
-
-        [HttpPost]
-        [IgnoreAntiforgeryToken]
-        public IActionResult DeleteDnaProfile(int id)
-        {
-            var profile = _context.ProjectDnaProfiles.Include(p => p.Details).FirstOrDefault(p => p.Id == id);
-            if (profile != null)
-            {
-                _context.ProjectDnaDetails.RemoveRange(profile.Details);
-                _context.ProjectDnaProfiles.Remove(profile);
-                _context.SaveChanges();
-            }
-            return Ok();
-        }
-
-        public IActionResult ParseDxf(int projectId, int recipeId)
-        {
-            // Simulate DXF parsing
-            var recipe = _context.MaterialRecipes
-                .Include(r => r.Ingredients)
-                .ThenInclude(i => i.MasterMaterial)
-                .FirstOrDefault(r => r.Id == recipeId);
-
-            ViewBag.Recipe = recipe;
-            ViewData["ProjectId"] = projectId;
-            return View("Result");
-        }
-
-        [HttpPost]
-        public IActionResult SimulateDxfUnitTypeRead(int projectId)
-        {
-            // DXF'ten Daire Tiplerini (Tip Planları) Okuma Simülasyonu
-            var existing = _context.DxfUnitTypeProfiles.Where(x => x.ProjectId == projectId).ToList();
-            if(existing.Any()) {
-                _context.DxfUnitSpaces.RemoveRange(_context.DxfUnitSpaces.Where(x => existing.Select(e => e.Id).Contains(x.DxfUnitTypeProfileId)));
-                _context.DxfUnitTypeProfiles.RemoveRange(existing);
-                _context.SaveChanges();
-            }
-
-            var typeA = new DxfUnitTypeProfile { ProjectId = projectId, ModelName = "A Tipi (3+1 Kuzey)", Category = "Daire", TotalGrossArea = 145, TotalNetArea = 120, TotalSpaceCount = 8 };
-            var typeB = new DxfUnitTypeProfile { ProjectId = projectId, ModelName = "Ticari Mağaza 1", Category = "Ticari", TotalGrossArea = 250, TotalNetArea = 230, TotalSpaceCount = 4 };
-            var typeC = new DxfUnitTypeProfile { ProjectId = projectId, ModelName = "Ortak Alan: Sığınak & Otopark", Category = "OrtakAlan", TotalGrossArea = 600, TotalNetArea = 580, TotalSpaceCount = 3 };
-
-            _context.DxfUnitTypeProfiles.AddRange(typeA, typeB, typeC);
-            _context.SaveChanges();
-
-            // Odaları (Mahalleri) Oluştur
-            _context.DxfUnitSpaces.AddRange(
-                new DxfUnitSpace { DxfUnitTypeProfileId = typeA.Id, SpaceName = "Salon", SpaceGroup = "Oda / Yaşam Alanı", FloorArea = 30, CeilingArea = 30, GrossWallArea = 50, NetWallArea = 42, SkirtingLength = 22, WindowSillLength = 3, InteriorDoorCount = 1, WindowCount = 2 },
-                new DxfUnitSpace { DxfUnitTypeProfileId = typeA.Id, SpaceName = "Ebeveyn Banyo", SpaceGroup = "Islak Hacim", FloorArea = 5, CeilingArea = 5, GrossWallArea = 15, NetWallArea = 14, SkirtingLength = 0, WindowSillLength = 0, InteriorDoorCount = 1, WindowCount = 1 },
-                new DxfUnitSpace { DxfUnitTypeProfileId = typeB.Id, SpaceName = "Ana Satış Alanı", SpaceGroup = "Ticari Alan", FloorArea = 200, CeilingArea = 200, GrossWallArea = 120, NetWallArea = 90, SkirtingLength = 60, WindowSillLength = 10, InteriorDoorCount = 0, WindowCount = 4 },
-                new DxfUnitSpace { DxfUnitTypeProfileId = typeC.Id, SpaceName = "Kapalı Otopark", SpaceGroup = "Ortak Alan", FloorArea = 500, CeilingArea = 500, GrossWallArea = 300, NetWallArea = 280, SkirtingLength = 120, WindowSillLength = 0, InteriorDoorCount = 2, WindowCount = 0 }
-            );
-            _context.SaveChanges();
-
-            return Ok();
-        }
-
-        [HttpGet]
-        public IActionResult GetDxfUnitTypes(int projectId)
-        {
-            var types = _context.DxfUnitTypeProfiles
-                .Include(x => x.Spaces)
-                .Where(x => x.ProjectId == projectId)
-                .Select(x => new {
-                    x.Id,
-                    x.ModelName,
-                    x.Category,
-                    x.TotalGrossArea,
-                    x.TotalSpaceCount,
-                    SpacesSummary = string.Join(", ", x.Spaces.Take(2).Select(s => $"{s.SpaceName} ({s.FloorArea}m²)")),
-                    SpacesCount = x.Spaces.Count
-                }).ToList();
-
-            return Json(types);
-        }
-
-        // =================================================================================
-        // OTONOM ŞANTİYE ŞEFİ AJANDASI (T-, T, T+ ZAMAN TÜNELİ)
-        // =================================================================================
-        public async Task<IActionResult> SiteAgenda(int id, int? profileId, DateTime? baseDate)
-        {
-            var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == id);
-            if (project == null) return NotFound();
-
-            ViewData["ProjectId"] = id;
-            ViewData["ProjectName"] = project.Name;
-
-            ProjectDnaProfile profile = null;
-            if (profileId.HasValue && profileId.Value > 0)
-            {
-                profile = await _context.ProjectDnaProfiles
-                    .Include(p => p.Details)
-                        .ThenInclude(d => d.Profession)
-                    .FirstOrDefaultAsync(p => p.Id == profileId.Value && p.ProjectId == id);
-            }
-
-            if (profile == null)
-            {
-                profile = await _context.ProjectDnaProfiles
-                    .Include(p => p.Details)
-                        .ThenInclude(d => d.Profession)
-                    .Where(p => p.ProjectId == id)
-                    .OrderByDescending(p => p.CreatedDate)
-                    .FirstOrDefaultAsync();
-            }
-
-            ViewBag.Profile = profile;
-            var effectiveBaseDate = baseDate ?? DateTime.Today.AddDays(7);
-            ViewBag.BaseDate = effectiveBaseDate;
-
-            // Diğer profilleri de dropdown için gönder
-            ViewBag.AllProfiles = await _context.ProjectDnaProfiles
-                .Where(p => p.ProjectId == id)
-                .OrderByDescending(p => p.CreatedDate)
-                .ToListAsync();
-
-            var tasks = _dnaTimeOffsetService.GenerateTasksForProfile(profile, effectiveBaseDate);
-            ViewBag.Tasks = tasks;
-
-            return View();
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> SyncSiteAgenda(int projectId, int profileId, DateTime baseDate)
-        {
-            int agencyId = 1;
-            var agencyIdClaim = User.FindFirst("AgencyId")?.Value;
-            if (int.TryParse(agencyIdClaim, out int aid)) agencyId = aid;
-
-            var profile = await _context.ProjectDnaProfiles
-                .Include(p => p.Details)
-                .FirstOrDefaultAsync(p => p.Id == profileId && p.ProjectId == projectId);
-
-            if (profile != null)
-            {
-                var tasks = _dnaTimeOffsetService.GenerateTasksForProfile(profile, baseDate);
-                int count = await _dnaTimeOffsetService.SyncTasksToAgendaAsync(agencyId, projectId, tasks);
-                TempData["SuccessMessage"] = $"{count} adet otonom şantiye görevi sistem ajandanıza (takvime) başarıyla işlendi!";
-            }
-
-            return RedirectToAction(nameof(SiteAgenda), new { id = projectId, profileId = profileId, baseDate = baseDate.ToString("yyyy-MM-dd") });
-        }
-
-        // =================================================================================
-        // DXF'SİZ PARAMETRİK KEŞİF, İHALE & MALZEME MOTORU
-        // =================================================================================
-        [HttpGet]
-        public async Task<IActionResult> GetParametricTakeoff(int projectId, int? profileId)
-        {
-            var project = await _context.ConstructionProjects
-                .Include(p => p.Blocks)
-                .Include(p => p.Amenities)
-                .FirstOrDefaultAsync(p => p.Id == projectId);
-
-            if (project == null) return NotFound(new { success = false, message = "Proje bulunamadı." });
-
-            ProjectDnaProfile profile = null;
-            if (profileId.HasValue && profileId.Value > 0)
-            {
-                profile = await _context.ProjectDnaProfiles
-                    .Include(p => p.Details)
-                        .ThenInclude(d => d.Profession)
-                    .FirstOrDefaultAsync(p => p.Id == profileId.Value && p.ProjectId == projectId);
-            }
-            if (profile == null)
-            {
-                profile = await _context.ProjectDnaProfiles
-                    .Include(p => p.Details)
-                        .ThenInclude(d => d.Profession)
-                    .Where(p => p.ProjectId == projectId)
-                    .OrderByDescending(p => p.CreatedDate)
-                    .FirstOrDefaultAsync();
-            }
-
-            var items = GenerateParametricTakeoff(project, profile);
-            return Json(new { success = true, items = items });
-        }
-
-        [HttpPost]
-        [IgnoreAntiforgeryToken]
-        public async Task<IActionResult> SendParametricToB2B([FromBody] SendParametricB2BDto dto)
-        {
-            if (dto == null || dto.ProjectId <= 0) return BadRequest(new { success = false, message = "Geçersiz parametre." });
-
-            var project = await _context.ConstructionProjects
-                .Include(p => p.Blocks)
-                .Include(p => p.Amenities)
-                .FirstOrDefaultAsync(p => p.Id == dto.ProjectId);
-
-            if (project == null) return NotFound(new { success = false, message = "Proje bulunamadı." });
-
-            ProjectDnaProfile profile = null;
-            if (dto.ProfileId.HasValue && dto.ProfileId.Value > 0)
-            {
-                profile = await _context.ProjectDnaProfiles
-                    .Include(p => p.Details)
-                        .ThenInclude(d => d.Profession)
-                    .FirstOrDefaultAsync(p => p.Id == dto.ProfileId.Value && p.ProjectId == dto.ProjectId);
-            }
-            if (profile == null)
-            {
-                profile = await _context.ProjectDnaProfiles
-                    .Include(p => p.Details)
-                        .ThenInclude(d => d.Profession)
-                    .Where(p => p.ProjectId == dto.ProjectId)
-                    .OrderByDescending(p => p.CreatedDate)
-                    .FirstOrDefaultAsync();
-            }
-
-            var allItems = GenerateParametricTakeoff(project, profile);
-            var selectedItems = (dto.SelectedItemIds != null && dto.SelectedItemIds.Any())
-                ? allItems.Where(i => dto.SelectedItemIds.Contains(i.Id)).ToList()
-                : allItems;
-
-            if (!selectedItems.Any()) return BadRequest(new { success = false, message = "Hiç kalem seçilmedi." });
-
-            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
-            var consultant = await _context.AgencyConsultants.FirstOrDefaultAsync(c => c.UserId == userId);
-            int agencyId = consultant?.AgencyId ?? (project.AgencyId > 0 ? project.AgencyId : 1);
-
-            var sb = new StringBuilder();
-            sb.AppendLine($"### 🏗️ {project.Name} - Parametrik İhale & Malzeme Alım Paketi");
-            sb.AppendLine($"*DXF Çizimi Olmaksızın Proje Yapı Özeti ve DNA Çevresel Faktörlerinden Otomatik Türetilmiştir.*");
-            sb.AppendLine();
-            sb.AppendLine("| # | İmalat / Malzeme Kalemi | Miktar | Birim | İlgili İş Branşı (Taşeron) | Hesaplama Formülü |");
-            sb.AppendLine("|---|---|---|---|---|---|");
-
-            foreach (var item in selectedItems)
-            {
-                sb.AppendLine($"| {item.Id} | **{item.Title}** | {item.Quantity:N0} | {item.Unit} | `{item.ProfessionName}` | {item.Formula} |");
-            }
-
-            var quoteRequest = new B2BQuoteRequest
-            {
-                RequesterAgencyId = agencyId,
-                RequesterUserId = userId,
-                SourceModule = "ConstructionProject",
-                SourceReferenceId = project.Id,
-                Title = $"{project.Name} - Parametrik İhale Paketi ({selectedItems.Count} Kalem)",
-                Description = sb.ToString(),
-                Deadline = DateTime.UtcNow.AddDays(14),
-                Status = "Draft",
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.B2BQuoteRequests.Add(quoteRequest);
-            await _context.SaveChangesAsync();
-
-            return Json(new
-            {
-                success = true,
-                quoteRequestId = quoteRequest.Id,
-                itemCount = selectedItems.Count,
-                message = $"{selectedItems.Count} adet parametrik keşif kalemi B2B Satın Alma & İhale havuzuna başarıyla aktarıldı!"
-            });
-        }
-
-        // =================================================================================
-        // ÇİFT LİSTE & TEK SIRA KODLU (X01-X09) İŞ GÜCÜ, TEDARİK VE TAKVİM MOTORU
-        // =================================================================================
-        [HttpGet]
-        public async Task<IActionResult> GetParametricWorkflow(int projectId, int? profileId, DateTime? startDate, int? buildingId = null, string? mode = null)
-        {
-            var project = await _context.ConstructionProjects
-                .Include(p => p.Blocks)
-                .Include(p => p.Amenities)
-                .FirstOrDefaultAsync(p => p.Id == projectId);
-
-            if (project == null) return NotFound(new { success = false, message = "Proje bulunamadı." });
-
-            ProjectDnaProfile profile = null;
-            if (profileId.HasValue && profileId.Value > 0)
-            {
-                profile = await _context.ProjectDnaProfiles
-                    .Include(p => p.Details)
-                        .ThenInclude(d => d.Profession)
-                    .FirstOrDefaultAsync(p => p.Id == profileId.Value && p.ProjectId == projectId);
-            }
-            if (profile == null)
-            {
-                profile = await _context.ProjectDnaProfiles
-                    .Include(p => p.Details)
-                        .ThenInclude(d => d.Profession)
-                    .Where(p => p.ProjectId == projectId)
-                    .OrderByDescending(p => p.CreatedDate)
-                    .FirstOrDefaultAsync();
-            }
-
-            var baseDate = startDate ?? DateTime.Today;
-            var steps = GenerateParametricWorkflow(project, profile, baseDate, buildingId);
-            var siteSetupSteps = GenerateSiteSetupSteps(project, profile);
-            var siteHandoverSteps = GenerateSiteHandoverSteps(project, profile);
-
-            int totalManDays = steps.Sum(s => s.TotalManDays);
-            int maxCrew = steps.Any() ? steps.Max(s => s.CrewSize) : 0;
-            int totalDurationDays = steps.Any() ? (int)(steps.Max(s => s.PlannedEndDate.Value) - steps.Min(s => s.PlannedStartDate.Value)).TotalDays + 1 : 0;
-            var estimatedCompletion = steps.Any() ? steps.Max(s => s.PlannedEndDate.Value).ToString("dd.MM.yyyy") : "";
-
-            var allBlocks = project.Blocks?.Where(b => !b.IsExistingBuilding).ToList() ?? new List<GMK360.Core.Entities.Building>();
-            var targetStructure = buildingId.HasValue ? allBlocks.FirstOrDefault(b => b.Id == buildingId.Value) : allBlocks.FirstOrDefault(b => b.ParentBuildingId == null);
-
-            return Json(new
-            {
-                success = true,
-                steps = steps,
-                siteSetupSteps = siteSetupSteps,
-                siteHandoverSteps = siteHandoverSteps,
-                staticSummary = new
-                {
-                    concreteClass = "C30/37 Taşıyıcı Hazır Beton",
-                    rebarClass = "B420C Nervürlü Donatı Çeliği",
-                    foundationType = "Radye Genel Temel",
-                    structureType = "Betonarme Karkas (Kolon/Perde/Döşeme)",
-                    totalStructures = allBlocks.Count(b => b.ParentBuildingId == null),
-                    landArea = project.TotalLandArea ?? 0,
-                    baseArea = targetStructure?.BaseArea ?? 0,
-                    totalFloors = targetStructure != null ? (targetStructure.TotalFloors ?? 0) + targetStructure.BasementFloors : (project.TotalFloors ?? 5)
-                },
-                summary = new
-                {
-                    totalManDays = totalManDays,
-                    maxCrew = maxCrew,
-                    totalDurationDays = totalDurationDays,
-                    estimatedCompletion = estimatedCompletion,
-                    startDateStr = baseDate.ToString("dd.MM.yyyy")
-                }
-            });
-        }
-
-        [HttpPost]
-        [IgnoreAntiforgeryToken]
-        public async Task<IActionResult> SendWorkflowToB2B([FromBody] SendWorkflowB2BDto dto)
-        {
-            if (dto == null || dto.ProjectId <= 0) return BadRequest(new { success = false, message = "Geçersiz parametre." });
-
-            var project = await _context.ConstructionProjects
-                .Include(p => p.Blocks)
-                .Include(p => p.Amenities)
-                .FirstOrDefaultAsync(p => p.Id == dto.ProjectId);
-
-            if (project == null) return NotFound(new { success = false, message = "Proje bulunamadı." });
-
-            ProjectDnaProfile profile = null;
-            if (dto.ProfileId.HasValue && dto.ProfileId.Value > 0)
-            {
-                profile = await _context.ProjectDnaProfiles
-                    .Include(p => p.Details)
-                        .ThenInclude(d => d.Profession)
-                    .FirstOrDefaultAsync(p => p.Id == dto.ProfileId.Value && p.ProjectId == dto.ProjectId);
-            }
-            if (profile == null)
-            {
-                profile = await _context.ProjectDnaProfiles
-                    .Include(p => p.Details)
-                        .ThenInclude(d => d.Profession)
-                    .Where(p => p.ProjectId == dto.ProjectId)
-                    .OrderByDescending(p => p.CreatedDate)
-                    .FirstOrDefaultAsync();
-            }
-
-            var allSteps = GenerateParametricWorkflow(project, profile, DateTime.Today, dto.BuildingId);
-            var selectedSteps = (dto.SelectedStepCodes != null && dto.SelectedStepCodes.Any())
-                ? allSteps.Where(s => dto.SelectedStepCodes.Contains(s.StepCode)).ToList()
-                : allSteps;
-
-            bool isTradePackage = dto.TargetTrack == "TradePackage" || (dto.SelectedStepCodes != null && dto.SelectedStepCodes.Any(c => c.StartsWith("ADIM0-")));
-            if (!selectedSteps.Any() && !isTradePackage) return BadRequest(new { success = false, message = "Hiç aşama seçilmedi." });
-
-            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
-            var consultant = await _context.AgencyConsultants.FirstOrDefaultAsync(c => c.UserId == userId);
-            int agencyId = consultant?.AgencyId ?? (project.AgencyId > 0 ? project.AgencyId : 1);
-
-            var sb = new StringBuilder();
-            string targetTrack = dto.TargetTrack ?? "Material"; // "Material" or "Labor"
-            string structPrefix = !string.IsNullOrEmpty(selectedSteps.FirstOrDefault()?.TargetStructureName)
-                ? $"[{selectedSteps.First().TargetStructureName}] "
-                : "";
-            string rfpTitle = "";
-
-            if (isTradePackage)
-            {
-                var tradeCode = dto.SelectedStepCodes?.FirstOrDefault(c => c.StartsWith("ADIM0-"))?.Replace("ADIM0-", "") ?? "İnşaat";
-                rfpTitle = $"{project.Name} - {structPrefix}Toptan {tradeCode} İhale & Fiyat Bağlama Paketi (Adım 0 Statik Sabiti)";
-                sb.AppendLine($"### 🏛️ {project.Name} - {structPrefix}Toptan {tradeCode} İhale & Fiyat Kilitleme Paketi");
-                sb.AppendLine($"*Adım 0 Mecburi Statik ve Taşıyıcı DXF Parametrelerine Dayalı Proje Geneli Toptan Çerçeve Sözleşmesi*");
-                sb.AppendLine();
-                sb.AppendLine($"Bu ihale paketi, projenin tamamında kullanılacak olan **{tradeCode}** branşına ait tüm statik metraj ve teknik gereksinimleri kapsar.");
-                sb.AppendLine($"Müteahhit firma, şantiyeye başlamadan önce tedarikçi/taşeron firmadan sabit fiyat ve toptan birim fiyat garantisi talep etmektedir.");
-                sb.AppendLine();
-                sb.AppendLine($"| Veri Kaynağı | İlgili İş Branşı | Kapsam | Sözleşme Tipi |");
-                sb.AppendLine($"|---|---|---|---|");
-                sb.AppendLine($"| DXF / Statik Çizim | `{tradeCode}` | Projenin Tüm Yapıları ({project.Blocks?.Count ?? 1} Bağımsız Yapı) | Toptan Sabit Fiyat Sözleşmesi |");
-            }
-            else if (targetTrack == "Labor")
-            {
-                rfpTitle = $"{project.Name} - {structPrefix}Taşeron & İş Gücü Çağrısı ({selectedSteps.Count} Aşama)";
-                sb.AppendLine($"### 👷 {project.Name} - {structPrefix}Taşeron & İş Gücü Hizmet Çağrısı");
-                sb.AppendLine($"*İnşaat İş Akış Sıralamasına Göre Ekip, Kadro ve Süre İhtiyaçları*");
-                sb.AppendLine();
-                sb.AppendLine("| Kod | Parça | Aşama Adı | İlgili Branş / Meslek | Önerilen Ekip Kadrosu | Süre (İş Günü) | Hacim (Adam-Gün) | Kritik Gereksinim / Ekipman |");
-                sb.AppendLine("|:---:|---|---|---|---|:---:|:---:|---|");
-                foreach (var s in selectedSteps)
-                {
-                    sb.AppendLine($"| **{s.StepCode}** | {s.PartName} | {s.PhaseName} | `{s.ProfessionName}` | {s.CrewComposition} ({s.CrewSize} Kişi) | {s.DurationDays} Gün | {s.TotalManDays} Adam-Gün | {s.EquipmentNeeded} |");
-                }
-            }
-            else
-            {
-                rfpTitle = $"{project.Name} - {structPrefix}Sıralı Malzeme Tedarik İhalesi ({selectedSteps.Count} Aşama)";
-                sb.AppendLine($"### 📦 {project.Name} - {structPrefix}Sıralı Malzeme Tedarik & Satın Alma Paketi");
-                sb.AppendLine($"*İnşaat İş Akış Sıralamasına Göre Tedarik Edilecek Malzemeler*");
-                sb.AppendLine();
-                sb.AppendLine("| Kod | Parça | Aşama | Tedarik Edilecek Malzeme | Miktar | Birim | Tedarikçi Grubu | Mühendislik Hesabı |");
-                sb.AppendLine("|:---:|---|---|---|---|---|---|---|");
-                foreach (var s in selectedSteps)
-                {
-                    sb.AppendLine($"| **{s.StepCode}** | {s.PartName} | {s.PhaseName} | **{s.MaterialTitle}** | {s.MaterialQuantity:N0} | {s.MaterialUnit} | `{s.SupplierCategory}` | {s.MaterialFormula} |");
-                }
-            }
-
-            var quoteRequest = new B2BQuoteRequest
-            {
-                RequesterAgencyId = agencyId,
-                RequesterUserId = userId,
-                SourceModule = "ConstructionProject",
-                SourceReferenceId = project.Id,
-                Title = rfpTitle,
-                Description = sb.ToString(),
-                Deadline = DateTime.UtcNow.AddDays(14),
-                Status = "Draft",
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.B2BQuoteRequests.Add(quoteRequest);
-            await _context.SaveChangesAsync();
-
-            return Json(new
-            {
-                success = true,
-                quoteRequestId = quoteRequest.Id,
-                itemCount = selectedSteps.Count,
-                message = $"{selectedSteps.Count} adet iş akış aşaması B2B {(targetTrack == "Labor" ? "Taşeron & İş Gücü" : "Malzeme Satın Alma")} havuzuna başarıyla aktarıldı!"
-            });
-        }
-
-        [HttpPost]
-        [IgnoreAntiforgeryToken]
-        public async Task<IActionResult> TriggerWorkflowAgenda([FromBody] TriggerWorkflowAgendaDto dto)
-        {
-            if (dto == null || dto.ProjectId <= 0) return BadRequest(new { success = false, message = "Geçersiz parametre." });
-
-            var project = await _context.ConstructionProjects
-                .Include(p => p.Blocks)
-                .Include(p => p.Amenities)
-                .FirstOrDefaultAsync(p => p.Id == dto.ProjectId);
-
-            if (project == null) return NotFound(new { success = false, message = "Proje bulunamadı." });
-
-            ProjectDnaProfile profile = null;
-            if (dto.ProfileId.HasValue && dto.ProfileId.Value > 0)
-            {
-                profile = await _context.ProjectDnaProfiles
-                    .Include(p => p.Details)
-                        .ThenInclude(d => d.Profession)
-                    .FirstOrDefaultAsync(p => p.Id == dto.ProfileId.Value && p.ProjectId == dto.ProjectId);
-            }
-            if (profile == null)
-            {
-                profile = await _context.ProjectDnaProfiles
-                    .Include(p => p.Details)
-                        .ThenInclude(d => d.Profession)
-                    .Where(p => p.ProjectId == dto.ProjectId)
-                    .OrderByDescending(p => p.CreatedDate)
-                    .FirstOrDefaultAsync();
-            }
-
-            var baseDate = dto.StartDate > DateTime.MinValue ? dto.StartDate : DateTime.Today;
-            var allSteps = GenerateParametricWorkflow(project, profile, baseDate, dto.BuildingId);
-            var selectedSteps = (dto.SelectedStepCodes != null && dto.SelectedStepCodes.Any())
-                ? allSteps.Where(s => dto.SelectedStepCodes.Contains(s.StepCode)).ToList()
-                : allSteps;
-
-            bool isTradePackage = dto.TargetTrack == "TradePackage" || (dto.SelectedStepCodes != null && dto.SelectedStepCodes.Any(c => c.StartsWith("ADIM0-")));
-            if (!selectedSteps.Any() && !isTradePackage) return BadRequest(new { success = false, message = "Hiç aşama seçilmedi." });
-
-            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
-            var consultant = await _context.AgencyConsultants.FirstOrDefaultAsync(c => c.UserId == userId);
-            int agencyId = consultant?.AgencyId ?? (project.AgencyId > 0 ? project.AgencyId : 1);
-
-            int createdCount = 0;
-
-            foreach (var step in selectedSteps)
-            {
-                if (!step.PlannedStartDate.HasValue) continue;
-
-                // 1. Ana İmalat Görevi (T 0)
-                var mainTitle = $"🏗️ [{step.StepCode}] {step.PhaseName} İmalat Başlangıcı";
-                bool existsMain = await _context.AgendaRecords.AnyAsync(a =>
-                    a.AgencyId == agencyId &&
-                    a.ProjectId == project.Id &&
-                    a.EventDate.Date == step.PlannedStartDate.Value.Date &&
-                    a.Title == mainTitle &&
-                    !a.IsDeleted);
-
-                if (!existsMain)
-                {
-                    _context.AgendaRecords.Add(new AgendaRecord
-                    {
-                        AgencyId = agencyId,
-                        ProjectId = project.Id,
-                        Title = mainTitle,
-                        EventDate = step.PlannedStartDate.Value,
-                        RecordTypeId = AgendaConstants.TypeSantiyeDenetimi,
-                        StatusId = AgendaConstants.StatusPlanlandi,
-                        Notes = $"Kadro: {step.CrewComposition} ({step.CrewSize} Kişi)\nSüre: {step.DurationDays} İş Günü ({step.TotalManDays} Adam-Gün)\nÖnkoşul: {step.Predecessors}\nKritik Kural: {step.CriticalDependency}\nMalzeme: {step.MaterialTitle} ({step.MaterialQuantity:N0} {step.MaterialUnit})"
-                    });
-                    createdCount++;
-                }
-
-                // 2. T- Ön Hazırlık Hatırlatması (2 veya 3 gün önce)
-                int reminderDays = step.DurationDays >= 5 ? 3 : 2;
-                var reminderDate = step.PlannedStartDate.Value.AddDays(-reminderDays);
-                var reminderTitle = $"⚠️ [T-{reminderDays} Hazırlık - {step.StepCode}] {step.PhaseName} Ön Kontrolleri";
-
-                bool existsReminder = await _context.AgendaRecords.AnyAsync(a =>
-                    a.AgencyId == agencyId &&
-                    a.ProjectId == project.Id &&
-                    a.EventDate.Date == reminderDate.Date &&
-                    a.Title == reminderTitle &&
-                    !a.IsDeleted);
-
-                if (!existsReminder)
-                {
-                    _context.AgendaRecords.Add(new AgendaRecord
-                    {
-                        AgencyId = agencyId,
-                        ProjectId = project.Id,
-                        Title = reminderTitle,
-                        EventDate = reminderDate,
-                        RecordTypeId = AgendaConstants.TypeTaseronToplantisi,
-                        StatusId = AgendaConstants.StatusPlanlandi,
-                        Notes = $"⚠️ DİKKAT: {step.PlannedStartDate.Value:dd.MM.yyyy} tarihinde başlayacak {step.PhaseName} için;\n1) {step.MaterialTitle} depoya sevk edildi mi?\n2) {step.ProfessionName} ekibi teyit edildi mi?\n3) {step.CriticalDependency}"
-                    });
-                    createdCount++;
-                }
-            }
-
-            await _context.SaveChangesAsync();
-
-            return Json(new
-            {
-                success = true,
-                createdCount = createdCount,
-                message = $"{selectedSteps.Count} adet aşamaya ait {createdCount} otonom ajanda görevi ve T- hatırlatması takviminize başarıyla işlendi!"
-            });
-        }
-
-        private List<ParametricTakeoffItemDto> GenerateParametricTakeoff(ConstructionProject project, ProjectDnaProfile profile)
-        {
-            var list = new List<ParametricTakeoffItemDto>();
+            var list = new List<MasterBomItemDto>();
             if (project == null) return list;
 
             var blocks = project.Blocks?.Where(b => !b.IsExistingBuilding).ToList() ?? new List<GMK360.Core.Entities.Building>();
             var rootBlocks = blocks.Where(b => b.ParentBuildingId == null).ToList();
 
-            double landArea = project.TotalLandArea ?? 0;
+            double landArea = project.TotalLandArea ?? 3600;
             double baseArea = rootBlocks.Sum(b => b.BaseArea ?? 0);
             if (baseArea <= 0 && blocks.Any()) baseArea = blocks.Sum(b => b.BaseArea ?? 0);
             if (baseArea <= 0) baseArea = project.EskiBinaOturumAlani ?? (landArea > 0 ? landArea * 0.40 : 500);
 
-            int maxFloors = blocks.Any() ? blocks.Max(b => (b.TotalFloors ?? 0) + b.BasementFloors) : (project.TotalFloors ?? 5);
+            int maxFloors = blocks.Any() ? blocks.Max(b => (b.TotalFloors ?? 0) + b.BasementFloors) : (project.TotalFloors ?? 15);
             int maxBasement = blocks.Any() ? blocks.Max(b => b.BasementFloors) : (project.EskiBodrumKatSayisi ?? 2);
             if (maxBasement <= 0) maxBasement = 2;
-            if (maxFloors <= 0) maxFloors = 5;
+            if (maxFloors <= 0) maxFloors = 15;
 
             int totalUnits = blocks.Sum(b => b.TotalApartments);
-            if (totalUnits <= 0) totalUnits = project.TargetTotalApartments ?? (project.EskiDaireSayisi ?? 10);
+            if (totalUnits <= 0) totalUnits = project.TargetTotalApartments ?? (project.EskiDaireSayisi ?? 172);
 
             int totalShops = blocks.Sum(b => b.TotalShops);
-            if (totalShops <= 0) totalShops = project.TargetTotalShops ?? (project.EskiDukkanSayisi ?? 0);
+            if (totalShops <= 0) totalShops = project.TargetTotalShops ?? (project.EskiDukkanSayisi ?? 85);
 
-            // Toplam inşaat alanı
             double totalFloorArea = 0;
             if (blocks.Any(b => b.BaseArea.HasValue && b.BaseArea > 0))
             {
@@ -1357,2559 +357,8869 @@ namespace GMK360.Web.Controllers
             {
                 totalFloorArea = baseArea * maxFloors;
             }
+            if (totalFloorArea <= 0) totalFloorArea = 25000;
+
+            int id = 1;
+
+            // =========================================================================
+            // 1. DEMİR & ÇELİK TEDARİKÇİSİ (KİM SATAR) -> KALIP & DEMİR EKİBİ (KİM YAPAR)
+            // =========================================================================
+            string branchDemir = "Demirci";
+            string keyDemir = "branch_demir";
+            string iconDemir = "bi-grid-3x3-gap-fill";
+            int orderDemir = 1;
+            string tradeDemir = "Kalıp & Demirci Ekibi";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchDemir,
+                PackageKey = keyDemir,
+                PackageName = branchDemir,
+                PackageIcon = iconDemir,
+                PackageOrder = orderDemir,
+                ProfessionName = tradeDemir,
+                Title = "18-28'lik Kalın Demir",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.034), 1),
+                Unit = "Ton"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchDemir,
+                PackageKey = keyDemir,
+                PackageName = branchDemir,
+                PackageIcon = iconDemir,
+                PackageOrder = orderDemir,
+                ProfessionName = tradeDemir,
+                Title = "14-16'lık Orta Demir",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.030), 1),
+                Unit = "Ton"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchDemir,
+                PackageKey = keyDemir,
+                PackageName = branchDemir,
+                PackageIcon = iconDemir,
+                PackageOrder = orderDemir,
+                ProfessionName = tradeDemir,
+                Title = "8-12'lik İnce Demir",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.016), 1),
+                Unit = "Ton"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchDemir,
+                PackageKey = keyDemir,
+                PackageName = branchDemir,
+                PackageIcon = iconDemir,
+                PackageOrder = orderDemir,
+                ProfessionName = tradeDemir,
+                Title = "Hasır Çelik",
+                Quantity = Math.Round((decimal)(baseArea * 2.5), 0),
+                Unit = "m²"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchDemir,
+                PackageKey = keyDemir,
+                PackageName = branchDemir,
+                PackageIcon = iconDemir,
+                PackageOrder = orderDemir,
+                ProfessionName = tradeDemir,
+                Title = "Bağ Teli",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.08 * 8.5), 0),
+                Unit = "kg"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchDemir,
+                PackageKey = keyDemir,
+                PackageName = branchDemir,
+                PackageIcon = iconDemir,
+                PackageOrder = orderDemir,
+                ProfessionName = tradeDemir,
+                Title = "Plastik Paspayı",
+                Quantity = Math.Round((decimal)(totalFloorArea * 1.5), 0),
+                Unit = "Adet"
+            });
+
+            // =========================================================================
+            // 2. HAZIR BETONCU -> BETON DÖKÜM & POMPA EKİBİ
+            // =========================================================================
+            string branchBeton = "Hazır Betoncu";
+            string keyBeton = "branch_beton";
+            string iconBeton = "bi-truck";
+            int orderBeton = 2;
+            string tradeBeton = "Beton Döküm Ekibi";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchBeton,
+                PackageKey = keyBeton,
+                PackageName = branchBeton,
+                PackageIcon = iconBeton,
+                PackageOrder = orderBeton,
+                ProfessionName = tradeBeton,
+                Title = "C30/37 Taşıyıcı Beton",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.44), 0),
+                Unit = "m³"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchBeton,
+                PackageKey = keyBeton,
+                PackageName = branchBeton,
+                PackageIcon = iconBeton,
+                PackageOrder = orderBeton,
+                ProfessionName = tradeBeton,
+                Title = "C16 Grobeton",
+                Quantity = Math.Round((decimal)(baseArea * 0.15), 0),
+                Unit = "m³"
+            });
+
+            // =========================================================================
+            // 3. DUVAR & GAZBETONCU -> DUVARCI EKİBİ
+            // =========================================================================
+            string branchDuvar = "Duvar & Gazbetoncu";
+            string keyDuvar = "branch_duvar";
+            string iconDuvar = "bi-bricks";
+            int orderDuvar = 3;
+            string tradeDuvar = "Duvarcı Ekibi";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchDuvar,
+                PackageKey = keyDuvar,
+                PackageName = branchDuvar,
+                PackageIcon = iconDuvar,
+                PackageOrder = orderDuvar,
+                ProfessionName = tradeDuvar,
+                Title = "20'lik Dış Duvar Gazbetonu",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.38), 0),
+                Unit = "m²"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchDuvar,
+                PackageKey = keyDuvar,
+                PackageName = branchDuvar,
+                PackageIcon = iconDuvar,
+                PackageOrder = orderDuvar,
+                ProfessionName = tradeDuvar,
+                Title = "15'lik Daire İçi Gazbeton",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.42), 0),
+                Unit = "m²"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchDuvar,
+                PackageKey = keyDuvar,
+                PackageName = branchDuvar,
+                PackageIcon = iconDuvar,
+                PackageOrder = orderDuvar,
+                ProfessionName = tradeDuvar,
+                Title = "Gazbeton Tutkalı",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.80 * 0.12), 0),
+                Unit = "Torba"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchDuvar,
+                PackageKey = keyDuvar,
+                PackageName = branchDuvar,
+                PackageIcon = iconDuvar,
+                PackageOrder = orderDuvar,
+                ProfessionName = tradeDuvar,
+                Title = "Prekast Lento",
+                Quantity = Math.Round((decimal)(totalUnits * 6 + totalShops * 4), 0),
+                Unit = "Adet"
+            });
+
+            // =========================================================================
+            // 4. SIVACI (KARA / KABA SIVA MALZEMELERİ) -> KARA SIVA EKİBİ
+            // =========================================================================
+            string branchSivaci = "Sıvacı";
+            string keySivaci = "branch_sivaci";
+            string iconSivaci = "bi-layers-half";
+            int orderSivaci = 4;
+            string tradeSivaci = "Kara Sıvacı Ekibi";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchSivaci,
+                PackageKey = keySivaci,
+                PackageName = branchSivaci,
+                PackageIcon = iconSivaci,
+                PackageOrder = orderSivaci,
+                ProfessionName = tradeSivaci,
+                Title = "Kaba & İnce Sıva Kumu",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.80 * 0.045), 1),
+                Unit = "Ton"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchSivaci,
+                PackageKey = keySivaci,
+                PackageName = branchSivaci,
+                PackageIcon = iconSivaci,
+                PackageOrder = orderSivaci,
+                ProfessionName = tradeSivaci,
+                Title = "Sıva Çimentosu & Kireç",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.80 * 0.15), 0),
+                Unit = "Torba"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchSivaci,
+                PackageKey = keySivaci,
+                PackageName = branchSivaci,
+                PackageIcon = iconSivaci,
+                PackageOrder = orderSivaci,
+                ProfessionName = tradeSivaci,
+                Title = "Sıva Köşe Profili & Ano Çıtası",
+                Quantity = Math.Round((decimal)(totalUnits * 24 + totalShops * 16), 0),
+                Unit = "Metre"
+            });
+
+            // =========================================================================
+            // 5. ŞAPÇI (ZEMİN ŞAP MALZEMELERİ) -> HELİKOPTERLİ ŞAPÇI EKİBİ
+            // =========================================================================
+            string branchSapci = "Şapçı";
+            string keySapci = "branch_sapci";
+            string iconSapci = "bi-square-half";
+            int orderSapci = 5;
+            string tradeSapci = "Şapçı Ekibi";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchSapci,
+                PackageKey = keySapci,
+                PackageName = branchSapci,
+                PackageIcon = iconSapci,
+                PackageOrder = orderSapci,
+                ProfessionName = tradeSapci,
+                Title = "Şap Kumu (0-3 mm Perdah Kumu)",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.70 * 0.08), 1),
+                Unit = "Ton"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchSapci,
+                PackageKey = keySapci,
+                PackageName = branchSapci,
+                PackageIcon = iconSapci,
+                PackageOrder = orderSapci,
+                ProfessionName = tradeSapci,
+                Title = "Şap Çimentosu (CEM I 42.5)",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.70 * 0.22), 0),
+                Unit = "Torba"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchSapci,
+                PackageKey = keySapci,
+                PackageName = branchSapci,
+                PackageIcon = iconSapci,
+                PackageOrder = orderSapci,
+                ProfessionName = tradeSapci,
+                Title = "Şap Polipropilen Elyafı",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.70 * 0.10), 0),
+                Unit = "Paket"
+            });
+
+            // =========================================================================
+            // 6. ÇATI & YAĞMUR İNDİRME -> ÇATI EKİBİ
+            // =========================================================================
+            string branchCati = "Çatı & Yağmur İndirme";
+            string keyCati = "branch_cati";
+            string iconCati = "bi-house-door-fill";
+            int orderCati = 6;
+            string tradeCati = "Çatı Ustası Ekibi";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchCati,
+                PackageKey = keyCati,
+                PackageName = branchCati,
+                PackageIcon = iconCati,
+                PackageOrder = orderCati,
+                ProfessionName = tradeCati,
+                Title = "Kiremit (Marsilya / Akdeniz)",
+                Quantity = Math.Round((decimal)(baseArea * 1.35 * 15), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchCati,
+                PackageKey = keyCati,
+                PackageName = branchCati,
+                PackageIcon = iconCati,
+                PackageOrder = orderCati,
+                ProfessionName = tradeCati,
+                Title = "Mahya Kiremidi",
+                Quantity = Math.Round((decimal)(Math.Sqrt(baseArea) * 4), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchCati,
+                PackageKey = keyCati,
+                PackageName = branchCati,
+                PackageIcon = iconCati,
+                PackageOrder = orderCati,
+                ProfessionName = tradeCati,
+                Title = "15 mm Çatı OSB-3",
+                Quantity = Math.Round((decimal)(baseArea * 1.35), 0),
+                Unit = "m²"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchCati,
+                PackageKey = keyCati,
+                PackageName = branchCati,
+                PackageIcon = iconCati,
+                PackageOrder = orderCati,
+                ProfessionName = tradeCati,
+                Title = "Kiremit Altı Su Yalıtım Örtüsü",
+                Quantity = Math.Round((decimal)(baseArea * 1.45), 0),
+                Unit = "m²"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchCati,
+                PackageKey = keyCati,
+                PackageName = branchCati,
+                PackageIcon = iconCati,
+                PackageOrder = orderCati,
+                ProfessionName = tradeCati,
+                Title = "Eksiz Çatı Oluğu & Yağmur İniş Borusu",
+                Quantity = Math.Round((decimal)(Math.Sqrt(baseArea) * 4 + maxFloors * 3.2 * 4), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchCati,
+                PackageKey = keyCati,
+                PackageName = branchCati,
+                PackageIcon = iconCati,
+                PackageOrder = orderCati,
+                ProfessionName = tradeCati,
+                Title = "Çatı İskelet Kerestesi (5×10 - 10×10)",
+                Quantity = Math.Round((decimal)(baseArea * 1.35 * 0.035), 1),
+                Unit = "m³"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchCati,
+                PackageKey = keyCati,
+                PackageName = branchCati,
+                PackageIcon = iconCati,
+                PackageOrder = orderCati,
+                ProfessionName = tradeCati,
+                Title = "Çatı Taşyünü Isı Yalıtım Şiltesi",
+                Quantity = Math.Round((decimal)(baseArea * 1.20), 0),
+                Unit = "m²"
+            });
+
+            // =========================================================================
+            // 7. KALIP & KERESTECİ -> KALIPÇI EKİBİ
+            // =========================================================================
+            string branchOrman = "Kalıp & Keresteci";
+            string keyOrman = "branch_orman";
+            string iconOrman = "bi-tree-fill";
+            int orderOrman = 7;
+            string tradeKalip = "Kalıpçı Ekibi";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchOrman,
+                PackageKey = keyOrman,
+                PackageName = branchOrman,
+                PackageIcon = iconOrman,
+                PackageOrder = orderOrman,
+                ProfessionName = tradeKalip,
+                Title = "18 mm Huş Plywood",
+                Quantity = Math.Round((decimal)(baseArea * 1.25), 0),
+                Unit = "m²"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchOrman,
+                PackageKey = keyOrman,
+                PackageName = branchOrman,
+                PackageIcon = iconOrman,
+                PackageOrder = orderOrman,
+                ProfessionName = tradeKalip,
+                Title = "5×10 & 10×10 Kalıp Kerestesi",
+                Quantity = Math.Round((decimal)(baseArea * 0.055), 1),
+                Unit = "m³"
+            });
+
+            // =========================================================================
+            // 8. İZOLASYON & SU YALITIMI -> İZOLASYON USTASI
+            // =========================================================================
+            string branchYalitim = "Yalıtımcı";
+            string keyYalitim = "branch_yalitim";
+            string iconYalitim = "bi-shield-shaded";
+            int orderYalitim = 8;
+            string tradeYalitim = "İzolasyon Ustası";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchYalitim,
+                PackageKey = keyYalitim,
+                PackageName = branchYalitim,
+                PackageIcon = iconYalitim,
+                PackageOrder = orderYalitim,
+                ProfessionName = tradeYalitim,
+                Title = "4 mm Bitümlü Membran",
+                Quantity = Math.Round((decimal)(baseArea * 1.45 * maxBasement), 0),
+                Unit = "m²"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchYalitim,
+                PackageKey = keyYalitim,
+                PackageName = branchYalitim,
+                PackageIcon = iconYalitim,
+                PackageOrder = orderYalitim,
+                ProfessionName = tradeYalitim,
+                Title = "Bitüm / Zift Astarı",
+                Quantity = Math.Round((decimal)(baseArea * 1.45 * maxBasement * 0.35), 0),
+                Unit = "kg"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchYalitim,
+                PackageKey = keyYalitim,
+                PackageName = branchYalitim,
+                PackageIcon = iconYalitim,
+                PackageOrder = orderYalitim,
+                ProfessionName = tradeYalitim,
+                Title = "5 cm XPS Isı Yalıtım Levhası",
+                Quantity = Math.Round((decimal)(baseArea * 1.25 * maxBasement), 0),
+                Unit = "m²"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchYalitim,
+                PackageKey = keyYalitim,
+                PackageName = branchYalitim,
+                PackageIcon = iconYalitim,
+                PackageOrder = orderYalitim,
+                ProfessionName = tradeYalitim,
+                Title = "Drenaj Levhası",
+                Quantity = Math.Round((decimal)(baseArea * 1.25 * maxBasement), 0),
+                Unit = "m²"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchYalitim,
+                PackageKey = keyYalitim,
+                PackageName = branchYalitim,
+                PackageIcon = iconYalitim,
+                PackageOrder = orderYalitim,
+                ProfessionName = tradeYalitim,
+                Title = "Temel Delikli Drenaj Borusu (Ø100-Ø150)",
+                Quantity = Math.Round((decimal)(Math.Sqrt(baseArea) * 4), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchYalitim,
+                PackageKey = keyYalitim,
+                PackageName = branchYalitim,
+                PackageIcon = iconYalitim,
+                PackageOrder = orderYalitim,
+                ProfessionName = tradeYalitim,
+                Title = "Temel Su Tutucu Bant",
+                Quantity = Math.Round((decimal)(Math.Sqrt(baseArea) * 4 * maxBasement), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchYalitim,
+                PackageKey = keyYalitim,
+                PackageName = branchYalitim,
+                PackageIcon = iconYalitim,
+                PackageOrder = orderYalitim,
+                ProfessionName = tradeYalitim,
+                Title = "Sürme Yalıtım (Islak Hacim)",
+                Quantity = Math.Round((decimal)(totalUnits * 18 * 1.8), 0),
+                Unit = "kg"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchYalitim,
+                PackageKey = keyYalitim,
+                PackageName = branchYalitim,
+                PackageIcon = iconYalitim,
+                PackageOrder = orderYalitim,
+                ProfessionName = tradeYalitim,
+                Title = "Pah Bandı (Islak Hacim)",
+                Quantity = Math.Round((decimal)(totalUnits * 22), 0),
+                Unit = "Metre"
+            });
+
+            // =========================================================================
+            // 9. DIŞ CEPHE & MANTOLAMA -> MANTOLAMA EKİBİ
+            // =========================================================================
+            string branchCephe = "Dış Cephe & Mantolama";
+            string keyCephe = "branch_cephe";
+            string iconCephe = "bi-building-fill-up";
+            int orderCephe = 9;
+            string tradeCephe = "Dış Cephe Mantolama Ekibi";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchCephe,
+                PackageKey = keyCephe,
+                PackageName = branchCephe,
+                PackageIcon = iconCephe,
+                PackageOrder = orderCephe,
+                ProfessionName = tradeCephe,
+                Title = "Damlalıklı Köşe Profili (Fileli)",
+                Quantity = Math.Round((decimal)(totalUnits * 14 + totalShops * 10), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchCephe,
+                PackageKey = keyCephe,
+                PackageName = branchCephe,
+                PackageIcon = iconCephe,
+                PackageOrder = orderCephe,
+                ProfessionName = tradeCephe,
+                Title = "Fileli Köşe Profili",
+                Quantity = Math.Round((decimal)(maxFloors * 3.2 * 8), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchCephe,
+                PackageKey = keyCephe,
+                PackageName = branchCephe,
+                PackageIcon = iconCephe,
+                PackageOrder = orderCephe,
+                ProfessionName = tradeCephe,
+                Title = "Taşyünü / Karbonlu EPS Levha (5 cm)",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.42), 0),
+                Unit = "m²"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchCephe,
+                PackageKey = keyCephe,
+                PackageName = branchCephe,
+                PackageIcon = iconCephe,
+                PackageOrder = orderCephe,
+                ProfessionName = tradeCephe,
+                Title = "Mantolama Yapıştırıcısı",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.42 * 0.20), 0),
+                Unit = "Torba"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchCephe,
+                PackageKey = keyCephe,
+                PackageName = branchCephe,
+                PackageIcon = iconCephe,
+                PackageOrder = orderCephe,
+                ProfessionName = tradeCephe,
+                Title = "Mantolama Sıvası",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.42 * 0.18), 0),
+                Unit = "Torba"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchCephe,
+                PackageKey = keyCephe,
+                PackageName = branchCephe,
+                PackageIcon = iconCephe,
+                PackageOrder = orderCephe,
+                ProfessionName = tradeCephe,
+                Title = "Mantolama Donatı Filesi (160 gr)",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.42 * 1.10), 0),
+                Unit = "m²"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchCephe,
+                PackageKey = keyCephe,
+                PackageName = branchCephe,
+                PackageIcon = iconCephe,
+                PackageOrder = orderCephe,
+                ProfessionName = tradeCephe,
+                Title = "Mekanik Mantolama Dübeli",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.42 * 6), 0),
+                Unit = "Adet"
+            });
+
+            // =========================================================================
+            // 10. MERMER & DOĞAL TAŞ -> MERMER USTASI
+            // =========================================================================
+            string branchMermer = "Mermerci";
+            string keyMermer = "branch_mermer";
+            string iconMermer = "bi-gem";
+            int orderMermer = 10;
+            string tradeMermer = "Mermer Ustası";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchMermer,
+                PackageKey = keyMermer,
+                PackageName = branchMermer,
+                PackageIcon = iconMermer,
+                PackageOrder = orderMermer,
+                ProfessionName = tradeMermer,
+                Title = "Pimapen Altı Denizlik Mermeri",
+                Quantity = Math.Round((decimal)(totalUnits * 8.5 + totalShops * 6.0), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchMermer,
+                PackageKey = keyMermer,
+                PackageName = branchMermer,
+                PackageIcon = iconMermer,
+                PackageOrder = orderMermer,
+                ProfessionName = tradeMermer,
+                Title = "Balkon & Parapet Küpeşte Mermeri",
+                Quantity = Math.Round((decimal)(totalUnits * 5.0 + Math.Sqrt(baseArea) * 4), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchMermer,
+                PackageKey = keyMermer,
+                PackageName = branchMermer,
+                PackageIcon = iconMermer,
+                PackageOrder = orderMermer,
+                ProfessionName = tradeMermer,
+                Title = "Merdiven Basamağı & Rıht Mermeri",
+                Quantity = Math.Round((decimal)(maxFloors * 38), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchMermer,
+                PackageKey = keyMermer,
+                PackageName = branchMermer,
+                PackageIcon = iconMermer,
+                PackageOrder = orderMermer,
+                ProfessionName = tradeMermer,
+                Title = "Bina Girişi & Asansör Söve Mermeri",
+                Quantity = Math.Round((decimal)(maxFloors * 8 + 25), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchMermer,
+                PackageKey = keyMermer,
+                PackageName = branchMermer,
+                PackageIcon = iconMermer,
+                PackageOrder = orderMermer,
+                ProfessionName = tradeMermer,
+                Title = "Mutfak Tezgahı (Kuvars / Çimstone)",
+                Quantity = Math.Round((decimal)(totalUnits * 2.8), 0),
+                Unit = "Metre"
+            });
+
+            // =========================================================================
+            // 11. SERAMİK & GRANİT TOPTANCISI -> SERAMİK / FAYANS USTASI
+            // =========================================================================
+            string branchSeramik = "Seramik & Granit";
+            string keySeramik = "branch_seramik";
+            string iconSeramik = "bi-grid-fill";
+            int orderSeramik = 11;
+            string tradeSeramik = "Seramik & Fayans Ustası";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchSeramik,
+                PackageKey = keySeramik,
+                PackageName = branchSeramik,
+                PackageIcon = iconSeramik,
+                PackageOrder = orderSeramik,
+                ProfessionName = tradeSeramik,
+                Title = "60×120 Seramik / Granit",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.22), 0),
+                Unit = "m²"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchSeramik,
+                PackageKey = keySeramik,
+                PackageName = branchSeramik,
+                PackageIcon = iconSeramik,
+                PackageOrder = orderSeramik,
+                ProfessionName = tradeSeramik,
+                Title = "30×60 Fayans (Islak Hacim)",
+                Quantity = Math.Round((decimal)(totalUnits * 38), 0),
+                Unit = "m²"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchSeramik,
+                PackageKey = keySeramik,
+                PackageName = branchSeramik,
+                PackageIcon = iconSeramik,
+                PackageOrder = orderSeramik,
+                ProfessionName = tradeSeramik,
+                Title = "Kalekim (Seramik Yapıştırıcı)",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.22 * 0.25 + totalUnits * 38 * 0.25), 0),
+                Unit = "Torba"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchSeramik,
+                PackageKey = keySeramik,
+                PackageName = branchSeramik,
+                PackageIcon = iconSeramik,
+                PackageOrder = orderSeramik,
+                ProfessionName = tradeSeramik,
+                Title = "Derz Dolgu",
+                Quantity = Math.Round((decimal)((totalFloorArea * 0.22 + totalUnits * 38) * 0.04), 0),
+                Unit = "Torba"
+            });
+
+            // =========================================================================
+            // 12. PARKE & ZEMİN KAPLAMA -> PARKE USTASI
+            // =========================================================================
+            string branchParke = "Parke & Zemin";
+            string keyParke = "branch_parke";
+            string iconParke = "bi-border-style";
+            int orderParke = 12;
+            string tradeParke = "Parke Ustası";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchParke,
+                PackageKey = keyParke,
+                PackageName = branchParke,
+                PackageIcon = iconParke,
+                PackageOrder = orderParke,
+                ProfessionName = tradeParke,
+                Title = "Laminat Parke (8 mm AC4)",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.52), 0),
+                Unit = "m²"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchParke,
+                PackageKey = keyParke,
+                PackageName = branchParke,
+                PackageIcon = iconParke,
+                PackageOrder = orderParke,
+                ProfessionName = tradeParke,
+                Title = "MDF Süpürgelik",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.75), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchParke,
+                PackageKey = keyParke,
+                PackageName = branchParke,
+                PackageIcon = iconParke,
+                PackageOrder = orderParke,
+                ProfessionName = tradeParke,
+                Title = "Parke Altı Kapron / Şilte",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.52 * 1.05), 0),
+                Unit = "m²"
+            });
+
+            // =========================================================================
+            // 13. ALÇI & KURU DUVAR TOPTANCISI (KNAUF/DALSAN) -> ALÇI SIVA & ASMA TAVAN EKİBİ
+            // =========================================================================
+            string branchAlci = "Alçı & Kuru Duvar";
+            string keyAlci = "branch_alci";
+            string iconAlci = "bi-bounding-box-circles";
+            int orderAlci = 13;
+            string tradeAlci = "Alçı Sıva & Asma Tavan Ekibi";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchAlci,
+                PackageKey = keyAlci,
+                PackageName = branchAlci,
+                PackageIcon = iconAlci,
+                PackageOrder = orderAlci,
+                ProfessionName = tradeAlci,
+                Title = "Kaba Alçı (Perlitli Sıva Alçısı)",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.28), 0),
+                Unit = "Torba"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchAlci,
+                PackageKey = keyAlci,
+                PackageName = branchAlci,
+                PackageIcon = iconAlci,
+                PackageOrder = orderAlci,
+                ProfessionName = tradeAlci,
+                Title = "Saten Alçı (Perdah)",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.14), 0),
+                Unit = "Torba"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchAlci,
+                PackageKey = keyAlci,
+                PackageName = branchAlci,
+                PackageIcon = iconAlci,
+                PackageOrder = orderAlci,
+                ProfessionName = tradeAlci,
+                Title = "Banyo Modüler Asma Tavanı (60×60 Karopan/Klipin)",
+                Quantity = Math.Round((decimal)(totalUnits * 4.5), 0),
+                Unit = "m²"
+            });
+
+            // =========================================================================
+            // 14. BOYA TOPTANCISI (FİLLİ BOYA/DYO/JOTUN) -> BOYACI EKİBİ
+            // =========================================================================
+            string branchBoya = "Boya Toptancısı";
+            string keyBoya = "branch_boya";
+            string iconBoya = "bi-paint-bucket";
+            int orderBoya = 14;
+            string tradeBoya = "Boyacı Ekibi";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchBoya,
+                PackageKey = keyBoya,
+                PackageName = branchBoya,
+                PackageIcon = iconBoya,
+                PackageOrder = orderBoya,
+                ProfessionName = tradeBoya,
+                Title = "Silikonlu İç Cephe Boyası",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.24), 0),
+                Unit = "Litre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchBoya,
+                PackageKey = keyBoya,
+                PackageName = branchBoya,
+                PackageIcon = iconBoya,
+                PackageOrder = orderBoya,
+                ProfessionName = tradeBoya,
+                Title = "Grenli Dış Cephe Boyası",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.12), 0),
+                Unit = "Litre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchBoya,
+                PackageKey = keyBoya,
+                PackageName = branchBoya,
+                PackageIcon = iconBoya,
+                PackageOrder = orderBoya,
+                ProfessionName = tradeBoya,
+                Title = "Tavan Boyası (Plastik)",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.08), 0),
+                Unit = "Litre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchBoya,
+                PackageKey = keyBoya,
+                PackageName = branchBoya,
+                PackageIcon = iconBoya,
+                PackageOrder = orderBoya,
+                ProfessionName = tradeBoya,
+                Title = "Silikonlu Boya Astarı (Binder)",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.10), 0),
+                Unit = "Litre"
+            });
+
+            // =========================================================================
+            // 15. SIHHİ TESİSAT & BORU -> SIHHİ TESİSAT EKİBİ
+            // =========================================================================
+            string branchTesisat = "Sıhhi Tesisat & Boru";
+            string keyTesisat = "branch_tesisat";
+            string iconTesisat = "bi-droplet-fill";
+            int orderTesisat = 15;
+            string tradeTesisat = "Sıhhi Tesisat Ekibi";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchTesisat,
+                PackageKey = keyTesisat,
+                PackageName = branchTesisat,
+                PackageIcon = iconTesisat,
+                PackageOrder = orderTesisat,
+                ProfessionName = tradeTesisat,
+                Title = "PPRC Temiz Su Borusu (Ø20 - Ø25)",
+                Quantity = Math.Round((decimal)(totalUnits * 32 + totalShops * 18), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchTesisat,
+                PackageKey = keyTesisat,
+                PackageName = branchTesisat,
+                PackageIcon = iconTesisat,
+                PackageOrder = orderTesisat,
+                ProfessionName = tradeTesisat,
+                Title = "PPRC Branşman & Vana Grubu",
+                Quantity = Math.Round((decimal)(totalUnits * 6 + totalShops * 4), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchTesisat,
+                PackageKey = keyTesisat,
+                PackageName = branchTesisat,
+                PackageIcon = iconTesisat,
+                PackageOrder = orderTesisat,
+                ProfessionName = tradeTesisat,
+                Title = "PVC Pis Su Pimaşı (Ø50)",
+                Quantity = Math.Round((decimal)(totalUnits * 16 + totalShops * 10), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchTesisat,
+                PackageKey = keyTesisat,
+                PackageName = branchTesisat,
+                PackageIcon = iconTesisat,
+                PackageOrder = orderTesisat,
+                ProfessionName = tradeTesisat,
+                Title = "PVC Pis Su Pimaşı (Ø70 - Ø100)",
+                Quantity = Math.Round((decimal)(maxFloors * 24 + totalUnits * 12), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchTesisat,
+                PackageKey = keyTesisat,
+                PackageName = branchTesisat,
+                PackageIcon = iconTesisat,
+                PackageOrder = orderTesisat,
+                ProfessionName = tradeTesisat,
+                Title = "Koku Önleyicili Banyo Süzgeci",
+                Quantity = Math.Round((decimal)(totalUnits * 2.5), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchTesisat,
+                PackageKey = keyTesisat,
+                PackageName = branchTesisat,
+                PackageIcon = iconTesisat,
+                PackageOrder = orderTesisat,
+                ProfessionName = tradeTesisat,
+                Title = "Atık Su Çekvalfi",
+                Quantity = Math.Round((decimal)(maxBasement * 2), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchTesisat,
+                PackageKey = keyTesisat,
+                PackageName = branchTesisat,
+                PackageIcon = iconTesisat,
+                PackageOrder = orderTesisat,
+                ProfessionName = tradeTesisat,
+                Title = "Yerden Isıtma Borusu (Oksijen Bariyerli)",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.65 * 6.5), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchTesisat,
+                PackageKey = keyTesisat,
+                PackageName = branchTesisat,
+                PackageIcon = iconTesisat,
+                PackageOrder = orderTesisat,
+                ProfessionName = tradeTesisat,
+                Title = "Modülasyon Paneli (Straforu)",
+                Quantity = Math.Round((decimal)(totalFloorArea * 0.65), 0),
+                Unit = "m²"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchTesisat,
+                PackageKey = keyTesisat,
+                PackageName = branchTesisat,
+                PackageIcon = iconTesisat,
+                PackageOrder = orderTesisat,
+                ProfessionName = tradeTesisat,
+                Title = "Kollektör & Kollektör Dolabı",
+                Quantity = Math.Round((decimal)(totalUnits), 0),
+                Unit = "Takım"
+            });
+
+            // =========================================================================
+            // 16. VİTRİFİYE & ARMATÜR TOPTANCISI -> SIHHİ TESİSAT EKİBİ
+            // =========================================================================
+            string branchVitrifiye = "Vitrifiye & Armatür";
+            string keyVitrifiye = "branch_vitrifiye";
+            string iconVitrifiye = "bi-water";
+            int orderVitrifiye = 16;
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchVitrifiye,
+                PackageKey = keyVitrifiye,
+                PackageName = branchVitrifiye,
+                PackageIcon = iconVitrifiye,
+                PackageOrder = orderVitrifiye,
+                ProfessionName = tradeTesisat,
+                Title = "Gömme Rezervuar & Asma Klozet",
+                Quantity = Math.Round((decimal)(totalUnits * 1.5 + totalShops), 0),
+                Unit = "Takım"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchVitrifiye,
+                PackageKey = keyVitrifiye,
+                PackageName = branchVitrifiye,
+                PackageIcon = iconVitrifiye,
+                PackageOrder = orderVitrifiye,
+                ProfessionName = tradeTesisat,
+                Title = "Seramik Lavabo / Çanak",
+                Quantity = Math.Round((decimal)(totalUnits * 1.2), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchVitrifiye,
+                PackageKey = keyVitrifiye,
+                PackageName = branchVitrifiye,
+                PackageIcon = iconVitrifiye,
+                PackageOrder = orderVitrifiye,
+                ProfessionName = tradeTesisat,
+                Title = "Aç-Kapa Lavabo & Eviye Bataryası",
+                Quantity = Math.Round((decimal)(totalUnits * 3.0 + totalShops * 1.0), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchVitrifiye,
+                PackageKey = keyVitrifiye,
+                PackageName = branchVitrifiye,
+                PackageIcon = iconVitrifiye,
+                PackageOrder = orderVitrifiye,
+                ProfessionName = tradeTesisat,
+                Title = "Banyo Duş Bataryası & Duş Seti",
+                Quantity = Math.Round((decimal)(totalUnits * 1.2), 0),
+                Unit = "Takım"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchVitrifiye,
+                PackageKey = keyVitrifiye,
+                PackageName = branchVitrifiye,
+                PackageIcon = iconVitrifiye,
+                PackageOrder = orderVitrifiye,
+                ProfessionName = tradeTesisat,
+                Title = "Temperli Cam Duşakabin",
+                Quantity = Math.Round((decimal)(totalUnits * 1.2), 0),
+                Unit = "Adet"
+            });
+
+            // =========================================================================
+            // 17. ELEKTRİK TOPTANCISI -> ELEKTRİKÇİ EKİBİ
+            // =========================================================================
+            string branchElektrik = "Elektrik Toptancısı";
+            string keyElektrik = "branch_elektrik";
+            string iconElektrik = "bi-lightning-charge-fill";
+            int orderElektrik = 17;
+            string tradeElektrik = "Elektrik Tesisat Ekibi";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchElektrik,
+                PackageKey = keyElektrik,
+                PackageName = branchElektrik,
+                PackageIcon = iconElektrik,
+                PackageOrder = orderElektrik,
+                ProfessionName = tradeElektrik,
+                Title = "Temel Topraklama Galvaniz Şeridi & Kazığı",
+                Quantity = Math.Round((decimal)(Math.Sqrt(baseArea) * 4 * 1.5 + maxBasement * 20), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchElektrik,
+                PackageKey = keyElektrik,
+                PackageName = branchElektrik,
+                PackageIcon = iconElektrik,
+                PackageOrder = orderElektrik,
+                ProfessionName = tradeElektrik,
+                Title = "Daire Sigorta Kutusu & Sayaç Panosu",
+                Quantity = Math.Round((decimal)(totalUnits + totalShops + maxFloors), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchElektrik,
+                PackageKey = keyElektrik,
+                PackageName = branchElektrik,
+                PackageIcon = iconElektrik,
+                PackageOrder = orderElektrik,
+                ProfessionName = tradeElektrik,
+                Title = "Topraklı Priz",
+                Quantity = Math.Round((decimal)(totalUnits * 24 + totalShops * 15), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchElektrik,
+                PackageKey = keyElektrik,
+                PackageName = branchElektrik,
+                PackageIcon = iconElektrik,
+                PackageOrder = orderElektrik,
+                ProfessionName = tradeElektrik,
+                Title = "Kapaklı Nemliyer Prizi",
+                Quantity = Math.Round((decimal)(totalUnits * 4 + totalShops * 2), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchElektrik,
+                PackageKey = keyElektrik,
+                PackageName = branchElektrik,
+                PackageIcon = iconElektrik,
+                PackageOrder = orderElektrik,
+                ProfessionName = tradeElektrik,
+                Title = "Tekli Anahtar (Adi)",
+                Quantity = Math.Round((decimal)(totalUnits * 8 + totalShops * 4), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchElektrik,
+                PackageKey = keyElektrik,
+                PackageName = branchElektrik,
+                PackageIcon = iconElektrik,
+                PackageOrder = orderElektrik,
+                ProfessionName = tradeElektrik,
+                Title = "Çiftli Anahtar (Komütatör)",
+                Quantity = Math.Round((decimal)(totalUnits * 4 + totalShops * 3), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchElektrik,
+                PackageKey = keyElektrik,
+                PackageName = branchElektrik,
+                PackageIcon = iconElektrik,
+                PackageOrder = orderElektrik,
+                ProfessionName = tradeElektrik,
+                Title = "Vaviyen Anahtar",
+                Quantity = Math.Round((decimal)(totalUnits * 3 + maxFloors * 2), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchElektrik,
+                PackageKey = keyElektrik,
+                PackageName = branchElektrik,
+                PackageIcon = iconElektrik,
+                PackageOrder = orderElektrik,
+                ProfessionName = tradeElektrik,
+                Title = "TV / Data / Telefon Prizi",
+                Quantity = Math.Round((decimal)(totalUnits * 5 + totalShops * 4), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchElektrik,
+                PackageKey = keyElektrik,
+                PackageName = branchElektrik,
+                PackageIcon = iconElektrik,
+                PackageOrder = orderElektrik,
+                ProfessionName = tradeElektrik,
+                Title = "Otomatik Sigorta (W-Otomat)",
+                Quantity = Math.Round((decimal)(totalUnits * 10 + totalShops * 8), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchElektrik,
+                PackageKey = keyElektrik,
+                PackageName = branchElektrik,
+                PackageIcon = iconElektrik,
+                PackageOrder = orderElektrik,
+                ProfessionName = tradeElektrik,
+                Title = "Kaçak Akım Rölesi (30mA / 300mA)",
+                Quantity = Math.Round((decimal)(totalUnits * 2 + maxFloors * 1), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchElektrik,
+                PackageKey = keyElektrik,
+                PackageName = branchElektrik,
+                PackageIcon = iconElektrik,
+                PackageOrder = orderElektrik,
+                ProfessionName = tradeElektrik,
+                Title = "NYM Antigron Tesisat Kablosu",
+                Quantity = Math.Round((decimal)(totalFloorArea * 3.8), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchElektrik,
+                PackageKey = keyElektrik,
+                PackageName = branchElektrik,
+                PackageIcon = iconElektrik,
+                PackageOrder = orderElektrik,
+                ProfessionName = tradeElektrik,
+                Title = "NYY Yeraltı / Ana Besleme Kablosu",
+                Quantity = Math.Round((decimal)((maxFloors * 28) + (totalUnits * 14)), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchElektrik,
+                PackageKey = keyElektrik,
+                PackageName = branchElektrik,
+                PackageIcon = iconElektrik,
+                PackageOrder = orderElektrik,
+                ProfessionName = tradeElektrik,
+                Title = "Zayıf Akım Kabloları (Diafon/Data)",
+                Quantity = Math.Round((decimal)(totalFloorArea * 2.2), 0),
+                Unit = "Metre"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchElektrik,
+                PackageKey = keyElektrik,
+                PackageName = branchElektrik,
+                PackageIcon = iconElektrik,
+                PackageOrder = orderElektrik,
+                ProfessionName = tradeElektrik,
+                Title = "Spiral Boru, Kasa & Buat Grubu",
+                Quantity = Math.Round((decimal)(totalFloorArea * 1.8), 0),
+                Unit = "Metre"
+            });
+
+            // =========================================================================
+            // 18. MOBİLYA & MARANGOZ -> MOBİLYA MONTAJ EKİBİ
+            // =========================================================================
+            string branchMobilya = "Mobilya & Marangoz";
+            string keyMobilya = "branch_mobilya";
+            string iconMobilya = "bi-inboxes-fill";
+            int orderMobilya = 18;
+            string tradeMobilya = "Mobilya Montaj Ekibi";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchMobilya,
+                PackageKey = keyMobilya,
+                PackageName = branchMobilya,
+                PackageIcon = iconMobilya,
+                PackageOrder = orderMobilya,
+                ProfessionName = tradeMobilya,
+                Title = "Mutfak Dolabı (Alt & Üst Takım)",
+                Quantity = Math.Round((decimal)(totalUnits * 3.2), 0),
+                Unit = "mtül"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchMobilya,
+                PackageKey = keyMobilya,
+                PackageName = branchMobilya,
+                PackageIcon = iconMobilya,
+                PackageOrder = orderMobilya,
+                ProfessionName = tradeMobilya,
+                Title = "Banyo Dolabı (Hilton Dolap Takımı)",
+                Quantity = Math.Round((decimal)(totalUnits * 1.2), 0),
+                Unit = "Takım"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchMobilya,
+                PackageKey = keyMobilya,
+                PackageName = branchMobilya,
+                PackageIcon = iconMobilya,
+                PackageOrder = orderMobilya,
+                ProfessionName = tradeMobilya,
+                Title = "Daire İçi Vestiyer & Portmanto",
+                Quantity = Math.Round((decimal)(totalUnits), 0),
+                Unit = "Takım"
+            });
+
+            // =========================================================================
+            // 19. KAPI, PENCERE & DOĞRAMA -> DOĞRAMA & KAPI MONTAJ EKİBİ
+            // =========================================================================
+            string branchPvc = "Kapı & Doğramacı";
+            string keyPvc = "branch_pvc";
+            string iconPvc = "bi-door-closed-fill";
+            int orderPvc = 19;
+            string tradePvc = "Doğrama & Kapı Montaj Ekibi";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchPvc,
+                PackageKey = keyPvc,
+                PackageName = branchPvc,
+                PackageIcon = iconPvc,
+                PackageOrder = orderPvc,
+                ProfessionName = tradePvc,
+                Title = "İç Oda Kapısı (Melamin / Lake)",
+                Quantity = Math.Round((decimal)(totalUnits * 6.5), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchPvc,
+                PackageKey = keyPvc,
+                PackageName = branchPvc,
+                PackageIcon = iconPvc,
+                PackageOrder = orderPvc,
+                ProfessionName = tradePvc,
+                Title = "Çelik Daire Giriş Kapısı",
+                Quantity = Math.Round((decimal)(totalUnits), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchPvc,
+                PackageKey = keyPvc,
+                PackageName = branchPvc,
+                PackageIcon = iconPvc,
+                PackageOrder = orderPvc,
+                ProfessionName = tradePvc,
+                Title = "Yangın & Sığınak Çıkış Kapısı",
+                Quantity = Math.Round((decimal)(maxFloors * 2 + 4), 0),
+                Unit = "Adet"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchPvc,
+                PackageKey = keyPvc,
+                PackageName = branchPvc,
+                PackageIcon = iconPvc,
+                PackageOrder = orderPvc,
+                ProfessionName = tradePvc,
+                Title = "Pimapen / PVC Doğrama Profili",
+                Quantity = Math.Round((decimal)(totalUnits * 14.5 + totalShops * 18), 0),
+                Unit = "m²"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchPvc,
+                PackageKey = keyPvc,
+                PackageName = branchPvc,
+                PackageIcon = iconPvc,
+                PackageOrder = orderPvc,
+                ProfessionName = tradePvc,
+                Title = "4+16+4 Konfor / Isıcam",
+                Quantity = Math.Round((decimal)(totalUnits * 14.5 + totalShops * 18), 0),
+                Unit = "m²"
+            });
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchPvc,
+                PackageKey = keyPvc,
+                PackageName = branchPvc,
+                PackageIcon = iconPvc,
+                PackageOrder = orderPvc,
+                ProfessionName = tradePvc,
+                Title = "Balkon & Merdiven Korkuluğu",
+                Quantity = Math.Round((decimal)(totalUnits * 6.5 + maxFloors * 18), 0),
+                Unit = "Metre"
+            });
+
+            // =========================================================================
+            // 20. ASANSÖR TEDARİKÇİSİ -> ASANSÖR MONTAJ EKİBİ
+            // =========================================================================
+            string branchAsansor = "Asansörcü";
+            string keyAsansor = "branch_asansor";
+            string iconAsansor = "bi-arrow-down-up";
+            int orderAsansor = 20;
+            string tradeAsansor = "Asansör Montaj Ekibi";
+
+            list.Add(new MasterBomItemDto
+            {
+                Id = id++,
+                SupplierBranch = branchAsansor,
+                PackageKey = keyAsansor,
+                PackageName = branchAsansor,
+                PackageIcon = iconAsansor,
+                PackageOrder = orderAsansor,
+                ProfessionName = tradeAsansor,
+                Title = "Yolcu Asansörü (Motor, Kabin, Ray)",
+                Quantity = Math.Round((decimal)(Math.Max(1, blocks.Count) * (totalUnits > 40 ? 2 : 1)), 0),
+                Unit = "Takım"
+            });
+
+            return list;
+        }
+
+        private int GetTotalSlabs(Building b)
+
+        {
+
+            return b.BasementFloors + (b.HasGroundFloor ? 1 : 0) + (b.TotalFloors ?? 0) + (b.HasRoof ? 1 : 0);
+
+        }
+
+
+
+        private string GetFloorNameBySlabIndex(Building b, int slabIndex)
+
+        {
+
+            int current = 1;
+
+            int basements = b.BasementFloors;
+
+            if (slabIndex <= basements)
+
+            {
+
+                int bodrumNo = (basements - slabIndex) + 1;
+
+                return $"-{bodrumNo}. Bodrum";
+
+            }
+
+            current += basements;
+
+
+
+            if (b.HasGroundFloor)
+
+            {
+
+                if (slabIndex == current) return "Zemin Kat";
+
+                current++;
+
+            }
+
+
+
+            int totalF = b.TotalFloors ?? 0;
+
+            if (slabIndex < current + totalF)
+
+            {
+
+                int katNo = slabIndex - current + 1;
+
+                return $"{katNo}. Normal Kat";
+
+            }
+
+            current += totalF;
+
+
+
+            if (b.HasRoof && slabIndex == current)
+
+            {
+
+                return "Ã‡atÄ± KatÄ±";
+
+            }
+
+
+
+            return $"{slabIndex}. Seviye";
+
+        }
+
+
+
+        
+
+        
+
+        public IActionResult ProjectDNA(int id)
+
+        {
+
+            ViewData["ProjectId"] = id;
+
+            
+
+            var project = _context.ConstructionProjects
+
+                .Include(p => p.Blocks)
+
+                .Include(p => p.Amenities)
+
+                .FirstOrDefault(p => p.Id == id);
+
+            if (project == null) return NotFound();
+
+
+
+            ViewBag.Project = project;
+
+            ViewData["ProjectName"] = project.Name;
+
+            
+
+            ViewBag.WallRecipes = _context.MaterialRecipes.ToList();
+
+            ViewBag.MasterMaterials = _context.MasterMaterials.ToList();
+
+            ViewBag.WorkGroups = _context.WorkGroupDefinitions.ToList();
+
+
+
+            // DINAMIK ADIM 1 VERISI
+
+            var step1 = _context.DnaTemplateSteps
+
+                .Include(s => s.Questions)
+
+                    .ThenInclude(q => q.Options)
+
+                        .ThenInclude(o => o.Profession)
+
+                .Include(s => s.Questions)
+
+                    .ThenInclude(q => q.Profession)
+
+                .FirstOrDefault(s => s.StepOrder == 1 || s.StepName.Contains("AdÄ±m 1") || s.Id == 3);
+
+
+
+            if (step1 != null)
+
+            {
+
+                step1.Questions = step1.Questions.OrderBy(q => q.QuestionOrder).ToList();
+
+            }
+
+
+
+            ViewBag.Step1 = step1;
+
+
+
+            // URETILEN PROFILLERI (KAYITLARI) CEK
+
+            var savedProfiles = _context.ProjectDnaProfiles
+
+                .Include(p => p.Details)
+
+                    .ThenInclude(d => d.Profession)
+
+                .Where(p => p.ProjectId == id)
+
+                .OrderByDescending(p => p.CreatedDate)
+
+                .ToList();
+
+
+
+            ViewBag.SavedProfiles = savedProfiles;
+
+
+
+            // YAPI / BLOK HÄ°YERARÅÄ°SÄ° (A Blok, BitiÅŸik Bloklar, Ortak Baza)
+
+            var structures = project.Blocks.Where(b => b.ParentBuildingId == null && !b.IsExistingBuilding).ToList();
+
+            ViewBag.Structures = structures;
+
+            var defaultStructure = structures.FirstOrDefault();
+
+            ViewBag.ActiveStructure = defaultStructure;
+
+
+
+            // DXF'SÄ°Z PARAMETRÄ°K KEÅÄ°F & Ä°HALE LÄ°STESÄ°
+
+            var activeProfile = savedProfiles.FirstOrDefault();
+
+            ViewBag.ParametricTakeoff = GenerateParametricTakeoff(project, activeProfile);
+
+            ViewBag.WorkflowSteps = GenerateParametricWorkflow(project, activeProfile, DateTime.Today, defaultStructure?.Id);
+
+
+
+            return View();
+
+        }
+
+
+
+        // =================================================================================
+
+        // ÅANTÄ°YE Ä°Å AKIÅI, MALZEME & KADRO MASASI (YAPI ODAKLI Ã‡ALIÅMA MASASI)
+
+        // =================================================================================
+
+        public async Task<IActionResult> BuildingWorkflow(int id, int? profileId, int? buildingId)
+
+        {
+
+            var project = await _context.ConstructionProjects
+
+                .Include(p => p.Blocks).ThenInclude(b => b.ChildBuildings).ThenInclude(c => c.Units)
+
+                .Include(p => p.Blocks).ThenInclude(b => b.Units)
+
+                .Include(p => p.Amenities)
+
+                .FirstOrDefaultAsync(p => p.Id == id);
+
+
+
+            if (project == null) return NotFound();
+
+
+
+            ViewData["ProjectId"] = id;
+
+            ViewData["ProjectName"] = project.Name;
+
+            ViewBag.Project = project;
+
+
+
+            // YapÄ±lar (A Blok, BitiÅŸik Bloklar, Ortak Baza)
+
+            var structures = project.Blocks.Where(b => b.ParentBuildingId == null && !b.IsExistingBuilding).ToList();
+
+            ViewBag.Structures = structures;
+
+
+
+            // KayÄ±tlÄ± Profiller
+
+            var savedProfiles = await _context.ProjectDnaProfiles
+
+                .Include(p => p.Details).ThenInclude(d => d.Profession)
+
+                .Where(p => p.ProjectId == id)
+
+                .OrderByDescending(p => p.CreatedDate)
+
+                .ToListAsync();
+
+
+
+            ViewBag.SavedProfiles = savedProfiles;
+
+            var activeProfile = profileId.HasValue 
+
+                ? savedProfiles.FirstOrDefault(p => p.Id == profileId.Value) 
+
+                : savedProfiles.FirstOrDefault(p => p.Status == "TamamlandÄ±") ?? savedProfiles.FirstOrDefault();
+
+            ViewBag.ActiveProfile = activeProfile;
+
+
+
+            // SeÃ§ili YapÄ± (varsayÄ±lan: parametre veya ilk yapÄ±)
+
+            var activeStructure = buildingId.HasValue 
+
+                ? structures.FirstOrDefault(s => s.Id == buildingId.Value) 
+
+                : structures.FirstOrDefault();
+
+            ViewBag.ActiveStructure = activeStructure;
+
+
+
+            // ADIM 0 (Mecburi Statik ve TaÅŸÄ±yÄ±cÄ±lar - 20 Soru / Kalem)
+
+            var step0 = await _context.DnaTemplateSteps
+
+                .AsNoTracking()
+
+                .Include(s => s.Questions)
+
+                    .ThenInclude(q => q.Profession)
+
+                .FirstOrDefaultAsync(s => s.StepOrder == 0 || s.Id == 2);
+
+
+
+            if (step0 != null && step0.Questions != null)
+
+            {
+
+                step0.Questions = step0.Questions.OrderBy(q => q.QuestionOrder).ToList();
+
+            }
+
+            ViewBag.Step0 = step0;
+
+
+
+            return View();
+
+        }
+
+
+
+        // YENÄ° TAM SAYFA DNA SÄ°HÄ°RBAZI (YENÄ° SEKME)
+
+        public IActionResult DnaWizard(int id, int? profileId, int? startStep = null)
+
+        {
+
+            var project = _context.ConstructionProjects
+
+                .Include(p => p.Blocks)
+
+                .Include(p => p.Amenities)
+
+                .FirstOrDefault(p => p.Id == id);
+
+            if (project == null) return NotFound();
+
+
+
+            ViewBag.Project = project;
+
+            ViewData["ProjectId"] = id;
+
+            ViewData["ProjectName"] = project.Name;
+
+
+
+            // ADIM 0 (Mecburi Statik ve TaÅŸÄ±yÄ±cÄ±lar - 20 Soru)
+
+            var step0 = _context.DnaTemplateSteps
+
+                .AsNoTracking()
+
+                .Include(s => s.Questions)
+
+                    .ThenInclude(q => q.Profession)
+
+                .FirstOrDefault(s => s.StepOrder == 0 || s.Id == 2);
+
+
+
+            if (step0 != null && step0.Questions != null)
+
+            {
+
+                step0.Questions = step0.Questions.OrderBy(q => q.QuestionOrder).ToList();
+
+            }
+
+            ViewBag.Step0 = step0;
+
+
+
+            // ADIM 1 (Saha Analizi ve Åantiye Kurulumu)
+
+            var step1 = _context.DnaTemplateSteps
+
+                .AsNoTracking()
+
+                .Include(s => s.Questions)
+
+                    .ThenInclude(q => q.Options)
+
+                        .ThenInclude(o => o.Profession)
+
+                .Include(s => s.Questions)
+
+                    .ThenInclude(q => q.Profession)
+
+                .FirstOrDefault(s => s.StepOrder == 1 || s.Id == 3);
+
+
+
+            if (step1 != null && step1.Questions != null)
+
+            {
+
+                step1.Questions = step1.Questions.OrderBy(q => q.QuestionOrder).ToList();
+
+            }
+
+            ViewBag.Step1 = step1;
+
+
+
+            // TÃœM ADIMLAR (Navigasyon ve TÃ¼m FazlarÄ±n SorularÄ±/SeÃ§enekleri Ä°Ã§in)
+
+            ViewBag.AllSteps = _context.DnaTemplateSteps
+
+                .AsNoTracking()
+
+                .Include(s => s.Questions)
+
+                    .ThenInclude(q => q.Options)
+
+                        .ThenInclude(o => o.Profession)
+
+                .Include(s => s.Questions)
+
+                    .ThenInclude(q => q.Profession)
+
+                .OrderBy(s => s.StepOrder)
+
+                .ToList();
+
+
+
+            // Ä°Å BRANÅLARI (Pazar Yeri EÅŸleÅŸtirmesi)
+
+            ViewBag.Professions = _context.DnaProfessions.OrderBy(p => p.Name).ToList();
+
+
+
+            // MEVCUT BÄ°R TASLAK VEYA PROFÄ°L VAR MI?
+
+            // NOT: profileId parametresi verilmiÅŸse (DÃ¼zenle tÄ±klandÄ±ysa) o profili aÃ§ar.
+
+            // Verilmediyse (Yeni Profil tÄ±klandÄ±ysa) tertemiz YENÄ° bir profil aÃ§ar; eski taslaÄŸa zorlamaz!
+
+            if (profileId.HasValue && profileId.Value > 0)
+
+            {
+
+                var existing = _context.ProjectDnaProfiles
+
+                    .Include(p => p.Details)
+
+                        .ThenInclude(d => d.Profession)
+
+                    .FirstOrDefault(p => p.Id == profileId.Value && p.ProjectId == id);
+
+                ViewBag.ExistingProfile = existing;
+
+            }
+
+            else
+
+            {
+
+                ViewBag.ExistingProfile = null;
+
+            }
+
+
+
+            int? effectiveStartStep = startStep;
+
+            if (!effectiveStartStep.HasValue && ViewBag.ExistingProfile != null)
+
+            {
+
+                var prof = ViewBag.ExistingProfile as ProjectDnaProfile;
+
+                if (prof != null && int.TryParse(prof.ExtraField1, out int sStep))
+
+                {
+
+                    effectiveStartStep = sStep;
+
+                }
+
+            }
+
+            ViewBag.StartStep = effectiveStartStep;
+
+
+
+            // PARAMETRÄ°K KEÅÄ°F LÄ°STESÄ°
+
+            var currProfile = ViewBag.ExistingProfile as ProjectDnaProfile;
+
+            ViewBag.ParametricTakeoff = GenerateParametricTakeoff(project, currProfile);
+
+            ViewBag.WorkflowSteps = GenerateParametricWorkflow(project, currProfile, DateTime.Today);
+
+
+
+            return View();
+
+        }
+
+
+
+        public class DnaProfileSaveDto
+
+        {
+
+            public int? ProfileId { get; set; }
+
+            public int ProjectId { get; set; }
+
+            public string Name { get; set; }
+
+            public int? StartStep { get; set; }
+
+            public List<DnaProfileDetailDto> Details { get; set; }
+
+        }
+
+
+
+        public class DnaProfileDetailDto
+
+        {
+
+            public string Phase { get; set; }
+
+            public string SelectedItem { get; set; }
+
+            public int ValueId { get; set; } // OptionId
+
+        }
+
+
+
+        [HttpGet]
+
+        public IActionResult CheckProfileName(int projectId, string name, int? profileId)
+
+        {
+
+            if (string.IsNullOrWhiteSpace(name)) return Json(new { exists = false });
+
+            var trimmed = name.Trim().ToLower();
+
+            bool exists = _context.ProjectDnaProfiles.Any(p =>
+
+                p.ProjectId == projectId &&
+
+                p.Name.Trim().ToLower() == trimmed &&
+
+                (!profileId.HasValue || p.Id != profileId.Value));
+
+            return Json(new { exists });
+
+        }
+
+
+
+        [HttpPost]
+
+        [IgnoreAntiforgeryToken]
+
+        public IActionResult AutoSaveProfile([FromBody] DnaProfileSaveDto data)
+
+        {
+
+            if (data == null || string.IsNullOrWhiteSpace(data.Name)) return BadRequest();
+
+
+
+            var trimmedName = data.Name.Trim();
+
+
+
+            ProjectDnaProfile profile = null;
+
+            if (data.ProfileId.HasValue && data.ProfileId.Value > 0)
+
+            {
+
+                profile = _context.ProjectDnaProfiles
+
+                    .Include(p => p.Details)
+
+                    .FirstOrDefault(p => p.Id == data.ProfileId.Value && p.ProjectId == data.ProjectId);
+
+            }
+
+
+
+            if (profile == null)
+
+            {
+
+                // AynÄ± isimde aktif bir taslak varsa onu devam ettir
+
+                profile = _context.ProjectDnaProfiles
+
+                    .Include(p => p.Details)
+
+                    .FirstOrDefault(p => p.ProjectId == data.ProjectId && p.Name.Trim().ToLower() == trimmedName.ToLower());
+
+            }
+
+
+
+            // BaÅŸka bir profille isim Ã§akÄ±ÅŸmasÄ± kontrolÃ¼
+
+            bool isDuplicate = _context.ProjectDnaProfiles.Any(p =>
+
+                p.ProjectId == data.ProjectId &&
+
+                p.Name.Trim().ToLower() == trimmedName.ToLower() &&
+
+                (profile == null || p.Id != profile.Id));
+
+
+
+            if (isDuplicate)
+
+            {
+
+                return Json(new { success = false, duplicate = true, message = "Bu isimde bir DNA profili bu projede zaten kayÄ±tlÄ±! LÃ¼tfen farklÄ± bir isim belirleyiniz." });
+
+            }
+
+
+
+            if (profile == null)
+
+            {
+
+                profile = new ProjectDnaProfile
+
+                {
+
+                    ProjectId = data.ProjectId,
+
+                    Name = trimmedName,
+
+                    Status = "Taslak",
+
+                    CreatedBy = User.Identity?.Name ?? "Admin",
+
+                    CreatedDate = DateTime.UtcNow,
+
+                    ExtraField1 = data.StartStep?.ToString()
+
+                };
+
+                _context.ProjectDnaProfiles.Add(profile);
+
+            }
+
+            else
+
+            {
+
+                profile.Name = trimmedName;
+
+                profile.Status = "Taslak";
+
+                if (data.StartStep.HasValue)
+
+                {
+
+                    profile.ExtraField1 = data.StartStep.Value.ToString();
+
+                }
+
+                if (profile.Details != null && profile.Details.Any())
+
+                {
+
+                    _context.ProjectDnaDetails.RemoveRange(profile.Details);
+
+                }
+
+            }
+
+
+
+            _context.SaveChanges();
+
+
+
+            if (data.Details != null && data.Details.Any())
+
+            {
+
+                var optIds = data.Details.Select(d => d.ValueId).ToList();
+
+                var options = _context.DnaTemplateOptions.Where(o => optIds.Contains(o.Id)).ToList();
+
+                var questions = _context.DnaTemplateQuestions.Where(q => optIds.Contains(q.Id)).ToList();
+
+
+
+                foreach (var d in data.Details)
+
+                {
+
+                    var opt = options.FirstOrDefault(o => o.Id == d.ValueId);
+
+                    int? profId = opt?.DnaProfessionId;
+
+                    if (!profId.HasValue && opt != null)
+
+                    {
+
+                        var optQ = _context.DnaTemplateQuestions.Find(opt.DnaTemplateQuestionId);
+
+                        profId = optQ?.DnaProfessionId;
+
+                    }
+
+                    if (!profId.HasValue)
+
+                    {
+
+                        var qItem = questions.FirstOrDefault(q => q.Id == d.ValueId);
+
+                        profId = qItem?.DnaProfessionId;
+
+                    }
+
+
+
+                    decimal qty = 0;
+
+                    string unit = "Belirsiz";
+
+                    if (!string.IsNullOrEmpty(d.SelectedItem) && d.SelectedItem.Contains(":"))
+
+                    {
+
+                        var parts = d.SelectedItem.Split(':');
+
+                        if (parts.Length > 1)
+
+                        {
+
+                            var valStr = parts[1].Replace("m", "").Trim();
+
+                            decimal.TryParse(valStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out qty);
+
+                            unit = "mt";
+
+                        }
+
+                    }
+
+
+
+                    _context.ProjectDnaDetails.Add(new ProjectDnaDetail
+
+                    {
+
+                        ProfileId = profile.Id,
+
+                        Phase = d.Phase,
+
+                        SelectedItem = d.SelectedItem,
+
+                        DnaProfessionId = profId,
+
+                        Quantity = qty,
+
+                        Unit = unit
+
+                    });
+
+                }
+
+                _context.SaveChanges();
+
+            }
+
+
+
+            return Json(new { success = true, profileId = profile.Id });
+
+        }
+
+
+
+        [HttpPost]
+
+        [IgnoreAntiforgeryToken]
+
+        public IActionResult SaveDnaProfile([FromBody] DnaProfileSaveDto data)
+
+        {
+
+            if (data == null || string.IsNullOrWhiteSpace(data.Name)) return BadRequest();
+
+
+
+            var trimmedName = data.Name.Trim();
+
+
+
+            ProjectDnaProfile profile = null;
+
+            if (data.ProfileId.HasValue && data.ProfileId.Value > 0)
+
+            {
+
+                profile = _context.ProjectDnaProfiles
+
+                    .Include(p => p.Details)
+
+                    .FirstOrDefault(p => p.Id == data.ProfileId.Value && p.ProjectId == data.ProjectId);
+
+            }
+
+
+
+            if (profile == null)
+
+            {
+
+                profile = _context.ProjectDnaProfiles
+
+                    .Include(p => p.Details)
+
+                    .FirstOrDefault(p => p.ProjectId == data.ProjectId && p.Name.Trim().ToLower() == trimmedName.ToLower());
+
+            }
+
+
+
+            // AynÄ± isimde baÅŸka bir profil var mÄ± kontrolÃ¼
+
+            bool isDuplicate = _context.ProjectDnaProfiles.Any(p =>
+
+                p.ProjectId == data.ProjectId &&
+
+                p.Name.Trim().ToLower() == trimmedName.ToLower() &&
+
+                (profile == null || p.Id != profile.Id));
+
+
+
+            if (isDuplicate)
+
+            {
+
+                return Json(new { success = false, duplicate = true, message = "Bu isimde bir DNA profili bu projede zaten kayÄ±tlÄ±! LÃ¼tfen farklÄ± bir isim belirleyiniz." });
+
+            }
+
+
+
+            if (profile == null)
+
+            {
+
+                profile = new ProjectDnaProfile
+
+                {
+
+                    ProjectId = data.ProjectId,
+
+                    Name = trimmedName,
+
+                    Status = "DNA TamamlandÄ±",
+
+                    CreatedBy = User.Identity?.Name ?? "Admin",
+
+                    CreatedDate = DateTime.UtcNow,
+
+                    ExtraField1 = data.StartStep?.ToString()
+
+                };
+
+                _context.ProjectDnaProfiles.Add(profile);
+
+            }
+
+            else
+
+            {
+
+                profile.Name = trimmedName;
+
+                profile.Status = "DNA TamamlandÄ±";
+
+                if (data.StartStep.HasValue)
+
+                {
+
+                    profile.ExtraField1 = data.StartStep.Value.ToString();
+
+                }
+
+                if (profile.Details != null && profile.Details.Any())
+
+                {
+
+                    _context.ProjectDnaDetails.RemoveRange(profile.Details);
+
+                }
+
+            }
+
+
+
+            _context.SaveChanges();
+
+
+
+            if (data.Details != null && data.Details.Any())
+
+            {
+
+                var optIds = data.Details.Select(d => d.ValueId).ToList();
+
+                var options = _context.DnaTemplateOptions.Where(o => optIds.Contains(o.Id)).ToList();
+
+                var questions = _context.DnaTemplateQuestions.Where(q => optIds.Contains(q.Id)).ToList();
+
+
+
+                foreach (var d in data.Details)
+
+                {
+
+                    var opt = options.FirstOrDefault(o => o.Id == d.ValueId);
+
+                    int? profId = opt?.DnaProfessionId;
+
+                    if (!profId.HasValue && opt != null)
+
+                    {
+
+                        var optQ = _context.DnaTemplateQuestions.Find(opt.DnaTemplateQuestionId);
+
+                        profId = optQ?.DnaProfessionId;
+
+                    }
+
+                    if (!profId.HasValue)
+
+                    {
+
+                        var qItem = questions.FirstOrDefault(q => q.Id == d.ValueId);
+
+                        profId = qItem?.DnaProfessionId;
+
+                    }
+
+
+
+                    decimal qty = 0;
+
+                    string unit = "Belirsiz";
+
+                    if (!string.IsNullOrEmpty(d.SelectedItem) && d.SelectedItem.Contains(":"))
+
+                    {
+
+                        var parts = d.SelectedItem.Split(':');
+
+                        if (parts.Length > 1)
+
+                        {
+
+                            var valStr = parts[1].Replace("m", "").Trim();
+
+                            decimal.TryParse(valStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out qty);
+
+                            unit = "mt";
+
+                        }
+
+                    }
+
+
+
+                    _context.ProjectDnaDetails.Add(new ProjectDnaDetail
+
+                    {
+
+                        ProfileId = profile.Id,
+
+                        Phase = d.Phase,
+
+                        SelectedItem = d.SelectedItem,
+
+                        DnaProfessionId = profId,
+
+                        Quantity = qty,
+
+                        Unit = unit
+
+                    });
+
+                }
+
+                _context.SaveChanges();
+
+            }
+
+
+
+            return Json(new { success = true, profileId = profile.Id });
+
+        }
+
+
+
+        [HttpPost]
+
+        [IgnoreAntiforgeryToken]
+
+        public IActionResult DeleteDnaProfile(int id)
+
+        {
+
+            var profile = _context.ProjectDnaProfiles.Include(p => p.Details).FirstOrDefault(p => p.Id == id);
+
+            if (profile != null)
+
+            {
+
+                _context.ProjectDnaDetails.RemoveRange(profile.Details);
+
+                _context.ProjectDnaProfiles.Remove(profile);
+
+                _context.SaveChanges();
+
+            }
+
+            return Ok();
+
+        }
+
+
+
+        public IActionResult ParseDxf(int projectId, int recipeId)
+
+        {
+
+            // Simulate DXF parsing
+
+            var recipe = _context.MaterialRecipes
+
+                .Include(r => r.Ingredients)
+
+                .ThenInclude(i => i.MasterMaterial)
+
+                .FirstOrDefault(r => r.Id == recipeId);
+
+
+
+            ViewBag.Recipe = recipe;
+
+            ViewData["ProjectId"] = projectId;
+
+            return View("Result");
+
+        }
+
+
+
+        [HttpPost]
+
+        public IActionResult SimulateDxfUnitTypeRead(int projectId)
+
+        {
+
+            // DXF'ten Daire Tiplerini (Tip PlanlarÄ±) Okuma SimÃ¼lasyonu
+
+            var existing = _context.DxfUnitTypeProfiles.Where(x => x.ProjectId == projectId).ToList();
+
+            if(existing.Any()) {
+
+                _context.DxfUnitSpaces.RemoveRange(_context.DxfUnitSpaces.Where(x => existing.Select(e => e.Id).Contains(x.DxfUnitTypeProfileId)));
+
+                _context.DxfUnitTypeProfiles.RemoveRange(existing);
+
+                _context.SaveChanges();
+
+            }
+
+
+
+            var typeA = new DxfUnitTypeProfile { ProjectId = projectId, ModelName = "A Tipi (3+1 Kuzey)", Category = "Daire", TotalGrossArea = 145, TotalNetArea = 120, TotalSpaceCount = 8 };
+
+            var typeB = new DxfUnitTypeProfile { ProjectId = projectId, ModelName = "Ticari MaÄŸaza 1", Category = "Ticari", TotalGrossArea = 250, TotalNetArea = 230, TotalSpaceCount = 4 };
+
+            var typeC = new DxfUnitTypeProfile { ProjectId = projectId, ModelName = "Ortak Alan: SÄ±ÄŸÄ±nak & Otopark", Category = "OrtakAlan", TotalGrossArea = 600, TotalNetArea = 580, TotalSpaceCount = 3 };
+
+
+
+            _context.DxfUnitTypeProfiles.AddRange(typeA, typeB, typeC);
+
+            _context.SaveChanges();
+
+
+
+            // OdalarÄ± (Mahalleri) OluÅŸtur
+
+            _context.DxfUnitSpaces.AddRange(
+
+                new DxfUnitSpace { DxfUnitTypeProfileId = typeA.Id, SpaceName = "Salon", SpaceGroup = "Oda / YaÅŸam AlanÄ±", FloorArea = 30, CeilingArea = 30, GrossWallArea = 50, NetWallArea = 42, SkirtingLength = 22, WindowSillLength = 3, InteriorDoorCount = 1, WindowCount = 2 },
+
+                new DxfUnitSpace { DxfUnitTypeProfileId = typeA.Id, SpaceName = "Ebeveyn Banyo", SpaceGroup = "Islak Hacim", FloorArea = 5, CeilingArea = 5, GrossWallArea = 15, NetWallArea = 14, SkirtingLength = 0, WindowSillLength = 0, InteriorDoorCount = 1, WindowCount = 1 },
+
+                new DxfUnitSpace { DxfUnitTypeProfileId = typeB.Id, SpaceName = "Ana SatÄ±ÅŸ AlanÄ±", SpaceGroup = "Ticari Alan", FloorArea = 200, CeilingArea = 200, GrossWallArea = 120, NetWallArea = 90, SkirtingLength = 60, WindowSillLength = 10, InteriorDoorCount = 0, WindowCount = 4 },
+
+                new DxfUnitSpace { DxfUnitTypeProfileId = typeC.Id, SpaceName = "KapalÄ± Otopark", SpaceGroup = "Ortak Alan", FloorArea = 500, CeilingArea = 500, GrossWallArea = 300, NetWallArea = 280, SkirtingLength = 120, WindowSillLength = 0, InteriorDoorCount = 2, WindowCount = 0 }
+
+            );
+
+            _context.SaveChanges();
+
+
+
+            return Ok();
+
+        }
+
+
+
+        [HttpGet]
+
+        public IActionResult GetDxfUnitTypes(int projectId)
+
+        {
+
+            var types = _context.DxfUnitTypeProfiles
+
+                .Include(x => x.Spaces)
+
+                .Where(x => x.ProjectId == projectId)
+
+                .Select(x => new {
+
+                    x.Id,
+
+                    x.ModelName,
+
+                    x.Category,
+
+                    x.TotalGrossArea,
+
+                    x.TotalSpaceCount,
+
+                    SpacesSummary = string.Join(", ", x.Spaces.Take(2).Select(s => $"{s.SpaceName} ({s.FloorArea}mÂ²)")),
+
+                    SpacesCount = x.Spaces.Count
+
+                }).ToList();
+
+
+
+            return Json(types);
+
+        }
+
+
+
+        // =================================================================================
+
+        // OTONOM ÅANTÄ°YE ÅEFÄ° AJANDASI (T-, T, T+ ZAMAN TÃœNELÄ°)
+
+        // =================================================================================
+
+        public async Task<IActionResult> SiteAgenda(int id, int? profileId, DateTime? baseDate)
+
+        {
+
+            var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == id);
+
+            if (project == null) return NotFound();
+
+
+
+            ViewData["ProjectId"] = id;
+
+            ViewData["ProjectName"] = project.Name;
+
+
+
+            ProjectDnaProfile profile = null;
+
+            if (profileId.HasValue && profileId.Value > 0)
+
+            {
+
+                profile = await _context.ProjectDnaProfiles
+
+                    .Include(p => p.Details)
+
+                        .ThenInclude(d => d.Profession)
+
+                    .FirstOrDefaultAsync(p => p.Id == profileId.Value && p.ProjectId == id);
+
+            }
+
+
+
+            if (profile == null)
+
+            {
+
+                profile = await _context.ProjectDnaProfiles
+
+                    .Include(p => p.Details)
+
+                        .ThenInclude(d => d.Profession)
+
+                    .Where(p => p.ProjectId == id)
+
+                    .OrderByDescending(p => p.CreatedDate)
+
+                    .FirstOrDefaultAsync();
+
+            }
+
+
+
+            ViewBag.Profile = profile;
+
+            var effectiveBaseDate = baseDate ?? DateTime.Today.AddDays(7);
+
+            ViewBag.BaseDate = effectiveBaseDate;
+
+
+
+            // DiÄŸer profilleri de dropdown iÃ§in gÃ¶nder
+
+            ViewBag.AllProfiles = await _context.ProjectDnaProfiles
+
+                .Where(p => p.ProjectId == id)
+
+                .OrderByDescending(p => p.CreatedDate)
+
+                .ToListAsync();
+
+
+
+            var tasks = _dnaTimeOffsetService.GenerateTasksForProfile(profile, effectiveBaseDate);
+
+            ViewBag.Tasks = tasks;
+
+
+
+            return View();
+
+        }
+
+
+
+        [HttpPost]
+
+        [ValidateAntiForgeryToken]
+
+        public async Task<IActionResult> SyncSiteAgenda(int projectId, int profileId, DateTime baseDate)
+
+        {
+
+            int agencyId = 1;
+
+            var agencyIdClaim = User.FindFirst("AgencyId")?.Value;
+
+            if (int.TryParse(agencyIdClaim, out int aid)) agencyId = aid;
+
+
+
+            var profile = await _context.ProjectDnaProfiles
+
+                .Include(p => p.Details)
+
+                .FirstOrDefaultAsync(p => p.Id == profileId && p.ProjectId == projectId);
+
+
+
+            if (profile != null)
+
+            {
+
+                var tasks = _dnaTimeOffsetService.GenerateTasksForProfile(profile, baseDate);
+
+                int count = await _dnaTimeOffsetService.SyncTasksToAgendaAsync(agencyId, projectId, tasks);
+
+                TempData["SuccessMessage"] = $"{count} adet otonom ÅŸantiye gÃ¶revi sistem ajandanÄ±za (takvime) baÅŸarÄ±yla iÅŸlendi!";
+
+            }
+
+
+
+            return RedirectToAction(nameof(SiteAgenda), new { id = projectId, profileId = profileId, baseDate = baseDate.ToString("yyyy-MM-dd") });
+
+        }
+
+
+
+        // =================================================================================
+
+        // DXF'SÄ°Z PARAMETRÄ°K KEÅÄ°F, Ä°HALE & MALZEME MOTORU
+
+        // =================================================================================
+
+        [HttpGet]
+
+        public async Task<IActionResult> GetParametricTakeoff(int projectId, int? profileId)
+
+        {
+
+            var project = await _context.ConstructionProjects
+
+                .Include(p => p.Blocks)
+
+                .Include(p => p.Amenities)
+
+                .FirstOrDefaultAsync(p => p.Id == projectId);
+
+
+
+            if (project == null) return NotFound(new { success = false, message = "Proje bulunamadÄ±." });
+
+
+
+            ProjectDnaProfile profile = null;
+
+            if (profileId.HasValue && profileId.Value > 0)
+
+            {
+
+                profile = await _context.ProjectDnaProfiles
+
+                    .Include(p => p.Details)
+
+                        .ThenInclude(d => d.Profession)
+
+                    .FirstOrDefaultAsync(p => p.Id == profileId.Value && p.ProjectId == projectId);
+
+            }
+
+            if (profile == null)
+
+            {
+
+                profile = await _context.ProjectDnaProfiles
+
+                    .Include(p => p.Details)
+
+                        .ThenInclude(d => d.Profession)
+
+                    .Where(p => p.ProjectId == projectId)
+
+                    .OrderByDescending(p => p.CreatedDate)
+
+                    .FirstOrDefaultAsync();
+
+            }
+
+
+
+            var items = GenerateParametricTakeoff(project, profile);
+
+            return Json(new { success = true, items = items });
+
+        }
+
+
+
+        [HttpPost]
+
+        [IgnoreAntiforgeryToken]
+
+        public async Task<IActionResult> SendParametricToB2B([FromBody] SendParametricB2BDto dto)
+
+        {
+
+            if (dto == null || dto.ProjectId <= 0) return BadRequest(new { success = false, message = "GeÃ§ersiz parametre." });
+
+
+
+            var project = await _context.ConstructionProjects
+
+                .Include(p => p.Blocks)
+
+                .Include(p => p.Amenities)
+
+                .FirstOrDefaultAsync(p => p.Id == dto.ProjectId);
+
+
+
+            if (project == null) return NotFound(new { success = false, message = "Proje bulunamadÄ±." });
+
+
+
+            ProjectDnaProfile profile = null;
+
+            if (dto.ProfileId.HasValue && dto.ProfileId.Value > 0)
+
+            {
+
+                profile = await _context.ProjectDnaProfiles
+
+                    .Include(p => p.Details)
+
+                        .ThenInclude(d => d.Profession)
+
+                    .FirstOrDefaultAsync(p => p.Id == dto.ProfileId.Value && p.ProjectId == dto.ProjectId);
+
+            }
+
+            if (profile == null)
+
+            {
+
+                profile = await _context.ProjectDnaProfiles
+
+                    .Include(p => p.Details)
+
+                        .ThenInclude(d => d.Profession)
+
+                    .Where(p => p.ProjectId == dto.ProjectId)
+
+                    .OrderByDescending(p => p.CreatedDate)
+
+                    .FirstOrDefaultAsync();
+
+            }
+
+
+
+            var allItems = GenerateParametricTakeoff(project, profile);
+
+            var selectedItems = (dto.SelectedItemIds != null && dto.SelectedItemIds.Any())
+
+                ? allItems.Where(i => dto.SelectedItemIds.Contains(i.Id)).ToList()
+
+                : allItems;
+
+
+
+            if (!selectedItems.Any()) return BadRequest(new { success = false, message = "HiÃ§ kalem seÃ§ilmedi." });
+
+
+
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+
+            var consultant = await _context.AgencyConsultants.FirstOrDefaultAsync(c => c.UserId == userId);
+
+            int agencyId = consultant?.AgencyId ?? (project.AgencyId > 0 ? project.AgencyId : 1);
+
+
+
+            var sb = new StringBuilder();
+
+            sb.AppendLine($"### ğŸ—ï¸ {project.Name} - Parametrik Ä°hale & Malzeme AlÄ±m Paketi");
+
+            sb.AppendLine($"*DXF Ã‡izimi OlmaksÄ±zÄ±n Proje YapÄ± Ã–zeti ve DNA Ã‡evresel FaktÃ¶rlerinden Otomatik TÃ¼retilmiÅŸtir.*");
+
+            sb.AppendLine();
+
+            sb.AppendLine("| # | Ä°malat / Malzeme Kalemi | Miktar | Birim | Ä°lgili Ä°ÅŸ BranÅŸÄ± (TaÅŸeron) | Hesaplama FormÃ¼lÃ¼ |");
+
+            sb.AppendLine("|---|---|---|---|---|---|");
+
+
+
+            foreach (var item in selectedItems)
+
+            {
+
+                sb.AppendLine($"| {item.Id} | **{item.Title}** | {item.Quantity:N0} | {item.Unit} | `{item.ProfessionName}` | {item.Formula} |");
+
+            }
+
+
+
+            var quoteRequest = new B2BQuoteRequest
+
+            {
+
+                RequesterAgencyId = agencyId,
+
+                RequesterUserId = userId,
+
+                SourceModule = "ConstructionProject",
+
+                SourceReferenceId = project.Id,
+
+                Title = $"{project.Name} - Parametrik Ä°hale Paketi ({selectedItems.Count} Kalem)",
+
+                Description = sb.ToString(),
+
+                Deadline = DateTime.UtcNow.AddDays(14),
+
+                Status = "Draft",
+
+                CreatedAt = DateTime.UtcNow
+
+            };
+
+
+
+            _context.B2BQuoteRequests.Add(quoteRequest);
+
+            await _context.SaveChangesAsync();
+
+
+
+            return Json(new
+
+            {
+
+                success = true,
+
+                quoteRequestId = quoteRequest.Id,
+
+                itemCount = selectedItems.Count,
+
+                message = $"{selectedItems.Count} adet parametrik keÅŸif kalemi B2B SatÄ±n Alma & Ä°hale havuzuna baÅŸarÄ±yla aktarÄ±ldÄ±!"
+
+            });
+
+        }
+
+
+
+        // =================================================================================
+
+        // Ã‡Ä°FT LÄ°STE & TEK SIRA KODLU (X01-X09) Ä°Å GÃœCÃœ, TEDARÄ°K VE TAKVÄ°M MOTORU
+
+        // =================================================================================
+
+        [HttpGet]
+
+        public async Task<IActionResult> GetParametricWorkflow(int projectId, int? profileId, DateTime? startDate, int? buildingId = null, string? mode = null)
+
+        {
+
+            var project = await _context.ConstructionProjects
+
+                .Include(p => p.Blocks)
+
+                .Include(p => p.Amenities)
+
+                .FirstOrDefaultAsync(p => p.Id == projectId);
+
+
+
+            if (project == null) return NotFound(new { success = false, message = "Proje bulunamadÄ±." });
+
+
+
+            ProjectDnaProfile profile = null;
+
+            if (profileId.HasValue && profileId.Value > 0)
+
+            {
+
+                profile = await _context.ProjectDnaProfiles
+
+                    .Include(p => p.Details)
+
+                        .ThenInclude(d => d.Profession)
+
+                    .FirstOrDefaultAsync(p => p.Id == profileId.Value && p.ProjectId == projectId);
+
+            }
+
+            if (profile == null)
+
+            {
+
+                profile = await _context.ProjectDnaProfiles
+
+                    .Include(p => p.Details)
+
+                        .ThenInclude(d => d.Profession)
+
+                    .Where(p => p.ProjectId == projectId)
+
+                    .OrderByDescending(p => p.CreatedDate)
+
+                    .FirstOrDefaultAsync();
+
+            }
+
+
+
+            var baseDate = startDate ?? DateTime.Today;
+
+            var steps = GenerateParametricWorkflow(project, profile, baseDate, buildingId);
+
+            var siteSetupSteps = GenerateSiteSetupSteps(project, profile);
+
+            var siteHandoverSteps = GenerateSiteHandoverSteps(project, profile);
+
+
+
+            int totalManDays = steps.Sum(s => s.TotalManDays);
+
+            int maxCrew = steps.Any() ? steps.Max(s => s.CrewSize) : 0;
+
+            int totalDurationDays = steps.Any() ? (int)(steps.Max(s => s.PlannedEndDate.Value) - steps.Min(s => s.PlannedStartDate.Value)).TotalDays + 1 : 0;
+
+            var estimatedCompletion = steps.Any() ? steps.Max(s => s.PlannedEndDate.Value).ToString("dd.MM.yyyy") : "";
+
+
+
+            var allBlocks = project.Blocks?.Where(b => !b.IsExistingBuilding).ToList() ?? new List<GMK360.Core.Entities.Building>();
+
+            var targetStructure = buildingId.HasValue ? allBlocks.FirstOrDefault(b => b.Id == buildingId.Value) : allBlocks.FirstOrDefault(b => b.ParentBuildingId == null);
+
+
+
+            return Json(new
+
+            {
+
+                success = true,
+
+                steps = steps,
+
+                siteSetupSteps = siteSetupSteps,
+
+                siteHandoverSteps = siteHandoverSteps,
+
+                staticSummary = new
+
+                {
+
+                    concreteClass = "C30/37 TaÅŸÄ±yÄ±cÄ± HazÄ±r Beton",
+
+                    rebarClass = "B420C NervÃ¼rlÃ¼ DonatÄ± Ã‡eliÄŸi",
+
+                    foundationType = "Radye Genel Temel",
+
+                    structureType = "Betonarme Karkas (Kolon/Perde/DÃ¶ÅŸeme)",
+
+                    totalStructures = allBlocks.Count(b => b.ParentBuildingId == null),
+
+                    landArea = project.TotalLandArea ?? 0,
+
+                    baseArea = targetStructure?.BaseArea ?? 0,
+
+                    totalFloors = targetStructure != null ? (targetStructure.TotalFloors ?? 0) + targetStructure.BasementFloors : (project.TotalFloors ?? 5)
+
+                },
+
+                summary = new
+
+                {
+
+                    totalManDays = totalManDays,
+
+                    maxCrew = maxCrew,
+
+                    totalDurationDays = totalDurationDays,
+
+                    estimatedCompletion = estimatedCompletion,
+
+                    startDateStr = baseDate.ToString("dd.MM.yyyy")
+
+                }
+
+            });
+
+        }
+
+
+
+        [HttpPost]
+
+        [IgnoreAntiforgeryToken]
+
+        public async Task<IActionResult> SendWorkflowToB2B([FromBody] SendWorkflowB2BDto dto)
+
+        {
+
+            if (dto == null || dto.ProjectId <= 0) return BadRequest(new { success = false, message = "GeÃ§ersiz parametre." });
+
+
+
+            var project = await _context.ConstructionProjects
+
+                .Include(p => p.Blocks)
+
+                .Include(p => p.Amenities)
+
+                .FirstOrDefaultAsync(p => p.Id == dto.ProjectId);
+
+
+
+            if (project == null) return NotFound(new { success = false, message = "Proje bulunamadÄ±." });
+
+
+
+            ProjectDnaProfile profile = null;
+
+            if (dto.ProfileId.HasValue && dto.ProfileId.Value > 0)
+
+            {
+
+                profile = await _context.ProjectDnaProfiles
+
+                    .Include(p => p.Details)
+
+                        .ThenInclude(d => d.Profession)
+
+                    .FirstOrDefaultAsync(p => p.Id == dto.ProfileId.Value && p.ProjectId == dto.ProjectId);
+
+            }
+
+            if (profile == null)
+
+            {
+
+                profile = await _context.ProjectDnaProfiles
+
+                    .Include(p => p.Details)
+
+                        .ThenInclude(d => d.Profession)
+
+                    .Where(p => p.ProjectId == dto.ProjectId)
+
+                    .OrderByDescending(p => p.CreatedDate)
+
+                    .FirstOrDefaultAsync();
+
+            }
+
+
+
+            var allSteps = GenerateParametricWorkflow(project, profile, DateTime.Today, dto.BuildingId);
+
+            var selectedSteps = (dto.SelectedStepCodes != null && dto.SelectedStepCodes.Any())
+
+                ? allSteps.Where(s => dto.SelectedStepCodes.Contains(s.StepCode)).ToList()
+
+                : allSteps;
+
+
+
+            bool isTradePackage = dto.TargetTrack == "TradePackage" || (dto.SelectedStepCodes != null && dto.SelectedStepCodes.Any(c => c.StartsWith("ADIM0-")));
+
+            if (!selectedSteps.Any() && !isTradePackage) return BadRequest(new { success = false, message = "HiÃ§ aÅŸama seÃ§ilmedi." });
+
+
+
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+
+            var consultant = await _context.AgencyConsultants.FirstOrDefaultAsync(c => c.UserId == userId);
+
+            int agencyId = consultant?.AgencyId ?? (project.AgencyId > 0 ? project.AgencyId : 1);
+
+
+
+            var sb = new StringBuilder();
+
+            string targetTrack = dto.TargetTrack ?? "Material"; // "Material" or "Labor"
+
+            string structPrefix = !string.IsNullOrEmpty(selectedSteps.FirstOrDefault()?.TargetStructureName)
+
+                ? $"[{selectedSteps.First().TargetStructureName}] "
+
+                : "";
+
+            string rfpTitle = "";
+
+
+
+            if (isTradePackage)
+
+            {
+
+                var tradeCode = dto.SelectedStepCodes?.FirstOrDefault(c => c.StartsWith("ADIM0-"))?.Replace("ADIM0-", "") ?? "Ä°nÅŸaat";
+
+                rfpTitle = $"{project.Name} - {structPrefix}Toptan {tradeCode} Ä°hale & Fiyat BaÄŸlama Paketi (AdÄ±m 0 Statik Sabiti)";
+
+                sb.AppendLine($"### ğŸ›ï¸ {project.Name} - {structPrefix}Toptan {tradeCode} Ä°hale & Fiyat Kilitleme Paketi");
+
+                sb.AppendLine($"*AdÄ±m 0 Mecburi Statik ve TaÅŸÄ±yÄ±cÄ± DXF Parametrelerine DayalÄ± Proje Geneli Toptan Ã‡erÃ§eve SÃ¶zleÅŸmesi*");
+
+                sb.AppendLine();
+
+                sb.AppendLine($"Bu ihale paketi, projenin tamamÄ±nda kullanÄ±lacak olan **{tradeCode}** branÅŸÄ±na ait tÃ¼m statik metraj ve teknik gereksinimleri kapsar.");
+
+                sb.AppendLine($"MÃ¼teahhit firma, ÅŸantiyeye baÅŸlamadan Ã¶nce tedarikÃ§i/taÅŸeron firmadan sabit fiyat ve toptan birim fiyat garantisi talep etmektedir.");
+
+                sb.AppendLine();
+
+                sb.AppendLine($"| Veri KaynaÄŸÄ± | Ä°lgili Ä°ÅŸ BranÅŸÄ± | Kapsam | SÃ¶zleÅŸme Tipi |");
+
+                sb.AppendLine($"|---|---|---|---|");
+
+                sb.AppendLine($"| DXF / Statik Ã‡izim | `{tradeCode}` | Projenin TÃ¼m YapÄ±larÄ± ({project.Blocks?.Count ?? 1} BaÄŸÄ±msÄ±z YapÄ±) | Toptan Sabit Fiyat SÃ¶zleÅŸmesi |");
+
+            }
+
+            else if (targetTrack == "Labor")
+
+            {
+
+                rfpTitle = $"{project.Name} - {structPrefix}TaÅŸeron & Ä°ÅŸ GÃ¼cÃ¼ Ã‡aÄŸrÄ±sÄ± ({selectedSteps.Count} AÅŸama)";
+
+                sb.AppendLine($"### ğŸ‘· {project.Name} - {structPrefix}TaÅŸeron & Ä°ÅŸ GÃ¼cÃ¼ Hizmet Ã‡aÄŸrÄ±sÄ±");
+
+                sb.AppendLine($"*Ä°nÅŸaat Ä°ÅŸ AkÄ±ÅŸ SÄ±ralamasÄ±na GÃ¶re Ekip, Kadro ve SÃ¼re Ä°htiyaÃ§larÄ±*");
+
+                sb.AppendLine();
+
+                sb.AppendLine("| Kod | ParÃ§a | AÅŸama AdÄ± | Ä°lgili BranÅŸ / Meslek | Ã–nerilen Ekip Kadrosu | SÃ¼re (Ä°ÅŸ GÃ¼nÃ¼) | Hacim (Adam-GÃ¼n) | Kritik Gereksinim / Ekipman |");
+
+                sb.AppendLine("|:---:|---|---|---|---|:---:|:---:|---|");
+
+                foreach (var s in selectedSteps)
+
+                {
+
+                    sb.AppendLine($"| **{s.StepCode}** | {s.PartName} | {s.PhaseName} | `{s.ProfessionName}` | {s.CrewComposition} ({s.CrewSize} KiÅŸi) | {s.DurationDays} GÃ¼n | {s.TotalManDays} Adam-GÃ¼n | {s.EquipmentNeeded} |");
+
+                }
+
+            }
+
+            else
+
+            {
+
+                rfpTitle = $"{project.Name} - {structPrefix}SÄ±ralÄ± Malzeme Tedarik Ä°halesi ({selectedSteps.Count} AÅŸama)";
+
+                sb.AppendLine($"### ğŸ“¦ {project.Name} - {structPrefix}SÄ±ralÄ± Malzeme Tedarik & SatÄ±n Alma Paketi");
+
+                sb.AppendLine($"*Ä°nÅŸaat Ä°ÅŸ AkÄ±ÅŸ SÄ±ralamasÄ±na GÃ¶re Tedarik Edilecek Malzemeler*");
+
+                sb.AppendLine();
+
+                sb.AppendLine("| Kod | ParÃ§a | AÅŸama | Tedarik Edilecek Malzeme | Miktar | Birim | TedarikÃ§i Grubu | MÃ¼hendislik HesabÄ± |");
+
+                sb.AppendLine("|:---:|---|---|---|---|---|---|---|");
+
+                foreach (var s in selectedSteps)
+
+                {
+
+                    sb.AppendLine($"| **{s.StepCode}** | {s.PartName} | {s.PhaseName} | **{s.MaterialTitle}** | {s.MaterialQuantity:N0} | {s.MaterialUnit} | `{s.SupplierCategory}` | {s.MaterialFormula} |");
+
+                }
+
+            }
+
+
+
+            var quoteRequest = new B2BQuoteRequest
+
+            {
+
+                RequesterAgencyId = agencyId,
+
+                RequesterUserId = userId,
+
+                SourceModule = "ConstructionProject",
+
+                SourceReferenceId = project.Id,
+
+                Title = rfpTitle,
+
+                Description = sb.ToString(),
+
+                Deadline = DateTime.UtcNow.AddDays(14),
+
+                Status = "Draft",
+
+                CreatedAt = DateTime.UtcNow
+
+            };
+
+
+
+            _context.B2BQuoteRequests.Add(quoteRequest);
+
+            await _context.SaveChangesAsync();
+
+
+
+            return Json(new
+
+            {
+
+                success = true,
+
+                quoteRequestId = quoteRequest.Id,
+
+                itemCount = selectedSteps.Count,
+
+                message = $"{selectedSteps.Count} adet iÅŸ akÄ±ÅŸ aÅŸamasÄ± B2B {(targetTrack == "Labor" ? "TaÅŸeron & Ä°ÅŸ GÃ¼cÃ¼" : "Malzeme SatÄ±n Alma")} havuzuna baÅŸarÄ±yla aktarÄ±ldÄ±!"
+
+            });
+
+        }
+
+
+
+        [HttpPost]
+
+        [IgnoreAntiforgeryToken]
+
+        public async Task<IActionResult> TriggerWorkflowAgenda([FromBody] TriggerWorkflowAgendaDto dto)
+
+        {
+
+            if (dto == null || dto.ProjectId <= 0) return BadRequest(new { success = false, message = "GeÃ§ersiz parametre." });
+
+
+
+            var project = await _context.ConstructionProjects
+
+                .Include(p => p.Blocks)
+
+                .Include(p => p.Amenities)
+
+                .FirstOrDefaultAsync(p => p.Id == dto.ProjectId);
+
+
+
+            if (project == null) return NotFound(new { success = false, message = "Proje bulunamadÄ±." });
+
+
+
+            ProjectDnaProfile profile = null;
+
+            if (dto.ProfileId.HasValue && dto.ProfileId.Value > 0)
+
+            {
+
+                profile = await _context.ProjectDnaProfiles
+
+                    .Include(p => p.Details)
+
+                        .ThenInclude(d => d.Profession)
+
+                    .FirstOrDefaultAsync(p => p.Id == dto.ProfileId.Value && p.ProjectId == dto.ProjectId);
+
+            }
+
+            if (profile == null)
+
+            {
+
+                profile = await _context.ProjectDnaProfiles
+
+                    .Include(p => p.Details)
+
+                        .ThenInclude(d => d.Profession)
+
+                    .Where(p => p.ProjectId == dto.ProjectId)
+
+                    .OrderByDescending(p => p.CreatedDate)
+
+                    .FirstOrDefaultAsync();
+
+            }
+
+
+
+            var baseDate = dto.StartDate > DateTime.MinValue ? dto.StartDate : DateTime.Today;
+
+            var allSteps = GenerateParametricWorkflow(project, profile, baseDate, dto.BuildingId);
+
+            var selectedSteps = (dto.SelectedStepCodes != null && dto.SelectedStepCodes.Any())
+
+                ? allSteps.Where(s => dto.SelectedStepCodes.Contains(s.StepCode)).ToList()
+
+                : allSteps;
+
+
+
+            bool isTradePackage = dto.TargetTrack == "TradePackage" || (dto.SelectedStepCodes != null && dto.SelectedStepCodes.Any(c => c.StartsWith("ADIM0-")));
+
+            if (!selectedSteps.Any() && !isTradePackage) return BadRequest(new { success = false, message = "HiÃ§ aÅŸama seÃ§ilmedi." });
+
+
+
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+
+            var consultant = await _context.AgencyConsultants.FirstOrDefaultAsync(c => c.UserId == userId);
+
+            int agencyId = consultant?.AgencyId ?? (project.AgencyId > 0 ? project.AgencyId : 1);
+
+
+
+            int createdCount = 0;
+
+
+
+            foreach (var step in selectedSteps)
+
+            {
+
+                if (!step.PlannedStartDate.HasValue) continue;
+
+
+
+                // 1. Ana Ä°malat GÃ¶revi (T 0)
+
+                var mainTitle = $"ğŸ—ï¸ [{step.StepCode}] {step.PhaseName} Ä°malat BaÅŸlangÄ±cÄ±";
+
+                bool existsMain = await _context.AgendaRecords.AnyAsync(a =>
+
+                    a.AgencyId == agencyId &&
+
+                    a.ProjectId == project.Id &&
+
+                    a.EventDate.Date == step.PlannedStartDate.Value.Date &&
+
+                    a.Title == mainTitle &&
+
+                    !a.IsDeleted);
+
+
+
+                if (!existsMain)
+
+                {
+
+                    _context.AgendaRecords.Add(new AgendaRecord
+
+                    {
+
+                        AgencyId = agencyId,
+
+                        ProjectId = project.Id,
+
+                        Title = mainTitle,
+
+                        EventDate = step.PlannedStartDate.Value,
+
+                        RecordTypeId = AgendaConstants.TypeSantiyeDenetimi,
+
+                        StatusId = AgendaConstants.StatusPlanlandi,
+
+                        Notes = $"Kadro: {step.CrewComposition} ({step.CrewSize} KiÅŸi)\nSÃ¼re: {step.DurationDays} Ä°ÅŸ GÃ¼nÃ¼ ({step.TotalManDays} Adam-GÃ¼n)\nÃ–nkoÅŸul: {step.Predecessors}\nKritik Kural: {step.CriticalDependency}\nMalzeme: {step.MaterialTitle} ({step.MaterialQuantity:N0} {step.MaterialUnit})"
+
+                    });
+
+                    createdCount++;
+
+                }
+
+
+
+                // 2. T- Ã–n HazÄ±rlÄ±k HatÄ±rlatmasÄ± (2 veya 3 gÃ¼n Ã¶nce)
+
+                int reminderDays = step.DurationDays >= 5 ? 3 : 2;
+
+                var reminderDate = step.PlannedStartDate.Value.AddDays(-reminderDays);
+
+                var reminderTitle = $"âš ï¸ [T-{reminderDays} HazÄ±rlÄ±k - {step.StepCode}] {step.PhaseName} Ã–n Kontrolleri";
+
+
+
+                bool existsReminder = await _context.AgendaRecords.AnyAsync(a =>
+
+                    a.AgencyId == agencyId &&
+
+                    a.ProjectId == project.Id &&
+
+                    a.EventDate.Date == reminderDate.Date &&
+
+                    a.Title == reminderTitle &&
+
+                    !a.IsDeleted);
+
+
+
+                if (!existsReminder)
+
+                {
+
+                    _context.AgendaRecords.Add(new AgendaRecord
+
+                    {
+
+                        AgencyId = agencyId,
+
+                        ProjectId = project.Id,
+
+                        Title = reminderTitle,
+
+                        EventDate = reminderDate,
+
+                        RecordTypeId = AgendaConstants.TypeTaseronToplantisi,
+
+                        StatusId = AgendaConstants.StatusPlanlandi,
+
+                        Notes = $"âš ï¸ DÄ°KKAT: {step.PlannedStartDate.Value:dd.MM.yyyy} tarihinde baÅŸlayacak {step.PhaseName} iÃ§in;\n1) {step.MaterialTitle} depoya sevk edildi mi?\n2) {step.ProfessionName} ekibi teyit edildi mi?\n3) {step.CriticalDependency}"
+
+                    });
+
+                    createdCount++;
+
+                }
+
+            }
+
+
+
+            await _context.SaveChangesAsync();
+
+
+
+            return Json(new
+
+            {
+
+                success = true,
+
+                createdCount = createdCount,
+
+                message = $"{selectedSteps.Count} adet aÅŸamaya ait {createdCount} otonom ajanda gÃ¶revi ve T- hatÄ±rlatmasÄ± takviminize baÅŸarÄ±yla iÅŸlendi!"
+
+            });
+
+        }
+
+
+
+        private List<ParametricTakeoffItemDto> GenerateParametricTakeoff(ConstructionProject project, ProjectDnaProfile profile)
+
+        {
+
+            var list = new List<ParametricTakeoffItemDto>();
+
+            if (project == null) return list;
+
+
+
+            var blocks = project.Blocks?.Where(b => !b.IsExistingBuilding).ToList() ?? new List<GMK360.Core.Entities.Building>();
+
+            var rootBlocks = blocks.Where(b => b.ParentBuildingId == null).ToList();
+
+
+
+            double landArea = project.TotalLandArea ?? 0;
+
+            double baseArea = rootBlocks.Sum(b => b.BaseArea ?? 0);
+
+            if (baseArea <= 0 && blocks.Any()) baseArea = blocks.Sum(b => b.BaseArea ?? 0);
+
+            if (baseArea <= 0) baseArea = project.EskiBinaOturumAlani ?? (landArea > 0 ? landArea * 0.40 : 500);
+
+
+
+            int maxFloors = blocks.Any() ? blocks.Max(b => (b.TotalFloors ?? 0) + b.BasementFloors) : (project.TotalFloors ?? 5);
+
+            int maxBasement = blocks.Any() ? blocks.Max(b => b.BasementFloors) : (project.EskiBodrumKatSayisi ?? 2);
+
+            if (maxBasement <= 0) maxBasement = 2;
+
+            if (maxFloors <= 0) maxFloors = 5;
+
+
+
+            int totalUnits = blocks.Sum(b => b.TotalApartments);
+
+            if (totalUnits <= 0) totalUnits = project.TargetTotalApartments ?? (project.EskiDaireSayisi ?? 10);
+
+
+
+            int totalShops = blocks.Sum(b => b.TotalShops);
+
+            if (totalShops <= 0) totalShops = project.TargetTotalShops ?? (project.EskiDukkanSayisi ?? 0);
+
+
+
+            // Toplam inÅŸaat alanÄ±
+
+            double totalFloorArea = 0;
+
+            if (blocks.Any(b => b.BaseArea.HasValue && b.BaseArea > 0))
+
+            {
+
+                totalFloorArea = blocks.Sum(b => (b.BaseArea ?? (baseArea / Math.Max(1, blocks.Count))) * ((b.TotalFloors ?? 5) + b.BasementFloors));
+
+            }
+
+            else
+
+            {
+
+                totalFloorArea = baseArea * maxFloors;
+
+            }
+
             if (totalFloorArea <= 0) totalFloorArea = baseArea * 5;
 
-            // Çevre uzunlukları
+
+
+            // Ã‡evre uzunluklarÄ±
+
             double landPerimeter = landArea > 0 ? Math.Round(4 * Math.Sqrt(landArea), 1) : 240;
+
             double buildingPerimeter = baseArea > 0 ? Math.Round(4 * Math.Sqrt(baseArea), 1) : 120;
 
-            // DNA Detayları
+
+
+            // DNA DetaylarÄ±
+
             var details = profile?.Details?.ToList() ?? new List<ProjectDnaDetail>();
 
+
+
             var zeminDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Zemin") || d.SelectedItem.Contains("Kaya") || d.SelectedItem.Contains("Kum") || d.SelectedItem.Contains("Kil"));
-            string zeminTipi = zeminDetail != null ? zeminDetail.SelectedItem : "Yumuşak / Kumlu Zemin";
+
+            string zeminTipi = zeminDetail != null ? zeminDetail.SelectedItem : "YumuÅŸak / Kumlu Zemin";
+
             double kabarma = zeminTipi.Contains("Kaya") ? 1.35 : 1.25;
 
+
+
             decimal ihataUzunlugu = (decimal)landPerimeter;
-            var ihataLenDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Çevre Sınırı Toplam") || (d.SelectedItem.Contains("İhata") && d.SelectedItem.Contains(":")));
+
+            var ihataLenDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Ã‡evre SÄ±nÄ±rÄ± Toplam") || (d.SelectedItem.Contains("Ä°hata") && d.SelectedItem.Contains(":")));
+
             if (ihataLenDetail != null && ihataLenDetail.Quantity > 0)
+
             {
+
                 ihataUzunlugu = ihataLenDetail.Quantity;
-            }
-            else if (ihataLenDetail != null && ihataLenDetail.SelectedItem.Contains(":"))
-            {
-                var p = ihataLenDetail.SelectedItem.Split(':');
-                if (p.Length > 1 && decimal.TryParse(p[1].Replace("m", "").Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal qVal))
-                {
-                    ihataUzunlugu = qVal;
-                }
+
             }
 
-            var ihataMatDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Sac") || d.SelectedItem.Contains("Tel Örgü") || d.SelectedItem.Contains("Pano"));
+            else if (ihataLenDetail != null && ihataLenDetail.SelectedItem.Contains(":"))
+
+            {
+
+                var p = ihataLenDetail.SelectedItem.Split(':');
+
+                if (p.Length > 1 && decimal.TryParse(p[1].Replace("m", "").Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal qVal))
+
+                {
+
+                    ihataUzunlugu = qVal;
+
+                }
+
+            }
+
+
+
+            var ihataMatDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Sac") || d.SelectedItem.Contains("Tel Ã–rgÃ¼") || d.SelectedItem.Contains("Pano"));
+
             string ihataMalzemesi = ihataMatDetail != null ? ihataMatDetail.SelectedItem : "Trapez Sac Kaplama";
 
-            var kapiDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Kapı"));
-            string kapiTipi = kapiDetail != null ? kapiDetail.SelectedItem : "Sürgülü Sac Kapı (Raylı)";
 
-            var molozDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Yıkım") || d.SelectedItem.Contains("Moloz") || d.SelectedItem.Contains("Enkaz") || d.SelectedItem.Contains("Boş Arsa"));
-            bool isCleanPlot = molozDetail != null && (molozDetail.SelectedItem.Contains("Boş") || molozDetail.SelectedItem.Contains("Gerekmez") || molozDetail.SelectedItem.Contains("Yok"));
-            bool molozVar = molozDetail != null && !isCleanPlot && (molozDetail.SelectedItem.Contains("Yıkılacak") || molozDetail.SelectedItem.Contains("Moloz ve Çöp") || molozDetail.SelectedItem.Contains("Enkaz"));
+
+            var kapiDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("KapÄ±"));
+
+            string kapiTipi = kapiDetail != null ? kapiDetail.SelectedItem : "SÃ¼rgÃ¼lÃ¼ Sac KapÄ± (RaylÄ±)";
+
+
+
+            var molozDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("YÄ±kÄ±m") || d.SelectedItem.Contains("Moloz") || d.SelectedItem.Contains("Enkaz") || d.SelectedItem.Contains("BoÅŸ Arsa"));
+
+            bool isCleanPlot = molozDetail != null && (molozDetail.SelectedItem.Contains("BoÅŸ") || molozDetail.SelectedItem.Contains("Gerekmez") || molozDetail.SelectedItem.Contains("Yok"));
+
+            bool molozVar = molozDetail != null && !isCleanPlot && (molozDetail.SelectedItem.Contains("YÄ±kÄ±lacak") || molozDetail.SelectedItem.Contains("Moloz ve Ã‡Ã¶p") || molozDetail.SelectedItem.Contains("Enkaz"));
+
             bool hasDemolition = !isCleanPlot && (molozVar || (project.EskiToplamMetrekare.HasValue && project.EskiToplamMetrekare.Value > 0) || (project.EskiKatSayisi.HasValue && project.EskiKatSayisi.Value > 0));
+
+
 
             int itemId = 1;
 
-            // 1. Kazı ve Hafriyat
+
+
+            // 1. KazÄ± ve Hafriyat
+
             decimal kaziM3 = Math.Round((decimal)(baseArea * (maxBasement * 3.2 + 1.0) * kabarma), 0);
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "01. Hafriyat & Saha Hazırlığı",
-                Title = $"Derin Kazı ve Hafriyat Nakliyesi ({zeminTipi})",
-                Description = $"Proje taban oturumu ({baseArea:N0} m²) ve {maxBasement} bodrum kat derinliğine göre hafriyat kazısı, döküm sahasına nakliyesi ve tesviyesi.",
-                Formula = $"{baseArea:N0} m² Taban × {(maxBasement * 3.2 + 1.0):N1}m Derinlik × {kabarma} Kabarma",
+
+                Category = "01. Hafriyat & Saha HazÄ±rlÄ±ÄŸÄ±",
+
+                Title = $"Derin KazÄ± ve Hafriyat Nakliyesi ({zeminTipi})",
+
+                Description = $"Proje taban oturumu ({baseArea:N0} mÂ²) ve {maxBasement} bodrum kat derinliÄŸine gÃ¶re hafriyat kazÄ±sÄ±, dÃ¶kÃ¼m sahasÄ±na nakliyesi ve tesviyesi.",
+
+                Formula = $"{baseArea:N0} mÂ² Taban Ã— {(maxBasement * 3.2 + 1.0):N1}m Derinlik Ã— {kabarma} Kabarma",
+
                 Quantity = kaziM3,
-                Unit = "m³",
+
+                Unit = "mÂ³",
+
                 ProfessionName = "Hafriyat ve Nakliye Ekibi",
-                DnaSource = "Yapı Özeti + Adım 1 Zemin Seçimi"
+
+                DnaSource = "YapÄ± Ã–zeti + AdÄ±m 1 Zemin SeÃ§imi"
+
             });
 
-            // 2. Yıkım / Moloz
+
+
+            // 2. YÄ±kÄ±m / Moloz
+
             if (hasDemolition)
+
             {
+
                 double eskiAlan = project.EskiToplamMetrekare ?? (project.EskiBinaOturumAlani ?? (baseArea * 0.5));
+
                 decimal molozM3 = Math.Round((decimal)(eskiAlan * 0.45), 0);
+
                 if (molozM3 < 300) molozM3 = 450;
+
                 list.Add(new ParametricTakeoffItemDto
+
                 {
+
                     Id = itemId++,
-                    Category = "01. Hafriyat & Saha Hazırlığı",
-                    Title = "Eski Yapı Yıkımı, Enkaz Sökümü & Moloz Bertarafı",
-                    Description = "Parselde bulunan mevcut yapının kontrollü yıkımı, demir ayrıştırma ve molozun belediye döküm sahasına nakliyesi.",
-                    Formula = $"Mevcut Yapı Hacmi ({eskiAlan:N0} m²) × 0.45 m³/m² Moloz Katsayısı",
+
+                    Category = "01. Hafriyat & Saha HazÄ±rlÄ±ÄŸÄ±",
+
+                    Title = "Eski YapÄ± YÄ±kÄ±mÄ±, Enkaz SÃ¶kÃ¼mÃ¼ & Moloz BertarafÄ±",
+
+                    Description = "Parselde bulunan mevcut yapÄ±nÄ±n kontrollÃ¼ yÄ±kÄ±mÄ±, demir ayrÄ±ÅŸtÄ±rma ve molozun belediye dÃ¶kÃ¼m sahasÄ±na nakliyesi.",
+
+                    Formula = $"Mevcut YapÄ± Hacmi ({eskiAlan:N0} mÂ²) Ã— 0.45 mÂ³/mÂ² Moloz KatsayÄ±sÄ±",
+
                     Quantity = molozM3,
-                    Unit = "m³",
-                    ProfessionName = "Yıkım ve Enkaz Taşeronu",
-                    DnaSource = "Proje Künyesi + Adım 1 Yıkım/Moloz Seçimi"
+
+                    Unit = "mÂ³",
+
+                    ProfessionName = "YÄ±kÄ±m ve Enkaz TaÅŸeronu",
+
+                    DnaSource = "Proje KÃ¼nyesi + AdÄ±m 1 YÄ±kÄ±m/Moloz SeÃ§imi"
+
                 });
+
             }
 
-            // 3. Çevre İhata Çiti
+
+
+            // 3. Ã‡evre Ä°hata Ã‡iti
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "02. Şantiye Mobilizasyon & Güvenlik",
-                Title = $"{ihataMalzemesi} ile Şantiye Çevre İhatası Kapatılması",
-                Description = "Şantiye parsel sınırlarının iş güvenliği standartlarına uygun çit ve destek dikmeleri ile çevrilmesi.",
-                Formula = $"Arsa Parsel Çevre Uzunluğu ({ihataUzunlugu:N0} mt)",
+
+                Category = "02. Åantiye Mobilizasyon & GÃ¼venlik",
+
+                Title = $"{ihataMalzemesi} ile Åantiye Ã‡evre Ä°hatasÄ± KapatÄ±lmasÄ±",
+
+                Description = "Åantiye parsel sÄ±nÄ±rlarÄ±nÄ±n iÅŸ gÃ¼venliÄŸi standartlarÄ±na uygun Ã§it ve destek dikmeleri ile Ã§evrilmesi.",
+
+                Formula = $"Arsa Parsel Ã‡evre UzunluÄŸu ({ihataUzunlugu:N0} mt)",
+
                 Quantity = ihataUzunlugu,
+
                 Unit = "mt",
-                ProfessionName = "İhata / Çit Ustası",
-                DnaSource = "Adım 1 Çevresel Faktör (İhata Metrajı)"
+
+                ProfessionName = "Ä°hata / Ã‡it UstasÄ±",
+
+                DnaSource = "AdÄ±m 1 Ã‡evresel FaktÃ¶r (Ä°hata MetrajÄ±)"
+
             });
 
-            // 4. Şantiye Kapısı
+
+
+            // 4. Åantiye KapÄ±sÄ±
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "02. Şantiye Mobilizasyon & Güvenlik",
-                Title = $"{kapiTipi} (6.00m Ağır Vasıta Girişi)",
-                Description = "Şantiye ana araç ve transmikser giriş kapısı, sürgülü ray mekanizması ve kilit sistemi montajı.",
-                Formula = "1 Takım Çift Raylı Sürgülü Güvenlik Giriş Kapısı",
+
+                Category = "02. Åantiye Mobilizasyon & GÃ¼venlik",
+
+                Title = $"{kapiTipi} (6.00m AÄŸÄ±r VasÄ±ta GiriÅŸi)",
+
+                Description = "Åantiye ana araÃ§ ve transmikser giriÅŸ kapÄ±sÄ±, sÃ¼rgÃ¼lÃ¼ ray mekanizmasÄ± ve kilit sistemi montajÄ±.",
+
+                Formula = "1 TakÄ±m Ã‡ift RaylÄ± SÃ¼rgÃ¼lÃ¼ GÃ¼venlik GiriÅŸ KapÄ±sÄ±",
+
                 Quantity = 1,
-                Unit = "Takım",
-                ProfessionName = "Demir Doğramacı",
-                DnaSource = "Adım 1 Giriş Kapısı Seçimi"
+
+                Unit = "TakÄ±m",
+
+                ProfessionName = "Demir DoÄŸramacÄ±",
+
+                DnaSource = "AdÄ±m 1 GiriÅŸ KapÄ±sÄ± SeÃ§imi"
+
             });
 
-            // 5. Mobilizasyon Binaları
+
+
+            // 5. Mobilizasyon BinalarÄ±
+
             int konteynerSayisi = Math.Max(2, Math.Min(6, (int)Math.Ceiling(totalFloorArea / 5000.0)));
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "02. Şantiye Mobilizasyon & Güvenlik",
-                Title = "Şantiye Konteyner / Prefabrik Kampı Kurulumu",
-                Description = "Şantiye yönetim ofisi, yemekhane, soyunma odası ve WC/duş konteynerlerinin sahaya nakliyesi ve teraziye alınması.",
-                Formula = $"Toplam {totalFloorArea:N0} m² inşaat büyüklüğüne göre mobilizasyon ünitesi",
+
+                Category = "02. Åantiye Mobilizasyon & GÃ¼venlik",
+
+                Title = "Åantiye Konteyner / Prefabrik KampÄ± Kurulumu",
+
+                Description = "Åantiye yÃ¶netim ofisi, yemekhane, soyunma odasÄ± ve WC/duÅŸ konteynerlerinin sahaya nakliyesi ve teraziye alÄ±nmasÄ±.",
+
+                Formula = $"Toplam {totalFloorArea:N0} mÂ² inÅŸaat bÃ¼yÃ¼klÃ¼ÄŸÃ¼ne gÃ¶re mobilizasyon Ã¼nitesi",
+
                 Quantity = konteynerSayisi,
+
                 Unit = "Adet",
-                ProfessionName = "Prefabrik / Konteyner Tedarikçisi",
-                DnaSource = "Yapı Özeti + Adım 1 Konaklama Seçimi"
+
+                ProfessionName = "Prefabrik / Konteyner TedarikÃ§isi",
+
+                DnaSource = "YapÄ± Ã–zeti + AdÄ±m 1 Konaklama SeÃ§imi"
+
             });
 
-            // 6. İksa / Şoring
+
+
+            // 6. Ä°ksa / Åoring
+
             decimal iksaM2 = Math.Round((decimal)(buildingPerimeter * (maxBasement * 3.2)), 0);
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "03. Zemin Güvenliği & İksa",
-                Title = "Derin Kazı İksası & Güvenlik Perdesi (Püskürtme Beton / Mini Kazık)",
-                Description = "Yol ve komşu parsellerin göçmesini önlemek için derin kazı şoring, zemin çivisi ve hasır çelikli püskürtme beton iksa imalatı.",
-                Formula = $"{buildingPerimeter:N0} mt Bina Çevresi × {(maxBasement * 3.2):N1} mt Kazı Derinliği",
+
+                Category = "03. Zemin GÃ¼venliÄŸi & Ä°ksa",
+
+                Title = "Derin KazÄ± Ä°ksasÄ± & GÃ¼venlik Perdesi (PÃ¼skÃ¼rtme Beton / Mini KazÄ±k)",
+
+                Description = "Yol ve komÅŸu parsellerin gÃ¶Ã§mesini Ã¶nlemek iÃ§in derin kazÄ± ÅŸoring, zemin Ã§ivisi ve hasÄ±r Ã§elikli pÃ¼skÃ¼rtme beton iksa imalatÄ±.",
+
+                Formula = $"{buildingPerimeter:N0} mt Bina Ã‡evresi Ã— {(maxBasement * 3.2):N1} mt KazÄ± DerinliÄŸi",
+
                 Quantity = iksaM2,
-                Unit = "m²",
-                ProfessionName = "İksa ve Ankraj Ekibi",
-                DnaSource = "Yapı Özeti + Adım 1 İksa Seçimi"
+
+                Unit = "mÂ²",
+
+                ProfessionName = "Ä°ksa ve Ankraj Ekibi",
+
+                DnaSource = "YapÄ± Ã–zeti + AdÄ±m 1 Ä°ksa SeÃ§imi"
+
             });
+
+
 
             // 7. C20/25 Temel Grobetonu
+
             decimal grobetonM3 = Math.Round((decimal)(baseArea * 0.15), 0);
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "04. Temel & Yalıtım",
-                Title = "C20/25 Pompalı Temel Altı Grobetonu (15 cm)",
-                Description = "Radye temel altı membran bohçalama öncesi tesviye ve zemin koruma grobetonu dökümü.",
-                Formula = $"{baseArea:N0} m² Taban Oturumu × 0.15m Kalınlık",
+
+                Category = "04. Temel & YalÄ±tÄ±m",
+
+                Title = "C20/25 PompalÄ± Temel AltÄ± Grobetonu (15 cm)",
+
+                Description = "Radye temel altÄ± membran bohÃ§alama Ã¶ncesi tesviye ve zemin koruma grobetonu dÃ¶kÃ¼mÃ¼.",
+
+                Formula = $"{baseArea:N0} mÂ² Taban Oturumu Ã— 0.15m KalÄ±nlÄ±k",
+
                 Quantity = grobetonM3,
-                Unit = "m³",
+
+                Unit = "mÂ³",
+
                 ProfessionName = "Betoncu",
-                DnaSource = "Yapı Özeti (Taban TAKS)"
+
+                DnaSource = "YapÄ± Ã–zeti (Taban TAKS)"
+
             });
 
-            // 8. Membran Bohçalama & Perde Su Yalıtımı
+
+
+            // 8. Membran BohÃ§alama & Perde Su YalÄ±tÄ±mÄ±
+
             decimal yalitimM2 = Math.Round((decimal)(baseArea + (buildingPerimeter * (maxBasement * 3.2))), 0);
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "04. Temel & Yalıtım",
-                Title = "Çift Kat Bitümlü Membran Temel Bohçalama & Perde Yalıtımı",
-                Description = "Radye temel altı ve bodrum dış perde duvarlarının yeraltı suyu ve neme karşı çift kat polyester keçe takviyeli membranla bohçalanması.",
-                Formula = $"{baseArea:N0} m² Taban + {Math.Round(buildingPerimeter * maxBasement * 3.2, 0):N0} m² Perde Yüzeyi",
+
+                Category = "04. Temel & YalÄ±tÄ±m",
+
+                Title = "Ã‡ift Kat BitÃ¼mlÃ¼ Membran Temel BohÃ§alama & Perde YalÄ±tÄ±mÄ±",
+
+                Description = "Radye temel altÄ± ve bodrum dÄ±ÅŸ perde duvarlarÄ±nÄ±n yeraltÄ± suyu ve neme karÅŸÄ± Ã§ift kat polyester keÃ§e takviyeli membranla bohÃ§alanmasÄ±.",
+
+                Formula = $"{baseArea:N0} mÂ² Taban + {Math.Round(buildingPerimeter * maxBasement * 3.2, 0):N0} mÂ² Perde YÃ¼zeyi",
+
                 Quantity = yalitimM2,
-                Unit = "m²",
-                ProfessionName = "İzolasyoncu / Bohçalama Ustası",
-                DnaSource = "Yapı Özeti + Adım 2 Temel İzolasyonu"
+
+                Unit = "mÂ²",
+
+                ProfessionName = "Ä°zolasyoncu / BohÃ§alama UstasÄ±",
+
+                DnaSource = "YapÄ± Ã–zeti + AdÄ±m 2 Temel Ä°zolasyonu"
+
             });
 
-            // 9. C30/37 Taşıyıcı Hazır Beton
+
+
+            // 9. C30/37 TaÅŸÄ±yÄ±cÄ± HazÄ±r Beton
+
             decimal betonM3 = Math.Round((decimal)(totalFloorArea * 0.40), 0);
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "05. Taşıyıcı Kaba Yapı (Statik)",
-                Title = "C30/37 Taşıyıcı Statik Hazır Beton (Radye, Kolon, Perde, Döşeme)",
-                Description = "Bina taşıyıcı karkas sistemi için transmikser ve beton pompası ile dökülecek toplam hazır beton metrajı.",
-                Formula = $"{totalFloorArea:N0} m² Toplam İnşaat Alanı × 0.40 m³/m² Katsayısı",
+
+                Category = "05. TaÅŸÄ±yÄ±cÄ± Kaba YapÄ± (Statik)",
+
+                Title = "C30/37 TaÅŸÄ±yÄ±cÄ± Statik HazÄ±r Beton (Radye, Kolon, Perde, DÃ¶ÅŸeme)",
+
+                Description = "Bina taÅŸÄ±yÄ±cÄ± karkas sistemi iÃ§in transmikser ve beton pompasÄ± ile dÃ¶kÃ¼lecek toplam hazÄ±r beton metrajÄ±.",
+
+                Formula = $"{totalFloorArea:N0} mÂ² Toplam Ä°nÅŸaat AlanÄ± Ã— 0.40 mÂ³/mÂ² KatsayÄ±sÄ±",
+
                 Quantity = betonM3,
-                Unit = "m³",
+
+                Unit = "mÂ³",
+
                 ProfessionName = "Betoncu",
-                DnaSource = "Yapı Özeti + Adım 0 Taşıyıcı Sabitleri"
+
+                DnaSource = "YapÄ± Ã–zeti + AdÄ±m 0 TaÅŸÄ±yÄ±cÄ± Sabitleri"
+
             });
 
-            // 10. Nervürlü Donatı Çeliği
+
+
+            // 10. NervÃ¼rlÃ¼ DonatÄ± Ã‡eliÄŸi
+
             decimal demirTon = Math.Round((decimal)(totalFloorArea * 0.034), 1);
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "05. Taşıyıcı Kaba Yapı (Statik)",
-                Title = "B420C Nervürlü Donatı Çeliği (Q8-Q26 Kalın/Orta/İnce Demir)",
-                Description = "Temel, perde, kolon, kiriş ve döşemelerde kullanılacak nervürlü inşaat demiri (etriye, boy donatı, pilye).",
-                Formula = $"{totalFloorArea:N0} m² Toplam İnşaat Alanı × 34 kg/m² Donatı Oranı",
+
+                Category = "05. TaÅŸÄ±yÄ±cÄ± Kaba YapÄ± (Statik)",
+
+                Title = "B420C NervÃ¼rlÃ¼ DonatÄ± Ã‡eliÄŸi (Q8-Q26 KalÄ±n/Orta/Ä°nce Demir)",
+
+                Description = "Temel, perde, kolon, kiriÅŸ ve dÃ¶ÅŸemelerde kullanÄ±lacak nervÃ¼rlÃ¼ inÅŸaat demiri (etriye, boy donatÄ±, pilye).",
+
+                Formula = $"{totalFloorArea:N0} mÂ² Toplam Ä°nÅŸaat AlanÄ± Ã— 34 kg/mÂ² DonatÄ± OranÄ±",
+
                 Quantity = demirTon,
+
                 Unit = "Ton",
+
                 ProfessionName = "Demirci",
-                DnaSource = "Yapı Özeti + Adım 0 Donatı Sabitleri"
+
+                DnaSource = "YapÄ± Ã–zeti + AdÄ±m 0 DonatÄ± Sabitleri"
+
             });
 
-            // 11. Kalıp ve İskele İmalatı
+
+
+            // 11. KalÄ±p ve Ä°skele Ä°malatÄ±
+
             decimal kalipM2 = Math.Round((decimal)(totalFloorArea * 2.5), 0);
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "05. Taşıyıcı Kaba Yapı (Statik)",
-                Title = "Endüstriyel Kalıp ve İskele Sistemi Kurulum & Söküm İşçiliği",
-                Description = "Perde, kolon, kiriş ve asmolen/kaset döşeme kalıplarının projeye uygun kurulması, yağlanması ve sökümü.",
-                Formula = $"{totalFloorArea:N0} m² Toplam İnşaat Alanı × 2.5 m²/m² Kalıp Yüzeyi",
+
+                Category = "05. TaÅŸÄ±yÄ±cÄ± Kaba YapÄ± (Statik)",
+
+                Title = "EndÃ¼striyel KalÄ±p ve Ä°skele Sistemi Kurulum & SÃ¶kÃ¼m Ä°ÅŸÃ§iliÄŸi",
+
+                Description = "Perde, kolon, kiriÅŸ ve asmolen/kaset dÃ¶ÅŸeme kalÄ±plarÄ±nÄ±n projeye uygun kurulmasÄ±, yaÄŸlanmasÄ± ve sÃ¶kÃ¼mÃ¼.",
+
+                Formula = $"{totalFloorArea:N0} mÂ² Toplam Ä°nÅŸaat AlanÄ± Ã— 2.5 mÂ²/mÂ² KalÄ±p YÃ¼zeyi",
+
                 Quantity = kalipM2,
-                Unit = "m²",
-                ProfessionName = "Kalıpçı",
-                DnaSource = "Yapı Özeti + Adım 0 Kalıp Sabitleri"
+
+                Unit = "mÂ²",
+
+                ProfessionName = "KalÄ±pÃ§Ä±",
+
+                DnaSource = "YapÄ± Ã–zeti + AdÄ±m 0 KalÄ±p Sabitleri"
+
             });
 
-            // 12. Dış Cephe Güvenlikli İskele
+
+
+            // 12. DÄ±ÅŸ Cephe GÃ¼venlikli Ä°skele
+
             decimal iskeleM2 = Math.Round((decimal)(buildingPerimeter * (maxFloors * 3.0)), 0);
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "06. Dış Cephe & İnce İmalatlar",
-                Title = "TSE Belgeli Flanşlı Güvenlikli Dış Cephe İskelesi (Kurulum & Kiralama)",
-                Description = "Bina dış cephesine kurulacak tam güvenlikli, merdivenli ve fileli çalışma iskelesi.",
-                Formula = $"{buildingPerimeter:N0} mt Çevre × {(maxFloors * 3.0):N0} mt Bina Yüksekliği",
+
+                Category = "06. DÄ±ÅŸ Cephe & Ä°nce Ä°malatlar",
+
+                Title = "TSE Belgeli FlanÅŸlÄ± GÃ¼venlikli DÄ±ÅŸ Cephe Ä°skelesi (Kurulum & Kiralama)",
+
+                Description = "Bina dÄ±ÅŸ cephesine kurulacak tam gÃ¼venlikli, merdivenli ve fileli Ã§alÄ±ÅŸma iskelesi.",
+
+                Formula = $"{buildingPerimeter:N0} mt Ã‡evre Ã— {(maxFloors * 3.0):N0} mt Bina YÃ¼ksekliÄŸi",
+
                 Quantity = iskeleM2,
-                Unit = "m²",
-                ProfessionName = "İskeleci",
-                DnaSource = "Yapı Özeti (Kat & Yükseklik)"
+
+                Unit = "mÂ²",
+
+                ProfessionName = "Ä°skeleci",
+
+                DnaSource = "YapÄ± Ã–zeti (Kat & YÃ¼kseklik)"
+
             });
 
-            // 13. Dış Cephe Isı Mantolama
+
+
+            // 13. DÄ±ÅŸ Cephe IsÄ± Mantolama
+
             decimal mantoM2 = Math.Round((decimal)(iskeleM2 * 0.85m), 0);
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "06. Dış Cephe & İnce İmalatlar",
-                Title = "Taşyünü / EPS Dış Cephe Isı Mantolama & Mineral Sıva",
-                Description = "Dış cephe ısı yalıtım levhası montajı, dubelleme, fileli sıva ve dekoratif mineral sıva kaplaması.",
-                Formula = $"{iskeleM2:N0} m² Brüt Cephe × 0.85 (Pencere/Boşluk Düşülmüş Net)",
+
+                Category = "06. DÄ±ÅŸ Cephe & Ä°nce Ä°malatlar",
+
+                Title = "TaÅŸyÃ¼nÃ¼ / EPS DÄ±ÅŸ Cephe IsÄ± Mantolama & Mineral SÄ±va",
+
+                Description = "DÄ±ÅŸ cephe Ä±sÄ± yalÄ±tÄ±m levhasÄ± montajÄ±, dubelleme, fileli sÄ±va ve dekoratif mineral sÄ±va kaplamasÄ±.",
+
+                Formula = $"{iskeleM2:N0} mÂ² BrÃ¼t Cephe Ã— 0.85 (Pencere/BoÅŸluk DÃ¼ÅŸÃ¼lmÃ¼ÅŸ Net)",
+
                 Quantity = mantoM2,
-                Unit = "m²",
-                ProfessionName = "Dış Cephe Ustası",
-                DnaSource = "Yapı Özeti + Adım 3 Gövde Seçimi"
+
+                Unit = "mÂ²",
+
+                ProfessionName = "DÄ±ÅŸ Cephe UstasÄ±",
+
+                DnaSource = "YapÄ± Ã–zeti + AdÄ±m 3 GÃ¶vde SeÃ§imi"
+
             });
 
-            // 14. Tesviye Şapı
+
+
+            // 14. Tesviye ÅapÄ±
+
             decimal sapM2 = Math.Round((decimal)(totalFloorArea * 0.82), 0);
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "06. Dış Cephe & İnce İmalatlar",
-                Title = "Helikopterli ve Mastarlı Zemin Tesviye Şapı",
-                Description = "Daire içi kuru ve ıslak hacimlerde izolasyon ve döşeme kaplaması öncesi helikopterli tesviye şapı dökümü.",
-                Formula = $"{totalFloorArea:N0} m² İnşaat Alanı × 0.82 (Net Döşeme Alanı)",
+
+                Category = "06. DÄ±ÅŸ Cephe & Ä°nce Ä°malatlar",
+
+                Title = "Helikopterli ve MastarlÄ± Zemin Tesviye ÅapÄ±",
+
+                Description = "Daire iÃ§i kuru ve Ä±slak hacimlerde izolasyon ve dÃ¶ÅŸeme kaplamasÄ± Ã¶ncesi helikopterli tesviye ÅŸapÄ± dÃ¶kÃ¼mÃ¼.",
+
+                Formula = $"{totalFloorArea:N0} mÂ² Ä°nÅŸaat AlanÄ± Ã— 0.82 (Net DÃ¶ÅŸeme AlanÄ±)",
+
                 Quantity = sapM2,
-                Unit = "m²",
-                ProfessionName = "Şapçı",
-                DnaSource = "Yapı Özeti + Adım 0 Şap Sabitleri"
+
+                Unit = "mÂ²",
+
+                ProfessionName = "ÅapÃ§Ä±",
+
+                DnaSource = "YapÄ± Ã–zeti + AdÄ±m 0 Åap Sabitleri"
+
             });
 
-            // 15. Şantiye Elektriği
+
+
+            // 15. Åantiye ElektriÄŸi
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "07. Geçici MEP & Şantiye Altyapısı",
-                Title = "Şantiye Geçici Enerji, Dağıtım Panosu & Çevre Aydınlatma",
-                Description = "Ana şantiye elektrik panosu, kaçak akım röleleri, kat tali panoları ve gece güvenlik aydınlatması kurulumu.",
-                Formula = "Şantiye Geçici Elektrik & Pano Paketi",
+
+                Category = "07. GeÃ§ici MEP & Åantiye AltyapÄ±sÄ±",
+
+                Title = "Åantiye GeÃ§ici Enerji, DaÄŸÄ±tÄ±m Panosu & Ã‡evre AydÄ±nlatma",
+
+                Description = "Ana ÅŸantiye elektrik panosu, kaÃ§ak akÄ±m rÃ¶leleri, kat tali panolarÄ± ve gece gÃ¼venlik aydÄ±nlatmasÄ± kurulumu.",
+
+                Formula = "Åantiye GeÃ§ici Elektrik & Pano Paketi",
+
                 Quantity = 1,
+
                 Unit = "Set",
-                ProfessionName = "Şantiye Elektrikçisi",
-                DnaSource = "Adım 1 Şantiye Elektriği Seçimi"
+
+                ProfessionName = "Åantiye ElektrikÃ§isi",
+
+                DnaSource = "AdÄ±m 1 Åantiye ElektriÄŸi SeÃ§imi"
+
             });
 
-            // 16. Şantiye Suyu
+
+
+            // 16. Åantiye Suyu
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "07. Geçici MEP & Şantiye Altyapısı",
-                Title = "15 Tonluk Polietilen Şantiye Su Deposu & 3 HP Otomatik Hidrofor",
-                Description = "Beton kürü, temizlik ve kullanım suyu için şantiye su deposu, otomatik hidrofor ve dağıtım borulama tesisatı.",
-                Formula = "Şantiye Su Depolama & Basınçlandırma Paketi",
+
+                Category = "07. GeÃ§ici MEP & Åantiye AltyapÄ±sÄ±",
+
+                Title = "15 Tonluk Polietilen Åantiye Su Deposu & 3 HP Otomatik Hidrofor",
+
+                Description = "Beton kÃ¼rÃ¼, temizlik ve kullanÄ±m suyu iÃ§in ÅŸantiye su deposu, otomatik hidrofor ve daÄŸÄ±tÄ±m borulama tesisatÄ±.",
+
+                Formula = "Åantiye Su Depolama & BasÄ±nÃ§landÄ±rma Paketi",
+
                 Quantity = 1,
+
                 Unit = "Set",
-                ProfessionName = "Sıhhi Tesisatçı",
-                DnaSource = "Adım 1 Şantiye Suyu Seçimi"
+
+                ProfessionName = "SÄ±hhi TesisatÃ§Ä±",
+
+                DnaSource = "AdÄ±m 1 Åantiye Suyu SeÃ§imi"
+
             });
 
-            // 17. Ankastre 3'lü Set (Adım 4)
-            var ankastreDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Ankastre") || d.SelectedItem.Contains("Fırın") || d.SelectedItem.Contains("Ocak"));
-            string ankastreTitle = ankastreDetail != null ? ankastreDetail.SelectedItem : "Ankastre 3'lü Set (Fırın + Ocak + Davlumbaz)";
+
+
+            // 17. Ankastre 3'lÃ¼ Set (AdÄ±m 4)
+
+            var ankastreDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Ankastre") || d.SelectedItem.Contains("FÄ±rÄ±n") || d.SelectedItem.Contains("Ocak"));
+
+            string ankastreTitle = ankastreDetail != null ? ankastreDetail.SelectedItem : "Ankastre 3'lÃ¼ Set (FÄ±rÄ±n + Ocak + Davlumbaz)";
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "08. İç Mekan, Mutfak & Ahşap İmalatları",
-                Title = $"{ankastreTitle} Temini ve Montajı",
-                Description = "Daireler için bağımsız ankastre fırın, cam ocak ve davlumbaz temini, elektrik/gaz bağlantısı ve montajı.",
-                Formula = $"{totalUnits} Bağımsız Bölüm (Daire) × 1 Takım",
+
+                Category = "08. Ä°Ã§ Mekan, Mutfak & AhÅŸap Ä°malatlarÄ±",
+
+                Title = $"{ankastreTitle} Temini ve MontajÄ±",
+
+                Description = "Daireler iÃ§in baÄŸÄ±msÄ±z ankastre fÄ±rÄ±n, cam ocak ve davlumbaz temini, elektrik/gaz baÄŸlantÄ±sÄ± ve montajÄ±.",
+
+                Formula = $"{totalUnits} BaÄŸÄ±msÄ±z BÃ¶lÃ¼m (Daire) Ã— 1 TakÄ±m",
+
                 Quantity = totalUnits,
+
                 Unit = "Set",
+
                 ProfessionName = "Mutfak & Mobilya Ekibi",
-                DnaSource = "Adım 4 Soru 8: Ankastre Set Standardı"
+
+                DnaSource = "AdÄ±m 4 Soru 8: Ankastre Set StandardÄ±"
+
             });
 
-            // 18. Giriş Portmanto / Vestiyer Dolabı (Adım 4)
+
+
+            // 18. GiriÅŸ Portmanto / Vestiyer DolabÄ± (AdÄ±m 4)
+
             var vestiyerDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Portmanto") || d.SelectedItem.Contains("Vestiyer"));
-            string vestiyerTitle = vestiyerDetail != null ? vestiyerDetail.SelectedItem : "Giriş Holü Portmanto / Vestiyer Dolabı";
+
+            string vestiyerTitle = vestiyerDetail != null ? vestiyerDetail.SelectedItem : "GiriÅŸ HolÃ¼ Portmanto / Vestiyer DolabÄ±";
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "08. İç Mekan, Mutfak & Ahşap İmalatları",
-                Title = $"{vestiyerTitle} İmalat ve Montajı",
-                Description = "Daire giriş hollerine projesine uygun gömme veya modüler vestiyer, ayakkabılık ve ayna montajı.",
-                Formula = $"{totalUnits} Daire Giriş Holü × 1 Adet",
+
+                Category = "08. Ä°Ã§ Mekan, Mutfak & AhÅŸap Ä°malatlarÄ±",
+
+                Title = $"{vestiyerTitle} Ä°malat ve MontajÄ±",
+
+                Description = "Daire giriÅŸ hollerine projesine uygun gÃ¶mme veya modÃ¼ler vestiyer, ayakkabÄ±lÄ±k ve ayna montajÄ±.",
+
+                Formula = $"{totalUnits} Daire GiriÅŸ HolÃ¼ Ã— 1 Adet",
+
                 Quantity = totalUnits,
+
                 Unit = "Adet",
+
                 ProfessionName = "Mutfak & Mobilya Ekibi",
-                DnaSource = "Adım 4 Soru 10: Portmanto / Vestiyer Standardı"
+
+                DnaSource = "AdÄ±m 4 Soru 10: Portmanto / Vestiyer StandardÄ±"
+
             });
 
-            // 19. Parapet Harpuştası & Çatı Çıkış Kapağı (Adım 5)
-            var harpushtaDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Harpuşta") || d.SelectedItem.Contains("Parapet"));
-            string harpushtaTitle = harpushtaDetail != null ? harpushtaDetail.SelectedItem : "Mermer / Granit Parapet Harpuştası";
+
+
+            // 19. Parapet HarpuÅŸtasÄ± & Ã‡atÄ± Ã‡Ä±kÄ±ÅŸ KapaÄŸÄ± (AdÄ±m 5)
+
+            var harpushtaDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("HarpuÅŸta") || d.SelectedItem.Contains("Parapet"));
+
+            string harpushtaTitle = harpushtaDetail != null ? harpushtaDetail.SelectedItem : "Mermer / Granit Parapet HarpuÅŸtasÄ±";
+
             decimal harpushtaMt = Math.Round((decimal)(buildingPerimeter * 1.10), 0);
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "09. Çatı, Teras & Harpuşta",
-                Title = $"{harpushtaTitle} & Emniyetli Çatı Çıkış Kapağı",
-                Description = "Teras ve çatı parapet duvarlarının su sızdırmaz damlalıklı mermer/granit ile kaplanması ve çatı çıkış kapağı.",
-                Formula = $"{buildingPerimeter:N0} mt Bina Çevresi × 1.10 Parapet Gelişimi",
+
+                Category = "09. Ã‡atÄ±, Teras & HarpuÅŸta",
+
+                Title = $"{harpushtaTitle} & Emniyetli Ã‡atÄ± Ã‡Ä±kÄ±ÅŸ KapaÄŸÄ±",
+
+                Description = "Teras ve Ã§atÄ± parapet duvarlarÄ±nÄ±n su sÄ±zdÄ±rmaz damlalÄ±klÄ± mermer/granit ile kaplanmasÄ± ve Ã§atÄ± Ã§Ä±kÄ±ÅŸ kapaÄŸÄ±.",
+
+                Formula = $"{buildingPerimeter:N0} mt Bina Ã‡evresi Ã— 1.10 Parapet GeliÅŸimi",
+
                 Quantity = harpushtaMt,
+
                 Unit = "mt",
-                ProfessionName = "Mermer & Doğaltaş Ustası",
-                DnaSource = "Adım 5 Soru 6: Parapet Harpuştası ve Çatı Çıkış Güvenliği"
+
+                ProfessionName = "Mermer & DoÄŸaltaÅŸ UstasÄ±",
+
+                DnaSource = "AdÄ±m 5 Soru 6: Parapet HarpuÅŸtasÄ± ve Ã‡atÄ± Ã‡Ä±kÄ±ÅŸ GÃ¼venliÄŸi"
+
             });
 
-            // 20. Pencere Denizlikleri (Adım 6)
+
+
+            // 20. Pencere Denizlikleri (AdÄ±m 6)
+
             var denizlikDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Denizlik"));
-            string denizlikTitle = denizlikDetail != null ? denizlikDetail.SelectedItem : "3cm Kalınlığında Doğaltaş / Mermer Pencere Denizlikleri";
+
+            string denizlikTitle = denizlikDetail != null ? denizlikDetail.SelectedItem : "3cm KalÄ±nlÄ±ÄŸÄ±nda DoÄŸaltaÅŸ / Mermer Pencere Denizlikleri";
+
             decimal denizlikMt = totalUnits * 7;
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "10. Doğrama, Denizlik & Balkon Korkulukları",
-                Title = $"{denizlikTitle} (İç ve Dış Denizlikler)",
-                Description = "Pencere altlarına pahlı, damlalıklı iç ve dış mermer/granit denizlik montajı.",
-                Formula = $"{totalUnits} Daire × 5 Pencere × 1.4 mt Ortalama Açıklık",
+
+                Category = "10. DoÄŸrama, Denizlik & Balkon KorkuluklarÄ±",
+
+                Title = $"{denizlikTitle} (Ä°Ã§ ve DÄ±ÅŸ Denizlikler)",
+
+                Description = "Pencere altlarÄ±na pahlÄ±, damlalÄ±klÄ± iÃ§ ve dÄ±ÅŸ mermer/granit denizlik montajÄ±.",
+
+                Formula = $"{totalUnits} Daire Ã— 5 Pencere Ã— 1.4 mt Ortalama AÃ§Ä±klÄ±k",
+
                 Quantity = denizlikMt,
+
                 Unit = "mt",
-                ProfessionName = "Mermer & Doğaltaş Ustası",
-                DnaSource = "Adım 6 Soru 6: Pencere İç ve Dış Denizlik Malzemesi"
+
+                ProfessionName = "Mermer & DoÄŸaltaÅŸ UstasÄ±",
+
+                DnaSource = "AdÄ±m 6 Soru 6: Pencere Ä°Ã§ ve DÄ±ÅŸ Denizlik Malzemesi"
+
             });
 
-            // 21. Balkon ve Fransız Balkon Korkulukları (Adım 6)
+
+
+            // 21. Balkon ve FransÄ±z Balkon KorkuluklarÄ± (AdÄ±m 6)
+
             var korkulukDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Korkuluk"));
-            string korkulukTitle = korkulukDetail != null ? korkulukDetail.SelectedItem : "Alüminyum & Lamine Cam Balkon Korkuluk Sistemi";
+
+            string korkulukTitle = korkulukDetail != null ? korkulukDetail.SelectedItem : "AlÃ¼minyum & Lamine Cam Balkon Korkuluk Sistemi";
+
             decimal korkulukMt = totalUnits * 6;
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "10. Doğrama, Denizlik & Balkon Korkulukları",
-                Title = $"{korkulukTitle} İmalat ve Montajı",
-                Description = "Balkon ve Fransız pencereler için statik hesaplı küpeşteli güvenlik korkulukları.",
-                Formula = $"{totalUnits} Daire × 6.0 mt Ortalama Balkon/Fransız Çevresi",
+
+                Category = "10. DoÄŸrama, Denizlik & Balkon KorkuluklarÄ±",
+
+                Title = $"{korkulukTitle} Ä°malat ve MontajÄ±",
+
+                Description = "Balkon ve FransÄ±z pencereler iÃ§in statik hesaplÄ± kÃ¼peÅŸteli gÃ¼venlik korkuluklarÄ±.",
+
+                Formula = $"{totalUnits} Daire Ã— 6.0 mt Ortalama Balkon/FransÄ±z Ã‡evresi",
+
                 Quantity = korkulukMt,
+
                 Unit = "mt",
-                ProfessionName = "Korkuluk & Metal Ustası",
-                DnaSource = "Adım 6 Soru 7: Balkon ve Fransız Balkon Korkuluk Sistemi"
+
+                ProfessionName = "Korkuluk & Metal UstasÄ±",
+
+                DnaSource = "AdÄ±m 6 Soru 7: Balkon ve FransÄ±z Balkon Korkuluk Sistemi"
+
             });
 
-            // 22. Bina İçi Sessiz Atık Su / Pis Su Boruları (Adım 7)
-            var pisuDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Pis Su") || d.SelectedItem.Contains("Atık Su") || d.SelectedItem.Contains("Sessiz"));
-            string pisuTitle = pisuDetail != null ? pisuDetail.SelectedItem : "Mineral Takviyeli Sessiz Atık Su Boru Sistemi";
+
+
+            // 22. Bina Ä°Ã§i Sessiz AtÄ±k Su / Pis Su BorularÄ± (AdÄ±m 7)
+
+            var pisuDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Pis Su") || d.SelectedItem.Contains("AtÄ±k Su") || d.SelectedItem.Contains("Sessiz"));
+
+            string pisuTitle = pisuDetail != null ? pisuDetail.SelectedItem : "Mineral Takviyeli Sessiz AtÄ±k Su Boru Sistemi";
+
             decimal pisuMt = totalUnits * 25;
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "11. Mekanik, Sıhhi Tesisat & Yangın (MEP)",
-                Title = $"{pisuTitle} Düşey Kolon ve Daire Tesisatı",
-                Description = "Katlar arası dikey ana iniş şaftları ve daire içi ıslak hacimlerin sızdırmaz, ses yalıtımlı pis su borulaması.",
-                Formula = $"{totalUnits} Daire × 25 mt (Şaft ve Daire İçi Dağıtım)",
+
+                Category = "11. Mekanik, SÄ±hhi Tesisat & YangÄ±n (MEP)",
+
+                Title = $"{pisuTitle} DÃ¼ÅŸey Kolon ve Daire TesisatÄ±",
+
+                Description = "Katlar arasÄ± dikey ana iniÅŸ ÅŸaftlarÄ± ve daire iÃ§i Ä±slak hacimlerin sÄ±zdÄ±rmaz, ses yalÄ±tÄ±mlÄ± pis su borulamasÄ±.",
+
+                Formula = $"{totalUnits} Daire Ã— 25 mt (Åaft ve Daire Ä°Ã§i DaÄŸÄ±tÄ±m)",
+
                 Quantity = pisuMt,
+
                 Unit = "mt",
-                ProfessionName = "Sıhhi Tesisatçı",
-                DnaSource = "Adım 7 Soru 6: Atık Su / Pis Su Borusu Standardı"
+
+                ProfessionName = "SÄ±hhi TesisatÃ§Ä±",
+
+                DnaSource = "AdÄ±m 7 Soru 6: AtÄ±k Su / Pis Su Borusu StandardÄ±"
+
             });
 
-            // 23. Su Deposu & Hidrofor (Adım 7)
+
+
+            // 23. Su Deposu & Hidrofor (AdÄ±m 7)
+
             var suDeposuDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Su Deposu") || d.SelectedItem.Contains("Hidrofor"));
-            string suDeposuTitle = suDeposuDetail != null ? suDeposuDetail.SelectedItem : "AISI 304 Paslanmaz Çelik Modüler Su Deposu & Çift Pompalı Hidrofor";
+
+            string suDeposuTitle = suDeposuDetail != null ? suDeposuDetail.SelectedItem : "AISI 304 Paslanmaz Ã‡elik ModÃ¼ler Su Deposu & Ã‡ift PompalÄ± Hidrofor";
+
             int depoTakim = Math.Max(1, blocks.Count);
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "11. Mekanik, Sıhhi Tesisat & Yangın (MEP)",
+
+                Category = "11. Mekanik, SÄ±hhi Tesisat & YangÄ±n (MEP)",
+
                 Title = $"{suDeposuTitle} Sistemi",
-                Description = "Yangın ve kullanım suyu rezervi için paslanmaz modüler depo, frekans invertörlü hidrofor ve vana grubu.",
-                Formula = $"{depoTakim} Blok / Yapı × 1 Takım Merkezi Basınçlandırma Paketi",
+
+                Description = "YangÄ±n ve kullanÄ±m suyu rezervi iÃ§in paslanmaz modÃ¼ler depo, frekans invertÃ¶rlÃ¼ hidrofor ve vana grubu.",
+
+                Formula = $"{depoTakim} Blok / YapÄ± Ã— 1 TakÄ±m Merkezi BasÄ±nÃ§landÄ±rma Paketi",
+
                 Quantity = depoTakim,
-                Unit = "Takım",
-                ProfessionName = "Sıhhi Tesisatçı",
-                DnaSource = "Adım 7 Soru 7: Temiz Su Deposu ve Hidrofor Sistemi"
+
+                Unit = "TakÄ±m",
+
+                ProfessionName = "SÄ±hhi TesisatÃ§Ä±",
+
+                DnaSource = "AdÄ±m 7 Soru 7: Temiz Su Deposu ve Hidrofor Sistemi"
+
             });
 
-            // 24. Yangın Merdiveni Basamak Kaplaması (Adım 8)
-            var yanginBasamakDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Yangın Merdiveni Basamak") || d.SelectedItem.Contains("Yangın Merdiveni Kaplama") || d.SelectedItem.Contains("Traverten"));
-            string yanginBasamakTitle = yanginBasamakDetail != null ? yanginBasamakDetail.SelectedItem : "Doğaltaş / Traverten Yangın Merdiveni Basamak Kaplaması";
+
+
+            // 24. YangÄ±n Merdiveni Basamak KaplamasÄ± (AdÄ±m 8)
+
+            var yanginBasamakDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("YangÄ±n Merdiveni Basamak") || d.SelectedItem.Contains("YangÄ±n Merdiveni Kaplama") || d.SelectedItem.Contains("Traverten"));
+
+            string yanginBasamakTitle = yanginBasamakDetail != null ? yanginBasamakDetail.SelectedItem : "DoÄŸaltaÅŸ / Traverten YangÄ±n Merdiveni Basamak KaplamasÄ±";
+
             decimal yanginBasamakMt = maxFloors * 22;
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "12. Ortak Alanlar, Yangın Güvenliği & Sirkülasyon",
+
+                Category = "12. Ortak Alanlar, YangÄ±n GÃ¼venliÄŸi & SirkÃ¼lasyon",
+
                 Title = yanginBasamakTitle,
-                Description = "Acil kaçış ve yangın merdiveni basamaklarının kaymaz profil traverten/mermer veya epoksi kaplaması.",
-                Formula = $"{maxFloors} Kat × 18 Basamak × 1.2 mt Rıht/Basamak Ölçüsü",
+
+                Description = "Acil kaÃ§Ä±ÅŸ ve yangÄ±n merdiveni basamaklarÄ±nÄ±n kaymaz profil traverten/mermer veya epoksi kaplamasÄ±.",
+
+                Formula = $"{maxFloors} Kat Ã— 18 Basamak Ã— 1.2 mt RÄ±ht/Basamak Ã–lÃ§Ã¼sÃ¼",
+
                 Quantity = yanginBasamakMt,
+
                 Unit = "mt",
-                ProfessionName = "Mermer & Doğaltaş Ustası",
-                DnaSource = "Adım 8 Soru 6: Yangın Merdiveni Basamak Kaplaması"
+
+                ProfessionName = "Mermer & DoÄŸaltaÅŸ UstasÄ±",
+
+                DnaSource = "AdÄ±m 8 Soru 6: YangÄ±n Merdiveni Basamak KaplamasÄ±"
+
             });
 
-            // 24B. Yangın Merdiveni Korkuluk & Küpeştesi (Adım 8)
-            var yanginKorkulukDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Yangın Merdiveni Korkuluk") || d.SelectedItem.Contains("Kaçış Küpeşte"));
-            string yanginKorkulukTitle = yanginKorkulukDetail != null ? yanginKorkulukDetail.SelectedItem : "Elektrostatik Boyalı Demir Boru Yangın Korkuluğu";
+
+
+            // 24B. YangÄ±n Merdiveni Korkuluk & KÃ¼peÅŸtesi (AdÄ±m 8)
+
+            var yanginKorkulukDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("YangÄ±n Merdiveni Korkuluk") || d.SelectedItem.Contains("KaÃ§Ä±ÅŸ KÃ¼peÅŸte"));
+
+            string yanginKorkulukTitle = yanginKorkulukDetail != null ? yanginKorkulukDetail.SelectedItem : "Elektrostatik BoyalÄ± Demir Boru YangÄ±n KorkuluÄŸu";
+
             decimal yanginKorkulukMt = maxFloors * 22;
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "12. Ortak Alanlar, Yangın Güvenliği & Sirkülasyon",
+
+                Category = "12. Ortak Alanlar, YangÄ±n GÃ¼venliÄŸi & SirkÃ¼lasyon",
+
                 Title = yanginKorkulukTitle,
-                Description = "Yangın merdiveni kovası emniyet korkuluğu ve yangına dayanıklı kaçış tutamağı montajı.",
-                Formula = $"{maxFloors} Kat × 22 mt Merdiven İniş Hattı",
+
+                Description = "YangÄ±n merdiveni kovasÄ± emniyet korkuluÄŸu ve yangÄ±na dayanÄ±klÄ± kaÃ§Ä±ÅŸ tutamaÄŸÄ± montajÄ±.",
+
+                Formula = $"{maxFloors} Kat Ã— 22 mt Merdiven Ä°niÅŸ HattÄ±",
+
                 Quantity = yanginKorkulukMt,
+
                 Unit = "mt",
-                ProfessionName = "Korkuluk & Metal Ustası",
-                DnaSource = "Adım 8 Soru 7: Yangın Merdiveni Korkuluk Standardı"
+
+                ProfessionName = "Korkuluk & Metal UstasÄ±",
+
+                DnaSource = "AdÄ±m 8 Soru 7: YangÄ±n Merdiveni Korkuluk StandardÄ±"
+
             });
 
-            // 24C. Kat Holü Asansör Söve ve Çerçeve Kaplaması (Adım 8)
-            var asansorSoveDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Asansör Söve") || d.SelectedItem.Contains("Kat Holü Asansör"));
-            string asansorSoveTitle = asansorSoveDetail != null ? asansorSoveDetail.SelectedItem : "Mermer / Granit Asansör Kapı Sövesi";
+
+
+            // 24C. Kat HolÃ¼ AsansÃ¶r SÃ¶ve ve Ã‡erÃ§eve KaplamasÄ± (AdÄ±m 8)
+
+            var asansorSoveDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("AsansÃ¶r SÃ¶ve") || d.SelectedItem.Contains("Kat HolÃ¼ AsansÃ¶r"));
+
+            string asansorSoveTitle = asansorSoveDetail != null ? asansorSoveDetail.SelectedItem : "Mermer / Granit AsansÃ¶r KapÄ± SÃ¶vesi";
+
             int asansorKapiAdet = maxFloors;
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "12. Ortak Alanlar, Yangın Güvenliği & Sirkülasyon",
+
+                Category = "12. Ortak Alanlar, YangÄ±n GÃ¼venliÄŸi & SirkÃ¼lasyon",
+
                 Title = asansorSoveTitle,
-                Description = "Her kat koridorunda asansör kapı çevrelerinin mermer, granit veya kompozit söve ile giydirilmesi.",
-                Formula = $"{asansorKapiAdet} Kat × 1 Kapı Açıklığı",
+
+                Description = "Her kat koridorunda asansÃ¶r kapÄ± Ã§evrelerinin mermer, granit veya kompozit sÃ¶ve ile giydirilmesi.",
+
+                Formula = $"{asansorKapiAdet} Kat Ã— 1 KapÄ± AÃ§Ä±klÄ±ÄŸÄ±",
+
                 Quantity = asansorKapiAdet,
+
                 Unit = "Adet",
-                ProfessionName = "Mermer & Doğaltaş Ustası",
-                DnaSource = "Adım 8 Soru 5: Kat Holü Asansör Sövesi"
+
+                ProfessionName = "Mermer & DoÄŸaltaÅŸ UstasÄ±",
+
+                DnaSource = "AdÄ±m 8 Soru 5: Kat HolÃ¼ AsansÃ¶r SÃ¶vesi"
+
             });
 
-            // 25. Yangın Kaçış Kapıları (Adım 8)
-            var yanginKapiDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Yangın Kaçış Kapı") || d.SelectedItem.Contains("Yangın Merdiveni ve Acil Kaçış") || d.SelectedItem.Contains("EI90") || d.SelectedItem.Contains("EI60"));
-            string yanginKapiTitle = yanginKapiDetail != null ? yanginKapiDetail.SelectedItem : "EI90 Panik Barlı Çift Cidarlı Yangın Kaçış Kapısı";
+
+
+            // 25. YangÄ±n KaÃ§Ä±ÅŸ KapÄ±larÄ± (AdÄ±m 8)
+
+            var yanginKapiDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("YangÄ±n KaÃ§Ä±ÅŸ KapÄ±") || d.SelectedItem.Contains("YangÄ±n Merdiveni ve Acil KaÃ§Ä±ÅŸ") || d.SelectedItem.Contains("EI90") || d.SelectedItem.Contains("EI60"));
+
+            string yanginKapiTitle = yanginKapiDetail != null ? yanginKapiDetail.SelectedItem : "EI90 Panik BarlÄ± Ã‡ift CidarlÄ± YangÄ±n KaÃ§Ä±ÅŸ KapÄ±sÄ±";
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "12. Ortak Alanlar, Yangın Güvenliği & Sirkülasyon",
-                Title = $"{yanginKapiTitle} (Duman Sızdırmaz Fitilli)",
-                Description = "Kat koridorlarından yangın merdivenine açılan panik barlı, yaylı menteşeli ve duman fitilli sertifikalı yangın kapıları.",
-                Formula = $"{maxFloors} Kat × 1 Adet Kat Yangın Çıkış Kapısı",
+
+                Category = "12. Ortak Alanlar, YangÄ±n GÃ¼venliÄŸi & SirkÃ¼lasyon",
+
+                Title = $"{yanginKapiTitle} (Duman SÄ±zdÄ±rmaz Fitilli)",
+
+                Description = "Kat koridorlarÄ±ndan yangÄ±n merdivenine aÃ§Ä±lan panik barlÄ±, yaylÄ± menteÅŸeli ve duman fitilli sertifikalÄ± yangÄ±n kapÄ±larÄ±.",
+
+                Formula = $"{maxFloors} Kat Ã— 1 Adet Kat YangÄ±n Ã‡Ä±kÄ±ÅŸ KapÄ±sÄ±",
+
                 Quantity = maxFloors,
+
                 Unit = "Adet",
-                ProfessionName = "Kapı ve Ahşap Montaj Ekibi",
-                DnaSource = "Adım 8 Soru 7: Yangın Merdiveni Acil Kaçış Kapıları"
+
+                ProfessionName = "KapÄ± ve AhÅŸap Montaj Ekibi",
+
+                DnaSource = "AdÄ±m 8 Soru 7: YangÄ±n Merdiveni Acil KaÃ§Ä±ÅŸ KapÄ±larÄ±"
+
             });
 
-            // 26. Kat Yangın Dolapları & Ekipmanları (Adım 8)
-            var yanginDolapDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Yangın Dolabı") || d.SelectedItem.Contains("Yangın Hortumu"));
-            string yanginDolapTitle = yanginDolapDetail != null ? yanginDolapDetail.SelectedItem : "Tüp Bölmeli Gömme Tip Kat Yangın Dolabı (TSE EN 671-1)";
+
+
+            // 26. Kat YangÄ±n DolaplarÄ± & EkipmanlarÄ± (AdÄ±m 8)
+
+            var yanginDolapDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("YangÄ±n DolabÄ±") || d.SelectedItem.Contains("YangÄ±n Hortumu"));
+
+            string yanginDolapTitle = yanginDolapDetail != null ? yanginDolapDetail.SelectedItem : "TÃ¼p BÃ¶lmeli GÃ¶mme Tip Kat YangÄ±n DolabÄ± (TSE EN 671-1)";
+
             list.Add(new ParametricTakeoffItemDto
+
             {
+
                 Id = itemId++,
-                Category = "12. Ortak Alanlar, Yangın Güvenliği & Sirkülasyon",
-                Title = $"{yanginDolapTitle} ve Lans Takımı",
-                Description = "Her kat koridorunda 30m yarı sert yangın hortumlu, vanalı ve 6 kg KKT yangın söndürme tüplü dolap montajı.",
-                Formula = $"{maxFloors} Kat × 1 Adet Kat Yangın Dolabı",
+
+                Category = "12. Ortak Alanlar, YangÄ±n GÃ¼venliÄŸi & SirkÃ¼lasyon",
+
+                Title = $"{yanginDolapTitle} ve Lans TakÄ±mÄ±",
+
+                Description = "Her kat koridorunda 30m yarÄ± sert yangÄ±n hortumlu, vanalÄ± ve 6 kg KKT yangÄ±n sÃ¶ndÃ¼rme tÃ¼plÃ¼ dolap montajÄ±.",
+
+                Formula = $"{maxFloors} Kat Ã— 1 Adet Kat YangÄ±n DolabÄ±",
+
                 Quantity = maxFloors,
+
                 Unit = "Adet",
-                ProfessionName = "Yangın Güvenlik & Mekanik Ekibi",
-                DnaSource = "Adım 8 Soru 8: Kat Yangın Dolabı ve Ekipman Modeli"
+
+                ProfessionName = "YangÄ±n GÃ¼venlik & Mekanik Ekibi",
+
+                DnaSource = "AdÄ±m 8 Soru 8: Kat YangÄ±n DolabÄ± ve Ekipman Modeli"
+
             });
 
-            // 27+. Dış Saha ve Sosyal Donatılar (Adım 9)
+
+
+            // 27+. DÄ±ÅŸ Saha ve Sosyal DonatÄ±lar (AdÄ±m 9)
+
             if (project.Amenities != null && project.Amenities.Any())
+
             {
+
                 foreach (var am in project.Amenities)
+
                 {
+
                     decimal amQty = (decimal)(am.SquareMeters ?? 1);
+
                     if (amQty <= 0) amQty = 1;
-                    string unit = (am.SquareMeters.HasValue && am.SquareMeters.Value > 0) ? "m²" : "Adet";
+
+                    string unit = (am.SquareMeters.HasValue && am.SquareMeters.Value > 0) ? "mÂ²" : "Adet";
+
+
 
                     list.Add(new ParametricTakeoffItemDto
+
                     {
+
                         Id = itemId++,
-                        Category = "13. Dış Saha, Sosyal Donatılar & Çevre Düzenleme",
-                        Title = $"{am.Name} İmalat ve Düzenlemesi",
-                        Description = $"{am.Type ?? "Sosyal Donatı"} kapsamında zemin kaplaması, ekipman montajı ve çevre düzenlemesi.",
-                        Formula = $"Proje Donatı Envanteri: {am.Name} ({amQty:N0} {unit})",
+
+                        Category = "13. DÄ±ÅŸ Saha, Sosyal DonatÄ±lar & Ã‡evre DÃ¼zenleme",
+
+                        Title = $"{am.Name} Ä°malat ve DÃ¼zenlemesi",
+
+                        Description = $"{am.Type ?? "Sosyal DonatÄ±"} kapsamÄ±nda zemin kaplamasÄ±, ekipman montajÄ± ve Ã§evre dÃ¼zenlemesi.",
+
+                        Formula = $"Proje DonatÄ± Envanteri: {am.Name} ({amQty:N0} {unit})",
+
                         Quantity = amQty,
+
                         Unit = unit,
-                        ProfessionName = "Peyzaj ve Dış Saha Düzenleme Ustası",
-                        DnaSource = $"Adım 9: Donatı Envanteri ({am.Type ?? "Sosyal Donatı"})"
+
+                        ProfessionName = "Peyzaj ve DÄ±ÅŸ Saha DÃ¼zenleme UstasÄ±",
+
+                        DnaSource = $"AdÄ±m 9: DonatÄ± Envanteri ({am.Type ?? "Sosyal DonatÄ±"})"
+
                     });
+
                 }
+
             }
 
+
+
             return list;
+
         }
+
+
 
         private List<WorkflowStepItemDto> GenerateParametricWorkflow(ConstructionProject project, ProjectDnaProfile profile, DateTime? baseDate = null, int? buildingId = null)
+
         {
+
             var list = new List<WorkflowStepItemDto>();
+
             if (project == null) return list;
+
+
 
             var allBlocks = project.Blocks?.Where(b => !b.IsExistingBuilding).ToList() ?? new List<GMK360.Core.Entities.Building>();
+
             var rootBlocks = allBlocks.Where(b => b.ParentBuildingId == null).ToList();
 
+
+
             GMK360.Core.Entities.Building targetStructure = null;
+
             if (buildingId.HasValue && buildingId.Value > 0)
+
             {
+
                 targetStructure = allBlocks.FirstOrDefault(b => b.Id == buildingId.Value);
+
             }
+
             if (targetStructure == null)
+
             {
+
                 targetStructure = rootBlocks.FirstOrDefault() ?? allBlocks.FirstOrDefault();
+
             }
+
+
 
             var targetBlocks = new List<GMK360.Core.Entities.Building>();
+
             if (targetStructure != null)
+
             {
+
                 var children = allBlocks.Where(b => b.ParentBuildingId == targetStructure.Id).ToList();
+
                 if (children.Any())
+
                 {
+
                     targetBlocks.AddRange(children);
+
                 }
+
                 else
+
                 {
+
                     targetBlocks.Add(targetStructure);
+
                 }
+
             }
+
             else
+
             {
+
                 targetBlocks = allBlocks;
+
             }
+
+
 
             string targetStructureName = targetStructure?.BlockName ?? targetStructure?.Name ?? (targetBlocks.Count == 1 ? (targetBlocks[0].BlockName ?? targetBlocks[0].Name) : project.Name);
+
             int? targetBuildingId = targetStructure?.Id ?? targetBlocks.FirstOrDefault()?.Id;
 
+
+
             double landArea = project.TotalLandArea ?? 0;
+
             double baseArea = targetStructure?.BaseArea ?? targetBlocks.Sum(b => b.BaseArea ?? 0);
+
             if (baseArea <= 0 && targetBlocks.Any()) baseArea = targetBlocks.Sum(b => b.BaseArea ?? 0);
+
             if (baseArea <= 0) baseArea = project.EskiBinaOturumAlani ?? (landArea > 0 ? landArea * 0.40 : 500);
 
+
+
             int maxFloors = targetBlocks.Any() ? targetBlocks.Max(b => (b.TotalFloors ?? 0) + b.BasementFloors) : (project.TotalFloors ?? 5);
+
             if (targetStructure != null && targetStructure.TotalFloors.HasValue && targetStructure.TotalFloors.Value > 0)
+
             {
+
                 int structFloors = (targetStructure.TotalFloors.Value) + targetStructure.BasementFloors;
+
                 if (structFloors > maxFloors) maxFloors = structFloors;
+
             }
+
+
 
             int maxBasement = targetBlocks.Any() ? targetBlocks.Max(b => b.BasementFloors) : (project.EskiBodrumKatSayisi ?? 2);
+
             if (targetStructure != null && targetStructure.BasementFloors > maxBasement) maxBasement = targetStructure.BasementFloors;
+
             if (maxBasement <= 0) maxBasement = 2;
+
             if (maxFloors <= 0) maxFloors = 5;
 
+
+
             double totalFloorArea = 0;
+
             if (targetBlocks.Any(b => b.BaseArea.HasValue && b.BaseArea > 0))
+
             {
+
                 totalFloorArea = targetBlocks.Sum(b => (b.BaseArea ?? (baseArea / Math.Max(1, targetBlocks.Count))) * ((b.TotalFloors ?? 5) + b.BasementFloors));
+
             }
+
             else
+
             {
+
                 totalFloorArea = baseArea * maxFloors;
+
             }
+
             if (totalFloorArea <= 0) totalFloorArea = baseArea * maxFloors;
 
+
+
             double landPerimeter = landArea > 0 ? Math.Round(4 * Math.Sqrt(landArea), 1) : 240;
+
             double buildingPerimeter = baseArea > 0 ? Math.Round(4 * Math.Sqrt(baseArea), 1) : 120;
 
+
+
             int totalUnits = targetBlocks.Sum(b => b.TotalApartments);
+
             if (totalUnits <= 0) totalUnits = targetStructure?.TotalApartments ?? (project.TargetTotalApartments ?? (project.EskiDaireSayisi ?? 10));
 
+
+
             var details = profile?.Details?.ToList() ?? new List<ProjectDnaDetail>();
+
+
 
             var zeminDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Zemin") || d.SelectedItem.Contains("Kaya") || d.SelectedItem.Contains("Kum") || d.SelectedItem.Contains("Kil"));
-            string zeminTipi = zeminDetail != null ? zeminDetail.SelectedItem : "Yumuşak / Kumlu Zemin";
+
+            string zeminTipi = zeminDetail != null ? zeminDetail.SelectedItem : "YumuÅŸak / Kumlu Zemin";
+
             double kabarma = zeminTipi.Contains("Kaya") ? 1.35 : 1.25;
 
+
+
             decimal ihataUzunlugu = (decimal)landPerimeter;
-            var ihataLenDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Çevre Sınırı Toplam") || (d.SelectedItem.Contains("İhata") && d.SelectedItem.Contains(":")));
+
+            var ihataLenDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Ã‡evre SÄ±nÄ±rÄ± Toplam") || (d.SelectedItem.Contains("Ä°hata") && d.SelectedItem.Contains(":")));
+
             if (ihataLenDetail != null && ihataLenDetail.Quantity > 0)
+
             {
+
                 ihataUzunlugu = ihataLenDetail.Quantity;
-            }
-            else if (ihataLenDetail != null && ihataLenDetail.SelectedItem.Contains(":"))
-            {
-                var p = ihataLenDetail.SelectedItem.Split(':');
-                if (p.Length > 1 && decimal.TryParse(p[1].Replace("m", "").Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal qVal))
-                {
-                    ihataUzunlugu = qVal;
-                }
+
             }
 
-            var ihataMatDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Sac") || d.SelectedItem.Contains("Tel Örgü") || d.SelectedItem.Contains("Pano"));
+            else if (ihataLenDetail != null && ihataLenDetail.SelectedItem.Contains(":"))
+
+            {
+
+                var p = ihataLenDetail.SelectedItem.Split(':');
+
+                if (p.Length > 1 && decimal.TryParse(p[1].Replace("m", "").Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal qVal))
+
+                {
+
+                    ihataUzunlugu = qVal;
+
+                }
+
+            }
+
+
+
+            var ihataMatDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Sac") || d.SelectedItem.Contains("Tel Ã–rgÃ¼") || d.SelectedItem.Contains("Pano"));
+
             string ihataMalzemesi = ihataMatDetail != null ? ihataMatDetail.SelectedItem : "Trapez Sac Kaplama";
 
-            var kapiDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Kapı"));
-            string kapiTipi = kapiDetail != null ? kapiDetail.SelectedItem : "Sürgülü Raylı Sac Kapı (6m)";
 
-            var molozDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Yıkım") || d.SelectedItem.Contains("Moloz") || d.SelectedItem.Contains("Enkaz") || d.SelectedItem.Contains("Boş Arsa"));
-            bool isCleanPlot = molozDetail != null && (molozDetail.SelectedItem.Contains("Boş") || molozDetail.SelectedItem.Contains("Gerekmez") || molozDetail.SelectedItem.Contains("Yok"));
-            bool molozVar = molozDetail != null && !isCleanPlot && (molozDetail.SelectedItem.Contains("Yıkılacak") || molozDetail.SelectedItem.Contains("Moloz ve Çöp") || molozDetail.SelectedItem.Contains("Enkaz"));
+
+            var kapiDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("KapÄ±"));
+
+            string kapiTipi = kapiDetail != null ? kapiDetail.SelectedItem : "SÃ¼rgÃ¼lÃ¼ RaylÄ± Sac KapÄ± (6m)";
+
+
+
+            var molozDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("YÄ±kÄ±m") || d.SelectedItem.Contains("Moloz") || d.SelectedItem.Contains("Enkaz") || d.SelectedItem.Contains("BoÅŸ Arsa"));
+
+            bool isCleanPlot = molozDetail != null && (molozDetail.SelectedItem.Contains("BoÅŸ") || molozDetail.SelectedItem.Contains("Gerekmez") || molozDetail.SelectedItem.Contains("Yok"));
+
+            bool molozVar = molozDetail != null && !isCleanPlot && (molozDetail.SelectedItem.Contains("YÄ±kÄ±lacak") || molozDetail.SelectedItem.Contains("Moloz ve Ã‡Ã¶p") || molozDetail.SelectedItem.Contains("Enkaz"));
+
             bool hasDemolition = !isCleanPlot && (molozVar || (project.EskiToplamMetrekare.HasValue && project.EskiToplamMetrekare.Value > 0) || (project.EskiKatSayisi.HasValue && project.EskiKatSayisi.Value > 0));
 
-            var elektrikDetail = details.FirstOrDefault(d => (d.Phase.Contains("1") || d.Phase.Contains("Faz 1") || d.Phase.Contains("Adım 1")) && (d.SelectedItem.Contains("Elektrik") || d.SelectedItem.Contains("Abonelik") || d.SelectedItem.Contains("Trafo") || d.SelectedItem.Contains("Jeneratör")));
-            string elektrikTipi = elektrikDetail != null ? elektrikDetail.SelectedItem : "Şantiye Şebeke Aboneliği ve TMŞ Dağıtım Panosu";
 
-            var suDetail = details.FirstOrDefault(d => (d.Phase.Contains("1") || d.Phase.Contains("Faz 1") || d.Phase.Contains("Adım 1")) && (d.SelectedItem.Contains("Su") || d.SelectedItem.Contains("Depo") || d.SelectedItem.Contains("Hidrofor") || d.SelectedItem.Contains("Kuyu")));
+
+            var elektrikDetail = details.FirstOrDefault(d => (d.Phase.Contains("1") || d.Phase.Contains("Faz 1") || d.Phase.Contains("AdÄ±m 1")) && (d.SelectedItem.Contains("Elektrik") || d.SelectedItem.Contains("Abonelik") || d.SelectedItem.Contains("Trafo") || d.SelectedItem.Contains("JeneratÃ¶r")));
+
+            string elektrikTipi = elektrikDetail != null ? elektrikDetail.SelectedItem : "Åantiye Åebeke AboneliÄŸi ve TMÅ DaÄŸÄ±tÄ±m Panosu";
+
+
+
+            var suDetail = details.FirstOrDefault(d => (d.Phase.Contains("1") || d.Phase.Contains("Faz 1") || d.Phase.Contains("AdÄ±m 1")) && (d.SelectedItem.Contains("Su") || d.SelectedItem.Contains("Depo") || d.SelectedItem.Contains("Hidrofor") || d.SelectedItem.Contains("Kuyu")));
+
             string suTipi = suDetail != null ? suDetail.SelectedItem : "15 Tonluk Su Deposu ve 3 HP Hidrofor";
 
+
+
             int konteynerSayisi = Math.Max(2, Math.Min(6, (int)Math.Ceiling(totalFloorArea / 5000.0)));
+
             decimal kaziM3 = Math.Round((decimal)(baseArea * (maxBasement * 3.2 + 1.0) * kabarma), 0);
+
             decimal iksaM2 = Math.Round((decimal)(buildingPerimeter * (maxBasement * 3.2)), 0);
+
             decimal grobetonM3 = Math.Round((decimal)(baseArea * 0.15), 0);
+
             decimal yalitimM2 = Math.Round((decimal)(baseArea + (buildingPerimeter * (maxBasement * 3.2))), 0);
+
             decimal temelBetonM3 = Math.Round((decimal)(baseArea * 0.70), 0);
+
             if (temelBetonM3 < 50) temelBetonM3 = 100;
+
             decimal temelDemirTon = Math.Round((decimal)(temelBetonM3 * 0.085m), 1);
 
+
+
             decimal karkasBetonM3 = Math.Round((decimal)(totalFloorArea * 0.38), 0);
+
             decimal karkasDemirTon = Math.Round((decimal)(totalFloorArea * 0.032), 1);
 
+
+
             decimal sapM2 = Math.Round((decimal)(totalFloorArea * 0.82), 0);
+
             decimal iskeleM2 = Math.Round((decimal)(buildingPerimeter * (maxFloors * 3.0)), 0);
+
             decimal mantoM2 = Math.Round((decimal)(iskeleM2 * 0.85m), 0);
+
             decimal harpushtaMt = Math.Round((decimal)(buildingPerimeter * 1.10), 0);
+
             decimal denizlikMt = totalUnits * 7;
+
             decimal korkulukMt = totalUnits * 6;
+
             decimal pisuMt = totalUnits * 25;
-            var pisuDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Pis Su") || d.SelectedItem.Contains("Atık Su") || d.SelectedItem.Contains("Sessiz"));
-            string pisuTitle = pisuDetail != null ? pisuDetail.SelectedItem : "Sessiz Atık Su Boru Sistemi";
+
+            var pisuDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Pis Su") || d.SelectedItem.Contains("AtÄ±k Su") || d.SelectedItem.Contains("Sessiz"));
+
+            string pisuTitle = pisuDetail != null ? pisuDetail.SelectedItem : "Sessiz AtÄ±k Su Boru Sistemi";
+
+
 
             decimal landscapeArea = (decimal)(project.LandscapeArea ?? (landArea * 0.4));
+
             DateTime curDate = (baseDate ?? DateTime.Today).Date;
 
-            // 4 Parça Hiyerarşi Sabitleri
+
+
+            // 4 ParÃ§a HiyerarÅŸi Sabitleri
+
             int p1Idx = 1;
-            string p1Name = "1. Parça: Kaba İnşaat (Temel & Taşıyıcı İskelet)";
+
+            string p1Name = "1. ParÃ§a: Kaba Ä°nÅŸaat (Temel & TaÅŸÄ±yÄ±cÄ± Ä°skelet)";
+
             string p1Badge = "primary";
-            string p1Trigger = "İşbaşı / Şantiye Kuruluşu ile Başlar";
+
+            string p1Trigger = "Ä°ÅŸbaÅŸÄ± / Åantiye KuruluÅŸu ile BaÅŸlar";
+
+
 
             int p2Idx = 2;
-            string p2Name = "2. Parça: Statik İnce (Kaba İnce / Kovalayan İşler)";
+
+            string p2Name = "2. ParÃ§a: Statik Ä°nce (Kaba Ä°nce / Kovalayan Ä°ÅŸler)";
+
             string p2Badge = "info";
-            string p2Trigger = "⚡ Kovalama Kuralı: Kaba 2 kat önden gidince alttan kat kat başlar!";
+
+            string p2Trigger = "âš¡ Kovalama KuralÄ±: Kaba 2 kat Ã¶nden gidince alttan kat kat baÅŸlar!";
+
+
 
             int p3Idx = 3;
-            string p3Name = "3. Parça: Tercihe Göre İnce İşler (Daire İçi İmalatlar)";
+
+            string p3Name = "3. ParÃ§a: Tercihe GÃ¶re Ä°nce Ä°ÅŸler (Daire Ä°Ã§i Ä°malatlar)";
+
             string p3Badge = "warning";
-            string p3Trigger = "⚡ Tetikleyici: Kat kaba duvarları ve tesisat sızdırmazlık testi bitince başlar!";
+
+            string p3Trigger = "âš¡ Tetikleyici: Kat kaba duvarlarÄ± ve tesisat sÄ±zdÄ±rmazlÄ±k testi bitince baÅŸlar!";
+
+
 
             int p4Idx = 4;
-            string p4Name = "4. Parça: Demirbaş, Montaj & Dış Çevre (Teslim Aşaması)";
-            string p4Badge = "success";
-            string p4Trigger = "⚡ Tetikleyici: Daire içi boya ve zemin kaplamaları bitince temiz montaja geçilir!";
 
-            // Helper metot: Alt adımları temiz (mokapsız) oluşturur
+            string p4Name = "4. ParÃ§a: DemirbaÅŸ, Montaj & DÄ±ÅŸ Ã‡evre (Teslim AÅŸamasÄ±)";
+
+            string p4Badge = "success";
+
+            string p4Trigger = "âš¡ Tetikleyici: Daire iÃ§i boya ve zemin kaplamalarÄ± bitince temiz montaja geÃ§ilir!";
+
+
+
+            // Helper metot: Alt adÄ±mlarÄ± temiz (mokapsÄ±z) oluÅŸturur
+
             List<WorkflowSubStepDto> CreateSubSteps(string prePrep, string exec, string quality, string isg)
+
             {
+
                 return new List<WorkflowSubStepDto>
+
                 {
+
                     new WorkflowSubStepDto { Title = prePrep, Category = "PrePreparation", IsCompleted = false },
+
                     new WorkflowSubStepDto { Title = exec, Category = "Execution", IsCompleted = false },
+
                     new WorkflowSubStepDto { Title = quality, Category = "QualityAndCuring", IsCompleted = false },
+
                     new WorkflowSubStepDto { Title = isg, Category = "SafetyIsg", IsCompleted = false }
+
                 };
+
             }
 
+
+
             int stepOrderSeq = 1;
+
             DateTime runDate = curDate;
 
-            // =========================================================================
-            // 1. PARÇA: KABA İNŞAAT (TEMEL & TAŞIYICI İSKELET)
+
+
             // =========================================================================
 
-            // K-01: Derin Kazı (Hafriyat) & Zemin İksası (Shoring) (Adım 1)
+            // 1. PARÃ‡A: KABA Ä°NÅAAT (TEMEL & TAÅIYICI Ä°SKELET)
+
+            // =========================================================================
+
+
+
+            // K-01: Derin KazÄ± (Hafriyat) & Zemin Ä°ksasÄ± (Shoring) (AdÄ±m 1)
+
             var k01Start = runDate;
+
             var k01End = k01Start.AddDays(14);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "K-01",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Derin Kazı (Hafriyat) & Zemin İksası (Shoring)",
-                StageCategory = "Hafriyat & Zemin İksası",
+
+                PhaseName = "Derin KazÄ± (Hafriyat) & Zemin Ä°ksasÄ± (Shoring)",
+
+                StageCategory = "Hafriyat & Zemin Ä°ksasÄ±",
+
                 PartIndex = p1Idx,
+
                 PartName = p1Name,
+
                 PartBadgeClass = p1Badge,
-                TriggerRule = "Şantiye ortak saha hazırlığı tamamlanınca yapı tabanında başlar",
+
+                TriggerRule = "Åantiye ortak saha hazÄ±rlÄ±ÄŸÄ± tamamlanÄ±nca yapÄ± tabanÄ±nda baÅŸlar",
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = $"{zeminTipi} Kazısı, İksa Hasır Çeliği ve Püskürtme Beton (Shotcrete)",
-                MaterialDescription = "Kademeli temel hafriyat kazısı, döküm sahasına nakliye, hasır çelik ve püskürtme beton (shotcrete) iksa perdesi.",
+
+                MaterialTitle = $"{zeminTipi} KazÄ±sÄ±, Ä°ksa HasÄ±r Ã‡eliÄŸi ve PÃ¼skÃ¼rtme Beton (Shotcrete)",
+
+                MaterialDescription = "Kademeli temel hafriyat kazÄ±sÄ±, dÃ¶kÃ¼m sahasÄ±na nakliye, hasÄ±r Ã§elik ve pÃ¼skÃ¼rtme beton (shotcrete) iksa perdesi.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m³",
-                MaterialFormula = "DXF Bekliyor (Bodrum kat kesit yüksekliklerinden ve kazı kotundan hesaplanacak)",
-                SupplierCategory = "Hafriyat & Zemin Firması",
-                LaborTitle = "Ağır Hafriyat & İksa Operasyon Ekibi",
-                ProfessionName = "Hafriyatçı & İksacı",
-                CrewComposition = "2 Ağır Ekskavatör Op. + 1 Loder Op. + 8 Kamyon Şoförü + 2 Delgi Op. + 2 Shotcrete Ustası + 2 Saha Güvenlik",
+
+                MaterialUnit = "mÂ³",
+
+                MaterialFormula = "DXF Bekliyor (Bodrum kat kesit yÃ¼ksekliklerinden ve kazÄ± kotundan hesaplanacak)",
+
+                SupplierCategory = "Hafriyat & Zemin FirmasÄ±",
+
+                LaborTitle = "AÄŸÄ±r Hafriyat & Ä°ksa Operasyon Ekibi",
+
+                ProfessionName = "HafriyatÃ§Ä± & Ä°ksacÄ±",
+
+                CrewComposition = "2 AÄŸÄ±r EkskavatÃ¶r Op. + 1 Loder Op. + 8 Kamyon ÅofÃ¶rÃ¼ + 2 Delgi Op. + 2 Shotcrete UstasÄ± + 2 Saha GÃ¼venlik",
+
                 CrewSize = 17,
+
                 DurationDays = 14,
-                EquipmentNeeded = "2 Ekskavatör (Kovalı & Kırıcılı), 1 Loder, 8 Damperli Kamyon, Shotcrete Pompası, Ankraj Delgi Makinesi",
-                Predecessors = "Şantiye ortak mobilizasyonunun ve köşe kazıklarının onaylanması",
-                CriticalDependency = "Yol ve komşu parsel şevlerinin göçmesini önlemek için kademeli iksa uygulanmadan derin kazıya girilemez!",
-                DnaSource = "Adım 1: Zemin & Hafriyat",
+
+                EquipmentNeeded = "2 EkskavatÃ¶r (KovalÄ± & KÄ±rÄ±cÄ±lÄ±), 1 Loder, 8 Damperli Kamyon, Shotcrete PompasÄ±, Ankraj Delgi Makinesi",
+
+                Predecessors = "Åantiye ortak mobilizasyonunun ve kÃ¶ÅŸe kazÄ±klarÄ±nÄ±n onaylanmasÄ±",
+
+                CriticalDependency = "Yol ve komÅŸu parsel ÅŸevlerinin gÃ¶Ã§mesini Ã¶nlemek iÃ§in kademeli iksa uygulanmadan derin kazÄ±ya girilemez!",
+
+                DnaSource = "AdÄ±m 1: Zemin & Hafriyat",
+
                 PlannedStartDate = k01Start,
+
                 PlannedEndDate = k01End,
+
                 SubSteps = CreateSubSteps(
-                    "T-3 Zemin etüdü raporu kontrolü, hafriyat döküm fişleri ve kazı güzergah izinleri teyidi",
-                    "Kademeli kazı, kamyonlara yükleme, iksa perdesi hasır çelik ve püskürtme beton uygulaması",
-                    "Optik nivo ile temel taban kotu kontrolü ve iksa deplasman lazer okuması",
-                    "Derin kazı çukuru çevresi korkulukları, araç teker stoperi ve şev güvenlik takibi"
+
+                    "T-3 Zemin etÃ¼dÃ¼ raporu kontrolÃ¼, hafriyat dÃ¶kÃ¼m fiÅŸleri ve kazÄ± gÃ¼zergah izinleri teyidi",
+
+                    "Kademeli kazÄ±, kamyonlara yÃ¼kleme, iksa perdesi hasÄ±r Ã§elik ve pÃ¼skÃ¼rtme beton uygulamasÄ±",
+
+                    "Optik nivo ile temel taban kotu kontrolÃ¼ ve iksa deplasman lazer okumasÄ±",
+
+                    "Derin kazÄ± Ã§ukuru Ã§evresi korkuluklarÄ±, araÃ§ teker stoperi ve ÅŸev gÃ¼venlik takibi"
+
                 )
+
             });
 
-            // K-02: Taban Tesviyesi, Mıcır Drenajı & C20/25 Grobeton (Adım 2 & Adım 0)
+
+
+            // K-02: Taban Tesviyesi, MÄ±cÄ±r DrenajÄ± & C20/25 Grobeton (AdÄ±m 2 & AdÄ±m 0)
+
             var k02Start = k01End;
+
             var k02End = k02Start.AddDays(2);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "K-02",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Taban Tesviyesi, Mıcır Drenajı & C20/25 Grobeton",
-                StageCategory = "Temel Tabanı",
+
+                PhaseName = "Taban Tesviyesi, MÄ±cÄ±r DrenajÄ± & C20/25 Grobeton",
+
+                StageCategory = "Temel TabanÄ±",
+
                 PartIndex = p1Idx,
+
                 PartName = p1Name,
+
                 PartBadgeClass = p1Badge,
-                TriggerRule = "Kazı tamamlanıp taban kotu alınınca başlar",
+
+                TriggerRule = "KazÄ± tamamlanÄ±p taban kotu alÄ±nÄ±nca baÅŸlar",
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "C20/25 Hazır Grobeton ve Taban Filon Mıcırı",
-                MaterialDescription = "Temel tabanına mıcır serilmesi, silindirlenmesi ve üzerine mastarlı grobeton dökümü.",
+
+                MaterialTitle = "C20/25 HazÄ±r Grobeton ve Taban Filon MÄ±cÄ±rÄ±",
+
+                MaterialDescription = "Temel tabanÄ±na mÄ±cÄ±r serilmesi, silindirlenmesi ve Ã¼zerine mastarlÄ± grobeton dÃ¶kÃ¼mÃ¼.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m³",
-                MaterialFormula = "DXF Bekliyor (Temel taban oturum alanından hesaplanacak)",
-                SupplierCategory = "Hazır Beton Santrali & Taş Ocağı",
+
+                MaterialUnit = "mÂ³",
+
+                MaterialFormula = "DXF Bekliyor (Temel taban oturum alanÄ±ndan hesaplanacak)",
+
+                SupplierCategory = "HazÄ±r Beton Santrali & TaÅŸ OcaÄŸÄ±",
+
                 LaborTitle = "Grobeton ve Taban Tesviye Ekibi",
-                ProfessionName = "Grobeton & Zemin Ustası",
-                CrewComposition = "1 Beton Formeni + 1 Pompa Operatörü + 4 Vibratör Usta/Amelesi + 2 Mastarcı",
+
+                ProfessionName = "Grobeton & Zemin UstasÄ±",
+
+                CrewComposition = "1 Beton Formeni + 1 Pompa OperatÃ¶rÃ¼ + 4 VibratÃ¶r Usta/Amelesi + 2 MastarcÄ±",
+
                 CrewSize = 8,
+
                 DurationDays = 2,
-                EquipmentNeeded = "Beton Pompası, Silindir, Dalgıç Vibratör, Alüminyum Mastarlar",
-                Predecessors = "Temel kazısının tamamlanması ve taban kotunun onaylanması",
-                CriticalDependency = "Grobeton mastarı düzgün atılmadan üzerine su yalıtım membranı serilemez!",
-                DnaSource = "Adım 2: Taban İmalatları (Grobeton)",
+
+                EquipmentNeeded = "Beton PompasÄ±, Silindir, DalgÄ±Ã§ VibratÃ¶r, AlÃ¼minyum Mastarlar",
+
+                Predecessors = "Temel kazÄ±sÄ±nÄ±n tamamlanmasÄ± ve taban kotunun onaylanmasÄ±",
+
+                CriticalDependency = "Grobeton mastarÄ± dÃ¼zgÃ¼n atÄ±lmadan Ã¼zerine su yalÄ±tÄ±m membranÄ± serilemez!",
+
+                DnaSource = "AdÄ±m 2: Taban Ä°malatlarÄ± (Grobeton)",
+
                 PlannedStartDate = k02Start,
+
                 PlannedEndDate = k02End,
+
                 SubSteps = CreateSubSteps(
-                    "T-2 Beton santrali grobeton siparişi ve silindir ile zemin sıkıştırması",
-                    "Filon mıcır serimi, grobeton pompa dökümü ve mastarlı tesviye",
-                    "Grobeton üzeri kot/mastar düzgünlüğü ve priz alma sulaması",
-                    "Pompa boru hatlarının emniyet kilitleri ve döküm alanı KKD denetimi"
+
+                    "T-2 Beton santrali grobeton sipariÅŸi ve silindir ile zemin sÄ±kÄ±ÅŸtÄ±rmasÄ±",
+
+                    "Filon mÄ±cÄ±r serimi, grobeton pompa dÃ¶kÃ¼mÃ¼ ve mastarlÄ± tesviye",
+
+                    "Grobeton Ã¼zeri kot/mastar dÃ¼zgÃ¼nlÃ¼ÄŸÃ¼ ve priz alma sulamasÄ±",
+
+                    "Pompa boru hatlarÄ±nÄ±n emniyet kilitleri ve dÃ¶kÃ¼m alanÄ± KKD denetimi"
+
                 )
+
             });
 
-            // K-03: Çift Kat Bitümlü Membran Temel Bohçalama & Koruma Şapı (Adım 2)
+
+
+            // K-03: Ã‡ift Kat BitÃ¼mlÃ¼ Membran Temel BohÃ§alama & Koruma ÅapÄ± (AdÄ±m 2)
+
             var k03Start = k02End;
+
             var k03End = k03Start.AddDays(5);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "K-03",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Çift Kat Bitümlü Membran Temel Bohçalama & Koruma Şapı",
-                StageCategory = "Temel Su Yalıtımı",
+
+                PhaseName = "Ã‡ift Kat BitÃ¼mlÃ¼ Membran Temel BohÃ§alama & Koruma ÅapÄ±",
+
+                StageCategory = "Temel Su YalÄ±tÄ±mÄ±",
+
                 PartIndex = p1Idx,
+
                 PartName = p1Name,
+
                 PartBadgeClass = p1Badge,
-                TriggerRule = "Grobeton kuruyunca başlar",
+
+                TriggerRule = "Grobeton kuruyunca baÅŸlar",
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "SBS Katkılı Çift Kat Polyester Keçeli Membran, Bitüm Astar ve Koruma Betonu",
-                MaterialDescription = "Grobeton üzerine bitüm astar, çift kat membran şaloma yapıştırma, pah teşliki ve üzerine koruma betonu.",
+
+                MaterialTitle = "SBS KatkÄ±lÄ± Ã‡ift Kat Polyester KeÃ§eli Membran, BitÃ¼m Astar ve Koruma Betonu",
+
+                MaterialDescription = "Grobeton Ã¼zerine bitÃ¼m astar, Ã§ift kat membran ÅŸaloma yapÄ±ÅŸtÄ±rma, pah teÅŸliki ve Ã¼zerine koruma betonu.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Temel tabanı ve perde çevre yüzey alanından hesaplanacak)",
-                SupplierCategory = "Su İzolasyon Malzemeleri Bayisi",
-                LaborTitle = "Su Yalıtımı ve Bohçalama Ekibi",
-                ProfessionName = "Su Yalıtım Ustası",
-                CrewComposition = "1 İzolasyon Formeni + 4 Şaloma/Yalıtım Ustası + 2 Taşıma İşçisi",
+
+                MaterialUnit = "mÂ²",
+
+                MaterialFormula = "DXF Bekliyor (Temel tabanÄ± ve perde Ã§evre yÃ¼zey alanÄ±ndan hesaplanacak)",
+
+                SupplierCategory = "Su Ä°zolasyon Malzemeleri Bayisi",
+
+                LaborTitle = "Su YalÄ±tÄ±mÄ± ve BohÃ§alama Ekibi",
+
+                ProfessionName = "Su YalÄ±tÄ±m UstasÄ±",
+
+                CrewComposition = "1 Ä°zolasyon Formeni + 4 Åaloma/YalÄ±tÄ±m UstasÄ± + 2 TaÅŸÄ±ma Ä°ÅŸÃ§isi",
+
                 CrewSize = 7,
+
                 DurationDays = 5,
-                EquipmentNeeded = "Şaloma Takımları, Gaz Tüpleri, Astar Püskürtme Pompası",
-                Predecessors = "Grobetonun kuruması ve yüzey tozunun temizlenmesi",
-                CriticalDependency = "Su yalıtımı delinmeden üzerine donatı demiri konamaz; mutlaka koruma şapı/betonu atılmalıdır!",
-                DnaSource = "Adım 2: Temel Bohçalama",
+
+                EquipmentNeeded = "Åaloma TakÄ±mlarÄ±, Gaz TÃ¼pleri, Astar PÃ¼skÃ¼rtme PompasÄ±",
+
+                Predecessors = "Grobetonun kurumasÄ± ve yÃ¼zey tozunun temizlenmesi",
+
+                CriticalDependency = "Su yalÄ±tÄ±mÄ± delinmeden Ã¼zerine donatÄ± demiri konamaz; mutlaka koruma ÅŸapÄ±/betonu atÄ±lmalÄ±dÄ±r!",
+
+                DnaSource = "AdÄ±m 2: Temel BohÃ§alama",
+
                 PlannedStartDate = k03Start,
+
                 PlannedEndDate = k03End,
+
                 SubSteps = CreateSubSteps(
-                    "T-2 Bitüm astar, membran ruloları ve şaloma tüplerinin sevki",
-                    "Astar uygulaması, çift kat şaşırtmalı şaloma yapıştırma ve pah çıtaları teşliki",
-                    "Ek yerleri bindirme kaynak kontrolü ve koruma betonu uygulaması",
-                    "Şaloma alevli çalışma yangın güvenlik tüpleri ve havalandırma önlemleri"
+
+                    "T-2 BitÃ¼m astar, membran rulolarÄ± ve ÅŸaloma tÃ¼plerinin sevki",
+
+                    "Astar uygulamasÄ±, Ã§ift kat ÅŸaÅŸÄ±rtmalÄ± ÅŸaloma yapÄ±ÅŸtÄ±rma ve pah Ã§Ä±talarÄ± teÅŸliki",
+
+                    "Ek yerleri bindirme kaynak kontrolÃ¼ ve koruma betonu uygulamasÄ±",
+
+                    "Åaloma alevli Ã§alÄ±ÅŸma yangÄ±n gÃ¼venlik tÃ¼pleri ve havalandÄ±rma Ã¶nlemleri"
+
                 )
+
             });
 
-            // K-04: Radye Temel Ahşap / Çelik Dış Kalıbı & Su Tutucu Bant (Adım 0)
+
+
+            // K-04: Radye Temel AhÅŸap / Ã‡elik DÄ±ÅŸ KalÄ±bÄ± & Su Tutucu Bant (AdÄ±m 0)
+
             var k04Start = k03End;
+
             var k04End = k04Start.AddDays(4);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "K-04",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Radye Temel Ahşap / Çelik Dış Kalıbı & Su Tutucu Bant",
-                StageCategory = "Temel Kalıp",
+
+                PhaseName = "Radye Temel AhÅŸap / Ã‡elik DÄ±ÅŸ KalÄ±bÄ± & Su Tutucu Bant",
+
+                StageCategory = "Temel KalÄ±p",
+
                 PartIndex = p1Idx,
+
                 PartName = p1Name,
+
                 PartBadgeClass = p1Badge,
-                TriggerRule = "Koruma şapı kuruyunca temel kalıbı çakılır",
+
+                TriggerRule = "Koruma ÅŸapÄ± kuruyunca temel kalÄ±bÄ± Ã§akÄ±lÄ±r",
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Radye Temel Dış Kalıp Kerestesi, Plywood, Payandalar ve PVC Su Tutucu Bant",
-                MaterialDescription = "Radye temel yan perdeleri dış çevre kalıbının çakılması, köşegen payandalar ve soğuk derz su tutucu bant montajı.",
+
+                MaterialTitle = "Radye Temel DÄ±ÅŸ KalÄ±p Kerestesi, Plywood, Payandalar ve PVC Su Tutucu Bant",
+
+                MaterialDescription = "Radye temel yan perdeleri dÄ±ÅŸ Ã§evre kalÄ±bÄ±nÄ±n Ã§akÄ±lmasÄ±, kÃ¶ÅŸegen payandalar ve soÄŸuk derz su tutucu bant montajÄ±.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Temel kalınlığı ve çevre ölçüsünden hesaplanacak)",
-                SupplierCategory = "Kalıp & Kereste Tedarikçisi",
-                LaborTitle = "Temel Kalıpçı Ekibi",
-                ProfessionName = "Kalıp Ustası",
-                CrewComposition = "1 Kalıp Formeni + 5 Kalıpçı Ustası + 2 Yardımcı",
+
+                MaterialUnit = "mÂ²",
+
+                MaterialFormula = "DXF Bekliyor (Temel kalÄ±nlÄ±ÄŸÄ± ve Ã§evre Ã¶lÃ§Ã¼sÃ¼nden hesaplanacak)",
+
+                SupplierCategory = "KalÄ±p & Kereste TedarikÃ§isi",
+
+                LaborTitle = "Temel KalÄ±pÃ§Ä± Ekibi",
+
+                ProfessionName = "KalÄ±p UstasÄ±",
+
+                CrewComposition = "1 KalÄ±p Formeni + 5 KalÄ±pÃ§Ä± UstasÄ± + 2 YardÄ±mcÄ±",
+
                 CrewSize = 8,
+
                 DurationDays = 4,
-                EquipmentNeeded = "Daire Testere, Kalıp Krikoları, Lazer Hizalama",
-                Predecessors = "Bohçalama koruma şapı üzerine temel akslarının çırpı ipiyle işaretlenmesi",
-                CriticalDependency = "Kalıp şakülü ve rijit payandaları kontrol edilmeden demir donatı döşenmeye başlanamaz!",
-                DnaSource = "Adım 0: Statik Taşıyıcılar (Temel Kalıbı)",
+
+                EquipmentNeeded = "Daire Testere, KalÄ±p KrikolarÄ±, Lazer Hizalama",
+
+                Predecessors = "BohÃ§alama koruma ÅŸapÄ± Ã¼zerine temel akslarÄ±nÄ±n Ã§Ä±rpÄ± ipiyle iÅŸaretlenmesi",
+
+                CriticalDependency = "KalÄ±p ÅŸakÃ¼lÃ¼ ve rijit payandalarÄ± kontrol edilmeden demir donatÄ± dÃ¶ÅŸenmeye baÅŸlanamaz!",
+
+                DnaSource = "AdÄ±m 0: Statik TaÅŸÄ±yÄ±cÄ±lar (Temel KalÄ±bÄ±)",
+
                 PlannedStartDate = k04Start,
+
                 PlannedEndDate = k04End,
+
                 SubSteps = CreateSubSteps(
-                    "T-2 Kalıp kerestesi, plywood panolar ve su tutucu bantların sahaya indirilmesi",
-                    "Aks çizgilerine göre radye yan kalıbının montajı ve payanda tahkimatı",
-                    "Kalıp içi temizlik, kot nivo kontrolü ve su tutucu bant sabitleme kontrolü",
-                    "Kalıp çivi batmalarına karşı çelik burunlu tabanlı iş ayakkabısı denetimi"
+
+                    "T-2 KalÄ±p kerestesi, plywood panolar ve su tutucu bantlarÄ±n sahaya indirilmesi",
+
+                    "Aks Ã§izgilerine gÃ¶re radye yan kalÄ±bÄ±nÄ±n montajÄ± ve payanda tahkimatÄ±",
+
+                    "KalÄ±p iÃ§i temizlik, kot nivo kontrolÃ¼ ve su tutucu bant sabitleme kontrolÃ¼",
+
+                    "KalÄ±p Ã§ivi batmalarÄ±na karÅŸÄ± Ã§elik burunlu tabanlÄ± iÅŸ ayakkabÄ±sÄ± denetimi"
+
                 )
+
             });
 
-            // K-05: Radye Temel B420C Donatı Çeliği, Paspayları & Demir Vizesi (Adım 0)
+
+
+            // K-05: Radye Temel B420C DonatÄ± Ã‡eliÄŸi, PaspaylarÄ± & Demir Vizesi (AdÄ±m 0)
+
             var k05Start = k04End;
+
             var k05End = k05Start.AddDays(7);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "K-05",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Radye Temel B420C Donatı Çeliği, Paspayları & Demir Vizesi",
-                StageCategory = "Temel Donatı",
+
+                PhaseName = "Radye Temel B420C DonatÄ± Ã‡eliÄŸi, PaspaylarÄ± & Demir Vizesi",
+
+                StageCategory = "Temel DonatÄ±",
+
                 PartIndex = p1Idx,
+
                 PartName = p1Name,
+
                 PartBadgeClass = p1Badge,
-                TriggerRule = "Dış kalıp tamamlanınca donatı örülür",
+
+                TriggerRule = "DÄ±ÅŸ kalÄ±p tamamlanÄ±nca donatÄ± Ã¶rÃ¼lÃ¼r",
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "B420C Nervürlü Donatı Çeliği, Beton Paspayı Takozları ve Bağ Teli",
-                MaterialDescription = "Alt/üst çift sıra nervürlü hasır donatı, donatı sehpaları, kolon/perde filizleri, topraklama şeridi ve paspayları.",
+
+                MaterialTitle = "B420C NervÃ¼rlÃ¼ DonatÄ± Ã‡eliÄŸi, Beton PaspayÄ± TakozlarÄ± ve BaÄŸ Teli",
+
+                MaterialDescription = "Alt/Ã¼st Ã§ift sÄ±ra nervÃ¼rlÃ¼ hasÄ±r donatÄ±, donatÄ± sehpalarÄ±, kolon/perde filizleri, topraklama ÅŸeridi ve paspaylarÄ±.",
+
                 MaterialQuantity = 0,
+
                 MaterialUnit = "Ton",
-                MaterialFormula = "DXF Bekliyor (Statik radye temel donatı planından hesaplanacak)",
-                SupplierCategory = "Demir Çelik Bayisi & Donatı Tedarikçisi",
+
+                MaterialFormula = "DXF Bekliyor (Statik radye temel donatÄ± planÄ±ndan hesaplanacak)",
+
+                SupplierCategory = "Demir Ã‡elik Bayisi & DonatÄ± TedarikÃ§isi",
+
                 LaborTitle = "Temel Demirci Ekibi",
-                ProfessionName = "Demirci Ustası",
-                CrewComposition = "1 Demir Formeni + 8 Demirci Ustası + 4 Bağlama İşçisi",
+
+                ProfessionName = "Demirci UstasÄ±",
+
+                CrewComposition = "1 Demir Formeni + 8 Demirci UstasÄ± + 4 BaÄŸlama Ä°ÅŸÃ§isi",
+
                 CrewSize = 13,
+
                 DurationDays = 7,
-                EquipmentNeeded = "Demir Bükme ve Kesme Tezgahı, Bağ Teli Kargaburunları",
-                Predecessors = "Radye dış kalıbı ve temel topraklama galvaniz şeridi montajı",
-                CriticalDependency = "Yapı Denetim ve Şantiye Şefi DEMİR VİZESİ imzalamadan hazır beton santraline sevk emri VERİLEMEZ!",
-                DnaSource = "Adım 0: Statik Taşıyıcılar (B420C Donatı)",
+
+                EquipmentNeeded = "Demir BÃ¼kme ve Kesme TezgahÄ±, BaÄŸ Teli KargaburunlarÄ±",
+
+                Predecessors = "Radye dÄ±ÅŸ kalÄ±bÄ± ve temel topraklama galvaniz ÅŸeridi montajÄ±",
+
+                CriticalDependency = "YapÄ± Denetim ve Åantiye Åefi DEMÄ°R VÄ°ZESÄ° imzalamadan hazÄ±r beton santraline sevk emri VERÄ°LEMEZ!",
+
+                DnaSource = "AdÄ±m 0: Statik TaÅŸÄ±yÄ±cÄ±lar (B420C DonatÄ±)",
+
                 PlannedStartDate = k05Start,
+
                 PlannedEndDate = k05End,
+
                 SubSteps = CreateSubSteps(
-                    "T-3 Donatı çeliği çap, boy ve etiket kontrolü, paspayı takozlarının serimi",
-                    "Alt hasır, sehpalar, üst hasır bağlama ve kolon/perde filizlerinin montajı",
-                    "Demir aralıkları, kanca boyları ve Yapı Denetim Demir Vizesi kabulü",
-                    "Ağır demir taşıma ergonomisi, kesme tezgahı siperlikleri ve eldiven kullanımı"
+
+                    "T-3 DonatÄ± Ã§eliÄŸi Ã§ap, boy ve etiket kontrolÃ¼, paspayÄ± takozlarÄ±nÄ±n serimi",
+
+                    "Alt hasÄ±r, sehpalar, Ã¼st hasÄ±r baÄŸlama ve kolon/perde filizlerinin montajÄ±",
+
+                    "Demir aralÄ±klarÄ±, kanca boylarÄ± ve YapÄ± Denetim Demir Vizesi kabulÃ¼",
+
+                    "AÄŸÄ±r demir taÅŸÄ±ma ergonomisi, kesme tezgahÄ± siperlikleri ve eldiven kullanÄ±mÄ±"
+
                 )
+
             });
 
-            // K-06: Radye Temel C30/37 Taşıyıcı Hazır Beton Dökümü & Vibrasyon (Adım 0)
+
+
+            // K-06: Radye Temel C30/37 TaÅŸÄ±yÄ±cÄ± HazÄ±r Beton DÃ¶kÃ¼mÃ¼ & Vibrasyon (AdÄ±m 0)
+
             var k06Start = k05End;
+
             var k06End = k06Start.AddDays(2);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "K-06",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Radye Temel C30/37 Taşıyıcı Hazır Beton Dökümü & Vibrasyon",
-                StageCategory = "Temel Beton Dökümü",
+
+                PhaseName = "Radye Temel C30/37 TaÅŸÄ±yÄ±cÄ± HazÄ±r Beton DÃ¶kÃ¼mÃ¼ & Vibrasyon",
+
+                StageCategory = "Temel Beton DÃ¶kÃ¼mÃ¼",
+
                 PartIndex = p1Idx,
+
                 PartName = p1Name,
+
                 PartBadgeClass = p1Badge,
-                TriggerRule = "Demir vizesi onaylandığı gün dökülür",
+
+                TriggerRule = "Demir vizesi onaylandÄ±ÄŸÄ± gÃ¼n dÃ¶kÃ¼lÃ¼r",
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "C30/37 Taşıyıcı Hazır Beton (Su Geçirimsizlik Katkılı)",
-                MaterialDescription = "Monolitik soğuk derzsiz radye temel betonu dökümü, derin vibrasyon sıkıştırması ve mastarlama.",
+
+                MaterialTitle = "C30/37 TaÅŸÄ±yÄ±cÄ± HazÄ±r Beton (Su GeÃ§irimsizlik KatkÄ±lÄ±)",
+
+                MaterialDescription = "Monolitik soÄŸuk derzsiz radye temel betonu dÃ¶kÃ¼mÃ¼, derin vibrasyon sÄ±kÄ±ÅŸtÄ±rmasÄ± ve mastarlama.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m³",
-                MaterialFormula = "DXF Bekliyor (Statik radye hacim hesabından netleşecek)",
-                SupplierCategory = "Hazır Beton Santrali",
-                LaborTitle = "Temel Beton Döküm Ekibi",
+
+                MaterialUnit = "mÂ³",
+
+                MaterialFormula = "DXF Bekliyor (Statik radye hacim hesabÄ±ndan netleÅŸecek)",
+
+                SupplierCategory = "HazÄ±r Beton Santrali",
+
+                LaborTitle = "Temel Beton DÃ¶kÃ¼m Ekibi",
+
                 ProfessionName = "Betoncu & Pompa Ekibi",
-                CrewComposition = "1 Şef + 2 Mobil Pompa Operatörü + 4 Vibratörcü + 4 Mastarcı",
+
+                CrewComposition = "1 Åef + 2 Mobil Pompa OperatÃ¶rÃ¼ + 4 VibratÃ¶rcÃ¼ + 4 MastarcÄ±",
+
                 CrewSize = 11,
+
                 DurationDays = 2,
-                EquipmentNeeded = "2 Mobil Beton Pompası, 4 Dalgıç Vibratör, Slump Konisi, Numune Küp Kalıpları",
-                Predecessors = "Demir vizesi onayı ve beton santrali döküm rezervasyonu",
-                CriticalDependency = "Her transmikserde slump testi yapılmalı ve Yapı Denetim gözetiminde 7/28 günlük küp numuneleri alınmalıdır!",
-                DnaSource = "Adım 0: Statik Taşıyıcılar (C30/37 Beton)",
+
+                EquipmentNeeded = "2 Mobil Beton PompasÄ±, 4 DalgÄ±Ã§ VibratÃ¶r, Slump Konisi, Numune KÃ¼p KalÄ±plarÄ±",
+
+                Predecessors = "Demir vizesi onayÄ± ve beton santrali dÃ¶kÃ¼m rezervasyonu",
+
+                CriticalDependency = "Her transmikserde slump testi yapÄ±lmalÄ± ve YapÄ± Denetim gÃ¶zetiminde 7/28 gÃ¼nlÃ¼k kÃ¼p numuneleri alÄ±nmalÄ±dÄ±r!",
+
+                DnaSource = "AdÄ±m 0: Statik TaÅŸÄ±yÄ±cÄ±lar (C30/37 Beton)",
+
                 PlannedStartDate = k06Start,
+
                 PlannedEndDate = k06End,
+
                 SubSteps = CreateSubSteps(
-                    "T-2 Santral transmikser rotası, yedek pompa ve laboratuvar numune hazırlığı",
-                    "Kademeli katman dökümü, derin vibrasyon ve lazer nivo ile yüzey mastarlama",
-                    "İrsaliye kontrolü, taze beton slump deneyi ve 6 adet küp numune alımı",
-                    "Pompa bomu elektrik hattı mesafesi, mikser manevra güvenlik elemanı"
+
+                    "T-2 Santral transmikser rotasÄ±, yedek pompa ve laboratuvar numune hazÄ±rlÄ±ÄŸÄ±",
+
+                    "Kademeli katman dÃ¶kÃ¼mÃ¼, derin vibrasyon ve lazer nivo ile yÃ¼zey mastarlama",
+
+                    "Ä°rsaliye kontrolÃ¼, taze beton slump deneyi ve 6 adet kÃ¼p numune alÄ±mÄ±",
+
+                    "Pompa bomu elektrik hattÄ± mesafesi, mikser manevra gÃ¼venlik elemanÄ±"
+
                 )
+
             });
 
-            // K-07: Temel Kürlenme, Islak Sulama & Dış Kalıp Sökümü (Adım 0)
+
+
+            // K-07: Temel KÃ¼rlenme, Islak Sulama & DÄ±ÅŸ KalÄ±p SÃ¶kÃ¼mÃ¼ (AdÄ±m 0)
+
             var k07Start = k06End;
+
             var k07End = k07Start.AddDays(7);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "K-07",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Temel Kürlenme, Islak Sulama & Dış Kalıp Sökümü",
-                StageCategory = "Temel Kür & Bakım",
+
+                PhaseName = "Temel KÃ¼rlenme, Islak Sulama & DÄ±ÅŸ KalÄ±p SÃ¶kÃ¼mÃ¼",
+
+                StageCategory = "Temel KÃ¼r & BakÄ±m",
+
                 PartIndex = p1Idx,
+
                 PartName = p1Name,
+
                 PartBadgeClass = p1Badge,
-                TriggerRule = "Beton dökümü bitiminde anında başlar",
+
+                TriggerRule = "Beton dÃ¶kÃ¼mÃ¼ bitiminde anÄ±nda baÅŸlar",
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Beton Kür Malzemesi (Kür Membranı) / Geotekstil Keçe ve Bol Su",
-                MaterialDescription = "Radye yüzeyinin çatlamasını önlemek için geotekstil keçe serimi, sıvı kür kimyasalı ve 7 gün kesintisiz sulama.",
+
+                MaterialTitle = "Beton KÃ¼r Malzemesi (KÃ¼r MembranÄ±) / Geotekstil KeÃ§e ve Bol Su",
+
+                MaterialDescription = "Radye yÃ¼zeyinin Ã§atlamasÄ±nÄ± Ã¶nlemek iÃ§in geotekstil keÃ§e serimi, sÄ±vÄ± kÃ¼r kimyasalÄ± ve 7 gÃ¼n kesintisiz sulama.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Temel üst yüzey alanından hesaplanacak)",
-                SupplierCategory = "Yapı Kimyasalları & Şantiye Malzemeleri",
-                LaborTitle = "Kürleme & Kalıp Söküm Ekibi",
-                ProfessionName = "Kürleme & Kalıp Söküm Ustası",
-                CrewComposition = "1 Formen + 2 Kürleme İşçisi + 3 Kalıp Söküm Ustası",
+
+                MaterialUnit = "mÂ²",
+
+                MaterialFormula = "DXF Bekliyor (Temel Ã¼st yÃ¼zey alanÄ±ndan hesaplanacak)",
+
+                SupplierCategory = "YapÄ± KimyasallarÄ± & Åantiye Malzemeleri",
+
+                LaborTitle = "KÃ¼rleme & KalÄ±p SÃ¶kÃ¼m Ekibi",
+
+                ProfessionName = "KÃ¼rleme & KalÄ±p SÃ¶kÃ¼m UstasÄ±",
+
+                CrewComposition = "1 Formen + 2 KÃ¼rleme Ä°ÅŸÃ§isi + 3 KalÄ±p SÃ¶kÃ¼m UstasÄ±",
+
                 CrewSize = 6,
+
                 DurationDays = 7,
-                EquipmentNeeded = "Basınçlı Su Hortumları, Püskürtme Pompası, Manivela Levye",
-                Predecessors = "Beton dökümünün tamamlanması ve yüzey prizinin başlaması",
-                CriticalDependency = "Rötre çatlaklarını önlemek için ilk 7 gün boyunca beton yüzeyi kesinlikle kuru bırakılamaz!",
-                DnaSource = "Adım 0: Statik Taşıyıcılar (Beton Bakımı)",
+
+                EquipmentNeeded = "BasÄ±nÃ§lÄ± Su HortumlarÄ±, PÃ¼skÃ¼rtme PompasÄ±, Manivela Levye",
+
+                Predecessors = "Beton dÃ¶kÃ¼mÃ¼nÃ¼n tamamlanmasÄ± ve yÃ¼zey prizinin baÅŸlamasÄ±",
+
+                CriticalDependency = "RÃ¶tre Ã§atlaklarÄ±nÄ± Ã¶nlemek iÃ§in ilk 7 gÃ¼n boyunca beton yÃ¼zeyi kesinlikle kuru bÄ±rakÄ±lamaz!",
+
+                DnaSource = "AdÄ±m 0: Statik TaÅŸÄ±yÄ±cÄ±lar (Beton BakÄ±mÄ±)",
+
                 PlannedStartDate = k07Start,
+
                 PlannedEndDate = k07End,
+
                 SubSteps = CreateSubSteps(
-                    "T-1 Geotekstil keçe ve kür kimyasalı hazırlığı, su hattı kontrolü",
-                    "Yüzey kür kimyasalı püskürtme, keçe serme, günde 3 defa ıslatma ve 48 saat sonra dış kalıp sökümü",
-                    "Beton yüzeyinde çatlak kontrolü ve sıcaklık gradyan takibi",
-                    "Gece sulaması aydınlatması ve kaygan zemin uyarı levhaları"
+
+                    "T-1 Geotekstil keÃ§e ve kÃ¼r kimyasalÄ± hazÄ±rlÄ±ÄŸÄ±, su hattÄ± kontrolÃ¼",
+
+                    "YÃ¼zey kÃ¼r kimyasalÄ± pÃ¼skÃ¼rtme, keÃ§e serme, gÃ¼nde 3 defa Ä±slatma ve 48 saat sonra dÄ±ÅŸ kalÄ±p sÃ¶kÃ¼mÃ¼",
+
+                    "Beton yÃ¼zeyinde Ã§atlak kontrolÃ¼ ve sÄ±caklÄ±k gradyan takibi",
+
+                    "Gece sulamasÄ± aydÄ±nlatmasÄ± ve kaygan zemin uyarÄ± levhalarÄ±"
+
                 )
+
             });
 
-            // K-08: Bodrum / Kat Kolon & Perde Kalıbı (Endüstriyel Çelik / Plywood) (Adım 0)
+
+
+            // K-08: Bodrum / Kat Kolon & Perde KalÄ±bÄ± (EndÃ¼striyel Ã‡elik / Plywood) (AdÄ±m 0)
+
             var k08Start = k07End;
+
             var k08End = k08Start.AddDays(8);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "K-08",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Bodrum / Kat Kolon & Perde Kalıbı (Endüstriyel Çelik / Plywood)",
-                StageCategory = "Düşey Taşıyıcı Kalıp",
+
+                PhaseName = "Bodrum / Kat Kolon & Perde KalÄ±bÄ± (EndÃ¼striyel Ã‡elik / Plywood)",
+
+                StageCategory = "DÃ¼ÅŸey TaÅŸÄ±yÄ±cÄ± KalÄ±p",
+
                 PartIndex = p1Idx,
+
                 PartName = p1Name,
+
                 PartBadgeClass = p1Badge,
-                TriggerRule = "Temel priz alıp filizler doğrulanınca başlar",
+
+                TriggerRule = "Temel priz alÄ±p filizler doÄŸrulanÄ±nca baÅŸlar",
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Endüstriyel Çelik Çerçeveli Kolon/Perde Kalıp Panoları, Çirozlar ve Tie-Rod Milleri",
-                MaterialDescription = "Kolon ve perde düşey taşıyıcıların endüstriyel kalıplarının kurulması, tie-rod milleri, çiroz kilitlemeleri ve şakül payandaları.",
+
+                MaterialTitle = "EndÃ¼striyel Ã‡elik Ã‡erÃ§eveli Kolon/Perde KalÄ±p PanolarÄ±, Ã‡irozlar ve Tie-Rod Milleri",
+
+                MaterialDescription = "Kolon ve perde dÃ¼ÅŸey taÅŸÄ±yÄ±cÄ±larÄ±n endÃ¼striyel kalÄ±plarÄ±nÄ±n kurulmasÄ±, tie-rod milleri, Ã§iroz kilitlemeleri ve ÅŸakÃ¼l payandalarÄ±.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Kat yüksekliği ve kolon/perde çevrelerinden hesaplanacak)",
-                SupplierCategory = "Endüstriyel Kalıp & İskele Firması",
-                LaborTitle = "Düşey Kalıpçı Ekibi",
-                ProfessionName = "Kalıp Ustası",
-                CrewComposition = "1 Kalıp Formeni + 6 Kalıp Ustası + 3 Yardımcı",
+
+                MaterialUnit = "mÂ²",
+
+                MaterialFormula = "DXF Bekliyor (Kat yÃ¼ksekliÄŸi ve kolon/perde Ã§evrelerinden hesaplanacak)",
+
+                SupplierCategory = "EndÃ¼striyel KalÄ±p & Ä°skele FirmasÄ±",
+
+                LaborTitle = "DÃ¼ÅŸey KalÄ±pÃ§Ä± Ekibi",
+
+                ProfessionName = "KalÄ±p UstasÄ±",
+
+                CrewComposition = "1 KalÄ±p Formeni + 6 KalÄ±p UstasÄ± + 3 YardÄ±mcÄ±",
+
                 CrewSize = 10,
+
                 DurationDays = 8,
-                EquipmentNeeded = "Kule Vinç / Mobil Vinç, Lazer Şakül, Kalıp Yağı Pompası",
-                Predecessors = "Temel kolon/perde filiz akslarının lazerle kot ve kaçıklık kontrolü",
-                CriticalDependency = "Kalıp içi temizlik cepleri açılmalı, döküm öncesi dipteki talaş ve tel artıkları basınçlı suyla yıkanmalıdır!",
-                DnaSource = "Adım 0: Statik Taşıyıcılar (Düşey Kalıp)",
+
+                EquipmentNeeded = "Kule VinÃ§ / Mobil VinÃ§, Lazer ÅakÃ¼l, KalÄ±p YaÄŸÄ± PompasÄ±",
+
+                Predecessors = "Temel kolon/perde filiz akslarÄ±nÄ±n lazerle kot ve kaÃ§Ä±klÄ±k kontrolÃ¼",
+
+                CriticalDependency = "KalÄ±p iÃ§i temizlik cepleri aÃ§Ä±lmalÄ±, dÃ¶kÃ¼m Ã¶ncesi dipteki talaÅŸ ve tel artÄ±klarÄ± basÄ±nÃ§lÄ± suyla yÄ±kanmalÄ±dÄ±r!",
+
+                DnaSource = "AdÄ±m 0: Statik TaÅŸÄ±yÄ±cÄ±lar (DÃ¼ÅŸey KalÄ±p)",
+
                 PlannedStartDate = k08Start,
+
                 PlannedEndDate = k08End,
+
                 SubSteps = CreateSubSteps(
-                    "T-2 Kalıp panoları temizliği, kalıp yağı sürülmesi ve kule vinç halat kontrolleri",
-                    "Tek yüz kalıp kapatma, donatı sonrası çift yüz kapatma, tie-rod ve payanda ayarı",
-                    "Lazer şakül ile kolon ve perde düşeylik kontrolü (maksimum 3 mm tolerans)",
-                    "Kalıp iskelesi emniyet korkulukları ve kule vinç yük kaldırma güvenlik sahası"
+
+                    "T-2 KalÄ±p panolarÄ± temizliÄŸi, kalÄ±p yaÄŸÄ± sÃ¼rÃ¼lmesi ve kule vinÃ§ halat kontrolleri",
+
+                    "Tek yÃ¼z kalÄ±p kapatma, donatÄ± sonrasÄ± Ã§ift yÃ¼z kapatma, tie-rod ve payanda ayarÄ±",
+
+                    "Lazer ÅŸakÃ¼l ile kolon ve perde dÃ¼ÅŸeylik kontrolÃ¼ (maksimum 3 mm tolerans)",
+
+                    "KalÄ±p iskelesi emniyet korkuluklarÄ± ve kule vinÃ§ yÃ¼k kaldÄ±rma gÃ¼venlik sahasÄ±"
+
                 )
+
             });
 
-            // K-09: Bodrum / Kat Kolon & Perde B420C Donatı Çeliği (Adım 0)
+
+
+            // K-09: Bodrum / Kat Kolon & Perde B420C DonatÄ± Ã‡eliÄŸi (AdÄ±m 0)
+
             var k09Start = k08Start.AddDays(2);
+
             var k09End = k09Start.AddDays(7);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "K-09",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Bodrum / Kat Kolon & Perde B420C Donatı Çeliği",
-                StageCategory = "Düşey Taşıyıcı Donatı",
+
+                PhaseName = "Bodrum / Kat Kolon & Perde B420C DonatÄ± Ã‡eliÄŸi",
+
+                StageCategory = "DÃ¼ÅŸey TaÅŸÄ±yÄ±cÄ± DonatÄ±",
+
                 PartIndex = p1Idx,
+
                 PartName = p1Name,
+
                 PartBadgeClass = p1Badge,
-                TriggerRule = "Kolon/perde tek yüz kalıbı dikilince başlar",
+
+                TriggerRule = "Kolon/perde tek yÃ¼z kalÄ±bÄ± dikilince baÅŸlar",
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "B420C Boyuna Düşey Donatılar, Etriyeler, Çirozlar ve Plastik Paspayı Halka Takozları",
-                MaterialDescription = "Düşey kolon/perde ana donatılarının filizlerle bindirilmesi, deprem etriye sıklaştırmaları, çirozlar ve paspayı halkaları.",
+
+                MaterialTitle = "B420C Boyuna DÃ¼ÅŸey DonatÄ±lar, Etriyeler, Ã‡irozlar ve Plastik PaspayÄ± Halka TakozlarÄ±",
+
+                MaterialDescription = "DÃ¼ÅŸey kolon/perde ana donatÄ±larÄ±nÄ±n filizlerle bindirilmesi, deprem etriye sÄ±klaÅŸtÄ±rmalarÄ±, Ã§irozlar ve paspayÄ± halkalarÄ±.",
+
                 MaterialQuantity = 0,
+
                 MaterialUnit = "Ton",
-                MaterialFormula = "DXF Bekliyor (Statik kolon aplikasyon çizimlerinden hesaplanacak)",
-                SupplierCategory = "Demir Çelik Bayisi",
-                LaborTitle = "Düşey Donatı Demirci Ekibi",
-                ProfessionName = "Demirci Ustası",
-                CrewComposition = "1 Demir Formeni + 6 Demirci Ustası + 2 Bağlama İşçisi",
+
+                MaterialFormula = "DXF Bekliyor (Statik kolon aplikasyon Ã§izimlerinden hesaplanacak)",
+
+                SupplierCategory = "Demir Ã‡elik Bayisi",
+
+                LaborTitle = "DÃ¼ÅŸey DonatÄ± Demirci Ekibi",
+
+                ProfessionName = "Demirci UstasÄ±",
+
+                CrewComposition = "1 Demir Formeni + 6 Demirci UstasÄ± + 2 BaÄŸlama Ä°ÅŸÃ§isi",
+
                 CrewSize = 9,
+
                 DurationDays = 7,
-                EquipmentNeeded = "Demir Bükme/Kesme Tezgahı, Paspayı Halkaları, Bağ Teli",
-                Predecessors = "Kalıp tek yüzünün dikilmesi ve paspaylarının yerleştirilmesi",
-                CriticalDependency = "Kolon alt ve üst etriye sıklaştırma bölgeleri statik projeye göre sayılmadan kalıp kapatılamaz!",
-                DnaSource = "Adım 0: Statik Taşıyıcılar (Düşey Donatı)",
+
+                EquipmentNeeded = "Demir BÃ¼kme/Kesme TezgahÄ±, PaspayÄ± HalkalarÄ±, BaÄŸ Teli",
+
+                Predecessors = "KalÄ±p tek yÃ¼zÃ¼nÃ¼n dikilmesi ve paspaylarÄ±nÄ±n yerleÅŸtirilmesi",
+
+                CriticalDependency = "Kolon alt ve Ã¼st etriye sÄ±klaÅŸtÄ±rma bÃ¶lgeleri statik projeye gÃ¶re sayÄ±lmadan kalÄ±p kapatÄ±lamaz!",
+
+                DnaSource = "AdÄ±m 0: Statik TaÅŸÄ±yÄ±cÄ±lar (DÃ¼ÅŸey DonatÄ±)",
+
                 PlannedStartDate = k09Start,
+
                 PlannedEndDate = k09End,
+
                 SubSteps = CreateSubSteps(
-                    "T-2 Donatı çap/boy kontrolü ve etriye aralıklarının işaretlenmesi",
-                    "Düşey boy donatılarının bindirilmesi, etriye sıklaştırmaları ve çiroz bağlama",
-                    "Etriye kanca 135 derece kıvrım kontrolü, paspayı halkalarının denetimi",
-                    "Düşey donatı üzerinde çalışma emniyet kemeri ve tırmanma merdivenleri"
+
+                    "T-2 DonatÄ± Ã§ap/boy kontrolÃ¼ ve etriye aralÄ±klarÄ±nÄ±n iÅŸaretlenmesi",
+
+                    "DÃ¼ÅŸey boy donatÄ±larÄ±nÄ±n bindirilmesi, etriye sÄ±klaÅŸtÄ±rmalarÄ± ve Ã§iroz baÄŸlama",
+
+                    "Etriye kanca 135 derece kÄ±vrÄ±m kontrolÃ¼, paspayÄ± halkalarÄ±nÄ±n denetimi",
+
+                    "DÃ¼ÅŸey donatÄ± Ã¼zerinde Ã§alÄ±ÅŸma emniyet kemeri ve tÄ±rmanma merdivenleri"
+
                 )
+
             });
 
-            // K-10: Kat Döşeme & Kiriş Kalıbı ve Donatısı (Tabliye Hazırlığı) (Adım 0)
+
+
+            // K-10: Kat DÃ¶ÅŸeme & KiriÅŸ KalÄ±bÄ± ve DonatÄ±sÄ± (Tabliye HazÄ±rlÄ±ÄŸÄ±) (AdÄ±m 0)
+
             var k10Start = k08End;
+
             var k10End = k10Start.AddDays(9);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "K-10",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Kat Döşeme & Kiriş Kalıbı ve Donatısı (Tabliye Hazırlığı)",
-                StageCategory = "Kat Tabliyesi Kalıp & Donatı",
+
+                PhaseName = "Kat DÃ¶ÅŸeme & KiriÅŸ KalÄ±bÄ± ve DonatÄ±sÄ± (Tabliye HazÄ±rlÄ±ÄŸÄ±)",
+
+                StageCategory = "Kat Tabliyesi KalÄ±p & DonatÄ±",
+
                 PartIndex = p1Idx,
+
                 PartName = p1Name,
+
                 PartBadgeClass = p1Badge,
-                TriggerRule = "Düşey kolon/perdeler dikilince tabliye iskelesi kurulur",
+
+                TriggerRule = "DÃ¼ÅŸey kolon/perdeler dikilince tabliye iskelesi kurulur",
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Teleskopik Dikmeler, H20 Ahşap Kirişler, Plywood Tabliye Panoları ve B420C Döşeme Hasır Donatısı",
-                MaterialDescription = "Masa tipi veya flanşlı döşeme iskelesi, H20 kirişler, plywood döşeme kalıbı, kiriş donatıları, tabliye hasırı ve sehpa montajı.",
+
+                MaterialTitle = "Teleskopik Dikmeler, H20 AhÅŸap KiriÅŸler, Plywood Tabliye PanolarÄ± ve B420C DÃ¶ÅŸeme HasÄ±r DonatÄ±sÄ±",
+
+                MaterialDescription = "Masa tipi veya flanÅŸlÄ± dÃ¶ÅŸeme iskelesi, H20 kiriÅŸler, plywood dÃ¶ÅŸeme kalÄ±bÄ±, kiriÅŸ donatÄ±larÄ±, tabliye hasÄ±rÄ± ve sehpa montajÄ±.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Kat brüt döşeme alanından hesaplanacak)",
-                SupplierCategory = "Kalıp/İskele Tedarikçisi & Demir Çelik Bayisi",
-                LaborTitle = "Tabliye Kalıp & Donatı Karma Ekibi",
-                ProfessionName = "Kalıpçı & Demirci Ustası",
-                CrewComposition = "1 Şef + 6 Kalıpçı + 6 Demirci + 4 Yardımcı",
+
+                MaterialUnit = "mÂ²",
+
+                MaterialFormula = "DXF Bekliyor (Kat brÃ¼t dÃ¶ÅŸeme alanÄ±ndan hesaplanacak)",
+
+                SupplierCategory = "KalÄ±p/Ä°skele TedarikÃ§isi & Demir Ã‡elik Bayisi",
+
+                LaborTitle = "Tabliye KalÄ±p & DonatÄ± Karma Ekibi",
+
+                ProfessionName = "KalÄ±pÃ§Ä± & Demirci UstasÄ±",
+
+                CrewComposition = "1 Åef + 6 KalÄ±pÃ§Ä± + 6 Demirci + 4 YardÄ±mcÄ±",
+
                 CrewSize = 17,
+
                 DurationDays = 9,
-                EquipmentNeeded = "Kule Vinç, Lazer Kot Terazisi, İskele Çekiçleri, Demir Bağ Teli",
-                Predecessors = "Kolon/perde kalıplarının kapatılması ve düşey donatı vizesi",
-                CriticalDependency = "Döşeme elektrik buat/borulama hatları çekilmeden ve Yapı Denetim tabliye demir vizesi vermeden beton dökülemez!",
-                DnaSource = "Adım 0: Statik Taşıyıcılar (Kat Tabliyesi)",
+
+                EquipmentNeeded = "Kule VinÃ§, Lazer Kot Terazisi, Ä°skele Ã‡ekiÃ§leri, Demir BaÄŸ Teli",
+
+                Predecessors = "Kolon/perde kalÄ±plarÄ±nÄ±n kapatÄ±lmasÄ± ve dÃ¼ÅŸey donatÄ± vizesi",
+
+                CriticalDependency = "DÃ¶ÅŸeme elektrik buat/borulama hatlarÄ± Ã§ekilmeden ve YapÄ± Denetim tabliye demir vizesi vermeden beton dÃ¶kÃ¼lemez!",
+
+                DnaSource = "AdÄ±m 0: Statik TaÅŸÄ±yÄ±cÄ±lar (Kat Tabliyesi)",
+
                 PlannedStartDate = k10Start,
+
                 PlannedEndDate = k10End,
+
                 SubSteps = CreateSubSteps(
-                    "T-3 İskele dikme yük hesabı, plywood serme ve kiriş/döşeme donatılarının sevki",
-                    "Tabliye kalıp montajı, kiriş demirleri, döşeme donatısı ve elektrik buat borulaması",
-                    "Optik nivo ile döşeme ters sehim kontrolü ve Yapı Denetim Tabliye Vizesi",
-                    "Döşeme kenar güvenlik ağları, düşme durdurucu yaşam hatları ve tam koruma"
+
+                    "T-3 Ä°skele dikme yÃ¼k hesabÄ±, plywood serme ve kiriÅŸ/dÃ¶ÅŸeme donatÄ±larÄ±nÄ±n sevki",
+
+                    "Tabliye kalÄ±p montajÄ±, kiriÅŸ demirleri, dÃ¶ÅŸeme donatÄ±sÄ± ve elektrik buat borulamasÄ±",
+
+                    "Optik nivo ile dÃ¶ÅŸeme ters sehim kontrolÃ¼ ve YapÄ± Denetim Tabliye Vizesi",
+
+                    "DÃ¶ÅŸeme kenar gÃ¼venlik aÄŸlarÄ±, dÃ¼ÅŸme durdurucu yaÅŸam hatlarÄ± ve tam koruma"
+
                 )
+
             });
 
-            // K-11: Kat Karkas Taşıyıcı Beton Dökümü (Kolon, Perde & Tabliye C30/37) (Adım 0)
+
+
+            // K-11: Kat Karkas TaÅŸÄ±yÄ±cÄ± Beton DÃ¶kÃ¼mÃ¼ (Kolon, Perde & Tabliye C30/37) (AdÄ±m 0)
+
             var k11Start = k10End;
+
             var k11End = k11Start.AddDays(2);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "K-11",
+
                 Order = stepOrderSeq++,
-                PhaseName = $"Kat Karkas Taşıyıcı Beton Dökümü (Kolon, Perde & Tabliye C30/37) ({maxFloors} Kat Döngüsü)",
-                StageCategory = "Kat Karkas Beton Dökümü",
+
+                PhaseName = $"Kat Karkas TaÅŸÄ±yÄ±cÄ± Beton DÃ¶kÃ¼mÃ¼ (Kolon, Perde & Tabliye C30/37) ({maxFloors} Kat DÃ¶ngÃ¼sÃ¼)",
+
+                StageCategory = "Kat Karkas Beton DÃ¶kÃ¼mÃ¼",
+
                 PartIndex = p1Idx,
+
                 PartName = p1Name,
+
                 PartBadgeClass = p1Badge,
-                TriggerRule = "Tabliye demir vizesi onaylanınca dökülür",
+
+                TriggerRule = "Tabliye demir vizesi onaylanÄ±nca dÃ¶kÃ¼lÃ¼r",
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "C30/37 Taşıyıcı Hazır Beton (Kat Karkas)",
-                MaterialDescription = "Kolon, perde, kiriş ve döşemenin monolitik C30/37 hazır betonla dökülmesi, vibrasyonu ve helikopterli/mastarlı perdahı.",
+
+                MaterialTitle = "C30/37 TaÅŸÄ±yÄ±cÄ± HazÄ±r Beton (Kat Karkas)",
+
+                MaterialDescription = "Kolon, perde, kiriÅŸ ve dÃ¶ÅŸemenin monolitik C30/37 hazÄ±r betonla dÃ¶kÃ¼lmesi, vibrasyonu ve helikopterli/mastarlÄ± perdahÄ±.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m³",
-                MaterialFormula = "DXF Bekliyor (Kat brüt alan ve kolon kesit hacminden hesaplanacak)",
-                SupplierCategory = "Hazır Beton Santrali",
-                LaborTitle = "Karkas Beton Döküm Ekibi",
+
+                MaterialUnit = "mÂ³",
+
+                MaterialFormula = "DXF Bekliyor (Kat brÃ¼t alan ve kolon kesit hacminden hesaplanacak)",
+
+                SupplierCategory = "HazÄ±r Beton Santrali",
+
+                LaborTitle = "Karkas Beton DÃ¶kÃ¼m Ekibi",
+
                 ProfessionName = "Betoncu & Pompa Ekibi",
-                CrewComposition = "1 Saha Şefi + 2 Pompa Operatörü + 4 Vibratörcü + 3 Mastarcı + 2 Kür İşçisi",
+
+                CrewComposition = "1 Saha Åefi + 2 Pompa OperatÃ¶rÃ¼ + 4 VibratÃ¶rcÃ¼ + 3 MastarcÄ± + 2 KÃ¼r Ä°ÅŸÃ§isi",
+
                 CrewSize = 12,
+
                 DurationDays = 2,
-                EquipmentNeeded = "Mobil / Sabit Dağıtıcı Beton Pompası, 4 Dalgıç Vibratör, Helikopter Perdah Makinesi",
-                Predecessors = "Tabliye vizesi, elektrik tesisat kontrolü ve kalıp altı dikme emniyeti",
-                CriticalDependency = "Döküm esnasında kalıp patlamasına karşı altta sürekli kalıp gözetmeni hazır bulundurulmalıdır!",
-                DnaSource = "Adım 0: Statik Taşıyıcılar (C30/37 Kat Karkas)",
+
+                EquipmentNeeded = "Mobil / Sabit DaÄŸÄ±tÄ±cÄ± Beton PompasÄ±, 4 DalgÄ±Ã§ VibratÃ¶r, Helikopter Perdah Makinesi",
+
+                Predecessors = "Tabliye vizesi, elektrik tesisat kontrolÃ¼ ve kalÄ±p altÄ± dikme emniyeti",
+
+                CriticalDependency = "DÃ¶kÃ¼m esnasÄ±nda kalÄ±p patlamasÄ±na karÅŸÄ± altta sÃ¼rekli kalÄ±p gÃ¶zetmeni hazÄ±r bulundurulmalÄ±dÄ±r!",
+
+                DnaSource = "AdÄ±m 0: Statik TaÅŸÄ±yÄ±cÄ±lar (C30/37 Kat Karkas)",
+
                 PlannedStartDate = k11Start,
+
                 PlannedEndDate = k11End,
+
                 SubSteps = CreateSubSteps(
-                    "T-2 Santral transmikser sevkiyat akışı, pompa bom konumu ve kule vinç desteği",
-                    "Önce kolon/perdelerin kademeli dökümü ve vibrasyonu, ardından kiriş ve döşeme dökümü",
-                    "Lazer nivo mastar kotu, transmikser slump deneyi ve kat küp numunesi alımı",
-                    "Kalıp altı dikme gözetmeni, pompa borusu emniyet kelepçeleri ve gece aydınlatması"
+
+                    "T-2 Santral transmikser sevkiyat akÄ±ÅŸÄ±, pompa bom konumu ve kule vinÃ§ desteÄŸi",
+
+                    "Ã–nce kolon/perdelerin kademeli dÃ¶kÃ¼mÃ¼ ve vibrasyonu, ardÄ±ndan kiriÅŸ ve dÃ¶ÅŸeme dÃ¶kÃ¼mÃ¼",
+
+                    "Lazer nivo mastar kotu, transmikser slump deneyi ve kat kÃ¼p numunesi alÄ±mÄ±",
+
+                    "KalÄ±p altÄ± dikme gÃ¶zetmeni, pompa borusu emniyet kelepÃ§eleri ve gece aydÄ±nlatmasÄ±"
+
                 )
+
             });
 
-            // K-12: Çatı Taşıyıcı İskeleti, Su Yalıtımı, Parapet Harpuştası & Yağmur İnişleri (Adım 5)
+
+
+            // K-12: Ã‡atÄ± TaÅŸÄ±yÄ±cÄ± Ä°skeleti, Su YalÄ±tÄ±mÄ±, Parapet HarpuÅŸtasÄ± & YaÄŸmur Ä°niÅŸleri (AdÄ±m 5)
+
             var k12Start = k11End.AddDays(7);
+
             var k12End = k12Start.AddDays(10);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "K-12",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Çatı Taşıyıcı İskeleti, Su Yalıtımı, Parapet Harpuştası & Yağmur İnişleri",
-                StageCategory = "Çatı & Kapanış",
+
+                PhaseName = "Ã‡atÄ± TaÅŸÄ±yÄ±cÄ± Ä°skeleti, Su YalÄ±tÄ±mÄ±, Parapet HarpuÅŸtasÄ± & YaÄŸmur Ä°niÅŸleri",
+
+                StageCategory = "Ã‡atÄ± & KapanÄ±ÅŸ",
+
                 PartIndex = p1Idx,
+
                 PartName = p1Name,
+
                 PartBadgeClass = p1Badge,
-                TriggerRule = "Son kat tavan tabliyesi dökülünce başlar",
+
+                TriggerRule = "Son kat tavan tabliyesi dÃ¶kÃ¼lÃ¼nce baÅŸlar",
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Çatı Ahşap/Çelik Taşıyıcı Konstrüksiyonu, Su/Isı İzolasyonu ve Parapet Harpuştası",
-                MaterialDescription = "Çatı ahşap/çelik taşıyıcı dikmeleri, OSB kaplama, su/ısı yalıtımı, dere inişleri ve mermer/alüminyum parapet harpuştaları.",
+
+                MaterialTitle = "Ã‡atÄ± AhÅŸap/Ã‡elik TaÅŸÄ±yÄ±cÄ± KonstrÃ¼ksiyonu, Su/IsÄ± Ä°zolasyonu ve Parapet HarpuÅŸtasÄ±",
+
+                MaterialDescription = "Ã‡atÄ± ahÅŸap/Ã§elik taÅŸÄ±yÄ±cÄ± dikmeleri, OSB kaplama, su/Ä±sÄ± yalÄ±tÄ±mÄ±, dere iniÅŸleri ve mermer/alÃ¼minyum parapet harpuÅŸtalarÄ±.",
+
                 MaterialQuantity = 0,
+
                 MaterialUnit = "mt",
-                MaterialFormula = "DXF Bekliyor (Çatı planı ve parapet çevre uzunluğundan hesaplanacak)",
-                SupplierCategory = "Çatı Kaplama & Yalıtım Tedarikçisi",
-                LaborTitle = "Çatı Konstrüksiyon ve İzolasyon Ekibi",
-                ProfessionName = "Çatı Ustası",
-                CrewComposition = "1 Çatı Formeni + 4 Çatı Ustası + 2 Yalıtım Ustası + 2 Yardımcı",
+
+                MaterialFormula = "DXF Bekliyor (Ã‡atÄ± planÄ± ve parapet Ã§evre uzunluÄŸundan hesaplanacak)",
+
+                SupplierCategory = "Ã‡atÄ± Kaplama & YalÄ±tÄ±m TedarikÃ§isi",
+
+                LaborTitle = "Ã‡atÄ± KonstrÃ¼ksiyon ve Ä°zolasyon Ekibi",
+
+                ProfessionName = "Ã‡atÄ± UstasÄ±",
+
+                CrewComposition = "1 Ã‡atÄ± Formeni + 4 Ã‡atÄ± UstasÄ± + 2 YalÄ±tÄ±m UstasÄ± + 2 YardÄ±mcÄ±",
+
                 CrewSize = 9,
+
                 DurationDays = 10,
-                EquipmentNeeded = "Mobil Vinç, Şaloma Takımları, Profil Kesme, Güvenlik Yaşam Hattı",
-                Predecessors = "Son kat tavan betonu dökümü ve parapet duvarlarının örülmesi",
-                CriticalDependency = "Çatı su yalıtımı ve dere inişleri tamamlanmadan bina içine su gireceğinden alt kat ince imalatlarına başlanamaz!",
-                DnaSource = "Adım 5: Çatı & Parapet",
+
+                EquipmentNeeded = "Mobil VinÃ§, Åaloma TakÄ±mlarÄ±, Profil Kesme, GÃ¼venlik YaÅŸam HattÄ±",
+
+                Predecessors = "Son kat tavan betonu dÃ¶kÃ¼mÃ¼ ve parapet duvarlarÄ±nÄ±n Ã¶rÃ¼lmesi",
+
+                CriticalDependency = "Ã‡atÄ± su yalÄ±tÄ±mÄ± ve dere iniÅŸleri tamamlanmadan bina iÃ§ine su gireceÄŸinden alt kat ince imalatlarÄ±na baÅŸlanamaz!",
+
+                DnaSource = "AdÄ±m 5: Ã‡atÄ± & Parapet",
+
                 PlannedStartDate = k12Start,
+
                 PlannedEndDate = k12End,
+
                 SubSteps = CreateSubSteps(
-                    "T-3 Çatı konstrüksiyon statik projesi, kereste/çelik profil ve yalıtım malzemeleri sevki",
-                    "Taşıyıcı dikmelerin montajı, OSB kaplama, su yalıtım membranı ve parapet harpuştaları montajı",
-                    "Dere inişleri su sızdırmazlık testi ve rüzgar fırtına emniyet bağlantıları",
-                    "Çatı kenarı parapet güvenlik ağları, çelik yaşam hattı ve paraşüt tipi emniyet kemeri"
+
+                    "T-3 Ã‡atÄ± konstrÃ¼ksiyon statik projesi, kereste/Ã§elik profil ve yalÄ±tÄ±m malzemeleri sevki",
+
+                    "TaÅŸÄ±yÄ±cÄ± dikmelerin montajÄ±, OSB kaplama, su yalÄ±tÄ±m membranÄ± ve parapet harpuÅŸtalarÄ± montajÄ±",
+
+                    "Dere iniÅŸleri su sÄ±zdÄ±rmazlÄ±k testi ve rÃ¼zgar fÄ±rtÄ±na emniyet baÄŸlantÄ±larÄ±",
+
+                    "Ã‡atÄ± kenarÄ± parapet gÃ¼venlik aÄŸlarÄ±, Ã§elik yaÅŸam hattÄ± ve paraÅŸÃ¼t tipi emniyet kemeri"
+
                 )
+
             });
 
-            // =========================================================================
-            // 2. PARÇA: STATİK İNCE (KABA İNCE / KOVALAYAN İŞLER)
+
+
             // =========================================================================
 
-            // S-01: Dış ve İç Bölme Duvar Örümü & Hatıllar / Lentolar (Adım 3)
-            var s01Start = k11Start.AddDays(7); // Kaba 2 kat önden gidince alttan başlar
+            // 2. PARÃ‡A: STATÄ°K Ä°NCE (KABA Ä°NCE / KOVALAYAN Ä°ÅLER)
+
+            // =========================================================================
+
+
+
+            // S-01: DÄ±ÅŸ ve Ä°Ã§ BÃ¶lme Duvar Ã–rÃ¼mÃ¼ & HatÄ±llar / Lentolar (AdÄ±m 3)
+
+            var s01Start = k11Start.AddDays(7); // Kaba 2 kat Ã¶nden gidince alttan baÅŸlar
+
             var s01End = s01Start.AddDays(10);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "S-01",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Dış ve İç Bölme Duvar Örümü & Hatıllar / Lentolar",
-                StageCategory = "Duvar İmalatları",
+
+                PhaseName = "DÄ±ÅŸ ve Ä°Ã§ BÃ¶lme Duvar Ã–rÃ¼mÃ¼ & HatÄ±llar / Lentolar",
+
+                StageCategory = "Duvar Ä°malatlarÄ±",
+
                 PartIndex = p2Idx,
+
                 PartName = p2Name,
+
                 PartBadgeClass = p2Badge,
+
                 TriggerRule = p2Trigger,
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Gazbeton / Bims Bloklar, Örgü Harcı ve Hatıl / Lentolar",
-                MaterialDescription = "Dış cephe ve daire içi oda bölme duvarlarının örülmesi, kapı üstü lentoları ve hatıl bağlantıları.",
+
+                MaterialTitle = "Gazbeton / Bims Bloklar, Ã–rgÃ¼ HarcÄ± ve HatÄ±l / Lentolar",
+
+                MaterialDescription = "DÄ±ÅŸ cephe ve daire iÃ§i oda bÃ¶lme duvarlarÄ±nÄ±n Ã¶rÃ¼lmesi, kapÄ± Ã¼stÃ¼ lentolarÄ± ve hatÄ±l baÄŸlantÄ±larÄ±.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Mimari kat planı duvar metrajlarından hesaplanacak)",
-                SupplierCategory = "Gazbeton / Tuğla & Harç Fabrika Bayisi",
-                LaborTitle = "Duvar Örme Ekibi",
-                ProfessionName = "Duvar Ustası",
-                CrewComposition = "1 Formen + 6 Duvar Ustası + 4 Taşıma/Harç İşçisi",
+
+                MaterialUnit = "mÂ²",
+
+                MaterialFormula = "DXF Bekliyor (Mimari kat planÄ± duvar metrajlarÄ±ndan hesaplanacak)",
+
+                SupplierCategory = "Gazbeton / TuÄŸla & HarÃ§ Fabrika Bayisi",
+
+                LaborTitle = "Duvar Ã–rme Ekibi",
+
+                ProfessionName = "Duvar UstasÄ±",
+
+                CrewComposition = "1 Formen + 6 Duvar UstasÄ± + 4 TaÅŸÄ±ma/HarÃ§ Ä°ÅŸÃ§isi",
+
                 CrewSize = 11,
+
                 DurationDays = 10,
-                EquipmentNeeded = "Harç Mikseri, Blok Testeresi, İç Mekan Seyyar İskele",
-                Predecessors = "Üst kat tabliyesinin dökülmesi ve dikme kulelerinin güvenli sökümü",
-                CriticalDependency = "Kaba 2 kat önden gitmeden alttan duvar örümüne başlanamaz!",
-                DnaSource = "Adım 3: Bölme Duvarlar",
+
+                EquipmentNeeded = "HarÃ§ Mikseri, Blok Testeresi, Ä°Ã§ Mekan Seyyar Ä°skele",
+
+                Predecessors = "Ãœst kat tabliyesinin dÃ¶kÃ¼lmesi ve dikme kulelerinin gÃ¼venli sÃ¶kÃ¼mÃ¼",
+
+                CriticalDependency = "Kaba 2 kat Ã¶nden gitmeden alttan duvar Ã¶rÃ¼mÃ¼ne baÅŸlanamaz!",
+
+                DnaSource = "AdÄ±m 3: BÃ¶lme Duvarlar",
+
                 PlannedStartDate = s01Start,
+
                 PlannedEndDate = s01End,
+
                 SubSteps = CreateSubSteps(
-                    "T-2 Mimari projeye göre kat kapı ve pencere boşluklarının sahaya aplikasyonu",
-                    "İlk sıra harç mastarı, duvar örümü, esnek tavan birleşimi (poliüretan köpük) ve kapı lentoları",
-                    "Duvar şakül, gönye ve hatıl donatı bağlantılarının kontrolü",
-                    "İç iskele korkulukları, malzeme istif güvenliği ve toz maskesi kullanımı"
+
+                    "T-2 Mimari projeye gÃ¶re kat kapÄ± ve pencere boÅŸluklarÄ±nÄ±n sahaya aplikasyonu",
+
+                    "Ä°lk sÄ±ra harÃ§ mastarÄ±, duvar Ã¶rÃ¼mÃ¼, esnek tavan birleÅŸimi (poliÃ¼retan kÃ¶pÃ¼k) ve kapÄ± lentolarÄ±",
+
+                    "Duvar ÅŸakÃ¼l, gÃ¶nye ve hatÄ±l donatÄ± baÄŸlantÄ±larÄ±nÄ±n kontrolÃ¼",
+
+                    "Ä°Ã§ iskele korkuluklarÄ±, malzeme istif gÃ¼venliÄŸi ve toz maskesi kullanÄ±mÄ±"
+
                 )
+
             });
 
-            // S-02: Daire İçi ve Şaft Sıhhi Tesisat, Pis Su & Temiz Su Borulama (Adım 7)
+
+
+            // S-02: Daire Ä°Ã§i ve Åaft SÄ±hhi Tesisat, Pis Su & Temiz Su Borulama (AdÄ±m 7)
+
             var s02Start = s01Start.AddDays(3);
+
             var s02End = s02Start.AddDays(8);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "S-02",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Daire İçi ve Şaft Sıhhi Tesisat, Pis Su & Temiz Su Borulama",
+
+                PhaseName = "Daire Ä°Ã§i ve Åaft SÄ±hhi Tesisat, Pis Su & Temiz Su Borulama",
+
                 StageCategory = "Mekanik Tesisat",
+
                 PartIndex = p2Idx,
+
                 PartName = p2Name,
+
                 PartBadgeClass = p2Badge,
+
                 TriggerRule = p2Trigger,
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = $"{pisuTitle}, PPRC Temiz Su Boruları ve Kollektörler",
-                MaterialDescription = "Bina dikey ana şaft kolonları, daire içi ıslak hacim pis su giderleri ve PPRC temiz su dağıtım tesisatı.",
+
+                MaterialTitle = $"{pisuTitle}, PPRC Temiz Su BorularÄ± ve KollektÃ¶rler",
+
+                MaterialDescription = "Bina dikey ana ÅŸaft kolonlarÄ±, daire iÃ§i Ä±slak hacim pis su giderleri ve PPRC temiz su daÄŸÄ±tÄ±m tesisatÄ±.",
+
                 MaterialQuantity = 0,
+
                 MaterialUnit = "mt",
-                MaterialFormula = "DXF Bekliyor (Mekanik tesisat şaft ve daire içi kolon projelerinden hesaplanacak)",
-                SupplierCategory = "Sıhhi Tesisat & Boru Toptancısı",
-                LaborTitle = "Sıhhi Tesisat Ekibi",
-                ProfessionName = "Sıhhi Tesisat Ustası",
-                CrewComposition = "1 Mekanik Müh. + 4 Tesisat Ustası + 2 Yardımcı",
+
+                MaterialFormula = "DXF Bekliyor (Mekanik tesisat ÅŸaft ve daire iÃ§i kolon projelerinden hesaplanacak)",
+
+                SupplierCategory = "SÄ±hhi Tesisat & Boru ToptancÄ±sÄ±",
+
+                LaborTitle = "SÄ±hhi Tesisat Ekibi",
+
+                ProfessionName = "SÄ±hhi Tesisat UstasÄ±",
+
+                CrewComposition = "1 Mekanik MÃ¼h. + 4 Tesisat UstasÄ± + 2 YardÄ±mcÄ±",
+
                 CrewSize = 7,
+
                 DurationDays = 8,
-                EquipmentNeeded = "PPRC Kaynak Makinesi, Boru Kesme Aparatları, Basınç Test Pompası",
-                Predecessors = "Kat duvarlarının örülmesi ve şaft boşluklarının açılması",
-                CriticalDependency = "Sıva ve şap atılmadan önce tesisat boruları test edilip basınca tabi tutulmalıdır!",
-                DnaSource = "Adım 7: Sıhhi Tesisat & Borulama",
+
+                EquipmentNeeded = "PPRC Kaynak Makinesi, Boru Kesme AparatlarÄ±, BasÄ±nÃ§ Test PompasÄ±",
+
+                Predecessors = "Kat duvarlarÄ±nÄ±n Ã¶rÃ¼lmesi ve ÅŸaft boÅŸluklarÄ±nÄ±n aÃ§Ä±lmasÄ±",
+
+                CriticalDependency = "SÄ±va ve ÅŸap atÄ±lmadan Ã¶nce tesisat borularÄ± test edilip basÄ±nca tabi tutulmalÄ±dÄ±r!",
+
+                DnaSource = "AdÄ±m 7: SÄ±hhi Tesisat & Borulama",
+
                 PlannedStartDate = s02Start,
+
                 PlannedEndDate = s02End,
+
                 SubSteps = CreateSubSteps(
-                    "T-3 Tesisat güzergahlarının ve rezervuar/kollektör yerlerinin işaretlenmesi",
-                    "Pis su eğim hattı, sessiz boru kelepçelemesi, temiz su PPRC borulama ve kollektör montajı",
-                    "Test pompası ile 10 bar basınç sızdırmazlık testi ve 24 saat basınç manometre takibi",
-                    "Şaft çalışma platformları, kaynak güvenliği ve boru kesme çapağı gözlüğü"
+
+                    "T-3 Tesisat gÃ¼zergahlarÄ±nÄ±n ve rezervuar/kollektÃ¶r yerlerinin iÅŸaretlenmesi",
+
+                    "Pis su eÄŸim hattÄ±, sessiz boru kelepÃ§elemesi, temiz su PPRC borulama ve kollektÃ¶r montajÄ±",
+
+                    "Test pompasÄ± ile 10 bar basÄ±nÃ§ sÄ±zdÄ±rmazlÄ±k testi ve 24 saat basÄ±nÃ§ manometre takibi",
+
+                    "Åaft Ã§alÄ±ÅŸma platformlarÄ±, kaynak gÃ¼venliÄŸi ve boru kesme Ã§apaÄŸÄ± gÃ¶zlÃ¼ÄŸÃ¼"
+
                 )
+
             });
 
-            // S-03: Daire İçi Elektrik Altyapısı, Borulama, Kablolama ve Sortiler (Adım 7)
+
+
+            // S-03: Daire Ä°Ã§i Elektrik AltyapÄ±sÄ±, Borulama, Kablolama ve Sortiler (AdÄ±m 7)
+
             var s03Start = s01Start.AddDays(4);
+
             var s03End = s03Start.AddDays(8);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "S-03",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Daire İçi Elektrik Altyapısı, Borulama, Kablolama ve Sortiler",
-                StageCategory = "Elektrik Altyapı",
+
+                PhaseName = "Daire Ä°Ã§i Elektrik AltyapÄ±sÄ±, Borulama, Kablolama ve Sortiler",
+
+                StageCategory = "Elektrik AltyapÄ±",
+
                 PartIndex = p2Idx,
+
                 PartName = p2Name,
+
                 PartBadgeClass = p2Badge,
+
                 TriggerRule = p2Trigger,
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
+
                 MaterialTitle = "Halogen Free Borular, NYM Kablolar, Buat ve Kasalar",
-                MaterialDescription = "Duvar içi elektrik kanallarının açılması, kasalama, linye borulaması, buat montajı ve kablo çekimi.",
+
+                MaterialDescription = "Duvar iÃ§i elektrik kanallarÄ±nÄ±n aÃ§Ä±lmasÄ±, kasalama, linye borulamasÄ±, buat montajÄ± ve kablo Ã§ekimi.",
+
                 MaterialQuantity = 0,
+
                 MaterialUnit = "Sorti",
-                MaterialFormula = "DXF Bekliyor (Elektrik kuvvetli/zayıf akım projelerinden sorti sayısı netleşecek)",
-                SupplierCategory = "Elektrik Malzemeleri Toptancısı",
+
+                MaterialFormula = "DXF Bekliyor (Elektrik kuvvetli/zayÄ±f akÄ±m projelerinden sorti sayÄ±sÄ± netleÅŸecek)",
+
+                SupplierCategory = "Elektrik Malzemeleri ToptancÄ±sÄ±",
+
                 LaborTitle = "Elektrik Tesisat Ekibi",
-                ProfessionName = "Elektrik Ustası",
-                CrewComposition = "1 Elektrik Formeni + 4 Elektrik Ustası + 3 Yardımcı",
+
+                ProfessionName = "Elektrik UstasÄ±",
+
+                CrewComposition = "1 Elektrik Formeni + 4 Elektrik UstasÄ± + 3 YardÄ±mcÄ±",
+
                 CrewSize = 8,
+
                 DurationDays = 8,
-                EquipmentNeeded = "Kanal Açma Makinesi, Sustalı Kablo Çekici, Meger Test Cihazı",
-                Predecessors = "Kat duvarlarının örülmesi ve tavan karkasının netleşmesi",
-                CriticalDependency = "Kablolar çekilmeden ve buatlar sabitlenmeden sıva yapılamaz!",
-                DnaSource = "Adım 7: Elektrik Tesisatı & Kablolama",
+
+                EquipmentNeeded = "Kanal AÃ§ma Makinesi, SustalÄ± Kablo Ã‡ekici, Meger Test CihazÄ±",
+
+                Predecessors = "Kat duvarlarÄ±nÄ±n Ã¶rÃ¼lmesi ve tavan karkasÄ±nÄ±n netleÅŸmesi",
+
+                CriticalDependency = "Kablolar Ã§ekilmeden ve buatlar sabitlenmeden sÄ±va yapÄ±lamaz!",
+
+                DnaSource = "AdÄ±m 7: Elektrik TesisatÄ± & Kablolama",
+
                 PlannedStartDate = s03Start,
+
                 PlannedEndDate = s03End,
+
                 SubSteps = CreateSubSteps(
-                    "T-2 Elektrik projesine göre priz, anahtar ve aydınlatma linye kotlarının çizilmesi",
-                    "Kanal açma, borulama, kasalama, buat montajı ve kablo çekimi",
-                    "Faz, nötr, toprak meger izolasyon testi ve kablo süreklilik kontrolü",
-                    "Kanal açma tozu için filtreli maske, spiral koruyucu kapağı ve eldiven denetimi"
+
+                    "T-2 Elektrik projesine gÃ¶re priz, anahtar ve aydÄ±nlatma linye kotlarÄ±nÄ±n Ã§izilmesi",
+
+                    "Kanal aÃ§ma, borulama, kasalama, buat montajÄ± ve kablo Ã§ekimi",
+
+                    "Faz, nÃ¶tr, toprak meger izolasyon testi ve kablo sÃ¼reklilik kontrolÃ¼",
+
+                    "Kanal aÃ§ma tozu iÃ§in filtreli maske, spiral koruyucu kapaÄŸÄ± ve eldiven denetimi"
+
                 )
+
             });
 
-            // S-04: İç Cephe Kaba Sıva, Alçı Sıva & Tavan Alçıpan Asma Tavan (Adım 3)
+
+
+            // S-04: Ä°Ã§ Cephe Kaba SÄ±va, AlÃ§Ä± SÄ±va & Tavan AlÃ§Ä±pan Asma Tavan (AdÄ±m 3)
+
             var s04Start = s02End;
+
             var s04End = s04Start.AddDays(12);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "S-04",
+
                 Order = stepOrderSeq++,
-                PhaseName = "İç Cephe Kaba Sıva, Alçı Sıva & Tavan Alçıpan Asma Tavan",
-                StageCategory = "Sıva & Alçıpan",
+
+                PhaseName = "Ä°Ã§ Cephe Kaba SÄ±va, AlÃ§Ä± SÄ±va & Tavan AlÃ§Ä±pan Asma Tavan",
+
+                StageCategory = "SÄ±va & AlÃ§Ä±pan",
+
                 PartIndex = p2Idx,
+
                 PartName = p2Name,
+
                 PartBadgeClass = p2Badge,
+
                 TriggerRule = p2Trigger,
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Perlitli Alçı Sıva, Ano / Köşe Profilleri ve Tavan Alçıpan Levhaları",
-                MaterialDescription = "Duvarlarda makineli alçı sıva püskürtme, ano çekimi, mastarlama ve tavan alçıpan asma tavan imalatı.",
+
+                MaterialTitle = "Perlitli AlÃ§Ä± SÄ±va, Ano / KÃ¶ÅŸe Profilleri ve Tavan AlÃ§Ä±pan LevhalarÄ±",
+
+                MaterialDescription = "Duvarlarda makineli alÃ§Ä± sÄ±va pÃ¼skÃ¼rtme, ano Ã§ekimi, mastarlama ve tavan alÃ§Ä±pan asma tavan imalatÄ±.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Kat yükseklikleri ve net duvar yüzey alanlarından hesaplanacak)",
-                SupplierCategory = "Yapı Kimyasalları & Alçı Toptancısı",
-                LaborTitle = "Alçı Sıva & Asma Tavan Ekibi",
-                ProfessionName = "Alçı Sıva & Asma Tavan Ustası",
-                CrewComposition = "1 Sıva Formeni + 6 Alçı/Sıva Ustası + 4 Yardımcı",
+
+                MaterialUnit = "mÂ²",
+
+                MaterialFormula = "DXF Bekliyor (Kat yÃ¼kseklikleri ve net duvar yÃ¼zey alanlarÄ±ndan hesaplanacak)",
+
+                SupplierCategory = "YapÄ± KimyasallarÄ± & AlÃ§Ä± ToptancÄ±sÄ±",
+
+                LaborTitle = "AlÃ§Ä± SÄ±va & Asma Tavan Ekibi",
+
+                ProfessionName = "AlÃ§Ä± SÄ±va & Asma Tavan UstasÄ±",
+
+                CrewComposition = "1 SÄ±va Formeni + 6 AlÃ§Ä±/SÄ±va UstasÄ± + 4 YardÄ±mcÄ±",
+
                 CrewSize = 11,
+
                 DurationDays = 12,
-                EquipmentNeeded = "Alçı Sıva Püskürtme Makinesi, Alüminyum H Mastarlar, Lazer Hizalama",
-                Predecessors = "Elektrik kasalama ve tesisat borulama hatlarının kapatılması",
-                CriticalDependency = "Elektrik tesisat testleri tamamlanıp kapak takılmadan sıva kapatılamaz!",
-                DnaSource = "Adım 3: Sıva & Alçıpan",
+
+                EquipmentNeeded = "AlÃ§Ä± SÄ±va PÃ¼skÃ¼rtme Makinesi, AlÃ¼minyum H Mastarlar, Lazer Hizalama",
+
+                Predecessors = "Elektrik kasalama ve tesisat borulama hatlarÄ±nÄ±n kapatÄ±lmasÄ±",
+
+                CriticalDependency = "Elektrik tesisat testleri tamamlanÄ±p kapak takÄ±lmadan sÄ±va kapatÄ±lamaz!",
+
+                DnaSource = "AdÄ±m 3: SÄ±va & AlÃ§Ä±pan",
+
                 PlannedStartDate = s04Start,
+
                 PlannedEndDate = s04End,
+
                 SubSteps = CreateSubSteps(
-                    "T-2 Ano çıtalarının çekilmesi ve kapı/pencere kenarları fileli köşe profili montajı",
-                    "Makineli alçı sıva püskürtme, mastarlama ve tavan alçıpan karkas montajı",
-                    "2 metrelik mastar ile yüzey kaçıklığı ve şakül kontrolü",
-                    "Hareketli platform iskele emniyet kilitleri ve göz yıkama solüsyonu kontrolü"
+
+                    "T-2 Ano Ã§Ä±talarÄ±nÄ±n Ã§ekilmesi ve kapÄ±/pencere kenarlarÄ± fileli kÃ¶ÅŸe profili montajÄ±",
+
+                    "Makineli alÃ§Ä± sÄ±va pÃ¼skÃ¼rtme, mastarlama ve tavan alÃ§Ä±pan karkas montajÄ±",
+
+                    "2 metrelik mastar ile yÃ¼zey kaÃ§Ä±klÄ±ÄŸÄ± ve ÅŸakÃ¼l kontrolÃ¼",
+
+                    "Hareketli platform iskele emniyet kilitleri ve gÃ¶z yÄ±kama solÃ¼syonu kontrolÃ¼"
+
                 )
+
             });
 
-            // S-05: Helikopterli ve Mastarlı Zemin Tesviye Şapı (Adım 3)
+
+
+            // S-05: Helikopterli ve MastarlÄ± Zemin Tesviye ÅapÄ± (AdÄ±m 3)
+
             var s05Start = s04End;
+
             var s05End = s05Start.AddDays(6);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "S-05",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Helikopterli ve Mastarlı Zemin Tesviye Şapı",
-                StageCategory = "Zemin Şapı",
+
+                PhaseName = "Helikopterli ve MastarlÄ± Zemin Tesviye ÅapÄ±",
+
+                StageCategory = "Zemin ÅapÄ±",
+
                 PartIndex = p2Idx,
+
                 PartName = p2Name,
+
                 PartBadgeClass = p2Badge,
+
                 TriggerRule = p2Trigger,
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Zemin Şap Kumu, Çimento ve Yüzey Sertleştirici Katkı",
-                MaterialDescription = "Zemindeki tesisat borularının üzerine mastarlı çimento esaslı tesviye şapı atılması ve helikopter perdahı.",
+
+                MaterialTitle = "Zemin Åap Kumu, Ã‡imento ve YÃ¼zey SertleÅŸtirici KatkÄ±",
+
+                MaterialDescription = "Zemindeki tesisat borularÄ±nÄ±n Ã¼zerine mastarlÄ± Ã§imento esaslÄ± tesviye ÅŸapÄ± atÄ±lmasÄ± ve helikopter perdahÄ±.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Net döşeme alanı mimari plandan hesaplanacak)",
-                SupplierCategory = "Şap Kumu & Çimento Bayisi",
-                LaborTitle = "Helikopterli Şap Ekibi",
-                ProfessionName = "Şap Ustası",
-                CrewComposition = "1 Şap Formeni + 4 Şap Ustası + 2 Pompa/Mikser Operatörü",
+
+                MaterialUnit = "mÂ²",
+
+                MaterialFormula = "DXF Bekliyor (Net dÃ¶ÅŸeme alanÄ± mimari plandan hesaplanacak)",
+
+                SupplierCategory = "Åap Kumu & Ã‡imento Bayisi",
+
+                LaborTitle = "Helikopterli Åap Ekibi",
+
+                ProfessionName = "Åap UstasÄ±",
+
+                CrewComposition = "1 Åap Formeni + 4 Åap UstasÄ± + 2 Pompa/Mikser OperatÃ¶rÃ¼",
+
                 CrewSize = 7,
+
                 DurationDays = 6,
-                EquipmentNeeded = "Şap Pompası (Kara Şap), Helikopter Perdah Makinesi, Lazer Nivo",
-                Predecessors = "Zeminden geçen tesisat borularının yalıtımı ve kot referans çizgisi",
-                CriticalDependency = "Zemin şapı atılmadan önce temiz/pis su boruları basınç testinden geçmiş ve sabitlenmiş olmalıdır!",
-                DnaSource = "Adım 3: Şap İmalatları",
+
+                EquipmentNeeded = "Åap PompasÄ± (Kara Åap), Helikopter Perdah Makinesi, Lazer Nivo",
+
+                Predecessors = "Zeminden geÃ§en tesisat borularÄ±nÄ±n yalÄ±tÄ±mÄ± ve kot referans Ã§izgisi",
+
+                CriticalDependency = "Zemin ÅŸapÄ± atÄ±lmadan Ã¶nce temiz/pis su borularÄ± basÄ±nÃ§ testinden geÃ§miÅŸ ve sabitlenmiÅŸ olmalÄ±dÄ±r!",
+
+                DnaSource = "AdÄ±m 3: Åap Ä°malatlarÄ±",
+
                 PlannedStartDate = s05Start,
+
                 PlannedEndDate = s05End,
+
                 SubSteps = CreateSubSteps(
-                    "T-2 Lazer nivo ile kat kotlarının işaretlenmesi ve şap anolarının oluşturulması",
-                    "Şap pompası ile harç basımı, mastarlama ve helikopterli yüzey perdahı",
-                    "Lazer nivo ile eğim kontrolü, dilatasyon derz kesimi ve çatlama önleme sulaması",
-                    "Helikopterli perdah makinesi acil durdurma mandalı ve çizme kullanımı"
+
+                    "T-2 Lazer nivo ile kat kotlarÄ±nÄ±n iÅŸaretlenmesi ve ÅŸap anolarÄ±nÄ±n oluÅŸturulmasÄ±",
+
+                    "Åap pompasÄ± ile harÃ§ basÄ±mÄ±, mastarlama ve helikopterli yÃ¼zey perdahÄ±",
+
+                    "Lazer nivo ile eÄŸim kontrolÃ¼, dilatasyon derz kesimi ve Ã§atlama Ã¶nleme sulamasÄ±",
+
+                    "Helikopterli perdah makinesi acil durdurma mandalÄ± ve Ã§izme kullanÄ±mÄ±"
+
                 )
+
             });
 
-            // S-06: Dış Cephe Güvenlikli İskele Kurulumu & Isı Yalıtım / Mantolama (Adım 6)
+
+
+            // S-06: DÄ±ÅŸ Cephe GÃ¼venlikli Ä°skele Kurulumu & IsÄ± YalÄ±tÄ±m / Mantolama (AdÄ±m 6)
+
             var s06Start = k10End;
+
             var s06End = s06Start.AddDays(14);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "S-06",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Dış Cephe Güvenlikli İskele Kurulumu & Isı Yalıtım / Mantolama",
-                StageCategory = "Dış Cephe Mantolama",
+
+                PhaseName = "DÄ±ÅŸ Cephe GÃ¼venlikli Ä°skele Kurulumu & IsÄ± YalÄ±tÄ±m / Mantolama",
+
+                StageCategory = "DÄ±ÅŸ Cephe Mantolama",
+
                 PartIndex = p2Idx,
+
                 PartName = p2Name,
+
                 PartBadgeClass = p2Badge,
+
                 TriggerRule = p2Trigger,
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Taşyünü / EPS Mantolama Levhaları, Fileli Sıva ve Dekoratif Dış Cephe Kaplaması",
-                MaterialDescription = "TS EN 12810 onaylı güvenlikli flanşlı iskele kurulumu, ısı yalıtım levhaları, dübelleme, fileli sıva ve dekoratif cephe kaplaması.",
+
+                MaterialTitle = "TaÅŸyÃ¼nÃ¼ / EPS Mantolama LevhalarÄ±, Fileli SÄ±va ve Dekoratif DÄ±ÅŸ Cephe KaplamasÄ±",
+
+                MaterialDescription = "TS EN 12810 onaylÄ± gÃ¼venlikli flanÅŸlÄ± iskele kurulumu, Ä±sÄ± yalÄ±tÄ±m levhalarÄ±, dÃ¼belleme, fileli sÄ±va ve dekoratif cephe kaplamasÄ±.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Bina cephe açılımları ve kat yüksekliklerinden hesaplanacak)",
-                SupplierCategory = "Dış Cephe Yalıtım Bayisi & İskele Kiralama",
-                LaborTitle = "Dış Cephe ve Mantolama Ekibi",
-                ProfessionName = "Mantolama & Cephe Ustası",
-                CrewComposition = "1 İskele Süpervizörü + 6 Cephe Ustası + 4 Yardımcı",
+
+                MaterialUnit = "mÂ²",
+
+                MaterialFormula = "DXF Bekliyor (Bina cephe aÃ§Ä±lÄ±mlarÄ± ve kat yÃ¼ksekliklerinden hesaplanacak)",
+
+                SupplierCategory = "DÄ±ÅŸ Cephe YalÄ±tÄ±m Bayisi & Ä°skele Kiralama",
+
+                LaborTitle = "DÄ±ÅŸ Cephe ve Mantolama Ekibi",
+
+                ProfessionName = "Mantolama & Cephe UstasÄ±",
+
+                CrewComposition = "1 Ä°skele SÃ¼pervizÃ¶rÃ¼ + 6 Cephe UstasÄ± + 4 YardÄ±mcÄ±",
+
                 CrewSize = 11,
+
                 DurationDays = 14,
-                EquipmentNeeded = "Güvenlikli Cephe İskelesi, Dübel Matkapları, Harç Karıştırma Mikseri",
-                Predecessors = "Kaba inşaat cephe temizliği ve denizlik montajları",
-                CriticalDependency = "Dış cephe güvenlikli iskelesi yeşil etiket (TS EN 12810 onaylı) almadan cephe çalışması başlatılamaz!",
-                DnaSource = "Adım 6: Dış Cephe & Mantolama",
+
+                EquipmentNeeded = "GÃ¼venlikli Cephe Ä°skelesi, DÃ¼bel MatkaplarÄ±, HarÃ§ KarÄ±ÅŸtÄ±rma Mikseri",
+
+                Predecessors = "Kaba inÅŸaat cephe temizliÄŸi ve denizlik montajlarÄ±",
+
+                CriticalDependency = "DÄ±ÅŸ cephe gÃ¼venlikli iskelesi yeÅŸil etiket (TS EN 12810 onaylÄ±) almadan cephe Ã§alÄ±ÅŸmasÄ± baÅŸlatÄ±lamaz!",
+
+                DnaSource = "AdÄ±m 6: DÄ±ÅŸ Cephe & Mantolama",
+
                 PlannedStartDate = s06Start,
+
                 PlannedEndDate = s06End,
+
                 SubSteps = CreateSubSteps(
-                    "T-3 Güvenlikli flanşlı iskele kurulumu, statik ankraj tespiti ve güvenlik ağları",
-                    "Levha yapıştırma, mekanik dübelleme, çift kat fileli sıva ve dekoratif kaplama",
-                    "Dübel çekme testi, köşe diklik kontrolü ve su iticilik incelemesi",
-                    "İskele yeşil etiket denetimi, rüzgar hız takibi ve paraşüt tipi çift kollu emniyet kemeri"
+
+                    "T-3 GÃ¼venlikli flanÅŸlÄ± iskele kurulumu, statik ankraj tespiti ve gÃ¼venlik aÄŸlarÄ±",
+
+                    "Levha yapÄ±ÅŸtÄ±rma, mekanik dÃ¼belleme, Ã§ift kat fileli sÄ±va ve dekoratif kaplama",
+
+                    "DÃ¼bel Ã§ekme testi, kÃ¶ÅŸe diklik kontrolÃ¼ ve su iticilik incelemesi",
+
+                    "Ä°skele yeÅŸil etiket denetimi, rÃ¼zgar hÄ±z takibi ve paraÅŸÃ¼t tipi Ã§ift kollu emniyet kemeri"
+
                 )
+
             });
 
-            // =========================================================================
-            // 3. PARÇA: TERCİHE GÖRE İNCE İŞLER (DAİRE İÇİ İMALATLAR)
+
+
             // =========================================================================
 
-            // D-01: Islak Hacimler (Banyo/WC/Balkon) Çift Kat Sürme Su Yalıtımı (Adım 4)
+            // 3. PARÃ‡A: TERCÄ°HE GÃ–RE Ä°NCE Ä°ÅLER (DAÄ°RE Ä°Ã‡Ä° Ä°MALATLAR)
+
+            // =========================================================================
+
+
+
+            // D-01: Islak Hacimler (Banyo/WC/Balkon) Ã‡ift Kat SÃ¼rme Su YalÄ±tÄ±mÄ± (AdÄ±m 4)
+
             var d01Start = s05End.AddDays(2);
+
             var d01End = d01Start.AddDays(5);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "D-01",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Islak Hacimler (Banyo/WC/Balkon) Çift Kat Sürme Su Yalıtımı",
-                StageCategory = "Islak Hacim Yalıtımı",
+
+                PhaseName = "Islak Hacimler (Banyo/WC/Balkon) Ã‡ift Kat SÃ¼rme Su YalÄ±tÄ±mÄ±",
+
+                StageCategory = "Islak Hacim YalÄ±tÄ±mÄ±",
+
                 PartIndex = p3Idx,
+
                 PartName = p3Name,
+
                 PartBadgeClass = p3Badge,
+
                 TriggerRule = p3Trigger,
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Çift Bileşenli Tam Elastik Su Yalıtımı ve Pah Bantları",
-                MaterialDescription = "Banyo, tuvalet ve balkon zeminlerine çift kat elastik sürme izolasyon ve süzgeç manşetleri uygulaması.",
+
+                MaterialTitle = "Ã‡ift BileÅŸenli Tam Elastik Su YalÄ±tÄ±mÄ± ve Pah BantlarÄ±",
+
+                MaterialDescription = "Banyo, tuvalet ve balkon zeminlerine Ã§ift kat elastik sÃ¼rme izolasyon ve sÃ¼zgeÃ§ manÅŸetleri uygulamasÄ±.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Islak hacim zemin ve duvar yüzey alanlarından hesaplanacak)",
-                SupplierCategory = "Su İzolasyonu Kimyasalları Bayisi",
-                LaborTitle = "Islak Hacim İzolasyon Ekibi",
-                ProfessionName = "İzolasyon Ustası",
-                CrewComposition = "1 İzolasyon Formeni + 3 İzolasyon Ustası",
+
+                MaterialUnit = "mÂ²",
+
+                MaterialFormula = "DXF Bekliyor (Islak hacim zemin ve duvar yÃ¼zey alanlarÄ±ndan hesaplanacak)",
+
+                SupplierCategory = "Su Ä°zolasyonu KimyasallarÄ± Bayisi",
+
+                LaborTitle = "Islak Hacim Ä°zolasyon Ekibi",
+
+                ProfessionName = "Ä°zolasyon UstasÄ±",
+
+                CrewComposition = "1 Ä°zolasyon Formeni + 3 Ä°zolasyon UstasÄ±",
+
                 CrewSize = 4,
+
                 DurationDays = 5,
-                EquipmentNeeded = "İzolasyon Karıştırıcı Mikser, Rulo ve Pah Fırçaları",
-                Predecessors = "Islak hacim şapının kuruması ve süzgeç kasalarının montajı",
-                CriticalDependency = "Su yalıtımı 48 saat su göllendirme sızdırmazlık testinden geçmeden üzerine seramik döşenemez!",
-                DnaSource = "Adım 4: Islak Hacim Su Yalıtımı",
+
+                EquipmentNeeded = "Ä°zolasyon KarÄ±ÅŸtÄ±rÄ±cÄ± Mikser, Rulo ve Pah FÄ±rÃ§alarÄ±",
+
+                Predecessors = "Islak hacim ÅŸapÄ±nÄ±n kurumasÄ± ve sÃ¼zgeÃ§ kasalarÄ±nÄ±n montajÄ±",
+
+                CriticalDependency = "Su yalÄ±tÄ±mÄ± 48 saat su gÃ¶llendirme sÄ±zdÄ±rmazlÄ±k testinden geÃ§meden Ã¼zerine seramik dÃ¶ÅŸenemez!",
+
+                DnaSource = "AdÄ±m 4: Islak Hacim Su YalÄ±tÄ±mÄ±",
+
                 PlannedStartDate = d01Start,
+
                 PlannedEndDate = d01End,
+
                 SubSteps = CreateSubSteps(
-                    "T-2 Zemin tozunun temizlenmesi, pah bandı ve elastik astar hazırlığı",
-                    "Duvar-taban birleşim pah bantları, ilk kat ve ikinci kat şaşırtmalı sürme yalıtım",
-                    "48 saat su göllendirme testi ve alt kat tavanında ıslaklık/nem kontrolü",
-                    "Havalandırmasız banyolarda fanlı hava tahliyesi ve organik buhar maskesi"
+
+                    "T-2 Zemin tozunun temizlenmesi, pah bandÄ± ve elastik astar hazÄ±rlÄ±ÄŸÄ±",
+
+                    "Duvar-taban birleÅŸim pah bantlarÄ±, ilk kat ve ikinci kat ÅŸaÅŸÄ±rtmalÄ± sÃ¼rme yalÄ±tÄ±m",
+
+                    "48 saat su gÃ¶llendirme testi ve alt kat tavanÄ±nda Ä±slaklÄ±k/nem kontrolÃ¼",
+
+                    "HavalandÄ±rmasÄ±z banyolarda fanlÄ± hava tahliyesi ve organik buhar maskesi"
+
                 )
+
             });
 
-            // D-02: Islak Hacim & Mutfak Seramik / Porselen Kaplama (Adım 4)
+
+
+            // D-02: Islak Hacim & Mutfak Seramik / Porselen Kaplama (AdÄ±m 4)
+
             var d02Start = d01End;
+
             var d02End = d02Start.AddDays(12);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "D-02",
+
                 Order = stepOrderSeq++,
+
                 PhaseName = "Islak Hacim & Mutfak Seramik / Porselen Kaplama",
+
                 StageCategory = "Seramik & Fayans",
+
                 PartIndex = p3Idx,
+
                 PartName = p3Name,
+
                 PartBadgeClass = p3Badge,
+
                 TriggerRule = p3Trigger,
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Porselen Seramik / Fayans, Esnek Yapıştırıcı ve Derz Dolgusu",
-                MaterialDescription = "Banyo duvar/zemin seramik kaplamaları, mutfak tezgah arası ve balkon seramiklerinin döşenmesi.",
+
+                MaterialTitle = "Porselen Seramik / Fayans, Esnek YapÄ±ÅŸtÄ±rÄ±cÄ± ve Derz Dolgusu",
+
+                MaterialDescription = "Banyo duvar/zemin seramik kaplamalarÄ±, mutfak tezgah arasÄ± ve balkon seramiklerinin dÃ¶ÅŸenmesi.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Islak hacim ve mutfak döşeme/duvar net alanlarından hesaplanacak)",
-                SupplierCategory = "Seramik Mağazası & Yapıştırıcı Bayisi",
+
+                MaterialUnit = "mÂ²",
+
+                MaterialFormula = "DXF Bekliyor (Islak hacim ve mutfak dÃ¶ÅŸeme/duvar net alanlarÄ±ndan hesaplanacak)",
+
+                SupplierCategory = "Seramik MaÄŸazasÄ± & YapÄ±ÅŸtÄ±rÄ±cÄ± Bayisi",
+
                 LaborTitle = "Seramik ve Fayans Ekibi",
-                ProfessionName = "Seramik Ustası",
-                CrewComposition = "1 Formen + 6 Seramik Ustası + 3 Yardımcı",
+
+                ProfessionName = "Seramik UstasÄ±",
+
+                CrewComposition = "1 Formen + 6 Seramik UstasÄ± + 3 YardÄ±mcÄ±",
+
                 CrewSize = 10,
+
                 DurationDays = 12,
+
                 EquipmentNeeded = "Lazer Hizalama Nivosu, Sulu Seramik Kesme Makinesi, Tesviye Klipsleri",
-                Predecessors = "Islak hacim su yalıtım sızdırmazlık onay tutanağı",
-                CriticalDependency = "Seramik yapıştırıcısı priz almadan ve derz dolgusu çekilmeden vitrifiye montajına başlanamaz!",
-                DnaSource = "Adım 4: Seramik & Zemin",
+
+                Predecessors = "Islak hacim su yalÄ±tÄ±m sÄ±zdÄ±rmazlÄ±k onay tutanaÄŸÄ±",
+
+                CriticalDependency = "Seramik yapÄ±ÅŸtÄ±rÄ±cÄ±sÄ± priz almadan ve derz dolgusu Ã§ekilmeden vitrifiye montajÄ±na baÅŸlanamaz!",
+
+                DnaSource = "AdÄ±m 4: Seramik & Zemin",
+
                 PlannedStartDate = d02Start,
+
                 PlannedEndDate = d02End,
+
                 SubSteps = CreateSubSteps(
-                    "T-2 Seramik açılım şeması, derz artı/takozları ve lazer hizalama hazırlığı",
-                    "Taraklı yapıştırma harcı çekimi, tesviye klipsleri ile seramik montajı ve derz dolgusu",
-                    "Mastar ile yüzey sıfırlığı, eğim kontrolü ve derz dolgusu pürüzsüzlük kontrolü",
-                    "Islak seramik kesme makinesi koruması, toz maskesi ve dizlik kullanımı"
+
+                    "T-2 Seramik aÃ§Ä±lÄ±m ÅŸemasÄ±, derz artÄ±/takozlarÄ± ve lazer hizalama hazÄ±rlÄ±ÄŸÄ±",
+
+                    "TaraklÄ± yapÄ±ÅŸtÄ±rma harcÄ± Ã§ekimi, tesviye klipsleri ile seramik montajÄ± ve derz dolgusu",
+
+                    "Mastar ile yÃ¼zey sÄ±fÄ±rlÄ±ÄŸÄ±, eÄŸim kontrolÃ¼ ve derz dolgusu pÃ¼rÃ¼zsÃ¼zlÃ¼k kontrolÃ¼",
+
+                    "Islak seramik kesme makinesi korumasÄ±, toz maskesi ve dizlik kullanÄ±mÄ±"
+
                 )
+
             });
 
-            // D-03: Daire İçi Duvar & Tavan Su Bazlı Silikonlu Boya (Adım 4)
+
+
+            // D-03: Daire Ä°Ã§i Duvar & Tavan Su BazlÄ± Silikonlu Boya (AdÄ±m 4)
+
             var d03Start = s05End.AddDays(7);
+
             var d03End = d03Start.AddDays(10);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "D-03",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Daire İçi Duvar & Tavan Su Bazlı Silikonlu Boya",
+
+                PhaseName = "Daire Ä°Ã§i Duvar & Tavan Su BazlÄ± Silikonlu Boya",
+
                 StageCategory = "Boya & Badana",
+
                 PartIndex = p3Idx,
+
                 PartName = p3Name,
+
                 PartBadgeClass = p3Badge,
+
                 TriggerRule = p3Trigger,
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "İpeksi Mat Silikonlu İç Cephe Boyası, Astar ve Macun",
-                MaterialDescription = "Duvar ve tavan yüzeylerinde zımpara, tamirat macunu, astar ve çift kat silikonlu boya uygulaması.",
+
+                MaterialTitle = "Ä°peksi Mat Silikonlu Ä°Ã§ Cephe BoyasÄ±, Astar ve Macun",
+
+                MaterialDescription = "Duvar ve tavan yÃ¼zeylerinde zÄ±mpara, tamirat macunu, astar ve Ã§ift kat silikonlu boya uygulamasÄ±.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Net duvar/tavan boya alanlarından hesaplanacak)",
-                SupplierCategory = "Boya Bayisi & Yapı Kimyası",
-                LaborTitle = "Boya & Yüzey İşlemleri Ekibi",
-                ProfessionName = "Boya Ustası",
-                CrewComposition = "1 Boya Formeni + 5 Boyacı Ustası",
+
+                MaterialUnit = "mÂ²",
+
+                MaterialFormula = "DXF Bekliyor (Net duvar/tavan boya alanlarÄ±ndan hesaplanacak)",
+
+                SupplierCategory = "Boya Bayisi & YapÄ± KimyasÄ±",
+
+                LaborTitle = "Boya & YÃ¼zey Ä°ÅŸlemleri Ekibi",
+
+                ProfessionName = "Boya UstasÄ±",
+
+                CrewComposition = "1 Boya Formeni + 5 BoyacÄ± UstasÄ±",
+
                 CrewSize = 6,
+
                 DurationDays = 10,
-                EquipmentNeeded = "Zımpara Makinesi, Boya Ruloları, Kestirme Fırçaları, Spot Projektör",
-                Predecessors = "Alçı sıva zımparası ve nem oranının %10 altına düşmesi",
-                CriticalDependency = "Ahşap kapılar ve parkeler döşenmeden önce duvarların 1. ve 2. kat astar/boyası tamamlanmalıdır!",
-                DnaSource = "Adım 4: İç Mekan Boya",
+
+                EquipmentNeeded = "ZÄ±mpara Makinesi, Boya RulolarÄ±, Kestirme FÄ±rÃ§alarÄ±, Spot ProjektÃ¶r",
+
+                Predecessors = "AlÃ§Ä± sÄ±va zÄ±mparasÄ± ve nem oranÄ±nÄ±n %10 altÄ±na dÃ¼ÅŸmesi",
+
+                CriticalDependency = "AhÅŸap kapÄ±lar ve parkeler dÃ¶ÅŸenmeden Ã¶nce duvarlarÄ±n 1. ve 2. kat astar/boyasÄ± tamamlanmalÄ±dÄ±r!",
+
+                DnaSource = "AdÄ±m 4: Ä°Ã§ Mekan Boya",
+
                 PlannedStartDate = d03Start,
+
                 PlannedEndDate = d03End,
+
                 SubSteps = CreateSubSteps(
-                    "T-2 Alçı sıva yüzey zımparası, spot lamba ile yüzey kontrolü ve şeffaf astar çekimi",
-                    "Rulo ve kestirme fırçalar ile 2 kat boya uygulaması ve süpürgelik altı izolasyonu",
-                    "Işık altında fırça izi, dalgalanma ve ton farkı kontrolü",
-                    "İç mekan havalandırması ve göz koruyucu gözlük"
+
+                    "T-2 AlÃ§Ä± sÄ±va yÃ¼zey zÄ±mparasÄ±, spot lamba ile yÃ¼zey kontrolÃ¼ ve ÅŸeffaf astar Ã§ekimi",
+
+                    "Rulo ve kestirme fÄ±rÃ§alar ile 2 kat boya uygulamasÄ± ve sÃ¼pÃ¼rgelik altÄ± izolasyonu",
+
+                    "IÅŸÄ±k altÄ±nda fÄ±rÃ§a izi, dalgalanma ve ton farkÄ± kontrolÃ¼",
+
+                    "Ä°Ã§ mekan havalandÄ±rmasÄ± ve gÃ¶z koruyucu gÃ¶zlÃ¼k"
+
                 )
+
             });
 
-            // D-04: Daire İçi Parke, Süpürgelik & Zemin Kaplamaları (Adım 4)
+
+
+            // D-04: Daire Ä°Ã§i Parke, SÃ¼pÃ¼rgelik & Zemin KaplamalarÄ± (AdÄ±m 4)
+
             var d04Start = d03End;
+
             var d04End = d04Start.AddDays(7);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "D-04",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Daire İçi Parke, Süpürgelik & Zemin Kaplamaları",
+
+                PhaseName = "Daire Ä°Ã§i Parke, SÃ¼pÃ¼rgelik & Zemin KaplamalarÄ±",
+
                 StageCategory = "Parke & Zemin",
+
                 PartIndex = p3Idx,
+
                 PartName = p3Name,
+
                 PartBadgeClass = p3Badge,
+
                 TriggerRule = p3Trigger,
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "32. Sınıf Derzli Laminat Parke, Kapron Şilte ve Süpürgelik",
-                MaterialDescription = "Salon ve odalarda kapron şilte serimi, kilitli laminat parke montajı ve 8cm lake süpürgelikler.",
+
+                MaterialTitle = "32. SÄ±nÄ±f Derzli Laminat Parke, Kapron Åilte ve SÃ¼pÃ¼rgelik",
+
+                MaterialDescription = "Salon ve odalarda kapron ÅŸilte serimi, kilitli laminat parke montajÄ± ve 8cm lake sÃ¼pÃ¼rgelikler.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Kuru hacim net döşeme alanlarından hesaplanacak)",
-                SupplierCategory = "Parke & Orman Ürünleri Mağazası",
+
+                MaterialUnit = "mÂ²",
+
+                MaterialFormula = "DXF Bekliyor (Kuru hacim net dÃ¶ÅŸeme alanlarÄ±ndan hesaplanacak)",
+
+                SupplierCategory = "Parke & Orman ÃœrÃ¼nleri MaÄŸazasÄ±",
+
                 LaborTitle = "Laminat Parke Montaj Ekibi",
-                ProfessionName = "Parke Ustası",
-                CrewComposition = "1 Formen + 4 Parke Ustası",
+
+                ProfessionName = "Parke UstasÄ±",
+
+                CrewComposition = "1 Formen + 4 Parke UstasÄ±",
+
                 CrewSize = 5,
+
                 DurationDays = 7,
-                EquipmentNeeded = "Giyotin Parke Kesici, Gönye Kesme Testeresi, Parke Çektirme Demiri",
-                Predecessors = "Zemin şapının tamamen kuruması (nem <%2) ve tavan boyalarının bitmesi",
-                CriticalDependency = "Zemin nemi %2'nin altına düşmeden parke serilemez; aksi takdirde kabarma ve deformasyon oluşur!",
-                DnaSource = "Adım 4: Parke & Zemin",
+
+                EquipmentNeeded = "Giyotin Parke Kesici, GÃ¶nye Kesme Testeresi, Parke Ã‡ektirme Demiri",
+
+                Predecessors = "Zemin ÅŸapÄ±nÄ±n tamamen kurumasÄ± (nem <%2) ve tavan boyalarÄ±nÄ±n bitmesi",
+
+                CriticalDependency = "Zemin nemi %2'nin altÄ±na dÃ¼ÅŸmeden parke serilemez; aksi takdirde kabarma ve deformasyon oluÅŸur!",
+
+                DnaSource = "AdÄ±m 4: Parke & Zemin",
+
                 PlannedStartDate = d04Start,
+
                 PlannedEndDate = d04End,
+
                 SubSteps = CreateSubSteps(
-                    "T-2 Dijital nem ölçer ile şap nem kontrolü ve kapron şilte serimi",
-                    "Duvar dibi 1.5 cm genleşme boşluğu bırakarak kilitli parke ve süpürgelik montajı",
-                    "Zemin esneme, kilit oturumu ve süpürgelik köşe gönye kontrolü",
-                    "Giyotin kesici güvenliği ve diz koruyucu pedler"
+
+                    "T-2 Dijital nem Ã¶lÃ§er ile ÅŸap nem kontrolÃ¼ ve kapron ÅŸilte serimi",
+
+                    "Duvar dibi 1.5 cm genleÅŸme boÅŸluÄŸu bÄ±rakarak kilitli parke ve sÃ¼pÃ¼rgelik montajÄ±",
+
+                    "Zemin esneme, kilit oturumu ve sÃ¼pÃ¼rgelik kÃ¶ÅŸe gÃ¶nye kontrolÃ¼",
+
+                    "Giyotin kesici gÃ¼venliÄŸi ve diz koruyucu pedler"
+
                 )
+
             });
 
-            // =========================================================================
-            // 4. PARÇA: DEMİRBAŞ, MONTAJ & DIŞ ÇEVRE (TESLİM AŞAMASI)
+
+
             // =========================================================================
 
-            // M-01: Daire Giriş Çelik Kapıları ve İç Ahşap Oda Kapıları (Adım 4)
+            // 4. PARÃ‡A: DEMÄ°RBAÅ, MONTAJ & DIÅ Ã‡EVRE (TESLÄ°M AÅAMASI)
+
+            // =========================================================================
+
+
+
+            // M-01: Daire GiriÅŸ Ã‡elik KapÄ±larÄ± ve Ä°Ã§ AhÅŸap Oda KapÄ±larÄ± (AdÄ±m 4)
+
             var m01Start = d04End;
+
             var m01End = m01Start.AddDays(6);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "M-01",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Daire Giriş Çelik Kapıları ve İç Ahşap Oda Kapıları",
-                StageCategory = "Kapı Montajı",
+
+                PhaseName = "Daire GiriÅŸ Ã‡elik KapÄ±larÄ± ve Ä°Ã§ AhÅŸap Oda KapÄ±larÄ±",
+
+                StageCategory = "KapÄ± MontajÄ±",
+
                 PartIndex = p4Idx,
+
                 PartName = p4Name,
+
                 PartBadgeClass = p4Badge,
+
                 TriggerRule = p4Trigger,
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Monoblok Çelik Daire Giriş Kapısı ve İç Ahşap Oda Kapıları",
-                MaterialDescription = "Monoblok kilitli çelik kapılar, ahşap kasa/kanat oda kapıları, pervazlar, kollar ve kilitler.",
+
+                MaterialTitle = "Monoblok Ã‡elik Daire GiriÅŸ KapÄ±sÄ± ve Ä°Ã§ AhÅŸap Oda KapÄ±larÄ±",
+
+                MaterialDescription = "Monoblok kilitli Ã§elik kapÄ±lar, ahÅŸap kasa/kanat oda kapÄ±larÄ±, pervazlar, kollar ve kilitler.",
+
                 MaterialQuantity = 0,
+
                 MaterialUnit = "Adet",
-                MaterialFormula = "DXF Bekliyor (Mimari kapı pencere şemasından adetler netleşecek)",
-                SupplierCategory = "Çelik Kapı & Ahşap Kapı İmalatçısı",
-                LaborTitle = "Kapı Montaj Ekibi",
-                ProfessionName = "Kapı Montaj Ustası",
-                CrewComposition = "1 Formen + 3 Kapı Montaj Ustası + 2 Yardımcı",
+
+                MaterialFormula = "DXF Bekliyor (Mimari kapÄ± pencere ÅŸemasÄ±ndan adetler netleÅŸecek)",
+
+                SupplierCategory = "Ã‡elik KapÄ± & AhÅŸap KapÄ± Ä°malatÃ§Ä±sÄ±",
+
+                LaborTitle = "KapÄ± Montaj Ekibi",
+
+                ProfessionName = "KapÄ± Montaj UstasÄ±",
+
+                CrewComposition = "1 Formen + 3 KapÄ± Montaj UstasÄ± + 2 YardÄ±mcÄ±",
+
                 CrewSize = 6,
+
                 DurationDays = 6,
-                EquipmentNeeded = "Lazer Terazi, Akülü Vidalama, Köpük Tabancası",
-                Predecessors = "Zemin parke ve ıslak hacim seramik döşemelerinin tamamlanması",
-                CriticalDependency = "Kapı kasaları montajından önce zemin kaplama kalınlıkları netleşmiş olmalıdır!",
-                DnaSource = "Adım 4: Çelik ve Ahşap Kapılar",
+
+                EquipmentNeeded = "Lazer Terazi, AkÃ¼lÃ¼ Vidalama, KÃ¶pÃ¼k TabancasÄ±",
+
+                Predecessors = "Zemin parke ve Ä±slak hacim seramik dÃ¶ÅŸemelerinin tamamlanmasÄ±",
+
+                CriticalDependency = "KapÄ± kasalarÄ± montajÄ±ndan Ã¶nce zemin kaplama kalÄ±nlÄ±klarÄ± netleÅŸmiÅŸ olmalÄ±dÄ±r!",
+
+                DnaSource = "AdÄ±m 4: Ã‡elik ve AhÅŸap KapÄ±lar",
+
                 PlannedStartDate = m01Start,
+
                 PlannedEndDate = m01End,
+
                 SubSteps = CreateSubSteps(
-                    "T-3 Daire bazında kapı açılış yönleri ve net kasa açıklıklarının kontrolü",
-                    "Kasa terazisi, poliüretan köpük dolgusu, kanat ayarı ve pervaz montajı",
-                    "Kilit, kol ve menteşe sürtünme testleri ve kanat ayar kontrolü",
-                    "Ağır çelik kapı taşımalarında ergonomik kaldırma ve eldiven kullanımı"
+
+                    "T-3 Daire bazÄ±nda kapÄ± aÃ§Ä±lÄ±ÅŸ yÃ¶nleri ve net kasa aÃ§Ä±klÄ±klarÄ±nÄ±n kontrolÃ¼",
+
+                    "Kasa terazisi, poliÃ¼retan kÃ¶pÃ¼k dolgusu, kanat ayarÄ± ve pervaz montajÄ±",
+
+                    "Kilit, kol ve menteÅŸe sÃ¼rtÃ¼nme testleri ve kanat ayar kontrolÃ¼",
+
+                    "AÄŸÄ±r Ã§elik kapÄ± taÅŸÄ±malarÄ±nda ergonomik kaldÄ±rma ve eldiven kullanÄ±mÄ±"
+
                 )
+
             });
 
-            // M-02: Mutfak Dolapları, Tezgah & Banyo Dolapları Montajı (Adım 4)
+
+
+            // M-02: Mutfak DolaplarÄ±, Tezgah & Banyo DolaplarÄ± MontajÄ± (AdÄ±m 4)
+
             var m02Start = m01Start.AddDays(2);
+
             var m02End = m02Start.AddDays(8);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "M-02",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Mutfak Dolapları, Tezgah & Banyo Dolapları Montajı",
-                StageCategory = "Sabit Mobilya Montajı",
+
+                PhaseName = "Mutfak DolaplarÄ±, Tezgah & Banyo DolaplarÄ± MontajÄ±",
+
+                StageCategory = "Sabit Mobilya MontajÄ±",
+
                 PartIndex = p4Idx,
+
                 PartName = p4Name,
+
                 PartBadgeClass = p4Badge,
+
                 TriggerRule = p4Trigger,
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Modüler Mutfak Dolapları, Granit / Kuvars Tezgah ve Banyo Dolapları",
-                MaterialDescription = "MDF gövde modüler mutfak dolapları, kuvars tezgah, banyo aynalı lavabo dolapları montajı.",
+
+                MaterialTitle = "ModÃ¼ler Mutfak DolaplarÄ±, Granit / Kuvars Tezgah ve Banyo DolaplarÄ±",
+
+                MaterialDescription = "MDF gÃ¶vde modÃ¼ler mutfak dolaplarÄ±, kuvars tezgah, banyo aynalÄ± lavabo dolaplarÄ± montajÄ±.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "Daire Takımı",
-                MaterialFormula = "DXF Bekliyor (Mutfak ve banyo mimari yerleşim detaylarından hesaplanacak)",
-                SupplierCategory = "Mutfak / Banyo Mobilya Üreticisi & Mermer Atölyesi",
+
+                MaterialUnit = "Daire TakÄ±mÄ±",
+
+                MaterialFormula = "DXF Bekliyor (Mutfak ve banyo mimari yerleÅŸim detaylarÄ±ndan hesaplanacak)",
+
+                SupplierCategory = "Mutfak / Banyo Mobilya Ãœreticisi & Mermer AtÃ¶lyesi",
+
                 LaborTitle = "Mobilya & Tezgah Montaj Ekibi",
-                ProfessionName = "Mobilya Montaj Ustası",
-                CrewComposition = "1 Formen + 4 Mobilya Ustası + 2 Mermer/Tezgah Ustası",
+
+                ProfessionName = "Mobilya Montaj UstasÄ±",
+
+                CrewComposition = "1 Formen + 4 Mobilya UstasÄ± + 2 Mermer/Tezgah UstasÄ±",
+
                 CrewSize = 7,
+
                 DurationDays = 8,
-                EquipmentNeeded = "Lazer Hizalama, Akülü Montaj Setleri, Vakumlu Vantuzlar",
-                Predecessors = "İç boya, zemin kaplamaları ve elektrik/sıhhi tesisat sortilerinin hazır olması",
-                CriticalDependency = "Dolap arkası tesisat vanaları ve priz yerleri milimetrik hizalanmalıdır!",
-                DnaSource = "Adım 4: Mutfak & Banyo Mobilyaları",
+
+                EquipmentNeeded = "Lazer Hizalama, AkÃ¼lÃ¼ Montaj Setleri, Vakumlu Vantuzlar",
+
+                Predecessors = "Ä°Ã§ boya, zemin kaplamalarÄ± ve elektrik/sÄ±hhi tesisat sortilerinin hazÄ±r olmasÄ±",
+
+                CriticalDependency = "Dolap arkasÄ± tesisat vanalarÄ± ve priz yerleri milimetrik hizalanmalÄ±dÄ±r!",
+
+                DnaSource = "AdÄ±m 4: Mutfak & Banyo MobilyalarÄ±",
+
                 PlannedStartDate = m02Start,
+
                 PlannedEndDate = m02End,
+
                 SubSteps = CreateSubSteps(
-                    "T-3 İmalat çizimlerine göre mutfak ve banyo duvarlarının gönye ve tesisat kontrolü",
-                    "Modüler gövde asımı, raylı çekmece/kapak montajı ve tezgah montajı",
-                    "Kapak boşlukları, ray amortisör testleri ve eviye sızdırmazlık silikonu kontrolü",
-                    "Duvar asma raylarının taşıma kapasitesi ve güvenli montaj vidaları denetimi"
+
+                    "T-3 Ä°malat Ã§izimlerine gÃ¶re mutfak ve banyo duvarlarÄ±nÄ±n gÃ¶nye ve tesisat kontrolÃ¼",
+
+                    "ModÃ¼ler gÃ¶vde asÄ±mÄ±, raylÄ± Ã§ekmece/kapak montajÄ± ve tezgah montajÄ±",
+
+                    "Kapak boÅŸluklarÄ±, ray amortisÃ¶r testleri ve eviye sÄ±zdÄ±rmazlÄ±k silikonu kontrolÃ¼",
+
+                    "Duvar asma raylarÄ±nÄ±n taÅŸÄ±ma kapasitesi ve gÃ¼venli montaj vidalarÄ± denetimi"
+
                 )
+
             });
 
-            // M-03: Vitrifiye, Armatür ve Bataryalar Montajı (Adım 4)
+
+
+            // M-03: Vitrifiye, ArmatÃ¼r ve Bataryalar MontajÄ± (AdÄ±m 4)
+
             var m03Start = m02End;
+
             var m03End = m03Start.AddDays(5);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "M-03",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Vitrifiye, Armatür ve Bataryalar Montajı",
-                StageCategory = "Vitrifiye & Armatür",
+
+                PhaseName = "Vitrifiye, ArmatÃ¼r ve Bataryalar MontajÄ±",
+
+                StageCategory = "Vitrifiye & ArmatÃ¼r",
+
                 PartIndex = p4Idx,
+
                 PartName = p4Name,
+
                 PartBadgeClass = p4Badge,
+
                 TriggerRule = p4Trigger,
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Asma Klozet, Gömme Rezervuar, Lavabo, Batarya ve Duş Setleri",
-                MaterialDescription = "Gömme rezervuar kumanda panelleri, klozet kapakları, lavabo bataryaları, duş başlıkları ve aksesuarlar.",
+
+                MaterialTitle = "Asma Klozet, GÃ¶mme Rezervuar, Lavabo, Batarya ve DuÅŸ Setleri",
+
+                MaterialDescription = "GÃ¶mme rezervuar kumanda panelleri, klozet kapaklarÄ±, lavabo bataryalarÄ±, duÅŸ baÅŸlÄ±klarÄ± ve aksesuarlar.",
+
                 MaterialQuantity = 0,
+
                 MaterialUnit = "Daire Seti",
-                MaterialFormula = "DXF Bekliyor (Islak hacim vitrifiye yerleşim planından netleşecek)",
-                SupplierCategory = "Vitrifiye & Banyo Donanım Bayisi",
-                LaborTitle = "İnce Sıhhi Tesisat Montaj Ekibi",
-                ProfessionName = "Vitrifiye Montaj Ustası",
-                CrewComposition = "1 Formen + 4 Montaj Ustası",
+
+                MaterialFormula = "DXF Bekliyor (Islak hacim vitrifiye yerleÅŸim planÄ±ndan netleÅŸecek)",
+
+                SupplierCategory = "Vitrifiye & Banyo DonanÄ±m Bayisi",
+
+                LaborTitle = "Ä°nce SÄ±hhi Tesisat Montaj Ekibi",
+
+                ProfessionName = "Vitrifiye Montaj UstasÄ±",
+
+                CrewComposition = "1 Formen + 4 Montaj UstasÄ±",
+
                 CrewSize = 5,
+
                 DurationDays = 5,
-                EquipmentNeeded = "Tork Anahtarları, Silikon Tabancaları, Boru Anahtarları",
-                Predecessors = "Banyo mobilyaları ve seramik imalatlarının tamamlanması",
-                CriticalDependency = "Batarya ve klozet montajları tamamlandıktan sonra basınçlı su testi yapılmadan daire teslim edilemez!",
-                DnaSource = "Adım 4: Vitrifiye & Armatür",
+
+                EquipmentNeeded = "Tork AnahtarlarÄ±, Silikon TabancalarÄ±, Boru AnahtarlarÄ±",
+
+                Predecessors = "Banyo mobilyalarÄ± ve seramik imalatlarÄ±nÄ±n tamamlanmasÄ±",
+
+                CriticalDependency = "Batarya ve klozet montajlarÄ± tamamlandÄ±ktan sonra basÄ±nÃ§lÄ± su testi yapÄ±lmadan daire teslim edilemez!",
+
+                DnaSource = "AdÄ±m 4: Vitrifiye & ArmatÃ¼r",
+
                 PlannedStartDate = m03Start,
+
                 PlannedEndDate = m03End,
+
                 SubSteps = CreateSubSteps(
-                    "T-2 Daire bazlı vitrifiye kutularının dağıtımı ve ara muslukların temizliği",
-                    "Asma klozet, lavabo montajı, bataryalar ve duş başlığı montajı",
-                    "Tüm bataryaların su akış ve rezervuar su basma testi, kaçak kontrolü",
-                    "Porselen montajlarında aşırı sıkma çatlamalarını önleme ve koruyucu eldiven"
+
+                    "T-2 Daire bazlÄ± vitrifiye kutularÄ±nÄ±n daÄŸÄ±tÄ±mÄ± ve ara musluklarÄ±n temizliÄŸi",
+
+                    "Asma klozet, lavabo montajÄ±, bataryalar ve duÅŸ baÅŸlÄ±ÄŸÄ± montajÄ±",
+
+                    "TÃ¼m bataryalarÄ±n su akÄ±ÅŸ ve rezervuar su basma testi, kaÃ§ak kontrolÃ¼",
+
+                    "Porselen montajlarÄ±nda aÅŸÄ±rÄ± sÄ±kma Ã§atlamalarÄ±nÄ± Ã¶nleme ve koruyucu eldiven"
+
                 )
+
             });
 
-            // M-04: Asansör Montajı, Güvenlik Testleri ve Tescil Ruhsatı (Adım 8)
+
+
+            // M-04: AsansÃ¶r MontajÄ±, GÃ¼venlik Testleri ve Tescil RuhsatÄ± (AdÄ±m 8)
+
             var m04Start = s05End;
+
             var m04End = m04Start.AddDays(12);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "M-04",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Asansör Montajı, Güvenlik Testleri ve Tescil Ruhsatı",
-                StageCategory = "Asansör & Sirkülasyon",
+
+                PhaseName = "AsansÃ¶r MontajÄ±, GÃ¼venlik Testleri ve Tescil RuhsatÄ±",
+
+                StageCategory = "AsansÃ¶r & SirkÃ¼lasyon",
+
                 PartIndex = p4Idx,
+
                 PartName = p4Name,
+
                 PartBadgeClass = p4Badge,
+
                 TriggerRule = p4Trigger,
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Makine Dairesiz (MRL) Asansör Paketi, Raylar ve Kabin Donanımı",
-                MaterialDescription = "Kılavuz raylar, tahrik motoru, kabin, halatlar, karşı ağırlık, otomatik kat kapıları ve kumanda panosu.",
+
+                MaterialTitle = "Makine Dairesiz (MRL) AsansÃ¶r Paketi, Raylar ve Kabin DonanÄ±mÄ±",
+
+                MaterialDescription = "KÄ±lavuz raylar, tahrik motoru, kabin, halatlar, karÅŸÄ± aÄŸÄ±rlÄ±k, otomatik kat kapÄ±larÄ± ve kumanda panosu.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "Adet Asansör",
-                MaterialFormula = "DXF Bekliyor (Asansör kuyu rölevesi ve durak sayısından hesaplanacak)",
-                SupplierCategory = "Asansör İmalatçı & Montaj Firması",
-                LaborTitle = "Asansör İmalat ve Montaj Ekibi",
-                ProfessionName = "Asansör Montajcısı",
-                CrewComposition = "1 Asansör Mühendisi + 3 Montaj Ustası",
+
+                MaterialUnit = "Adet AsansÃ¶r",
+
+                MaterialFormula = "DXF Bekliyor (AsansÃ¶r kuyu rÃ¶levesi ve durak sayÄ±sÄ±ndan hesaplanacak)",
+
+                SupplierCategory = "AsansÃ¶r Ä°malatÃ§Ä± & Montaj FirmasÄ±",
+
+                LaborTitle = "AsansÃ¶r Ä°malat ve Montaj Ekibi",
+
+                ProfessionName = "AsansÃ¶r MontajcÄ±sÄ±",
+
+                CrewComposition = "1 AsansÃ¶r MÃ¼hendisi + 3 Montaj UstasÄ±",
+
                 CrewSize = 4,
+
                 DurationDays = 12,
-                EquipmentNeeded = "Kuyu İçi Tirfor / Halatlı Çektirme, Lazer Şakül, Tork Anahtarları",
-                Predecessors = "Kuyu dibi su yalıtımı, şaft duvarları ve asansör makine dairesi / kule betonu",
-                CriticalDependency = "A Tipi Muayene Kuruluşu yeşil etiket vermeden ve tescil ruhsatı çıkmadan asansör çalıştırılamaz!",
-                DnaSource = "Adım 8: Asansör Sistemleri",
+
+                EquipmentNeeded = "Kuyu Ä°Ã§i Tirfor / HalatlÄ± Ã‡ektirme, Lazer ÅakÃ¼l, Tork AnahtarlarÄ±",
+
+                Predecessors = "Kuyu dibi su yalÄ±tÄ±mÄ±, ÅŸaft duvarlarÄ± ve asansÃ¶r makine dairesi / kule betonu",
+
+                CriticalDependency = "A Tipi Muayene KuruluÅŸu yeÅŸil etiket vermeden ve tescil ruhsatÄ± Ã§Ä±kmadan asansÃ¶r Ã§alÄ±ÅŸtÄ±rÄ±lamaz!",
+
+                DnaSource = "AdÄ±m 8: AsansÃ¶r Sistemleri",
+
                 PlannedStartDate = m04Start,
+
                 PlannedEndDate = m04End,
+
                 SubSteps = CreateSubSteps(
-                    "T-5 Kuyu şakülü atılması, kuyu dibi temizliği ve ray konsollarının kontrolü",
-                    "Kılavuz ray montajı, makine/motor montajı, kabin ve paraşüt fren sistemi kurulumu",
-                    "A Tipi Muayene Kuruluşu yeşil etiket kabulü ve belediye tescil belgesi",
-                    "Kuyu içi yaşam hattı, kuyu kapıları koruyucu paravanları ve revizyon kumanda denetimi"
+
+                    "T-5 Kuyu ÅŸakÃ¼lÃ¼ atÄ±lmasÄ±, kuyu dibi temizliÄŸi ve ray konsollarÄ±nÄ±n kontrolÃ¼",
+
+                    "KÄ±lavuz ray montajÄ±, makine/motor montajÄ±, kabin ve paraÅŸÃ¼t fren sistemi kurulumu",
+
+                    "A Tipi Muayene KuruluÅŸu yeÅŸil etiket kabulÃ¼ ve belediye tescil belgesi",
+
+                    "Kuyu iÃ§i yaÅŸam hattÄ±, kuyu kapÄ±larÄ± koruyucu paravanlarÄ± ve revizyon kumanda denetimi"
+
                 )
+
             });
 
-            // M-05: Kat Holleri / Yangın Merdiveni Mermer Kaplama & Yangın Dolapları (Adım 8)
+
+
+            // M-05: Kat Holleri / YangÄ±n Merdiveni Mermer Kaplama & YangÄ±n DolaplarÄ± (AdÄ±m 8)
+
             var m05Start = m04Start.AddDays(2);
+
             var m05End = m05Start.AddDays(8);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "M-05",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Kat Holleri / Yangın Merdiveni Mermer Kaplama & Yangın Dolapları",
-                StageCategory = "Ortak Alanlar & Yangın Güvenliği",
+
+                PhaseName = "Kat Holleri / YangÄ±n Merdiveni Mermer Kaplama & YangÄ±n DolaplarÄ±",
+
+                StageCategory = "Ortak Alanlar & YangÄ±n GÃ¼venliÄŸi",
+
                 PartIndex = p4Idx,
+
                 PartName = p4Name,
+
                 PartBadgeClass = p4Badge,
+
                 TriggerRule = p4Trigger,
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "Kat Holü / Merdiven Mermerleri, EI90 Yangın Kaçış Kapıları ve Yangın Dolapları",
-                MaterialDescription = "Basamak ve kat koridorları mermer kaplama, panik barlı yangın merdiven kapıları ve yangın dolabı lans setleri.",
+
+                MaterialTitle = "Kat HolÃ¼ / Merdiven Mermerleri, EI90 YangÄ±n KaÃ§Ä±ÅŸ KapÄ±larÄ± ve YangÄ±n DolaplarÄ±",
+
+                MaterialDescription = "Basamak ve kat koridorlarÄ± mermer kaplama, panik barlÄ± yangÄ±n merdiven kapÄ±larÄ± ve yangÄ±n dolabÄ± lans setleri.",
+
                 MaterialQuantity = 0,
+
                 MaterialUnit = "Kat Seti",
-                MaterialFormula = "DXF Bekliyor (Merdiven basamak detayları ve kat holü alanlarından hesaplanacak)",
-                SupplierCategory = "Mermer Ocağı & Yangın Güvenlik Firması",
-                LaborTitle = "Mermer & Yangın Güvenlik Ekibi",
-                ProfessionName = "Mermerci & Yangın Ekibi",
-                CrewComposition = "1 Formen + 4 Mermerci + 2 Yangın Tesisatçısı",
+
+                MaterialFormula = "DXF Bekliyor (Merdiven basamak detaylarÄ± ve kat holÃ¼ alanlarÄ±ndan hesaplanacak)",
+
+                SupplierCategory = "Mermer OcaÄŸÄ± & YangÄ±n GÃ¼venlik FirmasÄ±",
+
+                LaborTitle = "Mermer & YangÄ±n GÃ¼venlik Ekibi",
+
+                ProfessionName = "Mermerci & YangÄ±n Ekibi",
+
+                CrewComposition = "1 Formen + 4 Mermerci + 2 YangÄ±n TesisatÃ§Ä±sÄ±",
+
                 CrewSize = 7,
+
                 DurationDays = 8,
+
                 EquipmentNeeded = "Sulu Mermer Kesici, Lazer Hizalama, Boru Pres Makinesi",
-                Predecessors = "Kat koridorları ve merdiven kova kaba sıvalarının tamamlanması",
-                CriticalDependency = "İtfaiye yangın uygunluk raporu için yangın kapıları duman fitilleri ve yaylı menteşeleri eksiksiz olmalıdır!",
-                DnaSource = "Adım 8: Yangın Güvenliği & Ortak Alanlar",
+
+                Predecessors = "Kat koridorlarÄ± ve merdiven kova kaba sÄ±valarÄ±nÄ±n tamamlanmasÄ±",
+
+                CriticalDependency = "Ä°tfaiye yangÄ±n uygunluk raporu iÃ§in yangÄ±n kapÄ±larÄ± duman fitilleri ve yaylÄ± menteÅŸeleri eksiksiz olmalÄ±dÄ±r!",
+
+                DnaSource = "AdÄ±m 8: YangÄ±n GÃ¼venliÄŸi & Ortak Alanlar",
+
                 PlannedStartDate = m05Start,
+
                 PlannedEndDate = m05End,
+
                 SubSteps = CreateSubSteps(
-                    "T-3 Yangın kaçış kapıları sertifikaları, basamak mermerleri ve hortum dolapları sevki",
-                    "Merdiven mermer kaplama, yangın kaçış kapıları panik bar montajı ve kat dolapları montajı",
-                    "Kapı yaylı otomatik kapanma testi, duman sızdırmazlık fitili ve yangın hattı su testi",
-                    "Yangın merdiveni geçici aydınlatması ve basamak kaydırmaz bant uygulaması"
+
+                    "T-3 YangÄ±n kaÃ§Ä±ÅŸ kapÄ±larÄ± sertifikalarÄ±, basamak mermerleri ve hortum dolaplarÄ± sevki",
+
+                    "Merdiven mermer kaplama, yangÄ±n kaÃ§Ä±ÅŸ kapÄ±larÄ± panik bar montajÄ± ve kat dolaplarÄ± montajÄ±",
+
+                    "KapÄ± yaylÄ± otomatik kapanma testi, duman sÄ±zdÄ±rmazlÄ±k fitili ve yangÄ±n hattÄ± su testi",
+
+                    "YangÄ±n merdiveni geÃ§ici aydÄ±nlatmasÄ± ve basamak kaydÄ±rmaz bant uygulamasÄ±"
+
                 )
+
             });
 
-            // M-06: Daire Temizlikleri, İnce Kabul, Tesisat Testleri ve İskan / Teslim Hazırlığı
+
+
+            // M-06: Daire Temizlikleri, Ä°nce Kabul, Tesisat Testleri ve Ä°skan / Teslim HazÄ±rlÄ±ÄŸÄ±
+
             var m06Start = m05End.AddDays(2);
+
             var m06End = m06Start.AddDays(7);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "M-06",
+
                 Order = stepOrderSeq++,
-                PhaseName = "Daire Temizlikleri, İnce Kabul, Tesisat Testleri ve İskan / Teslim Hazırlığı",
+
+                PhaseName = "Daire Temizlikleri, Ä°nce Kabul, Tesisat Testleri ve Ä°skan / Teslim HazÄ±rlÄ±ÄŸÄ±",
+
                 StageCategory = "Kabul & Teslim",
+
                 PartIndex = p4Idx,
+
                 PartName = p4Name,
+
                 PartBadgeClass = p4Badge,
-                TriggerRule = "Tüm daire içi montajlar tamamlanınca başlar",
+
+                TriggerRule = "TÃ¼m daire iÃ§i montajlar tamamlanÄ±nca baÅŸlar",
+
                 TargetStructureName = targetStructureName,
+
                 TargetBuildingId = targetBuildingId,
-                MaterialTitle = "İnşaat Sonrası Temizlik Kimyasalları, Koruma Kartonları ve Kabul Tutanakları",
-                MaterialDescription = "Cam, zemin ve dolapların endüstriyel temizliği, boya rötuşları, tesisat testleri ve bağımsız bölüm teslim tutanakları.",
+
+                MaterialTitle = "Ä°nÅŸaat SonrasÄ± Temizlik KimyasallarÄ±, Koruma KartonlarÄ± ve Kabul TutanaklarÄ±",
+
+                MaterialDescription = "Cam, zemin ve dolaplarÄ±n endÃ¼striyel temizliÄŸi, boya rÃ¶tuÅŸlarÄ±, tesisat testleri ve baÄŸÄ±msÄ±z bÃ¶lÃ¼m teslim tutanaklarÄ±.",
+
                 MaterialQuantity = 0,
+
                 MaterialUnit = "Daire",
-                MaterialFormula = "DXF Bekliyor (Toplam bağımsız bölüm sayısından netleşecek)",
-                SupplierCategory = "Endüstriyel Temizlik & Şantiye Sarf Malzemeleri",
-                LaborTitle = "İnce Temizlik ve Kalite Kabul Ekibi",
-                ProfessionName = "Temizlik & Kalite Kontrol Ustası",
-                CrewComposition = "1 Kalite Kontrol Şefi + 6 Temizlik Personeli + 2 Rötuş Ustası",
+
+                MaterialFormula = "DXF Bekliyor (Toplam baÄŸÄ±msÄ±z bÃ¶lÃ¼m sayÄ±sÄ±ndan netleÅŸecek)",
+
+                SupplierCategory = "EndÃ¼striyel Temizlik & Åantiye Sarf Malzemeleri",
+
+                LaborTitle = "Ä°nce Temizlik ve Kalite Kabul Ekibi",
+
+                ProfessionName = "Temizlik & Kalite Kontrol UstasÄ±",
+
+                CrewComposition = "1 Kalite Kontrol Åefi + 6 Temizlik Personeli + 2 RÃ¶tuÅŸ UstasÄ±",
+
                 CrewSize = 9,
+
                 DurationDays = 7,
-                EquipmentNeeded = "Endüstriyel Vakum Makineleri, Buharlı Temizleyiciler, Lazer Kontrol Cihazları",
-                Predecessors = "Tüm ince işlerin, vitrifiye, mobilya ve kapı montajlarının bitmesi",
-                CriticalDependency = "Eksik ve kusur listesi (punch list) giderilmeden daire anahtarları teslim edilemez!",
-                DnaSource = "Yapı Yönetimi: Teslim ve İskan",
+
+                EquipmentNeeded = "EndÃ¼striyel Vakum Makineleri, BuharlÄ± Temizleyiciler, Lazer Kontrol CihazlarÄ±",
+
+                Predecessors = "TÃ¼m ince iÅŸlerin, vitrifiye, mobilya ve kapÄ± montajlarÄ±nÄ±n bitmesi",
+
+                CriticalDependency = "Eksik ve kusur listesi (punch list) giderilmeden daire anahtarlarÄ± teslim edilemez!",
+
+                DnaSource = "YapÄ± YÃ¶netimi: Teslim ve Ä°skan",
+
                 PlannedStartDate = m06Start,
+
                 PlannedEndDate = m06End,
+
                 SubSteps = CreateSubSteps(
-                    "T-2 Daire bazlı punch list (kusur tespit tutanağı) oluşturulması",
-                    "Endüstriyel ince temizlik, harç/boya lekelerinin çıkarılması ve zemin koruması",
-                    "Elektrik sortileri, bataryalar ve pencere kanatlarının tek tek fonksiyon testi",
-                    "Islak zeminlerde kayma önlemleri ve temizlik kimyasalları güvenlik bilgi formu (MSDS)"
+
+                    "T-2 Daire bazlÄ± punch list (kusur tespit tutanaÄŸÄ±) oluÅŸturulmasÄ±",
+
+                    "EndÃ¼striyel ince temizlik, harÃ§/boya lekelerinin Ã§Ä±karÄ±lmasÄ± ve zemin korumasÄ±",
+
+                    "Elektrik sortileri, bataryalar ve pencere kanatlarÄ±nÄ±n tek tek fonksiyon testi",
+
+                    "Islak zeminlerde kayma Ã¶nlemleri ve temizlik kimyasallarÄ± gÃ¼venlik bilgi formu (MSDS)"
+
                 )
+
             });
+
+
 
             return list;
+
         }
+
+
 
         private static List<WorkflowSubStepDto> CreateWorkflowSubSteps(string prePrep, string exec, string quality, string isg)
+
         {
+
             return new List<WorkflowSubStepDto>
+
             {
+
                 new WorkflowSubStepDto { Title = prePrep, Category = "PrePreparation", IsCompleted = false },
+
                 new WorkflowSubStepDto { Title = exec, Category = "Execution", IsCompleted = false },
+
                 new WorkflowSubStepDto { Title = quality, Category = "QualityAndCuring", IsCompleted = false },
+
                 new WorkflowSubStepDto { Title = isg, Category = "SafetyIsg", IsCompleted = false }
+
             };
+
         }
 
+
+
         private List<WorkflowStepItemDto> GenerateSiteSetupSteps(ConstructionProject project, ProjectDnaProfile profile)
+
         {
+
             var list = new List<WorkflowStepItemDto>();
+
             if (project == null) return list;
+
+
 
             var details = profile?.Details?.ToList() ?? new List<ProjectDnaDetail>();
 
-            var ihataMatDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Sac") || d.SelectedItem.Contains("Tel Örgü") || d.SelectedItem.Contains("Pano") || d.SelectedItem.Contains("OSB"));
-            string ihataMalzemesi = ihataMatDetail != null ? ihataMatDetail.SelectedItem : "Trapez Sac / OSB Pano Çevre İhatası";
 
-            var kapiDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Kapı"));
-            string kapiTipi = kapiDetail != null ? kapiDetail.SelectedItem : "Sürgülü Raylı Sac Kapı (6.00m)";
 
-            var molozDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Yıkım") || d.SelectedItem.Contains("Moloz") || d.SelectedItem.Contains("Enkaz") || d.SelectedItem.Contains("Boş Arsa"));
-            bool isCleanPlot = molozDetail != null && (molozDetail.SelectedItem.Contains("Boş") || molozDetail.SelectedItem.Contains("Gerekmez") || molozDetail.SelectedItem.Contains("Yok"));
-            bool molozVar = molozDetail != null && !isCleanPlot && (molozDetail.SelectedItem.Contains("Yıkılacak") || molozDetail.SelectedItem.Contains("Moloz ve Çöp") || molozDetail.SelectedItem.Contains("Enkaz"));
+            var ihataMatDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("Sac") || d.SelectedItem.Contains("Tel Ã–rgÃ¼") || d.SelectedItem.Contains("Pano") || d.SelectedItem.Contains("OSB"));
+
+            string ihataMalzemesi = ihataMatDetail != null ? ihataMatDetail.SelectedItem : "Trapez Sac / OSB Pano Ã‡evre Ä°hatasÄ±";
+
+
+
+            var kapiDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("KapÄ±"));
+
+            string kapiTipi = kapiDetail != null ? kapiDetail.SelectedItem : "SÃ¼rgÃ¼lÃ¼ RaylÄ± Sac KapÄ± (6.00m)";
+
+
+
+            var molozDetail = details.FirstOrDefault(d => d.SelectedItem.Contains("YÄ±kÄ±m") || d.SelectedItem.Contains("Moloz") || d.SelectedItem.Contains("Enkaz") || d.SelectedItem.Contains("BoÅŸ Arsa"));
+
+            bool isCleanPlot = molozDetail != null && (molozDetail.SelectedItem.Contains("BoÅŸ") || molozDetail.SelectedItem.Contains("Gerekmez") || molozDetail.SelectedItem.Contains("Yok"));
+
+            bool molozVar = molozDetail != null && !isCleanPlot && (molozDetail.SelectedItem.Contains("YÄ±kÄ±lacak") || molozDetail.SelectedItem.Contains("Moloz ve Ã‡Ã¶p") || molozDetail.SelectedItem.Contains("Enkaz"));
+
             bool hasDemolition = !isCleanPlot && (molozVar || (project.EskiToplamMetrekare.HasValue && project.EskiToplamMetrekare.Value > 0) || (project.EskiKatSayisi.HasValue && project.EskiKatSayisi.Value > 0));
 
-            var elektrikDetail = details.FirstOrDefault(d => (d.Phase.Contains("1") || d.Phase.Contains("Faz 1") || d.Phase.Contains("Adım 1")) && (d.SelectedItem.Contains("Elektrik") || d.SelectedItem.Contains("Abonelik") || d.SelectedItem.Contains("Trafo") || d.SelectedItem.Contains("Jeneratör")));
-            string elektrikTipi = elektrikDetail != null ? elektrikDetail.SelectedItem : "Şantiye Şebeke Aboneliği ve TMŞ Dağıtım Panosu";
 
-            var suDetail = details.FirstOrDefault(d => (d.Phase.Contains("1") || d.Phase.Contains("Faz 1") || d.Phase.Contains("Adım 1")) && (d.SelectedItem.Contains("Su") || d.SelectedItem.Contains("Depo") || d.SelectedItem.Contains("Hidrofor") || d.SelectedItem.Contains("Kuyu")));
+
+            var elektrikDetail = details.FirstOrDefault(d => (d.Phase.Contains("1") || d.Phase.Contains("Faz 1") || d.Phase.Contains("AdÄ±m 1")) && (d.SelectedItem.Contains("Elektrik") || d.SelectedItem.Contains("Abonelik") || d.SelectedItem.Contains("Trafo") || d.SelectedItem.Contains("JeneratÃ¶r")));
+
+            string elektrikTipi = elektrikDetail != null ? elektrikDetail.SelectedItem : "Åantiye Åebeke AboneliÄŸi ve TMÅ DaÄŸÄ±tÄ±m Panosu";
+
+
+
+            var suDetail = details.FirstOrDefault(d => (d.Phase.Contains("1") || d.Phase.Contains("Faz 1") || d.Phase.Contains("AdÄ±m 1")) && (d.SelectedItem.Contains("Su") || d.SelectedItem.Contains("Depo") || d.SelectedItem.Contains("Hidrofor") || d.SelectedItem.Contains("Kuyu")));
+
             string suTipi = suDetail != null ? suDetail.SelectedItem : "15 Tonluk Su Deposu ve 3 HP Otomatik Hidrofor";
+
+
 
             DateTime curDate = DateTime.Today;
 
-            // S-01: Harita, Aplikasyon & Sabit Röper Kotu
+
+
+            // S-01: Harita, Aplikasyon & Sabit RÃ¶per Kotu
+
             var s01Start = curDate;
+
             var s01End = s01Start.AddDays(2);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "S-01",
+
                 Order = 1,
-                PhaseName = "Harita, Aplikasyon & Sabit Röper Kotu",
+
+                PhaseName = "Harita, Aplikasyon & Sabit RÃ¶per Kotu",
+
                 StageCategory = "Ortak Saha Kurulumu",
+
                 PartIndex = 0,
-                PartName = "Şantiye Ortak Saha Kurulumu (Tüm Arsa)",
+
+                PartName = "Åantiye Ortak Saha Kurulumu (TÃ¼m Arsa)",
+
                 PartBadgeClass = "dark",
-                TriggerRule = "Şantiye işbaşında 1 defa yapılır, bloklara tekrarlamaz",
+
+                TriggerRule = "Åantiye iÅŸbaÅŸÄ±nda 1 defa yapÄ±lÄ±r, bloklara tekrarlamaz",
+
                 TargetStructureName = "Proje Geneli (Ortak Saha)",
-                MaterialTitle = "Ahşap Kazıklar, Kireç Tozu, Çelik Röper Çubukları ve Nivo Kot İşaretleri",
-                MaterialDescription = "Arsa köşe poligonu, köşe kotları, sabit röper noktası ve tüm blokların oturum sınırlarının kireçle işaretlenmesi.",
+
+                MaterialTitle = "AhÅŸap KazÄ±klar, KireÃ§ Tozu, Ã‡elik RÃ¶per Ã‡ubuklarÄ± ve Nivo Kot Ä°ÅŸaretleri",
+
+                MaterialDescription = "Arsa kÃ¶ÅŸe poligonu, kÃ¶ÅŸe kotlarÄ±, sabit rÃ¶per noktasÄ± ve tÃ¼m bloklarÄ±n oturum sÄ±nÄ±rlarÄ±nÄ±n kireÃ§le iÅŸaretlenmesi.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "Takım",
-                MaterialFormula = "DXF Bekliyor (Mimari vaziyet ve köşe koordinatlarından belirlenecek)",
-                SupplierCategory = "Harita Mühendislik Ofisi / Topoğraf Ekipmanı",
-                LaborTitle = "Harita Mühendisi & Topoğraf Ekibi",
-                ProfessionName = "Harita Mühendisi / Topoğraf",
-                CrewComposition = "1 Harita Müh. + 1 Topoğraf + 2 Yardımcı",
+
+                MaterialUnit = "TakÄ±m",
+
+                MaterialFormula = "DXF Bekliyor (Mimari vaziyet ve kÃ¶ÅŸe koordinatlarÄ±ndan belirlenecek)",
+
+                SupplierCategory = "Harita MÃ¼hendislik Ofisi / TopoÄŸraf EkipmanÄ±",
+
+                LaborTitle = "Harita MÃ¼hendisi & TopoÄŸraf Ekibi",
+
+                ProfessionName = "Harita MÃ¼hendisi / TopoÄŸraf",
+
+                CrewComposition = "1 Harita MÃ¼h. + 1 TopoÄŸraf + 2 YardÄ±mcÄ±",
+
                 CrewSize = 4,
+
                 DurationDays = 2,
-                EquipmentNeeded = "Total Station, Nivo, Lazer Metre, GPS Cihazı",
-                Predecessors = "İmar çapı ve mimari vaziyet planı kabulü",
-                CriticalDependency = "Sabit röper kotu alınmadan ve köşe kazıkları çakılmadan çevre ihata yapılamaz, şantiye başlayamaz!",
-                DnaSource = "Adım 1: Saha Analizi & Aplikasyon",
+
+                EquipmentNeeded = "Total Station, Nivo, Lazer Metre, GPS CihazÄ±",
+
+                Predecessors = "Ä°mar Ã§apÄ± ve mimari vaziyet planÄ± kabulÃ¼",
+
+                CriticalDependency = "Sabit rÃ¶per kotu alÄ±nmadan ve kÃ¶ÅŸe kazÄ±klarÄ± Ã§akÄ±lmadan Ã§evre ihata yapÄ±lamaz, ÅŸantiye baÅŸlayamaz!",
+
+                DnaSource = "AdÄ±m 1: Saha Analizi & Aplikasyon",
+
                 PlannedStartDate = s01Start,
+
                 PlannedEndDate = s01End,
+
                 SubSteps = CreateWorkflowSubSteps(
-                    "T-2 Belediye imar çapı, aplikasyon krokisi ve köşe koordinat listesi temini",
-                    "Total Station ve GPS ile parsel köşe kazıklarının çakılması ve sabit röper noktasının betona çakılması",
-                    "İmar çekme mesafelerinin ve sabit röper kotunun doğrulanması",
-                    "Saha çevre güvenlik hattı ve komşu parsel sınır reflektörlü şeritlerinin çekilmesi"
+
+                    "T-2 Belediye imar Ã§apÄ±, aplikasyon krokisi ve kÃ¶ÅŸe koordinat listesi temini",
+
+                    "Total Station ve GPS ile parsel kÃ¶ÅŸe kazÄ±klarÄ±nÄ±n Ã§akÄ±lmasÄ± ve sabit rÃ¶per noktasÄ±nÄ±n betona Ã§akÄ±lmasÄ±",
+
+                    "Ä°mar Ã§ekme mesafelerinin ve sabit rÃ¶per kotunun doÄŸrulanmasÄ±",
+
+                    "Saha Ã§evre gÃ¼venlik hattÄ± ve komÅŸu parsel sÄ±nÄ±r reflektÃ¶rlÃ¼ ÅŸeritlerinin Ã§ekilmesi"
+
                 )
+
             });
 
-            // S-02: Parsel Çevre İhatası & Raylı Araç Giriş Kapısı (OSB Pano / Tel Çit)
+
+
+            // S-02: Parsel Ã‡evre Ä°hatasÄ± & RaylÄ± AraÃ§ GiriÅŸ KapÄ±sÄ± (OSB Pano / Tel Ã‡it)
+
             var s02Start = s01End;
+
             var s02End = s02Start.AddDays(3);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "S-02",
+
                 Order = 2,
-                PhaseName = "Parsel Çevre İhatası & Raylı Araç Giriş Kapısı (OSB Pano / Tel Çit)",
+
+                PhaseName = "Parsel Ã‡evre Ä°hatasÄ± & RaylÄ± AraÃ§ GiriÅŸ KapÄ±sÄ± (OSB Pano / Tel Ã‡it)",
+
                 StageCategory = "Ortak Saha Kurulumu",
+
                 PartIndex = 0,
-                PartName = "Şantiye Ortak Saha Kurulumu (Tüm Arsa)",
+
+                PartName = "Åantiye Ortak Saha Kurulumu (TÃ¼m Arsa)",
+
                 PartBadgeClass = "dark",
-                TriggerRule = "Aplikasyon sınırları çakılınca kurulur",
+
+                TriggerRule = "Aplikasyon sÄ±nÄ±rlarÄ± Ã§akÄ±lÄ±nca kurulur",
+
                 TargetStructureName = "Proje Geneli (Ortak Saha)",
+
                 MaterialTitle = $"{ihataMalzemesi} ve {kapiTipi}",
-                MaterialDescription = "Şantiye parsel çevresinin kapatılması, dikme direkleri, rüzgar payandaları ve ana araç giriş kapısı.",
+
+                MaterialDescription = "Åantiye parsel Ã§evresinin kapatÄ±lmasÄ±, dikme direkleri, rÃ¼zgar payandalarÄ± ve ana araÃ§ giriÅŸ kapÄ±sÄ±.",
+
                 MaterialQuantity = 0,
+
                 MaterialUnit = "mt",
-                MaterialFormula = "DXF Bekliyor (Parsel çevre sınır ölçüsünden hesaplanacak)",
-                SupplierCategory = "Demir Çelik / Çit & Sac Bayisi",
-                LaborTitle = "Demir Doğrama ve Çit Montaj Ekibi",
-                ProfessionName = "Demir / Çit Ustası",
-                CrewComposition = "1 Demir Doğrama Formeni + 2 Kaynakçı + 2 Montaj İşçisi",
+
+                MaterialFormula = "DXF Bekliyor (Parsel Ã§evre sÄ±nÄ±r Ã¶lÃ§Ã¼sÃ¼nden hesaplanacak)",
+
+                SupplierCategory = "Demir Ã‡elik / Ã‡it & Sac Bayisi",
+
+                LaborTitle = "Demir DoÄŸrama ve Ã‡it Montaj Ekibi",
+
+                ProfessionName = "Demir / Ã‡it UstasÄ±",
+
+                CrewComposition = "1 Demir DoÄŸrama Formeni + 2 KaynakÃ§Ä± + 2 Montaj Ä°ÅŸÃ§isi",
+
                 CrewSize = 5,
+
                 DurationDays = 3,
-                EquipmentNeeded = "Kaynak Makinesi, Profil Kesme, Matkap Takımları",
-                Predecessors = "Harita aplikasyon sınır tespiti",
-                CriticalDependency = "İşyeri ve belediye denetimi gereği çevre ihatası ve kapı olmadan şantiyeye makine sokulamaz!",
-                DnaSource = "Adım 1: Şantiye Çevre İhatası",
+
+                EquipmentNeeded = "Kaynak Makinesi, Profil Kesme, Matkap TakÄ±mlarÄ±",
+
+                Predecessors = "Harita aplikasyon sÄ±nÄ±r tespiti",
+
+                CriticalDependency = "Ä°ÅŸyeri ve belediye denetimi gereÄŸi Ã§evre ihatasÄ± ve kapÄ± olmadan ÅŸantiyeye makine sokulamaz!",
+
+                DnaSource = "AdÄ±m 1: Åantiye Ã‡evre Ä°hatasÄ±",
+
                 PlannedStartDate = s02Start,
+
                 PlannedEndDate = s02End,
+
                 SubSteps = CreateWorkflowSubSteps(
-                    "T-2 İhata panoları, ankraj profilleri ve raylı kapı mekanizmasının şantiyeye sevki",
-                    "Direk ankrajlarının sabitlenmesi, çevre panolarının montajı ve raylı giriş kapısı montajı",
-                    "Rüzgar fırtına yüküne karşı payanda rijitliği ve kilit sistemi kontrolü",
-                    "Şantiye tanıtım tabelası, 'Yetkisiz Girilmez' levhaları ve acil toplanma noktası tabelası"
+
+                    "T-2 Ä°hata panolarÄ±, ankraj profilleri ve raylÄ± kapÄ± mekanizmasÄ±nÄ±n ÅŸantiyeye sevki",
+
+                    "Direk ankrajlarÄ±nÄ±n sabitlenmesi, Ã§evre panolarÄ±nÄ±n montajÄ± ve raylÄ± giriÅŸ kapÄ±sÄ± montajÄ±",
+
+                    "RÃ¼zgar fÄ±rtÄ±na yÃ¼kÃ¼ne karÅŸÄ± payanda rijitliÄŸi ve kilit sistemi kontrolÃ¼",
+
+                    "Åantiye tanÄ±tÄ±m tabelasÄ±, 'Yetkisiz Girilmez' levhalarÄ± ve acil toplanma noktasÄ± tabelasÄ±"
+
                 )
+
             });
 
-            // S-03: Saha Yüzey Temizliği / Varsa Eski Yapı Yıkımı & Moloz Bertarafı
+
+
+            // S-03: Saha YÃ¼zey TemizliÄŸi / Varsa Eski YapÄ± YÄ±kÄ±mÄ± & Moloz BertarafÄ±
+
             var s03Start = s02End;
+
             var s03End = s03Start.AddDays(hasDemolition ? 5 : 2);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "S-03",
+
                 Order = 3,
-                PhaseName = hasDemolition ? "Eski Yapı Yıkımı, Enkaz Sökümü & Moloz Bertarafı" : "Saha Yüzey Temizliği, Moloz & Çöp Temizliği",
+
+                PhaseName = hasDemolition ? "Eski YapÄ± YÄ±kÄ±mÄ±, Enkaz SÃ¶kÃ¼mÃ¼ & Moloz BertarafÄ±" : "Saha YÃ¼zey TemizliÄŸi, Moloz & Ã‡Ã¶p TemizliÄŸi",
+
                 StageCategory = "Ortak Saha Kurulumu",
+
                 PartIndex = 0,
-                PartName = "Şantiye Ortak Saha Kurulumu (Tüm Arsa)",
+
+                PartName = "Åantiye Ortak Saha Kurulumu (TÃ¼m Arsa)",
+
                 PartBadgeClass = "dark",
-                TriggerRule = "Çevre ihata tamamlanınca temizlik/yıkım yapılır",
+
+                TriggerRule = "Ã‡evre ihata tamamlanÄ±nca temizlik/yÄ±kÄ±m yapÄ±lÄ±r",
+
                 TargetStructureName = "Proje Geneli (Ortak Saha)",
-                MaterialTitle = hasDemolition ? "Yıkım Kırıcı Uçları, Toz Bastırma Tesisatı ve Moloz Nakliye Kamyonları" : "Yüzey Temizlik Kepçesi ve Moloz Taşıma Kamyonları",
-                MaterialDescription = hasDemolition ? "Mevcut yapının kontrollü yıkımı, hurda ayrıştırma ve molozun döküm sahasına nakliyesi." : "Boş arsa yüzeyindeki bitki, çöp, yüzey atıkları ve molozların temizlenmesi.",
+
+                MaterialTitle = hasDemolition ? "YÄ±kÄ±m KÄ±rÄ±cÄ± UÃ§larÄ±, Toz BastÄ±rma TesisatÄ± ve Moloz Nakliye KamyonlarÄ±" : "YÃ¼zey Temizlik KepÃ§esi ve Moloz TaÅŸÄ±ma KamyonlarÄ±",
+
+                MaterialDescription = hasDemolition ? "Mevcut yapÄ±nÄ±n kontrollÃ¼ yÄ±kÄ±mÄ±, hurda ayrÄ±ÅŸtÄ±rma ve molozun dÃ¶kÃ¼m sahasÄ±na nakliyesi." : "BoÅŸ arsa yÃ¼zeyindeki bitki, Ã§Ã¶p, yÃ¼zey atÄ±klarÄ± ve molozlarÄ±n temizlenmesi.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Arsa yüzey alanından hesaplanacak)",
-                SupplierCategory = "Hafriyat & Yıkım Firması",
-                LaborTitle = "Saha Temizlik & Yıkım Ekibi",
-                ProfessionName = "Yıkım / Hafriyat Ekibi",
-                CrewComposition = "1 Formen + 1 Ekskavatör Op. + 1 Loder Op. + 4 Kamyon Şoförü",
+
+                MaterialUnit = "mÂ²",
+
+                MaterialFormula = "DXF Bekliyor (Arsa yÃ¼zey alanÄ±ndan hesaplanacak)",
+
+                SupplierCategory = "Hafriyat & YÄ±kÄ±m FirmasÄ±",
+
+                LaborTitle = "Saha Temizlik & YÄ±kÄ±m Ekibi",
+
+                ProfessionName = "YÄ±kÄ±m / Hafriyat Ekibi",
+
+                CrewComposition = "1 Formen + 1 EkskavatÃ¶r Op. + 1 Loder Op. + 4 Kamyon ÅofÃ¶rÃ¼",
+
                 CrewSize = 7,
+
                 DurationDays = hasDemolition ? 5 : 2,
-                EquipmentNeeded = "Paletli Ekskavatör, Loder, 4 Kamyon, Toz Bastırma Su Arazözü",
-                Predecessors = "Çevre ihatası ve kapı güvenliğinin sağlanması",
-                CriticalDependency = "Yıkım varsa elektrik/su/doğalgaz kesme tutanakları olmadan işe başlanamaz!",
-                DnaSource = "Adım 1: Yıkım & Temizlik",
+
+                EquipmentNeeded = "Paletli EkskavatÃ¶r, Loder, 4 Kamyon, Toz BastÄ±rma Su ArazÃ¶zÃ¼",
+
+                Predecessors = "Ã‡evre ihatasÄ± ve kapÄ± gÃ¼venliÄŸinin saÄŸlanmasÄ±",
+
+                CriticalDependency = "YÄ±kÄ±m varsa elektrik/su/doÄŸalgaz kesme tutanaklarÄ± olmadan iÅŸe baÅŸlanamaz!",
+
+                DnaSource = "AdÄ±m 1: YÄ±kÄ±m & Temizlik",
+
                 PlannedStartDate = s03Start,
+
                 PlannedEndDate = s03End,
+
                 SubSteps = CreateWorkflowSubSteps(
-                    "T-2 Belediye yıkım/temizlik izinleri ve nakliye fişleri kontrolü",
-                    "Yüzey temizliği / kontrollü yıkım ve malzemenin kamyonlara yüklenmesi",
-                    "Arsa kot seviyesinin temizlenmesi ve komşu parsel sınır kontrolü",
-                    "Toz bastırma sulaması ve çevre güvenlik şeridi denetimi"
+
+                    "T-2 Belediye yÄ±kÄ±m/temizlik izinleri ve nakliye fiÅŸleri kontrolÃ¼",
+
+                    "YÃ¼zey temizliÄŸi / kontrollÃ¼ yÄ±kÄ±m ve malzemenin kamyonlara yÃ¼klenmesi",
+
+                    "Arsa kot seviyesinin temizlenmesi ve komÅŸu parsel sÄ±nÄ±r kontrolÃ¼",
+
+                    "Toz bastÄ±rma sulamasÄ± ve Ã§evre gÃ¼venlik ÅŸeridi denetimi"
+
                 )
+
             });
 
-            // S-04: Şantiye Geçici Elektrik Aboneliği & TMŞ Dağıtım Panosu
+
+
+            // S-04: Åantiye GeÃ§ici Elektrik AboneliÄŸi & TMÅ DaÄŸÄ±tÄ±m Panosu
+
             var s04Start = s03End;
+
             var s04End = s04Start.AddDays(3);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "S-04",
+
                 Order = 4,
-                PhaseName = "Şantiye Geçici Elektrik Aboneliği & TMŞ Dağıtım Panosu",
+
+                PhaseName = "Åantiye GeÃ§ici Elektrik AboneliÄŸi & TMÅ DaÄŸÄ±tÄ±m Panosu",
+
                 StageCategory = "Ortak Saha Kurulumu",
+
                 PartIndex = 0,
-                PartName = "Şantiye Ortak Saha Kurulumu (Tüm Arsa)",
+
+                PartName = "Åantiye Ortak Saha Kurulumu (TÃ¼m Arsa)",
+
                 PartBadgeClass = "dark",
-                TriggerRule = "Saha temizlenince altyapı panosu kurulur",
+
+                TriggerRule = "Saha temizlenince altyapÄ± panosu kurulur",
+
                 TargetStructureName = "Proje Geneli (Ortak Saha)",
-                MaterialTitle = $"{elektrikTipi}, Ana TMŞ Dağıtım Panosu, Kaçak Akım Röleleri ve Bakır Topraklama Çubukları",
-                MaterialDescription = "Elektrik dağıtım kurumundan geçici inşaat elektriği bağlantısı, kilitli sayaç panosu ve saha dağıtım kutuları.",
+
+                MaterialTitle = $"{elektrikTipi}, Ana TMÅ DaÄŸÄ±tÄ±m Panosu, KaÃ§ak AkÄ±m RÃ¶leleri ve BakÄ±r Topraklama Ã‡ubuklarÄ±",
+
+                MaterialDescription = "Elektrik daÄŸÄ±tÄ±m kurumundan geÃ§ici inÅŸaat elektriÄŸi baÄŸlantÄ±sÄ±, kilitli sayaÃ§ panosu ve saha daÄŸÄ±tÄ±m kutularÄ±.",
+
                 MaterialQuantity = 1,
-                MaterialUnit = "Takım",
-                MaterialFormula = "1 Adet Şantiye Ana Elektrik Altyapı Paketi",
-                SupplierCategory = "Elektrik Tesisat & Pano İmalatçısı",
-                LaborTitle = "Şantiye Elektrik Ekibi",
-                ProfessionName = "Elektrik Mühendisi / Tesisatçısı",
-                CrewComposition = "1 Elektrik Mühendisi + 2 Elektrik Ustası",
+
+                MaterialUnit = "TakÄ±m",
+
+                MaterialFormula = "1 Adet Åantiye Ana Elektrik AltyapÄ± Paketi",
+
+                SupplierCategory = "Elektrik Tesisat & Pano Ä°malatÃ§Ä±sÄ±",
+
+                LaborTitle = "Åantiye Elektrik Ekibi",
+
+                ProfessionName = "Elektrik MÃ¼hendisi / TesisatÃ§Ä±sÄ±",
+
+                CrewComposition = "1 Elektrik MÃ¼hendisi + 2 Elektrik UstasÄ±",
+
                 CrewSize = 3,
+
                 DurationDays = 3,
-                EquipmentNeeded = "Topraklama Meger Ölçüm Cihazı, Pano Montaj Takımları",
-                Predecessors = "Dağıtım şirketi proje onayı ve sayaç kabulü",
-                CriticalDependency = "300mA ana ve 30mA tali kaçak akım röleleri olmadan ve topraklama ölçümü yapılmadan şantiyeye enerji verilemez!",
-                DnaSource = "Adım 1: Geçici Elektrik",
+
+                EquipmentNeeded = "Topraklama Meger Ã–lÃ§Ã¼m CihazÄ±, Pano Montaj TakÄ±mlarÄ±",
+
+                Predecessors = "DaÄŸÄ±tÄ±m ÅŸirketi proje onayÄ± ve sayaÃ§ kabulÃ¼",
+
+                CriticalDependency = "300mA ana ve 30mA tali kaÃ§ak akÄ±m rÃ¶leleri olmadan ve topraklama Ã¶lÃ§Ã¼mÃ¼ yapÄ±lmadan ÅŸantiyeye enerji verilemez!",
+
+                DnaSource = "AdÄ±m 1: GeÃ§ici Elektrik",
+
                 PlannedStartDate = s04Start,
+
                 PlannedEndDate = s04End,
+
                 SubSteps = CreateWorkflowSubSteps(
-                    "T-3 Dağıtım şirketi onaylı proje, geçici inşaat tarifesi ve sayaç temini",
-                    "Kilitli ana TMŞ dağıtım panosu montajı, bakır topraklama çubukları çakımı ve kablolama",
-                    "Topraklama meger direnç testi (maksimum 2 Ohm) ve kaçak akım röle testi",
-                    "Pano kilit altına alma, yüksek gerilim uyarı levhası ve 6 kg CO2 yangın söndürme tüpü"
+
+                    "T-3 DaÄŸÄ±tÄ±m ÅŸirketi onaylÄ± proje, geÃ§ici inÅŸaat tarifesi ve sayaÃ§ temini",
+
+                    "Kilitli ana TMÅ daÄŸÄ±tÄ±m panosu montajÄ±, bakÄ±r topraklama Ã§ubuklarÄ± Ã§akÄ±mÄ± ve kablolama",
+
+                    "Topraklama meger direnÃ§ testi (maksimum 2 Ohm) ve kaÃ§ak akÄ±m rÃ¶le testi",
+
+                    "Pano kilit altÄ±na alma, yÃ¼ksek gerilim uyarÄ± levhasÄ± ve 6 kg CO2 yangÄ±n sÃ¶ndÃ¼rme tÃ¼pÃ¼"
+
                 )
+
             });
 
-            // S-05: İnşaat ve Kullanım Suyu Temini & Su Deposu / Hidrofor Tesisatı
+
+
+            // S-05: Ä°nÅŸaat ve KullanÄ±m Suyu Temini & Su Deposu / Hidrofor TesisatÄ±
+
             var s05Start = s04Start;
+
             var s05End = s05Start.AddDays(2);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "S-05",
+
                 Order = 5,
-                PhaseName = "İnşaat ve Kullanım Suyu Temini & Su Deposu / Hidrofor Tesisatı",
+
+                PhaseName = "Ä°nÅŸaat ve KullanÄ±m Suyu Temini & Su Deposu / Hidrofor TesisatÄ±",
+
                 StageCategory = "Ortak Saha Kurulumu",
+
                 PartIndex = 0,
-                PartName = "Şantiye Ortak Saha Kurulumu (Tüm Arsa)",
+
+                PartName = "Åantiye Ortak Saha Kurulumu (TÃ¼m Arsa)",
+
                 PartBadgeClass = "dark",
-                TriggerRule = "Elektrik panosuyla eş zamanlı kurulur",
+
+                TriggerRule = "Elektrik panosuyla eÅŸ zamanlÄ± kurulur",
+
                 TargetStructureName = "Proje Geneli (Ortak Saha)",
-                MaterialTitle = $"{suTipi}, Şantiye Su Sayaç Grubu, Dağıtım Vanaları ve Don Korumalı Borulama",
-                MaterialDescription = "Şebeke inşaat suyu aboneliği, 15 tonluk polietilen/çelik su deposu, otomatik frekans kontrollü hidrofor ve ana dağıtım hattı.",
+
+                MaterialTitle = $"{suTipi}, Åantiye Su SayaÃ§ Grubu, DaÄŸÄ±tÄ±m VanalarÄ± ve Don KorumalÄ± Borulama",
+
+                MaterialDescription = "Åebeke inÅŸaat suyu aboneliÄŸi, 15 tonluk polietilen/Ã§elik su deposu, otomatik frekans kontrollÃ¼ hidrofor ve ana daÄŸÄ±tÄ±m hattÄ±.",
+
                 MaterialQuantity = 1,
-                MaterialUnit = "Takım",
-                MaterialFormula = "1 Adet Şantiye Su Depolama & Hidrofor Paketi",
-                SupplierCategory = "Su İdaresi & Sıhhi Tesisat / Pompa Bayisi",
-                LaborTitle = "Şantiye Mekanik Tesisat Ekibi",
-                ProfessionName = "Sıhhi Tesisat Ustası",
-                CrewComposition = "1 Tesisat Formeni + 2 Tesisat Ustası",
+
+                MaterialUnit = "TakÄ±m",
+
+                MaterialFormula = "1 Adet Åantiye Su Depolama & Hidrofor Paketi",
+
+                SupplierCategory = "Su Ä°daresi & SÄ±hhi Tesisat / Pompa Bayisi",
+
+                LaborTitle = "Åantiye Mekanik Tesisat Ekibi",
+
+                ProfessionName = "SÄ±hhi Tesisat UstasÄ±",
+
+                CrewComposition = "1 Tesisat Formeni + 2 Tesisat UstasÄ±",
+
                 CrewSize = 3,
+
                 DurationDays = 2,
-                EquipmentNeeded = "Boru Kaynak Makinesi, Basınç Test Pompası",
-                Predecessors = "Su idaresi geçici inşaat suyu abonelik sözleşmesi",
-                CriticalDependency = "ŞANTİYE ALTIN KURALI: İnşaat suyu ve deposu hazır olmadan beton dökülemez ve şantiye çalışamaz!",
-                DnaSource = "Adım 1: Şantiye Suyu",
+
+                EquipmentNeeded = "Boru Kaynak Makinesi, BasÄ±nÃ§ Test PompasÄ±",
+
+                Predecessors = "Su idaresi geÃ§ici inÅŸaat suyu abonelik sÃ¶zleÅŸmesi",
+
+                CriticalDependency = "ÅANTÄ°YE ALTIN KURALI: Ä°nÅŸaat suyu ve deposu hazÄ±r olmadan beton dÃ¶kÃ¼lemez ve ÅŸantiye Ã§alÄ±ÅŸamaz!",
+
+                DnaSource = "AdÄ±m 1: Åantiye Suyu",
+
                 PlannedStartDate = s05Start,
+
                 PlannedEndDate = s05End,
+
                 SubSteps = CreateWorkflowSubSteps(
-                    "T-2 Su idaresi sayaç montajı ve şantiye su deposu nakliyesi",
-                    "Su deposu terazileme, hidrofor montajı, şantiye dağıtım vanaları ve test bağlantısı",
-                    "Hidrofor basınç ayarı (4-6 bar) ve su sızdırmazlık testi",
-                    "Depo taşma drenaj hattı ve kış dönemi don koruma izolasyonu"
+
+                    "T-2 Su idaresi sayaÃ§ montajÄ± ve ÅŸantiye su deposu nakliyesi",
+
+                    "Su deposu terazileme, hidrofor montajÄ±, ÅŸantiye daÄŸÄ±tÄ±m vanalarÄ± ve test baÄŸlantÄ±sÄ±",
+
+                    "Hidrofor basÄ±nÃ§ ayarÄ± (4-6 bar) ve su sÄ±zdÄ±rmazlÄ±k testi",
+
+                    "Depo taÅŸma drenaj hattÄ± ve kÄ±ÅŸ dÃ¶nemi don koruma izolasyonu"
+
                 )
+
             });
 
-            // S-06: Kanalizasyon Bağlantısı & Mobil Kimyasal İşçi WC Kabinleri (Aranan madde 1!)
+
+
+            // S-06: Kanalizasyon BaÄŸlantÄ±sÄ± & Mobil Kimyasal Ä°ÅŸÃ§i WC Kabinleri (Aranan madde 1!)
+
             var s06Start = s05Start;
+
             var s06End = s06Start.AddDays(2);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "S-06",
+
                 Order = 6,
-                PhaseName = "Kanalizasyon Bağlantısı & Mobil Kimyasal İşçi WC Kabinleri",
+
+                PhaseName = "Kanalizasyon BaÄŸlantÄ±sÄ± & Mobil Kimyasal Ä°ÅŸÃ§i WC Kabinleri",
+
                 StageCategory = "Ortak Saha Kurulumu",
+
                 PartIndex = 0,
-                PartName = "Şantiye Ortak Saha Kurulumu (Tüm Arsa)",
+
+                PartName = "Åantiye Ortak Saha Kurulumu (TÃ¼m Arsa)",
+
                 PartBadgeClass = "dark",
-                TriggerRule = "Su hattı ile birlikte kurulur",
+
+                TriggerRule = "Su hattÄ± ile birlikte kurulur",
+
                 TargetStructureName = "Proje Geneli (Ortak Saha)",
-                MaterialTitle = "Mobil Foseptik / Kimyasal WC Kabinleri, 110-150mm PVC Kanalizasyon Boruları, Menhol ve Çekvalf",
-                MaterialDescription = "Şantiye personeli için hijyenik kimyasal mobil tuvalet kabinleri veya belediye kanalizasyon ana hattına çekvalfli deşarj bağlantısı.",
+
+                MaterialTitle = "Mobil Foseptik / Kimyasal WC Kabinleri, 110-150mm PVC Kanalizasyon BorularÄ±, Menhol ve Ã‡ekvalf",
+
+                MaterialDescription = "Åantiye personeli iÃ§in hijyenik kimyasal mobil tuvalet kabinleri veya belediye kanalizasyon ana hattÄ±na Ã§ekvalfli deÅŸarj baÄŸlantÄ±sÄ±.",
+
                 MaterialQuantity = 2,
+
                 MaterialUnit = "Kabin / Hat",
-                MaterialFormula = "2 Adet Mobil WC Kabini + Ana Şebeke Atık Su Bağlantısı",
-                SupplierCategory = "Mobil WC Kiralama / Sıhhi Tesisat & Altyapı Tedarikçisi",
-                LaborTitle = "Altyapı & Kanalizasyon Ekibi",
-                ProfessionName = "Altyapı / Sıhhi Tesisat Ustası",
-                CrewComposition = "1 Tesisat Ustası + 2 Altyapı İşçisi",
+
+                MaterialFormula = "2 Adet Mobil WC Kabini + Ana Åebeke AtÄ±k Su BaÄŸlantÄ±sÄ±",
+
+                SupplierCategory = "Mobil WC Kiralama / SÄ±hhi Tesisat & AltyapÄ± TedarikÃ§isi",
+
+                LaborTitle = "AltyapÄ± & Kanalizasyon Ekibi",
+
+                ProfessionName = "AltyapÄ± / SÄ±hhi Tesisat UstasÄ±",
+
+                CrewComposition = "1 Tesisat UstasÄ± + 2 AltyapÄ± Ä°ÅŸÃ§isi",
+
                 CrewSize = 3,
+
                 DurationDays = 2,
-                EquipmentNeeded = "Kanal Açma / Mini Kepçe, Boru Kaynak Aparatları",
-                Predecessors = "Belediye kanalizasyon kotu ve deşarj izni",
-                CriticalDependency = "İş sağlığı ve güvenliği kanunu uyarınca şantiye personeli için hijyenik WC ve atık su bağlantısı kurulmadan çalışma başlatılamaz!",
-                DnaSource = "İSG ve Şantiye Tesisat Standartları (Adım 1)",
+
+                EquipmentNeeded = "Kanal AÃ§ma / Mini KepÃ§e, Boru Kaynak AparatlarÄ±",
+
+                Predecessors = "Belediye kanalizasyon kotu ve deÅŸarj izni",
+
+                CriticalDependency = "Ä°ÅŸ saÄŸlÄ±ÄŸÄ± ve gÃ¼venliÄŸi kanunu uyarÄ±nca ÅŸantiye personeli iÃ§in hijyenik WC ve atÄ±k su baÄŸlantÄ±sÄ± kurulmadan Ã§alÄ±ÅŸma baÅŸlatÄ±lamaz!",
+
+                DnaSource = "Ä°SG ve Åantiye Tesisat StandartlarÄ± (AdÄ±m 1)",
+
                 PlannedStartDate = s06Start,
+
                 PlannedEndDate = s06End,
+
                 SubSteps = CreateWorkflowSubSteps(
-                    "T-2 Belediye atık su bağlantı izinleri ve kimyasal WC kabinlerinin şantiyeye sevki",
-                    "Kanalizasyon menhol bağlantısı, çekvalf montajı ve mobil WC kabinlerinin kurulumu",
-                    "Su akış eğimi ve geri tepme önleyici çekvalf sızdırmazlık kontrolü",
-                    "Hijyen dezenfeksiyon malzemeleri, sıvı sabunluklar ve düzenli vidanjör temizlik protokolü"
+
+                    "T-2 Belediye atÄ±k su baÄŸlantÄ± izinleri ve kimyasal WC kabinlerinin ÅŸantiyeye sevki",
+
+                    "Kanalizasyon menhol baÄŸlantÄ±sÄ±, Ã§ekvalf montajÄ± ve mobil WC kabinlerinin kurulumu",
+
+                    "Su akÄ±ÅŸ eÄŸimi ve geri tepme Ã¶nleyici Ã§ekvalf sÄ±zdÄ±rmazlÄ±k kontrolÃ¼",
+
+                    "Hijyen dezenfeksiyon malzemeleri, sÄ±vÄ± sabunluklar ve dÃ¼zenli vidanjÃ¶r temizlik protokolÃ¼"
+
                 )
+
             });
 
-            // S-07: Şantiye Kampı & Mobilizasyon: Ofis, Yatakhane, Yemekhane & Soyunma Konteynerleri (Aranan madde 2!)
+
+
+            // S-07: Åantiye KampÄ± & Mobilizasyon: Ofis, Yatakhane, Yemekhane & Soyunma Konteynerleri (Aranan madde 2!)
+
             var s07Start = s06End;
+
             var s07End = s07Start.AddDays(3);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "S-07",
+
                 Order = 7,
-                PhaseName = "Şantiye Kampı & Mobilizasyon: Ofis, Yatakhane, Yemekhane & Soyunma Konteynerleri",
+
+                PhaseName = "Åantiye KampÄ± & Mobilizasyon: Ofis, Yatakhane, Yemekhane & Soyunma Konteynerleri",
+
                 StageCategory = "Ortak Saha Kurulumu",
+
                 PartIndex = 0,
-                PartName = "Şantiye Ortak Saha Kurulumu (Tüm Arsa)",
+
+                PartName = "Åantiye Ortak Saha Kurulumu (TÃ¼m Arsa)",
+
                 PartBadgeClass = "dark",
-                TriggerRule = "Saha altyapısı hazır olunca konteynerler yerleştirilir",
+
+                TriggerRule = "Saha altyapÄ±sÄ± hazÄ±r olunca konteynerler yerleÅŸtirilir",
+
                 TargetStructureName = "Proje Geneli (Ortak Saha)",
-                MaterialTitle = "Sandviç Panel Şantiye Konteynerleri (Ofis, Yatakhane, Yemekhane, Duş/Soyunma)",
-                MaterialDescription = "Yönetim ofisi, teknik ofis, işçi yatakhane ve dinlenme üniteleri, yemekhane masaları ve ranzalar.",
+
+                MaterialTitle = "SandviÃ§ Panel Åantiye Konteynerleri (Ofis, Yatakhane, Yemekhane, DuÅŸ/Soyunma)",
+
+                MaterialDescription = "YÃ¶netim ofisi, teknik ofis, iÅŸÃ§i yatakhane ve dinlenme Ã¼niteleri, yemekhane masalarÄ± ve ranzalar.",
+
                 MaterialQuantity = 3,
-                MaterialUnit = "Ünite",
-                MaterialFormula = "3 Adet Sandviç Panel Yaşam ve Yönetim Konteyneri",
-                SupplierCategory = "Prefabrik Yapı & Şantiye Konteyner Üreticisi",
+
+                MaterialUnit = "Ãœnite",
+
+                MaterialFormula = "3 Adet SandviÃ§ Panel YaÅŸam ve YÃ¶netim Konteyneri",
+
+                SupplierCategory = "Prefabrik YapÄ± & Åantiye Konteyner Ãœreticisi",
+
                 LaborTitle = "Mobilizasyon Kurulum Ekibi",
-                ProfessionName = "Prefabrik / Konteyner Montaj Ustası",
-                CrewComposition = "1 Mobil Vinç Operatörü + 3 Montaj Ustası",
+
+                ProfessionName = "Prefabrik / Konteyner Montaj UstasÄ±",
+
+                CrewComposition = "1 Mobil VinÃ§ OperatÃ¶rÃ¼ + 3 Montaj UstasÄ±",
+
                 CrewSize = 4,
+
                 DurationDays = 3,
-                EquipmentNeeded = "Mobil Vinç, Lazer Terazi, Çelik Bağlantı Elemanları",
-                Predecessors = "Konteyner altı mıcır/grobeton zemin platformunun hazırlanması",
-                CriticalDependency = "Kadroların yatma, yemek ve barınma alanları kurulmadan şantiyeye usta ve işçi kabul edilemez!",
-                DnaSource = "Şantiye Mobilizasyon Standartları (Adım 1)",
+
+                EquipmentNeeded = "Mobil VinÃ§, Lazer Terazi, Ã‡elik BaÄŸlantÄ± ElemanlarÄ±",
+
+                Predecessors = "Konteyner altÄ± mÄ±cÄ±r/grobeton zemin platformunun hazÄ±rlanmasÄ±",
+
+                CriticalDependency = "KadrolarÄ±n yatma, yemek ve barÄ±nma alanlarÄ± kurulmadan ÅŸantiyeye usta ve iÅŸÃ§i kabul edilemez!",
+
+                DnaSource = "Åantiye Mobilizasyon StandartlarÄ± (AdÄ±m 1)",
+
                 PlannedStartDate = s07Start,
+
                 PlannedEndDate = s07End,
+
                 SubSteps = CreateWorkflowSubSteps(
-                    "T-3 Konteyner zemin takozları, elektrik/su sortileri ve vinç sahası hazırlığı",
-                    "Konteynerlerin vinç ile indirilmesi, terazilenmesi, elektrik ve temiz su bağlantılarının yapılması",
-                    "Pencere/kapı yalıtımları, klimalar ve aydınlatma linye kontrolleri",
-                    "Acil toplanma alanı krokisi, ilk yardım ecza dolabı ve yangın söndürme tüpleri yerleşimi"
+
+                    "T-3 Konteyner zemin takozlarÄ±, elektrik/su sortileri ve vinÃ§ sahasÄ± hazÄ±rlÄ±ÄŸÄ±",
+
+                    "Konteynerlerin vinÃ§ ile indirilmesi, terazilenmesi, elektrik ve temiz su baÄŸlantÄ±larÄ±nÄ±n yapÄ±lmasÄ±",
+
+                    "Pencere/kapÄ± yalÄ±tÄ±mlarÄ±, klimalar ve aydÄ±nlatma linye kontrolleri",
+
+                    "Acil toplanma alanÄ± krokisi, ilk yardÄ±m ecza dolabÄ± ve yangÄ±n sÃ¶ndÃ¼rme tÃ¼pleri yerleÅŸimi"
+
                 )
+
             });
 
-            // S-08: Şantiye Çevre Aydınlatması, Güvenlik Kulübesi & 7/24 Mobil IP Kamera Sistemi
+
+
+            // S-08: Åantiye Ã‡evre AydÄ±nlatmasÄ±, GÃ¼venlik KulÃ¼besi & 7/24 Mobil IP Kamera Sistemi
+
             var s08Start = s07End;
+
             var s08End = s08Start.AddDays(2);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "S-08",
+
                 Order = 8,
-                PhaseName = "Şantiye Çevre Aydınlatması, Güvenlik Kulübesi & 7/24 Mobil IP Kamera Sistemi",
+
+                PhaseName = "Åantiye Ã‡evre AydÄ±nlatmasÄ±, GÃ¼venlik KulÃ¼besi & 7/24 Mobil IP Kamera Sistemi",
+
                 StageCategory = "Ortak Saha Kurulumu",
+
                 PartIndex = 0,
-                PartName = "Şantiye Ortak Saha Kurulumu (Tüm Arsa)",
+
+                PartName = "Åantiye Ortak Saha Kurulumu (TÃ¼m Arsa)",
+
                 PartBadgeClass = "dark",
-                TriggerRule = "Mobilizasyon tamamlanınca güvenlik devreye alınır",
+
+                TriggerRule = "Mobilizasyon tamamlanÄ±nca gÃ¼venlik devreye alÄ±nÄ±r",
+
                 TargetStructureName = "Proje Geneli (Ortak Saha)",
-                MaterialTitle = "LED Saha Projektörleri, Güvenlik Bekçi Kulübesi, Gece Görüşlü 4K IP Kameralar ve 4G NVR Kayıt Ünitesi",
-                MaterialDescription = "Giriş kapısı güvenlik kabini, çevre ihata üzeri LED aydınlatmalar, şantiye alanını izleyen yüksek çözünürlüklü IP güvenlik kameraları.",
+
+                MaterialTitle = "LED Saha ProjektÃ¶rleri, GÃ¼venlik BekÃ§i KulÃ¼besi, Gece GÃ¶rÃ¼ÅŸlÃ¼ 4K IP Kameralar ve 4G NVR KayÄ±t Ãœnitesi",
+
+                MaterialDescription = "GiriÅŸ kapÄ±sÄ± gÃ¼venlik kabini, Ã§evre ihata Ã¼zeri LED aydÄ±nlatmalar, ÅŸantiye alanÄ±nÄ± izleyen yÃ¼ksek Ã§Ã¶zÃ¼nÃ¼rlÃ¼klÃ¼ IP gÃ¼venlik kameralarÄ±.",
+
                 MaterialQuantity = 1,
+
                 MaterialUnit = "Sistem",
-                MaterialFormula = "1 Takım 7/24 Şantiye Kamera & Güvenlik Aydınlatma Paketi",
-                SupplierCategory = "Güvenlik Sistemleri & Elektrik Toptancısı",
-                LaborTitle = "Güvenlik & Kamera Montaj Ekibi",
-                ProfessionName = "Zayıf Akım & Kamera Teknisyeni",
-                CrewComposition = "1 Güvenlik Sistemleri Teknisyeni + 2 Elektrikçi",
+
+                MaterialFormula = "1 TakÄ±m 7/24 Åantiye Kamera & GÃ¼venlik AydÄ±nlatma Paketi",
+
+                SupplierCategory = "GÃ¼venlik Sistemleri & Elektrik ToptancÄ±sÄ±",
+
+                LaborTitle = "GÃ¼venlik & Kamera Montaj Ekibi",
+
+                ProfessionName = "ZayÄ±f AkÄ±m & Kamera Teknisyeni",
+
+                CrewComposition = "1 GÃ¼venlik Sistemleri Teknisyeni + 2 ElektrikÃ§i",
+
                 CrewSize = 3,
+
                 DurationDays = 2,
-                EquipmentNeeded = "Merdiven / Platform, UTP Test Cihazı, Lazer Hizalama",
-                Predecessors = "Çevre ihatası ve şantiye ana elektrik panosu kurulumu",
-                CriticalDependency = "Gece aydınlatması ve kameralar aktif olmadan şantiye sahasına değerli demir, kablo ve inşaat malzemesi indirilemez!",
-                DnaSource = "Şantiye Güvenlik Standartları (Adım 1)",
+
+                EquipmentNeeded = "Merdiven / Platform, UTP Test CihazÄ±, Lazer Hizalama",
+
+                Predecessors = "Ã‡evre ihatasÄ± ve ÅŸantiye ana elektrik panosu kurulumu",
+
+                CriticalDependency = "Gece aydÄ±nlatmasÄ± ve kameralar aktif olmadan ÅŸantiye sahasÄ±na deÄŸerli demir, kablo ve inÅŸaat malzemesi indirilemez!",
+
+                DnaSource = "Åantiye GÃ¼venlik StandartlarÄ± (AdÄ±m 1)",
+
                 PlannedStartDate = s08Start,
+
                 PlannedEndDate = s08End,
+
                 SubSteps = CreateWorkflowSubSteps(
-                    "T-2 Kamera kör nokta analizi, projektör direkleri ve kablo kanallarının çekilmesi",
-                    "IP kameraların direklere montajı, NVR kayıt cihazı kurulumu ve 4G uzaktan izleme aktivasyonu",
-                    "Gece görüş testi, projektör aydınlatma lüks seviyesi ve hareket algılama uyarı testi",
-                    "'7/24 Güvenlik Kamerasıyla İzlenmektedir' uyarı levhaları ve gece vardiya güvenlik nöbet defteri"
+
+                    "T-2 Kamera kÃ¶r nokta analizi, projektÃ¶r direkleri ve kablo kanallarÄ±nÄ±n Ã§ekilmesi",
+
+                    "IP kameralarÄ±n direklere montajÄ±, NVR kayÄ±t cihazÄ± kurulumu ve 4G uzaktan izleme aktivasyonu",
+
+                    "Gece gÃ¶rÃ¼ÅŸ testi, projektÃ¶r aydÄ±nlatma lÃ¼ks seviyesi ve hareket algÄ±lama uyarÄ± testi",
+
+                    "'7/24 GÃ¼venlik KamerasÄ±yla Ä°zlenmektedir' uyarÄ± levhalarÄ± ve gece vardiya gÃ¼venlik nÃ¶bet defteri"
+
                 )
+
             });
+
+
 
             return list;
+
         }
 
+
+
         private List<WorkflowStepItemDto> GenerateSiteHandoverSteps(ConstructionProject project, ProjectDnaProfile profile)
+
         {
+
             var list = new List<WorkflowStepItemDto>();
+
             if (project == null) return list;
+
+
 
             DateTime curDate = DateTime.Today.AddMonths(8);
 
-            // P-01: Bahçe Altyapısı, Otomatik Sulama Tesisatı & Toprak Dolgusu
+
+
+            // P-01: BahÃ§e AltyapÄ±sÄ±, Otomatik Sulama TesisatÄ± & Toprak Dolgusu
+
             var p01Start = curDate;
+
             var p01End = p01Start.AddDays(7);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "P-01",
+
                 Order = 1,
-                PhaseName = "Bahçe Altyapısı, Otomatik Sulama Tesisatı & Toprak Dolgusu",
-                StageCategory = "Site Çevre & Dış Saha",
+
+                PhaseName = "BahÃ§e AltyapÄ±sÄ±, Otomatik Sulama TesisatÄ± & Toprak Dolgusu",
+
+                StageCategory = "Site Ã‡evre & DÄ±ÅŸ Saha",
+
                 PartIndex = 5,
-                PartName = "Proje Teslimi & Ortak Dış Alanlar",
+
+                PartName = "Proje Teslimi & Ortak DÄ±ÅŸ Alanlar",
+
                 PartBadgeClass = "secondary",
-                TriggerRule = "Kule vinç sökülüp ağır makineler sahadan çıkınca başlar",
-                TargetStructureName = "Proje Geneli (Dış Saha)",
-                MaterialTitle = "Bahçe Drenaj Boruları, Otomatik Sulama Solenoid Vanaları, Damlama Hatları ve Elenmiş Bitkisel Toprak",
-                MaterialDescription = "Saha çevre drenajı, otomatik zaman ayarlı sulama borulaması, gübreli bitkisel toprak serimi ve tesviyesi.",
+
+                TriggerRule = "Kule vinÃ§ sÃ¶kÃ¼lÃ¼p aÄŸÄ±r makineler sahadan Ã§Ä±kÄ±nca baÅŸlar",
+
+                TargetStructureName = "Proje Geneli (DÄ±ÅŸ Saha)",
+
+                MaterialTitle = "BahÃ§e Drenaj BorularÄ±, Otomatik Sulama Solenoid VanalarÄ±, Damlama HatlarÄ± ve ElenmiÅŸ Bitkisel Toprak",
+
+                MaterialDescription = "Saha Ã§evre drenajÄ±, otomatik zaman ayarlÄ± sulama borulamasÄ±, gÃ¼breli bitkisel toprak serimi ve tesviyesi.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Vaziyet planı peyzaj alanından hesaplanacak)",
-                SupplierCategory = "Peyzaj Fidanlığı & Sulama Sistemleri Bayisi",
-                LaborTitle = "Bahçe Altyapı ve Toprak Düzenleme Ekibi",
-                ProfessionName = "Peyzaj & Sulama Ustası",
-                CrewComposition = "1 Peyzaj Mühendisi + 4 Bahçıvan / Altyapı İşçisi",
+
+                MaterialUnit = "mÂ²",
+
+                MaterialFormula = "DXF Bekliyor (Vaziyet planÄ± peyzaj alanÄ±ndan hesaplanacak)",
+
+                SupplierCategory = "Peyzaj FidanlÄ±ÄŸÄ± & Sulama Sistemleri Bayisi",
+
+                LaborTitle = "BahÃ§e AltyapÄ± ve Toprak DÃ¼zenleme Ekibi",
+
+                ProfessionName = "Peyzaj & Sulama UstasÄ±",
+
+                CrewComposition = "1 Peyzaj MÃ¼hendisi + 4 BahÃ§Ä±van / AltyapÄ± Ä°ÅŸÃ§isi",
+
                 CrewSize = 5,
+
                 DurationDays = 7,
-                EquipmentNeeded = "Mini Kepçe, Kompaktör, Toprak Tırmığı",
-                Predecessors = "Bina dış cephe iskelelerinin sökülmesi ve şantiye sahasının molozlardan arındırılması",
-                CriticalDependency = "Ağır iş makineleri ve kule vinç sahadan ayrılmadan toprak dolgusu ve sulama boruları döşenemez!",
-                DnaSource = "Adım 9: Dış Çevre & Peyzaj",
+
+                EquipmentNeeded = "Mini KepÃ§e, KompaktÃ¶r, Toprak TÄ±rmÄ±ÄŸÄ±",
+
+                Predecessors = "Bina dÄ±ÅŸ cephe iskelelerinin sÃ¶kÃ¼lmesi ve ÅŸantiye sahasÄ±nÄ±n molozlardan arÄ±ndÄ±rÄ±lmasÄ±",
+
+                CriticalDependency = "AÄŸÄ±r iÅŸ makineleri ve kule vinÃ§ sahadan ayrÄ±lmadan toprak dolgusu ve sulama borularÄ± dÃ¶ÅŸenemez!",
+
+                DnaSource = "AdÄ±m 9: DÄ±ÅŸ Ã‡evre & Peyzaj",
+
                 PlannedStartDate = p01Start,
+
                 PlannedEndDate = p01End,
+
                 SubSteps = CreateWorkflowSubSteps(
-                    "T-3 Vaziyet kot planı, drenaj güzergahı ve bitkisel toprak sevki",
-                    "Drenaj borularının döşenmesi, otomatik sulama borulaması ve toprak tesviyesi",
-                    "Sulama hatları basınç testi ve drenaj su tahliye eğimi kontrolü",
-                    "Hendek kenarları güvenlik şeridi ve toz bastırma sulaması"
+
+                    "T-3 Vaziyet kot planÄ±, drenaj gÃ¼zergahÄ± ve bitkisel toprak sevki",
+
+                    "Drenaj borularÄ±nÄ±n dÃ¶ÅŸenmesi, otomatik sulama borulamasÄ± ve toprak tesviyesi",
+
+                    "Sulama hatlarÄ± basÄ±nÃ§ testi ve drenaj su tahliye eÄŸimi kontrolÃ¼",
+
+                    "Hendek kenarlarÄ± gÃ¼venlik ÅŸeridi ve toz bastÄ±rma sulamasÄ±"
+
                 )
+
             });
 
-            // P-02: Peyzaj Düzenlemesi, Çim Alanlar, Ağaçlandırma & Çiçeklendirme
+
+
+            // P-02: Peyzaj DÃ¼zenlemesi, Ã‡im Alanlar, AÄŸaÃ§landÄ±rma & Ã‡iÃ§eklendirme
+
             var p02Start = p01End;
+
             var p02End = p02Start.AddDays(8);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "P-02",
+
                 Order = 2,
-                PhaseName = "Peyzaj Düzenlemesi, Çim Alanlar, Ağaçlandırma & Çiçeklendirme",
-                StageCategory = "Site Çevre & Dış Saha",
+
+                PhaseName = "Peyzaj DÃ¼zenlemesi, Ã‡im Alanlar, AÄŸaÃ§landÄ±rma & Ã‡iÃ§eklendirme",
+
+                StageCategory = "Site Ã‡evre & DÄ±ÅŸ Saha",
+
                 PartIndex = 5,
-                PartName = "Proje Teslimi & Ortak Dış Alanlar",
+
+                PartName = "Proje Teslimi & Ortak DÄ±ÅŸ Alanlar",
+
                 PartBadgeClass = "secondary",
-                TriggerRule = "Toprak dolgusu ve sulama hazır olunca uygulanır",
-                TargetStructureName = "Proje Geneli (Dış Saha)",
-                MaterialTitle = "Rulo Çim (Hazır Çim Kalıpları), Yetişkin İbreli/Yapraklı Ağaçlar, Çalı Grupları ve Mevsimlik Çiçekler",
-                MaterialDescription = "Peyzaj projesine uygun yetişkin ağaç dikimi, çalı çitleri, çiçek tarhları ve preslenmiş rulo çim serimi.",
+
+                TriggerRule = "Toprak dolgusu ve sulama hazÄ±r olunca uygulanÄ±r",
+
+                TargetStructureName = "Proje Geneli (DÄ±ÅŸ Saha)",
+
+                MaterialTitle = "Rulo Ã‡im (HazÄ±r Ã‡im KalÄ±plarÄ±), YetiÅŸkin Ä°breli/YapraklÄ± AÄŸaÃ§lar, Ã‡alÄ± GruplarÄ± ve Mevsimlik Ã‡iÃ§ekler",
+
+                MaterialDescription = "Peyzaj projesine uygun yetiÅŸkin aÄŸaÃ§ dikimi, Ã§alÄ± Ã§itleri, Ã§iÃ§ek tarhlarÄ± ve preslenmiÅŸ rulo Ã§im serimi.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Yeşil alan metrajlarından hesaplanacak)",
-                SupplierCategory = "Fidanlık & Peyzaj Botanik Merkezi",
-                LaborTitle = "Botanik & Bahçıvanlık Ekibi",
-                ProfessionName = "Peyzaj Mimarı / Bahçıvan",
-                CrewComposition = "1 Peyzaj Mimarı + 6 Bahçıvan",
+
+                MaterialUnit = "mÂ²",
+
+                MaterialFormula = "DXF Bekliyor (YeÅŸil alan metrajlarÄ±ndan hesaplanacak)",
+
+                SupplierCategory = "FidanlÄ±k & Peyzaj Botanik Merkezi",
+
+                LaborTitle = "Botanik & BahÃ§Ä±vanlÄ±k Ekibi",
+
+                ProfessionName = "Peyzaj MimarÄ± / BahÃ§Ä±van",
+
+                CrewComposition = "1 Peyzaj MimarÄ± + 6 BahÃ§Ä±van",
+
                 CrewSize = 7,
+
                 DurationDays = 8,
-                EquipmentNeeded = "Çim Silindiri, Fidan Dikme Aparatları, Çim Havalandırma",
-                Predecessors = "Otomatik sulama tesisatının aktif çalışır durumda olması",
-                CriticalDependency = "Rulo çim serildiği ilk 10 gün boyunca sabah ve akşam otomatik sulama aksatılmamalıdır!",
-                DnaSource = "Adım 9: Dış Çevre & Peyzaj",
+
+                EquipmentNeeded = "Ã‡im Silindiri, Fidan Dikme AparatlarÄ±, Ã‡im HavalandÄ±rma",
+
+                Predecessors = "Otomatik sulama tesisatÄ±nÄ±n aktif Ã§alÄ±ÅŸÄ±r durumda olmasÄ±",
+
+                CriticalDependency = "Rulo Ã§im serildiÄŸi ilk 10 gÃ¼n boyunca sabah ve akÅŸam otomatik sulama aksatÄ±lmamalÄ±dÄ±r!",
+
+                DnaSource = "AdÄ±m 9: DÄ±ÅŸ Ã‡evre & Peyzaj",
+
                 PlannedStartDate = p02Start,
+
                 PlannedEndDate = p02End,
+
                 SubSteps = CreateWorkflowSubSteps(
-                    "T-2 Fidan kök kontrolü, rulo çim tazelik kontrolü ve gübre hazırlığı",
-                    "Ağaç çukurlarının açılması, kazıklama/bağlama, çalı dikimi ve rulo çim serme",
-                    "Çim silindirleme düzgünlüğü ve ilk can suyu sulama kontrolü",
-                    "Ağır ağaç indirmelerinde halat güvenliği ve ergonomik taşıma"
+
+                    "T-2 Fidan kÃ¶k kontrolÃ¼, rulo Ã§im tazelik kontrolÃ¼ ve gÃ¼bre hazÄ±rlÄ±ÄŸÄ±",
+
+                    "AÄŸaÃ§ Ã§ukurlarÄ±nÄ±n aÃ§Ä±lmasÄ±, kazÄ±klama/baÄŸlama, Ã§alÄ± dikimi ve rulo Ã§im serme",
+
+                    "Ã‡im silindirleme dÃ¼zgÃ¼nlÃ¼ÄŸÃ¼ ve ilk can suyu sulama kontrolÃ¼",
+
+                    "AÄŸÄ±r aÄŸaÃ§ indirmelerinde halat gÃ¼venliÄŸi ve ergonomik taÅŸÄ±ma"
+
                 )
+
             });
 
-            // P-03: Çocuk Oyun Parkı & Kauçuk Zemin İmalatı
+
+
+            // P-03: Ã‡ocuk Oyun ParkÄ± & KauÃ§uk Zemin Ä°malatÄ±
+
             var p03Start = p02Start.AddDays(2);
+
             var p03End = p03Start.AddDays(5);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "P-03",
+
                 Order = 3,
-                PhaseName = "Çocuk Oyun Parkı & Kauçuk Zemin İmalatı",
-                StageCategory = "Site Çevre & Dış Saha",
+
+                PhaseName = "Ã‡ocuk Oyun ParkÄ± & KauÃ§uk Zemin Ä°malatÄ±",
+
+                StageCategory = "Site Ã‡evre & DÄ±ÅŸ Saha",
+
                 PartIndex = 5,
-                PartName = "Proje Teslimi & Ortak Dış Alanlar",
+
+                PartName = "Proje Teslimi & Ortak DÄ±ÅŸ Alanlar",
+
                 PartBadgeClass = "secondary",
-                TriggerRule = "Peyzaj zemin betonları dökülünce kurulur",
-                TargetStructureName = "Proje Geneli (Dış Saha)",
-                MaterialTitle = "TSE EN 1176 Sertifikalı Modüler Çocuk Oyun Grubu, Salıncak, Kaydırak ve 40mm EPDM Kauçuk Zemin Karo",
-                MaterialDescription = "Darbe emici kauçuk zemin kaplaması, statik ankrajlı kaydıraklı oyun kulesi, salıncaklar ve zıpzıplar.",
+
+                TriggerRule = "Peyzaj zemin betonlarÄ± dÃ¶kÃ¼lÃ¼nce kurulur",
+
+                TargetStructureName = "Proje Geneli (DÄ±ÅŸ Saha)",
+
+                MaterialTitle = "TSE EN 1176 SertifikalÄ± ModÃ¼ler Ã‡ocuk Oyun Grubu, SalÄ±ncak, KaydÄ±rak ve 40mm EPDM KauÃ§uk Zemin Karo",
+
+                MaterialDescription = "Darbe emici kauÃ§uk zemin kaplamasÄ±, statik ankrajlÄ± kaydÄ±raklÄ± oyun kulesi, salÄ±ncaklar ve zÄ±pzÄ±plar.",
+
                 MaterialQuantity = 1,
-                MaterialUnit = "Takım",
-                MaterialFormula = "1 Takım Çocuk Oyun Parkı ve Güvenlikli Kauçuk Zemin",
-                SupplierCategory = "Çocuk Parkı & Kent Mobilyaları Üreticisi",
-                LaborTitle = "Oyun Parkı Montaj Ekibi",
-                ProfessionName = "Kent Mobilyaları Montaj Ustası",
-                CrewComposition = "1 Montaj Formeni + 3 Montaj Ustası",
+
+                MaterialUnit = "TakÄ±m",
+
+                MaterialFormula = "1 TakÄ±m Ã‡ocuk Oyun ParkÄ± ve GÃ¼venlikli KauÃ§uk Zemin",
+
+                SupplierCategory = "Ã‡ocuk ParkÄ± & Kent MobilyalarÄ± Ãœreticisi",
+
+                LaborTitle = "Oyun ParkÄ± Montaj Ekibi",
+
+                ProfessionName = "Kent MobilyalarÄ± Montaj UstasÄ±",
+
+                CrewComposition = "1 Montaj Formeni + 3 Montaj UstasÄ±",
+
                 CrewSize = 4,
+
                 DurationDays = 5,
-                EquipmentNeeded = "Ankraj Matkapları, Poliüretan Yapıştırıcı Ruloları",
-                Predecessors = "Oyun alanı alt beton plağının dökülmesi ve kuruması",
-                CriticalDependency = "TSE EN 1176-1177 çocuk güvenlik ve düşme yüksekliği standartlarına uygun olmayan ekipman kabul edilemez!",
-                DnaSource = "Adım 9: Sosyal Donatılar (Çocuk Parkı)",
+
+                EquipmentNeeded = "Ankraj MatkaplarÄ±, PoliÃ¼retan YapÄ±ÅŸtÄ±rÄ±cÄ± RulolarÄ±",
+
+                Predecessors = "Oyun alanÄ± alt beton plaÄŸÄ±nÄ±n dÃ¶kÃ¼lmesi ve kurumasÄ±",
+
+                CriticalDependency = "TSE EN 1176-1177 Ã§ocuk gÃ¼venlik ve dÃ¼ÅŸme yÃ¼ksekliÄŸi standartlarÄ±na uygun olmayan ekipman kabul edilemez!",
+
+                DnaSource = "AdÄ±m 9: Sosyal DonatÄ±lar (Ã‡ocuk ParkÄ±)",
+
                 PlannedStartDate = p03Start,
+
                 PlannedEndDate = p03End,
+
                 SubSteps = CreateWorkflowSubSteps(
-                    "T-2 TSE güvenlik sertifikası kontrolü, oyun elemanları ve kauçuk karoların sevki",
-                    "Zemin alt betonu üzerine kauçuk yapıştırma ve oyun kulesi ankraj montajı",
-                    "Darbe emicilik testi, cıvata başı plastik kapakları ve salıncak zincir kontrolü",
-                    "Çocuk güvenlik uyarı tabelaları ve yaş grubu etiketleri montajı"
+
+                    "T-2 TSE gÃ¼venlik sertifikasÄ± kontrolÃ¼, oyun elemanlarÄ± ve kauÃ§uk karolarÄ±n sevki",
+
+                    "Zemin alt betonu Ã¼zerine kauÃ§uk yapÄ±ÅŸtÄ±rma ve oyun kulesi ankraj montajÄ±",
+
+                    "Darbe emicilik testi, cÄ±vata baÅŸÄ± plastik kapaklarÄ± ve salÄ±ncak zincir kontrolÃ¼",
+
+                    "Ã‡ocuk gÃ¼venlik uyarÄ± tabelalarÄ± ve yaÅŸ grubu etiketleri montajÄ±"
+
                 )
+
             });
 
-            // P-04: Ahşap Kamelyalar, Banklar & Dinlenme Alanları
+
+
+            // P-04: AhÅŸap Kamelyalar, Banklar & Dinlenme AlanlarÄ±
+
             var p04Start = p03Start.AddDays(1);
+
             var p04End = p04Start.AddDays(4);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "P-04",
+
                 Order = 4,
-                PhaseName = "Ahşap Kamelyalar, Banklar & Dinlenme Alanları",
-                StageCategory = "Site Çevre & Dış Saha",
+
+                PhaseName = "AhÅŸap Kamelyalar, Banklar & Dinlenme AlanlarÄ±",
+
+                StageCategory = "Site Ã‡evre & DÄ±ÅŸ Saha",
+
                 PartIndex = 5,
-                PartName = "Proje Teslimi & Ortak Dış Alanlar",
+
+                PartName = "Proje Teslimi & Ortak DÄ±ÅŸ Alanlar",
+
                 PartBadgeClass = "secondary",
-                TriggerRule = "Peyzaj sert zeminleri tamamlanınca monte edilir",
-                TargetStructureName = "Proje Geneli (Dış Saha)",
-                MaterialTitle = "Emprenyeli Çam Ahşap Kamelya (Çardak), Döküm Ayaklı Ahşap Park Bankları ve Çöp Kovaları",
-                MaterialDescription = "Site sakinleri dinlenme çardakları, gölgelikler, bahçe oturma bankları ve çevre çöp kutuları montajı.",
+
+                TriggerRule = "Peyzaj sert zeminleri tamamlanÄ±nca monte edilir",
+
+                TargetStructureName = "Proje Geneli (DÄ±ÅŸ Saha)",
+
+                MaterialTitle = "Emprenyeli Ã‡am AhÅŸap Kamelya (Ã‡ardak), DÃ¶kÃ¼m AyaklÄ± AhÅŸap Park BanklarÄ± ve Ã‡Ã¶p KovalarÄ±",
+
+                MaterialDescription = "Site sakinleri dinlenme Ã§ardaklarÄ±, gÃ¶lgelikler, bahÃ§e oturma banklarÄ± ve Ã§evre Ã§Ã¶p kutularÄ± montajÄ±.",
+
                 MaterialQuantity = 2,
-                MaterialUnit = "Takım",
-                MaterialFormula = "2 Adet Kamelya + 8 Adet Park Bankı + Çöp Kovaları",
-                SupplierCategory = "Ahşap Kent Mobilyaları İmalatçısı",
-                LaborTitle = "Ahşap Montaj Ekibi",
-                ProfessionName = "Marangoz / Ahşap Montaj Ustası",
-                CrewComposition = "1 Formen + 3 Ahşap Ustası",
+
+                MaterialUnit = "TakÄ±m",
+
+                MaterialFormula = "2 Adet Kamelya + 8 Adet Park BankÄ± + Ã‡Ã¶p KovalarÄ±",
+
+                SupplierCategory = "AhÅŸap Kent MobilyalarÄ± Ä°malatÃ§Ä±sÄ±",
+
+                LaborTitle = "AhÅŸap Montaj Ekibi",
+
+                ProfessionName = "Marangoz / AhÅŸap Montaj UstasÄ±",
+
+                CrewComposition = "1 Formen + 3 AhÅŸap UstasÄ±",
+
                 CrewSize = 4,
+
                 DurationDays = 4,
-                EquipmentNeeded = "Akülü Vidalama Setleri, Lazer Terazi, Ankraj Dübelleri",
-                Predecessors = "Kamelya taban taş veya beton zemin kaplamalarının bitmesi",
-                CriticalDependency = "Açık hava koşullarına dayanıklı olması için tüm ahşap elemanlar vakum basınç emprenyeli olmalıdır!",
-                DnaSource = "Adım 9: Sosyal Donatılar (Kamelya & Bank)",
+
+                EquipmentNeeded = "AkÃ¼lÃ¼ Vidalama Setleri, Lazer Terazi, Ankraj DÃ¼belleri",
+
+                Predecessors = "Kamelya taban taÅŸ veya beton zemin kaplamalarÄ±nÄ±n bitmesi",
+
+                CriticalDependency = "AÃ§Ä±k hava koÅŸullarÄ±na dayanÄ±klÄ± olmasÄ± iÃ§in tÃ¼m ahÅŸap elemanlar vakum basÄ±nÃ§ emprenyeli olmalÄ±dÄ±r!",
+
+                DnaSource = "AdÄ±m 9: Sosyal DonatÄ±lar (Kamelya & Bank)",
+
                 PlannedStartDate = p04Start,
+
                 PlannedEndDate = p04End,
+
                 SubSteps = CreateWorkflowSubSteps(
-                    "T-2 Emprenye sertifikası ve demonte kamelya parçalarının kontrolü",
-                    "Kamelya taşıyıcı dikmelerinin zemine çelik flanşla ankrajı ve çatı montajı",
-                    "Ahşap yüzey kıymık kontrolü, vernik/cila düzgünlüğü ve rüzgar rijitliği",
+
+                    "T-2 Emprenye sertifikasÄ± ve demonte kamelya parÃ§alarÄ±nÄ±n kontrolÃ¼",
+
+                    "Kamelya taÅŸÄ±yÄ±cÄ± dikmelerinin zemine Ã§elik flanÅŸla ankrajÄ± ve Ã§atÄ± montajÄ±",
+
+                    "AhÅŸap yÃ¼zey kÄ±ymÄ±k kontrolÃ¼, vernik/cila dÃ¼zgÃ¼nlÃ¼ÄŸÃ¼ ve rÃ¼zgar rijitliÄŸi",
+
                     "Elektrikli vidalama ve montaj emniyeti"
+
                 )
+
             });
 
-            // P-05: Açık / Kapalı Otopark Zemin Epoksi Kaplaması & Şerit Çizgileri
+
+
+            // P-05: AÃ§Ä±k / KapalÄ± Otopark Zemin Epoksi KaplamasÄ± & Åerit Ã‡izgileri
+
             var p05Start = p02End;
+
             var p05End = p05Start.AddDays(6);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "P-05",
+
                 Order = 5,
-                PhaseName = "Açık / Kapalı Otopark Zemin Epoksi Kaplaması & Şerit Çizgileri",
-                StageCategory = "Site Çevre & Dış Saha",
+
+                PhaseName = "AÃ§Ä±k / KapalÄ± Otopark Zemin Epoksi KaplamasÄ± & Åerit Ã‡izgileri",
+
+                StageCategory = "Site Ã‡evre & DÄ±ÅŸ Saha",
+
                 PartIndex = 5,
-                PartName = "Proje Teslimi & Ortak Dış Alanlar",
+
+                PartName = "Proje Teslimi & Ortak DÄ±ÅŸ Alanlar",
+
                 PartBadgeClass = "secondary",
-                TriggerRule = "Otopark kaba inşaatı ve tavan tesisatları tamamlanınca yapılır",
-                TargetStructureName = "Proje Geneli (Dış Saha)",
-                MaterialTitle = "Solventsiz Epoksi Zemin Kaplaması, Kauçuk Kolon Köşe Koruyucuları, Araç Stoperleri ve Trafik Boyası",
-                MaterialDescription = "Otopark zemininde silim, astar, portakal kabuğu epoksi kaplama, numaralı park şeritleri ve yönlendirme okları.",
+
+                TriggerRule = "Otopark kaba inÅŸaatÄ± ve tavan tesisatlarÄ± tamamlanÄ±nca yapÄ±lÄ±r",
+
+                TargetStructureName = "Proje Geneli (DÄ±ÅŸ Saha)",
+
+                MaterialTitle = "Solventsiz Epoksi Zemin KaplamasÄ±, KauÃ§uk Kolon KÃ¶ÅŸe KoruyucularÄ±, AraÃ§ Stoperleri ve Trafik BoyasÄ±",
+
+                MaterialDescription = "Otopark zemininde silim, astar, portakal kabuÄŸu epoksi kaplama, numaralÄ± park ÅŸeritleri ve yÃ¶nlendirme oklarÄ±.",
+
                 MaterialQuantity = 0,
-                MaterialUnit = "m²",
-                MaterialFormula = "DXF Bekliyor (Otopark planı ve araç park yeri adedinden hesaplanacak)",
-                SupplierCategory = "Epoksi Zemin Kimyasalları & Trafik Donanımları",
-                LaborTitle = "Epoksi Zemin ve Yol Çizgi Ekibi",
-                ProfessionName = "Epoksi Zemin Ustası",
-                CrewComposition = "1 Formen + 4 Epoksi Ustası + 2 Çizgi Ustası",
+
+                MaterialUnit = "mÂ²",
+
+                MaterialFormula = "DXF Bekliyor (Otopark planÄ± ve araÃ§ park yeri adedinden hesaplanacak)",
+
+                SupplierCategory = "Epoksi Zemin KimyasallarÄ± & Trafik DonanÄ±mlarÄ±",
+
+                LaborTitle = "Epoksi Zemin ve Yol Ã‡izgi Ekibi",
+
+                ProfessionName = "Epoksi Zemin UstasÄ±",
+
+                CrewComposition = "1 Formen + 4 Epoksi UstasÄ± + 2 Ã‡izgi UstasÄ±",
+
                 CrewSize = 7,
+
                 DurationDays = 6,
-                EquipmentNeeded = "Elmas Zemin Silim Makinesi, Vakumlu Endüstriyel Süpürge, Rulo ve Çizgi Makinesi",
-                Predecessors = "Otopark tavan yangın tesisatı ve aydınlatmalarının bitmesi",
-                CriticalDependency = "Epoksi uygulanacak zemin nemi <%4 olmalı ve yüzey tozu tamamen emilmiş olmalıdır!",
-                DnaSource = "Adım 8 & 9: Otopark İmalatları",
+
+                EquipmentNeeded = "Elmas Zemin Silim Makinesi, Vakumlu EndÃ¼striyel SÃ¼pÃ¼rge, Rulo ve Ã‡izgi Makinesi",
+
+                Predecessors = "Otopark tavan yangÄ±n tesisatÄ± ve aydÄ±nlatmalarÄ±nÄ±n bitmesi",
+
+                CriticalDependency = "Epoksi uygulanacak zemin nemi <%4 olmalÄ± ve yÃ¼zey tozu tamamen emilmiÅŸ olmalÄ±dÄ±r!",
+
+                DnaSource = "AdÄ±m 8 & 9: Otopark Ä°malatlarÄ±",
+
                 PlannedStartDate = p05Start,
+
                 PlannedEndDate = p05End,
+
                 SubSteps = CreateWorkflowSubSteps(
-                    "T-2 Zemin nem ölçümü, elmas uçlu silim makinesiyle beton pürüzlendirme",
-                    "Epoksi astar, ara kat ve tekstürlü son kat kaplama, park yeri çizgileri ve araç stoperi montajı",
-                    "Kaplama kalınlığı, yapışma testi ve şerit reflektif görünürlük kontrolü",
-                    "Kapalı alanda havalandırma fanı kullanımı ve organik buhar maskesi"
+
+                    "T-2 Zemin nem Ã¶lÃ§Ã¼mÃ¼, elmas uÃ§lu silim makinesiyle beton pÃ¼rÃ¼zlendirme",
+
+                    "Epoksi astar, ara kat ve tekstÃ¼rlÃ¼ son kat kaplama, park yeri Ã§izgileri ve araÃ§ stoperi montajÄ±",
+
+                    "Kaplama kalÄ±nlÄ±ÄŸÄ±, yapÄ±ÅŸma testi ve ÅŸerit reflektif gÃ¶rÃ¼nÃ¼rlÃ¼k kontrolÃ¼",
+
+                    "KapalÄ± alanda havalandÄ±rma fanÄ± kullanÄ±mÄ± ve organik buhar maskesi"
+
                 )
+
             });
 
-            // P-06: Çevre Aydınlatma Direkleri, Bahçe Projektörleri & Güneş Enerjisi (GES)
+
+
+            // P-06: Ã‡evre AydÄ±nlatma Direkleri, BahÃ§e ProjektÃ¶rleri & GÃ¼neÅŸ Enerjisi (GES)
+
             var p06Start = p04End;
+
             var p06End = p06Start.AddDays(4);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "P-06",
+
                 Order = 6,
-                PhaseName = "Çevre Aydınlatma Direkleri, Bahçe Projektörleri & Güneş Enerjisi (GES)",
-                StageCategory = "Site Çevre & Dış Saha",
+
+                PhaseName = "Ã‡evre AydÄ±nlatma Direkleri, BahÃ§e ProjektÃ¶rleri & GÃ¼neÅŸ Enerjisi (GES)",
+
+                StageCategory = "Site Ã‡evre & DÄ±ÅŸ Saha",
+
                 PartIndex = 5,
-                PartName = "Proje Teslimi & Ortak Dış Alanlar",
+
+                PartName = "Proje Teslimi & Ortak DÄ±ÅŸ Alanlar",
+
                 PartBadgeClass = "secondary",
-                TriggerRule = "Peyzaj bitki dikimi bitiminde devreye alınır",
-                TargetStructureName = "Proje Geneli (Dış Saha)",
-                MaterialTitle = "Dekoratif LED Bahçe Aydınlatma Direkleri, Çim Üstü Bollard Lambalar, Fotoselli Projektörler ve Zaman Saati",
-                MaterialDescription = "Yürüyüş yolları 3m dekoratif aydınlatma direkleri, çim üstü yönlendirme spotları, fotoselli gece aydınlatma otomasyonu.",
+
+                TriggerRule = "Peyzaj bitki dikimi bitiminde devreye alÄ±nÄ±r",
+
+                TargetStructureName = "Proje Geneli (DÄ±ÅŸ Saha)",
+
+                MaterialTitle = "Dekoratif LED BahÃ§e AydÄ±nlatma Direkleri, Ã‡im ÃœstÃ¼ Bollard Lambalar, Fotoselli ProjektÃ¶rler ve Zaman Saati",
+
+                MaterialDescription = "YÃ¼rÃ¼yÃ¼ÅŸ yollarÄ± 3m dekoratif aydÄ±nlatma direkleri, Ã§im Ã¼stÃ¼ yÃ¶nlendirme spotlarÄ±, fotoselli gece aydÄ±nlatma otomasyonu.",
+
                 MaterialQuantity = 0,
+
                 MaterialUnit = "Adet",
-                MaterialFormula = "DXF Bekliyor (Peyzaj elektrik aydınlatma projesinden netleşecek)",
-                SupplierCategory = "Dış Aydınlatma & Elektrik Toptancısı",
-                LaborTitle = "Dış Saha Elektrik & Otomasyon Ekibi",
-                ProfessionName = "Elektrik Ustası",
-                CrewComposition = "1 Formen + 3 Elektrik Ustası",
+
+                MaterialFormula = "DXF Bekliyor (Peyzaj elektrik aydÄ±nlatma projesinden netleÅŸecek)",
+
+                SupplierCategory = "DÄ±ÅŸ AydÄ±nlatma & Elektrik ToptancÄ±sÄ±",
+
+                LaborTitle = "DÄ±ÅŸ Saha Elektrik & Otomasyon Ekibi",
+
+                ProfessionName = "Elektrik UstasÄ±",
+
+                CrewComposition = "1 Formen + 3 Elektrik UstasÄ±",
+
                 CrewSize = 4,
+
                 DurationDays = 4,
-                EquipmentNeeded = "Lazer Hizalama, Kablo Çekici Sustalar, Meger Test Cihazı",
-                Predecessors = "Peyzaj toprak altı elektrik koruge borularının hazır olması",
-                CriticalDependency = "IP65/IP67 dış ortam su geçirmezlik sertifikası olmayan armatürler bahçede kullanılamaz!",
-                DnaSource = "Adım 9: Çevre Aydınlatma",
+
+                EquipmentNeeded = "Lazer Hizalama, Kablo Ã‡ekici Sustalar, Meger Test CihazÄ±",
+
+                Predecessors = "Peyzaj toprak altÄ± elektrik koruge borularÄ±nÄ±n hazÄ±r olmasÄ±",
+
+                CriticalDependency = "IP65/IP67 dÄ±ÅŸ ortam su geÃ§irmezlik sertifikasÄ± olmayan armatÃ¼rler bahÃ§ede kullanÄ±lamaz!",
+
+                DnaSource = "AdÄ±m 9: Ã‡evre AydÄ±nlatma",
+
                 PlannedStartDate = p06Start,
+
                 PlannedEndDate = p06End,
+
                 SubSteps = CreateWorkflowSubSteps(
-                    "T-2 Aydınlatma direk ankraj betonları, IP67 kablo ek mufları ve direk sevki",
-                    "Direklerin dikilmesi, armatür montajları, linye bağlantıları ve zaman saati panosu",
-                    "Gece ışık seviyesi kontrolü, fotosel devreye girme testi ve kaçak akım kontrolü",
+
+                    "T-2 AydÄ±nlatma direk ankraj betonlarÄ±, IP67 kablo ek muflarÄ± ve direk sevki",
+
+                    "Direklerin dikilmesi, armatÃ¼r montajlarÄ±, linye baÄŸlantÄ±larÄ± ve zaman saati panosu",
+
+                    "Gece Ä±ÅŸÄ±k seviyesi kontrolÃ¼, fotosel devreye girme testi ve kaÃ§ak akÄ±m kontrolÃ¼",
+
                     "Elektrik izolasyon eldivenleri ve direkte emniyetli montaj"
+
                 )
+
             });
 
-            // P-07: Dış Çevre Bahçe Duvarı, Ferforje Korkuluklar & Otomatik Site Bahçe Kapısı
+
+
+            // P-07: DÄ±ÅŸ Ã‡evre BahÃ§e DuvarÄ±, Ferforje Korkuluklar & Otomatik Site BahÃ§e KapÄ±sÄ±
+
             var p07Start = p05End;
+
             var p07End = p07Start.AddDays(8);
+
             list.Add(new WorkflowStepItemDto
+
             {
+
                 StepCode = "P-07",
+
                 Order = 7,
-                PhaseName = "Dış Çevre Bahçe Duvarı, Ferforje Korkuluklar & Otomatik Site Bahçe Kapısı",
-                StageCategory = "Site Çevre & Dış Saha",
+
+                PhaseName = "DÄ±ÅŸ Ã‡evre BahÃ§e DuvarÄ±, Ferforje Korkuluklar & Otomatik Site BahÃ§e KapÄ±sÄ±",
+
+                StageCategory = "Site Ã‡evre & DÄ±ÅŸ Saha",
+
                 PartIndex = 5,
-                PartName = "Proje Teslimi & Ortak Dış Alanlar",
+
+                PartName = "Proje Teslimi & Ortak DÄ±ÅŸ Alanlar",
+
                 PartBadgeClass = "secondary",
-                TriggerRule = "Şantiye ihata telleri kaldırılınca kalıcı bahçe duvarı yapılır",
-                TargetStructureName = "Proje Geneli (Dış Saha)",
-                MaterialTitle = "Betonarme / Taş Bahçe Duvarı, Elektrostatik Boyalı Ferforje Korkuluklar, Motorlu Otomatik Yana Kayar Site Kapısı ve OGS/Plaka Tanıma",
-                MaterialDescription = "Kalıcı parsel çevre bahçe duvarı, harpuştası, üzerine ferforje panel çit, motorlu ana site giriş kapısı ve plaka tanıma sistemi.",
+
+                TriggerRule = "Åantiye ihata telleri kaldÄ±rÄ±lÄ±nca kalÄ±cÄ± bahÃ§e duvarÄ± yapÄ±lÄ±r",
+
+                TargetStructureName = "Proje Geneli (DÄ±ÅŸ Saha)",
+
+                MaterialTitle = "Betonarme / TaÅŸ BahÃ§e DuvarÄ±, Elektrostatik BoyalÄ± Ferforje Korkuluklar, Motorlu Otomatik Yana Kayar Site KapÄ±sÄ± ve OGS/Plaka TanÄ±ma",
+
+                MaterialDescription = "KalÄ±cÄ± parsel Ã§evre bahÃ§e duvarÄ±, harpuÅŸtasÄ±, Ã¼zerine ferforje panel Ã§it, motorlu ana site giriÅŸ kapÄ±sÄ± ve plaka tanÄ±ma sistemi.",
+
                 MaterialQuantity = 0,
+
                 MaterialUnit = "mt",
-                MaterialFormula = "DXF Bekliyor (Parsel çevre net uzunluğundan hesaplanacak)",
-                SupplierCategory = "Demir Doğrama & Otomatik Kapı / Taş Ocağı",
-                LaborTitle = "Bahçe Duvarı ve Otomatik Kapı Ekibi",
-                ProfessionName = "Taş Ustası & Metal / Otomasyon Ustası",
-                CrewComposition = "1 Formen + 4 Taş/Duvar Ustası + 2 Demirci + 1 Otomasyoncu",
+
+                MaterialFormula = "DXF Bekliyor (Parsel Ã§evre net uzunluÄŸundan hesaplanacak)",
+
+                SupplierCategory = "Demir DoÄŸrama & Otomatik KapÄ± / TaÅŸ OcaÄŸÄ±",
+
+                LaborTitle = "BahÃ§e DuvarÄ± ve Otomatik KapÄ± Ekibi",
+
+                ProfessionName = "TaÅŸ UstasÄ± & Metal / Otomasyon UstasÄ±",
+
+                CrewComposition = "1 Formen + 4 TaÅŸ/Duvar UstasÄ± + 2 Demirci + 1 Otomasyoncu",
+
                 CrewSize = 8,
+
                 DurationDays = 8,
-                EquipmentNeeded = "Betoniyer / Pompa, Kaynak Makineleri, Kapı Motoru Montaj Seti",
-                Predecessors = "Şantiye geçici çevre tel ve konteynerlerinin sahadan kaldırılması",
-                CriticalDependency = "Site araç giriş kapısında fotoselli sıkışma önleyici emniyet sensörü ve flaşör lamba zorunludur!",
-                DnaSource = "Adım 9: Çevre İhata ve Güvenlik",
+
+                EquipmentNeeded = "Betoniyer / Pompa, Kaynak Makineleri, KapÄ± Motoru Montaj Seti",
+
+                Predecessors = "Åantiye geÃ§ici Ã§evre tel ve konteynerlerinin sahadan kaldÄ±rÄ±lmasÄ±",
+
+                CriticalDependency = "Site araÃ§ giriÅŸ kapÄ±sÄ±nda fotoselli sÄ±kÄ±ÅŸma Ã¶nleyici emniyet sensÃ¶rÃ¼ ve flaÅŸÃ¶r lamba zorunludur!",
+
+                DnaSource = "AdÄ±m 9: Ã‡evre Ä°hata ve GÃ¼venlik",
+
                 PlannedStartDate = p07Start,
+
                 PlannedEndDate = p07End,
+
                 SubSteps = CreateWorkflowSubSteps(
-                    "T-3 Parsel sınır kadastro tespiti, ferforje korkuluk imalatı ve kapı motoru hazırlığı",
-                    "Bahçe duvarı betonu/taşı, ferforje korkuluk montajı ve otomatik motorlu sürgülü kapı montajı",
-                    "Kapı motoru tork ve fotosel güvenlik testi, plaka tanıma kamerası açısı",
-                    "Yol tarafı çalışma güvenlik bariyerleri ve reflektörlü yelekler"
+
+                    "T-3 Parsel sÄ±nÄ±r kadastro tespiti, ferforje korkuluk imalatÄ± ve kapÄ± motoru hazÄ±rlÄ±ÄŸÄ±",
+
+                    "BahÃ§e duvarÄ± betonu/taÅŸÄ±, ferforje korkuluk montajÄ± ve otomatik motorlu sÃ¼rgÃ¼lÃ¼ kapÄ± montajÄ±",
+
+                    "KapÄ± motoru tork ve fotosel gÃ¼venlik testi, plaka tanÄ±ma kamerasÄ± aÃ§Ä±sÄ±",
+
+                    "Yol tarafÄ± Ã§alÄ±ÅŸma gÃ¼venlik bariyerleri ve reflektÃ¶rlÃ¼ yelekler"
+
                 )
+
             });
+
+
 
             return list;
+
         }
+
+
 
         public class ParametricTakeoffItemDto
+
         {
+
             public int Id { get; set; }
+
             public string Category { get; set; }
+
             public string Title { get; set; }
+
             public string Description { get; set; }
+
             public string Formula { get; set; }
+
             public decimal Quantity { get; set; }
+
             public string Unit { get; set; }
+
             public string ProfessionName { get; set; }
+
             public string DnaSource { get; set; }
-            public string Status { get; set; } = "Parametrik Hesaplandı";
+
+            public string Status { get; set; } = "Parametrik HesaplandÄ±";
+
         }
+
+
 
         public class SendParametricB2BDto
+
         {
+
             public int ProjectId { get; set; }
+
             public int? ProfileId { get; set; }
+
             public List<int> SelectedItemIds { get; set; }
+
         }
+
+
 
         public class WorkflowStepItemDto
+
         {
+
             public string StepCode { get; set; }
+
             public int Order { get; set; }
+
             public string PhaseName { get; set; }
+
             public string StageCategory { get; set; }
 
-            // 4 Parçalı Hiyerarşi & Yapı Bağı
-            public int PartIndex { get; set; } = 1; // 1: Kaba İnşaat, 2: Statik İnce, 3: Tercihe Göre İnce, 4: Demirbaş & Montaj
-            public string PartName { get; set; } = "1. Parça: Kaba İnşaat (Temel & Taşıyıcı İskelet)";
+
+
+            // 4 ParÃ§alÄ± HiyerarÅŸi & YapÄ± BaÄŸÄ±
+
+            public int PartIndex { get; set; } = 1; // 1: Kaba Ä°nÅŸaat, 2: Statik Ä°nce, 3: Tercihe GÃ¶re Ä°nce, 4: DemirbaÅŸ & Montaj
+
+            public string PartName { get; set; } = "1. ParÃ§a: Kaba Ä°nÅŸaat (Temel & TaÅŸÄ±yÄ±cÄ± Ä°skelet)";
+
             public string PartBadgeClass { get; set; } = "primary";
-            public string TriggerRule { get; set; } = "İşbaşı Tarihine Göre Kat Kat Başlar";
+
+            public string TriggerRule { get; set; } = "Ä°ÅŸbaÅŸÄ± Tarihine GÃ¶re Kat Kat BaÅŸlar";
+
             public string TargetStructureName { get; set; } = "";
+
             public int? TargetBuildingId { get; set; }
 
-            // Malzeme Bacağı
+
+
+            // Malzeme BacaÄŸÄ±
+
             public string MaterialTitle { get; set; }
+
             public string MaterialDescription { get; set; }
+
             public decimal MaterialQuantity { get; set; }
+
             public string MaterialUnit { get; set; }
+
             public string MaterialFormula { get; set; }
+
             public string SupplierCategory { get; set; }
 
-            // İş Gücü & Taşeron Bacağı
+
+
+            // Ä°ÅŸ GÃ¼cÃ¼ & TaÅŸeron BacaÄŸÄ±
+
             public string LaborTitle { get; set; }
+
             public string ProfessionName { get; set; }
+
             public string CrewComposition { get; set; }
+
             public int CrewSize { get; set; }
+
             public int DurationDays { get; set; }
+
             public int TotalManDays => CrewSize * DurationDays;
+
             public string EquipmentNeeded { get; set; }
 
-            // İş Akışı & Bağımlılık
+
+
+            // Ä°ÅŸ AkÄ±ÅŸÄ± & BaÄŸÄ±mlÄ±lÄ±k
+
             public string Predecessors { get; set; }
+
             public string CriticalDependency { get; set; }
+
             public string DnaSource { get; set; }
 
+
+
             // Takvim
+
             public DateTime? PlannedStartDate { get; set; }
+
             public DateTime? PlannedEndDate { get; set; }
+
             public string PlannedDateRange => PlannedStartDate.HasValue && PlannedEndDate.HasValue
+
                 ? $"{PlannedStartDate.Value:dd.MM.yyyy} - {PlannedEndDate.Value:dd.MM.yyyy}" : "";
 
-            // 4 Hayati Alt Aşama & Belgelendirme (Ön Hazırlık, İmalat, Kalite/Kür, İSG)
+
+
+            // 4 Hayati Alt AÅŸama & Belgelendirme (Ã–n HazÄ±rlÄ±k, Ä°malat, Kalite/KÃ¼r, Ä°SG)
+
             public List<WorkflowSubStepDto> SubSteps { get; set; } = new List<WorkflowSubStepDto>();
+
         }
+
+
 
         public class WorkflowSubStepDto
+
         {
+
             public string Title { get; set; } = "";
+
             public string Category { get; set; } = "PrePreparation"; // "PrePreparation", "Execution", "QualityAndCuring", "SafetyIsg"
+
             public bool IsCompleted { get; set; }
-            public string? TestResultValue { get; set; } // Örn: "Slump: 18 cm", "28G Kırım: 34.6 MPa"
+
+            public string? TestResultValue { get; set; } // Ã–rn: "Slump: 18 cm", "28G KÄ±rÄ±m: 34.6 MPa"
+
             public string? PhotoUrl { get; set; }
+
             public string? DocumentUrl { get; set; }
+
             public string? Notes { get; set; }
+
         }
+
+
 
         public class SendWorkflowB2BDto
+
         {
+
             public int ProjectId { get; set; }
+
             public int? ProfileId { get; set; }
+
             public int? BuildingId { get; set; }
+
             public string TargetTrack { get; set; } // "Material" or "Labor"
+
             public List<string> SelectedStepCodes { get; set; }
+
         }
 
+
+
         public class TriggerWorkflowAgendaDto
+
         {
+
             public int ProjectId { get; set; }
+
             public int? ProfileId { get; set; }
+
             public int? BuildingId { get; set; }
+
             public string? TargetTrack { get; set; }
+
             public DateTime StartDate { get; set; }
+
             public List<string> SelectedStepCodes { get; set; }
+
         }
+
     }
+
 }
+
+
+
 
 

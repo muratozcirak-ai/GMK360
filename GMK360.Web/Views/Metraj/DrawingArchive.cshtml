@@ -1,810 +1,2922 @@
-@model GMK360.Web.Models.DrawingArchiveViewModel
-@{
-    ViewData["Title"] = "Kanat 1: Dijital Çizim Arşivi & İlk Kabul";
-    Layout = "~/Views/Shared/_ProjectLayout.cshtml";
-    var projectId = Model.Project.Id;
-    var primaryBlockId = Model.Blocks.FirstOrDefault(b => b.ParentBuildingId == null)?.Id ?? Model.Blocks.FirstOrDefault()?.Id ?? 0;
-}
-
-<div class="container-fluid px-0">
-    <!-- ÜST BAŞLIK VE GEÇİŞ BUTONLARI -->
-    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 pb-2 border-bottom">
-        <div>
-            <div class="d-flex align-items-center gap-2 mb-1">
-                <span class="badge bg-primary text-white px-2 py-1 rounded-pill fw-bold" style="font-size:0.75rem;">
-                    <i class="bi bi-shield-check me-1"></i>KANAT 1 : İLK KABUL MASASI
-                </span>
-                <span class="badge bg-light text-muted border px-2 py-1 rounded-pill" style="font-size:0.75rem;">
-                    Proje #@projectId : @Model.Project.Name
-                </span>
-            </div>
-            <h2 class="fw-bold text-dark mb-0">
-                <i class="bi bi-folder2-open text-primary me-2"></i>Dijital Çizim Arşivi & Çizim İlk Kabul
-            </h2>
-            <p class="text-muted small mb-0">
-                Mimar ve mühendislerden gelen belediye ruhsat onaylı CAD / DXF / DWG / PDF setleri. Kat planlarını bloklara bağlayın, teknik şartname kontrolünü yapın.
-            </p>
+﻿@model GMK360.Web.Models.DrawingArchiveViewModel
+
+@{
+
+    ViewData["Title"] = "Kanat 1: Dijital Çizim Arşivi & İlk Kabul";
+
+    Layout = "~/Views/Shared/_ProjectLayout.cshtml";
+
+    var projectId = Model.Project.Id;
+
+    var primaryBlockId = Model.Blocks.FirstOrDefault(b => b.ParentBuildingId == null)?.Id ?? Model.Blocks.FirstOrDefault()?.Id ?? 0;
+
+}
+
+<div class="container-fluid px-0">
+
+    <!-- ÜST BAŞLIK VE GEÇİŞ BUTONLARI -->
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 pb-2 border-bottom">
+
+        <div>
+
+            <div class="d-flex align-items-center gap-2 mb-1">
+
+                <span class="badge bg-primary text-white px-2 py-1 rounded-pill fw-bold" style="font-size:0.75rem;">
+
+                    <i class="bi bi-shield-check me-1"></i>KANAT 1 : İLK KABUL MASASI
+
+                </span>
+
+                <span class="badge bg-light text-muted border px-2 py-1 rounded-pill" style="font-size:0.75rem;">
+
+                    Proje #@projectId : @Model.Project.Name
+
+                </span>
+
+            </div>
+
+            <h2 class="fw-bold text-dark mb-0">
+
+                <i class="bi bi-folder2-open text-primary me-2"></i>Dijital Çizim Arşivi & Çizim İlk Kabul
+
+            </h2>
+
+            <p class="text-muted small mb-0">
+
+                Mimar ve mühendislerden gelen belediye ruhsat onaylı CAD / DXF / DWG / PDF setleri. Kat planlarını bloklara bağlayın, teknik şartname kontrolünü yapın.
+
+            </p>
+
+        </div>
+
+        <div class="d-flex flex-wrap align-items-center gap-2 mt-3 mt-md-0">
+
+            <a href="/Metraj/ProjectDNA/@projectId" class="btn btn-outline-success rounded-pill px-3 shadow-sm fw-bold">
+
+                <i class="fas fa-dna me-1 text-success"></i> Kanat 2: Proje DNA (Hesaplama) &rarr;
+
+            </a>
+
+            @if (primaryBlockId > 0)
+
+            {
+
+                <a href="/ConstructionProject/ManageBlock/@primaryBlockId" class="btn btn-outline-secondary rounded-pill px-3 shadow-sm">
+
+                    <i class="bi bi-layers me-1 text-primary"></i> Yapı Yönetimi (Katlar) &rarr;
+
+                </a>
+
+            }
+
+            <button type="button" class="btn btn-primary rounded-pill px-3 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#uploadDrawingModal">
+
+                <i class="bi bi-cloud-arrow-up-fill me-1"></i> Yeni Çizim / Pafta Yükle
+
+            </button>
+
+        </div>
+
+    </div>
+
+    @{
+
+        var pendingDrawings = Model.AllDrawings
+
+            .Where(d => (d.FileExtension?.ToLowerInvariant() == ".dwg" || d.FileExtension?.ToLowerInvariant() == ".dxf") 
+
+                     && (d.Status == "Okuma Bekliyor" || d.Status == "İlk Kabul Onaylandı" || string.IsNullOrEmpty(d.Status)))
+
+            .OrderByDescending(d => d.UploadDate)
+
+            .ToList();
+
+    }
+
+    <!-- 2 & 3. OKUNMAMIŞ DWG'LER VE KOMPAKT YÜKLEME MASASI (SIFIR ALAN İSRAFI) -->
+
+    <div class="card border rounded-4 shadow-sm mb-4">
+
+        <div class="card-header bg-white py-2.5 px-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2" style="cursor: pointer; user-select: none;" onclick="if (!event.target.closest('button, input, form, a, .input-group')) togglePendingDrawings();" title="DWG Gelen Kutusunu Açmak / Kapatmak İçin Başlığa Tıklayın">
+
+            <div class="d-flex align-items-center gap-2">
+
+                <span class="badge bg-warning text-dark px-2.5 py-1 rounded-pill fw-bold" style="font-size: 0.72rem;">
+
+                    <i class="bi bi-hourglass-split me-1"></i>GELEN KUTUSU
+
+                </span>
+
+                <h6 class="fw-bold text-dark mb-0" style="font-size: 0.88rem;">İşlem Bekleyen (Okunmamış) DWG Çizimleri</h6>
+
+                <span class="badge bg-primary-subtle text-primary border px-2 py-0.5 rounded-pill" style="font-size: 0.72rem;">@pendingDrawings.Count Dosya</span>
+
+            </div>
+
+            <!-- KOMPAKT TEK SATIR YÜKLEME VE TOPLU GÖNDERME ÇUBUĞU -->
+
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+
+                <form asp-action="UploadBatchDrawings" asp-controller="Metraj" method="post" enctype="multipart/form-data" class="d-flex align-items-center gap-1 mb-0">
+
+                    @Html.AntiForgeryToken()
+
+                    <input type="hidden" name="projectId" value="@projectId" />
+
+                    <div class="input-group input-group-sm" style="max-width: 290px;">
+
+                        <input type="file" name="files" class="form-control form-control-sm" accept=".dwg,.dxf" multiple required title="Birden fazla DWG/DXF seçebilirsiniz" />
+
+                        <button type="submit" class="btn btn-primary btn-sm fw-bold px-2.5">
+
+                            <i class="bi bi-plus-lg me-1"></i>Masaya Al
+
+                        </button>
+
+                    </div>
+
+                </form>
+
+                @if (pendingDrawings.Any())
+
+                {
+
+                    <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-bold shadow-xs d-flex align-items-center gap-1" onclick="alert('Seçilen DWG dosyaları sırayla okuma ve ayrıştırma motoruna iletilecektir.')">
+
+                        <i class="bi bi-lightning-charge-fill"></i>
+
+                        <span>Seçilenleri Okumaya Gönder</span>
+
+                    </button>
+
+                }
+
+            </div>
+
+        </div>
+
+        <div class="card-body p-0 collapse" id="pendingDrawingsContent">
+
+            @if (pendingDrawings.Any())
+
+            {
+
+                <div class="table-responsive">
+
+                    <table class="table table-hover align-middle mb-0" style="font-size: 0.82rem;">
+
+                        <thead class="table-light text-muted">
+
+                            <tr>
+
+                                <th style="width: 40px;" class="text-center">
+
+                                    <input type="checkbox" class="form-check-input" id="checkAllDwg" onchange="document.querySelectorAll('.dwg-select-chk').forEach(c => c.checked = this.checked);" />
+
+                                </th>
+
+                                <th>DWG / Çizim Dosyası</th>
+
+                                <th style="width: 110px;">Format</th>
+
+                                <th style="width: 130px;">Yükleme Tarihi</th>
+
+                                <th style="width: 140px;">Durum</th>
+
+                                <th style="width: 180px;" class="text-end">İşlem</th>
+
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                            @foreach (var doc in pendingDrawings)
+
+                            {
+
+                                var isDwg = doc.FileExtension?.ToLowerInvariant() == ".dwg";
+
+                                var isDxf = doc.FileExtension?.ToLowerInvariant() == ".dxf";
+
+                                <tr>
+
+                                    <td class="text-center">
+
+                                        <input type="checkbox" class="form-check-input dwg-select-chk" value="@doc.Id" />
+
+                                    </td>
+
+                                    <td>
+
+                                        <div class="d-flex align-items-center gap-2">
+
+                                            <div class="p-2 rounded-3 text-white fw-bold shadow-2xs d-flex align-items-center justify-content-center" style="width: 38px; height: 38px; font-size: 0.72rem; background-color: @(isDwg ? "#0d6efd" : "#6f42c1");">
+
+                                                @(isDwg ? "DWG" : "DXF")
+
+                                            </div>
+
+                                            <div>
+
+                                                <span class="fw-bold text-dark d-block">@doc.Title</span>
+
+                                                <small class="text-muted" style="font-size: 0.70rem;">@doc.FileName</small>
+
+                                            </div>
+
+                                        </div>
+
+                                    </td>
+
+                                    <td>
+
+                                        <span class="badge bg-light text-dark border">@doc.FileExtension?.ToUpperInvariant()</span>
+
+                                    </td>
+
+                                    <td>
+
+                                        <small class="text-muted">@doc.UploadDate.ToString("dd.MM.yyyy HH:mm")</small>
+
+                                    </td>
+
+                                    <td>
+
+                                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1 rounded-pill" style="font-size: 0.72rem;">
+
+                                            <i class="bi bi-clock me-1"></i>Okuma Bekliyor
+
+                                        </span>
+
+                                    </td>
+
+                                    <td class="text-end">
+
+                                        <div class="d-flex justify-content-end gap-1">
+
+                                            <button type="button" class="btn btn-sm btn-success rounded-pill px-3 py-1 fw-bold shadow-xs d-inline-flex align-items-center gap-1" style="font-size: 0.74rem;" onclick="alert('DWG okuma motoruna bağlanıyor: @doc.Title')">
+
+                                                <i class="bi bi-lightning-charge-fill"></i>
+
+                                                <span>DWG Oku</span>
+
+                                            </button>
+
+                                            <a href="@doc.DocumentUrl" target="_blank" class="btn btn-sm btn-light border rounded-pill px-2 py-1 text-muted" title="İndir">
+
+                                                <i class="bi bi-download"></i>
+
+                                            </a>
+
+                                            <form asp-action="DeleteDrawing" method="post" class="d-inline" onsubmit="return confirm('Bu dosyayı silmek istediğinize emin misiniz?');">
+
+                                                @Html.AntiForgeryToken()
+
+                                                <input type="hidden" name="id" value="@doc.Id" />
+
+                                                <input type="hidden" name="projectId" value="@projectId" />
+
+                                                <button type="submit" class="btn btn-sm btn-light border rounded-pill px-2 py-1 text-danger" title="Sil">
+
+                                                    <i class="bi bi-trash"></i>
+
+                                                </button>
+
+                                            </form>
+
+                                        </div>
+
+                                    </td>
+
+                                </tr>
+
+                            }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            }
+
+            else
+
+            {
+
+                <div class="p-4 text-center text-muted">
+
+                    <i class="bi bi-check2-circle fs-2 text-success d-block mb-1"></i>
+
+                    <div class="fw-bold text-dark">İşlem bekleyen okunmamış DWG yok</div>
+
+                    <small class="text-muted">Yukarıdaki yükleme kutusundan yeni çizimler seçip masaya alabilirsiniz.</small>
+
+                </div>
+
+            }
+
         </div>
-
-        <div class="d-flex flex-wrap align-items-center gap-2 mt-3 mt-md-0">
-            <a href="/Metraj/ProjectDNA/@projectId" class="btn btn-outline-success rounded-pill px-3 shadow-sm fw-bold">
-                <i class="fas fa-dna me-1 text-success"></i> Kanat 2: Proje DNA (Hesaplama) &rarr;
-            </a>
-            @if (primaryBlockId > 0)
-            {
-                <a href="/ConstructionProject/ManageBlock/@primaryBlockId" class="btn btn-outline-secondary rounded-pill px-3 shadow-sm">
-                    <i class="bi bi-layers me-1 text-primary"></i> Yapı Yönetimi (Katlar) &rarr;
-                </a>
-            }
-            <button type="button" class="btn btn-primary rounded-pill px-3 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#uploadDrawingModal">
-                <i class="bi bi-cloud-arrow-up-fill me-1"></i> Yeni Çizim / Pafta Yükle
-            </button>
-        </div>
-    </div>
-
-    <!-- MİMAR CAD / DXF ŞARTNAMESİ BANNER -->
-    <div class="card border-0 rounded-4 shadow-sm mb-4 text-white" style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);">
-        <div class="card-body p-4">
-            <div class="row align-items-center">
-                <div class="col-lg-8">
-                    <div class="d-flex align-items-center gap-2 mb-2">
-                        <span class="badge bg-warning text-dark px-2 py-1 rounded-pill fw-bold" style="font-size:0.75rem;">
-                            <i class="bi bi-star-fill me-1"></i>STANDART ŞARTNAME
-                        </span>
-                        <span class="text-white-50 small">AutoCAD (DWG/DXF) & PDF Proje Kabul Kuralları</span>
-                    </div>
-                    <h4 class="fw-bold mb-1">Mimar ve Mühendisler için CAD/DXF Teslim Şartnamesi</h4>
-                    <p class="text-white-50 mb-0 small" style="line-height: 1.5;">
-                        GMK360 hesaplama ve ihale motorunun mimari projeleri sorunsuz işletmesi için: <strong>1)</strong> Her katın WBLOCK ile tekil DXF çıkarılması, <strong>2)</strong> Zorunlu Mahal isimlerinin yazılması, <strong>3)</strong> Standart kapı/pencere çizimi esastır. Taşeron ve tedarikçilere kusursuz metraj ve şablon PDF'ler buradan üretilir.
-                    </p>
+    </div>
+
+    <!-- ======================================================== -->
+
+    <!-- 3. ŞANTİYE MALZEME TEDARİK & SATIN ALMA MATRİSİ (LİSTE A: HAM PROJE MALZEMELERİ) -->
+
+    <!-- ======================================================== -->
+
+    @{
+
+        var bomItems = Model.MasterBomItems ?? new List<GMK360.Web.Models.MasterBomItemDto>();
+
+        var totalBomCount = bomItems.Count;
+
+        var packageGroups = bomItems
+
+            .GroupBy(i => new { i.PackageKey, i.PackageName, i.PackageIcon, i.PackageOrder, i.SupplierBranch })
+
+            .OrderBy(g => g.Key.PackageOrder)
+
+            .ToList();
+
+    }
+
+    <div class="card border rounded-4 shadow-sm mb-4" id="masterBomCard" style="border-top: 4px solid #0d6efd !important;">
+
+        <!-- ÜST BAŞLIK (TEK DİV KONTROLÜ) -->
+
+        <div class="card-header bg-white py-3 px-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2" style="cursor: pointer; user-select: none;" onclick="if (!event.target.closest('button, input, a, .input-group')) toggleMatrixCard();" title="Tabloyu Açmak veya Kapatmak İçin Başlığa Tıklayın">
+            <div class="d-flex align-items-center gap-2">
+                <div class="p-2 rounded-3 bg-primary-subtle text-primary fw-bold d-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                    <i class="bi bi-grid-3x3-gap-fill fs-5"></i>
                 </div>
-                <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
-                    <button type="button" class="btn btn-warning text-dark fw-bold rounded-pill px-3 py-2 shadow-sm me-2" data-bs-toggle="modal" data-bs-target="#sartnameModal">
-                        <i class="bi bi-file-earmark-richtext-fill me-1"></i> Şartnameyi İncele & Yazdır
-                    </button>
-                    <button type="button" class="btn btn-outline-light rounded-pill px-3 py-2 shadow-sm" onclick="copySartname()">
-                        <i class="bi bi-whatsapp me-1"></i> Mimara İlet
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ÖZET GÖSTERGELER (KPI CARDS) -->
-    <div class="row g-3 mb-4">
-        <div class="col-6 col-md-3">
-            <div class="card border-0 shadow-sm rounded-4 h-100">
-                <div class="card-body p-3 d-flex align-items-center">
-                    <div class="rounded-4 bg-primary bg-opacity-10 text-primary p-3 me-3">
-                        <i class="bi bi-building fs-3"></i>
-                    </div>
-                    <div>
-                        <div class="text-muted small fw-bold text-uppercase">Toplam Kat</div>
-                        <h4 class="fw-bold mb-0 text-dark">@Model.TotalFloorsCount Kat</h4>
-                        <small class="text-muted">@Model.Blocks.Count Blok/Kule</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-6 col-md-3">
-            <div class="card border-0 shadow-sm rounded-4 h-100">
-                <div class="card-body p-3">
-                    <div class="d-flex align-items-center mb-2">
-                        <div class="rounded-4 bg-success bg-opacity-10 text-success p-3 me-3">
-                            <i class="bi bi-file-earmark-check-fill fs-3"></i>
-                        </div>
-                        <div>
-                            <div class="text-muted small fw-bold text-uppercase">Mimari Planlar</div>
-                            <h4 class="fw-bold mb-0 text-success">@Model.FloorsWithPlanCount / @Model.TotalFloorsCount</h4>
-                            <small class="text-muted">Kat Planı Yüklü</small>
-                        </div>
-                    </div>
-                    <div class="progress" style="height: 6px;">
-                        <div class="progress-bar bg-success" role="progressbar" style="width: @Model.PlanCompletionPercentage%;" aria-valuenow="@Model.PlanCompletionPercentage" aria-valuemin="0" aria-valuemax="100"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-6 col-md-3">
-            <div class="card border-0 shadow-sm rounded-4 h-100">
-                <div class="card-body p-3 d-flex align-items-center">
-                    <div class="rounded-4 bg-warning bg-opacity-10 text-warning p-3 me-3">
-                        <i class="bi bi-cone-striped fs-3"></i>
-                    </div>
-                    <div>
-                        <div class="text-muted small fw-bold text-uppercase">Statik Paftalar</div>
-                        <h4 class="fw-bold mb-0 text-dark">@Model.StructuralDrawings.Count Pafta</h4>
-                        <small class="text-muted">Kalıp & Donatı Detayı</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-6 col-md-3">
-            <div class="card border-0 shadow-sm rounded-4 h-100">
-                <div class="card-body p-3 d-flex align-items-center">
-                    <div class="rounded-4 bg-info bg-opacity-10 text-info p-3 me-3">
-                        <i class="bi bi-lightning-charge-fill fs-3"></i>
-                    </div>
-                    <div>
-                        <div class="text-muted small fw-bold text-uppercase">Mekanik & Elektrik</div>
-                        <h4 class="fw-bold mb-0 text-dark">@(Model.MechanicalDrawings.Count + Model.ElectricalDrawings.Count) Pafta</h4>
-                        <small class="text-muted">Tesisat & Projeler</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- DİSİPLİN SEKMELERİ (TABS) -->
-    <div class="card border-0 shadow-sm rounded-4">
-        <div class="card-header bg-white border-bottom p-3">
-            <ul class="nav nav-pills card-header-pills" id="drawingTabs" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active rounded-pill fw-bold px-4" id="mimari-tab" data-bs-toggle="pill" data-bs-target="#mimari-pane" type="button" role="tab">
-                        <i class="bi bi-house-door-fill me-2"></i>🏛️ Mimari Kat Planları & Matris
-                        <span class="badge bg-primary ms-2">@Model.FloorsWithPlanCount / @Model.TotalFloorsCount</span>
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-pill fw-bold px-4" id="statik-tab" data-bs-toggle="pill" data-bs-target="#statik-pane" type="button" role="tab">
-                        <i class="bi bi-shield-shaded me-2"></i>🏗️ Statik Projeler
-                        <span class="badge bg-secondary ms-2">@Model.StructuralDrawings.Count</span>
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-pill fw-bold px-4" id="mekanik-tab" data-bs-toggle="pill" data-bs-target="#mekanik-pane" type="button" role="tab">
-                        <i class="bi bi-tools me-2"></i>🔧 Mekanik Tesisat
-                        <span class="badge bg-secondary ms-2">@Model.MechanicalDrawings.Count</span>
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link rounded-pill fw-bold px-4" id="elektrik-tab" data-bs-toggle="pill" data-bs-target="#elektrik-pane" type="button" role="tab">
-                        <i class="bi bi-lightning-fill me-2"></i>⚡ Elektrik & Zayıf Akım
-                        <span class="badge bg-secondary ms-2">@Model.ElectricalDrawings.Count</span>
-                    </button>
-                </li>
-            </ul>
-        </div>
-
-        <div class="card-body p-4">
-            <div class="tab-content" id="drawingTabsContent">
-                
-                <!-- SEKME 1: MİMARİ KAT PLANLARI & MATRİS -->
-                <div class="tab-pane fade show active" id="mimari-pane" role="tabpanel">
-                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
-                        <div>
-                            <h5 class="fw-bold mb-1"><i class="bi bi-grid-3x3-gap-fill text-primary me-2"></i>Akıllı Kat Planı Matrisi</h5>
-                            <p class="text-muted small mb-0">Her katın mimari planı ilgili kata doğrudan bağlanır. Yapı Yönetimi ile %100 senkronizedir.</p>
-                        </div>
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 rounded-pill">
-                                <i class="bi bi-check-circle-fill me-1"></i>@Model.FloorsWithPlanCount Kat Tamam
-                            </span>
-                            @if (Model.FloorsMissingPlanCount > 0)
-                            {
-                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 rounded-pill">
-                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>@Model.FloorsMissingPlanCount Kat Eksik
-                                </span>
-                            }
-                        </div>
-                    </div>
-
-                    <div class="table-responsive rounded-3 border">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th style="width: 18%;">Blok / Kule</th>
-                                    <th style="width: 18%;">Kat Seviyesi & Adı</th>
-                                    <th style="width: 16%;">Daire Sayısı & m²</th>
-                                    <th style="width: 28%;">Kat Planı (CAD / DXF / PDF)</th>
-                                    <th style="width: 20%;" class="text-end">İşlemler</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @if (Model.FloorMatrix != null && Model.FloorMatrix.Any())
-                                {
-                                    foreach (var item in Model.FloorMatrix)
-                                    {
-                                        <tr>
-                                            <td>
-                                                <div class="d-flex align-items-center">
-                                                    <i class="bi @(item.IsChildBuilding ? "bi-building" : "bi-houses") text-primary me-2 fs-5"></i>
-                                                    <div>
-                                                        <div class="fw-bold text-dark">@item.BlockName</div>
-                                                        <small class="text-muted">@(item.IsChildBuilding ? "Bağlı Kule" : "Ana Blok / Baza")</small>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span class="badge bg-light text-dark border px-2 py-1 fw-bold">
-                                                    @item.FloorName
-                                                </span>
-                                                <span class="text-muted small ms-1">(Kot/Seviye: @item.FloorLevel)</span>
-                                            </td>
-                                            <td>
-                                                @if (item.UnitCount > 0)
-                                                {
-                                                    <div class="fw-bold text-dark">@item.UnitCount Daire / Birim</div>
-                                                    <small class="text-muted">Net: @item.TotalNetM2.ToString("N0") m² | Brüt: @item.TotalGrossM2.ToString("N0") m²</small>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted small"><i class="bi bi-dash-circle me-1"></i>Birim Tanımlanmamış</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (item.HasPlan)
-                                                {
-                                                    <div class="d-flex align-items-center">
-                                                        <span class="badge bg-success bg-opacity-10 text-success border border-success me-2 px-2 py-1 rounded-pill">
-                                                            <i class="bi bi-file-earmark-check me-1"></i>Plan Mevcut
-                                                        </span>
-                                                        <a href="@item.PlanUrl" target="_blank" class="text-decoration-none fw-bold text-truncate" style="max-width: 180px;" title="@item.PlanFileName">
-                                                            <i class="bi bi-file-earmark-arrow-down me-1"></i>@(string.IsNullOrEmpty(item.PlanFileName) ? "Planı İndir" : item.PlanFileName)
-                                                        </a>
-                                                    </div>
-                                                    @if (item.PlanUploadDate.HasValue)
-                                                    {
-                                                        <small class="text-muted d-block mt-1">Yükleme: @item.PlanUploadDate.Value.ToString("dd.MM.yyyy HH:mm")</small>
-                                                    }
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 rounded-pill">
-                                                        <i class="bi bi-exclamation-circle me-1"></i>Plan Bekleniyor
-                                                    </span>
-                                                    <small class="text-muted d-block mt-1">Mimar şartnamesine uygun DXF/PDF yükleyin.</small>
-                                                }
-                                            </td>
-                                            <td class="text-end">
-                                                <div class="d-flex justify-content-end gap-1">
-                                                    @if (item.HasPlan)
-                                                    {
-                                                        <a href="@item.PlanUrl" target="_blank" class="btn btn-sm btn-outline-success rounded-pill px-2" title="Görüntüle / İndir">
-                                                            <i class="bi bi-eye"></i>
-                                                        </a>
-                                                    }
-                                                    <button type="button" class="btn btn-sm @(item.HasPlan ? "btn-outline-primary" : "btn-primary") rounded-pill px-2" 
-                                                            onclick="openUploadModalForFloor(@item.BuildingId, @item.FloorLevel, '@item.BlockName', '@item.FloorName')" 
-                                                            title="@(item.HasPlan ? "Planı Güncelle" : "Plan Yükle")">
-                                                        <i class="bi bi-upload me-1"></i>@(item.HasPlan ? "Revize Et" : "Yükle")
-                                                    </button>
-                                                    <a href="/ConstructionProject/ManageBlock/@(item.ParentBuildingId ?? item.BuildingId)" class="btn btn-sm btn-outline-secondary rounded-pill px-2" title="Yapı Yönetiminde Aç">
-                                                        <i class="bi bi-arrow-right-short"></i>
-                                                    </a>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    }
-                                }
-                                else
-                                {
-                                    <tr>
-                                        <td colspan="5" class="text-center py-4 text-muted">
-                                            <i class="bi bi-info-circle me-2"></i>Henüz bu projede kayıtlı blok veya kat bulunmuyor.
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- MİMARİ GENEL ÇİZİMLER (VAZİYET, KESİT, GÖRÜNÜŞ) -->
-                    <div class="mt-4 pt-3 border-top">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h6 class="fw-bold mb-0"><i class="bi bi-collection-fill text-primary me-2"></i>Mimari Genel Paftalar (Vaziyet, Kesit, Görünüş, Detay)</h6>
-                            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="openUploadModalForDiscipline('Mimari')">
-                                <i class="bi bi-plus-lg me-1"></i>Mimari Pafta Ekle
-                            </button>
-                        </div>
-
-                        @if (Model.ArchitecturalDrawings != null && Model.ArchitecturalDrawings.Any())
-                        {
-                            <div class="table-responsive rounded-3 border">
-                                <table class="table table-hover align-middle mb-0">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>Pafta Başlığı</th>
-                                            <th>Dosya Adı</th>
-                                            <th>Format</th>
-                                            <th>Tarih</th>
-                                            <th class="text-end">İşlem</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var doc in Model.ArchitecturalDrawings)
-                                        {
-                                            <tr>
-                                                <td class="fw-bold">@doc.Title</td>
-                                                <td><small class="text-muted">@doc.FileName</small></td>
-                                                <td><span class="badge bg-light text-dark border">@doc.FileExtension?.ToUpperInvariant()</span></td>
-                                                <td><small class="text-muted">@doc.UploadDate.ToString("dd.MM.yyyy HH:mm")</small></td>
-                                                <td class="text-end">
-                                                    <a href="@doc.DocumentUrl" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-2">
-                                                        <i class="bi bi-download"></i> İndir
-                                                    </a>
-                                                    <form asp-action="DeleteDrawing" method="post" class="d-inline" onsubmit="return confirm('Bu çizimi arşivden silmek istediğinize emin misiniz?');">
-                                                        @Html.AntiForgeryToken()
-                                                        <input type="hidden" name="id" value="@doc.Id" />
-                                                        <input type="hidden" name="projectId" value="@projectId" />
-                                                        <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-2">
-                                                            <i class="bi bi-trash"></i>
-                                                        </button>
-                                                    </form>
-                                                </td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="alert alert-light border rounded-3 p-3 text-muted small">
-                                <i class="bi bi-info-circle me-1"></i>Henüz genel mimari pafta eklenmemiş. Yukarıdaki "Mimari Pafta Ekle" butonu ile vaziyet planı veya kesit paftalarını arşivleyebilirsiniz.
-                            </div>
-                        }
-                    </div>
-                </div>
-
-                <!-- SEKME 2: STATİK PROJELER -->
-                <div class="tab-pane fade" id="statik-pane" role="tabpanel">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <div>
-                            <h5 class="fw-bold mb-1"><i class="bi bi-cone-striped text-warning me-2"></i>Statik & Taşıyıcı Sistem Paftaları</h5>
-                            <p class="text-muted small mb-0">Temel aplikasyon, kat kalıp planları, kolon düşey açılımları ve donatı detayları.</p>
-                        </div>
-                        <button type="button" class="btn btn-warning text-dark fw-bold rounded-pill px-3 shadow-sm" onclick="openUploadModalForDiscipline('Statik')">
-                            <i class="bi bi-plus-lg me-1"></i>Statik Pafta Yükle
-                        </button>
-                    </div>
-
-                    @if (Model.StructuralDrawings != null && Model.StructuralDrawings.Any())
-                    {
-                        <div class="table-responsive rounded-3 border">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Pafta Başlığı</th>
-                                        <th>Dosya Adı</th>
-                                        <th>Format</th>
-                                        <th>Tarih</th>
-                                        <th class="text-end">İşlemler</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var doc in Model.StructuralDrawings)
-                                    {
-                                        <tr>
-                                            <td class="fw-bold">@doc.Title</td>
-                                            <td><small class="text-muted">@doc.FileName</small></td>
-                                            <td><span class="badge bg-light text-dark border">@doc.FileExtension?.ToUpperInvariant()</span></td>
-                                            <td><small class="text-muted">@doc.UploadDate.ToString("dd.MM.yyyy HH:mm")</small></td>
-                                            <td class="text-end">
-                                                <a href="@doc.DocumentUrl" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-2">
-                                                    <i class="bi bi-download"></i> İndir
-                                                </a>
-                                                <form asp-action="DeleteDrawing" method="post" class="d-inline" onsubmit="return confirm('Bu çizimi silmek istediğinize emin misiniz?');">
-                                                    @Html.AntiForgeryToken()
-                                                    <input type="hidden" name="id" value="@doc.Id" />
-                                                    <input type="hidden" name="projectId" value="@projectId" />
-                                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-2">
-                                                        <i class="bi bi-trash"></i>
-                                                    </button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="text-center py-5 border rounded-4 bg-light">
-                            <i class="bi bi-cone-striped text-warning fs-1"></i>
-                            <h5 class="fw-bold mt-2">Henüz Statik Pafta Yüklenmedi</h5>
-                            <p class="text-muted small mb-3">Statik proje mühendisinden gelen kalıp ve donatı paftalarını buraya yükleyerek arşivi tamamlayın.</p>
-                            <button type="button" class="btn btn-warning text-dark fw-bold rounded-pill px-4 shadow-sm" onclick="openUploadModalForDiscipline('Statik')">
-                                <i class="bi bi-upload me-1"></i>Statik Pafta Yükle
-                            </button>
-                        </div>
-                    }
-                </div>
-
-                <!-- SEKME 3: MEKANİK TESİSAT -->
-                <div class="tab-pane fade" id="mekanik-pane" role="tabpanel">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <div>
-                            <h5 class="fw-bold mb-1"><i class="bi bi-tools text-info me-2"></i>Mekanik & Tesisat Paftaları</h5>
-                            <p class="text-muted small mb-0">Sıhhi tesisat (temiz/pis su), ısıtma, havalandırma, yangın sprinkler ve doğalgaz paftaları.</p>
-                        </div>
-                        <button type="button" class="btn btn-info text-white fw-bold rounded-pill px-3 shadow-sm" onclick="openUploadModalForDiscipline('Mekanik')">
-                            <i class="bi bi-plus-lg me-1"></i>Mekanik Pafta Yükle
-                        </button>
-                    </div>
-
-                    @if (Model.MechanicalDrawings != null && Model.MechanicalDrawings.Any())
-                    {
-                        <div class="table-responsive rounded-3 border">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Pafta Başlığı</th>
-                                        <th>Dosya Adı</th>
-                                        <th>Format</th>
-                                        <th>Tarih</th>
-                                        <th class="text-end">İşlemler</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var doc in Model.MechanicalDrawings)
-                                    {
-                                        <tr>
-                                            <td class="fw-bold">@doc.Title</td>
-                                            <td><small class="text-muted">@doc.FileName</small></td>
-                                            <td><span class="badge bg-light text-dark border">@doc.FileExtension?.ToUpperInvariant()</span></td>
-                                            <td><small class="text-muted">@doc.UploadDate.ToString("dd.MM.yyyy HH:mm")</small></td>
-                                            <td class="text-end">
-                                                <a href="@doc.DocumentUrl" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-2">
-                                                    <i class="bi bi-download"></i> İndir
-                                                </a>
-                                                <form asp-action="DeleteDrawing" method="post" class="d-inline" onsubmit="return confirm('Bu çizimi silmek istediğinize emin misiniz?');">
-                                                    @Html.AntiForgeryToken()
-                                                    <input type="hidden" name="id" value="@doc.Id" />
-                                                    <input type="hidden" name="projectId" value="@projectId" />
-                                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-2">
-                                                        <i class="bi bi-trash"></i>
-                                                    </button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="text-center py-5 border rounded-4 bg-light">
-                            <i class="bi bi-tools text-info fs-1"></i>
-                            <h5 class="fw-bold mt-2">Henüz Mekanik Pafta Yüklenmedi</h5>
-                            <p class="text-muted small mb-3">Mekanik tesisat mühendisinden gelen sıhhi tesisat, kalorifer ve yangın paftalarını arşivleyin.</p>
-                            <button type="button" class="btn btn-info text-white fw-bold rounded-pill px-4 shadow-sm" onclick="openUploadModalForDiscipline('Mekanik')">
-                                <i class="bi bi-upload me-1"></i>Mekanik Pafta Yükle
-                            </button>
-                        </div>
-                    }
-                </div>
-
-                <!-- SEKME 4: ELEKTRİK & ZAYIF AKIM -->
-                <div class="tab-pane fade" id="elektrik-pane" role="tabpanel">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <div>
-                            <h5 class="fw-bold mb-1"><i class="bi bi-lightning-fill text-danger me-2"></i>Elektrik & Zayıf Akım Paftaları</h5>
-                            <p class="text-muted small mb-0">Aydınlatma & priz, kuvvetli akım, yangın ihbar, interkom, topraklama ve paratoner paftaları.</p>
-                        </div>
-                        <button type="button" class="btn btn-danger fw-bold rounded-pill px-3 shadow-sm" onclick="openUploadModalForDiscipline('Elektrik')">
-                            <i class="bi bi-plus-lg me-1"></i>Elektrik Pafta Yükle
-                        </button>
-                    </div>
-
-                    @if (Model.ElectricalDrawings != null && Model.ElectricalDrawings.Any())
-                    {
-                        <div class="table-responsive rounded-3 border">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Pafta Başlığı</th>
-                                        <th>Dosya Adı</th>
-                                        <th>Format</th>
-                                        <th>Tarih</th>
-                                        <th class="text-end">İşlemler</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var doc in Model.ElectricalDrawings)
-                                    {
-                                        <tr>
-                                            <td class="fw-bold">@doc.Title</td>
-                                            <td><small class="text-muted">@doc.FileName</small></td>
-                                            <td><span class="badge bg-light text-dark border">@doc.FileExtension?.ToUpperInvariant()</span></td>
-                                            <td><small class="text-muted">@doc.UploadDate.ToString("dd.MM.yyyy HH:mm")</small></td>
-                                            <td class="text-end">
-                                                <a href="@doc.DocumentUrl" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-2">
-                                                    <i class="bi bi-download"></i> İndir
-                                                </a>
-                                                <form asp-action="DeleteDrawing" method="post" class="d-inline" onsubmit="return confirm('Bu çizimi silmek istediğinize emin misiniz?');">
-                                                    @Html.AntiForgeryToken()
-                                                    <input type="hidden" name="id" value="@doc.Id" />
-                                                    <input type="hidden" name="projectId" value="@projectId" />
-                                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-2">
-                                                        <i class="bi bi-trash"></i>
-                                                    </button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="text-center py-5 border rounded-4 bg-light">
-                            <i class="bi bi-lightning-charge-fill text-danger fs-1"></i>
-                            <h5 class="fw-bold mt-2">Henüz Elektrik Paftası Yüklenmedi</h5>
-                            <p class="text-muted small mb-3">Elektrik mühendisinden gelen aydınlatma, kuvvetli akım ve zayıf akım paftalarını arşivleyin.</p>
-                            <button type="button" class="btn btn-danger fw-bold rounded-pill px-4 shadow-sm" onclick="openUploadModalForDiscipline('Elektrik')">
-                                <i class="bi bi-upload me-1"></i>Elektrik Pafta Yükle
-                            </button>
-                        </div>
-                    }
-                </div>
-
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ========================================== -->
-<!-- MODAL: ÇİZİM / PAFTA YÜKLEME MODALI -->
-<!-- ========================================== -->
-<div class="modal fade" id="uploadDrawingModal" tabindex="-1" aria-labelledby="uploadDrawingModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content rounded-4 border-0 shadow-lg">
-            <div class="modal-header bg-primary text-white border-0 py-3 rounded-top-4">
-                <h5 class="modal-title fw-bold" id="uploadDrawingModalLabel">
-                    <i class="bi bi-cloud-arrow-up-fill me-2"></i>Dijital Çizim & Pafta İlk Kabul
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
-            </div>
-            <form asp-action="UploadDrawing" asp-controller="Metraj" method="post" enctype="multipart/form-data">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="projectId" value="@projectId" />
-                <div class="modal-body p-4">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small text-muted text-uppercase">Proje Disiplini</label>
-                        <select class="form-select" name="category" id="uploadDisciplineSelect" onchange="onDisciplineChanged()">
-                            <option value="Mimari">🏛️ Mimari Proje & Kat Planı</option>
-                            <option value="Statik">🏗️ Statik & Taşıyıcı Sistem</option>
-                            <option value="Mekanik">🔧 Mekanik & Tesisat</option>
-                            <option value="Elektrik">⚡ Elektrik & Zayıf Akım</option>
-                        </select>
-                    </div>
-
-                    <div id="floorBindingSection" class="border rounded-3 p-3 bg-light mb-3">
-                        <div class="fw-bold small text-primary mb-2">
-                            <i class="bi bi-layers-fill me-1"></i>Mimari Kat Planı Bağlantısı (Opsiyonel)
-                        </div>
-                        <div class="row g-2">
-                            <div class="col-7">
-                                <label class="form-label small text-muted">Blok / Kule</label>
-                                <select class="form-select form-select-sm" name="buildingId" id="uploadBuildingId">
-                                    <option value="">-- Blok Seçiniz --</option>
-                                    @foreach (var b in Model.Blocks)
-                                    {
-                                        <option value="@b.Id">@b.BlockName (@(b.ParentBuildingId == null ? "Ana Baza" : "Kule"))</option>
-                                    }
-                                </select>
-                            </div>
-                            <div class="col-5">
-                                <label class="form-label small text-muted">Kat Seviyesi</label>
-                                <input type="number" class="form-control form-control-sm" name="floorLevel" id="uploadFloorLevel" placeholder="Örn: 1" />
-                            </div>
-                        </div>
-                        <small class="text-muted d-block mt-2" style="font-size:0.75rem;">
-                            Blok ve kat seçerseniz bu plan otomatik olarak Yapı Yönetimi'ndeki kata da bağlanır.
-                        </small>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small text-muted text-uppercase">Pafta Başlığı / Tanımı</label>
-                        <input type="text" class="form-control" name="title" id="uploadTitleInput" placeholder="Örn: D Blok 1. Normal Kat Planı" required />
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small text-muted text-uppercase">Revizyon / Durum</label>
-                        <input type="text" class="form-control" name="revision" placeholder="Örn: Rev.0 (Ruhsat Onaylı)" value="Rev.0" />
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small text-muted text-uppercase">Çizim Dosyası</label>
-                        <input type="file" class="form-control form-control-lg" name="file" accept=".dxf,.dwg,.pdf,.zip,.rar,.png,.jpg,.jpeg" required />
-                        <small class="text-muted d-block mt-1">Desteklenen: .dxf, .dwg, .pdf, .zip, .png, .jpg (Maks. 100MB)</small>
-                    </div>
-                </div>
-                <div class="modal-footer border-top-0 pt-0 px-4 pb-4">
-                    <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
-                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">
-                        <i class="bi bi-cloud-arrow-up-fill me-1"></i> Arşive Kaydet
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- ========================================== -->
-<!-- MODAL: MİMAR CAD / DXF TESLİM ŞARTNAMESİ -->
-<!-- ========================================== -->
-<div class="modal fade" id="sartnameModal" tabindex="-1" aria-labelledby="sartnameModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content rounded-4 border-0 shadow-lg">
-            <div class="modal-header bg-dark text-white border-0 py-3 rounded-top-4">
-                <div class="d-flex align-items-center gap-2">
-                    <span class="badge bg-warning text-dark px-2 py-1 rounded-pill fw-bold" style="font-size:0.75rem;">GMK360 ŞARTNAME</span>
-                    <h5 class="modal-title fw-bold mb-0" id="sartnameModalLabel">
-                        <i class="bi bi-file-earmark-ruled-fill me-2 text-warning"></i>Mimari CAD / DXF Çizim Teslim Şartnamesi
-                    </h5>
-                </div>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
-            </div>
-            <div class="modal-body p-4" id="sartnamePrintableArea">
-                <div class="alert alert-info border-0 rounded-3 p-3 mb-4">
-                    <div class="d-flex align-items-start gap-2">
-                        <i class="bi bi-info-circle-fill fs-5 text-primary mt-1"></i>
-                        <div>
-                            <strong>Mimari Ofisler ve Tasarımcılar için Bilgilendirme:</strong>
-                            <p class="mb-0 small">Bu standartlar belediye onaylı mimari projenizin doğrudan ERP ihale motoruna aktarılmasını sağlar. Mimarların çizim alışkanlıklarını değiştirmeden sadece 10 saniyelik <code>WBLOCK</code> ve metin layer kurallarına uyması yeterlidir.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row g-4">
-                    <div class="col-md-6">
-                        <div class="card h-100 border rounded-3 p-3">
-                            <h6 class="fw-bold text-primary mb-2"><i class="bi bi-1-circle-fill me-1"></i> Kat Bazında Tekil Çizim (WBLOCK Kuralı)</h6>
-                            <p class="small text-muted mb-2">Tüm katların yan yana durduğu paftalar yerine, her kat ayrı bir DXF/DWG olarak kaydedilmelidir.</p>
-                            <div class="bg-light p-2 rounded small font-monospace">
-                                AutoCAD İpucu (10 Saniye):<br/>
-                                1. Komut satırına <code>WBLOCK</code> yazın.<br/>
-                                2. Katı seçin (Select Objects).<br/>
-                                3. Dosya adını girip DXF olarak kaydedin.<br/>
-                                Örn: <code>A_Blok_Zemin_Kat.dxf</code>, <code>A_Blok_1_Normal_Kat.dxf</code>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <div class="card h-100 border rounded-3 p-3">
-                            <h6 class="fw-bold text-success mb-2"><i class="bi bi-2-circle-fill me-1"></i> Zorunlu Oda / Mahal İsimlendirmeleri</h6>
-                            <p class="small text-muted mb-2">Her bağımsız bölümün içindeki alanlar tekil Türkçe büyük harf metin (TEXT / MTEXT) olarak yazılmalıdır:</p>
-                            <div class="row g-1 small">
-                                <div class="col-6"><span class="badge bg-light text-dark border w-100 text-start"><code>SALON</code></span></div>
-                                <div class="col-6"><span class="badge bg-light text-dark border w-100 text-start"><code>MUTFAK</code></span></div>
-                                <div class="col-6"><span class="badge bg-light text-dark border w-100 text-start"><code>YATAK ODASI</code></span></div>
-                                <div class="col-6"><span class="badge bg-light text-dark border w-100 text-start"><code>EBEVEYN BANYO</code></span></div>
-                                <div class="col-6"><span class="badge bg-light text-dark border w-100 text-start"><code>GENEL BANYO / WC</code></span></div>
-                                <div class="col-6"><span class="badge bg-light text-dark border w-100 text-start"><code>ANTRE / KORİDOR</code></span></div>
-                                <div class="col-6"><span class="badge bg-light text-dark border w-100 text-start"><code>BALKON 1</code></span></div>
-                                <div class="col-6"><span class="badge bg-light text-dark border w-100 text-start"><code>GİYİNME ODASI</code></span></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <div class="card h-100 border rounded-3 p-3">
-                            <h6 class="fw-bold text-warning mb-2"><i class="bi bi-3-circle-fill me-1"></i> Standart Kapı ve Pencere Ölçüleri</h6>
-                            <p class="small text-muted mb-2">Tedarikçi ve taşeron masasında net sipariş adetleri için standart kasalar:</p>
-                            <ul class="small text-muted mb-0 ps-3">
-                                <li><strong>Daire Dış Giriş Kapısı:</strong> 100 &times; 210 cm Çelik Kapı</li>
-                                <li><strong>Oda ve Mutfak Kapıları:</strong> 90 &times; 210 cm İç Oda Kapısı</li>
-                                <li><strong>Banyo ve WC Kapıları:</strong> 75 &times; 210 cm Islak Hacim Kapısı</li>
-                                <li><strong>Yangın Merdiveni Kapısı:</strong> 90 &times; 210 cm Panik Barlı Yangın Kapısı</li>
-                            </ul>
-                        </div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <div class="card h-100 border rounded-3 p-3">
-                            <h6 class="fw-bold text-danger mb-2"><i class="bi bi-4-circle-fill me-1"></i> Merdiven & Ortak Alan Ayrımı</h6>
-                            <p class="small text-muted mb-2">Taşeron ihalesi için basamak, rıht ve sahanlık ayrımı:</p>
-                            <ul class="small text-muted mb-0 ps-3">
-                                <li>Merdiven basamakları <code>MERDIVEN_BASAMAK</code> layerında polyline olmalı.</li>
-                                <li>Korkuluk ve küpeşte çizgisi net belirtilmeli (Metretül hesaplanır).</li>
-                                <li>Asansör kovası ve şaft boşlukları net kapatılmalı.</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mt-4 p-3 bg-light rounded-3 border">
-                    <h6 class="fw-bold mb-2">Örnek AutoCAD Layer Tablosu</h6>
-                    <div class="table-responsive">
-                        <table class="table table-sm table-bordered bg-white mb-0 small">
-                            <thead class="table-light">
-                                <tr><th>Layer Adı</th><th>Eleman</th><th>Tip</th><th>Açıklama</th></tr>
-                            </thead>
-                            <tbody>
-                                <tr><td><code>DUVAR_DIS</code></td><td>Dış Cephe Duvarları</td><td>Polyline / Line</td><td>20'lik veya 25'lik bims/tuğla duvarlar</td></tr>
-                                <tr><td><code>DUVAR_IC</code></td><td>İç Bölme Duvarları</td><td>Polyline / Line</td><td>10'luk veya 15'lik ara bölme duvarlar</td></tr>
-                                <tr><td><code>KAPI</code></td><td>Tüm Kapı Blokları</td><td>Block / Arc</td><td>Genişlik ve açılış yönü içeren kapılar</td></tr>
-                                <tr><td><code>PENCERE</code></td><td>Pencereler ve Fransız Balkonlar</td><td>Polyline / Line</td><td>Genişlik ve parapet yüksekliği</td></tr>
-                                <tr><td><code>MAHAL_ISIM</code></td><td>Oda / Alan İsimleri</td><td>Text / MText</td><td>SALON, MUTFAK, BANYO metinleri</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
+                <div>
+                    <h6 class="fw-bold text-dark mb-0" style="font-size: 1.05rem;">Şantiye Malzeme Tedarik & Satın Alma Matrisi</h6>
+                    <small class="text-muted" style="font-size: 0.75rem;">
+                        İşçiliksiz saf malzeme metrajı, birim fiyat, spot piyasa ("Ayrı Araştır") ve anlaşılan firma takip tablosu.
+                    </small>
                 </div>
             </div>
-            <div class="modal-footer border-top-0 pt-0 px-4 pb-4">
-                <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Kapat</button>
-                <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold" onclick="printSartname()">
-                    <i class="bi bi-printer me-1"></i> PDF Olarak Yazdır
+
+            <!-- ÜST AKSİYON: SADECE EXCEL (VER) VE ARAMA KUTUSU -->
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <!-- EXCEL'E AKTAR (SADE VE MİNİMAL: VER) -->
+                <button type="button" class="btn btn-success rounded-pill px-3.5 py-1.5 fw-bold shadow-sm d-inline-flex align-items-center gap-1.5" onclick="exportMaterialMatrixToExcel();" style="font-size: 0.82rem;" title="Malzeme Tedarik Matrisini Excel dosyası olarak indirir">
+                    <i class="bi bi-file-earmark-excel-fill fs-6"></i>
+                    <span>Ver</span>
                 </button>
-                <button type="button" class="btn btn-success rounded-pill px-4 fw-bold" onclick="copySartname()">
-                    <i class="bi bi-clipboard-check me-1"></i> WhatsApp / Metin Kopyala
-                </button>
+
+                <!-- Arama Kutusu -->
+                <div class="input-group input-group-sm" style="max-width: 220px;">
+                    <span class="input-group-text bg-white py-1 px-2"><i class="bi bi-search text-muted small"></i></span>
+                    <input type="text" class="form-control form-control-sm py-1" id="matrixSearchInput" placeholder="Malzeme ara..." oninput="searchMatrix(this.value);" />
+                </div>
             </div>
         </div>
-    </div>
-</div>
 
-<script>
-    function openUploadModalForFloor(buildingId, floorLevel, blockName, floorName) {
-        document.getElementById('uploadDisciplineSelect').value = 'Mimari';
-        document.getElementById('uploadBuildingId').value = buildingId;
-        document.getElementById('uploadFloorLevel').value = floorLevel;
-        document.getElementById('uploadTitleInput').value = blockName + ' - ' + floorName + ' Kat Planı';
-        document.getElementById('floorBindingSection').style.display = 'block';
-
-        var modal = new bootstrap.Modal(document.getElementById('uploadDrawingModal'));
-        modal.show();
+        <div id="masterBomContent" class="collapse">
+
+            <!-- 9 KOLONLU PROFESYONEL MALZEME TEDARİK TABLOSU -->
+
+            <div class="table-responsive" style="max-height: 750px; overflow-y: auto;">
+
+                <table class="table table-hover align-middle mb-0" id="materialMatrixTable" style="font-size: 0.83rem;">
+
+                    <thead class="table-light text-muted border-bottom sticky-top" style="font-size: 0.74rem; background-color: #f8fafc; z-index: 5;">
+
+                        <tr>
+
+                            <th style="width: 50px;" class="text-center">No</th>
+
+                            <th style="width: 170px;">B: Tedarikçi Türü</th>
+
+                            <th style="min-width: 240px;">C: Ürün Adı</th>
+
+                            <th style="width: 100px;" class="text-end">D: Miktar</th>
+
+                            <th style="width: 65px;" class="text-center">E: Birim</th>
+
+                            <th style="width: 130px;" class="text-end">F: Birim Fiyat (₺)</th>
+
+                            <th style="width: 135px;" class="text-end">G: Toplam (₺)</th>
+
+                            <th style="width: 85px;" class="text-center" title="Spot piyasa, parti sonu eldeki mal veya stok fazlası için işaretleyin">H: Ayrı Araştır</th>
+
+                            <th style="width: 180px;">I: Anlaşılan Yer</th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+
+                        @if (bomItems.Any())
+
+                        {
+
+                            int rowCounter = 1;
+
+                            foreach (var grp in packageGroups)
+
+                            {
+
+                                var grpItems = grp.ToList();
+
+                                var branchName = grp.Key.SupplierBranch ?? grp.Key.PackageName;
+
+                                var branchKey = grp.Key.PackageKey;
+
+                                var branchIcon = grp.Key.PackageIcon;
+
+                                <!-- BRANŞ AYRAÇ BAŞLIĞI (GRUBUN ÜSTÜNDE OLMASI SÜPER OLMUŞ) -->
+
+                                <tr class="table-light branch-header-row" data-branch="@branchKey" style="border-top: 2px solid #dee2e6;">
+
+                                    <td colspan="9" class="py-1.5 px-3 bg-body-tertiary">
+
+                                        <div class="d-flex justify-content-between align-items-center">
+
+                                            <div class="d-flex align-items-center gap-2">
+
+                                                <i class="bi @branchIcon text-primary fs-6"></i>
+
+                                                <strong class="text-dark" style="font-size: 0.84rem;">@branchName</strong>
+
+                                                <span class="badge bg-secondary-subtle text-secondary border rounded-pill px-2 py-0.5" style="font-size: 0.68rem;">
+
+                                                    @grpItems.Count Kalem
+
+                                                </span>
+
+                                            </div>
+
+                                            <button type="button" class="btn btn-xs btn-outline-primary py-0.5 px-2 rounded-pill fw-semibold" onclick="quickResearchBranch('@branchName');" style="font-size: 0.72rem;">
+                                                <i class="bi bi-lightning-charge-fill text-warning me-1"></i>Toplu Teklif İste / Araştır
+                                            </button>
+
+                                        </div>
+
+                                    </td>
+
+                                </tr>
+
+                                <!-- ÜRÜN SATIRLARI (9 KOLON - JİLET GİBİ TEK SATIR, ETİKETSİZ, ROMANSIZ) -->
+
+                                foreach (var item in grpItems)
+
+                                {
+
+                                    <tr class="material-matrix-row @(item.IsSeparateResearch ? "table-warning bg-opacity-25" : "")" 
+
+                                        id="mat_row_@item.Id"
+
+                                        data-item-id="@item.Id"
+
+                                        data-row-index="@rowCounter"
+
+                                        data-branch="@branchKey"
+
+                                        data-branch-name="@branchName"
+
+                                        data-title="@item.Title"
+
+                                        data-qty="@item.Quantity"
+
+                                        data-unit="@item.Unit"
+
+                                        data-search="@(branchName.ToLower()) @(item.Title.ToLower())"
+
+                                        style="height: 38px;">
+
+                                        
+
+                                        <!-- A: Sıra No -->
+                                        <td class="text-center text-muted fw-semibold py-1" style="font-size: 0.78rem;">@(rowCounter++)</td>
+
+                                        <!-- B: Tedarikçi Türü -->
+
+                                        <td class="py-1">
+
+                                            <span class="fw-semibold text-secondary" style="font-size: 0.78rem;">
+
+                                                @branchName
+
+                                            </span>
+
+                                        </td>
+
+                                        <!-- C: Ürün Adı (JİLET GİBİ NET VE KISA - SIFIR ETİKET) -->
+
+                                        <td class="py-1">
+
+                                            <span class="fw-bold text-dark" style="font-size: 0.82rem;">
+
+                                                @item.Title
+
+                                            </span>
+
+                                        </td>
+
+                                        <!-- D: Miktar -->
+
+                                        <td class="text-end fw-bold py-1">
+
+                                            <span class="item-qty-val font-monospace fs-6 text-dark">@item.Quantity.ToString("N0")</span>
+
+                                        </td>
+
+                                        <!-- E: Birim -->
+
+                                        <td class="text-center py-1">
+
+                                            <span class="badge bg-light text-dark border px-2 py-0.5 rounded-pill" style="font-size: 0.72rem;">
+
+                                                @item.Unit
+
+                                            </span>
+
+                                        </td>
+
+                                        <!-- F: Birim Fiyat -->
+
+                                        <td class="text-end py-1">
+
+                                            <div class="input-group input-group-sm">
+
+                                                <span class="input-group-text bg-light text-muted px-1 py-0" style="font-size: 0.70rem;">₺</span>
+
+                                                <input type="number" 
+
+                                                       step="0.01" 
+
+                                                       min="0" 
+
+                                                       class="form-control form-control-sm text-end unit-price-input font-monospace py-0.5"
+
+                                                       data-item-id="@item.Id"
+
+                                                       data-qty="@item.Quantity"
+
+                                                       placeholder="0.00" 
+
+                                                       value="@(item.UnitPrice.HasValue ? item.UnitPrice.Value.ToString("0.00") : "")"
+
+                                                       oninput="onPriceChanged(this);"
+
+                                                       style="font-size: 0.78rem; height: 26px;" />
+
+                                            </div>
+
+                                        </td>
+
+                                        <!-- G: Toplam -->
+
+                                        <td class="text-end py-1">
+
+                                            <span class="fw-bold font-monospace text-dark item-total-val" id="total_display_@item.Id" style="font-size: 0.82rem;">
+
+                                                @(item.TotalPrice.HasValue ? item.TotalPrice.Value.ToString("N2") + " ₺" : "—")
+
+                                            </span>
+
+                                        </td>
+
+                                        <!-- H: Ayrı Araştır (Spot) -->
+
+                                        <td class="text-center py-1">
+
+                                            <div class="form-check form-switch d-inline-block m-0">
+
+                                                <input class="form-check-input spot-checkbox" 
+
+                                                       type="checkbox" 
+
+                                                       role="switch"
+
+                                                       id="spot_@item.Id"
+
+                                                       data-item-id="@item.Id"
+
+                                                       @(item.IsSeparateResearch ? "checked" : "")
+
+                                                       onchange="onSpotCheckboxChanged(this);"
+
+                                                       title="Spot piyasa, parti sonu eldeki mal için işaretleyin"
+
+                                                       style="cursor: pointer;" />
+
+                                            </div>
+
+                                        </td>
+
+                                        <!-- I: Anlaşılan Yer -->
+
+                                        <td class="py-1">
+
+                                            <input type="text" 
+
+                                                   class="form-control form-control-sm agreed-supplier-input py-0.5"
+
+                                                   data-item-id="@item.Id"
+
+                                                   placeholder="Firma / Tedarikçi..."
+
+                                                   value="@(item.AgreedSupplier ?? "")"
+
+                                                   oninput="markChangesDirty();"
+
+                                                   style="font-size: 0.76rem; height: 26px;" />
+
+                                        </td>
+
+                                    </tr>
+
+                                    rowCounter++;
+
+                                }
+
+                            }
+
+                        }
+
+                        else
+
+                        {
+
+                            <tr>
+
+                                <td colspan="9" class="p-4 text-center text-muted">
+
+                                    <i class="bi bi-box-seam fs-3 d-block mb-1"></i>
+
+                                    Henüz malzeme metrajı bulunamadı.
+
+                                </td>
+
+                            </tr>
+
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+            <!-- FOOTER: GENEL TOPLAM VE ÖZET BİLGİ -->
+
+            <div class="card-footer bg-white py-2.5 px-3 border-top d-flex justify-content-between align-items-center flex-wrap gap-2">
+
+                <div class="d-flex align-items-center gap-2">
+
+                    <span class="text-muted small" style="font-size: 0.75rem;">
+
+                        <i class="bi bi-info-circle text-primary me-1"></i>
+
+                        Fiyat girildikçe toplamlar anlık hesaplanır. Spot işaretli satırlar sarı renkle vurgulanır.
+
+                    </span>
+
+                </div>
+
+                <div class="d-flex align-items-center gap-3">
+
+                    <div class="text-end">
+
+                        <small class="text-muted d-block" style="font-size: 0.68rem;">FİYATLANDIRILAN</small>
+
+                        <span class="fw-bold text-dark" id="pricedCountDisplay" style="font-size: 0.80rem;">0 / @totalBomCount Kalem</span>
+
+                    </div>
+
+                    <div class="text-end border-start ps-3">
+
+                        <small class="text-muted d-block" style="font-size: 0.68rem;">TOPLAM MALZEME MALİYETİ (KDV HARİÇ)</small>
+
+                        <span class="fs-5 fw-bolder text-primary font-monospace" id="matrixGrandTotalDisplay">₺0,00</span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- 4. ESKİLER / ARŞİVLENMİŞ GÖRÜNÜM (AÇILIR / KAPANIR DİV) -->
+
+    <!-- ======================================================== -->
+
+    <div class="card border rounded-4 shadow-sm mb-4">
+
+        <div class="card-header bg-light py-3 px-3 d-flex justify-content-between align-items-center" style="cursor: pointer;" data-bs-toggle="collapse" data-bs-target="#eskilerCollapse" aria-expanded="false">
+
+            <div class="d-flex align-items-center gap-2">
+
+                <i class="bi bi-archive-fill text-secondary fs-5"></i>
+
+                <div>
+
+                    <span class="fw-bold text-dark">Eskiler (Tüm Çizim Arşivi & 84 Kat Matrisi)</span>
+
+                    <small class="text-muted d-block" style="font-size: 0.72rem;">Daha önce eklenen şartname panosu, özet göstergeler, disiplin sekmeleri ve kat matrisini incelemek için tıklayın (Varsayılan Kapalı)</small>
+
+                </div>
+
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+
+                <span class="badge bg-white text-muted border">Geçmiş Tasarım</span>
+
+                <i class="bi bi-chevron-down text-muted"></i>
+
+            </div>
+
+        </div>
+
+        <div class="collapse" id="eskilerCollapse">
+
+            <div class="card-body p-3 bg-light bg-opacity-25">
+
+    <!-- MİMAR CAD / DXF ŞARTNAMESİ BANNER -->
+
+    <div class="card border-0 rounded-4 shadow-sm mb-4 text-white" style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);">
+
+        <div class="card-body p-4">
+
+            <div class="row align-items-center">
+
+                <div class="col-lg-8">
+
+                    <div class="d-flex align-items-center gap-2 mb-2">
+
+                        <span class="badge bg-warning text-dark px-2 py-1 rounded-pill fw-bold" style="font-size:0.75rem;">
+
+                            <i class="bi bi-star-fill me-1"></i>STANDART ŞARTNAME
+
+                        </span>
+
+                        <span class="text-white-50 small">AutoCAD (DWG/DXF) & PDF Proje Kabul Kuralları</span>
+
+                    </div>
+
+                    <h4 class="fw-bold mb-1">Mimar ve Mühendisler için CAD/DXF Teslim Şartnamesi</h4>
+
+                    <p class="text-white-50 mb-0 small" style="line-height: 1.5;">
+
+                        GMK360 hesaplama ve ihale motorunun mimari projeleri sorunsuz işletmesi için: <strong>1)</strong> Her katın WBLOCK ile tekil DXF çıkarılması, <strong>2)</strong> Zorunlu Mahal isimlerinin yazılması, <strong>3)</strong> Standart kapı/pencere çizimi esastır. Taşeron ve tedarikçilere kusursuz metraj ve şablon PDF'ler buradan üretilir.
+
+                    </p>
+
+                </div>
+
+                <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+
+                    <button type="button" class="btn btn-warning text-dark fw-bold rounded-pill px-3 py-2 shadow-sm me-2" data-bs-toggle="modal" data-bs-target="#sartnameModal">
+
+                        <i class="bi bi-file-earmark-richtext-fill me-1"></i> Şartnameyi İncele & Yazdır
+
+                    </button>
+
+                    <button type="button" class="btn btn-outline-light rounded-pill px-3 py-2 shadow-sm" onclick="copySartname()">
+
+                        <i class="bi bi-whatsapp me-1"></i> Mimara İlet
+
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- ÖZET GÖSTERGELER (KPI CARDS) -->
+
+    <div class="row g-3 mb-4">
+
+        <div class="col-6 col-md-3">
+
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+
+                <div class="card-body p-3 d-flex align-items-center">
+
+                    <div class="rounded-4 bg-primary bg-opacity-10 text-primary p-3 me-3">
+
+                        <i class="bi bi-building fs-3"></i>
+
+                    </div>
+
+                    <div>
+
+                        <div class="text-muted small fw-bold text-uppercase">Toplam Kat</div>
+
+                        <h4 class="fw-bold mb-0 text-dark">@Model.TotalFloorsCount Kat</h4>
+
+                        <small class="text-muted">@Model.Blocks.Count Blok/Kule</small>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-6 col-md-3">
+
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+
+                <div class="card-body p-3">
+
+                    <div class="d-flex align-items-center mb-2">
+
+                        <div class="rounded-4 bg-success bg-opacity-10 text-success p-3 me-3">
+
+                            <i class="bi bi-file-earmark-check-fill fs-3"></i>
+
+                        </div>
+
+                        <div>
+
+                            <div class="text-muted small fw-bold text-uppercase">Mimari Planlar</div>
+
+                            <h4 class="fw-bold mb-0 text-success">@Model.FloorsWithPlanCount / @Model.TotalFloorsCount</h4>
+
+                            <small class="text-muted">Kat Planı Yüklü</small>
+
+                        </div>
+
+                    </div>
+
+                    <div class="progress" style="height: 6px;">
+
+                        <div class="progress-bar bg-success" role="progressbar" style="width: @Model.PlanCompletionPercentage%;" aria-valuenow="@Model.PlanCompletionPercentage" aria-valuemin="0" aria-valuemax="100"></div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-6 col-md-3">
+
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+
+                <div class="card-body p-3 d-flex align-items-center">
+
+                    <div class="rounded-4 bg-warning bg-opacity-10 text-warning p-3 me-3">
+
+                        <i class="bi bi-cone-striped fs-3"></i>
+
+                    </div>
+
+                    <div>
+
+                        <div class="text-muted small fw-bold text-uppercase">Statik Paftalar</div>
+
+                        <h4 class="fw-bold mb-0 text-dark">@Model.StructuralDrawings.Count Pafta</h4>
+
+                        <small class="text-muted">Kalıp & Donatı Detayı</small>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-6 col-md-3">
+
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+
+                <div class="card-body p-3 d-flex align-items-center">
+
+                    <div class="rounded-4 bg-info bg-opacity-10 text-info p-3 me-3">
+
+                        <i class="bi bi-lightning-charge-fill fs-3"></i>
+
+                    </div>
+
+                    <div>
+
+                        <div class="text-muted small fw-bold text-uppercase">Mekanik & Elektrik</div>
+
+                        <h4 class="fw-bold mb-0 text-dark">@(Model.MechanicalDrawings.Count + Model.ElectricalDrawings.Count) Pafta</h4>
+
+                        <small class="text-muted">Tesisat & Projeler</small>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- DİSİPLİN SEKMELERİ (TABS) -->
+
+    <div class="card border-0 shadow-sm rounded-4">
+
+        <div class="card-header bg-white border-bottom p-3">
+
+            <ul class="nav nav-pills card-header-pills" id="drawingTabs" role="tablist">
+
+                <li class="nav-item" role="presentation">
+
+                    <button class="nav-link active rounded-pill fw-bold px-4" id="mimari-tab" data-bs-toggle="pill" data-bs-target="#mimari-pane" type="button" role="tab">
+
+                        <i class="bi bi-house-door-fill me-2"></i>ğŸ›ï¸ Mimari Kat Planları & Matris
+
+                        <span class="badge bg-primary ms-2">@Model.FloorsWithPlanCount / @Model.TotalFloorsCount</span>
+
+                    </button>
+
+                </li>
+
+                <li class="nav-item" role="presentation">
+
+                    <button class="nav-link rounded-pill fw-bold px-4" id="statik-tab" data-bs-toggle="pill" data-bs-target="#statik-pane" type="button" role="tab">
+
+                        <i class="bi bi-shield-shaded me-2"></i>ğŸ—ï¸ Statik Projeler
+
+                        <span class="badge bg-secondary ms-2">@Model.StructuralDrawings.Count</span>
+
+                    </button>
+
+                </li>
+
+                <li class="nav-item" role="presentation">
+
+                    <button class="nav-link rounded-pill fw-bold px-4" id="mekanik-tab" data-bs-toggle="pill" data-bs-target="#mekanik-pane" type="button" role="tab">
+
+                        <i class="bi bi-tools me-2"></i>ğŸ”§ Mekanik Tesisat
+
+                        <span class="badge bg-secondary ms-2">@Model.MechanicalDrawings.Count</span>
+
+                    </button>
+
+                </li>
+
+                <li class="nav-item" role="presentation">
+
+                    <button class="nav-link rounded-pill fw-bold px-4" id="elektrik-tab" data-bs-toggle="pill" data-bs-target="#elektrik-pane" type="button" role="tab">
+
+                        <i class="bi bi-lightning-fill me-2"></i>âš¡ Elektrik & Zayıf Akım
+
+                        <span class="badge bg-secondary ms-2">@Model.ElectricalDrawings.Count</span>
+
+                    </button>
+
+                </li>
+
+            </ul>
+
+        </div>
+
+        <div class="card-body p-4">
+
+            <div class="tab-content" id="drawingTabsContent">
+
+                
+
+                <!-- SEKME 1: MİMARİ KAT PLANLARI & CAD/DWG ARŞİVİ -->
+
+                <div class="tab-pane fade show active" id="mimari-pane" role="tabpanel">
+
+                    
+
+                    <!-- 1. HIZLI DWG / DXF / ÇİZİM YÜKLEME KARTI -->
+
+                    <div class="card border-0 bg-light rounded-4 p-3 mb-4 shadow-2xs">
+
+                        <form asp-action="UploadDrawing" asp-controller="Metraj" method="post" enctype="multipart/form-data">
+
+                            @Html.AntiForgeryToken()
+
+                            <input type="hidden" name="projectId" value="@projectId" />
+
+                            <div class="row g-2 align-items-end">
+
+                                <div class="col-md-3">
+
+                                    <label class="form-label small fw-bold text-dark mb-1">
+
+                                        <i class="bi bi-file-earmark-code text-primary me-1"></i>Çizim Dosyası (.dwg, .dxf, .pdf)
+
+                                    </label>
+
+                                    <input type="file" class="form-control form-control-sm bg-white" name="file" accept=".dwg,.dxf,.pdf" required />
+
+                                </div>
+
+                                <div class="col-md-3">
+
+                                    <label class="form-label small fw-bold text-dark mb-1">Pafta / Çizim Tanımı</label>
+
+                                    <input type="text" class="form-control form-control-sm bg-white" name="title" placeholder="Örn: 1. Tip Kat Mimari Planı" required />
+
+                                </div>
+
+                                <div class="col-md-2">
+
+                                    <label class="form-label small fw-bold text-dark mb-1">Çizim Türü</label>
+
+                                    <select class="form-select form-select-sm bg-white" name="category">
+
+                                        <option value="Mimari">ğŸ›ï¸ Mimari Tip Kat</option>
+
+                                        <option value="Mimari Vaziyet">ğŸ§­ Vaziyet / Kesit</option>
+
+                                        <option value="Statik">ğŸ—ï¸ Statik Proje</option>
+
+                                        <option value="Mekanik">ğŸ”§ Mekanik Tesisat</option>
+
+                                        <option value="Elektrik">âš¡ Elektrik / Zayıf Akım</option>
+
+                                    </select>
+
+                                </div>
+
+                                <div class="col-md-2">
+
+                                    <label class="form-label small fw-bold text-dark mb-1">Hedef Blok (Opsiyonel)</label>
+
+                                    <select class="form-select form-select-sm bg-white" name="buildingId">
+
+                                        <option value="">-- Tüm Bloklar --</option>
+
+                                        @foreach (var b in Model.Blocks)
+
+                                        {
+
+                                            <option value="@b.Id">@b.BlockName</option>
+
+                                        }
+
+                                    </select>
+
+                                </div>
+
+                                <div class="col-md-2">
+
+                                    <button type="submit" class="btn btn-primary btn-sm w-100 rounded-pill fw-bold shadow-xs py-1.5">
+
+                                        <i class="bi bi-cloud-arrow-up-fill me-1"></i>Çizimi Arşive Al
+
+                                    </button>
+
+                                </div>
+
+                            </div>
+
+                        </form>
+
+                    </div>
+
+                    <!-- 2. MİMARİ ÇİZİMLER & DWG ARŞİV DEPOSU LİSTESİ -->
+
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+
+                        <div>
+
+                            <h5 class="fw-bold mb-0 text-dark">
+
+                                <i class="bi bi-collection-fill text-primary me-2"></i>Mimari & CAD Çizim Arşivi
+
+                            </h5>
+
+                            <small class="text-muted">Projenin ruhsat ve uygulama aşamasındaki DWG/DXF/PDF paftaları.</small>
+
+                        </div>
+
+                        <span class="badge bg-primary px-3 py-1.5 rounded-pill">@(Model.ArchitecturalDrawings?.Count ?? 0) Pafta Kayıtlı</span>
+
+                    </div>
+
+                    @if (Model.ArchitecturalDrawings != null && Model.ArchitecturalDrawings.Any())
+
+                    {
+
+                        <div class="table-responsive rounded-3 border bg-white mb-4 shadow-2xs">
+
+                            <table class="table table-hover align-middle mb-0" style="font-size: 0.82rem;">
+
+                                <thead class="table-light text-muted">
+
+                                    <tr>
+
+                                        <th>Pafta / Çizim Başlığı</th>
+
+                                        <th>Format</th>
+
+                                        <th>Kategori / Disiplin</th>
+
+                                        <th>Yükleme Tarihi</th>
+
+                                        <th class="text-end" style="min-width: 220px;">İşlemler</th>
+
+                                    </tr>
+
+                                </thead>
+
+                                <tbody>
+
+                                    @foreach (var doc in Model.ArchitecturalDrawings)
+
+                                    {
+
+                                        var isDwg = doc.FileExtension?.ToLowerInvariant() == ".dwg";
+
+                                        var isDxf = doc.FileExtension?.ToLowerInvariant() == ".dxf";
+
+                                        var isPdf = doc.FileExtension?.ToLowerInvariant() == ".pdf";
+
+                                        <tr>
+
+                                            <td>
+
+                                                <div class="d-flex align-items-center gap-2">
+
+                                                    @if (isDwg)
+
+                                                    {
+
+                                                        <span class="badge bg-primary text-white px-2 py-1 fw-bold" style="font-size: 0.70rem;">DWG</span>
+
+                                                    }
+
+                                                    else if (isDxf)
+
+                                                    {
+
+                                                        <span class="badge text-white px-2 py-1 fw-bold" style="font-size: 0.70rem; background-color: #6f42c1;">DXF</span>
+
+                                                    }
+
+                                                    else if (isPdf)
+
+                                                    {
+
+                                                        <span class="badge bg-danger text-white px-2 py-1 fw-bold" style="font-size: 0.70rem;">PDF</span>
+
+                                                    }
+
+                                                    else
+
+                                                    {
+
+                                                        <span class="badge bg-secondary text-white px-2 py-1 fw-bold" style="font-size: 0.70rem;">CAD</span>
+
+                                                    }
+
+                                                    <div>
+
+                                                        <span class="fw-bold text-dark d-block">@doc.Title</span>
+
+                                                        <small class="text-muted" style="font-size: 0.70rem;">@doc.FileName</small>
+
+                                                    </div>
+
+                                                </div>
+
+                                            </td>
+
+                                            <td>
+
+                                                <span class="badge bg-light text-dark border">@doc.FileExtension?.ToUpperInvariant()</span>
+
+                                            </td>
+
+                                            <td>
+
+                                                <span class="badge bg-primary-subtle text-primary border" style="font-size: 0.72rem;">@doc.Category</span>
+
+                                            </td>
+
+                                            <td>
+
+                                                <small class="text-muted">@doc.UploadDate.ToString("dd.MM.yyyy HH:mm")</small>
+
+                                            </td>
+
+                                            <td class="text-end">
+
+                                                <div class="d-flex justify-content-end gap-1">
+
+                                                    <a href="@doc.DocumentUrl" target="_blank" class="btn btn-xs btn-outline-primary rounded-pill px-2.5 py-1" style="font-size: 0.72rem;" title="İndir">
+
+                                                        <i class="bi bi-download me-1"></i>İndir
+
+                                                    </a>
+
+                                                    @if (isDwg || isDxf)
+
+                                                    {
+
+                                                        <a href="/Metraj/DxfTakeoff/@projectId" class="btn btn-xs btn-success rounded-pill px-2.5 py-1 fw-bold shadow-xs" style="font-size: 0.72rem;" title="DWG Mahal ve Metraj Okuma">
+
+                                                            <i class="bi bi-lightning-charge-fill me-1"></i>DWG Oku
+
+                                                        </a>
+
+                                                    }
+
+                                                    <form asp-action="DeleteDrawing" method="post" class="d-inline" onsubmit="return confirm('Bu çizimi silmek istediğinize emin misiniz?');">
+
+                                                        @Html.AntiForgeryToken()
+
+                                                        <input type="hidden" name="id" value="@doc.Id" />
+
+                                                        <input type="hidden" name="projectId" value="@projectId" />
+
+                                                        <button type="submit" class="btn btn-xs btn-outline-danger rounded-pill px-2 py-1" style="font-size: 0.72rem;" title="Sil">
+
+                                                            <i class="bi bi-trash"></i>
+
+                                                        </button>
+
+                                                    </form>
+
+                                                </div>
+
+                                            </td>
+
+                                        </tr>
+
+                                    }
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    }
+
+                    else
+
+                    {
+
+                        <div class="alert alert-light border rounded-4 p-4 text-center mb-4">
+
+                            <i class="bi bi-file-earmark-code fs-2 text-primary d-block mb-2"></i>
+
+                            <h6 class="fw-bold text-dark mb-1">Henüz Mimari / DWG Çizimi Yüklenmedi</h6>
+
+                            <p class="text-muted small mb-0">Yukarıdaki yükleme alanından mimari kat planı veya ruhsat projesi DWG dosyasını seçerek arşive ekleyebilirsiniz.</p>
+
+                        </div>
+
+                    }
+
+                    <!-- 3. DETAYLI KAT PLANI MATRİSİ (AÇILIR / KAPANIR ÇEKMECE - VARSAYILAN KAPALI) -->
+
+                    <div class="card border rounded-4 shadow-sm mt-3">
+
+                        <div class="card-header bg-light py-3 d-flex justify-content-between align-items-center" style="cursor: pointer;" data-bs-toggle="collapse" data-bs-target="#floorMatrixCollapse" aria-expanded="false">
+
+                            <div class="d-flex align-items-center gap-2">
+
+                                <i class="bi bi-grid-3x3-gap-fill text-primary fs-5"></i>
+
+                                <div>
+
+                                    <span class="fw-bold text-dark">Detaylı Kat Planı Matrisi (@Model.TotalFloorsCount Kat & Blok Bağlantıları)</span>
+
+                                    <small class="text-muted d-block" style="font-size: 0.72rem;">Yapı Yönetimi ile senkronize kat planı bağlantı tablosunu incelemek için tıklayın (Açılır Çekmece)</small>
+
+                                </div>
+
+                            </div>
+
+                            <div class="d-flex align-items-center gap-2">
+
+                                <span class="badge bg-success-subtle text-success border">@Model.FloorsWithPlanCount Kat Planı Bağlı</span>
+
+                                <span class="badge bg-light text-muted border">@Model.TotalFloorsCount Kat Toplam</span>
+
+                                <i class="bi bi-chevron-down text-muted"></i>
+
+                            </div>
+
+                        </div>
+
+                        <div class="collapse" id="floorMatrixCollapse">
+
+                            <div class="card-body p-3">
+
+                                <div class="table-responsive rounded-3 border">
+
+                                    <table class="table table-hover align-middle mb-0" style="font-size: 0.82rem;">
+
+                                        <thead class="table-light">
+
+                                            <tr>
+
+                                                <th style="width: 18%;">Blok / Kule</th>
+
+                                                <th style="width: 18%;">Kat Seviyesi & Adı</th>
+
+                                                <th style="width: 16%;">Daire Sayısı & m²</th>
+
+                                                <th style="width: 28%;">Kat Planı (CAD / DXF / PDF)</th>
+
+                                                <th style="width: 20%;" class="text-end">İşlemler</th>
+
+                                            </tr>
+
+                                        </thead>
+
+                                        <tbody>
+
+                                            @if (Model.FloorMatrix != null && Model.FloorMatrix.Any())
+
+                                            {
+
+                                                foreach (var item in Model.FloorMatrix)
+
+                                                {
+
+                                                    <tr>
+
+                                                        <td>
+
+                                                            <div class="d-flex align-items-center">
+
+                                                                <i class="bi @(item.IsChildBuilding ? "bi-building" : "bi-houses") text-primary me-2 fs-5"></i>
+
+                                                                <div>
+
+                                                                    <div class="fw-bold text-dark">@item.BlockName</div>
+
+                                                                    <small class="text-muted">@(item.IsChildBuilding ? "Bağlı Kule" : "Ana Blok / Baza")</small>
+
+                                                                </div>
+
+                                                            </div>
+
+                                                        </td>
+
+                                                        <td>
+
+                                                            <span class="badge bg-light text-dark border px-2 py-1 fw-bold">
+
+                                                                @item.FloorName
+
+                                                            </span>
+
+                                                            <span class="text-muted small ms-1">(Kot/Seviye: @item.FloorLevel)</span>
+
+                                                        </td>
+
+                                                        <td>
+
+                                                            @if (item.UnitCount > 0)
+
+                                                            {
+
+                                                                <div class="fw-bold text-dark">@item.UnitCount Daire / Birim</div>
+
+                                                                <small class="text-muted">Net: @item.TotalNetM2.ToString("N0") m² | Brüt: @item.TotalGrossM2.ToString("N0") m²</small>
+
+                                                            }
+
+                                                            else
+
+                                                            {
+
+                                                                <span class="text-muted small"><i class="bi bi-dash-circle me-1"></i>Birim Tanımlanmamış</span>
+
+                                                            }
+
+                                                        </td>
+
+                                                        <td>
+
+                                                            @if (item.HasPlan)
+
+                                                            {
+
+                                                                <div class="d-flex align-items-center">
+
+                                                                    <span class="badge bg-success bg-opacity-10 text-success border border-success me-2 px-2 py-1 rounded-pill">
+
+                                                                        <i class="bi bi-file-earmark-check me-1"></i>Plan Mevcut
+
+                                                                    </span>
+
+                                                                    <a href="@item.PlanUrl" target="_blank" class="text-decoration-none fw-bold text-truncate" style="max-width: 180px;" title="@item.PlanFileName">
+
+                                                                        <i class="bi bi-file-earmark-arrow-down me-1"></i>@(string.IsNullOrEmpty(item.PlanFileName) ? "Planı İndir" : item.PlanFileName)
+
+                                                                    </a>
+
+                                                                </div>
+
+                                                                @if (item.PlanUploadDate.HasValue)
+
+                                                                {
+
+                                                                    <small class="text-muted d-block mt-1">Yükleme: @item.PlanUploadDate.Value.ToString("dd.MM.yyyy HH:mm")</small>
+
+                                                                }
+
+                                                            }
+
+                                                            else
+
+                                                            {
+
+                                                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 rounded-pill">
+
+                                                                    <i class="bi bi-exclamation-circle me-1"></i>Plan Bekleniyor
+
+                                                                </span>
+
+                                                                <small class="text-muted d-block mt-1">Mimar şartnamesine uygun DXF/PDF yükleyin.</small>
+
+                                                            }
+
+                                                        </td>
+
+                                                        <td class="text-end">
+
+                                                            <div class="d-flex justify-content-end gap-1">
+
+                                                                @if (item.HasPlan)
+
+                                                                {
+
+                                                                    <a href="@item.PlanUrl" target="_blank" class="btn btn-sm btn-outline-success rounded-pill px-2" title="Görüntüle / İndir">
+
+                                                                        <i class="bi bi-eye"></i>
+
+                                                                    </a>
+
+                                                                }
+
+                                                                <button type="button" class="btn btn-sm @(item.HasPlan ? "btn-outline-primary" : "btn-primary") rounded-pill px-2" 
+
+                                                                        onclick="openUploadModalForFloor(@item.BuildingId, @item.FloorLevel, '@item.BlockName', '@item.FloorName')" 
+
+                                                                        title="@(item.HasPlan ? "Planı Güncelle" : "Plan Yükle")">
+
+                                                                    <i class="bi bi-upload me-1"></i>@(item.HasPlan ? "Revize Et" : "Yükle")
+
+                                                                </button>
+
+                                                                <a href="/ConstructionProject/ManageBlock/@(item.ParentBuildingId ?? item.BuildingId)" class="btn btn-sm btn-outline-secondary rounded-pill px-2" title="Yapı Yönetiminde Aç">
+
+                                                                    <i class="bi bi-arrow-right-short"></i>
+
+                                                                </a>
+
+                                                            </div>
+
+                                                        </td>
+
+                                                    </tr>
+
+                                                }
+
+                                            }
+
+                                            else
+
+                                            {
+
+                                                <tr>
+
+                                                    <td colspan="5" class="text-center py-4 text-muted">
+
+                                                        <i class="bi bi-info-circle me-2"></i>Henüz bu projede kayıtlı blok veya kat bulunmuyor.
+
+                                                    </td>
+
+                                                </tr>
+
+                                            }
+
+                                        </tbody>
+
+                                    </table>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <!-- SEKME 2: STATİK PROJELER -->
+
+                <div class="tab-pane fade" id="statik-pane" role="tabpanel">
+
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+
+                        <div>
+
+                            <h5 class="fw-bold mb-1"><i class="bi bi-cone-striped text-warning me-2"></i>Statik & Taşıyıcı Sistem Paftaları</h5>
+
+                            <p class="text-muted small mb-0">Temel aplikasyon, kat kalıp planları, kolon düşey açılımları ve donatı detayları.</p>
+
+                        </div>
+
+                        <button type="button" class="btn btn-warning text-dark fw-bold rounded-pill px-3 shadow-sm" onclick="openUploadModalForDiscipline('Statik')">
+
+                            <i class="bi bi-plus-lg me-1"></i>Statik Pafta Yükle
+
+                        </button>
+
+                    </div>
+
+                    @if (Model.StructuralDrawings != null && Model.StructuralDrawings.Any())
+
+                    {
+
+                        <div class="table-responsive rounded-3 border">
+
+                            <table class="table table-hover align-middle mb-0">
+
+                                <thead class="table-light">
+
+                                    <tr>
+
+                                        <th>Pafta Başlığı</th>
+
+                                        <th>Dosya Adı</th>
+
+                                        <th>Format</th>
+
+                                        <th>Tarih</th>
+
+                                        <th class="text-end">İşlemler</th>
+
+                                    </tr>
+
+                                </thead>
+
+                                <tbody>
+
+                                    @foreach (var doc in Model.StructuralDrawings)
+
+                                    {
+
+                                        <tr>
+
+                                            <td class="fw-bold">@doc.Title</td>
+
+                                            <td><small class="text-muted">@doc.FileName</small></td>
+
+                                            <td><span class="badge bg-light text-dark border">@doc.FileExtension?.ToUpperInvariant()</span></td>
+
+                                            <td><small class="text-muted">@doc.UploadDate.ToString("dd.MM.yyyy HH:mm")</small></td>
+
+                                            <td class="text-end">
+
+                                                <a href="@doc.DocumentUrl" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-2">
+
+                                                    <i class="bi bi-download"></i> İndir
+
+                                                </a>
+
+                                                <form asp-action="DeleteDrawing" method="post" class="d-inline" onsubmit="return confirm('Bu çizimi silmek istediğinize emin misiniz?');">
+
+                                                    @Html.AntiForgeryToken()
+
+                                                    <input type="hidden" name="id" value="@doc.Id" />
+
+                                                    <input type="hidden" name="projectId" value="@projectId" />
+
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-2">
+
+                                                        <i class="bi bi-trash"></i>
+
+                                                    </button>
+
+                                                </form>
+
+                                            </td>
+
+                                        </tr>
+
+                                    }
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    }
+
+                    else
+
+                    {
+
+                        <div class="text-center py-5 border rounded-4 bg-light">
+
+                            <i class="bi bi-cone-striped text-warning fs-1"></i>
+
+                            <h5 class="fw-bold mt-2">Henüz Statik Pafta Yüklenmedi</h5>
+
+                            <p class="text-muted small mb-3">Statik proje mühendisinden gelen kalıp ve donatı paftalarını buraya yükleyerek arşivi tamamlayın.</p>
+
+                            <button type="button" class="btn btn-warning text-dark fw-bold rounded-pill px-4 shadow-sm" onclick="openUploadModalForDiscipline('Statik')">
+
+                                <i class="bi bi-upload me-1"></i>Statik Pafta Yükle
+
+                            </button>
+
+                        </div>
+
+                    }
+
+                </div>
+
+                <!-- SEKME 3: MEKANİK TESİSAT -->
+
+                <div class="tab-pane fade" id="mekanik-pane" role="tabpanel">
+
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+
+                        <div>
+
+                            <h5 class="fw-bold mb-1"><i class="bi bi-tools text-info me-2"></i>Mekanik & Tesisat Paftaları</h5>
+
+                            <p class="text-muted small mb-0">Sıhhi tesisat (temiz/pis su), ısıtma, havalandırma, yangın sprinkler ve doğalgaz paftaları.</p>
+
+                        </div>
+
+                        <button type="button" class="btn btn-info text-white fw-bold rounded-pill px-3 shadow-sm" onclick="openUploadModalForDiscipline('Mekanik')">
+
+                            <i class="bi bi-plus-lg me-1"></i>Mekanik Pafta Yükle
+
+                        </button>
+
+                    </div>
+
+                    @if (Model.MechanicalDrawings != null && Model.MechanicalDrawings.Any())
+
+                    {
+
+                        <div class="table-responsive rounded-3 border">
+
+                            <table class="table table-hover align-middle mb-0">
+
+                                <thead class="table-light">
+
+                                    <tr>
+
+                                        <th>Pafta Başlığı</th>
+
+                                        <th>Dosya Adı</th>
+
+                                        <th>Format</th>
+
+                                        <th>Tarih</th>
+
+                                        <th class="text-end">İşlemler</th>
+
+                                    </tr>
+
+                                </thead>
+
+                                <tbody>
+
+                                    @foreach (var doc in Model.MechanicalDrawings)
+
+                                    {
+
+                                        <tr>
+
+                                            <td class="fw-bold">@doc.Title</td>
+
+                                            <td><small class="text-muted">@doc.FileName</small></td>
+
+                                            <td><span class="badge bg-light text-dark border">@doc.FileExtension?.ToUpperInvariant()</span></td>
+
+                                            <td><small class="text-muted">@doc.UploadDate.ToString("dd.MM.yyyy HH:mm")</small></td>
+
+                                            <td class="text-end">
+
+                                                <a href="@doc.DocumentUrl" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-2">
+
+                                                    <i class="bi bi-download"></i> İndir
+
+                                                </a>
+
+                                                <form asp-action="DeleteDrawing" method="post" class="d-inline" onsubmit="return confirm('Bu çizimi silmek istediğinize emin misiniz?');">
+
+                                                    @Html.AntiForgeryToken()
+
+                                                    <input type="hidden" name="id" value="@doc.Id" />
+
+                                                    <input type="hidden" name="projectId" value="@projectId" />
+
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-2">
+
+                                                        <i class="bi bi-trash"></i>
+
+                                                    </button>
+
+                                                </form>
+
+                                            </td>
+
+                                        </tr>
+
+                                    }
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    }
+
+                    else
+
+                    {
+
+                        <div class="text-center py-5 border rounded-4 bg-light">
+
+                            <i class="bi bi-tools text-info fs-1"></i>
+
+                            <h5 class="fw-bold mt-2">Henüz Mekanik Pafta Yüklenmedi</h5>
+
+                            <p class="text-muted small mb-3">Mekanik tesisat mühendisinden gelen sıhhi tesisat, kalorifer ve yangın paftalarını arşivleyin.</p>
+
+                            <button type="button" class="btn btn-info text-white fw-bold rounded-pill px-4 shadow-sm" onclick="openUploadModalForDiscipline('Mekanik')">
+
+                                <i class="bi bi-upload me-1"></i>Mekanik Pafta Yükle
+
+                            </button>
+
+                        </div>
+
+                    }
+
+                </div>
+
+                <!-- SEKME 4: ELEKTRİK & ZAYIF AKIM -->
+
+                <div class="tab-pane fade" id="elektrik-pane" role="tabpanel">
+
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+
+                        <div>
+
+                            <h5 class="fw-bold mb-1"><i class="bi bi-lightning-fill text-danger me-2"></i>Elektrik & Zayıf Akım Paftaları</h5>
+
+                            <p class="text-muted small mb-0">Aydınlatma & priz, kuvvetli akım, yangın ihbar, interkom, topraklama ve paratoner paftaları.</p>
+
+                        </div>
+
+                        <button type="button" class="btn btn-danger fw-bold rounded-pill px-3 shadow-sm" onclick="openUploadModalForDiscipline('Elektrik')">
+
+                            <i class="bi bi-plus-lg me-1"></i>Elektrik Pafta Yükle
+
+                        </button>
+
+                    </div>
+
+                    @if (Model.ElectricalDrawings != null && Model.ElectricalDrawings.Any())
+
+                    {
+
+                        <div class="table-responsive rounded-3 border">
+
+                            <table class="table table-hover align-middle mb-0">
+
+                                <thead class="table-light">
+
+                                    <tr>
+
+                                        <th>Pafta Başlığı</th>
+
+                                        <th>Dosya Adı</th>
+
+                                        <th>Format</th>
+
+                                        <th>Tarih</th>
+
+                                        <th class="text-end">İşlemler</th>
+
+                                    </tr>
+
+                                </thead>
+
+                                <tbody>
+
+                                    @foreach (var doc in Model.ElectricalDrawings)
+
+                                    {
+
+                                        <tr>
+
+                                            <td class="fw-bold">@doc.Title</td>
+
+                                            <td><small class="text-muted">@doc.FileName</small></td>
+
+                                            <td><span class="badge bg-light text-dark border">@doc.FileExtension?.ToUpperInvariant()</span></td>
+
+                                            <td><small class="text-muted">@doc.UploadDate.ToString("dd.MM.yyyy HH:mm")</small></td>
+
+                                            <td class="text-end">
+
+                                                <a href="@doc.DocumentUrl" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-2">
+
+                                                    <i class="bi bi-download"></i> İndir
+
+                                                </a>
+
+                                                <form asp-action="DeleteDrawing" method="post" class="d-inline" onsubmit="return confirm('Bu çizimi silmek istediğinize emin misiniz?');">
+
+                                                    @Html.AntiForgeryToken()
+
+                                                    <input type="hidden" name="id" value="@doc.Id" />
+
+                                                    <input type="hidden" name="projectId" value="@projectId" />
+
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-2">
+
+                                                        <i class="bi bi-trash"></i>
+
+                                                    </button>
+
+                                                </form>
+
+                                            </td>
+
+                                        </tr>
+
+                                    }
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    }
+
+                    else
+
+                    {
+
+                        <div class="text-center py-5 border rounded-4 bg-light">
+
+                            <i class="bi bi-lightning-charge-fill text-danger fs-1"></i>
+
+                            <h5 class="fw-bold mt-2">Henüz Elektrik Paftası Yüklenmedi</h5>
+
+                            <p class="text-muted small mb-3">Elektrik mühendisinden gelen aydınlatma, kuvvetli akım ve zayıf akım paftalarını arşivleyin.</p>
+
+                            <button type="button" class="btn btn-danger fw-bold rounded-pill px-4 shadow-sm" onclick="openUploadModalForDiscipline('Elektrik')">
+
+                                <i class="bi bi-upload me-1"></i>Elektrik Pafta Yükle
+
+                            </button>
+
+                        </div>
+
+                    }
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- ========================================== -->
+
+<!-- MODAL: ÇİZİM / PAFTA YÜKLEME MODALI -->
+
+<!-- ========================================== -->
+
+<div class="modal fade" id="uploadDrawingModal" tabindex="-1" aria-labelledby="uploadDrawingModalLabel" aria-hidden="true">
+
+    <div class="modal-dialog modal-dialog-centered">
+
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+
+            <div class="modal-header bg-primary text-white border-0 py-3 rounded-top-4">
+
+                <h5 class="modal-title fw-bold" id="uploadDrawingModalLabel">
+
+                    <i class="bi bi-cloud-arrow-up-fill me-2"></i>Dijital Çizim & Pafta İlk Kabul
+
+                </h5>
+
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+
+            </div>
+
+            <form asp-action="UploadDrawing" asp-controller="Metraj" method="post" enctype="multipart/form-data">
+
+                @Html.AntiForgeryToken()
+
+                <input type="hidden" name="projectId" value="@projectId" />
+
+                <div class="modal-body p-4">
+
+                    <div class="mb-3">
+
+                        <label class="form-label fw-bold small text-muted text-uppercase">Proje Disiplini</label>
+
+                        <select class="form-select" name="category" id="uploadDisciplineSelect" onchange="onDisciplineChanged()">
+
+                            <option value="Mimari">ğŸ›ï¸ Mimari Proje & Kat Planı</option>
+
+                            <option value="Statik">ğŸ—ï¸ Statik & Taşıyıcı Sistem</option>
+
+                            <option value="Mekanik">ğŸ”§ Mekanik & Tesisat</option>
+
+                            <option value="Elektrik">âš¡ Elektrik & Zayıf Akım</option>
+
+                        </select>
+
+                    </div>
+
+                    <div id="floorBindingSection" class="border rounded-3 p-3 bg-light mb-3">
+
+                        <div class="fw-bold small text-primary mb-2">
+
+                            <i class="bi bi-layers-fill me-1"></i>Mimari Kat Planı Bağlantısı (Opsiyonel)
+
+                        </div>
+
+                        <div class="row g-2">
+
+                            <div class="col-7">
+
+                                <label class="form-label small text-muted">Blok / Kule</label>
+
+                                <select class="form-select form-select-sm" name="buildingId" id="uploadBuildingId">
+
+                                    <option value="">-- Blok Seçiniz --</option>
+
+                                    @foreach (var b in Model.Blocks)
+
+                                    {
+
+                                        <option value="@b.Id">@b.BlockName (@(b.ParentBuildingId == null ? "Ana Baza" : "Kule"))</option>
+
+                                    }
+
+                                </select>
+
+                            </div>
+
+                            <div class="col-5">
+
+                                <label class="form-label small text-muted">Kat Seviyesi</label>
+
+                                <input type="number" class="form-control form-control-sm" name="floorLevel" id="uploadFloorLevel" placeholder="Örn: 1" />
+
+                            </div>
+
+                        </div>
+
+                        <small class="text-muted d-block mt-2" style="font-size:0.75rem;">
+
+                            Blok ve kat seçerseniz bu plan otomatik olarak Yapı Yönetimi'ndeki kata da bağlanır.
+
+                        </small>
+
+                    </div>
+
+                    <div class="mb-3">
+
+                        <label class="form-label fw-bold small text-muted text-uppercase">Pafta Başlığı / Tanımı</label>
+
+                        <input type="text" class="form-control" name="title" id="uploadTitleInput" placeholder="Örn: D Blok 1. Normal Kat Planı" required />
+
+                    </div>
+
+                    <div class="mb-3">
+
+                        <label class="form-label fw-bold small text-muted text-uppercase">Revizyon / Durum</label>
+
+                        <input type="text" class="form-control" name="revision" placeholder="Örn: Rev.0 (Ruhsat Onaylı)" value="Rev.0" />
+
+                    </div>
+
+                    <div class="mb-3">
+
+                        <label class="form-label fw-bold small text-muted text-uppercase">Çizim Dosyası</label>
+
+                        <input type="file" class="form-control form-control-lg" name="file" accept=".dxf,.dwg,.pdf,.zip,.rar,.png,.jpg,.jpeg" required />
+
+                        <small class="text-muted d-block mt-1">Desteklenen: .dxf, .dwg, .pdf, .zip, .png, .jpg (Maks. 100MB)</small>
+
+                    </div>
+
+                </div>
+
+                <div class="modal-footer border-top-0 pt-0 px-4 pb-4">
+
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">
+
+                        <i class="bi bi-cloud-arrow-up-fill me-1"></i> Arşive Kaydet
+
+                    </button>
+
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- ========================================== -->
+
+<!-- MODAL: MİMAR CAD / DXF TESLİM ŞARTNAMESİ -->
+
+<!-- ========================================== -->
+
+<div class="modal fade" id="sartnameModal" tabindex="-1" aria-labelledby="sartnameModalLabel" aria-hidden="true">
+
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+
+            <div class="modal-header bg-dark text-white border-0 py-3 rounded-top-4">
+
+                <div class="d-flex align-items-center gap-2">
+
+                    <span class="badge bg-warning text-dark px-2 py-1 rounded-pill fw-bold" style="font-size:0.75rem;">GMK360 ŞARTNAME</span>
+
+                    <h5 class="modal-title fw-bold mb-0" id="sartnameModalLabel">
+
+                        <i class="bi bi-file-earmark-ruled-fill me-2 text-warning"></i>Mimari CAD / DXF Çizim Teslim Şartnamesi
+
+                    </h5>
+
+                </div>
+
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+
+            </div>
+
+            <div class="modal-body p-4" id="sartnamePrintableArea">
+
+                <div class="alert alert-info border-0 rounded-3 p-3 mb-4">
+
+                    <div class="d-flex align-items-start gap-2">
+
+                        <i class="bi bi-info-circle-fill fs-5 text-primary mt-1"></i>
+
+                        <div>
+
+                            <strong>Mimari Ofisler ve Tasarımcılar için Bilgilendirme:</strong>
+
+                            <p class="mb-0 small">Bu standartlar belediye onaylı mimari projenizin doğrudan ERP ihale motoruna aktarılmasını sağlar. Mimarların çizim alışkanlıklarını değiştirmeden sadece 10 saniyelik <code>WBLOCK</code> ve metin layer kurallarına uyması yeterlidir.</p>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="row g-4">
+
+                    <div class="col-md-6">
+
+                        <div class="card h-100 border rounded-3 p-3">
+
+                            <h6 class="fw-bold text-primary mb-2"><i class="bi bi-1-circle-fill me-1"></i> Kat Bazında Tekil Çizim (WBLOCK Kuralı)</h6>
+
+                            <p class="small text-muted mb-2">Tüm katların yan yana durduğu paftalar yerine, her kat ayrı bir DXF/DWG olarak kaydedilmelidir.</p>
+
+                            <div class="bg-light p-2 rounded small font-monospace">
+
+                                AutoCAD İpucu (10 Saniye):<br/>
+
+                                1. Komut satırına <code>WBLOCK</code> yazın.<br/>
+
+                                2. Katı seçin (Select Objects).<br/>
+
+                                3. Dosya adını girip DXF olarak kaydedin.<br/>
+
+                                Örn: <code>A_Blok_Zemin_Kat.dxf</code>, <code>A_Blok_1_Normal_Kat.dxf</code>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-md-6">
+
+                        <div class="card h-100 border rounded-3 p-3">
+
+                            <h6 class="fw-bold text-success mb-2"><i class="bi bi-2-circle-fill me-1"></i> Zorunlu Oda / Mahal İsimlendirmeleri</h6>
+
+                            <p class="small text-muted mb-2">Her bağımsız bölümün içindeki alanlar tekil Türkçe büyük harf metin (TEXT / MTEXT) olarak yazılmalıdır:</p>
+
+                            <div class="row g-1 small">
+
+                                <div class="col-6"><span class="badge bg-light text-dark border w-100 text-start"><code>SALON</code></span></div>
+
+                                <div class="col-6"><span class="badge bg-light text-dark border w-100 text-start"><code>MUTFAK</code></span></div>
+
+                                <div class="col-6"><span class="badge bg-light text-dark border w-100 text-start"><code>YATAK ODASI</code></span></div>
+
+                                <div class="col-6"><span class="badge bg-light text-dark border w-100 text-start"><code>EBEVEYN BANYO</code></span></div>
+
+                                <div class="col-6"><span class="badge bg-light text-dark border w-100 text-start"><code>GENEL BANYO / WC</code></span></div>
+
+                                <div class="col-6"><span class="badge bg-light text-dark border w-100 text-start"><code>ANTRE / KORİDOR</code></span></div>
+
+                                <div class="col-6"><span class="badge bg-light text-dark border w-100 text-start"><code>BALKON 1</code></span></div>
+
+                                <div class="col-6"><span class="badge bg-light text-dark border w-100 text-start"><code>GİYİNME ODASI</code></span></div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-md-6">
+
+                        <div class="card h-100 border rounded-3 p-3">
+
+                            <h6 class="fw-bold text-warning mb-2"><i class="bi bi-3-circle-fill me-1"></i> Standart Kapı ve Pencere Ölçüleri</h6>
+
+                            <p class="small text-muted mb-2">Tedarikçi ve taşeron masasında net sipariş adetleri için standart kasalar:</p>
+
+                            <ul class="small text-muted mb-0 ps-3">
+
+                                <li><strong>Daire Dış Giriş Kapısı:</strong> 100 &times; 210 cm Çelik Kapı</li>
+
+                                <li><strong>Oda ve Mutfak Kapıları:</strong> 90 &times; 210 cm İç Oda Kapısı</li>
+
+                                <li><strong>Banyo ve WC Kapıları:</strong> 75 &times; 210 cm Islak Hacim Kapısı</li>
+
+                                <li><strong>Yangın Merdiveni Kapısı:</strong> 90 &times; 210 cm Panik Barlı Yangın Kapısı</li>
+
+                            </ul>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-md-6">
+
+                        <div class="card h-100 border rounded-3 p-3">
+
+                            <h6 class="fw-bold text-danger mb-2"><i class="bi bi-4-circle-fill me-1"></i> Merdiven & Ortak Alan Ayrımı</h6>
+
+                            <p class="small text-muted mb-2">Taşeron ihalesi için basamak, rıht ve sahanlık ayrımı:</p>
+
+                            <ul class="small text-muted mb-0 ps-3">
+
+                                <li>Merdiven basamakları <code>MERDIVEN_BASAMAK</code> layerında polyline olmalı.</li>
+
+                                <li>Korkuluk ve küpeşte çizgisi net belirtilmeli (Metretül hesaplanır).</li>
+
+                                <li>Asansör kovası ve şaft boşlukları net kapatılmalı.</li>
+
+                            </ul>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="mt-4 p-3 bg-light rounded-3 border">
+
+                    <h6 class="fw-bold mb-2">Örnek AutoCAD Layer Tablosu</h6>
+
+                    <div class="table-responsive">
+
+                        <table class="table table-sm table-bordered bg-white mb-0 small">
+
+                            <thead class="table-light">
+
+                                <tr><th>Layer Adı</th><th>Eleman</th><th>Tip</th><th>Açıklama</th></tr>
+
+                            </thead>
+
+                            <tbody>
+
+                                <tr><td><code>DUVAR_DIS</code></td><td>Dış Cephe Duvarları</td><td>Polyline / Line</td><td>20'lik veya 25'lik bims/tuğla duvarlar</td></tr>
+
+                                <tr><td><code>DUVAR_IC</code></td><td>İç Bölme Duvarları</td><td>Polyline / Line</td><td>10'luk veya 15'lik ara bölme duvarlar</td></tr>
+
+                                <tr><td><code>KAPI</code></td><td>Tüm Kapı Blokları</td><td>Block / Arc</td><td>Genişlik ve açılış yönü içeren kapılar</td></tr>
+
+                                <tr><td><code>PENCERE</code></td><td>Pencereler ve Fransız Balkonlar</td><td>Polyline / Line</td><td>Genişlik ve parapet yüksekliği</td></tr>
+
+                                <tr><td><code>MAHAL_ISIM</code></td><td>Oda / Alan İsimleri</td><td>Text / MText</td><td>SALON, MUTFAK, BANYO metinleri</td></tr>
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="modal-footer border-top-0 pt-0 px-4 pb-4">
+
+                <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Kapat</button>
+
+                <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold" onclick="printSartname()">
+
+                    <i class="bi bi-printer me-1"></i> PDF Olarak Yazdır
+
+                </button>
+
+                <button type="button" class="btn btn-success rounded-pill px-4 fw-bold" onclick="copySartname()">
+
+                    <i class="bi bi-clipboard-check me-1"></i> WhatsApp / Metin Kopyala
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+    function openUploadModalForFloor(buildingId, floorLevel, blockName, floorName) {
+
+        document.getElementById('uploadDisciplineSelect').value = 'Mimari';
+
+        document.getElementById('uploadBuildingId').value = buildingId;
+
+        document.getElementById('uploadFloorLevel').value = floorLevel;
+
+        document.getElementById('uploadTitleInput').value = blockName + ' - ' + floorName + ' Kat Planı';
+
+        document.getElementById('floorBindingSection').style.display = 'block';
+
+        var modal = new bootstrap.Modal(document.getElementById('uploadDrawingModal'));
+
+        modal.show();
+
+    }
+
+    function openUploadModalForDiscipline(discipline) {
+
+        document.getElementById('uploadDisciplineSelect').value = discipline;
+
+        document.getElementById('uploadBuildingId').value = '';
+
+        document.getElementById('uploadFloorLevel').value = '';
+
+        document.getElementById('uploadTitleInput').value = discipline + ' Proje Paftası';
+
+        onDisciplineChanged();
+
+        var modal = new bootstrap.Modal(document.getElementById('uploadDrawingModal'));
+
+        modal.show();
+
+    }
+
+    function onDisciplineChanged() {
+
+        var disc = document.getElementById('uploadDisciplineSelect').value;
+
+        var floorSection = document.getElementById('floorBindingSection');
+
+        if (disc === 'Mimari') {
+
+            floorSection.style.display = 'block';
+
+        } else {
+
+            floorSection.style.display = 'none';
+
+        }
+
+    }
+
+    function printSartname() {
+
+        var printContents = document.getElementById('sartnamePrintableArea').innerHTML;
+
+        var originalContents = document.body.innerHTML;
+
+        var printWindow = window.open('', '', 'height=800,width=900');
+
+        printWindow.document.write('<html><head><title>GMK360 CAD/DXF Çizim Teslim Şartnamesi</title>');
+
+        printWindow.document.write('<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">');
+
+        printWindow.document.write('</head><body class="p-4">');
+
+        printWindow.document.write('<h3 class="fw-bold mb-3">GMK360 - MİMARİ CAD / DXF PROJE TESLİM ŞARTNAMESİ</h3>');
+
+        printWindow.document.write(printContents);
+
+        printWindow.document.write('</body></html>');
+
+        printWindow.document.close();
+
+        printWindow.focus();
+
+        setTimeout(function() {
+
+            printWindow.print();
+
+            printWindow.close();
+
+        }, 500);
+
+    }
+
+    function copySartname() {
+
+        var text = "GMK360 PROJE ÇİZİM TESLİM ŞARTNAMESİ\\n\\n" +
+
+                   "Sayın Mimar / Mühendisimiz,\\n" +
+
+                   "Projemizin GMK360 Dijital Arşivine ve Metraj-İhale sistemine kabul edilebilmesi için çizimlerin aşağıdaki kurallara uygun teslim edilmesi rica olunur:\\n\\n" +
+
+                   "1. KAT BAZINDA ÇIKTI (WBLOCK): Tüm katlar tek dosyada değil, her kat tekil DXF olarak (WBLOCK ile) kaydedilmelidir (Örn: A_Blok_Zemin_Kat.dxf).\\n" +
+
+                   "2. ODA İSİMLERİ: Her mahalin içine büyük harfle tekil metin olarak ismi yazılmalıdır (SALON, MUTFAK, YATAK ODASI, EBEVEYN BANYO, GENEL BANYO, ANTRE, BALKON vb.).\\n" +
+
+                   "3. STANDART KAPILAR: Giriş 100x210, Odalar 90x210, Banyo 75x210, Yangın 90x210 panik barlı.\\n" +
+
+                   "4. LAYER DİSİPLİNİ: DUVAR_DIS, DUVAR_IC, KAPI, PENCERE, MAHAL_ISIM standart katmanları kullanılmalıdır.\\n\\n" +
+
+                   "Desteğiniz için teşekkür eder, iyi çalışmalar dileriz.\\nGMK360 Proje Yönetim Merkezi";
+
+        navigator.clipboard.writeText(text).then(function() {
+
+            alert("Mimar Teslim Şartnamesi panoya kopyalandı! WhatsApp veya e-posta ile mimarınıza doğrudan iletebilirsiniz.");
+
+        });
+
+    }
+
+</script>
+
+<script>
+
+    // ========================================================
+
+    // ŞANTİYE MALZEME TEDARİK & SATIN ALMA MATRİSİ SCRİPTLERİ
+
+    // ========================================================
+
+    const projectId = '@Model.Project.Id';
+
+    const storageKey = 'gmk360_material_matrix_proj_' + projectId;
+
+        function togglePendingDrawings() {
+        var content = document.getElementById('pendingDrawingsContent');
+        if (!content) return;
+        var bsCollapse = bootstrap.Collapse.getOrCreateInstance(content);
+        bsCollapse.toggle();
     }
 
-    function openUploadModalForDiscipline(discipline) {
-        document.getElementById('uploadDisciplineSelect').value = discipline;
-        document.getElementById('uploadBuildingId').value = '';
-        document.getElementById('uploadFloorLevel').value = '';
-        document.getElementById('uploadTitleInput').value = discipline + ' Proje Paftası';
-        onDisciplineChanged();
-
-        var modal = new bootstrap.Modal(document.getElementById('uploadDrawingModal'));
-        modal.show();
-    }
-
-    function onDisciplineChanged() {
-        var disc = document.getElementById('uploadDisciplineSelect').value;
-        var floorSection = document.getElementById('floorBindingSection');
-        if (disc === 'Mimari') {
-            floorSection.style.display = 'block';
-        } else {
-            floorSection.style.display = 'none';
-        }
-    }
-
-    function printSartname() {
-        var printContents = document.getElementById('sartnamePrintableArea').innerHTML;
-        var originalContents = document.body.innerHTML;
-        var printWindow = window.open('', '', 'height=800,width=900');
-        printWindow.document.write('<html><head><title>GMK360 CAD/DXF Çizim Teslim Şartnamesi</title>');
-        printWindow.document.write('<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">');
-        printWindow.document.write('</head><body class="p-4">');
-        printWindow.document.write('<h3 class="fw-bold mb-3">GMK360 - MİMARİ CAD / DXF PROJE TESLİM ŞARTNAMESİ</h3>');
-        printWindow.document.write(printContents);
-        printWindow.document.write('</body></html>');
-        printWindow.document.close();
-        printWindow.focus();
+    function toggleMatrixCard() {
+        var content = document.getElementById('masterBomContent');
+        var chevron = document.getElementById('matrixHeaderChevron');
+        var chevronText = document.getElementById('matrixHeaderChevronText');
+        if (!content) return;
+        var bsCollapse = bootstrap.Collapse.getOrCreateInstance(content);
+        bsCollapse.toggle();
         setTimeout(function() {
-            printWindow.print();
-            printWindow.close();
-        }, 500);
-    }
-
-    function copySartname() {
-        var text = "GMK360 PROJE ÇİZİM TESLİM ŞARTNAMESİ\\n\\n" +
-                   "Sayın Mimar / Mühendisimiz,\\n" +
-                   "Projemizin GMK360 Dijital Arşivine ve Metraj-İhale sistemine kabul edilebilmesi için çizimlerin aşağıdaki kurallara uygun teslim edilmesi rica olunur:\\n\\n" +
-                   "1. KAT BAZINDA ÇIKTI (WBLOCK): Tüm katlar tek dosyada değil, her kat tekil DXF olarak (WBLOCK ile) kaydedilmelidir (Örn: A_Blok_Zemin_Kat.dxf).\\n" +
-                   "2. ODA İSİMLERİ: Her mahalin içine büyük harfle tekil metin olarak ismi yazılmalıdır (SALON, MUTFAK, YATAK ODASI, EBEVEYN BANYO, GENEL BANYO, ANTRE, BALKON vb.).\\n" +
-                   "3. STANDART KAPILAR: Giriş 100x210, Odalar 90x210, Banyo 75x210, Yangın 90x210 panik barlı.\\n" +
-                   "4. LAYER DİSİPLİNİ: DUVAR_DIS, DUVAR_IC, KAPI, PENCERE, MAHAL_ISIM standart katmanları kullanılmalıdır.\\n\\n" +
-                   "Desteğiniz için teşekkür eder, iyi çalışmalar dileriz.\\nGMK360 Proje Yönetim Merkezi";
-        navigator.clipboard.writeText(text).then(function() {
-            alert("Mimar Teslim Şartnamesi panoya kopyalandı! WhatsApp veya e-posta ile mimarınıza doğrudan iletebilirsiniz.");
-        });
-    }
-</script>
+            if (content.classList.contains('show')) {
+                if (chevron) chevron.className = 'bi bi-chevron-up text-primary';
+                if (chevronText) chevronText.innerText = 'Kapat';
+            } else {
+                if (chevron) chevron.className = 'bi bi-chevron-down text-secondary';
+                if (chevronText) chevronText.innerText = 'Aç';
+            }
+        }, 350);
+    }
+
+        }, 350);
+
+    }
+
+    function onPriceChanged(input) {
+
+        var row = input.closest('tr');
+
+        var qty = parseFloat(input.getAttribute('data-qty')) || 0;
+
+        var val = parseFloat(input.value) || 0;
+
+        var itemId = input.getAttribute('data-item-id');
+
+        var totalEl = document.getElementById('total_display_' + itemId);
+
+        if (input.value && val > 0) {
+
+            var total = qty * val;
+
+            if (totalEl) totalEl.innerText = formatMoney(total) + ' ₺';
+
+        } else {
+
+            if (totalEl) totalEl.innerText = '—';
+
+        }
+
+        recalculateGrandTotals();
+
+        markChangesDirty();
+
+    }
+
+    function onSpotCheckboxChanged(chk) {
+
+        var row = chk.closest('tr');
+
+        if (chk.checked) {
+
+            row.classList.add('table-warning', 'bg-opacity-25');
+
+        } else {
+
+            row.classList.remove('table-warning', 'bg-opacity-25');
+
+        }
+
+        markChangesDirty();
+
+    }
+
+    function recalculateGrandTotals() {
+
+        var rows = document.querySelectorAll('.material-matrix-row');
+
+        var grandTotal = 0;
+
+        var pricedCount = 0;
+
+        rows.forEach(function(r) {
+
+            var priceInput = r.querySelector('.unit-price-input');
+
+            var qty = parseFloat(r.getAttribute('data-qty')) || 0;
+
+            if (priceInput && priceInput.value) {
+
+                var price = parseFloat(priceInput.value) || 0;
+
+                if (price > 0) {
+
+                    grandTotal += (qty * price);
+
+                    pricedCount++;
+
+                }
+
+            }
+
+        });
+
+        var grandEl = document.getElementById('matrixGrandTotalDisplay');
+
+        if (grandEl) grandEl.innerText = formatMoney(grandTotal) + ' ₺';
+
+        var countEl = document.getElementById('pricedCountDisplay');
+
+        if (countEl) countEl.innerText = pricedCount + ' / ' + rows.length + ' Kalem';
+
+    }
+
+    function formatMoney(amount) {
+
+        return amount.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    }
+
+    function markChangesDirty() {
+
+        saveToLocalStorage(false);
+
+    }
+
+    function saveMaterialMatrixPrices() {
+
+        saveToLocalStorage(true);
+
+    }
+
+    function saveToLocalStorage(showToast) {
+
+        var data = {};
+
+        var rows = document.querySelectorAll('.material-matrix-row');
+
+        rows.forEach(function(r) {
+
+            var itemId = r.getAttribute('data-item-id');
+
+            var priceInput = r.querySelector('.unit-price-input');
+
+            var spotChk = r.querySelector('.spot-checkbox');
+
+            var supplierInput = r.querySelector('.agreed-supplier-input');
+
+            data[itemId] = {
+
+                price: priceInput ? priceInput.value : '',
+
+                spot: spotChk ? spotChk.checked : false,
+
+                supplier: supplierInput ? supplierInput.value : ''
+
+            };
+
+        });
+
+        localStorage.setItem(storageKey, JSON.stringify(data));
+
+        if (showToast) {
+
+            if (typeof Swal !== 'undefined') {
+
+                Swal.fire({
+
+                    title: 'Kaydedildi',
+
+                    text: 'Tüm birim fiyatlar, spot işaretlemeleri ve anlaşılan firmalar başarıyla kaydedildi.',
+
+                    icon: 'success',
+
+                    timer: 2000,
+
+                    showConfirmButton: false
+
+                });
+
+            } else {
+
+                alert('Tüm birim fiyatlar, spot işaretlemeleri ve anlaşılan firmalar kaydedildi.');
+
+            }
+
+        }
+
+    }
+
+    function loadFromLocalStorage() {
+
+        var raw = localStorage.getItem(storageKey);
+
+        if (!raw) return;
+
+        try {
+
+            var data = JSON.parse(raw);
+
+            var rows = document.querySelectorAll('.material-matrix-row');
+
+            rows.forEach(function(r) {
+
+                var itemId = r.getAttribute('data-item-id');
+
+                var entry = data[itemId];
+
+                if (entry) {
+
+                    var priceInput = r.querySelector('.unit-price-input');
+
+                    var spotChk = r.querySelector('.spot-checkbox');
+
+                    var supplierInput = r.querySelector('.agreed-supplier-input');
+
+                    if (priceInput && entry.price !== undefined && entry.price !== '') {
+
+                        priceInput.value = entry.price;
+
+                        var qty = parseFloat(r.getAttribute('data-qty')) || 0;
+
+                        var val = parseFloat(entry.price) || 0;
+
+                        var totalEl = document.getElementById('total_display_' + itemId);
+
+                        if (val > 0 && totalEl) {
+
+                            totalEl.innerText = formatMoney(qty * val) + ' ₺';
+
+                        }
+
+                    }
+
+                    if (spotChk && entry.spot) {
+
+                        spotChk.checked = true;
+
+                        r.classList.add('table-warning', 'bg-opacity-25');
+
+                    }
+
+                    if (supplierInput && entry.supplier) {
+
+                        supplierInput.value = entry.supplier;
+
+                    }
+
+                }
+
+            });
+
+            recalculateGrandTotals();
+
+        } catch (e) {
+
+            console.error('Failed to parse localStorage data', e);
+
+        }
+
+    }
+
+    function searchMatrix(keyword) {
+
+        var val = (keyword || '').toLowerCase().trim();
+
+        var rows = document.querySelectorAll('.material-matrix-row');
+
+        var headers = document.querySelectorAll('.branch-header-row');
+
+        if (!val) {
+
+            rows.forEach(r => r.style.display = '');
+
+            headers.forEach(h => h.style.display = '');
+
+            return;
+
+        }
+
+        var visibleBranches = new Set();
+
+        rows.forEach(r => {
+
+            var searchStr = r.getAttribute('data-search') || '';
+
+            var supplierVal = (r.querySelector('.agreed-supplier-input')?.value || '').toLowerCase();
+
+            if (searchStr.includes(val) || supplierVal.includes(val)) {
+
+                r.style.display = '';
+
+                visibleBranches.add(r.getAttribute('data-branch'));
+
+            } else {
+
+                r.style.display = 'none';
+
+            }
+
+        });
+
+        headers.forEach(h => {
+
+            h.style.display = visibleBranches.has(h.getAttribute('data-branch')) ? '' : 'none';
+
+        });
+
+    }
+
+    function researchMaterial(itemId, title, branchName) {
+
+        if (typeof Swal !== 'undefined') {
+
+            Swal.fire({
+
+                title: 'Malzeme Tedarikçi Araştırması',
+
+                html: `<strong>${title}</strong> malzemesi için <strong>${branchName}</strong> tedarikçi havuzunda araştırma başlatılıyor.`,
+
+                icon: 'info',
+
+                confirmButtonText: 'Tedarikçi Havuzunda Aç'
+
+            });
+
+        } else {
+
+            alert(`🔍 ${title} için ${branchName} havuzunda araştırma başlatıldı.`);
+
+        }
+
+    }
+
+    function quickResearchBranch(branchName) {
+
+        if (typeof Swal !== 'undefined') {
+
+            Swal.fire({
+
+                title: branchName,
+
+                text: `${branchName} kategorisindeki kayıtlı tedarikçiler listeleniyor.`,
+
+                icon: 'info',
+
+                confirmButtonText: 'Tamam'
+
+            });
+
+        }
+
+    }
+
+    // EXCEL'E AKTAR (9 KOLON BİREBİR ŞABLON)
+
+    function exportMaterialMatrixToExcel() {
+
+        var rows = document.querySelectorAll('.material-matrix-row');
+
+        if (!rows || rows.length === 0) {
+
+            alert('Dışa aktarılacak malzeme kalemi bulunamadı.');
+
+            return;
+
+        }
+
+        var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+
+        html += '<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Malzeme Tedarik Matrisi</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>';
+
+        html += '<body>';
+
+        html += '<h2 style="font-family: Arial; color: #1e3a8a;">GMK360 - Şantİye Malzeme Tedarİk & Satın Alma Matrİsİ</h2>';
+
+        html += '<p style="font-family: Arial; font-size: 11px; color: #555;">Proje: Yaşar Bey Apartmanı | Liste: A (Ham Proje Malzemeleri) | Tarih: ' + new Date().toLocaleDateString('tr-TR') + '</p>';
+
+        html += '<table border="1" cellpadding="5" cellspacing="0" style="font-family: Arial; font-size: 11px; border-collapse: collapse;">';
+
+        
+
+        // 9 Kolon Başlığı
+
+        html += '<tr style="background-color: #1e3a8a; color: #ffffff; font-weight: bold; text-align: center;">';
+
+        html += '<th>A: Sıra No / Araştır</th>';
+
+        html += '<th>B: Tedarikçi Türü</th>';
+
+        html += '<th>C: Ürün Adı</th>';
+
+        html += '<th>D: Miktar</th>';
+
+        html += '<th>E: Birim</th>';
+
+        html += '<th style="background-color: #047857; color: #ffffff;">F: Birim Fiyat (₺)</th>';
+
+        html += '<th style="background-color: #047857; color: #ffffff;">G: Toplam (₺)</th>';
+
+        html += '<th style="background-color: #b45309; color: #ffffff;">H: Ayrı Araştır (Spot)</th>';
+
+        html += '<th style="background-color: #1e40af; color: #ffffff;">I: Anlaşılan Yer</th>';
+
+        html += '</tr>';
+
+        var globalIndex = 1;
+
+        var grandTotal = 0;
+
+        rows.forEach(function(r) {
+
+            var branch = r.getAttribute('data-branch-name') || '';
+
+            var title = r.getAttribute('data-title') || '';
+
+            var qty = r.getAttribute('data-qty') || '0';
+
+            var unit = r.getAttribute('data-unit') || '';
+
+            var priceInput = r.querySelector('.unit-price-input');
+
+            var priceVal = priceInput ? priceInput.value : '';
+
+            var spotChk = r.querySelector('.spot-checkbox');
+
+            var isSpot = spotChk && spotChk.checked;
+
+            var supplierInput = r.querySelector('.agreed-supplier-input');
+
+            var supplierVal = supplierInput ? supplierInput.value : '';
+
+            var numPrice = parseFloat(priceVal) || 0;
+
+            var numQty = parseFloat(qty) || 0;
+
+            var numTotal = numPrice * numQty;
+
+            grandTotal += numTotal;
+
+            var rowBg = isSpot ? 'background-color: #fef3c7;' : '';
+
+            html += `<tr style="${rowBg}">`;
+
+            html += `<td align="center">${globalIndex++}</td>`;
+
+            html += `<td><b>${branch}</b></td>`;
+
+            html += `<td>${title}</td>`;
+
+            html += `<td align="right">${numQty.toLocaleString('tr-TR')}</td>`;
+
+            html += `<td align="center">${unit}</td>`;
+
+            html += `<td align="right">${numPrice > 0 ? numPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>`;
+
+            html += `<td align="right">${numTotal > 0 ? numTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>`;
+
+            html += `<td align="center">${isSpot ? 'EVET (Spot)' : 'Hayır'}</td>`;
+
+            html += `<td>${supplierVal}</td>`;
+
+            html += '</tr>';
+
+        });
+
+        // Genel Toplam Satırı
+
+        html += '<tr style="background-color: #f1f5f9; font-weight: bold;">';
+
+        html += '<td colspan="6" align="right">TOPLAM MALZEME MALİYETİ:</td>';
+
+        html += `<td align="right" style="color: #047857;">${grandTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺</td>`;
+
+        html += '<td colspan="2"></td>';
+
+        html += '</tr>';
+
+        html += '</table>';
+
+        html += '</body></html>';
+
+        var blob = new Blob(['\ufeff', html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+
+        var link = document.createElement('a');
+
+        link.href = URL.createObjectURL(blob);
+
+        link.download = "GMK360_Santiye_Malzeme_Tedarik_Matrisi.xls";
+
+        document.body.appendChild(link);
+
+        link.click();
+
+        document.body.removeChild(link);
+
+    }
+
+    // Sayfa Yüklendiğinde Kayıtlı Verileri Yükle
+
+    document.addEventListener('DOMContentLoaded', function() {
+
+        loadFromLocalStorage();
+
+    });
+
+</script>
+
