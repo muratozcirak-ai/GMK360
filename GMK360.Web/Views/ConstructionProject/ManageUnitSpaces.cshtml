@@ -1,7 +1,7 @@
 @model GMK360.Core.Entities.BuildingUnit
 @{
     ViewData["Title"] = "Mahal ve Demirbaş Yönetimi";
-    Layout = "~/Views/Shared/_Layout.cshtml";
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
     bool isCommonArea = Model.Category == "OrtakAlan_Blok" || Model.Category == "OrtakAlan";
     bool isStorage = Model.Category == "Eklenti" || Model.Category == "Depo";
     string unitTitle = isCommonArea 
@@ -11,21 +11,35 @@
             : $"Kat {Model.FloorLevel} - No {Model.DoorNumber}");
 }
 
-<div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="container-fluid mt-3">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
         <div>
-            <h4 class="fw-bold mb-1"><i class="bi bi-layers text-primary me-2"></i>Mahal ve Demirbaş Yönetimi</h4>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <a asp-action="ManageBlock" asp-route-id="@Model.BuildingId" class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-1">
+                    <i class="bi bi-arrow-left me-1"></i> Yapı Yönetimine Dön
+                </a>
+                <h4 class="fw-bold mb-0 text-dark"><i class="bi bi-door-open-fill text-primary me-2"></i>@unitTitle</h4>
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle fs-6">@(Model.RoomLayout ?? "Mesken")</span>
+                @if (Model.GrossSquareMeters.HasValue && Model.GrossSquareMeters > 0)
+                {
+                    <span class="badge bg-light text-dark border fs-6">@Model.GrossSquareMeters m² Brüt @(Model.NetSquareMeters.HasValue ? $"({Model.NetSquareMeters} m² Net)" : "")</span>
+                }
+            </div>
             <div class="text-muted small">
-                @Model.Building.ConstructionProject.Name / @Model.Building.BlockName / <span class="fw-bold text-dark">@unitTitle</span>
+                <i class="bi bi-building me-1"></i>@Model.Building.ConstructionProject.Name &bull; @Model.Building.BlockName &bull; <span class="fw-semibold text-dark">@(string.IsNullOrEmpty(Model.OwnerName) ? "Müteahhit Payı (Satılık)" : $"Hak Sahibi: {Model.OwnerName}")</span>
             </div>
         </div>
         <div class="d-flex align-items-center gap-2">
+            <form asp-action="PopulateDefaultUnitSpaces" method="post" class="d-inline" onsubmit="return confirm('Tip plan standardına göre mahaller ve metrajlar yeniden dağıtılacak. Devam edilsin mi?');">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="unitId" value="@Model.Id" />
+                <button type="submit" class="btn btn-outline-primary rounded-pill px-3 shadow-sm fw-bold" title="Tip plan standardına göre (3+1, 2+1, Dükkan) iç oda ve metrajları otomatik doldurur">
+                    <i class="bi bi-magic me-1"></i> Tip Plandan Dağıt
+                </button>
+            </form>
             <button type="button" class="btn btn-primary rounded-pill px-3 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#cloneUnitModal">
-                <i class="bi bi-copy me-1"></i> @(isCommonArea ? "Bu Ortak Alanı Diğer Bloklara Çoğalt" : "Bu Daireyi Diğer Dairelere Klonla / Çoğalt")
+                <i class="bi bi-copy me-1"></i> @(isCommonArea ? "Bu Ortak Alanı Çoğalt" : "Bu Daireyi Diğer Dairelere Klonla")
             </button>
-            <a asp-action="ManageBlock" asp-route-id="@Model.BuildingId" class="btn btn-outline-secondary rounded-pill px-3">
-                <i class="bi bi-arrow-left me-1"></i> Bloğa Dön
-            </a>
         </div>
     </div>
 
@@ -43,8 +57,16 @@
                     @if (!Model.Spaces.Any())
                     {
                         <div class="text-center text-muted small py-4">
-                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
-                            Henüz mahal eklenmemiş.
+                            <i class="bi bi-inbox fs-3 d-block mb-2 text-primary"></i>
+                            <div class="fw-bold text-dark mb-1">Henüz mahal eklenmemiş.</div>
+                            <p class="text-muted small mb-3">Bu daireye ait oda ve metrajları tek tek elle girebilir veya tip plandan tek tıkla yükleyebilirsiniz.</p>
+                            <form asp-action="PopulateDefaultUnitSpaces" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="unitId" value="@Model.Id" />
+                                <button type="submit" class="btn btn-sm btn-primary rounded-pill px-3 shadow-sm fw-bold">
+                                    <i class="bi bi-magic me-1"></i> Tip Plandan Mahalleleri & Metrajları Doldur
+                                </button>
+                            </form>
                         </div>
                     }
                     else
