@@ -7794,7 +7794,9 @@ namespace GMK360.Web.Controllers
 
 
 
-                    height = m.Height
+                    height = m.Height,
+                    selectedMaterialOption = m.SelectedMaterialOption,
+                    priceDifference = m.PriceDifference
 
 
 

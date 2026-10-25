@@ -418,5 +418,33 @@ namespace GMK360.Web.Controllers
 
             return View(vm);
         }
+
+        // POST: ConstructionProject/UpdateMeasurementMaterial (Oda İçi Satır Bazlı Malzeme Seçimi)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateMeasurementMaterial(int id, string materialOption, decimal? priceDifference, string? notes)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var measurement = await _context.SpaceMeasurements.FindAsync(id);
+            if (measurement == null) return NotFound(new { success = false, message = "Ölçü satırı bulunamadı." });
+
+            measurement.SelectedMaterialOption = materialOption;
+            measurement.PriceDifference = priceDifference ?? 0m;
+            if (!string.IsNullOrEmpty(notes))
+            {
+                measurement.MaterialSelectionNotes = notes;
+            }
+
+            await _context.SaveChangesAsync();
+            return Json(new
+            {
+                success = true,
+                message = "Malzeme / renk tercihi kaydedildi.",
+                selectedOption = materialOption,
+                priceDiff = measurement.PriceDifference
+            });
+        }
     }
 }

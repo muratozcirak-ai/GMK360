@@ -16,5 +16,10 @@ namespace GMK360.Core.Entities
 
         public double Quantity { get; set; }
         public string Unit { get; set; } // m2, mt, adet
+
+        // Yerinde (Inline) Malzeme & Renk Tercihi
+        public string? SelectedMaterialOption { get; set; } // Örn: "AGT Effect Doğal Meşe (0 ₺)" veya "Dyo Buz Beyazı"
+        public decimal? PriceDifference { get; set; }
+        public string? MaterialSelectionNotes { get; set; }
     }
 }

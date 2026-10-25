@@ -184,6 +184,7 @@
                                 <tr>
                                     <th>Kategori</th>
                                     <th>Açıklama (Örn: Duvar Alanı)</th>
+                                    <th style="min-width: 200px;">🎨 Malzeme / Renk Skalası</th>
                                     <th>En x Boy</th>
                                     <th>Miktar / Ölçü</th>
                                     <th>İşlem</th>
@@ -845,7 +846,7 @@
               });
 
             // 2. Load Measurements
-            $('#measurementsTableBody').html('<tr><td colspan="4" class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></td></tr>');
+            $('#measurementsTableBody').html('<tr><td colspan="6" class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></td></tr>');
             $.ajax({
                   url: '/ConstructionProject/GetSpaceMeasurements',
                   type: 'GET',
@@ -857,15 +858,16 @@
                   try {
                       measurementsCount = data.length;
                       if(data.length === 0) {
-                          $('#measurementsTableBody').html('<tr><td colspan="5" class="text-center text-muted py-4"><i class="bi bi-rulers fs-4 d-block mb-2"></i>Bu mahalde henüz ölçü yok.</td></tr>');
+                          $('#measurementsTableBody').html('<tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-rulers fs-4 d-block mb-2"></i>Bu mahalde henüz ölçü yok.</td></tr>');
                       } else {
                           let html = '';
                           data.forEach(function(m) {
                               html += `<tr>
                                   <td class="text-muted small">${m.category || m.Category || "-"}</td>
                                   <td class="fw-bold text-dark">${m.description || m.Description || "-"}</td>
-                                  <td>
-                                      <div class="input-group input-group-sm" style="width: 170px;">
+                                  <td>${renderMaterialSelector(m)}</td>
+                                   <td>
+                                       <div class="input-group input-group-sm" style="width: 170px;">
                                           <input type="number" step="0.01" class="form-control text-center" placeholder="En" value="${m.width || ''}" id="w_${m.id || m.Id}" onchange="updateMeasurementQty(${m.id || m.Id})" onkeydown="if(event.key==='Enter') this.blur();" />
                                           <span class="input-group-text px-1">x</span>
                                           <input type="number" step="0.01" class="form-control text-center" placeholder="Boy" value="${m.length || ''}" id="l_${m.id || m.Id}" onchange="updateMeasurementQty(${m.id || m.Id})" onkeydown="if(event.key==='Enter') this.blur();" />
@@ -885,11 +887,11 @@
                           $('#measurementsTableBody').html(html);
                       }
                   } catch(e) {
-                      $('#measurementsTableBody').html('<tr><td colspan="5" class="text-danger text-center">JS Hatası: ' + e.message + '</td></tr>');
+                      $('#measurementsTableBody').html('<tr><td colspan="6" class="text-danger text-center">JS Hatası: ' + e.message + '</td></tr>');
                   }
               })
               .fail(function(jqXHR, textStatus, errorThrown) {
-                  $('#measurementsTableBody').html('<tr><td colspan="5" class="text-danger text-center">Sunucu Yanıt Hatası: Oturumunuz kapanmış olabilir. Lütfen F5 ile sayfayı yenileyin.</td></tr>');
+                  $('#measurementsTableBody').html('<tr><td colspan="6" class="text-danger text-center">Sunucu Yanıt Hatası: Oturumunuz kapanmış olabilir. Lütfen F5 ile sayfayı yenileyin.</td></tr>');
               });
         }
 
@@ -942,6 +944,162 @@
                 toastr.error('Güncelleme başarısız');
             });
         }
+        
+        function renderMaterialSelector(m) {
+            let cat = (m.category || m.Category || '').toLowerCase();
+            let currentOpt = m.selectedMaterialOption || m.SelectedMaterialOption || '';
+            let mId = m.id || m.Id;
+            let isWet = (currentSpaceType === 'Islak Hacim') || (currentSpaceName && (currentSpaceName.includes('Banyo') || currentSpaceName.includes('WC')));
+
+            if (cat.includes('zemin')) {
+                let defaultVal = isWet ? 'VitrA 60x120 Calacatta (0 ₺)' : 'AGT Effect Doğal Meşe (0 ₺)';
+                let activeVal = currentOpt || defaultVal;
+                let options = isWet ? [
+                    { title: 'VitrA 60x120 Calacatta Porselen', badge: '0 ₺ Standart', diff: 0 },
+                    { title: 'Çanakkale 60x120 Brüt Beton Gri', badge: '0 ₺ Standart', diff: 0 },
+                    { title: 'VitrA Marmori Calacatta Gold (Showroom)', badge: '+Fark', diff: 3500 }
+                ] : [
+                    { title: 'AGT Effect 10mm Doğal Meşe', badge: '0 ₺ Standart', diff: 0 },
+                    { title: 'AGT Effect 10mm Kül Gri', badge: '0 ₺ Standart', diff: 0 },
+                    { title: 'Çamsan 10mm Sıcak Ceviz', badge: '0 ₺ Standart', diff: 0 },
+                    { title: 'Floorpan Macar Balıksırtı Parke', badge: '+180 ₺/m²', diff: 180 }
+                ];
+
+                let menuHtml = options.map(o => `
+                    <li><a class="dropdown-item d-flex justify-content-between align-items-center py-2" href="javascript:void(0)" onclick="setMeasurementMaterial(${mId}, '${o.title}', ${o.diff})">
+                        <span class="small font-monospace">${o.title}</span>
+                        <span class="badge ${o.diff === 0 ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-primary-subtle text-primary border border-primary-subtle'} ms-2">${o.badge}</span>
+                    </a></li>
+                `).join('');
+
+                menuHtml += `<li><hr class="dropdown-divider my-1"></li>
+                    <li><a class="dropdown-item text-primary small py-1" href="javascript:void(0)" onclick="promptCustomMaterial(${mId})">
+                        <i class="bi bi-pencil-square me-1"></i> + Özel Malzeme / Renk Gir
+                    </a></li>`;
+
+                return `
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-light border dropdown-toggle d-flex align-items-center justify-content-between text-truncate rounded-pill px-3 py-1 shadow-sm" 
+                                type="button" data-bs-toggle="dropdown" aria-expanded="false" style="max-width: 230px;" id="matBtn_${mId}" title="${activeVal}">
+                            <span class="text-truncate small fw-semibold text-dark"><i class="bi ${isWet ? 'bi-moisture text-info' : 'bi-layers text-warning'} me-1"></i>${activeVal}</span>
+                        </button>
+                        <ul class="dropdown-menu shadow rounded-4 py-2 border-0" style="min-width: 270px; z-index: 1050;">
+                            <li class="dropdown-header small text-muted text-uppercase fw-bold pb-1">Firma Standartı & Alternatifler</li>
+                            ${menuHtml}
+                        </ul>
+                    </div>`;
+            }
+            else if (cat.includes('duvar')) {
+                if (isWet) {
+                    let activeVal = currentOpt || 'VitrA 60x120 Calacatta Duvar Seramiği (0 ₺)';
+                    let options = [
+                        { title: 'VitrA 60x120 Calacatta Duvar Seramiği', badge: '0 ₺ Standart', diff: 0 },
+                        { title: 'Çanakkale 60x120 Beton Gri', badge: '0 ₺ Standart', diff: 0 }
+                    ];
+                    let menuHtml = options.map(o => `
+                        <li><a class="dropdown-item d-flex justify-content-between align-items-center py-2" href="javascript:void(0)" onclick="setMeasurementMaterial(${mId}, '${o.title}', ${o.diff})">
+                            <span class="small font-monospace">${o.title}</span>
+                            <span class="badge bg-success-subtle text-success border border-success-subtle ms-2">${o.badge}</span>
+                        </a></li>
+                    `).join('');
+                    menuHtml += `<li><hr class="dropdown-divider my-1"></li>
+                        <li><a class="dropdown-item text-primary small py-1" href="javascript:void(0)" onclick="promptCustomMaterial(${mId})">
+                            <i class="bi bi-pencil-square me-1"></i> + Özel Seramik Kodu Gir
+                        </a></li>`;
+                    return `
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-light border dropdown-toggle d-flex align-items-center justify-content-between text-truncate rounded-pill px-3 py-1 shadow-sm" 
+                                    type="button" data-bs-toggle="dropdown" aria-expanded="false" style="max-width: 230px;" id="matBtn_${mId}" title="${activeVal}">
+                                <span class="text-truncate small fw-semibold text-dark"><i class="bi bi-bricks text-info me-1"></i>${activeVal}</span>
+                            </button>
+                            <ul class="dropdown-menu shadow rounded-4 py-2 border-0" style="min-width: 270px; z-index: 1050;">
+                                <li class="dropdown-header small text-muted text-uppercase fw-bold pb-1">Banyo Duvar Seramiği</li>
+                                ${menuHtml}
+                            </ul>
+                        </div>`;
+                } else {
+                    let defaultVal = 'Dyo 0101 Buz Beyazı (0 ₺)';
+                    let activeVal = currentOpt || defaultVal;
+                    let options = [
+                        { title: 'Dyo 0101 Buz Beyazı', badge: '0 ₺ Standart', diff: 0 },
+                        { title: 'Dyo 1450 Kumtaşı', badge: '0 ₺ Standart', diff: 0 },
+                        { title: 'Dyo 7230 Keten Gri', badge: '0 ₺ Standart', diff: 0 },
+                        { title: 'Dyo 5120 Fildişi', badge: '0 ₺ Standart', diff: 0 },
+                        { title: 'Dyo 3210 Şampanya', badge: '0 ₺ Standart', diff: 0 },
+                        { title: 'Jotun 1024 Zamansız Gri', badge: '0 ₺ Standart', diff: 0 }
+                    ];
+                    let menuHtml = options.map(o => `
+                        <li><a class="dropdown-item d-flex justify-content-between align-items-center py-2" href="javascript:void(0)" onclick="setMeasurementMaterial(${mId}, '${o.title}', ${o.diff})">
+                            <span class="small font-monospace">${o.title}</span>
+                            <span class="badge bg-success-subtle text-success border border-success-subtle ms-2">${o.badge}</span>
+                        </a></li>
+                    `).join('');
+                    menuHtml += `<li><hr class="dropdown-divider my-1"></li>
+                        <li><a class="dropdown-item text-primary small py-1" href="javascript:void(0)" onclick="promptCustomMaterial(${mId})">
+                            <i class="bi bi-palette me-1"></i> + Özel Renk Kodu Belirt
+                        </a></li>`;
+                    return `
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-light border dropdown-toggle d-flex align-items-center justify-content-between text-truncate rounded-pill px-3 py-1 shadow-sm" 
+                                    type="button" data-bs-toggle="dropdown" aria-expanded="false" style="max-width: 230px;" id="matBtn_${mId}" title="${activeVal}">
+                                <span class="text-truncate small fw-semibold text-dark"><i class="bi bi-paint-bucket text-primary me-1"></i>${activeVal}</span>
+                            </button>
+                            <ul class="dropdown-menu shadow rounded-4 py-2 border-0" style="min-width: 270px; z-index: 1050;">
+                                <li class="dropdown-header small text-muted text-uppercase fw-bold pb-1">Boya Kartelası & Alternatifler</li>
+                                ${menuHtml}
+                            </ul>
+                        </div>`;
+                }
+            }
+            else if (cat.includes('süpürgelik')) {
+                return `<span class="badge bg-light text-muted border py-1 px-2 small"><i class="bi bi-link-45deg me-1"></i>Zemin / Kapı Standardı</span>`;
+            }
+            else if (cat.includes('tavan')) {
+                if (isWet) {
+                    return `<span class="badge bg-info-subtle text-info border border-info-subtle py-1 px-2 small"><i class="bi bi-grid-3x3 me-1"></i>60x60 Klipin Asma Tavan</span>`;
+                } else {
+                    return `<span class="badge bg-light text-muted border py-1 px-2 small"><i class="bi bi-brush me-1"></i>Tavan Beyazı (Plastik)</span>`;
+                }
+            }
+            else {
+                let activeVal = currentOpt || '-';
+                return `<span class="badge bg-light text-dark border py-1 px-2 small" onclick="promptCustomMaterial(${mId})" style="cursor:pointer;" title="Tıkla ve Belirt">${activeVal}</span>`;
+            }
+        }
+
+        function setMeasurementMaterial(id, optionTitle, priceDiff) {
+            $.post('/ConstructionProject/UpdateMeasurementMaterial', {
+                id: id,
+                materialOption: optionTitle,
+                priceDifference: priceDiff,
+                __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+            })
+            .done(function(res) {
+                if (res.success) {
+                    var btn = $('#matBtn_' + id);
+                    if (btn.length) {
+                        btn.find('span').html('<i class="bi bi-check2 text-success me-1"></i>' + optionTitle);
+                        btn.attr('title', optionTitle);
+                    }
+                    if (typeof toastr !== 'undefined') {
+                        toastr.success('Malzeme tercihi kaydedildi: ' + optionTitle);
+                    }
+                } else {
+                    alert(res.message || 'Güncellenemedi');
+                }
+            })
+            .fail(function() {
+                alert('Bağlantı hatası oluştu.');
+            });
+        }
+
+        function promptCustomMaterial(id) {
+            var val = prompt('Uygulanacak özel malzeme veya renk kodunu giriniz:');
+            if (val && val.trim() !== '') {
+                setMeasurementMaterial(id, val.trim(), 0);
+            }
+        }
+
         function updateMeasurementQty(id) {
             var q = $('#q_'+id).val() || 0;
             var w = $('#w_'+id).val() || '';
