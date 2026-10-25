@@ -303,105 +303,118 @@
 
 
     <div class="col-md-3">
-
-        <!-- Yapı Özellikleri -->
-
-        <div class="card border-0 shadow-sm rounded-4 mb-4">
-
+        <!-- Dış Alanlar & Sosyal Donatılar (Bahçe, Kamelya, Park) -->
+        <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white overflow-hidden">
             <div class="card-body p-4">
-
                 <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
-
-                    <h5 class="fw-bold mb-0"><i class="bi bi-info-square text-info me-2"></i>Yapı Özellikleri</h5>
-
-                    <button class="btn btn-sm btn-icon btn-light-primary rounded-circle" data-bs-toggle="modal" data-bs-target="#editBlockDetailsModal" title="Düzenle">
-
-                        <i class="bi bi-pencil"></i>
-
-                    </button>
-
+                    <h5 class="fw-bold mb-0 text-dark">
+                        <i class="bi bi-tree-fill text-success me-2"></i>Dış Alanlar & Donatılar
+                    </h5>
+                    <a href="/ConstructionProject/Amenities?projectId=@Model.ConstructionProjectId&isExisting=false" 
+                       class="btn btn-sm btn-outline-primary rounded-pill px-2 py-0 fw-semibold" title="Dış Alanları Düzenle">
+                        <i class="bi bi-pencil me-1"></i>Yönet
+                    </a>
                 </div>
 
-                <div class="mb-3">
+                @{
+                    var projectAmenities = Model.ConstructionProject?.Amenities?.Where(a => !a.IsExisting).ToList() ?? new List<GMK360.Core.Entities.Construction.ProjectAmenity>();
+                    double totalAmenitySqm = projectAmenities.Sum(a => a.SquareMeters ?? 0);
+                }
 
-                    <span class="text-muted small d-block">Taban Oturumu</span>
-
-                    <span class="fw-bold text-dark">@(Model.BaseArea.HasValue ? Model.BaseArea.Value + " m²" : "Belirtilmedi")</span>
-
+                <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-success bg-opacity-10 rounded-3">
+                    <span class="text-success small fw-bold"><i class="bi bi-check-circle-fill me-1"></i>Toplam Dış Alan</span>
+                    <span class="fw-bold text-success fs-6">@totalAmenitySqm m²</span>
                 </div>
 
-                <div class="mb-3">
-
-                    <span class="text-muted small d-block">Otopark</span>
-
-                    <span class="fw-bold text-dark">@(string.IsNullOrEmpty(Model.ParkingType) ? "Belirtilmedi" : Model.ParkingType)</span>
-
-                </div>
-
-                <div class="mb-3">
-
-                    <span class="text-muted small d-block">Asansör</span>
-
-                    <span class="fw-bold text-dark">@(Model.ElevatorCount.HasValue ? Model.ElevatorCount + " Adet" : "Belirtilmedi")</span>
-
-                </div>
-
-                <div class="mb-3">
-
-                    <span class="text-muted small d-block">Mantolama / Yalıtım</span>
-
-                    <span class="fw-bold text-dark">@(string.IsNullOrEmpty(Model.InsulationType) ? "Belirtilmedi" : Model.InsulationType)</span>
-
-                </div>
-
-                <div class="mb-3">
-
-                    <span class="text-muted small d-block mb-1">Diğer Donanımlar ve Notlar</span>
-
-                    @if (!string.IsNullOrEmpty(Model.TechnicalFeatures))
-
-                    {
-
-                        var features = Model.TechnicalFeatures.Split(new[] { "," }, StringSplitOptions.RemoveEmptyEntries);
-
-                        <ul class="list-unstyled mb-0">
-
-                            @foreach (var f in features)
-
-                            {
-
-                                <li class="text-dark small mb-1"><i class="bi bi-check2 text-success me-2"></i>@f.Trim()</li>
-
-                            }
-
-                        </ul>
-
-                    }
-
-                    else
-
-                    {
-
-                        <span class="text-dark small">Belirtilmedi</span>
-
-                    }
-
-                </div>
-
-                <div>
-
-                    <span class="text-muted small d-block">Açıklama</span>
-
-                    <span class="text-dark small">@(string.IsNullOrEmpty(Model.Description) ? "Belirtilmedi" : Model.Description)</span>
-
-                </div>
-
+                @if (projectAmenities.Any())
+                {
+                    <div class="d-flex flex-column gap-2">
+                        @foreach (var am in projectAmenities)
+                        {
+                            <div class="p-2 border rounded-3 bg-light shadow-sm">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <strong class="text-dark small text-truncate" style="max-width: 170px;" title="@am.Name">
+                                        <i class="bi bi-flower1 text-success me-1"></i>@am.Name
+                                    </strong>
+                                    <span class="badge bg-white text-dark border small">@(am.SquareMeters.HasValue ? $"{am.SquareMeters} m²" : "-")</span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(am.Description))
+                                {
+                                    <div class="text-muted small text-truncate mb-2" style="font-size: 0.72rem;">@am.Description</div>
+                                }
+                                <div class="d-flex gap-1 justify-content-end">
+                                    <a href="/SubcontractorBidding/CreateSubcontractorTender?projectId=@Model.ConstructionProjectId&title=@Uri.EscapeDataString(am.Name + " İmalatı")" 
+                                       class="btn btn-xs btn-outline-warning text-dark py-0 px-2 rounded-pill fw-semibold" style="font-size: 0.7rem;" title="Taşeron Teklifi Topla">
+                                        <i class="bi bi-file-earmark-text me-1"></i>Teklif Al
+                                    </a>
+                                    <a href="/ProjectMeeting/Index?projectId=@Model.ConstructionProjectId" 
+                                       class="btn btn-xs btn-outline-primary py-0 px-2 rounded-pill fw-semibold" style="font-size: 0.7rem;" title="Toplantı Masasında Görüş">
+                                        <i class="bi bi-people me-1"></i>Karar
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-3 text-muted small">
+                        <i class="bi bi-tree fs-3 d-block text-secondary mb-1"></i>
+                        Henüz dış alan donatısı eklenmemiş.
+                    </div>
+                }
             </div>
-
         </div>
 
-    </div>
+        <!-- Yapı Özellikleri (Özet - Açılır Kapanır Div) -->
+        <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white overflow-hidden">
+            <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-center" role="button" data-bs-toggle="collapse" data-bs-target="#yapiOzellikleriCollapse" aria-expanded="false" style="cursor: pointer;">
+                    <h6 class="fw-bold mb-0 text-dark">
+                        <i class="bi bi-info-square text-info me-2"></i>Yapı Özellikleri (Özet)
+                    </h6>
+                    <div class="d-flex align-items-center gap-1">
+                        <button class="btn btn-xs btn-outline-primary rounded-circle p-1" data-bs-toggle="modal" data-bs-target="#editBlockDetailsModal" title="Düzenle" onclick="event.stopPropagation();">
+                            <i class="bi bi-pencil" style="font-size: 0.75rem;"></i>
+                        </button>
+                        <i class="bi bi-chevron-down text-muted small ms-1"></i>
+                    </div>
+                </div>
 
+                <div class="collapse mt-3 pt-2 border-top" id="yapiOzellikleriCollapse">
+                    <div class="mb-2">
+                        <span class="text-muted small d-block">Taban Oturumu</span>
+                        <span class="fw-bold text-dark">@(Model.BaseArea.HasValue ? Model.BaseArea.Value + " m²" : "Belirtilmedi")</span>
+                    </div>
+                    <div class="mb-2">
+                        <span class="text-muted small d-block">Otopark</span>
+                        <span class="fw-bold text-dark">@(string.IsNullOrEmpty(Model.ParkingType) ? "Belirtilmedi" : Model.ParkingType)</span>
+                    </div>
+                    <div class="mb-2">
+                        <span class="text-muted small d-block">Asansör</span>
+                        <span class="fw-bold text-dark">@(Model.ElevatorCount.HasValue ? Model.ElevatorCount + " Adet" : "Belirtilmedi")</span>
+                    </div>
+                    <div class="mb-2">
+                        <span class="text-muted small d-block">Mantolama / Yalıtım</span>
+                        <span class="fw-bold text-dark">@(string.IsNullOrEmpty(Model.InsulationType) ? "Belirtilmedi" : Model.InsulationType)</span>
+                    </div>
+                    @if (!string.IsNullOrEmpty(Model.TechnicalFeatures))
+                    {
+                        var features = Model.TechnicalFeatures.Split(new[] { "," }, StringSplitOptions.RemoveEmptyEntries);
+                        <div class="mb-2">
+                            <span class="text-muted small d-block mb-1">Notlar & Donanımlar</span>
+                            <ul class="list-unstyled mb-0">
+                                @foreach (var f in features)
+                                {
+                                    <li class="text-dark small mb-1"><i class="bi bi-check2 text-success me-2"></i>@f.Trim()</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="col-md-9">
 
         <!-- DİV 1: Mimari DWG / DXF Okuma & Daire Sahiplendirme Masası (Anayasa Madde 10: Bağımsız 1. Sınıf Kart) -->

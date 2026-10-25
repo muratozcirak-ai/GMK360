@@ -3081,6 +3081,7 @@ namespace GMK360.Web.Controllers
 
 
                 .Include(b => b.ConstructionProject)
+                    .ThenInclude(p => p.Amenities)
 
 
 
@@ -3849,6 +3850,7 @@ namespace GMK360.Web.Controllers
             var building = await _context.Buildings
 
                 .Include(b => b.ConstructionProject)
+                    .ThenInclude(p => p.Amenities)
 
                 .FirstOrDefaultAsync(b => b.Id == Id);
 
@@ -4187,6 +4189,7 @@ namespace GMK360.Web.Controllers
             var parent = await _context.Buildings
 
                 .Include(b => b.ConstructionProject)
+                    .ThenInclude(p => p.Amenities)
 
                 .FirstOrDefaultAsync(b => b.Id == parentBuildingId && b.ConstructionProjectId == projectId);
 
@@ -4297,6 +4300,7 @@ namespace GMK360.Web.Controllers
 
 
                 .Include(b => b.ConstructionProject)
+                    .ThenInclude(p => p.Amenities)
 
 
 
@@ -4547,6 +4551,7 @@ namespace GMK360.Web.Controllers
 
 
                 .Include(b => b.ConstructionProject)
+                    .ThenInclude(p => p.Amenities)
 
 
 
@@ -5311,6 +5316,7 @@ namespace GMK360.Web.Controllers
             var building = await _context.Buildings
 
                 .Include(b => b.ConstructionProject)
+                    .ThenInclude(p => p.Amenities)
 
                 .Include(b => b.Units)
 
@@ -5619,6 +5625,7 @@ namespace GMK360.Web.Controllers
             var building = await _context.Buildings
 
                 .Include(b => b.ConstructionProject)
+                    .ThenInclude(p => p.Amenities)
 
                 .FirstOrDefaultAsync(b => b.Id == buildingId);
 
@@ -8456,6 +8463,7 @@ namespace GMK360.Web.Controllers
 
             var building = await _context.Buildings
                 .Include(b => b.ConstructionProject)
+                    .ThenInclude(p => p.Amenities)
                 .Include(b => b.Units)
                     .ThenInclude(u => u.Spaces)
                 .FirstOrDefaultAsync(b => b.Id == buildingId);
@@ -8486,6 +8494,7 @@ namespace GMK360.Web.Controllers
 
             var building = await _context.Buildings
                 .Include(b => b.ConstructionProject)
+                    .ThenInclude(p => p.Amenities)
                 .Include(b => b.Units)
                     .ThenInclude(u => u.Spaces)
                         .ThenInclude(s => s.Fixtures)
