@@ -1,0 +1,204 @@
+@model GMK360.Core.Entities.Construction.ConstructionProject
+@using GMK360.Core.Entities.Construction
+@using GMK360.Core.Entities
+
+@{
+    ViewData["Title"] = "Teklif Hazırlama: " + Model.Name;
+    ViewData["ProjectId"] = Model.Id;
+    ViewData["ProjectName"] = Model.Name;
+    ViewData["ProjectStatus"] = Model.Status;
+    Layout = "_ProjectLayout";
+
+    string cityName = ViewBag.CityName as string ?? "İstanbul";
+    string distName = ViewBag.DistrictName as string ?? "Kadıköy";
+    string neighName = ViewBag.NeighborhoodName as string ?? "Merdivenköy";
+
+    var stakeholders = ViewBag.Stakeholders as List<ProjectStakeholder> ?? new List<ProjectStakeholder>();
+    int landownerCount = stakeholders.Count;
+    int oldUnits = Model.EskiDaireSayisi ?? 10;
+    double landArea = Model.TotalLandArea ?? 850;
+}
+
+<!-- KOMPAKT PROJE BAŞLIK ŞERİDİ (TEK SATIR & SIFIR DİKEY İSRAF) -->
+<div class="d-flex justify-content-between align-items-center py-1.5 px-3 mb-2 bg-white rounded-3 border shadow-xs flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="badge bg-primary bg-opacity-10 text-primary rounded-circle p-1 d-flex align-items-center justify-content-center" style="width: 26px; height: 26px;">
+            <i class="bi bi-file-earmark-spreadsheet"></i>
+        </span>
+        <span class="fw-bold text-dark fs-6">@Model.Name</span>
+        <span class="badge bg-warning text-dark border border-warning px-2 py-0 rounded-pill fw-bold" style="font-size: 0.70rem;">
+            <i class="bi bi-hourglass-split me-1"></i>ADAY PROJE
+        </span>
+        <span class="text-muted small" style="font-size: 0.76rem;">— Teklif Hazırlama Masası</span>
+        <span class="text-muted opacity-50">|</span>
+        <span class="badge bg-light text-dark border px-2 py-0 rounded-pill small" style="font-size: 0.72rem;">
+            <i class="bi bi-geo-alt-fill text-danger me-1"></i>@cityName / @distName (@neighName Mah.)
+        </span>
+    </div>
+
+    <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-secondary bg-opacity-10 text-secondary border px-2 py-0.5 rounded-pill small" style="font-size: 0.72rem;">
+            ID: #@Model.Id
+        </span>
+        <a href="/ConstructionProject/Workspace/@Model.Id" class="btn btn-outline-primary rounded-pill px-2.5 py-0 fw-bold btn-sm shadow-xs" style="font-size: 0.74rem;">
+            <i class="bi bi-card-heading me-1"></i>Künyeye Git ➔
+        </a>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show rounded-3 py-1.5 px-3 mb-2 small shadow-xs" role="alert">
+        <i class="bi bi-check-circle-fill me-1"></i> @TempData["SuccessMessage"]
+        <button type="button" class="btn-close py-2" data-bs-dismiss="alert" aria-label="Kapat"></button>
+    </div>
+}
+
+<!-- 1. BÖLÜM: RESMİ TEKLİF HAZIRLAMA (KOMPAKT & AKILLI MASASI) -->
+<div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs overflow-hidden">
+    <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-light border-bottom flex-wrap gap-1"
+         role="button" data-bs-toggle="collapse" data-bs-target="#teklifCollapse" aria-expanded="true" aria-controls="teklifCollapse" style="cursor: pointer;">
+        
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-calculator text-primary fs-5"></i>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="fw-bold text-dark small" style="font-size: 0.88rem;">1. Resmi Teklif Hazırlama</span>
+                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-1.5 py-0 rounded-pill" style="font-size: 0.68rem;">
+                    <i class="bi bi-file-earmark-check me-1"></i>Kat Karşılığı & Kentsel Dönüşüm
+                </span>
+                <small class="text-muted d-none d-lg-inline" style="font-size: 0.72rem;">Malik paylaşım oranı, maliyet projeksiyonu ve resmi teklif mektubu çıktısı</small>
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-1.5 flex-wrap" onclick="event.stopPropagation();">
+            <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-1 rounded-pill fw-bold" style="font-size: 0.74rem;">
+                <i class="bi bi-pie-chart me-1"></i>Paylaşım: %50 / %50
+            </span>
+            <span class="badge bg-primary bg-opacity-10 text-primary border px-2 py-1 rounded-pill" style="font-size: 0.74rem;">
+                <i class="bi bi-people me-1"></i>@oldUnits Hak Sahibi
+            </span>
+            <button class="btn btn-sm btn-white border rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs text-secondary" 
+                    type="button" data-bs-toggle="collapse" data-bs-target="#teklifCollapse" aria-expanded="true" aria-controls="teklifCollapse" id="btnTeklifToggle" style="font-size: 0.74rem;">
+                <span id="textTeklifToggle">Daralt</span>
+                <i class="bi bi-chevron-up ms-1" id="iconTeklifChevron"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="collapse show p-2 p-md-3" id="teklifCollapse">
+        <!-- 1.1 ALT BÖLÜM: TEMEL TEKLİF PARAMETRELERİ -->
+        <div class="row g-2 mb-3">
+            <div class="col-md-3">
+                <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Malik (Arsa Sahibi) Payı (%)</label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-light fw-bold">%</span>
+                    <input type="number" step="0.5" class="form-control fw-bold text-primary" id="inputMalikOran" value="50" placeholder="50" />
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Müteahhit Payı (%)</label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-light fw-bold">%</span>
+                    <input type="number" step="0.5" class="form-control fw-bold text-success" id="inputMuteahhitOran" value="50" placeholder="50" readonly />
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Aylık Kira Desteği (₺/Malik)</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" step="1000" class="form-control" id="inputKiraYardimi" value="15000" placeholder="15.000" />
+                    <span class="input-group-text bg-light">₺/Ay</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Taşınma Yardımı (₺/Malik)</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" step="1000" class="form-control" id="inputTasinmaYardimi" value="30000" placeholder="30.000" />
+                    <span class="input-group-text bg-light">₺</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 1.2 ALT BÖLÜM: PROJE VE TESLİM TAAHHÜTLERİ -->
+        <div class="row g-2 mb-3">
+            <div class="col-md-3">
+                <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">İnşaat Teslim Süresi</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" class="form-control" id="inputTeslimAy" value="18" placeholder="18" />
+                    <span class="input-group-text bg-light">Ay</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Tahmini İnşaat m² Maliyeti</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" step="500" class="form-control" id="inputBirimMaliyet" value="22500" placeholder="22.500" />
+                    <span class="input-group-text bg-light">₺/m²</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Banka Teminat Mektubu</label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-light">%</span>
+                    <input type="number" step="1" class="form-control" id="inputTeminatOran" value="10" placeholder="10" />
+                    <span class="input-group-text bg-light">Maliyet Oranı</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Hedef Yeni Daire Sayısı</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" class="form-control fw-bold" id="inputYeniDaire" value="@(Model.TargetTotalApartments ?? (oldUnits * 2))" placeholder="20" />
+                    <span class="input-group-text bg-light">Adet</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 1.3 ALT BÖLÜM: RESMİ TEKLİF METNİ VE TAAHHÜT ŞARTLARI -->
+        <div class="mb-3">
+            <label class="form-label fw-bold small text-dark mb-1" style="font-size: 0.80rem;">
+                <i class="bi bi-card-text text-primary me-1"></i>Teklif Ön Yazısı & Maliklere Sunulacak Şartname Özeti
+            </label>
+            <textarea class="form-control rounded-3" rows="3" style="font-size: 0.82rem;" placeholder="Şirketimiz tarafından arsanız üzerinde yapılacak kentsel dönüşüm projesinde uygulanacak teknik şartname, malzeme kalitesi ve hak sahiplerine taahhütlerimiz...">Sayın Malikler Kurulu,
+@cityName ili, @distName ilçesi, @neighName Mahallesi sınırları içerisinde yer alan @Model.Ada Ada / @Model.Parsel Parsel üzerindeki yapınız için hazırlanan resmi teklifimizdir. Projemiz C35/45 sınıfı hazır beton, B420C nervürlü donatı çeliği, birinci sınıf ısı ve su yalıtımı, kapalı otopark ve modern mimari ile anahtar teslimi olarak inşa edilecektir.</textarea>
+        </div>
+
+        <!-- BUTONLAR ŞERİDİ -->
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 pt-2 border-top">
+            <div class="text-muted small" style="font-size: 0.74rem;">
+                <i class="bi bi-info-circle me-1"></i>Teklif parametreleri güncellendikçe resmi teklif mektubu dinamik olarak yeniden üretilir.
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-primary rounded-pill px-3 py-1 fw-bold btn-sm shadow-xs" style="font-size: 0.78rem;">
+                    <i class="bi bi-save me-1"></i>Teklif Parametrelerini Kaydet
+                </button>
+                <button type="button" class="btn btn-success rounded-pill px-3 py-1 fw-bold btn-sm shadow-xs text-white" style="font-size: 0.78rem;">
+                    <i class="bi bi-file-earmark-pdf me-1"></i>Resmi Teklif PDF'i Oluştur
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 2. BÖLÜM: SÖZLEŞMELER (BİLGİLENDİRME İSKELETİ - EXCEL NOTU: YENİ SEKME OLACAK KENDİ SAYFASI) -->
+<div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs">
+    <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-light rounded-3 flex-wrap gap-1">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-file-earmark-text text-secondary fs-5"></i>
+            <div>
+                <span class="fw-bold text-dark small" style="font-size: 0.88rem;">2. Sözleşmeler Masası</span>
+                <span class="badge bg-secondary bg-opacity-10 text-secondary border px-1.5 py-0 rounded-pill ms-1" style="font-size: 0.68rem;">
+                    <i class="bi bi-lock-fill me-1"></i>Müstakil Sayfa
+                </span>
+                <div class="text-muted small" style="font-size: 0.72rem;">
+                    Arsa Payı Karşılığı İnşaat Sözleşmesi (Noter Taslağı), Teknik Şartname Ekleri ve Muvafakatnameler kendi müstakil sayfasında açılacaktır.
+                </div>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-1.5 flex-wrap">
+            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs" style="font-size: 0.72rem;">
+                <i class="bi bi-box-arrow-up-right me-1"></i>Yeni Sekmede Aç
+            </button>
+            <span class="badge bg-light text-muted border px-2 py-0.5 rounded-pill" style="font-size: 0.72rem;">
+                <i class="bi bi-hourglass-split me-1"></i>Teklif Kabulü Sonrası
+            </span>
+        </div>
+    </div>
+</div>

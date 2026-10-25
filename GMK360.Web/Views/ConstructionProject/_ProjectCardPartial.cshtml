@@ -1,85 +1,210 @@
 @model GMK360.Core.Entities.Construction.ConstructionProject
+
 @using GMK360.Core.Entities.Construction
 
+
+
 @{
-    
+
     var imgUrl = !string.IsNullOrEmpty(Model.CoverImageUrl) 
+
         ? Model.CoverImageUrl 
+
         : (!string.IsNullOrEmpty(Model.CurrentStateImageUrl) ? Model.CurrentStateImageUrl : "/img/default-project.jpg");
+
     var statusText = Model.Status switch {
+
+        ProjectStatus.On_Gorusme_Talep => "Ön Görüşme / Aday",
+
         ProjectStatus.Projelendirme_Teklif => "Teklif / Planlama",
+
         ProjectStatus.Aktif_Santiye => "Aktif Şantiye",
+
         ProjectStatus.Satista_Topraktan => "Satışta (Topraktan)",
+
         ProjectStatus.Tamamlandi_Teslim => "Tamamlandı",
+
         _ => "Bilinmiyor"
+
     };
+
     
+
     var statusColor = Model.Status switch {
+
+        ProjectStatus.On_Gorusme_Talep => "bg-warning text-dark",
+
         ProjectStatus.Projelendirme_Teklif => "bg-secondary",
+
         ProjectStatus.Aktif_Santiye => "bg-primary",
+
         ProjectStatus.Satista_Topraktan => "bg-warning text-dark",
+
         ProjectStatus.Tamamlandi_Teslim => "bg-success",
+
         _ => "bg-dark"
+
     };
+
+
+
+    bool isAday = Model.Status == ProjectStatus.On_Gorusme_Talep || Model.Status == ProjectStatus.Projelendirme_Teklif;
+
+
 
     // İlerleme simülasyonu (gerçek veriye bağlanabilir)
+
     int progress = Model.Status == ProjectStatus.Tamamlandi_Teslim ? 100 : (Model.Status == ProjectStatus.Aktif_Santiye ? 45 : 0);
+
 }
 
-<div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden" style="transition: transform 0.2s; cursor:pointer;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'" onclick="window.open('/ConstructionProject/Details/@Model.Id', '_blank')">
+
+
+<div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden" style="transition: transform 0.2s; cursor:pointer;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'" onclick="window.location.href='@(isAday ? $"/ConstructionProject/Feasibility/{Model.Id}" : $"/ConstructionProject/Workspace/{Model.Id}")'">
+
     
+
     <!-- Proje Görseli -->
-    <div class="position-relative" style="height: 180px;">
+
+    <div class="position-relative" style="height: 125px;">
+
         <img src="@imgUrl" class="w-100 h-100 object-fit-cover" alt="@Model.Name" onerror="this.src='/img/bg1.jpg'">
+
         <div class="position-absolute top-0 start-0 w-100 h-100 bg-dark bg-opacity-25"></div>
+
         <div class="position-absolute top-0 end-0 p-2">
+
             <span class="badge @statusColor shadow-sm rounded-pill px-3 py-2"><i class="bi bi-circle-fill small me-1"></i> @statusText</span>
+
         </div>
+
     </div>
 
-    <div class="card-body p-4 d-flex flex-column">
-        <h5 class="fw-bold text-dark text-truncate mb-1" title="@Model.Name">@Model.Name</h5>
+
+
+    <div class="card-body p-2.5 d-flex flex-column">
+
+        <h6 class="fw-bold text-dark text-truncate mb-1 fs-6" title="@Model.Name">@Model.Name</h5>
+
         @{
+
             string locationDisplay = !string.IsNullOrEmpty(Model.Address) 
+
                 ? (Model.Address + (!string.IsNullOrEmpty(Model.Ada) ? $" (Ada: {Model.Ada}/Parsel: {Model.Parsel})" : ""))
+
                 : (!string.IsNullOrEmpty(Model.Ada) ? $"Ada: {Model.Ada} / Parsel: {Model.Parsel}" : "Konum Belirtilmedi");
+
         }
-        <p class="text-muted small mb-3"><i class="bi bi-geo-alt-fill text-danger me-1"></i> @locationDisplay</p>
+
+        <p class="text-muted small mb-2"><i class="bi bi-geo-alt-fill text-danger me-1"></i> @locationDisplay</p>
+
         
+
         <div class="mt-auto">
-                        <div class="d-flex justify-content-between small text-muted mb-1">
+
+            <div class="d-flex justify-content-between small text-muted mb-1">
+
                 @if (Model.StartDate.Year > 1) {
+
                     <span>Başlangıç</span>
+
                     <span class="fw-bold text-dark">@Model.StartDate.ToString("MMM yyyy")</span>
+
                 } else {
+
                     <span>Kayıt Tarihi</span>
+
                     <span class="fw-bold text-dark">@Model.CreatedAt.ToString("MMM yyyy")</span>
+
                 }
+
             </div>
+
             @if(Model.Status == ProjectStatus.Aktif_Santiye || Model.Status == ProjectStatus.Tamamlandi_Teslim)
+
             {
+
                 <div class="d-flex justify-content-between small text-muted mb-2">
+
                     <span>Tamamlanma</span>
+
                     <span class="fw-bold text-success">@progress%</span>
+
                 </div>
+
                 <div class="progress" style="height: 6px;">
+
                     <div class="progress-bar @statusColor" role="progressbar" style="width: @progress%" aria-valuenow="@progress" aria-valuemin="0" aria-valuemax="100"></div>
+
                 </div>
+
             }
+
         </div>
+
     </div>
-    <div class="card-footer bg-white border-top-0 p-3 pt-0 text-center">
+
+    <div class="card-footer bg-white border-top-0 p-2 pt-0 text-center">
+
         @if(Model.Status == ProjectStatus.Tamamlandi_Teslim)
+
         {
+
             <button class="btn btn-warning btn-sm rounded-pill w-100 fw-bold mb-2 shadow-sm text-dark" onclick="event.stopPropagation(); alert('Bu binanın (Dijital İkiz) davet linki yöneticiye SMS olarak gönderilecek. Bina yönetimi modülü aktif olduğunda devreye girecektir.');"><i class="bi bi-person-plus-fill me-1"></i> 👑 Bina Yöneticisini Davet Et</button>
-            <a href="/ConstructionProject/Details/@Model.Id" target="_blank" onclick="event.stopPropagation();" class="btn btn-outline-secondary btn-sm rounded-pill w-100 fw-bold">Geçmiş Şantiye Arşivi <i class="bi bi-archive"></i></a>
+
+            <a href="/ConstructionProject/Workspace/@Model.Id" onclick="event.stopPropagation();" class="btn btn-outline-primary btn-sm rounded-pill w-100 fw-bold">Şantiye Masası <i class="bi bi-archive"></i></a>
+
         }
+
         else
+
         {
-            <div class="d-flex gap-1">
-                <a href="/ConstructionProject/Details/@Model.Id" target="_blank" onclick="event.stopPropagation();" class="btn btn-outline-primary btn-sm rounded-pill flex-fill fw-bold">Şantiye Panosu <i class="bi bi-arrow-right"></i></a>
+
+            <div class="d-flex gap-1 flex-wrap">
+
+                @if (isAday)
+
+                {
+
+                    <a href="/ConstructionProject/Feasibility/@Model.Id" onclick="event.stopPropagation();" class="btn btn-warning btn-sm rounded-pill fw-bold text-dark px-3 shadow-xs" title="2. Adım: Hızlı Arsa Ön Etüdü, TKGM Harita ve Simülatör">
+
+                        <i class="bi bi-rulers me-1"></i> Hızlı Ön Etüt
+
+                    </a>
+
+                    <a href="/ConstructionProject/Workspace/@Model.Id" onclick="event.stopPropagation();" class="btn btn-outline-primary btn-sm rounded-pill flex-fill fw-bold" title="Proje Künyesi">
+
+                        Künye <i class="bi bi-arrow-right"></i>
+
+                    </a>
+
+                }
+
+                else
+
+                {
+
+                    <a href="/ConstructionProject/Analysis/@Model.Id" onclick="event.stopPropagation();" class="btn btn-outline-success btn-sm rounded-pill fw-bold px-2 shadow-xs" title="İmar Durumu ve Ön Keşif Raporu">
+
+                        <i class="bi bi-graph-up-arrow me-1"></i> İmar
+
+                    </a>
+
+                    <a href="/ConstructionProject/Workspace/@Model.Id" onclick="event.stopPropagation();" class="btn btn-primary btn-sm rounded-pill flex-fill fw-bold">
+
+                        Şantiye Masası <i class="bi bi-arrow-right"></i>
+
+                    </a>
+
+                }
+
                 <a href="/Agenda/Index?projectId=@Model.Id" target="_blank" onclick="event.stopPropagation();" class="btn btn-outline-warning text-dark btn-sm rounded-pill px-3 fw-bold" title="Bu Şantiyenin Kara Defteri / Randevuları"><i class="bi bi-journal-bookmark-fill text-warning"></i></a>
+
             </div>
+
         }
+
     </div>
+
 </div>
+

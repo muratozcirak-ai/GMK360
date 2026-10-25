@@ -14,6 +14,9 @@ using GMK360.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// QuestPDF Lisans Yapılandırması (Community Lisansı)
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
 builder.Services.Configure<GMK360.Core.Settings.SmsSettings>(builder.Configuration.GetSection("SmsSettings"));
 builder.Services.Configure<GMK360.Core.Settings.MailSettings>(builder.Configuration.GetSection("MailSettings"));
 
@@ -126,6 +129,7 @@ builder.Services.AddScoped<GMK360.Core.Interfaces.IPaymentGatewayService, GMK360
 builder.Services.AddScoped<GMK360.Core.Interfaces.IShortTermRentalService, GMK360.Web.Services.ShortTermRentalService>();
 builder.Services.AddScoped<GMK360.Core.Interfaces.IInvitationService, GMK360.Web.Services.InvitationService>();
 builder.Services.AddHttpClient<INviValidationService, NviValidationService>();
+builder.Services.AddHttpClient<ITkgmService, GMK360.Web.Services.TkgmService>();
 builder.Services.AddScoped<GMK360.Web.Services.WalletService>();
 builder.Services.AddScoped<IPropertySearchService, GMK360.Web.Services.PropertySearchService>();
 builder.Services.AddTransient<Microsoft.AspNetCore.Identity.UI.Services.IEmailSender, GMK360.Web.Services.MockEmailSender>();
@@ -146,6 +150,7 @@ builder.Services.AddScoped<GMK360.Web.Services.IValuationService, GMK360.Web.Ser
 builder.Services.AddScoped<GMK360.Web.Services.B2BSupplierSyncService>();
 builder.Services.AddScoped<GMK360.Web.Services.ISeoService, GMK360.Web.Services.SeoService>();
 builder.Services.AddScoped<GMK360.Web.Services.Construction.DnaTimeOffsetService>();
+builder.Services.AddScoped<GMK360.Core.Interfaces.IConstructionFeasibilityPdfService, GMK360.Web.Services.Construction.ConstructionFeasibilityPdfService>();
 
 // Register Background Services
 builder.Services.AddHostedService<LocationIntelligenceWorker>();

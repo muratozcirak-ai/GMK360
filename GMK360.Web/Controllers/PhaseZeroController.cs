@@ -28,17 +28,57 @@ namespace GMK360.Web.Controllers
             ViewData["ProjectId"] = projectId;
             ViewData["ProjectName"] = project.Name;
 
+            var globalRules = await _context.ModuleDocumentRules
+                .Include(r => r.Prerequisites)
+                .ThenInclude(p => p.PrerequisiteTemplate)
+                .Where(r => r.TargetModule == "Construction")
+                .ToListAsync();
+
+            ViewBag.GlobalRules = globalRules;
+
             var docs = await _context.ProjectLegalDocuments
                 .Include(d => d.SystemTemplate)
                 .Where(d => d.ConstructionProjectId == projectId)
                 .OrderBy(d => d.DisplayOrder)
                 .ToListAsync();
 
-            ViewBag.GlobalRules = await _context.ModuleDocumentRules
-                .Include(r => r.Prerequisites)
-                .ThenInclude(p => p.PrerequisiteTemplate)
-                .Where(r => r.TargetModule == "Construction")
-                .ToListAsync();
+            // Eksik önkoşul evrakları varsa otomatik oluştur
+            var existingTmplIds = docs.Where(d => d.SystemTemplateId != null).Select(d => d.SystemTemplateId.Value).ToHashSet();
+            bool anyNewPz = false;
+            foreach (var rule in globalRules)
+            {
+                if (rule.Prerequisites != null)
+                {
+                    int subOrder = 1;
+                    foreach (var pre in rule.Prerequisites)
+                    {
+                        if (pre.PrerequisiteTemplate != null && !existingTmplIds.Contains(pre.PrerequisiteTemplateId))
+                        {
+                            var childDoc = new ProjectLegalDocument
+                            {
+                                ConstructionProjectId = projectId,
+                                SystemTemplateId = pre.PrerequisiteTemplateId,
+                                DocumentName = pre.PrerequisiteTemplate.Name,
+                                Stage = rule.Stage,
+                                DisplayOrder = rule.DisplayOrder * 10 + subOrder++,
+                                Status = "Bekliyor",
+                                EstimatedCost = 0,
+                                ActualCost = 0,
+                                DocumentFee = 0,
+                                AdditionalCost = 0
+                            };
+                            _context.ProjectLegalDocuments.Add(childDoc);
+                            docs.Add(childDoc);
+                            existingTmplIds.Add(pre.PrerequisiteTemplateId);
+                            anyNewPz = true;
+                        }
+                    }
+                }
+            }
+            if (anyNewPz)
+            {
+                await _context.SaveChangesAsync();
+            }
 
             // Fetch quote requests for these documents to show status
             var docIds = docs.Select(d => d.Id).ToList();
@@ -58,6 +98,8 @@ namespace GMK360.Web.Controllers
         {
             var rules = await _context.ModuleDocumentRules
                 .Include(r => r.SystemLegalDocumentTemplate)
+                .Include(r => r.Prerequisites)
+                    .ThenInclude(p => p.PrerequisiteTemplate)
                 .Where(r => r.TargetModule == "Construction")
                 .OrderBy(r => r.DisplayOrder)
                 .ToListAsync();
@@ -85,7 +127,35 @@ namespace GMK360.Web.Controllers
                         ActualCost = 0
                     };
                     _context.ProjectLegalDocuments.Add(doc);
+                    existingTemplateIds.Add(rule.SystemLegalDocumentTemplateId);
                     addedCount++;
+                }
+
+                if (rule.Prerequisites != null)
+                {
+                    int subOrder = 1;
+                    foreach (var pre in rule.Prerequisites)
+                    {
+                        if (pre.PrerequisiteTemplate != null && !existingTemplateIds.Contains(pre.PrerequisiteTemplateId))
+                        {
+                            var childDoc = new ProjectLegalDocument
+                            {
+                                ConstructionProjectId = projectId,
+                                SystemTemplateId = pre.PrerequisiteTemplateId,
+                                DocumentName = pre.PrerequisiteTemplate.Name,
+                                Stage = rule.Stage,
+                                DisplayOrder = rule.DisplayOrder * 10 + subOrder++,
+                                Status = "Bekliyor",
+                                EstimatedCost = 0,
+                                ActualCost = 0,
+                                DocumentFee = 0,
+                                AdditionalCost = 0
+                            };
+                            _context.ProjectLegalDocuments.Add(childDoc);
+                            existingTemplateIds.Add(pre.PrerequisiteTemplateId);
+                            addedCount++;
+                        }
+                    }
                 }
             }
 
@@ -150,6 +220,15 @@ namespace GMK360.Web.Controllers
 
             await _context.SaveChangesAsync();
 
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return Json(new { success = true, message = "Evrak başarıyla güncellendi." });
+            }
+            string? returnUrl = Request.Headers["Referer"].ToString();
+            if (!string.IsNullOrEmpty(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
             return RedirectToAction("Index", new { projectId = doc.ConstructionProjectId });
         }
         

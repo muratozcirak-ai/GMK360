@@ -1,244 +1,353 @@
-@model IEnumerable<GMK360.Core.Entities.DocumentArchive>
-@{
-    ViewData["Title"] = "Merkezi Belge Arşivi";
-    var context = ViewBag.Context as string;
-    Layout = context == "construction" ? "~/Views/Shared/_ConstructionLayout.cshtml" : (context == "facility" ? "~/Views/Shared/_FacilityLayout.cshtml" : "~/Views/Shared/_Layout.cshtml");
-
-    var currentCategory = ViewBag.CurrentCategory as string;
-    var currentYear = ViewBag.CurrentYear as int?;
-    var categories = ViewBag.Categories as string[];
-    var projects = ViewBag.Projects as IEnumerable<GMK360.Core.Entities.Construction.ConstructionProject>;
-    var selectedProjectId = ViewBag.ProjectId as int?;
-    
-    // Find selected project name
-    var selectedProjectName = projects?.FirstOrDefault(p => p.Id == selectedProjectId)?.Name;
-}
-
-<style>
-    .folder-card { cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
-    .folder-card:hover { transform: translateY(-3px); box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important; }
-</style>
-
-<div class="container-fluid py-4">
-    <!-- Başlık ve Yükleme Butonu -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h4 class="fw-bold mb-1"><i class="bi bi-cloud-arrow-up text-primary"></i> Merkezi Belge Arşivi</h4>
-            <p class="text-muted mb-0">Tüm sistemden yüklenen ve oluşturulan evraklar burada toplanır.</p>
-        </div>
-        <div>
-            <button type="button" class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#uploadDocModal">
-                <i class="bi bi-plus-lg me-2"></i> Yeni Belge Yükle
-            </button>
-        </div>
-    </div>
-
-    <!-- Breadcrumb (Dolap Hiyerarşisi) -->
-    <nav aria-label="breadcrumb" class="mb-4 bg-white p-3 rounded-3 shadow-sm border">
-      <ol class="breadcrumb mb-0 fw-bold">
-        <li class="breadcrumb-item">
-            <a href="?context=@context" class="text-decoration-none @(!selectedProjectId.HasValue ? "text-dark" : "")">
-                <i class="bi bi-safe2"></i> Proje Dolapları
-            </a>
-        </li>
-        @if (selectedProjectId.HasValue)
-        {
-            <li class="breadcrumb-item">
-                <a href="?context=@context&projectId=@selectedProjectId" class="text-decoration-none @(string.IsNullOrEmpty(currentCategory) ? "text-dark" : "")">
-                    <i class="bi bi-folder-fill text-warning"></i> @selectedProjectName
-                </a>
-            </li>
-        }
-        @if (!string.IsNullOrEmpty(currentCategory))
-        {
-            <li class="breadcrumb-item active" aria-current="page">
-                <i class="bi bi-folder2-open text-primary"></i> @currentCategory
-            </li>
-        }
-      </ol>
-    </nav>
-
-    <!-- GÖSTERİM ALANI -->
-    <div class="bg-white p-4 rounded-3 shadow-sm border">
-        
-        @if (!selectedProjectId.HasValue)
-        {
-            <!-- SEVİYE 1: PROJE DOLAPLARI -->
-            <h5 class="fw-bold text-dark mb-4">Lütfen Bir Proje Dolabı Seçin</h5>
-            @if (projects != null && projects.Any())
-            {
-                <div class="row g-4">
-                    @foreach (var p in projects)
-                    {
-                        <div class="col-md-3 col-sm-6">
-                            <a href="?context=@context&projectId=@p.Id" class="text-decoration-none">
-                                <div class="card shadow-sm border h-100 folder-card bg-light">
-                                    <div class="card-body text-center p-4">
-                                        <i class="bi bi-safe2-fill text-secondary mb-3" style="font-size: 4rem;"></i>
-                                        <h5 class="fw-bold text-dark text-truncate mb-2" title="@p.Name">@p.Name</h5>
-                                        <span class="badge bg-white text-dark border">Proje Dolabı</span>
-                                    </div>
-                                </div>
-                            </a>
-                        </div>
-                    }
-                </div>
-            }
-            else
-            {
-                <div class="text-center py-5">
-                    <i class="bi bi-safe2 text-muted mb-3" style="font-size: 3rem;"></i>
-                    <h5 class="text-muted">Henüz hiç proje dolabı oluşturulmamış.</h5>
-                </div>
-            }
-        }
-        else if (selectedProjectId.HasValue && string.IsNullOrEmpty(currentCategory))
-        {
-            <!-- SEVİYE 2: PROJE RAFLARI (KATEGORİLER) -->
-            <h5 class="fw-bold text-dark mb-4">@selectedProjectName - Klasörler (Raflar)</h5>
-            <div class="row g-4">
-                @foreach (var cat in categories)
-                {
-                    // Calculate count of docs in this category for this project
-                    int docCount = Model.Count(d => d.Category == cat);
-                    
-                    <div class="col-md-3 col-sm-6">
-                        <a href="?context=@context&projectId=@selectedProjectId&category=@cat" class="text-decoration-none">
-                            <div class="card shadow-sm border h-100 folder-card">
-                                <div class="card-body d-flex align-items-center p-3">
-                                    <i class="bi bi-folder-fill text-warning me-3" style="font-size: 2.5rem;"></i>
-                                    <div>
-                                        <h6 class="fw-bold text-dark mb-1">@cat</h6>
-                                        <span class="small text-muted">@docCount Belge</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </a>
-                    </div>
-                }
-            </div>
-        }
-        else
-        {
-            <!-- SEVİYE 3: BELGE TABLOSU -->
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="fw-bold text-dark mb-0">@currentCategory Evrakları</h5>
-                <span class="badge bg-primary">@Model.Count() Dosya</span>
-            </div>
-            
-            @if (!Model.Any())
-            {
-                <div class="text-center py-5 bg-light rounded-3 border">
-                    <i class="bi bi-folder-x text-muted mb-3" style="font-size: 3rem;"></i>
-                    <h5 class="fw-bold text-dark">Bu rafta henüz evrak yok</h5>
-                    <p class="text-muted mb-0">Sihirbazdan veya yukarıdaki butondan evrak yükleyebilirsiniz.</p>
-                </div>
-            }
-            else
-            {
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle border">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Belge Adı</th>
-                                <th>Yükleyen Kişi</th>
-                                <th>Yüklenme Tarihi</th>
-                                <th>Geçerlilik / Bitiş</th>
-                                <th>Durum</th>
-                                <th>İşlem</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var doc in Model)
-                            {
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <i class="bi bi-file-earmark-text text-primary me-2 fs-5"></i>
-                                            <span class="fw-bold">@doc.FileName</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span class="text-muted small"><i class="bi bi-person-circle me-1"></i>Sistem / Kullanıcı</span>
-                                    </td>
-                                    <td>@doc.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
-                                    <td>
-                                        <span class="text-muted small">Süresiz</span>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-success">Aktif</span>
-                                    </td>
-                                    <td>
-                                        <a href="@doc.DocumentUrl" target="_blank" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i> İncele</a>
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
-        }
-    </div>
-</div>
-
-
-<!-- Yeni Belge Yükle Modal -->
-<div class="modal fade" id="uploadDocModal" tabindex="-1">
-    <div class="modal-dialog">
-        <form asp-action="UploadManual" asp-controller="DocumentArchive" method="post" enctype="multipart/form-data">
-            <div class="modal-content border-0 shadow">
-                <div class="modal-header bg-primary text-white border-0">
-                    <h5 class="modal-title fw-bold"><i class="bi bi-cloud-upload me-2"></i> Belge Yükle</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Dosya Seçin</label>
-                        <input type="file" name="file" class="form-control" required />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Kategori (Raf)</label>
-                        <select name="category" class="form-select" required>
-                            @foreach (var cat in categories)
-                            {
-                                <option value="@cat">@cat</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">İlgili Proje (Dolap)</label>
-                        <select name="projectId" class="form-select">
-                            <option value="">-- Projeden Bağımsız --</option>
-                            @if(projects != null)
-                            {
-                                foreach (var p in projects)
-                                {
-                                    if (selectedProjectId == p.Id)
-                                    {
-                                        <option value="@p.Id" selected>@p.Name</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="@p.Id">@p.Name</option>
-                                    }
-                                }
-                            }
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">İlgili Yıl</label>
-                        <input type="number" name="year" class="form-control" value="@DateTime.Now.Year" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Açıklama / Not (Opsiyonel)</label>
-                        <textarea name="notes" class="form-control" rows="2"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer border-0 bg-light">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
-                    <button type="submit" class="btn btn-primary px-4"><i class="bi bi-upload me-2"></i> Yükle ve Kaydet</button>
-                </div>
-            </div>
-        </form>
-    </div>
-</div>
+@model IEnumerable<GMK360.Core.Entities.DocumentArchive>
+@{
+    ViewData["Title"] = "Merkezi Belge Arşivi";
+    var context = ViewBag.Context as string;
+    Layout = context == "construction" ? "~/Views/Shared/_ConstructionLayout.cshtml" : (context == "facility" ? "~/Views/Shared/_FacilityLayout.cshtml" : "~/Views/Shared/_Layout.cshtml");
+
+    var currentCategory = ViewBag.CurrentCategory as string;
+    var currentYear = ViewBag.CurrentYear as int?;
+    var categories = ViewBag.Categories as string[];
+    var projects = ViewBag.Projects as IEnumerable<GMK360.Core.Entities.Construction.ConstructionProject>;
+    var selectedProjectId = ViewBag.ProjectId as int?;
+    
+    bool isCorporateCabinet = (ViewBag.IsCorporateCabinet == true);
+    bool isCabinetSelected = isCorporateCabinet || (selectedProjectId.HasValue && selectedProjectId.Value > 0);
+    var selectedProjectName = ViewBag.SelectedProjectName as string ?? (projects?.FirstOrDefault(p => p.Id == selectedProjectId)?.Name);
+    var agencyName = ViewBag.AgencyName as string ?? "Genel Merkez";
+    int corporateDocCount = ViewBag.CorporateDocCount != null ? (int)ViewBag.CorporateDocCount : 0;
+}
+
+<style>
+    .folder-card { cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+    .folder-card:hover { transform: translateY(-3px); box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important; }
+</style>
+
+<div class="container-fluid py-4">
+    <!-- Başlık ve Yükleme Butonu -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1"><i class="bi bi-cloud-arrow-up text-primary"></i> Merkezi Belge Arşivi</h4>
+            <p class="text-muted mb-0">Genel merkez kurumsal dolapları ve şantiye proje klasörleri.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-primary rounded-pill px-3 shadow-xs" data-bs-toggle="modal" data-bs-target="#uploadDocModal" onclick="openCreateFolderMode()">
+                <i class="bi bi-folder-plus me-1"></i> Yeni Klasör Aç
+            </button>
+            <button type="button" class="btn btn-primary rounded-pill px-4 shadow-xs" data-bs-toggle="modal" data-bs-target="#uploadDocModal" onclick="openNormalUploadMode()">
+                <i class="bi bi-plus-lg me-1"></i> Yeni Belge Yükle
+            </button>
+        </div>
+    </div>
+
+    <!-- Breadcrumb (Dolap Hiyerarşisi) -->
+    <nav aria-label="breadcrumb" class="mb-4 bg-white p-3 rounded-3 shadow-sm border">
+      <ol class="breadcrumb mb-0 fw-bold">
+        <li class="breadcrumb-item">
+            <a href="?context=@context" class="text-decoration-none @(!isCabinetSelected ? "text-dark" : "")">
+                <i class="bi bi-safe2"></i> Arşiv Dolapları
+            </a>
+        </li>
+        @if (isCorporateCabinet)
+        {
+            <li class="breadcrumb-item">
+                <a href="?context=@context&cabinet=corporate" class="text-decoration-none @(string.IsNullOrEmpty(currentCategory) ? "text-dark" : "")">
+                    <i class="bi bi-building-fill-gear text-primary"></i> @agencyName Merkez Arşivi
+                </a>
+            </li>
+        }
+        else if (selectedProjectId.HasValue && selectedProjectId.Value > 0)
+        {
+            <li class="breadcrumb-item">
+                <a href="?context=@context&projectId=@selectedProjectId" class="text-decoration-none @(string.IsNullOrEmpty(currentCategory) ? "text-dark" : "")">
+                    <i class="bi bi-folder-fill text-warning"></i> @selectedProjectName
+                </a>
+            </li>
+        }
+        @if (!string.IsNullOrEmpty(currentCategory))
+        {
+            <li class="breadcrumb-item active" aria-current="page">
+                <i class="bi bi-folder2-open text-primary"></i> @currentCategory
+            </li>
+        }
+      </ol>
+    </nav>
+
+    <!-- GÖSTERİM ALANI -->
+    <div class="bg-white p-4 rounded-3 shadow-sm border">
+        
+        @if (!isCabinetSelected)
+        {
+            <!-- SEVİYE 1: ARŞİV DOLAPLARI -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h5 class="fw-bold text-dark mb-1"><i class="bi bi-safe2 me-2 text-primary"></i>Arşiv Dolapları</h5>
+                    <p class="text-muted small mb-0">Genel Merkez kurumsal dolabını veya şantiye proje dolaplarını açarak içindeki klasörlere erişin.</p>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <!-- 1. GENEL MERKEZ & KURUMSAL ARŞİV DOLABI -->
+                <div class="col-md-4 col-sm-6">
+                    <a href="?context=@context&cabinet=corporate" class="text-decoration-none">
+                        <div class="card shadow-sm border border-2 border-primary h-100 folder-card bg-primary-subtle bg-opacity-10 position-relative">
+                            <div class="position-absolute top-0 end-0 p-2">
+                                <span class="badge bg-primary text-white shadow-xs">Genel Merkez</span>
+                            </div>
+                            <div class="card-body text-center p-4">
+                                <div class="d-inline-flex p-3 rounded-circle bg-primary text-white mb-3 shadow-sm">
+                                    <i class="bi bi-building-fill-gear" style="font-size: 2.8rem;"></i>
+                                </div>
+                                <h5 class="fw-bold text-dark text-truncate mb-1">🏢 @agencyName Merkez Arşivi</h5>
+                                <p class="text-muted small mb-2" style="font-size: 0.76rem; min-height: 34px;">Şirket Mülk & Yerleşke (Tapu / İskan / Kira), Şirket Araçları, Avukatlık/Hukuk, Resmi Ticari Evraklar</p>
+                                <span class="badge bg-white text-primary border border-primary px-2.5 py-1">@corporateDocCount Evrak / Belge</span>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <!-- 2. ŞANTİYE / İNŞAAT PROJE DOLAPLARI -->
+                @if (projects != null && projects.Any())
+                {
+                    @foreach (var p in projects)
+                    {
+                        <div class="col-md-4 col-sm-6">
+                            <a href="?context=@context&projectId=@p.Id" class="text-decoration-none">
+                                <div class="card shadow-sm border h-100 folder-card bg-light position-relative">
+                                    <div class="position-absolute top-0 end-0 p-2">
+                                        <span class="badge bg-secondary text-white shadow-xs">Proje Dolabı</span>
+                                    </div>
+                                    <div class="card-body text-center p-4">
+                                        <div class="d-inline-flex p-3 rounded-circle bg-secondary bg-opacity-10 text-secondary mb-3">
+                                            <i class="bi bi-safe2-fill" style="font-size: 2.8rem;"></i>
+                                        </div>
+                                        <h5 class="fw-bold text-dark text-truncate mb-1" title="@p.Name">@p.Name</h5>
+                                        <p class="text-muted small mb-2" style="font-size: 0.76rem; min-height: 34px;">Kentsel Dönüşüm, Çizimler, Daire Evrakları, Şantiye</p>
+                                        <span class="badge bg-white text-dark border px-2.5 py-1">Şantiye Dolabı</span>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    }
+                }
+            </div>
+        }
+        else if (isCabinetSelected && string.IsNullOrEmpty(currentCategory))
+        {
+            <!-- SEVİYE 2: PROJE / KURUMSAL RAFLARI (KATEGORİLER) -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h5 class="fw-bold text-dark mb-0">
+                        <i class="bi @(isCorporateCabinet ? "bi-building-fill-gear text-primary" : "bi-safe2-fill text-warning") me-2"></i>@selectedProjectName - Klasörler (Raflar)
+                    </h5>
+                    <small class="text-muted">Bu dolabın altındaki resmi ve operasyonel klasörler.</small>
+                </div>
+                <a href="?context=@context" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+                    <i class="bi bi-arrow-left me-1"></i>Tüm Dolaplara Dön
+                </a>
+            </div>
+
+            <div class="row g-4">
+                @foreach (var cat in categories)
+                {
+                    // Calculate count of docs in this category for this cabinet
+                    int docCount = Model.Count(d => d.Category == cat);
+                    var catUrl = isCorporateCabinet 
+                        ? $"?context={context}&cabinet=corporate&category={cat}" 
+                        : $"?context={context}&projectId={selectedProjectId}&category={cat}";
+
+                    <div class="col-md-3 col-sm-6">
+                        <a href="@catUrl" class="text-decoration-none">
+                            <div class="card shadow-sm border h-100 folder-card">
+                                <div class="card-body d-flex align-items-center p-3">
+                                    <i class="bi bi-folder-fill text-warning me-3" style="font-size: 2.5rem;"></i>
+                                    <div>
+                                        <h6 class="fw-bold text-dark mb-1">@cat</h6>
+                                        <span class="small text-muted">@docCount Belge</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <!-- SEVİYE 3: BELGE TABLOSU -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h5 class="fw-bold text-dark mb-0">
+                        <i class="bi bi-folder2-open text-primary me-2"></i>@currentCategory Evrakları
+                    </h5>
+                    <small class="text-muted">@selectedProjectName dolabı &gt; @currentCategory rafı</small>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="?context=@context@(isCorporateCabinet ? "&cabinet=corporate" : "&projectId=" + selectedProjectId)" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+                        <i class="bi bi-arrow-left me-1"></i>Raflara Dön
+                    </a>
+                    <span class="badge bg-primary d-flex align-items-center px-3 py-1">@Model.Count() Dosya</span>
+                </div>
+            </div>
+            
+            @if (!Model.Any())
+            {
+                <div class="text-center py-5 bg-light rounded-3 border">
+                    <i class="bi bi-folder-x text-muted mb-3" style="font-size: 3rem;"></i>
+                    <h5 class="fw-bold text-dark">Bu rafta henüz evrak yok</h5>
+                    <p class="text-muted mb-0">Yukarıdaki butonlardan yeni belge yükleyebilir veya masa görüşmesinden bağlayabilirsiniz.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle border">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Belge Adı</th>
+                                <th>Yükleyen Kişi</th>
+                                <th>Yüklenme Tarihi</th>
+                                <th>Geçerlilik / Bitiş</th>
+                                <th>Durum</th>
+                                <th>İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var doc in Model)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi bi-file-earmark-text text-primary me-2 fs-5"></i>
+                                            <div>
+                                                @{
+                                                    var cleanDocTitle = !string.IsNullOrWhiteSpace(doc.Title) 
+                                                        ? doc.Title 
+                                                        : doc.FileName.Replace(".pdf", "", StringComparison.OrdinalIgnoreCase)
+                                                                      .Replace(".jpg", "", StringComparison.OrdinalIgnoreCase)
+                                                                      .Replace(".png", "", StringComparison.OrdinalIgnoreCase)
+                                                                      .Replace("_", " ");
+                                                }
+                                                <span class="fw-bold d-block text-dark">@cleanDocTitle</span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="text-muted small"><i class="bi bi-person-circle me-1"></i>Sistem / Kullanıcı</span>
+                                    </td>
+                                    <td>@doc.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                                    <td>
+                                        <span class="text-muted small">Süresiz</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-success">Aktif</span>
+                                    </td>
+                                    <td>
+                                        <a href="@doc.DocumentUrl" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-3 shadow-xs"><i class="bi bi-eye me-1"></i> İncele</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+
+<!-- Yeni Belge Yükle Modal -->
+<div class="modal fade" id="uploadDocModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form asp-action="UploadManual" asp-controller="DocumentArchive" method="post" enctype="multipart/form-data">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-primary text-white border-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-cloud-upload me-2"></i> Belge Yükle</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Dosya Seçin</label>
+                        <input type="file" name="file" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Kategori (Raf)</label>
+                        <select name="category" id="selCategory" class="form-select" onchange="checkCategoryChange(this)" required>
+                            @foreach (var cat in categories)
+                            {
+                                <option value="@cat">@cat</option>
+                            }
+                            <option value="__custom__">➕ [Yeni Klasör / Raf Adı Yaz...]</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="divCustomCategory" style="display: none;">
+                        <label class="form-label fw-bold text-primary"><i class="bi bi-folder-plus me-1"></i>Yeni Klasör / Raf Adı</label>
+                        <input type="text" name="customCategory" id="inpCustomCategory" class="form-control border-primary" placeholder="Örn: Merkez Ofis Kira Sözleşmeleri, Personel Özlük..." />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">İlgili Dolap (Merkez / Proje)</label>
+                        <select name="projectId" class="form-select">
+                            <option value="0" selected="@(isCorporateCabinet)">🏢 @agencyName Genel Merkez Arşivi (Ofis Kira, Şirket, Araçlar)</option>
+                            @if(projects != null)
+                            {
+                                foreach (var p in projects)
+                                {
+                                    if (selectedProjectId == p.Id && !isCorporateCabinet)
+                                    {
+                                        <option value="@p.Id" selected>🏗️ @p.Name</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@p.Id">🏗️ @p.Name</option>
+                                    }
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">İlgili Yıl</label>
+                        <input type="number" name="year" class="form-control" value="@DateTime.Now.Year" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Açıklama / Başlık (Opsiyonel)</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="Belge başlığı veya not..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary px-4"><i class="bi bi-upload me-2"></i> Yükle ve Kaydet</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function checkCategoryChange(select) {
+        var div = document.getElementById('divCustomCategory');
+        var inp = document.getElementById('inpCustomCategory');
+        if (select.value === '__custom__') {
+            div.style.display = 'block';
+            inp.required = true;
+            inp.focus();
+        } else {
+            div.style.display = 'none';
+            inp.required = false;
+        }
+    }
+
+    function openCreateFolderMode() {
+        var sel = document.getElementById('selCategory');
+        if (sel) {
+            sel.value = '__custom__';
+            checkCategoryChange(sel);
+        }
+    }
+
+    function openNormalUploadMode() {
+        var sel = document.getElementById('selCategory');
+        if (sel && sel.value === '__custom__') {
+            sel.selectedIndex = 0;
+            checkCategoryChange(sel);
+        }
+    }
+</script>

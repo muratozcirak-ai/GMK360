@@ -1,292 +1,1229 @@
 @using Microsoft.AspNetCore.Identity
+
+
+
 @using GMK360.Core.Entities.Identity
+
+
+
 @inject UserManager<ApplicationUser> UserManager
+
+
+
+@{
+
+
+
+    var pStatus = ViewData["ProjectStatus"] as GMK360.Core.Entities.Construction.ProjectStatus?;
+
+
+
+    bool isAdayMode = pStatus.HasValue && (pStatus.Value == GMK360.Core.Entities.Construction.ProjectStatus.On_Gorusme_Talep || pStatus.Value == GMK360.Core.Entities.Construction.ProjectStatus.Projelendirme_Teklif);
+
+
+
+}
+
+
+
 <!DOCTYPE html>
+
+
+
 <html lang="tr">
+
+
+
 <head>
+
+
+
     <meta charset="utf-8" />
+
+
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+
+
     <title>@ViewData["Title"] - Şantiye Modu</title>
-    
+
+
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+
+
+
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+
+
+
     <script src="https://unpkg.com/@@phosphor-icons/web"></script>
+
+
+
     <style>
+
+
+
         body { background-color: #f8f9fa; }
+
+
+
         .hover-orange:hover { color: #FF6B00 !important; }
+
+
+
         .text-orange { color: #FF6B00; }
+
+
+
         .bg-orange { background-color: #FF6B00; }
+
+
+
         .text-navy { color: #1e3a8a; }
+
+
+
         .bg-navy { background-color: #1e3a8a; }
+
+
+
     </style>
+
+
+
     @await RenderSectionAsync("SEO", required: false)
+
+
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" />
+
+
+
 </head>
+
+
+
 <body class="d-flex flex-column min-vh-100 bg-light">
-    
-    <!-- TOP BAR (SADECE PROJE ADI VE LOGO) -->
-    <header class="fixed-top bg-white border-bottom shadow-sm">
-        <div class="container-fluid px-4 d-flex justify-content-between align-items-center py-3">
-            
+
+
+
+    <!-- TOP BAR (KOMPAKT & LAPTOP DOSTU) -->
+
+    <header class="fixed-top bg-white border-bottom shadow-xs" style="z-index: 1030;">
+
+        <div class="container-fluid px-2 px-md-3 d-flex justify-content-between align-items-center py-1">
+
             <!-- SOL: LOGO VE PROJE ADI -->
+
             <div class="d-flex align-items-center">
-                <a asp-controller="ConstructionProject" asp-action="Index" class="text-decoration-none d-flex align-items-center gap-2">
-                    <i class="ph-fill ph-infinity text-orange" style="font-size: 2.2rem;"></i>
-                    <span class="fs-3 fw-bold text-navy" style="letter-spacing:-1px;">GMK<span class="text-orange">360</span></span>
+
+                <a asp-controller="ConstructionProject" asp-action="Index" class="text-decoration-none d-flex align-items-center gap-1">
+
+                    <i class="ph-fill ph-infinity text-orange" style="font-size: 1.4rem;"></i>
+
+                    <span class="fs-6 fw-bold text-navy" style="letter-spacing:-0.5px;">GMK<span class="text-orange">360</span></span>
+
                 </a>
+
                 
+
                 @if(ViewData["ProjectName"] != null)
+
                 {
-                    <span class="fs-3 text-muted mx-3">|</span>
-                    <i class="bi bi-building-check fs-4 text-primary me-2"></i>
-                    <span class="fw-bold fs-4 text-uppercase text-dark" style="letter-spacing: 0px;">@ViewData["ProjectName"] ŞANTİYESİ</span>
+
+                    <span class="text-muted mx-2">|</span>
+
+                    <i class="@(isAdayMode ? "bi bi-search" : "bi bi-building-check") fs-6 @(isAdayMode ? "text-warning" : "text-primary") me-1"></i>
+
+                    <span class="fw-bold text-truncate text-uppercase text-dark" style="font-size: 0.85rem; max-width: 450px;">
+
+                        @ViewData["ProjectName"] <span class="badge @(isAdayMode ? "bg-warning text-dark" : "bg-primary text-white") ms-1 px-2 py-0 rounded-pill" style="font-size: 0.68rem;">@(isAdayMode ? "ADAY / TEKLİF" : "ŞANTİYE")</span>
+
+                    </span>
+
                 }
+
             </div>
+
             
+
             <!-- SAĞ: PROFİL MENÜSÜ -->
-            <div class="d-flex gap-3 align-items-center">
+
+            <div class="d-flex gap-2 align-items-center">
+
                 @if (User.Identity.IsAuthenticated)
+
                 {
+
                     <div class="dropdown">
-                        <button class="btn btn-outline-navy px-4 rounded-pill dropdown-toggle d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="ph-fill ph-user-circle fs-5"></i>
+
+                        <button class="btn btn-outline-navy px-3 py-1 rounded-pill dropdown-toggle d-flex align-items-center gap-1 btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="font-size: 0.78rem;">
+
+                            <i class="ph-fill ph-user-circle fs-6"></i>
+
                             <span class="d-none d-md-inline">Hesabım</span>
+
                         </button>
+
                         <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2" style="border-radius: 12px; min-width: 200px;">
+
                             <li class="px-3 py-2 border-bottom mb-1">
+
                                 <div class="fw-bold">@( (await UserManager.GetUserAsync(User))?.DisplayName ?? User.Identity.Name )</div>
+
                             </li>
+
                             @if (User.IsInRole("SuperAdmin") || User.IsInRole("Admin"))
+
                             {
+
                                 <li><a class="dropdown-item" asp-controller="Admin" asp-action="Index"><i class="ph ph-gear me-2 text-muted"></i>Sistem Yönetimi</a></li>
+
                             }
+
                             else
+
                             {
+
                                 <li><a class="dropdown-item" asp-controller="CustomerDashboard" asp-action="Index"><i class="ph ph-squares-four me-2 text-muted"></i>Çalışma Alanı</a></li>
+
                                 <li><a class="dropdown-item" asp-controller="Profile" asp-action="Index"><i class="ph ph-user me-2 text-muted"></i>Profil & Ayarlar</a></li>
+
                             }
+
                             <li><hr class="dropdown-divider"></li>
+
                             <li>
+
                                 <form asp-controller="Account" asp-action="Logout" method="post" class="m-0 p-0">
+
                                     <button type="submit" class="dropdown-item text-danger"><i class="ph ph-sign-out me-2"></i>Çıkış Yap</button>
+
                                 </form>
+
                             </li>
+
                         </ul>
+
                     </div>
+
                 }
+
             </div>
-            
+
         </div>
+
     </header>
 
+
+
     <!-- ANA İÇERİK (SİDEBAR + CONTENT) -->
-    <main class="flex-grow-1" style="margin-top: 80px;">
+
+    <main class="flex-grow-1" style="margin-top: 48px;">
+
+
 
             @if (TempData["SuccessMessage"] != null)
+
+
+
             {
+
+
+
                 <div class="alert alert-success alert-dismissible fade show shadow-sm m-3" role="alert">
+
+
+
                     <i class="bi bi-check-circle-fill me-2"></i> @TempData["SuccessMessage"]
+
+
+
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+
+
+
                 </div>
+
+
+
             }
+
+
+
             @if (TempData["ErrorMessage"] != null)
+
+
+
             {
+
+
+
                 <div class="alert alert-danger alert-dismissible fade show shadow-sm m-3" role="alert">
+
+
+
                     <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["ErrorMessage"]
+
+
+
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+
+
+
                 </div>
+
+
+
             }
 
-        <div class="container-fluid px-4 mt-4">
+
+
+        <div class="container-fluid px-2 px-md-3 mt-2">
+
+
+
             <div class="row">
-                
+
+
+
                 <!-- BAĞLAMSAL SOL MENÜ -->
-                <div class="col-xl-2 col-lg-3 col-md-4 mb-4">
-                    <div class="card shadow-sm border-0 h-100 rounded-4">
-                        <div class="list-group list-group-flush" style="font-size: 0.95rem;">
-                            
-                            <!-- KAÇIŞ BUTONU -->
-                            <div class="px-3 mb-3 mt-3">
-                                <a href="/ConstructionProject/Index" class="btn btn-outline-danger w-100 rounded-pill fw-bold shadow-sm d-flex justify-content-center align-items-center">
-                                    <i class="bi bi-arrow-left-circle-fill me-2 fs-5"></i> Tüm Projelere Dön
+
+
+
+                <div class="col-xl-2 col-lg-2 col-md-3 mb-2">
+
+
+
+                    <div class="card shadow-sm border-0 rounded-3">
+
+
+
+                        <div class="list-group list-group-flush" style="font-size: 0.82rem;">
+
+
+
+                            @if (isAdayMode)
+
+                            {
+
+                                var currentAction = ViewContext.RouteData.Values["Action"]?.ToString();
+
+                                var currentController = ViewContext.RouteData.Values["Controller"]?.ToString();
+
+                                var pId = ViewData["ProjectId"];
+
+
+
+                                <div class="p-2 d-flex flex-column gap-1">
+
+                                    <!-- 1. Görüşmeler ve Toplantılar (Merkeze bağlı) -->
+
+                                    <a href="/ConstructionProject/Meetings/@pId" 
+
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Meetings" || currentAction == "MeetingRoom" ? "btn-warning text-dark border-warning" : "btn-light border text-dark")"
+
+                                       style="font-size: 0.80rem; @(currentAction == "Meetings" || currentAction == "MeetingRoom" ? "background: #ffc107;" : "")">
+
+                                        <span class="d-flex align-items-center text-truncate">
+
+                                            <i class="bi bi-people-fill me-2 fs-6 text-warning"></i>
+
+                                            <span class="text-truncate">Görüşmeler & Toplantılar</span>
+
+                                        </span>
+
+                                        <i class="bi bi-chevron-right small text-muted opacity-50"></i>
+
+                                    </a>
+
+
+
+                                    <!-- 2. Künye -->
+
+                                    <a href="/ConstructionProject/Workspace/@pId" 
+
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Workspace" ? "btn-primary text-white" : "btn-light border text-dark")"
+
+                                       style="font-size: 0.80rem; @(currentAction == "Workspace" ? "background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);" : "")">
+
+                                        <span class="d-flex align-items-center text-truncate">
+
+                                            <i class="bi bi-card-heading me-2 fs-6 @(currentAction == "Workspace" ? "text-white" : "text-primary")"></i>
+
+                                            <span class="text-truncate">Proje Künyesi</span>
+
+                                        </span>
+
+                                        <i class="bi bi-chevron-right small @(currentAction == "Workspace" ? "text-white opacity-75" : "text-muted opacity-50")"></i>
+
+                                    </a>
+
+
+
+                                    <!-- 3. Hızlı Ön Etüd -->
+
+                                    <a href="/ConstructionProject/Feasibility/@pId" 
+
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Feasibility" ? "btn-warning text-dark border-warning" : "btn-light border text-dark")"
+
+                                       style="font-size: 0.80rem; @(currentAction == "Feasibility" ? "background: #ffc107;" : "")">
+
+                                        <span class="d-flex align-items-center text-truncate">
+
+                                            <i class="bi bi-rulers me-2 fs-6 text-warning"></i>
+
+                                            <span class="text-truncate">Hızlı Ön Etüd</span>
+
+                                        </span>
+
+                                        <i class="bi bi-chevron-right small text-muted opacity-50"></i>
+
+                                    </a>
+
+
+
+                                    <!-- 4. Detaylı İnceleme -->
+
+                                    <a href="/ConstructionProject/Analysis/@pId" 
+
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Analysis" ? "btn-primary text-white" : "btn-light border text-dark")"
+
+                                       style="font-size: 0.80rem; @(currentAction == "Analysis" ? "background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);" : "")">
+
+                                        <span class="d-flex align-items-center text-truncate">
+
+                                            <i class="bi bi-clipboard2-data me-2 fs-6 @(currentAction == "Analysis" ? "text-white" : "text-success")"></i>
+
+                                            <span class="text-truncate">Detaylı İnceleme</span>
+
+                                        </span>
+
+                                        <i class="bi bi-chevron-right small @(currentAction == "Analysis" ? "text-white opacity-75" : "text-muted opacity-50")"></i>
+
+                                    </a>
+
+
+
+                                    <!-- 5. Teklif Hazırlama -->
+
+                                    <a href="/ConstructionProject/Proposal/@pId" 
+
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Proposal" ? "btn-primary text-white" : "btn-light border text-dark")"
+
+                                       style="font-size: 0.80rem; @(currentAction == "Proposal" ? "background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);" : "")">
+
+                                        <span class="d-flex align-items-center text-truncate">
+
+                                            <i class="bi bi-file-earmark-spreadsheet me-2 fs-6 @(currentAction == "Proposal" ? "text-white" : "text-info")"></i>
+
+                                            <span class="text-truncate">Teklif Hazırlama</span>
+
+                                        </span>
+
+                                        <i class="bi bi-chevron-right small @(currentAction == "Proposal" ? "text-white opacity-75" : "text-muted opacity-50")"></i>
+
+                                    </a>
+
+
+
+                                    <!-- 6. Proje Finansı -->
+
+                                    <a href="/ConstructionProject/Finance/@pId" 
+
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Finance" ? "btn-primary text-white" : "btn-light border text-dark")"
+
+                                       style="font-size: 0.80rem; @(currentAction == "Finance" ? "background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);" : "")">
+
+                                        <span class="d-flex align-items-center text-truncate">
+
+                                            <i class="bi bi-cash-coin me-2 fs-6 @(currentAction == "Finance" ? "text-white" : "text-warning")"></i>
+
+                                            <span class="text-truncate">Proje Finansı</span>
+
+                                        </span>
+
+                                        <i class="bi bi-chevron-right small @(currentAction == "Finance" ? "text-white opacity-75" : "text-muted opacity-50")"></i>
+
+                                    </a>
+
+
+
+                                    <!-- 7. Dosya Arşivi -->
+
+                                    <a href="/ConstructionProject/Archive/@pId" 
+
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Archive" ? "btn-primary text-white" : "btn-light border text-dark")"
+
+                                       style="font-size: 0.80rem; @(currentAction == "Archive" ? "background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);" : "")">
+
+                                        <span class="d-flex align-items-center text-truncate">
+
+                                            <i class="bi bi-folder2-open me-2 fs-6 @(currentAction == "Archive" ? "text-white" : "text-primary")"></i>
+
+                                            <span class="text-truncate">Dosya Arşivi</span>
+
+                                        </span>
+
+                                        <i class="bi bi-chevron-right small @(currentAction == "Archive" ? "text-white opacity-75" : "text-muted opacity-50")"></i>
+
+                                    </a>
+
+
+
+                                    <hr class="text-muted mx-1 my-1">
+
+
+
+                                    <a href="/ConstructionProject/Index" class="btn btn-outline-danger w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-center align-items-center py-1.5" style="font-size: 0.78rem;">
+
+                                        <i class="bi bi-arrow-left-circle-fill me-1.5 fs-6"></i> Tüm Projelere Dön
+
+                                    </a>
+
+                                </div>
+
+
+
+                                <!-- ADAY PROJE BİLGİLENDİRMESİ -->
+
+                                <div class="p-2 text-center">
+
+                                    <span class="badge bg-warning bg-opacity-10 text-dark border border-warning px-2 py-1 rounded-pill fw-bold small w-100 text-wrap mb-1" style="font-size: 0.70rem;">
+
+                                        <i class="bi bi-search me-1 text-warning"></i> Aday Proje Masası
+
+                                    </span>
+
+                                    <p class="text-muted mb-0" style="font-size: 0.72rem; line-height: 1.25;">
+
+                                        Ön Görüşme, Etüd & Teklif Aşaması
+
+                                    </p>
+
+                                </div>
+
+                            }
+
+
+
+                            else
+
+
+
+                            {
+
+
+
+                                <!-- KAÇIŞ VE YENİ MASAYA GEÇİŞ BUTONLARI (AKTİF ŞANTİYE) -->
+
+
+
+                                <div class="p-2">
+
+
+
+                                    <a href="/ConstructionProject/Workspace/@ViewData["ProjectId"]" class="btn btn-primary w-100 rounded-pill fw-bold shadow-sm d-flex justify-content-center align-items-center py-1.5 mb-1" style="background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);">
+
+
+
+                                        <i class="bi bi-card-heading me-1.5 fs-6"></i> Proje Künyesi
+
+
+
+                                    </a>
+
+
+
+                                    <a href="/ConstructionProject/Index" class="btn btn-outline-danger w-100 rounded-pill fw-bold shadow-sm d-flex justify-content-center align-items-center">
+
+
+
+                                        <i class="bi bi-arrow-left-circle-fill me-1.5 fs-6"></i> Tüm Projelere Dön
+
+
+
+                                    </a>
+
+
+
+                                </div>
+
+
+
+                                <hr class="text-muted mx-3 my-1">
+
+
+
+                                <!-- AKTİF ŞANTİYE MENÜSÜ -->
+
+
+
+                                <a href="/ConstructionProject/Details/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Details" ? "active fw-bold" : "")">
+
+
+
+                                    <i class="bi bi-bar-chart-fill me-1.5 fs-6 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Details" ? "text-white" : "text-primary")"></i> Şantiye Panosu
+
+
+
                                 </a>
-                            </div>
 
-                            <hr class="text-muted mx-3 my-1">
 
-                            <a href="/ConstructionProject/Details/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-3 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Details" ? "active fw-bold" : "")">
-                                <i class="bi bi-bar-chart-fill me-2 fs-5 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Details" ? "text-white" : "text-primary")"></i> Şantiye Panosu
-                            </a>
-                            
-                            <a href="/ProjectFinance/Index/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-3 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "ProjectFinance" ? "active fw-bold" : "")">
-                                <i class="bi bi-wallet2 me-2 fs-5 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "ProjectFinance" ? "text-white" : "text-success")"></i> Maliyet ve Finans
-                            </a>
-                            <a href="/PhaseZero/Index/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-3 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "PhaseZero" ? "active fw-bold bg-danger text-white border-danger" : "text-danger fw-bold")">
-                                <i class="bi bi-file-earmark-lock-fill me-2 fs-5 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "PhaseZero" ? "text-white" : "text-danger")"></i> Faz 0: Resmi Evrak
-                            </a>
-                            
-                            <a href="/ConstructionProject/Emergencies/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-3 position-relative @(ViewContext.RouteData.Values["Action"]?.ToString() == "Emergencies" ? "active fw-bold bg-warning text-dark border-warning" : "text-dark")">
-                                <i class="bi bi-exclamation-triangle-fill me-2 fs-5 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Emergencies" ? "text-dark" : "text-warning")"></i> Acil Durum / Bildirimler
-                                <span class="position-absolute top-50 end-0 translate-middle-y me-3 badge bg-danger rounded-pill shadow-sm" style="animation: pulse 1.5s infinite;">2 Yeni</span>
-                            </a>
-                            
-                            <hr class="text-muted mx-3 my-1">
-                            <div class="px-3 mb-1 mt-2 text-muted small fw-bold text-uppercase">ERP Operasyon Merkezi</div>
 
-                            <a href="/Metraj/DrawingArchive?projectId=@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-3 @(ViewContext.RouteData.Values["Action"]?.ToString() == "DrawingArchive" ? "active fw-bold bg-primary text-white border-primary" : "")">
-                                <i class="bi bi-folder2-open me-2 fs-5 text-primary"></i> Kanat 1: Çizim Arşivi & Kabul
-                            </a>
+                                <a href="/ConstructionProject/Analysis/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Analysis" ? "active fw-bold bg-success text-white border-success" : "")">
 
-                            <a href="/Metraj/ProjectDNA/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-3 @(ViewContext.RouteData.Values["Action"]?.ToString() == "ProjectDNA" ? "active fw-bold" : "")">
-                                <i class="fas fa-dna me-2 fs-5 text-success"></i> Kanat 2: Proje DNA (Hesaplama)
-                            </a>
 
-                            <a href="/Metraj/BuildingWorkflow/@ViewData["ProjectId"]" target="_blank" rel="noopener noreferrer" class="list-group-item list-group-item-action py-3 @(ViewContext.RouteData.Values["Action"]?.ToString() == "BuildingWorkflow" ? "active fw-bold text-white bg-primary border-primary" : "")">
-                                <i class="fas fa-network-wired me-2 fs-5 text-warning"></i> Şantiye İş Akışı & Tedarik Masası
-                                <i class="fas fa-external-link-alt small ms-auto opacity-75"></i>
-                            </a>
 
-                            <a href="/PhaseTwo/OperationBoard/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-3 @(ViewContext.RouteData.Values["Action"]?.ToString() == "OperationBoard" ? "active fw-bold" : "")">
-                                <i class="fas fa-calendar-alt me-2 fs-5 text-warning"></i> Operasyon Planı (Takvim)
-                            </a>
-                            <a href="/SiteDiary" class="list-group-item list-group-item-action py-3 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "SiteDiary" ? "active fw-bold" : "")">
-                                <i class="fas fa-memory me-2 fs-5 text-primary"></i> Yönetim Hafızası (Günlük)
-                            </a>
-                            <a href="/LaborMobilization" class="list-group-item list-group-item-action py-3 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "LaborMobilization" ? "active fw-bold" : "")">
-                                <i class="fas fa-campground me-2 fs-5 text-danger"></i> İş Gücü & Mobilizasyon
-                            </a>
+                                    <i class="bi bi-graph-up-arrow me-1.5 fs-6 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Analysis" ? "text-white" : "text-success")"></i> 1. Aşama: İmar & Fizibilite
 
-                            <a href="/PhaseTwo/IsgChecklist/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-3 @(ViewContext.RouteData.Values["Action"]?.ToString() == "IsgChecklist" ? "active fw-bold" : "")">
-                                <i class="fas fa-hard-hat me-2 fs-5 text-danger"></i> İSG Günlük Kontrol
-                            </a>
-                            
-                            <a href="/ConstructionProject/Equipment/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-3 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Equipment" ? "active fw-bold" : "")">
-                                <i class="fas fa-truck-monster me-2 fs-5 text-info"></i> Makine Parkı & Kiralık Vinç
-                            </a>
-                            
-                            <a href="/DailyTimesheets/ProjectTimesheet/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-3 @(ViewContext.RouteData.Values["Action"]?.ToString() == "ProjectTimesheet" ? "active fw-bold" : "text-muted")">
-                                <i class="bi bi-people-fill me-2 fs-5 @(ViewContext.RouteData.Values["Action"]?.ToString() == "ProjectTimesheet" ? "text-white" : "text-secondary")"></i> Şantiye Puantajı
-                            </a>
-                            
-                            <a href="/Inventory/Index/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-3 text-muted" title="Yakında">
-                                <i class="bi bi-boxes me-2 fs-5 text-secondary"></i> Şantiye Deposu
-                            </a>
 
-                            <a href="/ConstructionProject/Details/@ViewData["ProjectId"]#collapseFaz0" class="list-group-item list-group-item-action py-3">
-                                <i class="bi bi-folder-fill me-2 fs-5 text-warning"></i> Evrak Yönetimi
-                            </a>
-                            
-                            <!-- ŞANTİYE KONUMU & LOJİSTİK BUTONU -->
-                            <a href="javascript:void(0)" onclick="openSantiyeLocationModal(@(ViewData["ProjectId"] ?? 0))" class="list-group-item list-group-item-action py-3 text-danger fw-bold bg-danger bg-opacity-10 border-start border-4 border-danger" title="Lojistik, Yol Tarifi ve Tedarikçiye Konum Paylaş">
-                                <i class="bi bi-geo-alt-fill me-2 fs-5 text-danger"></i> 📍 Şantiye Konumu & Lojistik
-                            </a>
-                            
-                            <div class="list-group-item bg-light fw-bold mt-4 text-uppercase text-center text-muted" style="font-size: 0.75rem;">
-                                SADECE BU PROJEYİ GÖRÜYORSUNUZ
-                            </div>
+
+                                </a>
+
+
+
+                                <a href="/ProjectFinance/Index/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "ProjectFinance" ? "active fw-bold" : "")">
+
+
+
+                                    <i class="bi bi-wallet2 me-1.5 fs-6 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "ProjectFinance" ? "text-white" : "text-success")"></i> Maliyet ve Finans
+
+
+
+                                </a>
+
+
+
+                                <a href="/PhaseZero/Index/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "PhaseZero" ? "active fw-bold bg-danger text-white border-danger" : "text-danger fw-bold")">
+
+
+
+                                    <i class="bi bi-file-earmark-lock-fill me-1.5 fs-6 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "PhaseZero" ? "text-white" : "text-danger")"></i> Faz 0: Resmi Evrak
+
+
+
+                                </a>
+
+
+
+                                <a href="/ConstructionProject/Emergencies/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 position-relative @(ViewContext.RouteData.Values["Action"]?.ToString() == "Emergencies" ? "active fw-bold bg-warning text-dark border-warning" : "text-dark")">
+
+
+
+                                    <i class="bi bi-exclamation-triangle-fill me-1.5 fs-6 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Emergencies" ? "text-dark" : "text-warning")"></i> Acil Durum / Bildirimler
+
+
+
+                                    <span class="position-absolute top-50 end-0 translate-middle-y me-3 badge bg-danger rounded-pill shadow-sm" style="animation: pulse 1.5s infinite;">2 Yeni</span>
+
+
+
+                                </a>
+
+
+
+                                <hr class="text-muted mx-3 my-1">
+
+
+
+                                <div class="px-3 mb-1 mt-2 text-muted small fw-bold text-uppercase">ERP Operasyon Merkezi</div>
+
+
+
+                                <a href="/Metraj/DrawingArchive?projectId=@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "DrawingArchive" ? "active fw-bold bg-primary text-white border-primary" : "")">
+
+
+
+                                    <i class="bi bi-folder2-open me-1.5 fs-6 text-primary"></i> Kanat 1: Çizim Arşivi & Kabul
+
+
+
+                                </a>
+
+
+
+                                <a href="/Metraj/ProjectDNA/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "ProjectDNA" ? "active fw-bold" : "")">
+
+
+
+                                    <i class="fas fa-dna me-1.5 fs-6 text-success"></i> Kanat 2: Proje DNA (Hesaplama)
+
+
+
+                                </a>
+
+
+
+                                <a href="/Metraj/BuildingWorkflow/@ViewData["ProjectId"]" target="_blank" rel="noopener noreferrer" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "BuildingWorkflow" ? "active fw-bold text-white bg-primary border-primary" : "")">
+
+
+
+                                    <i class="fas fa-network-wired me-1.5 fs-6 text-warning"></i> Şantiye İş Akışı & Tedarik Masası
+
+
+
+                                    <i class="fas fa-external-link-alt small ms-auto opacity-75"></i>
+
+
+
+                                </a>
+
+
+
+                                <a href="/PhaseTwo/OperationBoard/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "OperationBoard" ? "active fw-bold" : "")">
+
+
+
+                                    <i class="fas fa-calendar-alt me-1.5 fs-6 text-warning"></i> Operasyon Planı (Takvim)
+
+
+
+                                </a>
+
+
+
+                                <a href="/SiteDiary" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "SiteDiary" ? "active fw-bold" : "")">
+
+
+
+                                    <i class="fas fa-memory me-1.5 fs-6 text-primary"></i> Yönetim Hafızası (Günlük)
+
+
+
+                                </a>
+
+
+
+                                <a href="/LaborMobilization" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "LaborMobilization" ? "active fw-bold" : "")">
+
+
+
+                                    <i class="fas fa-campground me-1.5 fs-6 text-danger"></i> İş Gücü & Mobilizasyon
+
+
+
+                                </a>
+
+
+
+                                <a href="/PhaseTwo/IsgChecklist/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "IsgChecklist" ? "active fw-bold" : "")">
+
+
+
+                                    <i class="fas fa-hard-hat me-1.5 fs-6 text-danger"></i> İSG Günlük Kontrol
+
+
+
+                                </a>
+
+
+
+                                <a href="/ConstructionProject/Equipment/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Equipment" ? "active fw-bold" : "")">
+
+
+
+                                    <i class="fas fa-truck-monster me-1.5 fs-6 text-info"></i> Makine Parkı & Kiralık Vinç
+
+
+
+                                </a>
+
+
+
+                                <a href="/DailyTimesheets/ProjectTimesheet/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "ProjectTimesheet" ? "active fw-bold" : "text-muted")">
+
+
+
+                                    <i class="bi bi-people-fill me-1.5 fs-6 @(ViewContext.RouteData.Values["Action"]?.ToString() == "ProjectTimesheet" ? "text-white" : "text-secondary")"></i> Şantiye Puantajı
+
+
+
+                                </a>
+
+
+
+                                <a href="/Inventory/Index/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 text-muted" title="Yakında">
+
+
+
+                                    <i class="bi bi-boxes me-1.5 fs-6 text-secondary"></i> Şantiye Deposu
+
+
+
+                                </a>
+
+
+
+                                <a href="/ConstructionProject/Details/@ViewData["ProjectId"]#collapseFaz0" class="list-group-item list-group-item-action py-2">
+
+
+
+                                    <i class="bi bi-folder-fill me-1.5 fs-6 text-warning"></i> Evrak Yönetimi
+
+
+
+                                </a>
+
+
+
+                                <!-- ŞANTİYE KONUMU & LOJİSTİK BUTONU -->
+
+
+
+                                <a href="javascript:void(0)" onclick="openSantiyeLocationModal(@(ViewData["ProjectId"] ?? 0))" class="list-group-item list-group-item-action py-2 text-danger fw-bold bg-danger bg-opacity-10 border-start border-4 border-danger" title="Lojistik, Yol Tarifi ve Tedarikçiye Konum Paylaş">
+
+
+
+                                    <i class="bi bi-geo-alt-fill me-1.5 fs-6 text-danger"></i> 📍 Şantiye Konumu & Lojistik
+
+
+
+                                </a>
+
+
+
+                                <div class="list-group-item bg-light fw-bold mt-4 text-uppercase text-center text-muted" style="font-size: 0.75rem;">
+
+
+
+                                    SADECE BU PROJEYİ GÖRÜYORSUNUZ
+
+
+
+                                </div>
+
+
+
+                            }
+
+
+
                         </div>
+
+
+
                     </div>
+
+
+
                 </div>
+
+
 
                 <!-- SAYFA İÇERİĞİ -->
-                <div class="col-xl-10 col-lg-9 col-md-8">
+
+
+
+                <div class="col-xl-10 col-lg-10 col-md-9">
+
+
+
                     @RenderBody()
+
+
+
                 </div>
-                
+
+
+
             </div>
+
+
+
         </div>
+
+
+
     </main>
-    
-    <!-- ŞANTİYE KONUMU & LOJİSTİK MODAL -->
+
+
+
+    <!-- ŞANTİYE KONUM MODALI -->
+
+
+
     <div class="modal fade" id="santiyeLocationModal" tabindex="-1" aria-labelledby="santiyeLocationModalLabel" aria-hidden="true">
+
+
+
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content rounded-4 border-0 shadow">
-                <div class="modal-header bg-danger text-white rounded-top-4 py-3">
+
+
+
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+
+
+                <div class="modal-header bg-danger text-white border-0 py-3">
+
+
+
                     <h5 class="modal-title fw-bold" id="santiyeLocationModalLabel">
-                        <i class="bi bi-geo-alt-fill me-2"></i> Şantiye Konumu & Lojistik
+
+
+
+                        <i class="bi bi-geo-alt-fill me-2"></i> Şantiye Konumu & Lojistik Paylaşımı
+
+
+
                     </h5>
+
+
+
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+
+
+
                 </div>
-                <div class="modal-body p-4">
-                    <div class="text-center mb-4">
-                        <div class="d-inline-flex p-3 rounded-circle bg-danger bg-opacity-10 text-danger mb-2">
-                            <i class="bi bi-geo-alt-fill fs-1"></i>
-                        </div>
-                        <h5 class="fw-bold text-dark mb-1" id="locModalProjectName">Şantiye</h5>
-                        <p class="text-muted small mb-0" id="locModalAddress">Adres yükleniyor...</p>
+
+
+
+                <div class="modal-body p-4 text-center">
+
+
+
+                    <div class="mb-3">
+
+
+
+                        <span class="badge bg-danger bg-opacity-10 text-danger px-3 py-2 rounded-pill fs-6 fw-bold">
+
+
+
+                            <i class="bi bi-building me-1"></i> <span id="locModalProjectName">Şantiye</span>
+
+
+
+                        </span>
+
+
+
                     </div>
 
-                    <div class="card bg-light border-0 rounded-3 p-3 mb-3">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <span class="text-muted small fw-bold">Konum Bağlantısı:</span>
-                            <span id="copyFeedback" class="badge bg-success" style="display:none;">Kopyalandı!</span>
-                        </div>
-                        <div class="input-group">
-                            <input type="text" id="locModalUrlInput" class="form-control form-control-sm bg-white" readonly />
-                            <button class="btn btn-sm btn-outline-secondary" type="button" onclick="copyLocationUrl()">
-                                <i class="bi bi-clipboard me-1"></i> Kopyala
-                            </button>
-                        </div>
+
+
+                    <p class="text-muted mb-2 small" id="locModalAddress">Adres yükleniyor...</p>
+
+
+
+                    <p class="text-secondary small mb-4">Tedarikçi kamyonları, beton mikserleri veya misafirler için canlı yol tarifi linki:</p>
+
+
+
+                    <div class="input-group mb-3">
+
+
+
+                        <input type="text" id="locModalUrlInput" class="form-control bg-light" readonly value="">
+
+
+
+                        <button class="btn btn-outline-secondary" type="button" onclick="copyLocationUrl()">
+
+
+
+                            <i class="bi bi-clipboard me-1"></i> Kopyala
+
+
+
+                        </button>
+
+
+
                     </div>
+
+
+
+                    <div id="copyFeedback" class="text-success small fw-bold mb-3" style="display:none;">
+
+
+
+                        <i class="bi bi-check2-circle me-1"></i> Link panoya kopyalandı!
+
+
+
+                    </div>
+
+
 
                     <div class="d-grid gap-2">
-                        <a id="locModalMapsBtn" href="#" target="_blank" class="btn btn-danger py-2 rounded-pill fw-bold shadow-sm d-flex align-items-center justify-content-center">
-                            <i class="bi bi-map-fill me-2 fs-5"></i> Google Haritalar'da Aç / Yol Tarifi
+
+
+
+                        <a id="locModalWhatsappBtn" href="#" target="_blank" class="btn btn-success fw-bold py-2 rounded-pill">
+
+
+
+                            <i class="bi bi-whatsapp me-2"></i> WhatsApp İle Paylaş
+
+
+
                         </a>
-                        <a id="locModalWhatsappBtn" href="#" target="_blank" class="btn btn-success py-2 rounded-pill fw-bold shadow-sm d-flex align-items-center justify-content-center">
-                            <i class="bi bi-whatsapp me-2 fs-5"></i> Tedarikçiye / Ustaya WhatsApp ile Gönder
+
+
+
+                        <a id="locModalMapsBtn" href="#" target="_blank" class="btn btn-outline-danger fw-bold py-2 rounded-pill">
+
+
+
+                            <i class="bi bi-map-fill me-2"></i> Google Haritalar'da Aç
+
+
+
                         </a>
+
+
+
                     </div>
+
+
+
                 </div>
-                <div class="modal-footer border-0 bg-light py-2 rounded-bottom-4 justify-content-end">
-                    <button type="button" class="btn btn-secondary btn-sm rounded-pill px-4" data-bs-dismiss="modal">Kapat</button>
-                </div>
+
+
+
             </div>
+
+
+
         </div>
+
+
+
     </div>
 
+
+
     <script>
+
+
+
         function openSantiyeLocationModal(projectId) {
+
+
+
             if (!projectId || projectId === 0) return;
-            
+
+
+
             fetch('/ConstructionProject/GetLocationJson/' + projectId)
+
+
+
                 .then(res => res.json())
+
+
+
                 .then(data => {
+
+
+
                     document.getElementById('locModalProjectName').textContent = data.name || 'Şantiye';
+
+
+
                     document.getElementById('locModalAddress').textContent = data.address || 'Adres bilgisi girilmemiş';
-                    
+
+
+
                     var mapsUrl = data.mapsUrl || ('https://www.google.com/maps?q=' + (data.latitude || '') + ',' + (data.longitude || ''));
+
+
+
                     document.getElementById('locModalUrlInput').value = mapsUrl;
+
+
+
                     document.getElementById('locModalMapsBtn').href = mapsUrl;
-                    
+
+
+
                     var waText = encodeURIComponent('Merhaba, ' + (data.name || 'Şantiye') + ' projemizin konumu ve yol tarifi: ' + mapsUrl + ' (Adres: ' + (data.address || '') + ')');
+
+
+
                     document.getElementById('locModalWhatsappBtn').href = 'https://api.whatsapp.com/send?text=' + waText;
-                    
+
+
+
                     var modal = new bootstrap.Modal(document.getElementById('santiyeLocationModal'));
+
+
+
                     modal.show();
+
+
+
                 })
+
+
+
                 .catch(err => {
+
+
+
                     window.open('/ConstructionProject/Map/' + projectId, '_blank');
+
+
+
                 });
+
+
+
         }
 
+
+
         function copyLocationUrl() {
+
+
+
             var input = document.getElementById('locModalUrlInput');
+
+
+
             if (input && input.value) {
+
+
+
                 navigator.clipboard.writeText(input.value).then(function() {
+
+
+
                     var feedback = document.getElementById('copyFeedback');
+
+
+
                     if (feedback) {
+
+
+
                         feedback.style.display = 'inline-block';
+
+
+
                         setTimeout(function() { feedback.style.display = 'none'; }, 2000);
+
+
+
                     }
+
+
+
                 });
+
+
+
             }
+
+
+
         }
+
+
+
     </script>
-    
+
+
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+
+
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
+
+
+
     @await RenderSectionAsync("Scripts", required: false)
+
+
+
+
+
+    <script>
+
+        // Evrensel Collapse Hafıza Motoru (Universal Collapse Memory)
+
+        document.addEventListener("DOMContentLoaded", function () {
+
+            document.querySelectorAll('.collapse').forEach(function(el) {
+
+                var id = el.id;
+
+                if (!id) return;
+
+                var savedState = localStorage.getItem('gmk_col_' + id);
+
+                if (savedState === 'open') {
+
+                    el.classList.add('show');
+
+                    var trg = document.querySelector('[data-bs-target="#' + id + '"], [href="#' + id + '"]');
+
+                    if (trg) {
+
+                        trg.setAttribute('aria-expanded', 'true');
+
+                        var txt = trg.querySelector('#text' + id.charAt(0).toUpperCase() + id.slice(1) + 'Toggle') || trg.querySelector('[id$="Toggle"]');
+
+                        if (txt && txt.innerText === 'Genişlet') txt.innerText = 'Daralt';
+
+                        var ico = trg.querySelector('.bi-chevron-down');
+
+                        if (ico) { ico.classList.remove('bi-chevron-down'); ico.classList.add('bi-chevron-up'); }
+
+                    }
+
+                } else if (savedState === 'closed') {
+
+                    el.classList.remove('show');
+
+                    var trg = document.querySelector('[data-bs-target="#' + id + '"], [href="#' + id + '"]');
+
+                    if (trg) {
+
+                        trg.setAttribute('aria-expanded', 'false');
+
+                        var txt = trg.querySelector('#text' + id.charAt(0).toUpperCase() + id.slice(1) + 'Toggle') || trg.querySelector('[id$="Toggle"]');
+
+                        if (txt && txt.innerText === 'Daralt') txt.innerText = 'Genişlet';
+
+                        var ico = trg.querySelector('.bi-chevron-up');
+
+                        if (ico) { ico.classList.remove('bi-chevron-up'); ico.classList.add('bi-chevron-down'); }
+
+                    }
+
+                }
+
+                el.addEventListener('shown.bs.collapse', function() {
+
+                    localStorage.setItem('gmk_col_' + id, 'open');
+
+                });
+
+                el.addEventListener('hidden.bs.collapse', function() {
+
+                    localStorage.setItem('gmk_col_' + id, 'closed');
+
+                });
+
+            });
+
+        });
+
+    </script>
+
 </body>
+
+
+
 </html>

@@ -1,0 +1,1472 @@
+@using GMK360.Core.Entities
+@using GMK360.Core.Entities.Construction
+@model AgendaRecord
+@{
+    ViewData["Title"] = "Müzakere Masası: " + Model.Title;
+
+    // Eğer bir projeye bağlıysa projenin bağlamsal sol menüsü ve üst şeridi korunur (Altın Kural 9)
+    if (Model.ProjectId.HasValue && Model.Project != null)
+    {
+        Layout = "~/Views/Shared/_ProjectLayout.cshtml";
+        ViewData["ProjectId"] = Model.ProjectId.Value;
+        ViewData["ProjectName"] = Model.Project.Name;
+        ViewData["ProjectStatus"] = Model.Project.Status;
+    }
+    else
+    {
+        Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+    }
+
+    bool isDone = Model.StatusId == AgendaConstants.StatusTamamlandi;
+    var phonebooks = ViewBag.ParticipantsPhonebook as List<GMK360.Core.Entities.Construction.AgencyPhonebook> ?? new List<GMK360.Core.Entities.Construction.AgencyPhonebook>();
+    var availablePhonebooks = ViewBag.AvailablePhonebooks as List<GMK360.Core.Entities.Construction.AgencyPhonebook> ?? new List<GMK360.Core.Entities.Construction.AgencyPhonebook>();
+    var topicDocs = ViewBag.TopicDocuments as List<DocumentArchive> ?? new List<DocumentArchive>();
+    var items = Model.Items?.OrderBy(i => i.OrderNo).ToList() ?? new List<AgendaItem>();
+}
+
+<div class="@(Model.ProjectId.HasValue ? "container-fluid px-0" : "container-fluid py-2 px-2 px-md-3")">
+
+    <!-- KOMPAKT KÜNYE & HIZLI KONTROL ŞERİDİ -->
+    <div class="card border-0 shadow-sm rounded-3 bg-white p-2 p-md-3 mb-2">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            
+            <!-- SOL: BAŞLIK, PROJE & DURUM -->
+            <div class="d-flex flex-column gap-1">
+                <div class="d-flex align-items-center gap-2 flex-wrap" style="font-size: 0.76rem;">
+                    @if (Model.ProjectId.HasValue)
+                    {
+                        <a href="/ConstructionProject/Meetings/@Model.ProjectId.Value" class="text-decoration-none text-muted fw-semibold">
+                            <i class="bi bi-arrow-left me-1"></i>Proje Toplantılarına Dön
+                        </a>
+                    }
+                    else
+                    {
+                        <a href="/Agenda/Meetings" class="text-decoration-none text-muted fw-semibold">
+                            <i class="bi bi-arrow-left me-1"></i>Ajandaya Dön
+                        </a>
+                    }
+                    <span class="text-muted">•</span>
+                    @if (Model.Project != null)
+                    {
+                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2 py-0 rounded-pill fw-bold">
+                            <i class="bi bi-building me-1"></i>@Model.Project.Name
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary bg-opacity-10 text-secondary border px-2 py-0 rounded-pill">
+                            Genel İstişare
+                        </span>
+                    }
+
+                    <span class="badge @(isDone ? "bg-success text-white" : "bg-warning text-dark") px-2 py-0 rounded-pill fw-bold">
+                        <i class="bi @(isDone ? "bi-check2-all" : "bi-broadcast") me-1"></i>@(isDone ? "Karara Bağlandı" : "Canlı Müzakere")
+                    </span>
+
+                    <!-- ALTIN KURAL 8: TARİH VE SAAT KESİNLİKLE AYRI GÖSTERİM -->
+                    <span class="text-muted">
+                        <i class="bi bi-calendar3 me-1"></i>@Model.EventDate.ToString("dd.MM.yyyy") <i class="bi bi-clock ms-1 me-1"></i>@Model.EventDate.ToString("HH:mm")
+                    </span>
+
+                    <span class="badge bg-light text-success border px-2 py-0 rounded-pill" id="globalAutoSaveBadge" style="display: none; font-size: 0.70rem;">
+                        <i class="bi bi-check-circle-fill me-1"></i>Kaydedildi
+                    </span>
+                </div>
+
+                <h5 class="fw-bold text-dark mb-0 fs-6 fs-md-5">
+                    @Model.Title
+                </h5>
+            </div>
+
+            <!-- SAĞ: AKSİYON BUTONLARI -->
+            <div class="d-flex align-items-center gap-1 flex-wrap">
+                @if (!isDone)
+                {
+                    <button type="button" class="btn btn-outline-warning text-dark border-warning rounded-pill px-2 px-md-3 py-1 fw-bold shadow-xs btn-sm d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#nextSessionModal" style="font-size: 0.80rem;">
+                        <i class="bi bi-calendar-plus"></i>
+                        <span class="d-none d-sm-inline">Devam Oturumu Planla</span>
+                    </button>
+
+                    <button type="button" class="btn btn-success rounded-pill px-3 py-1 fw-bold shadow-xs btn-sm d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#concludeModal" style="font-size: 0.80rem;">
+                        <i class="bi bi-check2-circle"></i>
+                        <span>Sonlandır & Mühürle</span>
+                    </button>
+                }
+                else
+                {
+                    <form asp-action="ReopenMeeting" asp-controller="Agenda" method="post" class="d-inline" onsubmit="return confirm('Toplantıyı yeniden canlı müzakereye açmak istiyor musunuz?');">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="recordId" value="@Model.Id" />
+                        <button type="submit" class="btn btn-outline-warning rounded-pill px-3 py-1 fw-bold shadow-xs btn-sm" style="font-size: 0.80rem;">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i>Yeniden Canlıya Aç
+                        </button>
+                    </form>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- İKİ KOLONLU GÖVDE: SOLDA RESİM 3 EXCEL DİYALOG GRID'İ (AUTO-SAVE), SAĞDA KÜNYE & KATILIMCILAR -->
+    <div class="row g-2 g-md-3">
+
+        <!-- SOL KOLON: RESİM 3 SARI ÇİZGİLİ EXCEL DİYALOG GRID'İ (KİM | NOT | BELGE [AL / GÖNDER]) -->
+        <div class="col-lg-8">
+
+            <div class="card border-0 shadow-sm rounded-3 bg-white overflow-hidden mb-2">
+                
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle mb-0" id="matrixGridTable" style="font-size: 0.82rem;">
+                        <thead class="table-light text-dark fw-bold" style="font-size: 0.74rem; background-color: #f8fafc;">
+                            <tr>
+                                <th style="width: 125px;" class="text-uppercase py-2 px-2">Kim</th>
+                                <th class="text-uppercase py-2 px-2">Not</th>
+                                <th style="width: 290px;" class="text-uppercase py-2 px-2">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>Belge</span>
+                                        <span class="text-muted fw-normal" style="font-size: 0.68rem;">[ Alınan | Gönderilen ]</span>
+                                    </div>
+                                </th>
+                                <th style="width: 35px;" class="p-1 text-center"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="matrixGridBody">
+                            @for (int idx = 0; idx < items.Count; idx++)
+                            {
+                                var itm = items[idx];
+                                var itemDocs = topicDocs.Where(d => d.SourceRecordId == itm.Id).ToList();
+                                var alDocs = itemDocs.Where(d => d.Category == "Alınan Belge" || string.IsNullOrWhiteSpace(d.Category) || d.Category == "Toplantı Belgesi").ToList();
+                                var gonderDocs = itemDocs.Where(d => d.Category == "Gönderilen Belge").ToList();
+                                bool isUs = itm.TopicTitle != null && itm.TopicTitle.Trim().ToLower() == "biz";
+
+                                <tr data-item-id="@itm.Id" class="grid-row">
+                                    <!-- 1. SÜTUN: KİM (KATILIMCI / BİZ) -->
+                                    <td class="p-1 align-top bg-white">
+                                        <select class="form-select form-select-sm border-0 fw-bold shadow-none row-speaker @(isUs ? "text-dark" : "text-primary")" 
+                                                onchange="triggerAutoSave(this)" style="font-size: 0.78rem; background-color: transparent;">
+                                            <option value="Katılımcı" selected="@(!isUs)">👤 Katılımcı</option>
+                                            <option value="Biz" selected="@(isUs)">🏢 Biz</option>
+                                        </select>
+                                    </td>
+
+                                    <!-- 2. SÜTUN: NOT (AUTO-SAVE & ENTER İLE ALT SATIRA GEÇİŞ) -->
+                                    <td class="p-1 align-top bg-white position-relative">
+                                        <textarea class="form-control form-control-sm border-0 shadow-none row-note" 
+                                                  rows="1" 
+                                                  placeholder="Not yazın..." 
+                                                  oninput="handleNoteInput(this)" 
+                                                  onkeydown="handleNoteKeyDown(event, this)"
+                                                  onblur="triggerAutoSave(this)"
+                                                  style="font-size: 0.82rem; line-height: 1.4; resize: none; background-color: transparent;">@(string.IsNullOrWhiteSpace(itm.PresentationText) ? itm.TopicTitle : itm.PresentationText)</textarea>
+                                        <span class="save-status text-success small position-absolute" style="right: 6px; bottom: 4px; display: none; font-size: 0.68rem;">✓</span>
+                                    </td>
+
+                                    <!-- 3. SÜTUN: BELGE (AL / GÖNDER) - HER ZAMAN AKTİF VE HAZIR -->
+                                    <td class="p-1 align-top bg-white">
+                                        <div class="d-flex flex-column gap-1">
+                                            <!-- AL (ALINAN BELGE) -->
+                                            <div class="d-flex align-items-center gap-1 flex-wrap">
+                                                <div class="btn-group btn-group-sm shadow-none" role="group">
+                                                    <label class="btn btn-xs btn-outline-primary py-0 px-1.5 rounded-start-pill mb-0 shadow-none" style="font-size: 0.68rem; cursor: pointer;" title="Dosya / Belge Seç">
+                                                        <i class="bi bi-box-arrow-in-down me-1"></i>Al
+                                                        <input type="file" class="d-none" onchange="uploadRowFile(this, 'al')" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+                                                    </label>
+                                                    <button type="button" class="btn btn-xs btn-outline-primary py-0 px-1.5 rounded-end-pill mb-0 shadow-none" style="font-size: 0.68rem;" onclick="openCameraModal(this)" title="Laptop / Tablet Kamerasıyla Fotoğraf Çek">
+                                                        <i class="bi bi-camera-fill"></i>
+                                                    </button>
+                                                </div>
+                                                <div class="doc-list-al d-flex align-items-center gap-1 flex-wrap">
+                                                    @foreach (var doc in alDocs)
+                                                    {
+                                                        <span class="badge bg-light text-dark border p-1 px-1.5 rounded-pill d-inline-flex align-items-center gap-1" id="docBadge_@doc.Id" style="font-size: 0.68rem;">
+                                                            <a href="@doc.DocumentUrl" target="_blank" class="text-decoration-none text-dark text-truncate" style="max-width: 80px;" title="@doc.FileName">
+                                                                <i class="bi bi-file-earmark text-primary"></i> @doc.FileName
+                                                            </a>
+                                                            <i class="bi bi-x text-danger" style="cursor: pointer;" onclick="deleteRowDoc(@doc.Id)" title="Kaldır"></i>
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </div>
+
+                                            <!-- GÖNDER (GÖNDERİLEN BELGE) -->
+                                            <div class="d-flex align-items-center gap-1 flex-wrap">
+                                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-1.5 rounded-pill mb-0 shadow-none" style="font-size: 0.68rem;" onclick="openArchivePicker(this)" title="Sistem Dosya Arşivinden Belge Seç & Masaya Gönder">
+                                                    <i class="bi bi-box-arrow-up me-1"></i>Gönder
+                                                </button>
+                                                <div class="doc-list-gonder d-flex align-items-center gap-1 flex-wrap">
+                                                    @foreach (var doc in gonderDocs)
+                                                    {
+                                                        <span class="badge bg-light text-dark border p-1 px-1.5 rounded-pill d-inline-flex align-items-center gap-1" id="docBadge_@doc.Id" style="font-size: 0.68rem;">
+                                                            <a href="@doc.DocumentUrl" target="_blank" class="text-decoration-none text-dark text-truncate" style="max-width: 80px;" title="@doc.FileName">
+                                                                <i class="bi bi-send text-secondary"></i> @doc.FileName
+                                                            </a>
+                                                            <i class="bi bi-x text-danger" style="cursor: pointer;" onclick="deleteRowDoc(@doc.Id)" title="Kaldır"></i>
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <!-- 4. SÜTUN: İŞLEM (SİL) -->
+                                    <td class="p-1 align-middle text-center bg-white">
+                                        <button type="button" class="btn btn-link text-muted p-0 border-0" onclick="deleteRow(this)" title="Satırı Sil" style="font-size: 0.75rem;">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+
+                            @{
+                                // Eğer hiç satır yoksa ilk satır Katılımcı ile başlasın, satır varsa son satırın tersi olsun
+                                string nextDefaultSpeaker = "Katılımcı";
+                                if (items.Any())
+                                {
+                                    var lastSpeaker = items.Last().TopicTitle;
+                                    nextDefaultSpeaker = (lastSpeaker != null && lastSpeaker.Trim().ToLower() == "katılımcı") ? "Biz" : "Katılımcı";
+                                }
+                                bool isNextUs = nextDefaultSpeaker == "Biz";
+                            }
+
+                            <!-- HER ZAMAN HAZIR DURAN BOŞ İLK/SON EXCEL SATIRI -->
+                            <tr data-item-id="0" class="grid-row bg-white">
+                                <td class="p-1 align-top">
+                                    <select class="form-select form-select-sm border-0 fw-bold shadow-none row-speaker @(isNextUs ? "text-dark" : "text-primary")" 
+                                            onchange="triggerAutoSave(this)" style="font-size: 0.78rem; background-color: transparent;">
+                                        <option value="Katılımcı" selected="@(!isNextUs)">👤 Katılımcı</option>
+                                        <option value="Biz" selected="@(isNextUs)">🏢 Biz</option>
+                                    </select>
+                                </td>
+                                <td class="p-1 align-top position-relative">
+                                    <textarea class="form-control form-control-sm border-0 shadow-none row-note" 
+                                              rows="1" 
+                                              placeholder="Buraya yazın..." 
+                                              oninput="handleNoteInput(this)" 
+                                              onkeydown="handleNoteKeyDown(event, this)"
+                                              onblur="triggerAutoSave(this)"
+                                              style="font-size: 0.82rem; line-height: 1.4; resize: none; background-color: transparent;"></textarea>
+                                    <span class="save-status text-success small position-absolute" style="right: 6px; bottom: 4px; display: none; font-size: 0.68rem;">✓</span>
+                                </td>
+                                <td class="p-1 align-top">
+                                    <div class="d-flex flex-column gap-1">
+                                        <!-- AL -->
+                                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                                            <div class="btn-group btn-group-sm shadow-none" role="group">
+                                                <label class="btn btn-xs btn-outline-primary py-0 px-1.5 rounded-start-pill mb-0 shadow-none" style="font-size: 0.68rem; cursor: pointer;" title="Malikten Alınan Belge / Fotoğraf Yükle">
+                                                    <i class="bi bi-box-arrow-in-down me-1"></i>Al
+                                                    <input type="file" class="d-none" onchange="uploadRowFile(this, 'al')" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+                                                </label>
+                                                <button type="button" class="btn btn-xs btn-outline-primary py-0 px-1.5 rounded-end-pill mb-0 shadow-none" style="font-size: 0.68rem;" onclick="openCameraModal(this)" title="Laptop / Tablet Kamerasıyla Fotoğraf Çek">
+                                                    <i class="bi bi-camera-fill"></i>
+                                                </button>
+                                            </div>
+                                            <div class="doc-list-al d-flex align-items-center gap-1 flex-wrap"></div>
+                                        </div>
+                                        <!-- GÖNDER -->
+                                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-1.5 rounded-pill mb-0 shadow-none" style="font-size: 0.68rem;" onclick="openArchivePicker(this)" title="Dosya Arşivinden Belge Seç & Bağla">
+                                                <i class="bi bi-box-arrow-up me-1"></i>Gönder
+                                            </button>
+                                            <div class="doc-list-gonder d-flex align-items-center gap-1 flex-wrap"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="p-1 align-middle text-center">
+                                    <button type="button" class="btn btn-link text-muted p-0 border-0" onclick="deleteRow(this)" title="Satırı Sil" style="font-size: 0.75rem;">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TOPLANTI NİHAİ KARAR BİLDİRGESİ (EĞER SONUÇLANDIRILDIYSA) -->
+            @if (!string.IsNullOrWhiteSpace(Model.Notes))
+            {
+                <div class="card border-0 shadow-sm rounded-3 p-3 bg-white mb-2 border-start border-4 border-success">
+                    <h6 class="fw-bold text-dark mb-1 d-flex align-items-center gap-1" style="font-size: 0.88rem;">
+                        <i class="bi bi-journal-check text-success"></i>
+                        <span>Genel Toplantı Özeti & Alınan Nihai Kararlar</span>
+                    </h6>
+                    <div class="p-2 rounded-2 bg-light border text-dark" style="white-space: pre-wrap; font-size: 0.82rem; line-height: 1.45;">@Model.Notes</div>
+                </div>
+            }
+
+        </div>
+
+        <!-- SAĞ KOLON: KÜNYE & KATILIMCILAR (TABLET & MOBİL İÇİN SIKIŞTIRILMIŞ) -->
+        <div class="col-lg-4">
+
+            <!-- PROJE VE MUHATAP KARTI -->
+            <div class="card border-0 shadow-sm rounded-3 p-2 p-md-3 bg-white mb-2">
+                <div class="d-flex justify-content-between align-items-center mb-2 pb-1 border-bottom">
+                    <span class="fw-bold text-dark small" style="font-size: 0.82rem;">
+                        <i class="bi bi-info-circle-fill text-primary me-1"></i>Toplantı Künyesi
+                    </span>
+                    @if (Model.Phonebook != null && !string.IsNullOrWhiteSpace(Model.Phonebook.PhoneNumber))
+                    {
+                        var cleanNum = Model.Phonebook.PhoneNumber.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
+                        if (cleanNum.StartsWith("0")) cleanNum = "90" + cleanNum.Substring(1);
+                        else if (!cleanNum.StartsWith("90")) cleanNum = "90" + cleanNum;
+                        <div class="d-flex gap-1">
+                            <a href="tel:@Model.Phonebook.PhoneNumber" class="btn btn-outline-primary btn-sm rounded-circle p-1 d-flex align-items-center justify-content-center" style="width: 26px; height: 26px;" title="Ara">
+                                <i class="bi bi-telephone-fill" style="font-size: 0.72rem;"></i>
+                            </a>
+                            <a href="https://wa.me/@cleanNum" target="_blank" class="btn btn-outline-success btn-sm rounded-circle p-1 d-flex align-items-center justify-content-center" style="width: 26px; height: 26px;" title="WhatsApp">
+                                <i class="bi bi-whatsapp" style="font-size: 0.72rem;"></i>
+                            </a>
+                        </div>
+                    }
+                </div>
+
+                @if (Model.Project != null)
+                {
+                    <div class="mb-2">
+                        <small class="text-muted fw-bold d-block" style="font-size: 0.68rem;">ŞANTİYE / PROJE</small>
+                        <div class="fw-bold text-primary text-truncate" style="font-size: 0.85rem;">@Model.Project.Name</div>
+                        <small class="text-secondary d-block text-truncate" style="font-size: 0.72rem;"><i class="bi bi-geo-alt me-1 text-danger"></i>@(Model.Project.Address ?? "-")</small>
+                    </div>
+                }
+
+                @if (Model.Phonebook != null)
+                {
+                    <div class="p-2 rounded-2 bg-light border mb-2">
+                        <small class="text-muted fw-bold d-block" style="font-size: 0.68rem;">MUHATAP</small>
+                        <div class="fw-bold text-dark text-truncate" style="font-size: 0.85rem;">@Model.Phonebook.Name</div>
+                        @if (!string.IsNullOrWhiteSpace(Model.Phonebook.AuthorizedPerson))
+                        {
+                            <small class="text-muted d-block text-truncate" style="font-size: 0.72rem;"><i class="bi bi-person me-1"></i>Yetkili: @Model.Phonebook.AuthorizedPerson</small>
+                        }
+                    </div>
+                }
+
+                <!-- KATILIMCILAR LİSTESİ -->
+                <div>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <small class="text-muted fw-bold" style="font-size: 0.68rem;">KATILIMCILAR (@phonebooks.Count)</small>
+                        @if (!isDone)
+                        {
+                            <button type="button" class="btn btn-outline-primary btn-sm rounded-pill py-0 px-2 fw-bold" style="font-size: 0.70rem;" data-bs-toggle="modal" data-bs-target="#addParticipantModal">
+                                <i class="bi bi-person-plus-fill me-1"></i>+ Katılımcı Ekle
+                            </button>
+                        }
+                    </div>
+
+                    @if (phonebooks.Any())
+                    {
+                        <div class="d-flex flex-column gap-1">
+                            @foreach (var p in phonebooks)
+                            {
+                                <div class="d-flex align-items-center justify-content-between p-1 px-2 rounded-2 bg-light border" style="font-size: 0.76rem;">
+                                    <div class="d-flex align-items-center gap-1 text-truncate">
+                                        <i class="bi bi-person-check-fill text-success" style="font-size: 0.75rem;"></i>
+                                        <span class="fw-bold text-dark text-truncate">@p.Name</span>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(p.PhoneNumber))
+                                    {
+                                        <a href="tel:@p.PhoneNumber" class="btn btn-link text-primary p-0 ms-1" title="Ara">
+                                            <i class="bi bi-telephone" style="font-size: 0.75rem;"></i>
+                                        </a>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <small class="text-muted fst-italic" style="font-size: 0.72rem;">Ek katılımcı eklenmedi. Yukarıdaki butonla rehberden veya hızlı yeni kayıtla ekleyebilirsiniz.</small>
+                    }
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- MODAL: TOPLANTIYA KATILIMCI EKLE (3 SANİYEDE HIZLI KAYIT VEYA REHBERDEN ÇAĞIR) -->
+<div class="modal fade" id="addParticipantModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-3">
+            <div class="modal-header border-bottom py-2 bg-primary text-white">
+                <h6 class="modal-title fw-bold mb-0" style="font-size: 0.88rem;">
+                    <i class="bi bi-person-plus-fill me-1"></i>Toplantıya Katılımcı Ekle
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <!-- TAB BAŞLIKLARI -->
+            <ul class="nav nav-pills nav-fill bg-light p-1 border-bottom" id="participantTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active py-1 fw-bold" id="quickNew-tab" data-bs-toggle="pill" data-bs-target="#quickNewTabPane" type="button" role="tab" style="font-size: 0.78rem;">
+                        <i class="bi bi-lightning-charge-fill text-warning me-1"></i>Hızlı Yeni Kayıt (3 Saniye)
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link py-1 fw-bold" id="fromPhonebook-tab" data-bs-toggle="pill" data-bs-target="#fromPhonebookTabPane" type="button" role="tab" style="font-size: 0.78rem;">
+                        <i class="bi bi-journal-bookmark-fill me-1"></i>Rehberden Çağır (@availablePhonebooks.Count)
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="participantTabsContent">
+                <!-- TAB 1: HIZLI YENİ KAYIT -->
+                <div class="tab-pane fade show active p-3" id="quickNewTabPane" role="tabpanel">
+                    <form asp-action="QuickCreateParticipant" asp-controller="Agenda" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="recordId" value="@Model.Id" />
+
+                        <div class="alert alert-light border rounded-2 p-2 small mb-3" style="font-size: 0.74rem;">
+                            <i class="bi bi-info-circle text-primary me-1"></i>
+                            Görüşmeye ilk kez katılan malik veya temsilciyi anında rehbere kaydeder ve bu toplantı masasına ekler.
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold text-dark mb-1" style="font-size: 0.78rem;">Adı Soyadı <span class="text-danger">*</span></label>
+                            <input type="text" name="name" class="form-control form-control-sm rounded-2 fw-bold" placeholder="Örn: Ahmet Yılmaz" required />
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold text-dark mb-1" style="font-size: 0.78rem;">Telefon Numarası <span class="text-danger">*</span></label>
+                            <input type="tel" name="phoneNumber" class="form-control form-control-sm rounded-2" placeholder="05XX XXX XX XX" required />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-dark mb-1" style="font-size: 0.78rem;">Sıfat / Rolü (Opsiyonel)</label>
+                            <input type="text" name="role" class="form-control form-control-sm rounded-2" placeholder="Örn: Daire 4 Maliki, Bina Yöneticisi, Mirasçı, Avukat..." />
+                        </div>
+
+                        <div class="d-flex justify-content-between pt-2 border-top">
+                            <button type="button" class="btn btn-light rounded-pill px-3 btn-sm" data-bs-dismiss="modal">İptal</button>
+                            <button type="submit" class="btn btn-primary rounded-pill px-3 fw-bold shadow-xs btn-sm">
+                                <i class="bi bi-check2-circle me-1"></i>Rehbere Ekle & Masaya Al
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- TAB 2: REHBERDEN ÇAĞIR -->
+                <div class="tab-pane fade p-3" id="fromPhonebookTabPane" role="tabpanel">
+                    <form asp-action="AddMeetingParticipant" asp-controller="Agenda" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="recordId" value="@Model.Id" />
+
+                        @if (availablePhonebooks.Any())
+                        {
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-dark mb-1" style="font-size: 0.78rem;">Rehberdeki Kişiyi Seçin <span class="text-danger">*</span></label>
+                                <select name="phonebookId" class="form-select form-select-sm rounded-2" required>
+                                    <option value="">-- Kişi Seçin --</option>
+                                    @foreach (var c in availablePhonebooks)
+                                    {
+                                        <option value="@c.Id">@c.Name (@c.PhoneNumber@(string.IsNullOrWhiteSpace(c.AuthorizedPerson) ? "" : $" - {c.AuthorizedPerson}"))</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="d-flex justify-content-between pt-2 border-top">
+                                <button type="button" class="btn btn-light rounded-pill px-3 btn-sm" data-bs-dismiss="modal">İptal</button>
+                                <button type="submit" class="btn btn-primary rounded-pill px-3 fw-bold shadow-xs btn-sm">
+                                    <i class="bi bi-plus-circle me-1"></i>Toplantıya Dahil Et
+                                </button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-4">
+                                <i class="bi bi-people text-muted fs-3"></i>
+                                <p class="text-muted small mt-2 mb-3" style="font-size: 0.78rem;">Rehberdeki tüm kişiler bu toplantıya zaten eklenmiş veya henüz rehberde kayıt yok.</p>
+                                <button type="button" class="btn btn-outline-primary btn-sm rounded-pill" onclick="document.getElementById('quickNew-tab').click();">
+                                    <i class="bi bi-plus-lg me-1"></i>Yeni Hızlı Kayıt Oluştur
+                                </button>
+                            </div>
+                        }
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: SONRAKİ DEVAM OTURUMUNU PLANLA (ALTIN KURAL 8: TARİH VE SAAT KESİNLİKLE AYRI İKİ INPUT) -->
+<div class="modal fade" id="nextSessionModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-3">
+            <form asp-action="ScheduleNextSession" asp-controller="Agenda" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="recordId" value="@Model.Id" />
+
+                <div class="modal-header border-bottom py-2 bg-warning text-dark">
+                    <h6 class="modal-title fw-bold mb-0" style="font-size: 0.88rem;">
+                        <i class="bi bi-calendar-plus me-1"></i>Sonraki Devam Oturumunu Belirle
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body p-3">
+                    <div class="mb-2">
+                        <label class="form-label small text-muted fw-bold mb-1">Mevcut Oturum</label>
+                        <input type="text" class="form-control form-control-sm bg-light fw-bold" value="@Model.Title" readonly />
+                    </div>
+
+                    <div class="row g-2 mb-2">
+                        <div class="col-7">
+                            <label class="form-label small fw-bold text-dark mb-1">Sonraki Oturum Tarihi <span class="text-danger">*</span></label>
+                            <input type="date" name="nextSessionDate" class="form-control form-control-sm fw-bold" value="@DateTime.Now.AddDays(3).ToString("yyyy-MM-dd")" required />
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label small fw-bold text-dark mb-1">Başlama Saati <span class="text-danger">*</span></label>
+                            <input type="time" name="nextSessionTime" class="form-control form-control-sm fw-bold" value="14:00" required />
+                        </div>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-dark mb-1">Devam Notu / Kararlaştırılan Hazırlık</label>
+                        <textarea name="nextSessionNote" class="form-control form-control-sm" rows="3" placeholder="Örn: Taraflar teklif rakamlarını aile bireyleriyle görüşüp bu tarihte nihai karar için toplanacaktır..."></textarea>
+                    </div>
+
+                    <div class="form-check p-2.5 rounded-2 bg-light border mt-2">
+                        <input class="form-check-input ms-0 me-2" type="checkbox" name="createNewSession" value="true" id="chkCreateNewRoomSession" checked>
+                        <label class="form-check-label small fw-bold text-dark" for="chkCreateNewRoomSession">
+                            Bu oturumu kapat ve takvime <b>"2. Devam Oturumu"</b> olarak yeni seans bağla
+                        </label>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-top py-2 d-flex justify-content-between bg-light">
+                    <button type="button" class="btn btn-light rounded-pill px-3 btn-sm border" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-warning rounded-pill px-4 fw-bold shadow-xs btn-sm">
+                        <i class="bi bi-check2-circle me-1"></i>Ajandaya Kaydet & Devam Et
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: SİSTEM DOSYA ARŞİVİNDEN BELGE SEÇ & MASAYA BAĞLA (KLASÖR ODAKLI GEZİNTİ) -->
+<div class="modal fade" id="archiveDocPickerModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-3">
+            <div class="modal-header border-bottom py-2 bg-primary text-white">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-folder-symlink-fill fs-5 text-warning"></i>
+                    <div>
+                        <h6 class="modal-title fw-bold mb-0" style="font-size: 0.88rem;">Sistem Dosya Arşivi & Evrak Deposu</h6>
+                        <small class="text-white-50" style="font-size: 0.70rem;">Klasörlerden veya arama yaparak belgeyi doğrudan müzakere masasına bağlayın.</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body p-3">
+                <!-- ARAMA VE DOLAP / PROJE FİLTRESİ -->
+                <div class="d-flex justify-content-between align-items-center gap-2 mb-3 flex-wrap">
+                    <div class="input-group input-group-sm flex-grow-1" style="min-width: 220px;">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                        <input type="text" class="form-control border-start-0" id="inpArchiveSearch" placeholder="Belge başlığı veya konu ara..." oninput="handleArchiveSearchInput(this.value)" />
+                    </div>
+
+                    <div class="btn-group btn-group-sm flex-shrink-0" role="group">
+                        <button type="button" class="btn btn-outline-primary btn-proj-filter" id="btnFilterCorporate" onclick="selectArchiveScope('corporate', this)" style="font-size: 0.72rem;" title="Şirket Mülk / Kira, Araçlar, Hukuk & Şirket Evrakları">
+                            <i class="bi bi-building-fill-gear me-1"></i>Genel Merkez Arşivi
+                        </button>
+                        @if (Model.ProjectId.HasValue)
+                        {
+                            <button type="button" class="btn btn-outline-primary btn-proj-filter" id="btnFilterThisProject" onclick="selectArchiveScope('project', this)" style="font-size: 0.72rem;" title="@(Model.Project?.Name ?? "Bu Proje")">
+                                <i class="bi bi-safe2-fill me-1"></i>Bu Proje Dolabı
+                            </button>
+                        }
+                        <button type="button" class="btn btn-primary active btn-proj-filter" id="btnFilterAllProjects" onclick="selectArchiveScope('all', this)" style="font-size: 0.72rem;">
+                            <i class="bi bi-collection me-1"></i>Tüm Arşiv
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 1. GÖRÜNÜM: KLASÖRLER / RAFLAR KARTLARI -->
+                <div id="archiveFolderCardsView">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-bold text-dark small" style="font-size: 0.78rem;">
+                            <i class="bi bi-folder2-open text-primary me-1"></i>Klasör Seçin
+                        </span>
+                        <small class="text-muted" style="font-size: 0.70rem;">İlgili klasöre tıklayarak içindeki resmi belgelere ulaşın.</small>
+                    </div>
+                    <div class="row g-2" id="archiveFolderGrid">
+                        <!-- Javascript ile klasör kartları doldurulur -->
+                    </div>
+                </div>
+
+                <!-- 2. GÖRÜNÜM: SEÇİLEN KLASÖRÜN BELGE LİSTESİ -->
+                <div id="archiveDocListView" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2 pb-1 border-bottom">
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none p-0 text-dark fw-bold d-inline-flex align-items-center" onclick="showFolderCardsView()" style="font-size: 0.80rem;">
+                            <i class="bi bi-arrow-left text-primary fs-5 me-1"></i>
+                            <span id="currentFolderBreadcrumb">Klasör Belgeleri</span>
+                        </button>
+                        <span class="badge bg-light text-muted border" id="currentFolderDocCountBadge">0 Belge</span>
+                    </div>
+
+                    <div class="table-responsive border rounded-2" style="max-height: 340px; overflow-y: auto;">
+                        <table class="table table-hover align-middle mb-0" style="font-size: 0.78rem;">
+                            <thead class="table-light sticky-top text-muted" style="font-size: 0.72rem;">
+                                <tr>
+                                    <th>Belge Başlığı</th>
+                                    <th style="width: 150px;">Dolap / Kaynak</th>
+                                    <th style="width: 90px;">Tarih</th>
+                                    <th style="width: 120px;" class="text-end">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody id="archiveDocTableBody">
+                                <!-- Javascript ile doldurulur -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer border-top py-2 d-flex justify-content-between bg-light">
+                <span class="text-muted small" style="font-size: 0.70rem;">
+                    <i class="bi bi-info-circle text-primary me-1"></i>Seçtiğiniz belge masadaki satırın <strong>'Gönder'</strong> hanesine bağlanır.
+                </span>
+                <button type="button" class="btn btn-light rounded-pill px-3 btn-sm border" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: CANLI KAMERA FOTOĞRAF ÇEKİCİ (LAPTOP & TABLET) -->
+<div class="modal fade" id="cameraCaptureModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-3">
+            <div class="modal-header border-bottom py-2 bg-dark text-white">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-camera-fill text-warning fs-5"></i>
+                    <div>
+                        <h6 class="modal-title fw-bold mb-0" style="font-size: 0.88rem;">Kamera ile Evrak / Fotoğraf Çek</h6>
+                        <small class="text-white-50" style="font-size: 0.70rem;">Masadaki tapu, rapor veya yapıyı çekip doğrudan satıra bağlayın.</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopCameraStream()"></button>
+            </div>
+
+            <div class="modal-body p-2 text-center bg-black position-relative" style="min-height: 280px;">
+                <video id="liveCameraVideo" autoplay playsinline class="w-100 rounded-2 shadow-xs" style="max-height: 380px; object-fit: contain;"></video>
+                <canvas id="cameraCanvas" class="d-none"></canvas>
+                
+                <div id="cameraLoadingText" class="position-absolute top-50 start-50 translate-middle text-white small">
+                    <div class="spinner-border spinner-border-sm text-warning me-1"></div> Kamera başlatılıyor...
+                </div>
+            </div>
+
+            <div class="modal-footer border-top py-2 d-flex justify-content-between bg-light">
+                <button type="button" class="btn btn-outline-secondary rounded-pill px-3 btn-sm" id="btnSwitchCamera" onclick="switchCameraDevice()" style="font-size: 0.76rem;">
+                    <i class="bi bi-arrow-repeat me-1"></i>Kamerayı Değiştir
+                </button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-light rounded-pill px-3 btn-sm" data-bs-dismiss="modal" onclick="stopCameraStream()">Vazgeç</button>
+                    <button type="button" class="btn btn-success rounded-pill px-4 fw-bold shadow-xs btn-sm d-flex align-items-center gap-1" onclick="captureAndUploadPhoto()">
+                        <i class="bi bi-camera-fill"></i>
+                        <span>Fotoğrafı Çek & Masaya Ekle</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    var currentMeetingRecordId = @Model.Id;
+    var saveDebounceTimers = {};
+
+    function autoResize(textarea) {
+        textarea.style.height = 'auto';
+        textarea.style.height = (textarea.scrollHeight) + 'px';
+    }
+
+    function handleNoteInput(textarea) {
+        autoResize(textarea);
+        
+        var row = textarea.closest('tr');
+        var tbody = document.getElementById('matrixGridBody');
+        var allRows = tbody.querySelectorAll('tr.grid-row');
+        var isLastRow = (allRows[allRows.length - 1] === row);
+
+        // Son satırda yazı yazılmaya başlandığı an otomatik olarak altına yeni boş satır aç (Diyalog sırasına göre)
+        if (isLastRow && textarea.value.trim().length > 0) {
+            var currentSpeaker = row.querySelector('.row-speaker').value;
+            var nextSpeaker = (currentSpeaker === 'Katılımcı') ? 'Biz' : 'Katılımcı';
+            spawnNewRow(nextSpeaker);
+        }
+
+        debounceSave(textarea);
+    }
+
+    function handleNoteKeyDown(e, textarea) {
+        // Enter'a basılınca (Shift olmadan) alt satırdaki not hücresine geç
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            triggerAutoSave(textarea);
+
+            var row = textarea.closest('tr');
+            var nextRow = row.nextElementSibling;
+            if (nextRow && nextRow.querySelector('.row-note')) {
+                nextRow.querySelector('.row-note').focus();
+            }
+        }
+    }
+
+    function debounceSave(input) {
+        var row = input.closest('tr');
+        var rowId = row.getAttribute('data-item-id') || 'temp_' + Math.random();
+        if (saveDebounceTimers[rowId]) clearTimeout(saveDebounceTimers[rowId]);
+        saveDebounceTimers[rowId] = setTimeout(function() {
+            triggerAutoSave(input);
+        }, 700);
+    }
+
+    function triggerAutoSave(element) {
+        var row = element.closest('tr');
+        if (!row) return;
+
+        var rowId = row.getAttribute('data-item-id');
+        var speakerSelect = row.querySelector('.row-speaker');
+        var noteTextarea = row.querySelector('.row-note');
+        var saveIndicator = row.querySelector('.save-status');
+
+        var speaker = speakerSelect ? speakerSelect.value : 'Katılımcı';
+        var note = noteTextarea ? noteTextarea.value.trim() : '';
+
+        // Boş satırda hiçbir şey yazılmamışsa kaydetme
+        if ((!rowId || rowId === "0") && note === "") return;
+
+        var formData = new FormData();
+        if (rowId && rowId !== "0") {
+            formData.append('itemId', rowId);
+        }
+        formData.append('recordId', currentMeetingRecordId);
+        formData.append('speaker', speaker);
+        formData.append('note', note);
+
+        fetch('/Agenda/SaveGridRowAuto', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.success) {
+                if (!rowId || rowId === "0") {
+                    row.setAttribute('data-item-id', data.itemId);
+                }
+
+                if (saveIndicator) {
+                    saveIndicator.style.display = 'inline';
+                    setTimeout(function() { saveIndicator.style.display = 'none'; }, 2000);
+                }
+
+                var globalBadge = document.getElementById('globalAutoSaveBadge');
+                if (globalBadge) {
+                    globalBadge.style.display = 'inline-block';
+                    setTimeout(function() { globalBadge.style.display = 'none'; }, 2500);
+                }
+            } else {
+                console.error('Kayıt başarısız:', data.message);
+            }
+        })
+        .catch(function(err) {
+            console.error('AutoSave hatası:', err);
+        });
+    }
+
+    function spawnNewRow(speakerName) {
+        var tbody = document.getElementById('matrixGridBody');
+        var isUs = (speakerName === 'Biz');
+
+        var newTr = document.createElement('tr');
+        newTr.setAttribute('data-item-id', '0');
+        newTr.className = 'grid-row bg-white';
+        newTr.innerHTML = `
+            <td class="p-1 align-top">
+                <select class="form-select form-select-sm border-0 fw-bold shadow-none row-speaker ${isUs ? 'text-dark' : 'text-primary'}" 
+                        onchange="triggerAutoSave(this)" style="font-size: 0.78rem; background-color: transparent;">
+                    <option value="Katılımcı" ${!isUs ? 'selected' : ''}>👤 Katılımcı</option>
+                    <option value="Biz" ${isUs ? 'selected' : ''}>🏢 Biz</option>
+                </select>
+            </td>
+            <td class="p-1 align-top position-relative">
+                <textarea class="form-control form-control-sm border-0 shadow-none row-note" 
+                          rows="1" 
+                          placeholder="Buraya yazın..." 
+                          oninput="handleNoteInput(this)" 
+                          onkeydown="handleNoteKeyDown(event, this)"
+                          onblur="triggerAutoSave(this)"
+                          style="font-size: 0.82rem; line-height: 1.4; resize: none; background-color: transparent;"></textarea>
+                <span class="save-status text-success small position-absolute" style="right: 6px; bottom: 4px; display: none; font-size: 0.68rem;">✓</span>
+            </td>
+            <td class="p-1 align-top">
+                <div class="d-flex flex-column gap-1">
+                    <div class="d-flex align-items-center gap-1 flex-wrap">
+                        <div class="btn-group btn-group-sm shadow-none" role="group">
+                            <label class="btn btn-xs btn-outline-primary py-0 px-1.5 rounded-start-pill mb-0 shadow-none" style="font-size: 0.68rem; cursor: pointer;" title="Dosya / Belge Seç">
+                                <i class="bi bi-box-arrow-in-down me-1"></i>Al
+                                <input type="file" class="d-none" onchange="uploadRowFile(this, 'al')" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+                            </label>
+                            <button type="button" class="btn btn-xs btn-outline-primary py-0 px-1.5 rounded-end-pill mb-0 shadow-none" style="font-size: 0.68rem;" onclick="openCameraModal(this)" title="Laptop / Tablet Kamerasıyla Fotoğraf Çek">
+                                <i class="bi bi-camera-fill"></i>
+                            </button>
+                        </div>
+                        <div class="doc-list-al d-flex align-items-center gap-1 flex-wrap"></div>
+                    </div>
+                    <div class="d-flex align-items-center gap-1 flex-wrap">
+                        <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-1.5 rounded-pill mb-0 shadow-none" style="font-size: 0.68rem;" onclick="openArchivePicker(this)" title="Dosya Arşivinden Belge Seç & Bağla">
+                            <i class="bi bi-box-arrow-up me-1"></i>Gönder
+                        </button>
+                        <div class="doc-list-gonder d-flex align-items-center gap-1 flex-wrap"></div>
+                    </div>
+                </div>
+            </td>
+            <td class="p-1 align-middle text-center">
+                <button type="button" class="btn btn-link text-muted p-0 border-0" onclick="deleteRow(this)" title="Satırı Sil" style="font-size: 0.75rem;">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(newTr);
+    }
+
+    function deleteRow(btn) {
+        var row = btn.closest('tr');
+        var itemId = row.getAttribute('data-item-id');
+
+        if (!itemId || itemId === "0") {
+            row.remove();
+            return;
+        }
+
+        if (!confirm('Bu satırı silmek istiyor musunuz?')) return;
+
+        var formData = new FormData();
+        formData.append('itemId', itemId);
+        formData.append('recordId', currentMeetingRecordId);
+
+        fetch('/Agenda/DeleteGridRowAuto', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.success) {
+                row.remove();
+            }
+        });
+    }
+
+    function uploadRowFile(input, direction) {
+        if (!input.files || input.files.length === 0) return;
+        var file = input.files[0];
+        var row = input.closest('tr');
+        var itemId = parseInt(row.getAttribute('data-item-id') || "0");
+
+        var formData = new FormData();
+        formData.append('itemId', itemId);
+        formData.append('recordId', currentMeetingRecordId);
+        formData.append('direction', direction);
+        formData.append('file', file);
+
+        var targetContainer = direction === 'al' ? row.querySelector('.doc-list-al') : row.querySelector('.doc-list-gonder');
+
+        fetch('/Agenda/UploadGridDocumentAuto', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.success) {
+                // Eğer yeni satırdıysa sunucunun ürettiği itemId atanır
+                if (itemId <= 0 && data.docId) {
+                    // Sayfadaki satırı güncellemek için gerekirse itemId'yi kontrol et
+                }
+
+                if (targetContainer) {
+                    var badge = document.createElement('span');
+                    badge.className = 'badge bg-light text-dark border p-1 px-1.5 rounded-pill d-inline-flex align-items-center gap-1';
+                    badge.id = 'docBadge_' + data.docId;
+                    badge.style.fontSize = '0.68rem';
+                    badge.innerHTML = `
+                        <a href="${data.fileUrl}" target="_blank" class="text-decoration-none text-dark text-truncate" style="max-width: 80px;" title="${data.fileName}">
+                            <i class="bi ${data.isImage ? 'bi-image text-info' : (data.isPdf ? 'bi-file-pdf text-danger' : 'bi-file-earmark text-primary')}"></i> ${data.fileName}
+                        </a>
+                        <i class="bi bi-x text-danger" style="cursor: pointer;" onclick="deleteRowDoc(${data.docId})" title="Kaldır"></i>
+                    `;
+                    targetContainer.appendChild(badge);
+                }
+                input.value = '';
+
+                // Eğer son satırsa altına yeni satır aç
+                var tbody = document.getElementById('matrixGridBody');
+                var allRows = tbody.querySelectorAll('tr.grid-row');
+                if (allRows[allRows.length - 1] === row) {
+                    var currentSpeaker = row.querySelector('.row-speaker').value;
+                    var nextSpeaker = (currentSpeaker === 'Katılımcı') ? 'Biz' : 'Katılımcı';
+                    spawnNewRow(nextSpeaker);
+                }
+            }
+        })
+        .catch(function(err) {
+            console.error('Belge yükleme hatası:', err);
+        });
+    }
+
+    function deleteRowDoc(docId) {
+        if (!confirm('Belgeyi kaldırmak istiyor musunuz?')) return;
+
+        var formData = new FormData();
+        formData.append('documentId', docId);
+
+        fetch('/Agenda/DeleteGridDocumentAuto', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.success) {
+                var badge = document.getElementById('docBadge_' + docId);
+                if (badge) badge.remove();
+            }
+        });
+    }
+
+    // Başlangıçta textarea yüksekliklerini ayarla
+    document.querySelectorAll('.row-note').forEach(function(el) {
+        autoResize(el);
+    });
+
+    var activePickerTargetRow = null;
+    var cachedArchiveDocs = [];
+    var currentArchiveScope = 'all';
+    var selectedFolderCategory = null;
+    var currentArchiveSearch = '';
+    var activeMeetingProjectId = @(Model.ProjectId.HasValue ? Model.ProjectId.Value.ToString() : "null");
+
+    var standardFolders = [
+        { name: "Şirket Mülk & Yerleşke (Tapu / Kira)", icon: "bi-building-fill text-warning", desc: "Merkez Ofis Tapu, İskan veya Kira Sözleşmesi", isCorp: true },
+        { name: "Hukuk & Şirket Sözleşmeleri", icon: "bi-briefcase-fill text-danger", desc: "Avukatlık, Müşavirlik, Hukuk Danışmanlığı", isCorp: true },
+        { name: "Şirket Araçları & Garaj", icon: "bi-car-front-fill text-info", desc: "Filo Araç Ruhsatları, Kasko, Sigortalar", isCorp: true },
+        { name: "Resmi & Ticari Evraklar", icon: "bi-shield-check text-success", desc: "Vergi Levhası, Ticaret Sicil, İmza Sirküleri", isCorp: true },
+        { name: "Kentsel Dönüşüm Prosedürleri", icon: "bi-building-gear text-primary", desc: "Dönüşüm Süreç Kılavuzları & Yol Haritası", isCorp: false },
+        { name: "Sözleşmeler", icon: "bi-file-earmark-text text-secondary", desc: "Kat Karşılığı & Müteahhit Sözleşmeleri", isCorp: false },
+        { name: "Çizimler", icon: "bi-compass text-info", desc: "Mimari Avan Projeler & Kat Planları", isCorp: false },
+        { name: "Resmi Evraklar", icon: "bi-file-earmark-check text-success", desc: "Tapu Kayıtları, İmar Durumu, Ruhsat", isCorp: false },
+        { name: "Bina Görselleri", icon: "bi-images text-danger", desc: "3D Renderlar & Saha / Arsa Görselleri", isCorp: false },
+        { name: "Tutanaklar", icon: "bi-journal-text text-primary", desc: "Toplantı Tutanakları & Kararlar", isCorp: false },
+        { name: "Diğer", icon: "bi-collection text-secondary", desc: "Şirket & Proje Diğer Belgeleri", isCorp: false }
+    ];
+
+    function getCleanDocTitle(doc) {
+        if (!doc) return 'Belge';
+        var raw = (doc.title || doc.fileName || 'Belge').trim();
+        raw = raw.replace(/\.(pdf|jpe?g|png|docx?|xlsx?)$/i, '');
+        if (/^kamera_evrak_/i.test(raw)) {
+            return 'Kamera Çekimi Evrak ' + (doc.uploadDate ? '(' + doc.uploadDate + ')' : '');
+        }
+        raw = raw.replace(/_/g, ' ');
+        return raw;
+    }
+
+    function isDocInFolder(docCat, folderName) {
+        if (!docCat || !folderName) return false;
+        var c = docCat.trim().toLowerCase();
+        var f = folderName.trim().toLowerCase();
+        if (c === f) return true;
+        if (c.indexOf(f) !== -1 || f.indexOf(c) !== -1) return true;
+        if ((f.indexOf('mülk') !== -1 || f.indexOf('kira') !== -1 || f.indexOf('yerleşke') !== -1) && 
+            (c.indexOf('mülk') !== -1 || c.indexOf('kira') !== -1 || c.indexOf('yerleşke') !== -1 || c.indexOf('taşınmaz') !== -1)) return true;
+        if ((f.indexOf('hukuk') !== -1 || f.indexOf('avukat') !== -1) && (c.indexOf('hukuk') !== -1 || c.indexOf('avukat') !== -1)) return true;
+        if ((f.indexOf('araç') !== -1 || f.indexOf('garaj') !== -1) && (c.indexOf('araç') !== -1 || c.indexOf('garaj') !== -1 || c.indexOf('filo') !== -1)) return true;
+        if ((f.indexOf('ticari') !== -1 || f.indexOf('sicil') !== -1 || f.indexOf('sirkü') !== -1) && (c.indexOf('ticari') !== -1 || c.indexOf('sicil') !== -1 || c.indexOf('sirkü') !== -1)) return true;
+        if ((f.indexOf('kentsel') !== -1 || f.indexOf('prosedür') !== -1) && (c.indexOf('kentsel') !== -1 || c.indexOf('prosedür') !== -1)) return true;
+        return false;
+    }
+
+    function openArchivePicker(btn) {
+        activePickerTargetRow = btn.closest('tr');
+        var modalEl = document.getElementById('archiveDocPickerModal');
+        var modal = new bootstrap.Modal(modalEl);
+        modal.show();
+
+        currentArchiveSearch = '';
+        var searchInput = document.getElementById('inpArchiveSearch');
+        if (searchInput) searchInput.value = '';
+
+        loadArchiveDocuments();
+    }
+
+    function loadArchiveDocuments() {
+        var url = '/Agenda/GetArchiveDocuments';
+
+        fetch(url)
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            cachedArchiveDocs = (Array.isArray(data) ? data : data.documents) || [];
+            showFolderCardsView();
+        })
+        .catch(function(err) {
+            console.error('Arşiv yükleme hatası:', err);
+        });
+    }
+
+    function selectArchiveScope(scope, btn) {
+        currentArchiveScope = scope;
+        document.querySelectorAll('.btn-proj-filter').forEach(function(b) {
+            b.classList.remove('active', 'btn-primary');
+            b.classList.add('btn-outline-primary');
+        });
+        if (btn) {
+            btn.classList.add('active', 'btn-primary');
+            btn.classList.remove('btn-outline-primary');
+        }
+
+        if (selectedFolderCategory) {
+            renderFolderDocs(selectedFolderCategory);
+        } else {
+            showFolderCardsView();
+        }
+    }
+
+    function getScopedDocs() {
+        return cachedArchiveDocs.filter(function(d) {
+            if (currentArchiveScope === 'corporate') {
+                return (d.projectId === null || d.projectId === 0);
+            } else if (currentArchiveScope === 'project' && activeMeetingProjectId) {
+                return d.projectId === activeMeetingProjectId;
+            }
+            return true;
+        });
+    }
+
+    function showFolderCardsView() {
+        selectedFolderCategory = null;
+        var folderView = document.getElementById('archiveFolderCardsView');
+        var docView = document.getElementById('archiveDocListView');
+        if (folderView) folderView.style.display = 'block';
+        if (docView) docView.style.display = 'none';
+
+        var scopedDocs = getScopedDocs();
+        var grid = document.getElementById('archiveFolderGrid');
+        if (!grid) return;
+
+        // Mevcut dokümanlardaki tüm kategorileri çıkar
+        var allCats = [];
+        standardFolders.forEach(function(f) {
+            if (currentArchiveScope === 'corporate' && !f.isCorp && f.name !== 'Diğer') return;
+            if (currentArchiveScope === 'project' && f.isCorp) return;
+            allCats.push(f);
+        });
+
+        // Eğer standart listede olmayan özel kategori varsa ekle
+        scopedDocs.forEach(function(d) {
+            if (d.category && !allCats.some(function(c) { return c.name.toLowerCase() === d.category.toLowerCase(); })) {
+                allCats.push({
+                    name: d.category,
+                    icon: "bi-folder-fill text-warning",
+                    desc: "Özel Klasör",
+                    isCorp: false
+                });
+            }
+        });
+
+        var html = '';
+        allCats.forEach(function(folder) {
+            var count = scopedDocs.filter(function(d) {
+                return isDocInFolder(d.category, folder.name);
+            }).length;
+
+            html += `
+                <div class="col-md-4 col-sm-6">
+                    <div class="card h-100 border rounded-3 p-2.5 folder-card shadow-xs" onclick="openArchiveFolder('${folder.name}')" style="cursor: pointer; background: #fafafa; transition: all 0.15s ease;">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="p-2 rounded-3 bg-white border shadow-2xs d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                <i class="bi ${folder.icon} fs-4"></i>
+                            </div>
+                            <div class="flex-grow-1 overflow-hidden">
+                                <div class="fw-bold text-dark text-truncate" style="font-size: 0.78rem;" title="${folder.name}">${folder.name}</div>
+                                <span class="badge ${count > 0 ? 'bg-primary-subtle text-primary border' : 'bg-light text-muted border'}" style="font-size: 0.65rem;">
+                                    ${count} Belge
+                                </span>
+                            </div>
+                            <i class="bi bi-chevron-right text-muted small"></i>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        grid.innerHTML = html;
+    }
+
+    function openArchiveFolder(catName) {
+        selectedFolderCategory = catName;
+        var folderView = document.getElementById('archiveFolderCardsView');
+        var docView = document.getElementById('archiveDocListView');
+        if (folderView) folderView.style.display = 'none';
+        if (docView) docView.style.display = 'block';
+
+        renderFolderDocs(catName);
+    }
+
+    function renderFolderDocs(catName) {
+        var breadcrumb = document.getElementById('currentFolderBreadcrumb');
+        if (breadcrumb) breadcrumb.innerHTML = `<i class="bi bi-folder-fill text-warning me-1"></i> ${catName}`;
+
+        var scopedDocs = getScopedDocs();
+        var docsInCat = scopedDocs.filter(function(d) {
+            return isDocInFolder(d.category, catName);
+        });
+
+        var countBadge = document.getElementById('currentFolderDocCountBadge');
+        if (countBadge) countBadge.innerText = docsInCat.length + ' Belge';
+
+        var tbody = document.getElementById('archiveDocTableBody');
+        if (!tbody) return;
+
+        if (docsInCat.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="4" class="text-center py-4 text-muted">
+                        <i class="bi bi-folder-x fs-3 d-block text-secondary mb-1"></i>
+                        Bu klasörde henüz kayıtlı evrak bulunmuyor.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        var html = '';
+        docsInCat.forEach(function(doc) {
+            var isPdf = doc.fileExtension && doc.fileExtension.toLowerCase().indexOf('pdf') !== -1;
+            var isImg = doc.fileExtension && (doc.fileExtension.toLowerCase().indexOf('jpg') !== -1 || doc.fileExtension.toLowerCase().indexOf('png') !== -1 || doc.fileExtension.toLowerCase().indexOf('jpeg') !== -1 || doc.fileExtension.toLowerCase().indexOf('bmp') !== -1);
+            var iconClass = isPdf ? 'bi-file-pdf-fill text-danger' : (isImg ? 'bi-file-image-fill text-info' : 'bi-file-earmark-text-fill text-primary');
+
+            var isCorporateDoc = (doc.projectId === null || doc.projectId === 0);
+            var projBadge = isCorporateDoc
+                ? `<span class="badge bg-primary-subtle text-primary border" style="font-size: 0.70rem;"><i class="bi bi-building-fill-gear me-1"></i>Genel Merkez</span>`
+                : `<span class="badge bg-light text-muted border" style="font-size: 0.70rem;">${doc.projectName || 'Proje'}</span>`;
+
+            html += `
+                <tr>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi ${iconClass} fs-5"></i>
+                            <a href="${doc.documentUrl}" target="_blank" class="fw-semibold text-dark text-decoration-none" title="Belgeyi İncele">
+                                ${getCleanDocTitle(doc)}
+                            </a>
+                        </div>
+                    </td>
+                    <td>${projBadge}</td>
+                    <td><span class="text-muted small">${doc.uploadDate || '-'}</span></td>
+                    <td class="text-end">
+                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 py-1 fw-bold shadow-xs d-inline-flex align-items-center gap-1" style="font-size: 0.72rem;" onclick="selectArchiveDocToRow(${doc.id})">
+                            <i class="bi bi-box-arrow-up"></i>
+                            <span>Masaya Gönder</span>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    function handleArchiveSearchInput(q) {
+        var query = (q || '').trim().toLowerCase();
+        if (!query) {
+            if (selectedFolderCategory) {
+                renderFolderDocs(selectedFolderCategory);
+            } else {
+                showFolderCardsView();
+            }
+            return;
+        }
+
+        // Arama yapıldığında doğrudan doküman listesi görünümüne geç
+        var folderView = document.getElementById('archiveFolderCardsView');
+        var docView = document.getElementById('archiveDocListView');
+        if (folderView) folderView.style.display = 'none';
+        if (docView) docView.style.display = 'block';
+
+        var breadcrumb = document.getElementById('currentFolderBreadcrumb');
+        if (breadcrumb) breadcrumb.innerHTML = `<i class="bi bi-search text-primary me-1"></i> "${q}" Arama Sonuçları`;
+
+        var scopedDocs = getScopedDocs();
+        var results = scopedDocs.filter(function(d) {
+            var matchTitle = d.title && d.title.toLowerCase().indexOf(query) !== -1;
+            var matchCat = d.category && d.category.toLowerCase().indexOf(query) !== -1;
+            var matchProj = d.projectName && d.projectName.toLowerCase().indexOf(query) !== -1;
+            return matchTitle || matchCat || matchProj;
+        });
+
+        var countBadge = document.getElementById('currentFolderDocCountBadge');
+        if (countBadge) countBadge.innerText = results.length + ' Sonuç';
+
+        var tbody = document.getElementById('archiveDocTableBody');
+        if (!tbody) return;
+
+        if (results.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="4" class="text-center py-4 text-muted">
+                        <i class="bi bi-search fs-3 d-block text-secondary mb-1"></i>
+                        Aramanızla eşleşen evrak bulunamadı.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        var html = '';
+        results.forEach(function(doc) {
+            var isPdf = doc.fileExtension && doc.fileExtension.toLowerCase().indexOf('pdf') !== -1;
+            var isImg = doc.fileExtension && (doc.fileExtension.toLowerCase().indexOf('jpg') !== -1 || doc.fileExtension.toLowerCase().indexOf('png') !== -1 || doc.fileExtension.toLowerCase().indexOf('jpeg') !== -1 || doc.fileExtension.toLowerCase().indexOf('bmp') !== -1);
+            var iconClass = isPdf ? 'bi-file-pdf-fill text-danger' : (isImg ? 'bi-file-image-fill text-info' : 'bi-file-earmark-text-fill text-primary');
+
+            var isCorporateDoc = (doc.projectId === null || doc.projectId === 0);
+            var projBadge = isCorporateDoc
+                ? `<span class="badge bg-primary-subtle text-primary border" style="font-size: 0.70rem;"><i class="bi bi-building-fill-gear me-1"></i>Genel Merkez</span>`
+                : `<span class="badge bg-light text-muted border" style="font-size: 0.70rem;">${doc.projectName || 'Proje'}</span>`;
+
+            html += `
+                <tr>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi ${iconClass} fs-5"></i>
+                            <div>
+                                <a href="${doc.documentUrl}" target="_blank" class="fw-semibold text-dark text-decoration-none">
+                                    ${getCleanDocTitle(doc)}
+                                </a>
+                                <small class="text-muted d-block" style="font-size: 0.68rem;">📁 ${doc.category || 'Genel'}</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td>${projBadge}</td>
+                    <td><span class="text-muted small">${doc.uploadDate || '-'}</span></td>
+                    <td class="text-end">
+                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 py-1 fw-bold shadow-xs d-inline-flex align-items-center gap-1" style="font-size: 0.72rem;" onclick="selectArchiveDocToRow(${doc.id})">
+                            <i class="bi bi-box-arrow-up"></i>
+                            <span>Masaya Gönder</span>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    function selectArchiveDocToRow(archiveDocId) {
+        if (!activePickerTargetRow) return;
+
+        var row = activePickerTargetRow;
+        var itemId = parseInt(row.getAttribute('data-item-id') || "0");
+
+        var formData = new FormData();
+        formData.append('itemId', itemId);
+        formData.append('recordId', currentMeetingRecordId);
+        formData.append('archiveDocId', archiveDocId);
+
+        fetch('/Agenda/BindArchiveDocumentToRow', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.success) {
+                if (itemId <= 0 && data.itemId) {
+                    row.setAttribute('data-item-id', data.itemId);
+                }
+
+                var targetContainer = row.querySelector('.doc-list-gonder');
+                if (targetContainer) {
+                    var badge = document.createElement('span');
+                    badge.className = 'badge bg-light text-dark border p-1 px-1.5 rounded-pill d-inline-flex align-items-center gap-1';
+                    badge.id = 'docBadge_' + data.docId;
+                    badge.style.fontSize = '0.68rem';
+                    badge.innerHTML = `
+                        <a href="${data.fileUrl}" target="_blank" class="text-decoration-none text-dark text-truncate" style="max-width: 80px;" title="${data.fileName}">
+                            <i class="bi ${data.isImage ? 'bi-image text-info' : (data.isPdf ? 'bi-file-pdf text-danger' : 'bi-send text-secondary')}"></i> ${data.fileName}
+                        </a>
+                        <i class="bi bi-x text-danger" style="cursor: pointer;" onclick="deleteRowDoc(${data.docId})" title="Kaldır"></i>
+                    `;
+                    targetContainer.appendChild(badge);
+                }
+
+                // Modal'ı kapat
+                var modalEl = document.getElementById('archiveDocPickerModal');
+                var modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+
+                // Eğer son satırsa altına yeni satır aç
+                var tbody = document.getElementById('matrixGridBody');
+                var allRows = tbody.querySelectorAll('tr.grid-row');
+                if (allRows[allRows.length - 1] === row) {
+                    var currentSpeaker = row.querySelector('.row-speaker').value;
+                    var nextSpeaker = (currentSpeaker === 'Katılımcı') ? 'Biz' : 'Katılımcı';
+                    spawnNewRow(nextSpeaker);
+                }
+            }
+        })
+        .catch(function(err) {
+            console.error('Arşiv bağlama hatası:', err);
+        });
+    }
+
+    function uploadDirectFromModal(input) {
+        if (!input.files || input.files.length === 0 || !activePickerTargetRow) return;
+        uploadRowFile(input, 'gönder', activePickerTargetRow);
+        
+        var modalEl = document.getElementById('archiveDocPickerModal');
+        var modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+    }
+
+
+    var activeCameraTargetRow = null;
+    var currentCameraStream = null;
+    var availableVideoDevices = [];
+    var currentDeviceIndex = 0;
+
+    function openCameraModal(btn) {
+        activeCameraTargetRow = btn.closest('tr');
+        var modalEl = document.getElementById('cameraCaptureModal');
+        var modal = new bootstrap.Modal(modalEl);
+        modal.show();
+
+        startCameraStream();
+    }
+
+    function startCameraStream(deviceId) {
+        stopCameraStream();
+        var videoEl = document.getElementById('liveCameraVideo');
+        var loadingText = document.getElementById('cameraLoadingText');
+        if (loadingText) loadingText.style.display = 'block';
+
+        var constraints = {
+            video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: "environment" } },
+            audio: false
+        };
+
+        navigator.mediaDevices.getUserMedia(constraints)
+        .then(function(stream) {
+            currentCameraStream = stream;
+            videoEl.srcObject = stream;
+            if (loadingText) loadingText.style.display = 'none';
+
+            // Kamera cihazlarını tara
+            navigator.mediaDevices.enumerateDevices().then(function(devices) {
+                availableVideoDevices = devices.filter(function(d) { return d.kind === 'videoinput'; });
+                var btnSwitch = document.getElementById('btnSwitchCamera');
+                if (btnSwitch) {
+                    btnSwitch.style.display = (availableVideoDevices.length > 1) ? 'inline-block' : 'none';
+                }
+            });
+        })
+        .catch(function(err) {
+            console.error('Kamera erişim hatası:', err);
+            if (loadingText) loadingText.innerHTML = '<span class="text-danger">Kamera açılamadı. Lütfen tarayıcı izinlerini kontrol edin.</span>';
+        });
+    }
+
+    function switchCameraDevice() {
+        if (availableVideoDevices.length < 2) return;
+        currentDeviceIndex = (currentDeviceIndex + 1) % availableVideoDevices.length;
+        startCameraStream(availableVideoDevices[currentDeviceIndex].deviceId);
+    }
+
+    function stopCameraStream() {
+        if (currentCameraStream) {
+            currentCameraStream.getTracks().forEach(function(track) {
+                track.stop();
+            });
+            currentCameraStream = null;
+        }
+        var videoEl = document.getElementById('liveCameraVideo');
+        if (videoEl) videoEl.srcObject = null;
+    }
+
+    function captureAndUploadPhoto() {
+        var videoEl = document.getElementById('liveCameraVideo');
+        var canvas = document.getElementById('cameraCanvas');
+        if (!videoEl || !canvas || !activeCameraTargetRow) return;
+
+        var width = videoEl.videoWidth || 1280;
+        var height = videoEl.videoHeight || 720;
+        canvas.width = width;
+        canvas.height = height;
+
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(videoEl, 0, 0, width, height);
+
+        canvas.toBlob(function(blob) {
+            if (!blob) return;
+
+            var fileName = 'kamera_evrak_' + new Date().getTime() + '.jpg';
+            var file = new File([blob], fileName, { type: 'image/jpeg' });
+
+            uploadDirectFileToRow(file, 'al', activeCameraTargetRow);
+
+            stopCameraStream();
+            var modalEl = document.getElementById('cameraCaptureModal');
+            var modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+        }, 'image/jpeg', 0.90);
+    }
+
+    function uploadDirectFileToRow(file, direction, row) {
+        if (!file || !row) return;
+        var itemId = parseInt(row.getAttribute('data-item-id') || "0");
+
+        var formData = new FormData();
+        formData.append('itemId', itemId);
+        formData.append('recordId', currentMeetingRecordId);
+        formData.append('direction', direction);
+        formData.append('file', file);
+
+        var targetContainer = direction === 'al' ? row.querySelector('.doc-list-al') : row.querySelector('.doc-list-gonder');
+
+        fetch('/Agenda/UploadGridDocumentAuto', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.success) {
+                if (targetContainer) {
+                    var badge = document.createElement('span');
+                    badge.className = 'badge bg-light text-dark border p-1 px-1.5 rounded-pill d-inline-flex align-items-center gap-1';
+                    badge.id = 'docBadge_' + data.docId;
+                    badge.style.fontSize = '0.68rem';
+                    badge.innerHTML = `
+                        <a href="${data.fileUrl}" target="_blank" class="text-decoration-none text-dark text-truncate" style="max-width: 80px;" title="${data.fileName}">
+                            <i class="bi bi-camera-fill text-success"></i> ${data.fileName}
+                        </a>
+                        <i class="bi bi-x text-danger" style="cursor: pointer;" onclick="deleteRowDoc(${data.docId})" title="Kaldır"></i>
+                    `;
+                    targetContainer.appendChild(badge);
+                }
+
+                // Eğer son satırsa altına yeni satır aç
+                var tbody = document.getElementById('matrixGridBody');
+                var allRows = tbody.querySelectorAll('tr.grid-row');
+                if (allRows[allRows.length - 1] === row) {
+                    var currentSpeaker = row.querySelector('.row-speaker').value;
+                    var nextSpeaker = (currentSpeaker === 'Katılımcı') ? 'Biz' : 'Katılımcı';
+                    spawnNewRow(nextSpeaker);
+                }
+            }
+        })
+        .catch(function(err) {
+            console.error('Kamera görseli yükleme hatası:', err);
+        });
+    }
+
+</script>

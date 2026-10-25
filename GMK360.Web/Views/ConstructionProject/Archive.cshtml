@@ -1,0 +1,184 @@
+@model GMK360.Core.Entities.Construction.ConstructionProject
+@using GMK360.Core.Entities
+@using GMK360.Core.Entities.Construction
+
+@{
+    ViewData["Title"] = "Dosya Arşivi: " + Model.Name;
+    ViewData["ProjectId"] = Model.Id;
+    ViewData["ProjectName"] = Model.Name;
+    ViewData["ProjectStatus"] = Model.Status;
+    Layout = "_ProjectLayout";
+
+    string cityName = ViewBag.CityName as string ?? "İstanbul";
+    string distName = ViewBag.DistrictName as string ?? "Kadıköy";
+    string neighName = ViewBag.NeighborhoodName as string ?? "Merdivenköy";
+
+    var docs = ViewBag.Documents as List<DocumentArchive> ?? new List<DocumentArchive>();
+    string activeCategory = ViewBag.ActiveCategory as string ?? "Tümü";
+
+    var categories = new[] { "Tümü", "Tapu & Kadastro", "İmar & Çap", "Saha & Keşif Fotoğrafları", "Hak Sahibi Evrakları", "Teklif & Şartname" };
+}
+
+<!-- KOMPAKT PROJE BAŞLIK ŞERİDİ (TEK SATIR & SIFIR DİKEY İSRAF) -->
+<div class="d-flex justify-content-between align-items-center py-1.5 px-3 mb-2 bg-white rounded-3 border shadow-xs flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="badge bg-primary bg-opacity-10 text-primary rounded-circle p-1 d-flex align-items-center justify-content-center" style="width: 26px; height: 26px;">
+            <i class="bi bi-folder2-open"></i>
+        </span>
+        <span class="fw-bold text-dark fs-6">@Model.Name</span>
+        <span class="badge bg-warning text-dark border border-warning px-2 py-0 rounded-pill fw-bold" style="font-size: 0.70rem;">
+            <i class="bi bi-hourglass-split me-1"></i>ADAY PROJE
+        </span>
+        <span class="text-muted small" style="font-size: 0.76rem;">— Sırf Projeye Ait Dosya Arşivi</span>
+        <span class="text-muted opacity-50">|</span>
+        <span class="badge bg-light text-dark border px-2 py-0 rounded-pill small" style="font-size: 0.72rem;">
+            <i class="bi bi-geo-alt-fill text-danger me-1"></i>@cityName / @distName (@neighName Mah.)
+        </span>
+    </div>
+
+    <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-secondary bg-opacity-10 text-secondary border px-2 py-0.5 rounded-pill small" style="font-size: 0.72rem;">
+            ID: #@Model.Id
+        </span>
+        <a href="/ConstructionProject/Workspace/@Model.Id" class="btn btn-outline-primary rounded-pill px-2.5 py-0 fw-bold btn-sm shadow-xs" style="font-size: 0.74rem;">
+            <i class="bi bi-card-heading me-1"></i>Künyeye Git ➔
+        </a>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show rounded-3 py-1.5 px-3 mb-2 small shadow-xs" role="alert">
+        <i class="bi bi-check-circle-fill me-1"></i> @TempData["SuccessMessage"]
+        <button type="button" class="btn-close py-2" data-bs-dismiss="alert" aria-label="Kapat"></button>
+    </div>
+}
+
+<!-- 1. BÖLÜM: SIRF PROJEYE AİT DOSYA ARŞİVİ (KOMPAKT & LAPTOP DOSTU) -->
+<div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs overflow-hidden">
+    <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-light border-bottom flex-wrap gap-1"
+         role="button" data-bs-toggle="collapse" data-bs-target="#arsivCollapse" aria-expanded="true" aria-controls="arsivCollapse" style="cursor: pointer;">
+        
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-archive text-primary fs-5"></i>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="fw-bold text-dark small" style="font-size: 0.88rem;">1. Sırf Bu Projeye Ait Dosya Arşivi</span>
+                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-1.5 py-0 rounded-pill" style="font-size: 0.68rem;">
+                    <i class="bi bi-shield-check me-1"></i>İzole Proje Havuzu
+                </span>
+                <small class="text-muted d-none d-lg-inline" style="font-size: 0.72rem;">Tapu, imar çapı, keşif fotoğrafları, teklifler ve hak sahibi belgeleri</small>
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-1.5 flex-wrap" onclick="event.stopPropagation();">
+            <span class="badge bg-primary bg-opacity-10 text-primary border px-2 py-1 rounded-pill" style="font-size: 0.74rem;">
+                <i class="bi bi-files me-1"></i>Toplam Belge: <b>@docs.Count</b> Adet
+            </span>
+            <button class="btn btn-sm btn-white border rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs text-secondary" 
+                    type="button" data-bs-toggle="collapse" data-bs-target="#arsivCollapse" aria-expanded="true" aria-controls="arsivCollapse" id="btnArsivToggle" style="font-size: 0.74rem;">
+                <span id="textArsivToggle">Daralt</span>
+                <i class="bi bi-chevron-up ms-1" id="iconArsivChevron"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="collapse show p-2 p-md-3" id="arsivCollapse">
+        <!-- 1.1 ALT BÖLÜM: KATEGORİ FİLTRE HAPLARI -->
+        <div class="d-flex align-items-center gap-1.5 flex-wrap mb-3">
+            @foreach (var cat in categories)
+            {
+                bool isActive = (activeCategory == cat) || (cat == "Tümü" && string.IsNullOrEmpty(activeCategory));
+                <a href="/ConstructionProject/Archive/@Model.Id?category=@cat" 
+                   class="btn btn-sm rounded-pill px-2.5 py-0.5 fw-bold shadow-xs @(isActive ? "btn-primary text-white" : "btn-light border text-dark")"
+                   style="font-size: 0.76rem;">
+                    @cat
+                </a>
+            }
+        </div>
+
+        <!-- 1.2 ALT BÖLÜM: YENİ DOSYA YÜKLEME KARTI -->
+        <div class="p-2.5 bg-light rounded-3 border mb-3">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.74rem;">Belge / Evrak Adı</label>
+                    <input type="text" class="form-control form-control-sm rounded-3" placeholder="Örn: Güncel Tapu Kaydı veya Belediye İmar Çapı" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.74rem;">Kategori</label>
+                    <select class="form-select form-select-sm rounded-3">
+                        <option value="Tapu & Kadastro">Tapu & Kadastro</option>
+                        <option value="İmar & Çap">İmar & Çap</option>
+                        <option value="Saha & Keşif Fotoğrafları">Saha & Keşif Fotoğrafları</option>
+                        <option value="Hak Sahibi Evrakları">Hak Sahibi Evrakları</option>
+                        <option value="Teklif & Şartname">Teklif & Şartname</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.74rem;">Dosya Seç (PDF, DWG, Görsel)</label>
+                    <input type="file" class="form-control form-control-sm rounded-3" />
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="button" class="btn btn-sm btn-primary w-100 rounded-pill fw-bold shadow-xs py-1" style="font-size: 0.78rem;">
+                        <i class="bi bi-cloud-arrow-up-fill me-1"></i>Belgeyi Yükle
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 1.3 ALT BÖLÜM: BELGELER LİSTESİ -->
+        @if (!docs.Any())
+        {
+            <div class="alert alert-light border rounded-3 p-3 mb-0 text-center">
+                <i class="bi bi-folder-x text-muted fs-3 d-block mb-1"></i>
+                <div class="fw-bold text-dark small">Bu projeye ait henüz yüklenmiş evrak bulunmuyor.</div>
+                <div class="text-muted small" style="font-size: 0.76rem;">Yukarıdaki hızlı yükleme panelini kullanarak sırf bu projeye ait evrakları arşive ekleyebilirsiniz.</div>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive rounded-3 border">
+                <table class="table table-hover align-middle mb-0" style="font-size: 0.82rem;">
+                    <thead class="table-light text-muted small text-uppercase">
+                        <tr>
+                            <th style="width: 35%;">Belge Adı / Açıklama</th>
+                            <th style="width: 20%;">Kategori</th>
+                            <th style="width: 15%;">Tarih</th>
+                            <th style="width: 15%;">Dosya Türü</th>
+                            <th class="text-center" style="width: 15%;">İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var doc in docs)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="fw-bold text-dark">
+                                        <i class="bi bi-file-earmark-text text-primary me-1"></i>@(doc.Title ?? "İsimsiz Belge")
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(doc.FileName))
+                                    {
+                                        <small class="text-muted" style="font-size: 0.70rem;">@doc.FileName</small>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark border px-2 py-0.5 rounded-pill">@(doc.Category ?? "Genel")</span>
+                                </td>
+                                <td class="text-muted">@doc.CreatedAt.ToString("dd.MM.yyyy")</td>
+                                <td>
+                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2 py-0.5 rounded-pill">
+                                        @(System.IO.Path.GetExtension(doc.DocumentUrl ?? "").ToUpper().TrimStart('.'))
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <a href="@doc.DocumentUrl" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-2.5 py-0 fw-bold shadow-xs" style="font-size: 0.72rem;">
+                                        <i class="bi bi-eye me-1"></i>Görüntüle
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

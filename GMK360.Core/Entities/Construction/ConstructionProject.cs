@@ -15,7 +15,7 @@ namespace GMK360.Core.Entities.Construction
     public class ConstructionProject : BaseEntity
     {
         public string Name { get; set; }
-        public string Description { get; set; }
+        public string? Description { get; set; }
         public string? ProjectType { get; set; }
         public string? BypassedPhases { get; set; }
 
@@ -91,7 +91,8 @@ namespace GMK360.Core.Entities.Construction
         
         // Arsa ve Peyzaj Bilgileri
         public double? TotalLandArea { get; set; } // Toplam Arsa Alanı (m2)
-        public double? LandscapeArea { get; set; } // Peyzaj Alanı (m2)
+        public double? LandscapeArea { get; set; }
+        public string? ParcelPolygonGeoJson { get; set; } // Peyzaj Alanı (m2)
 
         // Bütçe / Satış Beklenti (Fizibilite)
         

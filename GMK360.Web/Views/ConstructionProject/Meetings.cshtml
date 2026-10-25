@@ -1,0 +1,353 @@
+@model GMK360.Core.Entities.Construction.ConstructionProject
+@using GMK360.Core.Entities.Construction
+@{
+    Layout = "~/Views/Shared/_ProjectLayout.cshtml";
+    ViewData["Title"] = $"{Model.Name} - Görüşmeler ve Toplantılar";
+
+    var meetings = ViewBag.Meetings as List<AgendaRecord> ?? new List<AgendaRecord>();
+    var phonebook = ViewBag.Phonebook as List<AgencyPhonebook> ?? new List<AgencyPhonebook>();
+    var stakeholders = ViewBag.Stakeholders as List<ProjectStakeholder> ?? new List<ProjectStakeholder>();
+    byte? selectedStatusId = ViewBag.SelectedStatusId as byte?;
+
+    var today = DateTime.Today;
+    int todayCount = meetings.Count(m => m.EventDate.Date == today && m.StatusId != AgendaConstants.StatusTamamlandi);
+    int plannedCount = meetings.Count(m => m.StatusId == AgendaConstants.StatusPlanlandi);
+    int completedCount = meetings.Count(m => m.StatusId == AgendaConstants.StatusTamamlandi);
+    int canceledCount = meetings.Count(m => m.StatusId == AgendaConstants.StatusIptal);
+
+    string cityName = ViewBag.CityName as string ?? "Şehir Belirtilmedi";
+    string distName = ViewBag.DistrictName as string ?? "-";
+    string neighName = ViewBag.NeighborhoodName as string ?? "-";
+}
+
+<div class="container-fluid px-0">
+
+    <!-- KOMPAKT PROJE BAŞLIK ŞERİDİ (TEK SATIR & SIFIR DİKEY İSRAF) -->
+    <div class="bg-white border rounded-3 p-2 px-3 mb-2 shadow-xs d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-warning text-dark px-2.5 py-1 rounded-pill fw-bold" style="font-size: 0.76rem;">
+                <i class="bi bi-people-fill me-1"></i>Görüşmeler & Toplantılar Masası
+            </span>
+            <span class="fw-bold text-dark small" style="font-size: 0.88rem;">@Model.Name</span>
+            <span class="text-muted small" style="font-size: 0.78rem;">
+                <i class="bi bi-geo-alt-fill text-danger me-1"></i>@cityName / @distName (@neighName Mah.)
+            </span>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-secondary bg-opacity-10 text-secondary border px-2 py-0.5 rounded-pill small" style="font-size: 0.72rem;">
+                ID: #@Model.Id
+            </span>
+            <a href="/ConstructionProject/Workspace/@Model.Id" class="btn btn-outline-primary rounded-pill px-2.5 py-0 fw-bold btn-sm shadow-xs" style="font-size: 0.74rem;">
+                <i class="bi bi-card-heading me-1"></i>Künyeye Git ➔
+            </a>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-3 py-1.5 px-3 mb-2 small shadow-xs" role="alert">
+            <i class="bi bi-check-circle-fill me-1"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close py-2" data-bs-dismiss="alert" aria-label="Kapat"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-3 py-1.5 px-3 mb-2 small shadow-xs" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close py-2" data-bs-dismiss="alert" aria-label="Kapat"></button>
+        </div>
+    }
+
+    <!-- ANA KART: TOPLANTI & GÖRÜŞMELER DİVİ (MERKEZE ENTEGRE, PROJE İÇİNDE KALIR) -->
+    <div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs overflow-hidden">
+        <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-light border-bottom flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-calendar2-week text-warning fs-5"></i>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="fw-bold text-dark small" style="font-size: 0.88rem;">Toplantı & Karar Masası</span>
+                    <span class="badge bg-warning bg-opacity-25 text-dark border border-warning px-1.5 py-0 rounded-pill" style="font-size: 0.68rem;">
+                        <i class="bi bi-link-45deg me-1"></i>Merkeze Bağlı
+                    </span>
+                    <small class="text-muted d-none d-md-inline" style="font-size: 0.72rem;">Yalnızca bu projeye ait görüşme ve toplantıları listeler</small>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-1.5 flex-wrap">
+                <button type="button" class="btn btn-sm btn-warning text-dark fw-bold rounded-pill px-3 py-1 shadow-xs d-flex align-items-center gap-1"
+                        data-bs-toggle="modal" data-bs-target="#newMeetingModal" style="font-size: 0.78rem;">
+                    <i class="bi bi-plus-circle-fill me-1"></i>Yeni Toplantı / Görüşme Başlat
+                </button>
+            </div>
+        </div>
+
+        <!-- HIZLI FİLTRE VE STAT PİLLERİ -->
+        <div class="p-2 px-3 bg-white border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-1.5 flex-wrap">
+                <a href="/ConstructionProject/Meetings/@Model.Id" 
+                   class="btn btn-sm rounded-pill px-2.5 py-0.5 fw-bold @(selectedStatusId == null ? "btn-dark text-white" : "btn-light border text-muted")" style="font-size: 0.75rem;">
+                    Tümü (@meetings.Count)
+                </a>
+                <a href="/ConstructionProject/Meetings/@Model.Id?statusId=1" 
+                   class="btn btn-sm rounded-pill px-2.5 py-0.5 fw-bold @(selectedStatusId == 1 ? "btn-warning text-dark border-warning" : "btn-light border text-muted")" style="font-size: 0.75rem;">
+                    <i class="bi bi-clock me-1 text-warning"></i>Planlananlar (@plannedCount)
+                </a>
+                <a href="/ConstructionProject/Meetings/@Model.Id?statusId=2" 
+                   class="btn btn-sm rounded-pill px-2.5 py-0.5 fw-bold @(selectedStatusId == 2 ? "btn-success text-white" : "btn-light border text-muted")" style="font-size: 0.75rem;">
+                    <i class="bi bi-check2-circle me-1"></i>Tamamlananlar (@completedCount)
+                </a>
+                <a href="/ConstructionProject/Meetings/@Model.Id?statusId=3" 
+                   class="btn btn-sm rounded-pill px-2.5 py-0.5 fw-bold @(selectedStatusId == 3 ? "btn-secondary text-white" : "btn-light border text-muted")" style="font-size: 0.75rem;">
+                    <i class="bi bi-x-circle me-1"></i>İptal (@canceledCount)
+                </a>
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+                @if (todayCount > 0)
+                {
+                    <span class="badge bg-danger rounded-pill px-2.5 py-1" style="font-size: 0.72rem;">
+                        <i class="bi bi-bell-fill me-1"></i>Bugün @todayCount Toplantı Var
+                    </span>
+                }
+                else
+                {
+                    <span class="badge bg-secondary bg-opacity-10 text-secondary border rounded-pill px-2 py-0.5" style="font-size: 0.72rem;">
+                        Bugün Toplantı Yok
+                    </span>
+                }
+            </div>
+        </div>
+
+        <!-- TOPLANTI LİSTESİ VEYA BOŞ DURUM -->
+        <div class="p-2 p-md-3">
+            @if (!meetings.Any())
+            {
+                <div class="text-center py-5 px-3 bg-light rounded-3 border border-dashed">
+                    <div class="avatar-lg bg-warning bg-opacity-10 text-warning rounded-circle mx-auto mb-2 d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                        <i class="bi bi-calendar-event fs-3"></i>
+                    </div>
+                    <h6 class="fw-bold text-dark mb-1">Bu Projeye Ait Toplantı Bulunmuyor</h6>
+                    <p class="text-muted small mb-3" style="max-width: 460px; margin: 0 auto; font-size: 0.78rem;">
+                        Hak sahipleri, mühendislik ekibi veya müteahhit ortaklarıyla yapacağınız görüşmeleri buradan planlayabilir, notlarını alabilir ve merkezi ajandada senkronize yönetebilirsiniz.
+                    </p>
+                    <button type="button" class="btn btn-warning text-dark fw-bold rounded-pill px-4 py-1.5 shadow-xs btn-sm"
+                            data-bs-toggle="modal" data-bs-target="#newMeetingModal" style="font-size: 0.80rem;">
+                        <i class="bi bi-plus-circle-fill me-1"></i>İlk Toplantıyı / Görüşmeyi Başlat
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" style="font-size: 0.80rem;">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 110px;">Tarih</th>
+                                <th style="width: 90px;">Saat</th>
+                                <th>Toplantı / Görüşme Başlığı</th>
+                                <th>Tür</th>
+                                <th>Muhatap / Katılımcı</th>
+                                <th>Durum</th>
+                                <th class="text-end" style="width: 190px;">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var m in meetings)
+                            {
+                                bool isPast = m.EventDate < DateTime.Now && m.StatusId == AgendaConstants.StatusPlanlandi;
+                                bool isToday = m.EventDate.Date == today;
+
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-1">
+                                            <i class="bi bi-calendar3 text-muted" style="font-size: 0.75rem;"></i>
+                                            <span class="fw-bold text-dark">
+                                                @m.EventDate.ToString("dd.MM.yyyy")
+                                            </span>
+                                        </div>
+                                        @if (isToday)
+                                        {
+                                            <span class="badge bg-danger rounded-pill px-1.5 py-0 mt-0.5" style="font-size: 0.65rem;">Bugün</span>
+                                        }
+                                        else if (isPast)
+                                        {
+                                            <span class="badge bg-secondary rounded-pill px-1.5 py-0 mt-0.5" style="font-size: 0.65rem;">Geçmiş</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border px-2 py-1 rounded-pill fw-bold" style="font-size: 0.74rem;">
+                                            <i class="bi bi-clock me-1 text-primary"></i>@m.EventDate.ToString("HH:mm")
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex flex-column">
+                                            <span class="fw-bold text-dark">@m.Title</span>
+                                            @if (!string.IsNullOrWhiteSpace(m.Notes))
+                                            {
+                                                <small class="text-muted text-truncate" style="max-width: 380px; font-size: 0.72rem;">
+                                                    @m.Notes
+                                                </small>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @if (m.Phonebook != null)
+                                        {
+                                            <div class="d-flex align-items-center gap-1.5">
+                                                <i class="bi bi-person-fill text-secondary"></i>
+                                                <span class="fw-semibold text-dark">@m.Phonebook.Name</span>
+                                                @if (!string.IsNullOrEmpty(m.Phonebook.PhoneNumber))
+                                                {
+                                                    <small class="text-muted" style="font-size: 0.70rem;">(@m.Phonebook.PhoneNumber)</small>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small" style="font-size: 0.72rem;">Muhatap Atanmadı</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (m.StatusId == AgendaConstants.StatusPlanlandi)
+                                        {
+                                            <span class="badge bg-warning text-dark border border-warning px-2 py-0.5 rounded-pill" style="font-size: 0.70rem;">
+                                                <i class="bi bi-clock me-1"></i>Planlandı
+                                            </span>
+                                        }
+                                        else if (m.StatusId == AgendaConstants.StatusTamamlandi)
+                                        {
+                                            <span class="badge bg-success text-white px-2 py-0.5 rounded-pill" style="font-size: 0.70rem;">
+                                                <i class="bi bi-check2 me-1"></i>Tamamlandı
+                                            </span>
+                                        }
+                                        else if (m.StatusId == AgendaConstants.StatusIptal)
+                                        {
+                                            <span class="badge bg-secondary text-white px-2 py-0.5 rounded-pill" style="font-size: 0.70rem;">
+                                                <i class="bi bi-x me-1"></i>İptal
+                                            </span>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="d-inline-flex align-items-center gap-1">
+                                            <a href="/Agenda/MeetingRoom/@m.Id" target="_blank" class="btn btn-primary btn-sm rounded-pill px-3 py-1 fw-bold shadow-xs d-inline-flex align-items-center gap-1" style="font-size: 0.76rem;" title="Toplantıyı Başlat (Yeni Sekmede Açılır)">
+                                                <i class="bi bi-box-arrow-up-right"></i>
+                                                <span>Toplantıyı Başlat (Canlı Masa) ➔</span>
+                                            </a>
+                                            @if (m.StatusId == AgendaConstants.StatusPlanlandi)
+                                            {
+                                                <button type="button" class="btn btn-outline-success btn-sm rounded-pill px-2 py-0 fw-bold shadow-xs" style="font-size: 0.72rem;" onclick="updateStatus(@m.Id, 2)" title="Tamamla">
+                                                    <i class="bi bi-check-lg"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-2 py-0 fw-bold shadow-xs" style="font-size: 0.72rem;" onclick="updateStatus(@m.Id, 3)" title="İptal">
+                                                    <i class="bi bi-x-lg"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+</div>
+
+<!-- YENİ TOPLANTI EKLEME MODALI (TARİH VE SAAT AYRI İKİ INPUT) -->
+<div class="modal fade" id="newMeetingModal" tabindex="-1" aria-labelledby="newMeetingModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-header border-bottom py-2.5 bg-warning bg-opacity-25">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-warning text-dark rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                        <i class="bi bi-calendar-plus-fill text-dark fs-6"></i>
+                    </span>
+                    <div>
+                        <h6 class="modal-title fw-bold text-dark mb-0">Bu Projeye Yeni Toplantı / Görüşme Planla</h6>
+                        <small class="text-muted" style="font-size: 0.75rem;">Toplantı doğrudan bu adaya bağlanır ve merkezi ajanda ile senkronize olur.</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <form asp-controller="ConstructionProject" asp-action="CreateProjectMeeting" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="projectId" value="@Model.Id" />
+                <div class="modal-body p-3">
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.76rem;">Toplantı / Görüşme Başlığı <span class="text-danger">*</span></label>
+                            <input type="text" name="title" class="form-control form-control-sm rounded-pill fw-bold" placeholder="Örn: Hak Sahipleriyle 1. Ön Bilgilendirme ve Teklif Toplantısı" required />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.76rem;">
+                                <i class="bi bi-calendar-event me-1 text-primary"></i>Tarih <span class="text-danger">*</span>
+                            </label>
+                            <input type="date" name="eventDate" class="form-control form-control-sm rounded-pill fw-bold" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.76rem;">
+                                <i class="bi bi-clock me-1 text-primary"></i>Saat <span class="text-danger">*</span>
+                            </label>
+                            <input type="time" name="eventTime" class="form-control form-control-sm rounded-pill fw-bold" value="@DateTime.Now.ToString("HH:mm")" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.76rem;">Görüşme Tipi</label>
+                            <select name="recordTypeId" class="form-select form-select-sm rounded-pill">
+                                <option value="1">Müşteri / Hak Sahibi Görüşmesi</option>
+                                <option value="2">Taşeron / Mühendislik Toplantısı</option>
+                                <option value="3">Saha / Şantiye Keşfi & Denetimi</option>
+                                <option value="4">Genel Karar / Şirket İçi Not</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.76rem;">Muhatap / Kişi (Telefon Rehberi)</label>
+                            <select name="phonebookId" class="form-select form-select-sm rounded-pill">
+                                <option value="">-- Muhatap Seçiniz (İsteğe Bağlı) --</option>
+                                @foreach (var contact in phonebook)
+                                {
+                                    <option value="@contact.Id">@contact.Name @(!string.IsNullOrEmpty(contact.PhoneNumber) ? $"({contact.PhoneNumber})" : "")</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.76rem;">Gündem Maddeleri / Hazırlık Notları</label>
+                            <textarea name="notes" class="form-control rounded-3" rows="3" placeholder="Görüşülecek konular, malik talepleri, imar çapı notları veya kararlar..."></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-top py-2 bg-light d-flex justify-content-between">
+                    <button type="button" class="btn btn-sm btn-white border rounded-pill px-3 fw-bold text-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-sm btn-warning text-dark fw-bold rounded-pill px-4 shadow-xs">
+                        <i class="bi bi-check-circle-fill me-1"></i>Toplantıyı Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function updateStatus(id, statusId) {
+    if (!confirm('Toplantı durumunu güncellemek istediğinize emin misiniz?')) return;
+    fetch('/Agenda/UpdateStatus?id=' + id + '&statusId=' + statusId, {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data && data.success) {
+            window.location.reload();
+        } else {
+            alert('Durum güncellenirken bir hata oluştu.');
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('İşlem başarısız oldu.');
+    });
+}
+</script>

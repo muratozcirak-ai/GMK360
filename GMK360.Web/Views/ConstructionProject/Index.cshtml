@@ -1,229 +1,452 @@
 @model IEnumerable<GMK360.Core.Entities.Construction.ConstructionProject>
+
 @using GMK360.Core.Entities.Construction
+
 @inject Microsoft.AspNetCore.Identity.UserManager<GMK360.Core.Entities.Identity.ApplicationUser> UserManager
+
 @{
+
     ViewData["Title"] = "Şantiyelerimiz (Projeler)";
+
     Layout = "_ConstructionLayout";
 
+
+
     var currentUser = await UserManager.GetUserAsync(User);
+
     bool isDemolitionCompany = currentUser?.ActiveModules?.Contains("demolition") == true;
 
+
+
     var aktifler = Model.Where(x => x.Status == ProjectStatus.Aktif_Santiye).ToList();
+
     var anlasmaYapilanlar = Model.Where(x => x.Status == ProjectStatus.Anlasma_Yapildi).ToList();
+
     var adaylar = Model.Where(x => x.Status == ProjectStatus.Projelendirme_Teklif || x.Status == ProjectStatus.On_Gorusme_Talep).ToList();
+
     var anlasmaOlmayan = Model.Where(x => x.Status == ProjectStatus.Anlasma_Olmayan_Iptal).ToList();
+
     var tamamlananlar = Model.Where(x => x.Status == ProjectStatus.Tamamlandi_Teslim).ToList();
+
     var satistakiler = Model.Where(x => x.Status == ProjectStatus.Satista_Topraktan).ToList();
+
 }
 
-<div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+
+
+<div class="container-fluid mt-2 px-2 px-md-3">
+
+    <div class="d-flex justify-content-between align-items-center mb-2 pb-1 border-bottom">
+
         <div>
-            <h2 class="fw-bold mb-0 text-dark"><i class="bi bi-building text-primary me-2"></i> Şantiyelerimiz</h2>
+
+            <h5 class="fw-bold mb-0 text-dark fs-6 fs-md-5"><i class="bi bi-building text-primary me-2"></i> Şantiyelerimiz</h2>
+
             <p class="text-muted mb-0">Firmanızın geçmiş, güncel ve gelecek tüm projelerini buradan yönetin.</p>
+
         </div>
+
         <div class="d-flex gap-2">
-            <a href="/Agenda/Index" class="btn btn-outline-warning text-dark fw-bold rounded-pill px-4 shadow-sm">
-                <i class="bi bi-journal-bookmark-fill text-warning me-1"></i> Şantiye Kara Defteri & Ajanda
-            </a>
-            <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#initProjectModal">
+
+            <button type="button" class="btn btn-primary rounded-pill px-3 py-1 btn-sm fw-bold shadow-xs" data-bs-toggle="modal" data-bs-target="#initProjectModal">
+
                 <i class="bi bi-plus-lg me-1"></i> Yeni Proje (Şantiye) Aç
+
             </button>
+
         </div>
+
     </div>
+
+
 
     <!-- Filtre Sekmeleri -->
-    <ul class="nav nav-pills mb-4 gap-2 flex-wrap" id="projectTabs" role="tablist">
+
+    <ul class="nav nav-pills mb-2 gap-1 flex-wrap" style="font-size: 0.80rem;" id="projectTabs" role="tablist">
+
         <li class="nav-item" role="presentation">
-            <button class="nav-link active rounded-pill px-4" id="aktif-tab" data-bs-toggle="pill" data-bs-target="#aktif" type="button" role="tab">
+
+            <button class="nav-link active rounded-pill px-3 py-1" id="aktif-tab" data-bs-toggle="pill" data-bs-target="#aktif" type="button" role="tab">
+
                 <i class="bi bi-cone-striped me-1"></i> Aktif Şantiyeler (@aktifler.Count)
+
             </button>
+
         </li>
+
         <li class="nav-item" role="presentation">
-            <button class="nav-link rounded-pill px-4 bg-light text-dark" id="anlasilmis-tab" data-bs-toggle="pill" data-bs-target="#anlasilmis" type="button" role="tab">
+
+            <button class="nav-link rounded-pill px-3 py-1 bg-light text-dark" id="anlasilmis-tab" data-bs-toggle="pill" data-bs-target="#anlasilmis" type="button" role="tab">
+
                 <i class="bi bi-handshake me-1"></i> Anlaşma Yapılanlar (@anlasmaYapilanlar.Count)
+
             </button>
+
         </li>
+
         <li class="nav-item" role="presentation">
-            <button class="nav-link rounded-pill px-4 bg-light text-dark" id="aday-tab" data-bs-toggle="pill" data-bs-target="#aday" type="button" role="tab">
+
+            <button class="nav-link rounded-pill px-3 py-1 bg-light text-dark" id="aday-tab" data-bs-toggle="pill" data-bs-target="#aday" type="button" role="tab">
+
                 <i class="bi bi-search me-1"></i> Aday Projeler (@adaylar.Count)
+
             </button>
+
         </li>
+
         <li class="nav-item" role="presentation">
-            <button class="nav-link rounded-pill px-4 bg-light text-dark" id="iptal-tab" data-bs-toggle="pill" data-bs-target="#iptal" type="button" role="tab">
+
+            <button class="nav-link rounded-pill px-3 py-1 bg-light text-dark" id="iptal-tab" data-bs-toggle="pill" data-bs-target="#iptal" type="button" role="tab">
+
                 <i class="bi bi-x-circle me-1"></i> Anlaşma Olmayan (@anlasmaOlmayan.Count)
+
             </button>
+
         </li>
+
         <li class="nav-item" role="presentation">
-            <button class="nav-link rounded-pill px-4 bg-light text-dark" id="tamamlanan-tab" data-bs-toggle="pill" data-bs-target="#tamamlanan" type="button" role="tab">
+
+            <button class="nav-link rounded-pill px-3 py-1 bg-light text-dark" id="tamamlanan-tab" data-bs-toggle="pill" data-bs-target="#tamamlanan" type="button" role="tab">
+
                 <i class="bi bi-check-circle-fill me-1 text-success"></i> Biten (@tamamlananlar.Count)
+
             </button>
+
         </li>
+
         <li class="nav-item" role="presentation">
-            <button class="nav-link rounded-pill px-4 bg-light text-dark" id="satis-tab" data-bs-toggle="pill" data-bs-target="#satis" type="button" role="tab">
+
+            <button class="nav-link rounded-pill px-3 py-1 bg-light text-dark" id="satis-tab" data-bs-toggle="pill" data-bs-target="#satis" type="button" role="tab">
+
                 <i class="bi bi-cash-coin me-1"></i> Satışa Çıkanlar (@satistakiler.Count)
+
             </button>
+
         </li>
+
     </ul>
 
+
+
     <div class="tab-content" id="projectTabsContent">
+
         <!-- Aktif Şantiyeler -->
+
         <div class="tab-pane fade show active" id="aktif" role="tabpanel">
-            <div class="row g-4">
+
+            <div class="row g-2 g-md-3">
+
                 @foreach(var p in aktifler) { <div class="col-xl-3 col-lg-4 col-md-6">@await Html.PartialAsync("_ProjectCardPartial", p)</div> }
+
                 @if(!aktifler.Any()){ <div class="col-12"><div class="alert alert-light text-center py-5 border text-muted"><i class="bi bi-info-circle fs-1 d-block mb-3"></i>Şu an devam eden aktif şantiyeniz bulunmuyor.</div></div> }
+
             </div>
+
         </div>
+
+
 
         <!-- Anlaşma Yapılanlar -->
+
         <div class="tab-pane fade" id="anlasilmis" role="tabpanel">
-            <div class="row g-4">
+
+            <div class="row g-2 g-md-3">
+
                 @foreach(var p in anlasmaYapilanlar) { <div class="col-xl-3 col-lg-4 col-md-6">@await Html.PartialAsync("_ProjectCardPartial", p)</div> }
+
                 @if(!anlasmaYapilanlar.Any()){ <div class="col-12"><div class="alert alert-light text-center py-5 border text-muted"><i class="bi bi-info-circle fs-1 d-block mb-3"></i>Anlaşması tamamlanmış, henüz başlamamış projeniz bulunmuyor.</div></div> }
+
             </div>
+
         </div>
+
+
 
         <!-- Aday Projeler -->
+
         <div class="tab-pane fade" id="aday" role="tabpanel">
-            <div class="row g-4">
+
+            <div class="row g-2 g-md-3">
+
                 @foreach(var p in adaylar) { <div class="col-xl-3 col-lg-4 col-md-6">@await Html.PartialAsync("_ProjectCardPartial", p)</div> }
+
                 @if(!adaylar.Any()){ <div class="col-12"><div class="alert alert-light text-center py-5 border text-muted"><i class="bi bi-info-circle fs-1 d-block mb-3"></i>Aday projeniz bulunmuyor.</div></div> }
+
             </div>
+
         </div>
+
+
 
         <!-- Anlaşma Olmayan -->
+
         <div class="tab-pane fade" id="iptal" role="tabpanel">
-            <div class="row g-4">
+
+            <div class="row g-2 g-md-3">
+
                 @foreach(var p in anlasmaOlmayan) { <div class="col-xl-3 col-lg-4 col-md-6">@await Html.PartialAsync("_ProjectCardPartial", p)</div> }
+
                 @if(!anlasmaOlmayan.Any()){ <div class="col-12"><div class="alert alert-light text-center py-5 border text-muted"><i class="bi bi-info-circle fs-1 d-block mb-3"></i>İptal edilen projeniz bulunmuyor.</div></div> }
+
             </div>
+
         </div>
+
+
 
         <!-- Biten -->
+
         <div class="tab-pane fade" id="tamamlanan" role="tabpanel">
-            <div class="row g-4">
+
+            <div class="row g-2 g-md-3">
+
                 @foreach(var p in tamamlananlar) { <div class="col-xl-3 col-lg-4 col-md-6">@await Html.PartialAsync("_ProjectCardPartial", p)</div> }
+
                 @if(!tamamlananlar.Any()){ <div class="col-12"><div class="alert alert-light text-center py-5 border text-muted"><i class="bi bi-info-circle fs-1 d-block mb-3"></i>Tamamlanan projeniz bulunmuyor.</div></div> }
+
             </div>
+
         </div>
+
+
 
         <!-- Satışa Çıkanlar -->
+
         <div class="tab-pane fade" id="satis" role="tabpanel">
-            <div class="row g-4">
+
+            <div class="row g-2 g-md-3">
+
                 @foreach(var p in satistakiler) { <div class="col-xl-3 col-lg-4 col-md-6">@await Html.PartialAsync("_ProjectCardPartial", p)</div> }
+
                 @if(!satistakiler.Any()){ <div class="col-12"><div class="alert alert-light text-center py-5 border text-muted"><i class="bi bi-info-circle fs-1 d-block mb-3"></i>Satışa çıkan projeniz bulunmuyor.</div></div> }
+
             </div>
+
         </div>
+
     </div>
+
 </div>
+
+
 
 <style>
+
     /* Tab pill active durumunu ezmek için */
+
     .nav-pills .nav-link.active {
+
         background-color: #0d6efd !important;
+
         color: white !important;
+
     }
+
     .nav-pills .nav-link.active .badge {
+
         background-color: white !important;
+
         color: #0d6efd !important;
+
     }
+
 </style>
 
+
+
 <!-- Yeni Proje Başlat Modalı -->
+
 <div class="modal fade" id="initProjectModal" tabindex="-1" aria-labelledby="initProjectModalLabel" aria-hidden="true">
+
     <div class="modal-dialog modal-dialog-centered">
+
         <div class="modal-content border-0 shadow-lg">
+
             <div class="modal-header bg-primary text-white">
+
                 <h5 class="modal-title fw-bold" id="initProjectModalLabel"><i class="bi bi-folder-plus me-2"></i>Yeni Proje (Dolap) Aç</h5>
+
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+
             </div>
+
             <form asp-action="InitProject" asp-controller="ConstructionProject" method="post">
+
                 <div class="modal-body p-4">
+
                     <p class="text-muted small mb-4">Sisteme yeni bir proje kaydetmek için önce projenin adını belirleyin. <strong>Bu isim daha sonra değiştirilemez</strong> ve tüm resmi evraklar/klasörler bu isimle oluşturulur.</p>
+
                     
+
                     <div class="mb-3">
+
                         <label for="projectName" class="form-label fw-bold">Proje / Şantiye Adı <span class="text-danger">*</span></label>
+
                         <input type="text" class="form-control form-control-lg rounded-3 mb-3" id="projectName" name="projectName" placeholder="Örn: Özdilek Apartmanı" required autocomplete="off" />
+
                         
+
                         <label for="projectOriginId" class="form-label fw-bold">İşin Türü / Faaliyet Kapsamı <span class="text-danger">*</span></label>
+
                         <select id="projectOriginId" name="projectOriginId" class="form-select form-select-lg rounded-3 mb-2" required onchange="toggleProjectScopeHint(this.value)">
+
                             @if (isDemolitionCompany)
+
                             {
+
                                 <option value="5" selected>🚜 Müstakil Yıkım & Hafriyat İşi (Sadece Yıkım, Hurda & Kazı)</option>
+
                                 <option value="1">🏗️ Kentsel Dönüşüm (Yıkım + Yeni Yapı - 3'ü Bir Arada)</option>
+
                                 <option value="0">📐 Sıfırdan Yeni İnşaat (Boş Arazi)</option>
+
                             }
+
                             else
+
                             {
+
                                 <option value="1" selected>🏗️ Kentsel Dönüşüm (Yıkılacak Eski Yapı Var)</option>
+
                                 <option value="0">📐 Sıfırdan İnşaat (Boş Arazi)</option>
+
                                 <option value="5">🚜 Müstakil Yıkım & Hafriyat İşi (Sadece Yıkım & Hurda)</option>
+
                             }
+
                         </select>
+
+
 
                         <div id="demolitionScopeHint" class="alert alert-warning py-2 px-3 small rounded-3 mb-3 @(isDemolitionCompany ? "" : "d-none")">
+
                             <i class="bi bi-info-circle-fill me-1"></i> <strong>Yıkım & Hafriyat:</strong> Mimari oda/daire çizimleri ve arsa payları atlanır; doğrudan <strong>Söküm & Hurda Masası</strong> ve <strong>Kamyon Döküm Seferleri</strong> açılır.
+
                         </div>
+
+
 
                         <label for="statusId" class="form-label fw-bold">Proje Durumu <span class="text-danger">*</span></label>
+
                         <select id="statusId" name="statusId" class="form-select form-select-lg rounded-3 mb-3" required>
+
                             <option value="2">Devam Eden Proje (Aktif Şantiye)</option>
+
                             <option value="0">Aday Proje / Fizibilite (Teklif & Ön Hazırlık)</option>
+
                             <option value="3">Tamamlanmış Proje (Referans / Portföy)</option>
+
                         </select>
 
+
+
                         <div id="projectTypeContainer" class="@(isDemolitionCompany ? "d-none" : "")">
+
                             <label for="projectType" class="form-label fw-bold">Ana Yapı Türü <span class="text-danger">*</span></label>
+
                             <select id="projectType" name="projectType" class="form-select form-select-lg rounded-3">
+
                                 <option value="Apartman">Apartman</option>
+
                                 <option value="Site">Site / Kompleks</option>
+
                                 <option value="Ticari">Ticari / Ofis</option>
+
                                 <option value="Karma">Karma (Konut + Ticari)</option>
+
                                 <option value="Villa">Villa / Müstakil</option>
+
                                 <option value="Fabrika">Fabrika / Endüstriyel</option>
+
                                 <option value="Kamu">Kamu Binası / Tesis</option>
+
                                 <option value="Diger">Diğer</option>
+
                             </select>
+
                         </div>
+
                     </div>
+
                 </div>
+
                 <div class="modal-footer bg-light">
+
                     <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+
                     <button type="submit" class="btn btn-primary rounded-pill px-4" id="submitProjectBtn">
+
                         <i class="bi @(isDemolitionCompany ? "bi-hammer" : "bi-arrow-right-circle") me-1"></i> @(isDemolitionCompany ? "Oluştur ve Yıkım Masasına Git" : "Oluştur ve Sihirbaza Git")
+
                     </button>
+
                 </div>
+
             </form>
+
         </div>
+
     </div>
+
 </div>
 
+
+
 @section Scripts {
+
     <script>
+
         function toggleProjectScopeHint(val) {
+
             var hint = document.getElementById('demolitionScopeHint');
+
             var btn = document.getElementById('submitProjectBtn');
+
             var typeContainer = document.getElementById('projectTypeContainer');
+
             if (val === '5') {
+
                 if (hint) hint.classList.remove('d-none');
+
                 if (typeContainer) typeContainer.classList.add('d-none');
+
                 if (btn) btn.innerHTML = '<i class="bi bi-hammer me-1"></i> Oluştur ve Yıkım Masasına Git';
+
             } else {
+
                 if (hint) hint.classList.add('d-none');
+
                 if (typeContainer) typeContainer.classList.remove('d-none');
+
                 if (btn) btn.innerHTML = '<i class="bi bi-arrow-right-circle me-1"></i> Oluştur ve Sihirbaza Git';
+
             }
+
         }
 
+
+
         document.addEventListener("DOMContentLoaded", function () {
+
             const urlParams = new URLSearchParams(window.location.search);
+
             if (urlParams.get('openNew') === 'true') {
+
                 const modalEl = document.getElementById('initProjectModal');
+
                 if (modalEl) {
+
                     const modal = new bootstrap.Modal(modalEl);
+
                     modal.show();
+
                 }
+
             }
+
         });
+
     </script>
+
 }
+

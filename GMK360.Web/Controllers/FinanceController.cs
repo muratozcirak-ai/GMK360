@@ -37,6 +37,15 @@ namespace GMK360.Web.Controllers
             return consultant?.AgencyId;
         }
 
+        // Finans & Cari Master Paneli
+        public async Task<IActionResult> Index()
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            return View();
+        }
+
         // Ortak Kasa ve Banka Akışı
         public async Task<IActionResult> Cashflow()
         {

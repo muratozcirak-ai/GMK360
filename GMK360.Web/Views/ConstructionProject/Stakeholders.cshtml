@@ -1,0 +1,1332 @@
+@model IEnumerable<GMK360.Core.Entities.Construction.ProjectStakeholder>
+@{
+    ViewData["Title"] = "Hak Sahipleri (Kira & Taşınma Ödenekleri)";
+    Layout = "_ConstructionLayout";
+
+    var projects = ViewBag.Projects as List<GMK360.Core.Entities.Construction.ConstructionProject> ?? new List<GMK360.Core.Entities.Construction.ConstructionProject>();
+    int? selectedProjectId = ViewBag.SelectedProjectId as int?;
+    string selectedStatus = ViewBag.SelectedStatus as string ?? "";
+    string searchTerm = ViewBag.SearchTerm as string ?? "";
+
+    int totalCount = ViewBag.TotalCount ?? 0;
+    decimal totalRent = ViewBag.TotalRent ?? 0m;
+    decimal totalRelocation = ViewBag.TotalRelocation ?? 0m;
+    int paidCount = ViewBag.PaidCount ?? 0;
+    int pendingCount = ViewBag.PendingCount ?? 0;
+    int notStartedCount = ViewBag.NotStartedCount ?? 0;
+    decimal totalProjectCommitment = ViewBag.TotalProjectCommitment ?? 0m;
+}
+
+<div class="container-fluid mt-3">
+    <!-- Üst Başlık & Eylem Çubuğu (Sade & Fonksiyonel) -->
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+            <h4 class="fw-bold mb-0 text-dark">
+                <i class="bi bi-people-fill text-primary me-2"></i> Hak Sahipleri (Kira & Taşınma Hakedişleri)
+            </h4>
+            <div class="text-muted small">Kentsel dönüşüm kira desteği, tek seferlik taşınma yardımı, banka talimatı ve kasa/banka çıkış takibi.</div>
+        </div>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <!-- Banka Talimatı / Gişe Dağıtım Listesi Butonu (Seçim Yapılınca Görünür) -->
+            <button type="button" id="btnBankInstruction" class="btn btn-outline-primary rounded-pill px-3 fw-bold shadow-sm d-none" onclick="openBankInstructionModal()">
+                <i class="bi bi-file-earmark-text me-1"></i> Banka Talimatı / Gişe Listesi Al (<span id="instructionCountBadge">0</span>)
+            </button>
+
+            <!-- Toplu Ödeme Butonu (Seçim Yapılınca Parlar) -->
+            <button type="button" id="btnBatchPay" class="btn btn-success rounded-pill px-3 fw-bold shadow-sm d-none" onclick="openBatchPayModal()">
+                <i class="bi bi-wallet2 me-1"></i> <span id="batchPayCountBadge">0</span> Kişiyi Toplu Öde (<span id="batchPayTotalBadge">0</span> ₺)
+            </button>
+
+            <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#batchModal" onclick="openBatchAddModal()">
+                <i class="bi bi-plus-circle me-1"></i> Yeni Daire & Hak Sahibi Ekle
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtre & Arama Barı (Kompakt Tek Satır) -->
+    <div class="card border-0 shadow-sm rounded-3 mb-3 bg-white">
+        <div class="card-body p-2 px-3">
+            <form method="get" asp-action="Stakeholders" class="row g-2 align-items-center">
+                <div class="col-md-4">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                        <input type="text" name="search" value="@searchTerm" class="form-control bg-light border-start-0" placeholder="Hak Sahibi Adı, TC, Telefon veya Daire No..." />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <select name="projectId" class="form-select form-select-sm bg-light">
+                        <option value="">-- Tüm Şantiyeler --</option>
+                        @foreach (var p in projects)
+                        {
+                            <option value="@p.Id" selected="@(selectedProjectId == p.Id)">@p.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select name="status" class="form-select form-select-sm bg-light">
+                        <option value="">-- Tüm Ödeme Durumları --</option>
+                        <option value="Bekliyor" selected="@(selectedStatus == "Bekliyor")">Ödeme Bekliyor</option>
+                        <option value="Başlamadı" selected="@(selectedStatus == "Başlamadı")">Henüz Başlamadı</option>
+                        <option value="Ödendi" selected="@(selectedStatus == "Ödendi")">Ödendi (Temizlendi)</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex gap-1">
+                    <button type="submit" class="btn btn-sm btn-primary rounded-pill w-100 fw-bold">Filtrele</button>
+                    @if (!string.IsNullOrEmpty(searchTerm) || selectedProjectId.HasValue || !string.IsNullOrEmpty(selectedStatus))
+                    {
+                        <a href="/ConstructionProject/Stakeholders" class="btn btn-sm btn-light rounded-pill px-3" title="Filtreyi Temizle"><i class="bi bi-x-lg"></i></a>
+                    }
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Hızlı Seçim Yardımcı Çubuğu (Toplu Ödemeyi Kolaylaştıran Araçlar) -->
+    @if (Model != null && Model.Any())
+    {
+        <div class="d-flex align-items-center justify-content-between mb-2 px-1 small">
+            <div class="d-flex align-items-center gap-2">
+                <span class="text-muted fw-semibold">Hızlı Seçim:</span>
+                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 rounded-pill" onclick="selectAllEligible()">
+                    <i class="bi bi-check-all me-1"></i>Tüm Vadesi Gelenleri Seç
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 rounded-pill" onclick="clearAllSelections()">
+                    Seçimi Temizle
+                </button>
+            </div>
+            <div id="selectionStatusText" class="text-muted fst-italic">
+                Tablodan hak sahiplerini seçerek tek seferde toplu ödeme yapabilir veya banka memuruna verilecek talimat çıktısı alabilirsiniz.
+            </div>
+        </div>
+    }
+
+    <!-- Ana Hakediş & Ödeme Tablosu (Grid / Muhasebe Yapısı) -->
+    <div class="card border-0 shadow-sm rounded-3 overflow-hidden mb-4">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 table-sm" style="font-size: 0.92rem;">
+                <thead class="table-light text-secondary border-bottom">
+                    <tr>
+                        <th class="ps-3 py-2" style="width: 40px;">
+                            <input type="checkbox" id="selectAllCheckbox" class="form-check-input" onchange="toggleSelectAll(this)" title="Tümünü Seç / Kaldır" />
+                        </th>
+                        <th class="py-2">Hak Sahibi</th>
+                        <th class="py-2">Şantiye</th>
+                        <th class="py-2">Mülk & Pay</th>
+                        <th class="py-2">Kira Başlangıç & Vade</th>
+                        <th class="py-2 text-end">Aylık Kira</th>
+                        <th class="py-2 text-end">Taşınma Yardımı</th>
+                        <th class="py-2">Banka & IBAN</th>
+                        <th class="py-2 text-center">Ödeme Durumu</th>
+                        <th class="text-end pe-3 py-2">İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model != null && Model.Any())
+                    {
+                        foreach (var st in Model)
+                        {
+                            bool isRealEmail = !string.IsNullOrEmpty(st.User?.Email) && !st.User.Email.EndsWith("@gmk360.local");
+                            bool isRelocationPaid = st.Notes != null && st.Notes.Contains("[Taşınma yardımı ödendi]");
+                            bool isSmsSent = st.Notes != null && st.Notes.Contains("[SMS İletildi");
+                            bool isNotStarted = st.PaymentStatus == "Başlamadı" || (st.RentStartDate.HasValue && st.RentStartDate.Value.Date > DateTime.Today);
+                            bool isPaid = st.PaymentStatus == "Ödendi";
+
+                            decimal pRent = st.MonthlyRentAllowance ?? 0m;
+                            decimal pReloc = isRelocationPaid ? 0m : (st.RelocationAllowance ?? 0m);
+                            decimal pPayableTotal = pRent + pReloc;
+
+                            <tr>
+                                <!-- Seçim Kutusu -->
+                                <td class="ps-3">
+                                    @if (!isPaid)
+                                    {
+                                        <input type="checkbox" class="form-check-input stakeholder-chk" 
+                                               value="@st.Id" 
+                                               data-id="@st.Id"
+                                               data-name="@st.User?.FirstName @st.User?.LastName"
+                                               data-tc="@(st.User?.TcIdentityNo ?? "")"
+                                               data-rent="@Math.Round(pRent)"
+                                               data-reloc="@Math.Round(pReloc)"
+                                               data-total="@Math.Round(pPayableTotal)"
+                                               data-iban="@(st.Iban ?? "")"
+                                               data-bank="@(st.BankName ?? "")"
+                                               data-unit="@(st.UnitNumbers ?? "")"
+                                               data-project="@(st.Project?.Name ?? "")"
+                                               data-not-started="@(isNotStarted ? "1" : "0")"
+                                               onchange="onStakeholderCheckboxChange()" />
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-check-circle-fill text-success" title="Ödendi"></i>
+                                    }
+                                </td>
+
+                                <!-- Hak Sahibi Bilgisi -->
+                                <td>
+                                    <div class="fw-bold text-dark">
+                                        @st.User?.FirstName @st.User?.LastName
+                                        @if (st.User?.IsShadowAccount == true)
+                                        {
+                                            <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary px-1 py-0 ms-1" style="font-size: 0.65rem;" title="Gölge Müşteri Havuzunda"><i class="bi bi-shield-lock me-1"></i>Gölge</span>
+                                        }
+                                    </div>
+                                    <div class="small text-muted" style="font-size: 0.8rem;">
+                                        <span>TC: @(string.IsNullOrEmpty(st.User?.TcIdentityNo) ? "-" : st.User.TcIdentityNo)</span>
+                                        <span class="mx-1">•</span>
+                                        <span>Tel: @(st.User?.PhoneNumber ?? "-")</span>
+                                        @if (isRealEmail)
+                                        {
+                                            <span class="mx-1">•</span>
+                                            <span>@st.User?.Email</span>
+                                        }
+                                    </div>
+                                </td>
+
+                                <!-- Şantiye / Proje -->
+                                <td>
+                                    <a href="/ConstructionProject/Details/@st.ProjectId#headingStakeholders" class="text-decoration-none fw-semibold text-primary" title="Şantiyeye Git">
+                                        @st.Project?.Name
+                                    </a>
+                                </td>
+
+                                <!-- Mülk & Kendine Düşen Pay -->
+                                <td>
+                                    <span class="fw-bold text-dark">@(string.IsNullOrEmpty(st.UnitNumbers) ? "Belirtilmemiş" : st.UnitNumbers)</span>
+                                    <span class="badge bg-light text-dark border ms-1">@(string.IsNullOrEmpty(st.ShareRatio) ? "1 Kişi (Tam)" : st.ShareRatio)</span>
+                                </td>
+
+                                <!-- Kira Başlangıç & Ödeme Günü -->
+                                <td>
+                                    <div>
+                                        <span class="badge bg-light text-dark border">
+                                            <i class="bi bi-calendar-event text-primary me-1"></i>Her ayın @(st.PaymentDay ?? 5). günü
+                                        </span>
+                                    </div>
+                                    <div class="small text-muted mt-1" style="font-size:0.75rem;">
+                                        @if (st.RentStartDate.HasValue)
+                                        {
+                                            <span><i class="bi bi-play-circle text-success me-1"></i>Başlangıç: <strong>@st.RentStartDate.Value.ToString("dd.MM.yyyy")</strong></span>
+                                        }
+                                        else
+                                        {
+                                            <span><i class="bi bi-play-circle text-muted me-1"></i>Başlangıç: Anında</span>
+                                        }
+                                        @if (st.RentEndDate.HasValue)
+                                        {
+                                            <span class="d-block"><i class="bi bi-flag text-danger me-1"></i>Taahhüt: <strong>@st.RentEndDate.Value.ToString("dd.MM.yyyy")</strong></span>
+                                        }
+                                    </div>
+                                </td>
+
+                                <!-- Aylık Kira Yardımı (Tam Sayı / Virgülsüz) -->
+                                <td class="text-end fw-bold text-success font-monospace">
+                                    @((st.MonthlyRentAllowance ?? 0m).ToString("N0")) ₺
+                                </td>
+
+                                <!-- Taşınma Yardımı (Tam Sayı / Virgülsüz) -->
+                                <td class="text-end font-monospace">
+                                    @if (isRelocationPaid)
+                                    {
+                                        <span class="text-decoration-line-through text-muted small me-1">@((st.RelocationAllowance ?? 0m).ToString("N0")) ₺</span>
+                                        <span class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:0.7rem;"><i class="bi bi-check2"></i> Ödendi</span>
+                                    }
+                                    else if ((st.RelocationAllowance ?? 0m) > 0)
+                                    {
+                                        <span class="fw-bold text-warning">@((st.RelocationAllowance ?? 0m).ToString("N0")) ₺</span>
+                                        <small class="d-block text-muted" style="font-size: 0.7rem;">(1 Seferlik)</small>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+
+                                <!-- Banka & IBAN -->
+                                <td>
+                                    @if (!string.IsNullOrEmpty(st.Iban))
+                                    {
+                                        <div>
+                                            @if (!string.IsNullOrEmpty(st.BankName))
+                                            {
+                                                <div class="small fw-semibold text-secondary" style="font-size:0.78rem;">@st.BankName</div>
+                                            }
+                                            <div class="d-flex align-items-center gap-1 font-monospace small bg-light px-2 py-0 rounded border" style="max-width: 220px; font-size: 0.8rem;">
+                                                <span class="text-truncate">@st.Iban</span>
+                                                <button type="button" class="btn btn-sm btn-link p-0 text-muted ms-auto" onclick="navigator.clipboard.writeText('@st.Iban'); alert('IBAN kopyalandı');" title="Kopyala">
+                                                    <i class="bi bi-clipboard"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small fst-italic">IBAN Yok</span>
+                                    }
+                                </td>
+
+                                <!-- Ödeme Durumu & Butonu -->
+                                <td class="text-center">
+                                    @if (isPaid)
+                                    {
+                                        <div class="d-flex align-items-center justify-content-center gap-1 flex-wrap">
+                                            <span class="badge bg-success bg-opacity-25 text-success border border-success px-2 py-1">
+                                                <i class="bi bi-check2-circle me-1"></i>Ödendi
+                                            </span>
+                                            @if (!string.IsNullOrEmpty(st.ReceiptUrl))
+                                            {
+                                                <a href="@st.ReceiptUrl" target="_blank" class="btn btn-sm btn-outline-success p-1 py-0 rounded" title="Kaşeli Banka Dekontunu Aç">
+                                                    <i class="bi bi-file-earmark-pdf"></i> Dekont
+                                                </a>
+                                            }
+                                            @if (isSmsSent)
+                                            {
+                                                <span class="badge bg-info bg-opacity-10 text-info border border-info px-1 py-0" title="Hak sahibine 'Kiranız Yattı' SMS'i iletildi">
+                                                    <i class="bi bi-chat-left-text me-1"></i>SMS
+                                                </span>
+                                            }
+                                        </div>
+                                    }
+                                    else if (isNotStarted)
+                                    {
+                                        <span class="badge bg-secondary bg-opacity-15 text-secondary border border-secondary px-2 py-1" title="Kira henüz başlamadı">
+                                            <i class="bi bi-hourglass-split me-1"></i>Başlamadı (@(st.RentStartDate?.ToString("dd.MM.yyyy") ?? "Gelecek"))
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 py-1 fw-bold shadow-sm"
+                                                onclick="openPayModal(@st.Id, '@st.User?.FirstName @st.User?.LastName', '@st.Project?.Name', '@st.Iban', '@st.BankName', @(Math.Round(st.MonthlyRentAllowance ?? 0m)), @(Math.Round(st.RelocationAllowance ?? 0m)), @(isRelocationPaid ? "true" : "false"))">
+                                            <i class="bi bi-cash-stack me-1"></i> Öde
+                                        </button>
+                                    }
+                                </td>
+
+                                <!-- İşlemler -->
+                                <td class="text-end pe-3">
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-secondary p-1 px-2" 
+                                                onclick="openSingleEditModal(@st.Id, @st.ProjectId, '@st.User?.FirstName', '@st.User?.LastName', '@st.User?.TcIdentityNo', '@st.User?.PhoneNumber', '@(isRealEmail ? st.User?.Email : "")', '@st.Iban', '@st.BankName', '@st.UnitNumbers', '@st.ShareRatio', @(Math.Round(st.MonthlyRentAllowance ?? 0m)), @(Math.Round(st.RelocationAllowance ?? 0m)), @(st.PaymentDay ?? 5), '@(st.RentStartDate?.ToString("yyyy-MM-dd") ?? "")', '@(st.RentEndDate?.ToString("yyyy-MM-dd") ?? "")', '@st.Notes')" title="Düzenle">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <form asp-action="DeleteStakeholder" asp-controller="ConstructionProject" method="post" class="d-inline" onsubmit="return confirm('@st.User?.FirstName @st.User?.LastName kaydını silmek istediğinize emin misiniz?');">
+                                            <input type="hidden" name="stakeholderId" value="@st.Id" />
+                                            <input type="hidden" name="returnUrl" value="/ConstructionProject/Stakeholders" />
+                                            <button type="submit" class="btn btn-outline-danger p-1 px-2" title="Sil">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                        <a href="/ConstructionProject/Details/@st.ProjectId#headingStakeholders" class="btn btn-outline-primary p-1 px-2" title="Şantiye Detayı">
+                                            <i class="bi bi-box-arrow-up-right"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="10" class="text-center py-4 text-muted">
+                                <i class="bi bi-info-circle me-1"></i> Henüz kayıtlı hak sahibi / hakediş bulunmuyor.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+
+                <!-- ALT TOPLAM / ÇIKAN PARA (GRID FOOTER - TAM SAYI & PROJE TAAHHÜT ÖZETİ) -->
+                @if (Model != null && Model.Any())
+                {
+                    <tfoot class="table-light border-top border-2" style="font-size: 0.93rem;">
+                        <!-- 1. Satır: Cari Ay / Dönem Çıkış Özeti -->
+                        <tr class="fw-bold align-middle">
+                            <td colspan="5" class="ps-3 py-2 text-dark">
+                                <i class="bi bi-calendar-check me-1 text-primary"></i> CARİ AY DÖNEM ÇIKIŞI
+                                <span class="badge bg-light text-secondary border ms-2">@totalCount Hak Sahibi</span>
+                                <span class="badge bg-success bg-opacity-10 text-success border border-success ms-1">@paidCount Ödendi</span>
+                                <span class="badge bg-warning bg-opacity-10 text-warning border border-warning ms-1">@pendingCount Ödeme Bekliyor</span>
+                                @if (notStartedCount > 0)
+                                {
+                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary ms-1">@notStartedCount Henüz Başlamadı</span>
+                                }
+                            </td>
+                            <td class="text-end py-2 text-success font-monospace fs-6">
+                                @totalRent.ToString("N0") ₺
+                            </td>
+                            <td class="text-end py-2 text-warning font-monospace fs-6">
+                                @totalRelocation.ToString("N0") ₺
+                            </td>
+                            <td colspan="3" class="text-end pe-3 py-2">
+                                <span class="text-muted small me-2">Bu Ay Çıkacak Toplam:</span>
+                                <span class="badge bg-dark text-white px-3 py-2 font-monospace fs-6 shadow-sm">
+                                    @((totalRent + totalRelocation).ToString("N0")) ₺
+                                </span>
+                            </td>
+                        </tr>
+
+                        <!-- 2. Satır: Proje Genel Taahhüdü (Tüm İnşaat Süresince Çıkacak Toplam Masraf) -->
+                        <tr class="align-middle bg-primary bg-opacity-10 border-top">
+                            <td colspan="5" class="ps-3 py-2 text-dark">
+                                <i class="bi bi-buildings-fill text-primary me-2"></i>
+                                <strong class="text-primary">PROJE TOPLAM KİRA & DÖNÜŞÜM TAAHHÜDÜ (Tüm İnşaat Süreci):</strong>
+                                <span class="text-muted small ms-1">Sözleşme başlangıcından anahtar teslime kadar çıkacak toplam tahmini bütçe (Gecikme/ilave ay durumunda süre ve tazminat tutarı otomatik güncellenir).</span>
+                            </td>
+                            <td colspan="5" class="text-end pe-3 py-2">
+                                <span class="badge bg-primary text-white px-3 py-2 font-monospace fs-6 shadow-sm">
+                                    <i class="bi bi-cash-stack me-1"></i> @totalProjectCommitment.ToString("N0") ₺ Toplam Taahhüt
+                                </span>
+                            </td>
+                        </tr>
+                    </tfoot>
+                }
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 1: YENİ DAİRE & HAK SAHİPLERİ EKLE (PARASI BAŞTA)  -->
+<!-- ======================================================== -->
+<div class="modal fade" id="batchModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <form asp-action="SaveUnitStakeholdersBatch" asp-controller="ConstructionProject" method="post">
+                <input type="hidden" name="returnUrl" value="/ConstructionProject/Stakeholders" />
+
+                <div class="modal-header border-bottom py-3 bg-light">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-building-add text-primary me-2"></i> Yeni Daire & Hak Sahipleri Ekle
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <div class="bg-light p-3 rounded-3 mb-3 border">
+                        <div class="row g-2">
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold small text-muted">Şantiye / Proje *</label>
+                                <select name="projectId" id="batchProjectId" class="form-select form-select-sm fw-semibold" required>
+                                    <option value="">-- Şantiye Seçiniz --</option>
+                                    @foreach (var p in projects)
+                                    {
+                                        <option value="@p.Id">@p.Name</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small text-muted">Mülk / Daire No *</label>
+                                <input type="text" name="unitNumbers" id="batchUnitNumbers" class="form-control form-control-sm fw-bold" placeholder="Örn: Daire 4" required oninput="renderStakeholderCards()" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small text-muted">Dairenin Toplam Aylık Kirası *</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" step="1" name="totalRent" id="batchTotalRent" class="form-control fw-bold text-success font-monospace" placeholder="Örn: 30000" value="30000" required oninput="renderStakeholderCards()" />
+                                    <span class="input-group-text fw-bold">₺</span>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small text-muted">Dairenin Toplam Taşınma Bedeli *</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" step="1" name="totalRelocation" id="batchTotalRelocation" class="form-control fw-bold text-warning font-monospace" placeholder="Örn: 40000" value="40000" required oninput="renderStakeholderCards()" />
+                                    <span class="input-group-text fw-bold">₺</span>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4 mt-2">
+                                <label class="form-label fw-bold small text-muted">Kira Başlangıç Tarihi *</label>
+                                <input type="date" name="rentStartDate" id="batchRentStartDate" class="form-control form-control-sm" value="@DateTime.Now.ToString("yyyy-MM-01")" required onchange="calculateBatchEndDate()" />
+                                <small class="text-muted" style="font-size:0.7rem;">Tahliye veya ilk kira ayı</small>
+                            </div>
+
+                            <div class="col-md-4 mt-2">
+                                <label class="form-label fw-bold small text-muted">Taahhüt Süresi (Ay) *</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" min="1" max="60" name="commitmentMonths" id="batchCommitmentMonths" class="form-control form-control-sm fw-bold" value="18" required oninput="calculateBatchEndDate()" />
+                                    <span class="input-group-text">Ay</span>
+                                </div>
+                                <small class="text-muted" style="font-size:0.7rem;">Sözleşme taahhüt süresi</small>
+                            </div>
+
+                            <div class="col-md-4 mt-2">
+                                <label class="form-label fw-bold small text-muted">Taahhüt Bitiş Tarihi</label>
+                                <input type="date" name="rentEndDate" id="batchRentEndDate" class="form-control form-control-sm bg-light" />
+                                <small class="text-muted" style="font-size:0.7rem;">Teslim taahhüdü / Anahtar teslim</small>
+                            </div>
+
+                            <div class="col-md-6 mt-2">
+                                <label class="form-label fw-bold small text-muted">Her Ayın Hangi Günü Ödenir? *</label>
+                                <select name="paymentDay" id="batchPaymentDay" class="form-select form-select-sm">
+                                    @for (int d = 1; d <= 31; d++)
+                                    {
+                                        <option value="@d" selected="@(d == 5)">Her ayın @d. günü</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-md-6 mt-2">
+                                <label class="form-label fw-bold small text-muted">Bu Dairede Kaç Hissedar / Hak Sahibi Var? *</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" min="1" max="20" step="1" name="shareCount" id="batchShareCount" class="form-control fw-bold fs-6 text-center" value="1" required oninput="renderStakeholderCards()" />
+                                    <span class="input-group-text fw-bold text-primary">Kişi</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="batchCalculationSummary" class="alert alert-primary py-2 px-3 mb-3 d-flex align-items-center justify-content-between rounded-3 border-0 bg-primary bg-opacity-10">
+                        <div class="small text-dark">
+                            <i class="bi bi-info-circle-fill text-primary me-1"></i>
+                            <span id="batchSummaryText">1 Kişi (Tam Hisse) — Aylık Kira: 30.000 ₺ | Taşınma: 40.000 ₺</span>
+                        </div>
+                    </div>
+
+                    <div id="stakeholdersCardsContainer"></div>
+
+                    <div class="mt-3">
+                        <label class="form-label fw-bold small text-muted">Özel Notlar / Anlaşma</label>
+                        <input type="text" name="notes" class="form-control form-control-sm" placeholder="Örn: 2 kardeşe eşit paylaştırıldı, vekaletname teslim alındı..." />
+                    </div>
+                </div>
+
+                <div class="modal-footer border-top py-3">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold" id="btnSaveBatch">
+                        <i class="bi bi-check2-circle me-1"></i> Daireyi ve Hak Sahiplerini Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 2: MEVCUT TEK KİŞİYİ DÜZENLE MODALI                -->
+<!-- ======================================================== -->
+<div class="modal fade" id="singleEditModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <form asp-action="SaveStakeholderDetails" asp-controller="ConstructionProject" method="post">
+                <input type="hidden" name="id" id="editStakeholderId" value="" />
+                <input type="hidden" name="projectId" id="editProjectId" value="" />
+                <input type="hidden" name="returnUrl" value="/ConstructionProject/Stakeholders" />
+
+                <div class="modal-header border-bottom py-3">
+                    <h5 class="modal-title fw-bold" id="editModalTitle">
+                        <i class="bi bi-pencil-square text-primary me-2"></i> Hak Sahibi Düzenle
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small text-muted">Mülk / Daire No *</label>
+                            <input type="text" name="unitNumbers" id="editUnitNumbers" class="form-control" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small text-muted">Ödeme Günü</label>
+                            <select name="paymentDay" id="editPaymentDay" class="form-select">
+                                @for (int d = 1; d <= 31; d++)
+                                {
+                                    <option value="@d">Her ayın @d. günü</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small text-muted">Kira Başlangıç Tarihi</label>
+                            <input type="date" name="rentStartDate" id="editRentStartDate" class="form-control" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small text-muted">Taahhüt Bitiş Tarihi (Anahtar Teslim)</label>
+                            <input type="date" name="rentEndDate" id="editRentEndDate" class="form-control" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small text-muted">Adı *</label>
+                            <input type="text" name="firstName" id="editFirstName" class="form-control" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small text-muted">Soyadı *</label>
+                            <input type="text" name="lastName" id="editLastName" class="form-control" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small text-muted">TC Kimlik No</label>
+                            <input type="text" name="tcIdentityNo" id="editTc" class="form-control" maxlength="11" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small text-muted">Telefon No *</label>
+                            <input type="tel" name="phone" id="editPhone" class="form-control" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small text-muted">E-posta</label>
+                            <input type="email" name="email" id="editEmail" class="form-control" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small text-muted">Banka Adı</label>
+                            <input type="text" name="bankName" id="editBankName" class="form-control" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold small text-muted">IBAN</label>
+                            <input type="text" name="iban" id="editIban" class="form-control font-monospace" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small text-muted">Aylık Kira Yardımı (₺ - Tam Sayı)</label>
+                            <input type="number" step="1" name="monthlyRentAllowance" id="editRent" class="form-control fw-bold text-success font-monospace" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small text-muted">Taşınma Yardımı (₺ - Tam Sayı)</label>
+                            <input type="number" step="1" name="relocationAllowance" id="editRelocation" class="form-control fw-bold text-warning font-monospace" />
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label fw-semibold small text-muted">Notlar</label>
+                            <input type="text" name="notes" id="editNotes" class="form-control" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-top py-3">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 3: TEKİL HAKEDİŞ ÖDEMESİ & KASA ÇIKIŞI MODALI       -->
+<!-- ======================================================== -->
+<div class="modal fade" id="payModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <form asp-action="ProcessStakeholderPayment" asp-controller="ConstructionProject" method="post" enctype="multipart/form-data">
+                <input type="hidden" name="stakeholderId" id="payStakeholderId" value="" />
+                <input type="hidden" name="returnUrl" value="/ConstructionProject/Stakeholders" />
+
+                <div class="modal-header border-bottom py-3">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-cash-stack text-success me-2"></i> Hakediş Ödemesi & Kasa Çıkışı
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <div class="bg-light p-3 rounded-3 mb-3 border">
+                        <div class="fw-bold fs-5 text-dark" id="payPersonName">-</div>
+                        <div class="text-primary small fw-semibold" id="payProjectName">-</div>
+                        <div class="font-monospace small text-muted mt-1" id="payIbanInfo">-</div>
+                    </div>
+
+                    <label class="form-label fw-bold small text-muted">Ödenecek Hakediş Kalemleri</label>
+                    <div class="card p-3 mb-3 border bg-white rounded-3">
+                        <div class="form-check d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <input class="form-check-input" type="checkbox" id="chkPayRent" name="payRent" value="true" checked onchange="recalcPayAmount()">
+                                <label class="form-check-label fw-semibold" for="chkPayRent">Aylık Kira Desteği</label>
+                            </div>
+                            <span class="fw-bold text-success font-monospace" id="lblRentAmount">0 ₺</span>
+                        </div>
+                        <div class="form-check d-flex justify-content-between align-items-center mb-0" id="relocationRow">
+                            <div>
+                                <input class="form-check-input" type="checkbox" id="chkPayRelocation" name="payRelocation" value="true" onchange="recalcPayAmount()">
+                                <label class="form-check-label fw-semibold" for="chkPayRelocation">Taşınma Yardımı <small class="text-muted">(1 Seferlik)</small></label>
+                            </div>
+                            <span class="fw-bold text-warning font-monospace" id="lblRelocationAmount">0 ₺</span>
+                        </div>
+                        <div id="relocationAlreadyPaidNotice" class="text-muted small fst-italic mt-1 d-none">
+                            <i class="bi bi-info-circle me-1 text-success"></i> Bu hak sahibinin taşınma yardımı daha önce ödenmiştir.
+                        </div>
+                        <hr class="my-2" />
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-bold text-dark">Toplam Ödenecek Tutar:</span>
+                            <span class="fw-bold fs-5 text-primary font-monospace" id="lblTotalPayAmount">0 ₺</span>
+                        </div>
+                        <input type="hidden" name="amount" id="txtTotalPayAmount" value="0" />
+                    </div>
+
+                    <!-- Ödeme Kaynağı (Hesap veya Kiralık Kasa) -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Ödemenin Çıkacağı Hesap / Kasa *</label>
+                        <select name="sourceAccount" id="singleSourceAccount" class="form-select fw-semibold" required onchange="toggleFxContainer('singleSourceAccount', 'singleFxContainer')">
+                            <option value="Şirket Banka Hesabı (Hesaptaki Nakit / EFT)">Şirket Banka Hesabı (Hesaptaki Nakit / EFT) — [Varsayılan]</option>
+                            <option value="Banka Kiralık Kasası (Döviz Bozumu / Gişe Nakit)">Banka Kiralık Kasası (Döviz Bozumu / Gişe Nakit) — [Yedek Kasa Rezervi]</option>
+                            <option value="Proje Ortak Hesabı (Şantiye Hesabı)">Proje Ortak Hesabı (Şantiye Hesabı)</option>
+                            <option value="Merkez Şirket Kasası (Nakit)">Merkez Şirket Kasası (Nakit)</option>
+                        </select>
+                    </div>
+
+                    <!-- Kiralık Kasa Döviz Bozumu Detayı (Opsiyonel Takip) -->
+                    <div id="singleFxContainer" class="p-2 mb-3 bg-warning bg-opacity-10 border border-warning rounded-3 d-none">
+                        <div class="small fw-bold text-dark mb-1"><i class="bi bi-currency-exchange me-1 text-warning"></i> Kiralık Kasadan Bozdurulan Döviz (Takip İçin):</div>
+                        <div class="row g-2">
+                            <div class="col-4">
+                                <select name="fxCurrency" class="form-select form-select-sm">
+                                    <option value="USD">USD ($)</option>
+                                    <option value="EUR">EUR (€)</option>
+                                </select>
+                            </div>
+                            <div class="col-4">
+                                <input type="number" step="0.01" name="fxAmount" class="form-control form-control-sm" placeholder="Döviz Tutarı" />
+                            </div>
+                            <div class="col-4">
+                                <input type="number" step="0.01" name="fxRate" class="form-control form-control-sm" placeholder="Bozum Kuru" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Proje Finansman & Ortaklık Durumu</label>
+                        <select name="partnershipStatus" class="form-select">
+                            <option value="Şirket Özkaynağı (Müteahhit Payı)">Şirket Özkaynağı (Müteahhit Payı)</option>
+                            <option value="Ortak Proje Kasası (Ortaklar Eşit Paylaşımlı)">Ortak Proje Kasası (Ortaklar Eşit Paylaşımlı)</option>
+                            <option value="Özel Hakediş Dağıtımı">Özel Hakediş Dağıtımı</option>
+                        </select>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted">Ödeme Tarihi *</label>
+                            <input type="date" name="paymentDate" class="form-control" value="@DateTime.Now.ToString("yyyy-MM-dd")" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted">Kaşeli Banka Dekontu / Makbuz</label>
+                            <input type="file" name="receiptFile" class="form-control" accept=".pdf,.png,.jpg,.jpeg" />
+                        </div>
+                    </div>
+
+                    <!-- Otomatik SMS Bildirimi Switch'i -->
+                    <div class="form-check form-switch p-2 bg-light rounded border mb-3">
+                        <input class="form-check-input ms-0 me-2" type="checkbox" name="sendSms" value="true" checked id="chkSingleSendSms">
+                        <label class="form-check-label fw-bold small text-dark" for="chkSingleSendSms">
+                            <i class="bi bi-chat-left-dots text-primary me-1"></i> Hak sahibine "Kiranız banka hesabınıza yatırılmıştır" SMS'i gönder (İspat Kaydı)
+                        </label>
+                    </div>
+
+                    <div class="mb-0">
+                        <label class="form-label fw-bold small text-muted">Açıklama / Not</label>
+                        <input type="text" name="paymentNote" class="form-control" placeholder="Örn: Kasım ayı kira bedeli banka gişe transferi..." />
+                    </div>
+                </div>
+
+                <div class="modal-footer border-top py-3">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold">
+                        <i class="bi bi-check2-circle me-1"></i> Ödemeyi Gerçekleştir & Kasadan Düş
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 4: TOPLU HAKEDİŞ ÖDEMESİ (SEÇ & ÖDE MODALI)         -->
+<!-- ======================================================== -->
+<div class="modal fade" id="batchPayModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <form asp-action="BatchProcessStakeholderPayments" asp-controller="ConstructionProject" method="post" enctype="multipart/form-data">
+                <input type="hidden" name="returnUrl" value="/ConstructionProject/Stakeholders" />
+                <div id="batchPayHiddenInputsContainer"></div>
+
+                <div class="modal-header border-bottom py-3 bg-light">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-wallet2 text-success me-2"></i> Toplu Hak Sahibi Hakediş Ödemesi
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <!-- Seçilen Kişiler Listesi -->
+                    <div class="card border rounded-3 p-3 mb-3 bg-light">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="fw-bold text-dark"><i class="bi bi-people-fill text-primary me-1"></i> Seçilen Hak Sahipleri (<span id="batchModalPersonCount">0</span> Kişi)</span>
+                            <span class="badge bg-success font-monospace fs-6 px-3 py-1" id="batchModalTotalAmountBadge">0 ₺</span>
+                        </div>
+                        <input type="hidden" name="totalAmount" id="batchModalTotalAmountInput" value="0" />
+                        <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                            <table class="table table-sm table-borderless align-middle mb-0 bg-white rounded border">
+                                <thead class="table-light border-bottom small text-muted">
+                                    <tr>
+                                        <th class="ps-2">Hak Sahibi</th>
+                                        <th>Şantiye & Daire</th>
+                                        <th>Banka / IBAN</th>
+                                        <th class="text-end pe-2">Ödenecek Tutar</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="batchModalSelectedListBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted">Ödemenin Çıkacağı Hesap / Kasa *</label>
+                            <select name="sourceAccount" id="batchSourceAccount" class="form-select fw-semibold" required onchange="toggleFxContainer('batchSourceAccount', 'batchFxContainer')">
+                                <option value="Şirket Banka Hesabı (Hesaptaki Nakit / EFT)">Şirket Banka Hesabı (Hesaptaki Nakit / EFT) — [Varsayılan]</option>
+                                <option value="Banka Kiralık Kasası (Döviz Bozumu / Gişe Nakit)">Banka Kiralık Kasası (Döviz Bozumu / Gişe Nakit) — [Yedek Kasa Rezervi]</option>
+                                <option value="Proje Ortak Hesabı (Şantiye Hesabı)">Proje Ortak Hesabı (Şantiye Hesabı)</option>
+                                <option value="Merkez Şirket Kasası (Nakit)">Merkez Şirket Kasası (Nakit)</option>
+                            </select>
+                        </div>
+
+                        <!-- Kiralık Kasa Döviz Bozumu Detayı -->
+                        <div id="batchFxContainer" class="col-md-6 d-none">
+                            <div class="p-2 bg-warning bg-opacity-10 border border-warning rounded-3">
+                                <div class="small fw-bold text-dark mb-1"><i class="bi bi-currency-exchange me-1 text-warning"></i> Kiralık Kasadan Bozdurulan Döviz:</div>
+                                <div class="row g-1">
+                                    <div class="col-4">
+                                        <select name="fxCurrency" class="form-select form-select-sm">
+                                            <option value="USD">USD ($)</option>
+                                            <option value="EUR">EUR (€)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-4">
+                                        <input type="number" step="0.01" name="fxAmount" class="form-control form-control-sm" placeholder="Tutar" />
+                                    </div>
+                                    <div class="col-4">
+                                        <input type="number" step="0.01" name="fxRate" class="form-control form-control-sm" placeholder="Kur" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted">Finansman & Ortaklık Durumu</label>
+                            <select name="partnershipStatus" class="form-select">
+                                <option value="Şirket Özkaynağı (Müteahhit Payı)">Şirket Özkaynağı (Müteahhit Payı)</option>
+                                <option value="Ortak Proje Kasası (Ortaklar Eşit Paylaşımlı)">Ortak Proje Kasası (Ortaklar Eşit Paylaşımlı)</option>
+                                <option value="Özel Hakediş Dağıtımı">Özel Hakediş Dağıtımı</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted">Ödeme Tarihi *</label>
+                            <input type="date" name="paymentDate" class="form-control" value="@DateTime.Now.ToString("yyyy-MM-dd")" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted">Toplu EFT Dekontu / Gişe Makbuzu</label>
+                            <input type="file" name="receiptFile" class="form-control" accept=".pdf,.png,.jpg,.jpeg" />
+                        </div>
+
+                        <!-- Toplu SMS Switch -->
+                        <div class="col-md-12">
+                            <div class="form-check form-switch p-2 bg-light rounded border">
+                                <input class="form-check-input ms-0 me-2" type="checkbox" name="sendSms" value="true" checked id="chkBatchSendSms">
+                                <label class="form-check-label fw-bold small text-dark" for="chkBatchSendSms">
+                                    <i class="bi bi-chat-left-dots text-primary me-1"></i> Tüm seçilen hak sahiplerine "Kiranız banka hesabınıza yatırılmıştır" SMS'i gönder (İspat Kaydı)
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold small text-muted">Açıklama / Not</label>
+                            <input type="text" name="paymentNote" class="form-control" placeholder="Örn: Kasım ayı toplu hak sahipleri kira ödemeleri..." />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-top py-3">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold">
+                        <i class="bi bi-check2-circle me-1"></i> <span id="batchSubmitBtnText">Seçilenlerin Ödemesini Gerçekleştir</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 5: RESMİ BANKA TALİMATI & GİŞE NAKİT DAĞITIM LİSTESİ -->
+<!-- ======================================================== -->
+<div class="modal fade" id="bankInstructionModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-bottom py-3 bg-light d-print-none">
+                <h5 class="modal-title fw-bold text-dark">
+                    <i class="bi bi-file-earmark-text text-primary me-2"></i> Resmi Banka Talimatı / Gişe Nakit Dağıtım Formu
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body p-4" id="printableInstructionArea">
+                <!-- Şablon Kontrol Barı (Sadece Ekranda Görünür, Yazdırmada Gizlenir) -->
+                <div class="card p-3 mb-4 bg-light border d-print-none rounded-3">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold small text-muted">Muhatap Banka & Şube:</label>
+                            <input type="text" id="insBankBranch" class="form-control form-control-sm fw-bold" value="T.C. Ziraat Bankası Kadıköy Şube Müdürlüğü'ne" oninput="updatePrintableDoc()" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small text-muted">Talimat Türü:</label>
+                            <select id="insInstructionType" class="form-select form-select-sm fw-semibold" onchange="updatePrintableDoc()">
+                                <option value="account">1. Banka Hesabından Transfer Talimatı (Hesaptan Dağıtım)</option>
+                                <option value="teller">2. Gişe / Vezne Nakit Dağıtım Talimatı (Kiralık Kasa Bozumu)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 text-end pt-3">
+                            <button type="button" class="btn btn-dark btn-sm rounded-pill px-3 fw-bold" onclick="window.print()">
+                                <i class="bi bi-printer me-1"></i> A4 Yazdır / PDF Al
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- YAZDIRILABİLİR RESMİ A4 EVRAK ALANI -->
+                <div class="bg-white p-4 border rounded shadow-sm print-area" style="font-family: Arial, sans-serif; color: #111;">
+                    <!-- Resmi Başlık -->
+                    <div class="text-end text-muted small mb-2">Tarih: @DateTime.Now.ToString("dd.MM.yyyy")</div>
+                    <div class="fw-bold fs-5 text-uppercase border-bottom pb-2 mb-3" id="docBankTitle">
+                        T.C. ZİRAAT BANKASI KADIKÖY ŞUBE MÜDÜRLÜĞÜ'NE
+                    </div>
+
+                    <!-- Talimat Metni -->
+                    <p class="mb-3" style="line-height: 1.6; font-size: 0.95rem;" id="docBodyText">
+                        Şirketimiz bünyesinde yürütülmekte olan Kentsel Dönüşüm projeleri kapsamında, aşağıda adı soyadı, T.C. kimlik numarası, banka ve IBAN bilgileri yer alan hak sahiplerine ait kira desteği ve hakediş tutarlarının belirtilen açıklama formatıyla transfer edilmesini arz ve talep ederiz.
+                    </p>
+
+                    <!-- Sıralı Hak Sahipleri Tablosu -->
+                    <table class="table table-bordered table-sm align-middle mb-3" style="font-size: 0.88rem; border-color: #333;">
+                        <thead class="table-light text-dark fw-bold text-center">
+                            <tr>
+                                <th style="width: 35px;">No</th>
+                                <th>Hak Sahibi Adı Soyadı</th>
+                                <th style="width: 110px;">T.C. Kimlik No</th>
+                                <th>Alıcı Banka</th>
+                                <th>Alıcı IBAN Numarası</th>
+                                <th class="text-end" style="width: 110px;">Tutar (₺)</th>
+                                <th>Dekont Açıklaması</th>
+                            </tr>
+                        </thead>
+                        <tbody id="insDocTableBody"></tbody>
+                        <tfoot class="fw-bold table-light">
+                            <tr>
+                                <td colspan="5" class="text-end pe-2">TOPLAM ÖDENECEK HAKEDİŞ TUTARI:</td>
+                                <td class="text-end text-primary font-monospace fs-6" id="docTotalAmountCell">0 ₺</td>
+                                <td class="small fst-italic" id="docAmountInWords">Yalnız: ...</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                    <!-- Yetkili Kaşe & İmza Bloğu -->
+                    <div class="row mt-5 pt-3">
+                        <div class="col-6">
+                            <div class="small text-muted">İşlemi Yapan / Teslim Eden Yetkili:</div>
+                            <div class="fw-bold mt-1">Firma Yetkilisi / Şantiye Muhasebesi</div>
+                            <div class="text-muted small mt-4">İmza: _______________________</div>
+                        </div>
+                        <div class="col-6 text-end">
+                            <div class="small text-muted">Şirket Kaşesi & Yetkili İmzası:</div>
+                            <div class="mt-4"><span class="border border-dark px-4 py-3 text-muted small">[ Şirket Kaşesi ]</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer border-top py-3 d-print-none">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Kapat</button>
+                <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold" onclick="window.print()">
+                    <i class="bi bi-printer me-1"></i> A4 Yazdır / PDF Olarak Kaydet
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    @@media print {
+        body * {
+            visibility: hidden;
+        }
+        #printableInstructionArea, #printableInstructionArea .print-area, #printableInstructionArea .print-area * {
+            visibility: visible;
+        }
+        #printableInstructionArea {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        .d-print-none {
+            display: none !important;
+        }
+    }
+</style>
+
+<script>
+    // ----------------------------------------------------
+    // CHECKBOX & ÇOKLU SEÇİM YÖNETİMİ
+    // ----------------------------------------------------
+    function onStakeholderCheckboxChange() {
+        const checkboxes = document.querySelectorAll('.stakeholder-chk');
+        const checkedList = document.querySelectorAll('.stakeholder-chk:checked');
+        const count = checkedList.length;
+
+        let totalPayable = 0;
+        checkedList.forEach(chk => {
+            totalPayable += parseFloat(chk.getAttribute('data-total')) || 0;
+        });
+        totalPayable = Math.round(totalPayable);
+
+        const btnBatch = document.getElementById('btnBatchPay');
+        const btnInstruction = document.getElementById('btnBankInstruction');
+        const countBadge = document.getElementById('batchPayCountBadge');
+        const totalBadge = document.getElementById('batchPayTotalBadge');
+        const instructionCountBadge = document.getElementById('instructionCountBadge');
+        const statusText = document.getElementById('selectionStatusText');
+
+        if (count > 0) {
+            btnBatch.classList.remove('d-none');
+            btnInstruction.classList.remove('d-none');
+            countBadge.innerText = count;
+            instructionCountBadge.innerText = count;
+            totalBadge.innerText = totalPayable.toLocaleString('tr-TR');
+            if (statusText) statusText.innerText = count + ' hak sahibi seçildi. Toplam ödenecek tutar: ' + totalPayable.toLocaleString('tr-TR') + ' ₺';
+        } else {
+            btnBatch.classList.add('d-none');
+            btnInstruction.classList.add('d-none');
+            if (statusText) statusText.innerText = 'Tablodan hak sahiplerini seçerek tek seferde toplu ödeme yapabilir veya banka memuruna verilecek talimat çıktısı alabilirsiniz.';
+        }
+
+        const selectAll = document.getElementById('selectAllCheckbox');
+        if (selectAll) {
+            selectAll.checked = (checkboxes.length > 0 && checkedList.length === checkboxes.length);
+        }
+    }
+
+    function toggleSelectAll(master) {
+        const checkboxes = document.querySelectorAll('.stakeholder-chk');
+        checkboxes.forEach(chk => {
+            chk.checked = master.checked;
+        });
+        onStakeholderCheckboxChange();
+    }
+
+    function selectAllEligible() {
+        const checkboxes = document.querySelectorAll('.stakeholder-chk');
+        checkboxes.forEach(chk => chk.checked = true);
+        onStakeholderCheckboxChange();
+    }
+
+    function clearAllSelections() {
+        const checkboxes = document.querySelectorAll('.stakeholder-chk');
+        checkboxes.forEach(chk => chk.checked = false);
+        const selectAll = document.getElementById('selectAllCheckbox');
+        if (selectAll) selectAll.checked = false;
+        onStakeholderCheckboxChange();
+    }
+
+    function toggleFxContainer(selectId, containerId) {
+        const val = document.getElementById(selectId).value;
+        const cont = document.getElementById(containerId);
+        if (val.includes('Kiralık Kasası')) {
+            cont.classList.remove('d-none');
+        } else {
+            cont.classList.add('d-none');
+        }
+    }
+
+    // ----------------------------------------------------
+    // RESMİ BANKA TALİMATI / GİŞE LİSTESİ YAZDIRMA
+    // ----------------------------------------------------
+    function openBankInstructionModal() {
+        const checkedList = document.querySelectorAll('.stakeholder-chk:checked');
+        if (checkedList.length === 0) {
+            alert('Lütfen en az bir hak sahibi seçiniz.');
+            return;
+        }
+
+        let total = 0;
+        let rowsHtml = '';
+        let rowIdx = 1;
+
+        checkedList.forEach(chk => {
+            const name = chk.getAttribute('data-name');
+            const tc = chk.getAttribute('data-tc') || '-';
+            const bank = chk.getAttribute('data-bank') || '-';
+            const iban = chk.getAttribute('data-iban') || 'IBAN Belirtilmemiş';
+            const project = chk.getAttribute('data-project');
+            const unit = chk.getAttribute('data-unit') || 'Daire';
+            const amount = Math.round(parseFloat(chk.getAttribute('data-total')) || 0);
+            total += amount;
+
+            const desc = `${project} ${unit} Kira Desteği`;
+
+            rowsHtml += `
+                <tr>
+                    <td class="text-center">${rowIdx++}</td>
+                    <td class="fw-bold">${name}</td>
+                    <td class="text-center font-monospace">${tc}</td>
+                    <td>${bank}</td>
+                    <td class="font-monospace small">${iban}</td>
+                    <td class="text-end fw-bold font-monospace">${amount.toLocaleString('tr-TR')} ₺</td>
+                    <td class="small text-muted">${desc}</td>
+                </tr>
+            `;
+        });
+
+        document.getElementById('insDocTableBody').innerHTML = rowsHtml;
+        document.getElementById('docTotalAmountCell').innerText = total.toLocaleString('tr-TR') + ' ₺';
+        document.getElementById('docAmountInWords').innerText = `Yalnız: #${total.toLocaleString('tr-TR')} Türk Lirası#`;
+
+        updatePrintableDoc();
+        var myModal = new bootstrap.Modal(document.getElementById('bankInstructionModal'));
+        myModal.show();
+    }
+
+    function updatePrintableDoc() {
+        const bankTitle = document.getElementById('insBankBranch').value.trim() || 'T.C. ZİRAAT BANKASI MÜDÜRLÜĞÜ\'NE';
+        document.getElementById('docBankTitle').innerText = bankTitle.toUpperCase();
+
+        const type = document.getElementById('insInstructionType').value;
+        const bodyText = document.getElementById('docBodyText');
+
+        if (type === 'teller') {
+            bodyText.innerHTML = `Şirketimiz yetkilisi tarafından veznenize / gişenize <strong>elden nakit olarak teslim edilen</strong> toplam hakediş tutarının; aşağıda kimlik, banka ve IBAN bilgileri belirtilen hak sahiplerinin hesaplarına belirtilen açıklamalarla gişeden transfer edilerek onaylı dekontlarının tarafımıza teslim edilmesini arz ve talep ederiz.`;
+        } else {
+            bodyText.innerHTML = `Şirketimiz bünyesinde yürütülmekte olan Kentsel Dönüşüm projeleri kapsamında, <strong>firmamıza ait banka hesabımızdan</strong> aşağıda adı soyadı, T.C. kimlik numarası, banka ve IBAN bilgileri yer alan hak sahiplerine ait kira desteği ve hakediş tutarlarının belirtilen açıklama formatıyla transfer edilmesini arz ve talep ederiz.`;
+        }
+    }
+
+    // ----------------------------------------------------
+    // TOPLU ÖDEME MODALI
+    // ----------------------------------------------------
+    function openBatchPayModal() {
+        const checkedList = document.querySelectorAll('.stakeholder-chk:checked');
+        if (checkedList.length === 0) {
+            alert('Lütfen en az bir hak sahibi seçiniz.');
+            return;
+        }
+
+        let totalAmount = 0;
+        let hiddenInputs = '';
+        let listHtml = '';
+
+        checkedList.forEach(chk => {
+            const id = chk.value;
+            const name = chk.getAttribute('data-name');
+            const project = chk.getAttribute('data-project');
+            const unit = chk.getAttribute('data-unit') || 'Daire';
+            const iban = chk.getAttribute('data-iban');
+            const bank = chk.getAttribute('data-bank');
+            const total = Math.round(parseFloat(chk.getAttribute('data-total')) || 0);
+
+            totalAmount += total;
+            hiddenInputs += `<input type="hidden" name="stakeholderIds" value="${id}" />`;
+
+            listHtml += `
+                <tr class="border-bottom">
+                    <td class="ps-2 fw-semibold">${name}</td>
+                    <td class="small text-muted">${project} (${unit})</td>
+                    <td class="font-monospace small text-muted">${bank ? bank + ' - ' : ''}${iban ? iban : 'IBAN Yok'}</td>
+                    <td class="text-end pe-2 fw-bold text-success font-monospace">${total.toLocaleString('tr-TR')} ₺</td>
+                </tr>
+            `;
+        });
+
+        document.getElementById('batchPayHiddenInputsContainer').innerHTML = hiddenInputs;
+        document.getElementById('batchModalSelectedListBody').innerHTML = listHtml;
+        document.getElementById('batchModalPersonCount').innerText = checkedList.length;
+        document.getElementById('batchModalTotalAmountBadge').innerText = totalAmount.toLocaleString('tr-TR') + ' ₺';
+        document.getElementById('batchModalTotalAmountInput').value = totalAmount;
+        document.getElementById('batchSubmitBtnText').innerText = checkedList.length + ' Kişi İçin ' + totalAmount.toLocaleString('tr-TR') + ' ₺ Ödemeyi Gerçekleştir';
+
+        toggleFxContainer('batchSourceAccount', 'batchFxContainer');
+        var myModal = new bootstrap.Modal(document.getElementById('batchPayModal'));
+        myModal.show();
+    }
+
+    // ----------------------------------------------------
+    // DİNAMİK KİŞİ KARTLARI OLUŞTURMA (PARASI BAŞTA & EŞİT BÖLÜNÜR)
+    // ----------------------------------------------------
+    function calculateBatchEndDate() {
+        const startDateVal = document.getElementById('batchRentStartDate').value;
+        const months = parseInt(document.getElementById('batchCommitmentMonths').value) || 18;
+        if (!startDateVal) return;
+
+        const d = new Date(startDateVal);
+        d.setMonth(d.getMonth() + months);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        document.getElementById('batchRentEndDate').value = `${yyyy}-${mm}-${dd}`;
+    }
+
+    function renderStakeholderCards() {
+        const unitNo = document.getElementById('batchUnitNumbers').value.trim() || 'Daire';
+        const totalRent = Math.round(parseFloat(document.getElementById('batchTotalRent').value) || 0);
+        const totalReloc = Math.round(parseFloat(document.getElementById('batchTotalRelocation').value) || 0);
+        let count = parseInt(document.getElementById('batchShareCount').value) || 1;
+        if (count < 1) count = 1;
+        if (count > 20) count = 20;
+
+        const perPersonRent = Math.round(totalRent / count);
+        const perPersonReloc = Math.round(totalReloc / count);
+
+        const summaryText = count === 1 
+            ? unitNo + ': 1 Kişi (Tam Hisse) — Aylık Kira: ' + perPersonRent.toLocaleString('tr-TR') + ' ₺ | Taşınma: ' + perPersonReloc.toLocaleString('tr-TR') + ' ₺'
+            : unitNo + ': ' + count + ' Hissedar (Kişi Başı 1/' + count + ') — Kişi Başı Aylık Kira: ' + perPersonRent.toLocaleString('tr-TR') + ' ₺ | Kişi Başı Taşınma: ' + perPersonReloc.toLocaleString('tr-TR') + ' ₺';
+
+        document.getElementById('batchSummaryText').innerText = summaryText;
+
+        const container = document.getElementById('stakeholdersCardsContainer');
+        const existingData = [];
+        const existingCards = container.querySelectorAll('.stakeholder-card');
+        existingCards.forEach((c) => {
+            existingData.push({
+                fName: c.querySelector('.f-name')?.value || '',
+                lName: c.querySelector('.l-name')?.value || '',
+                tc: c.querySelector('.f-tc')?.value || '',
+                phone: c.querySelector('.f-phone')?.value || '',
+                email: c.querySelector('.f-email')?.value || '',
+                bank: c.querySelector('.f-bank')?.value || '',
+                iban: c.querySelector('.f-iban')?.value || ''
+            });
+        });
+
+        let html = '';
+        for (let i = 0; i < count; i++) {
+            const cur = existingData[i] || { fName: '', lName: '', tc: '', phone: '', email: '', bank: '', iban: '' };
+            const cardTitle = count === 1 
+                ? 'Hak Sahibi Bilgileri' 
+                : (i + 1) + '. Hak Sahibi (1/' + count + ' Hisse — ' + perPersonRent.toLocaleString('tr-TR') + ' ₺ Kira | ' + perPersonReloc.toLocaleString('tr-TR') + ' ₺ Taşınma)';
+
+            html += `
+            <div class="card p-3 mb-3 border rounded-3 stakeholder-card bg-white shadow-sm">
+                <div class="fw-bold text-primary border-bottom pb-2 mb-2 d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-person-fill me-1"></i>${cardTitle}</span>
+                    <span class="badge bg-light text-dark border font-monospace">${perPersonRent.toLocaleString('tr-TR')} ₺/ay</span>
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small text-muted mb-1">Adı *</label>
+                        <input type="text" name="firstNames" class="form-control form-control-sm f-name" required placeholder="Örn: Ahmet" value="${cur.fName}" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small text-muted mb-1">Soyadı *</label>
+                        <input type="text" name="lastNames" class="form-control form-control-sm l-name" required placeholder="Örn: Yılmaz" value="${cur.lName}" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small text-muted mb-1">TC Kimlik No</label>
+                        <input type="text" name="tcIdentityNos" class="form-control form-control-sm f-tc" maxlength="11" placeholder="11 haneli TC" value="${cur.tc}" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small text-muted mb-1">Telefon No *</label>
+                        <input type="tel" name="phones" class="form-control form-control-sm f-phone" required placeholder="05XXXXXXXXX" value="${cur.phone}" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small text-muted mb-1">E-posta Adresi</label>
+                        <input type="email" name="emails" class="form-control form-control-sm f-email" placeholder="ornek@alanadi.com" value="${cur.email}" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small text-muted mb-1">Banka Adı</label>
+                        <input type="text" name="bankNames" class="form-control form-control-sm f-bank" placeholder="Örn: Ziraat, Garanti" value="${cur.bank}" />
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label small text-muted mb-1">IBAN Numarası</label>
+                        <input type="text" name="ibans" class="form-control form-control-sm font-monospace f-iban" placeholder="TR00 0000 0000 0000 0000 0000 00" value="${cur.iban}" />
+                    </div>
+                </div>
+            </div>
+            `;
+        }
+
+        container.innerHTML = html;
+        document.getElementById('btnSaveBatch').innerHTML = '<i class="bi bi-check2-circle me-1"></i> ' + unitNo + ' ve ' + count + ' Hak Sahibini Kaydet';
+    }
+
+    function openBatchAddModal() {
+        document.getElementById('batchUnitNumbers').value = '';
+        document.getElementById('batchTotalRent').value = '30000';
+        document.getElementById('batchTotalRelocation').value = '40000';
+        document.getElementById('batchShareCount').value = '1';
+        calculateBatchEndDate();
+        renderStakeholderCards();
+    }
+
+    // ----------------------------------------------------
+    // TEK KİŞİ DÜZENLE MODALI
+    // ----------------------------------------------------
+    function openSingleEditModal(id, projectId, first, last, tc, phone, email, iban, bankName, units, share, rent, relocation, paymentDay, rentStartDate, rentEndDate, notes) {
+        document.getElementById('editModalTitle').innerHTML = '<i class="bi bi-pencil-square text-primary me-2"></i> Hak Sahibi Düzenle: ' + first + ' ' + last;
+        document.getElementById('editStakeholderId').value = id;
+        document.getElementById('editProjectId').value = projectId;
+        document.getElementById('editFirstName').value = first;
+        document.getElementById('editLastName').value = last;
+        document.getElementById('editTc').value = (tc && tc !== 'null') ? tc : '';
+        document.getElementById('editPhone').value = (phone && phone !== 'null') ? phone : '';
+        document.getElementById('editEmail').value = (email && email !== 'null') ? email : '';
+        document.getElementById('editUnitNumbers').value = (units && units !== 'null') ? units : '';
+        document.getElementById('editPaymentDay').value = (paymentDay && paymentDay !== 'null') ? paymentDay : '5';
+        document.getElementById('editRentStartDate').value = (rentStartDate && rentStartDate !== 'null') ? rentStartDate : '';
+        document.getElementById('editRentEndDate').value = (rentEndDate && rentEndDate !== 'null') ? rentEndDate : '';
+        document.getElementById('editBankName').value = (bankName && bankName !== 'null') ? bankName : '';
+        document.getElementById('editIban').value = (iban && iban !== 'null') ? iban : '';
+        document.getElementById('editRent').value = Math.round(rent);
+        document.getElementById('editRelocation').value = Math.round(relocation);
+        document.getElementById('editNotes').value = (notes && notes !== 'null') ? notes : '';
+
+        var myModal = new bootstrap.Modal(document.getElementById('singleEditModal'));
+        myModal.show();
+    }
+
+    // ----------------------------------------------------
+    // TEKİL ÖDEME MODALI
+    // ----------------------------------------------------
+    let currentRent = 0;
+    let currentRelocation = 0;
+
+    function openPayModal(id, name, project, iban, bank, rent, relocation, isRelocationPaid) {
+        document.getElementById('payStakeholderId').value = id;
+        document.getElementById('payPersonName').innerText = name;
+        document.getElementById('payProjectName').innerText = project;
+        document.getElementById('payIbanInfo').innerText = (bank ? bank + ' | ' : '') + (iban ? iban : 'IBAN Girilmemiş');
+
+        currentRent = Math.round(parseFloat(rent) || 0);
+        currentRelocation = Math.round(parseFloat(relocation) || 0);
+
+        document.getElementById('lblRentAmount').innerText = currentRent.toLocaleString('tr-TR') + ' ₺';
+        document.getElementById('lblRelocationAmount').innerText = currentRelocation.toLocaleString('tr-TR') + ' ₺';
+
+        document.getElementById('chkPayRent').checked = true;
+
+        const relCheckbox = document.getElementById('chkPayRelocation');
+        const relRow = document.getElementById('relocationRow');
+        const relPaidNotice = document.getElementById('relocationAlreadyPaidNotice');
+
+        if (isRelocationPaid) {
+            relCheckbox.checked = false;
+            relCheckbox.disabled = true;
+            relPaidNotice.classList.remove('d-none');
+            relRow.classList.add('opacity-50');
+        } else {
+            relCheckbox.checked = currentRelocation > 0;
+            relCheckbox.disabled = false;
+            relPaidNotice.classList.add('d-none');
+            relRow.classList.remove('opacity-50');
+        }
+
+        recalcPayAmount();
+        toggleFxContainer('singleSourceAccount', 'singleFxContainer');
+        var myModal = new bootstrap.Modal(document.getElementById('payModal'));
+        myModal.show();
+    }
+
+    function recalcPayAmount() {
+        let total = 0;
+        if (document.getElementById('chkPayRent').checked) {
+            total += currentRent;
+        }
+        if (document.getElementById('chkPayRelocation').checked && !document.getElementById('chkPayRelocation').disabled) {
+            total += currentRelocation;
+        }
+        total = Math.round(total);
+        document.getElementById('lblTotalPayAmount').innerText = total.toLocaleString('tr-TR') + ' ₺';
+        document.getElementById('txtTotalPayAmount').value = total;
+    }
+</script>

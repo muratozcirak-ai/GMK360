@@ -1,0 +1,4555 @@
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+
+
+@model GMK360.Core.Entities.Construction.ConstructionProject
+
+
+
+@using GMK360.Core.Entities.Construction
+
+
+
+@using GMK360.Core.Entities
+
+
+
+@{
+
+
+
+    ViewData["Title"] = "Ön Analiz & Bürokrasi: " + Model.Name;
+
+
+
+    ViewData["ProjectId"] = Model.Id;
+
+
+
+    ViewData["ProjectName"] = Model.Name;
+
+
+
+    ViewData["ProjectStatus"] = Model.Status;
+
+
+
+    Layout = "_ProjectLayout";
+
+
+
+    string cityName = ViewBag.CityName as string ?? "İstanbul";
+
+
+
+    string distName = ViewBag.DistrictName as string ?? "Maltepe";
+
+
+
+    string neighName = ViewBag.NeighborhoodName as string ?? "Esenkent";
+
+
+
+    double landArea = Model.TotalLandArea ?? 850;
+
+
+
+    int oldUnits = Model.EskiDaireSayisi ?? 10;
+
+
+
+    var initialDocs = ViewBag.InitialDocs as List<ProjectLegalDocument> ?? new List<ProjectLegalDocument>();
+
+
+
+    var stageRules = ViewBag.StageRules as List<ModuleDocumentRule> ?? new List<ModuleDocumentRule>();
+
+
+
+    decimal totalInitialFee = ViewBag.TotalInitialFee != null ? (decimal)ViewBag.TotalInitialFee : 0;
+
+
+
+    int completedCount = ViewBag.CompletedInitialCount != null ? (int)ViewBag.CompletedInitialCount : 0;
+
+
+
+    var stakeholders = ViewBag.Stakeholders as List<ProjectStakeholder> ?? new List<ProjectStakeholder>();
+
+
+
+    var blocks = ViewBag.Blocks as List<GMK360.Core.Entities.Building> ?? new List<GMK360.Core.Entities.Building>();
+
+
+
+}
+
+
+
+<!-- KOMPAKT PROJE BAŞLIK ŞERİDİ (TEK SATIR & SIFIR DİKEY İSRAF) -->
+
+
+
+    <div class="d-flex justify-content-between align-items-center py-1.5 px-3 mb-2 bg-white rounded-3 border shadow-xs flex-wrap gap-2">
+
+
+
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+
+
+
+            <span class="badge bg-success bg-opacity-10 text-success rounded-circle p-1 d-flex align-items-center justify-content-center" style="width: 26px; height: 26px;">
+
+
+
+                <i class="bi bi-graph-up-arrow"></i>
+
+
+
+            </span>
+
+
+
+            <span class="fw-bold text-dark fs-6">@Model.Name</span>
+
+
+
+            <span class="badge bg-warning text-dark border border-warning px-2 py-0 rounded-pill fw-bold" style="font-size: 0.70rem;">
+
+
+
+                <i class="bi bi-hourglass-split me-1"></i>ADAY
+
+
+
+            </span>
+
+
+
+            <span class="text-muted small" style="font-size: 0.76rem;">— Ön Analiz & Bürokrasi Masası</span>
+
+
+
+            <span class="text-muted opacity-50">|</span>
+
+
+
+            <span class="badge bg-light text-dark border px-2 py-0 rounded-pill small" style="font-size: 0.72rem;">
+
+
+
+                <i class="bi bi-geo-alt-fill text-danger me-1"></i>@cityName / @distName (@neighName Mah.)
+
+
+
+            </span>
+
+
+
+        </div>
+
+
+
+        <div class="d-flex align-items-center gap-2">
+
+
+
+            <span class="badge bg-secondary bg-opacity-10 text-secondary border px-2 py-0.5 rounded-pill small" style="font-size: 0.72rem;">
+
+
+
+                ID: #@Model.Id
+
+
+
+            </span>
+
+
+
+            <a href="/ConstructionProject/Workspace/@Model.Id" class="btn btn-outline-primary rounded-pill px-2.5 py-0 fw-bold btn-sm shadow-xs" style="font-size: 0.74rem;">
+
+
+
+                <i class="bi bi-card-heading me-1"></i>Künyeye Git ➔
+
+
+
+            </a>
+
+
+
+        </div>
+
+
+
+    </div>
+
+
+
+    @if (TempData["SuccessMessage"] != null)
+
+
+
+    {
+
+
+
+        <div class="alert alert-success alert-dismissible fade show rounded-3 py-1.5 px-3 mb-2 small shadow-xs" role="alert">
+
+
+
+            <i class="bi bi-check-circle-fill me-1"></i> @TempData["SuccessMessage"]
+
+
+
+            <button type="button" class="btn-close py-2" data-bs-dismiss="alert" aria-label="Kapat"></button>
+
+
+
+        </div>
+
+
+
+    }
+
+
+
+    <!-- 1. BÖLÜM: KAÇ TANE HAK SAHİBİ VAR? (MALİK & PAYDAŞ HAVUZU) -->
+
+
+
+    <div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs overflow-hidden">
+
+
+
+        <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-light border-bottom flex-wrap gap-1"
+
+
+
+             role="button" data-bs-toggle="collapse" data-bs-target="#hakSahipleriCollapse" aria-expanded="true" aria-controls="hakSahipleriCollapse" style="cursor: pointer;">
+
+
+
+            
+
+
+
+            <div class="d-flex align-items-center gap-2">
+
+
+
+                <i class="bi bi-people-fill text-primary fs-5"></i>
+
+
+
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+
+
+
+                    <span class="fw-bold text-dark small" style="font-size: 0.88rem;">1. Kaç Tane Hak Sahibi Var?</span>
+
+
+
+                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-1.5 py-0 rounded-pill" style="font-size: 0.68rem;">
+
+
+
+                        <i class="bi bi-person-lines-fill me-1"></i>Malik & Paydaş Havuzu
+
+
+
+                    </span>
+
+
+
+                    <small class="text-muted d-none d-lg-inline" style="font-size: 0.72rem;">Arsa payı sahipleri, bağımsız bölüm malikleri ve vekilleri</small>
+
+
+
+                </div>
+
+
+
+            </div>
+
+
+
+            <div class="d-flex align-items-center gap-1.5 flex-wrap" onclick="event.stopPropagation();">
+
+
+
+                <span class="badge bg-primary bg-opacity-10 text-primary border px-2 py-1 rounded-pill" style="font-size: 0.74rem;">
+
+
+
+                    <i class="bi bi-person-check me-1"></i>Toplam Malik: <b>@stakeholders.Count</b> Kişi
+
+
+
+                </span>
+
+
+
+                <span class="badge bg-info bg-opacity-15 text-dark border px-2 py-1 rounded-pill" style="font-size: 0.74rem;">
+
+
+
+                    <i class="bi bi-building me-1"></i>Eski Daire: <b>@(Model.EskiDaireSayisi ?? 0)</b> Adet
+
+
+
+                </span>
+
+
+
+                <a href="/ConstructionProject/Workspace/@Model.Id#partnerModal" class="btn btn-sm btn-outline-primary rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs" style="font-size: 0.74rem;">
+
+
+
+                    <i class="bi bi-plus-circle me-1"></i>Malik Ekle
+
+
+
+                </a>
+
+
+
+                <button class="btn btn-sm btn-white border rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs text-secondary" 
+
+
+
+                        type="button" data-bs-toggle="collapse" data-bs-target="#hakSahipleriCollapse" aria-expanded="true" aria-controls="hakSahipleriCollapse" id="btnHakSahipleriToggle" style="font-size: 0.74rem;">
+
+
+
+                    <span id="textHakSahipleriToggle">Daralt</span>
+
+
+
+                    <i class="bi bi-chevron-up ms-1" id="iconHakSahipleriChevron"></i>
+
+
+
+                </button>
+
+
+
+            </div>
+
+
+
+        </div>
+
+
+
+        <div class="collapse show p-2 p-md-3" id="hakSahipleriCollapse">
+
+
+
+            @if (!stakeholders.Any())
+
+
+
+            {
+
+
+
+                <div class="alert alert-light border rounded-3 p-3 mb-0 text-center">
+
+
+
+                    <i class="bi bi-people text-muted fs-3 d-block mb-1"></i>
+
+
+
+                    <div class="fw-bold text-dark small">Bu projeye henüz hak sahibi / malik kaydı eklenmedi.</div>
+
+
+
+                    <div class="text-muted small mb-2" style="font-size: 0.76rem;">Eski binadaki malikleri künye üzerinden veya aşağıdaki butondan ekleyebilirsiniz.</div>
+
+
+
+                    <a href="/ConstructionProject/Workspace/@Model.Id" class="btn btn-sm btn-primary rounded-pill px-3 py-1 fw-bold shadow-xs" style="font-size: 0.76rem;">
+
+
+
+                        <i class="bi bi-person-plus-fill me-1"></i>Künyede Malik Tanımla
+
+
+
+                    </a>
+
+
+
+                </div>
+
+
+
+            }
+
+
+
+            else
+
+
+
+            {
+
+
+
+                <div class="table-responsive rounded-3 border">
+
+
+
+                    <table class="table table-hover align-middle mb-0" style="font-size: 0.84rem;">
+
+
+
+                        <thead class="table-light text-muted small text-uppercase">
+
+
+
+                            <tr>
+
+
+
+                                <th style="width: 25%;">Malik / Hak Sahibi</th>
+
+
+
+                                <th style="width: 15%;">Rol / Sıfat</th>
+
+
+
+                                <th style="width: 15%;">Bağımsız Bölüm</th>
+
+
+
+                                <th class="text-center" style="width: 12%;">Arsa Payı (%)</th>
+
+
+
+                                <th style="width: 18%;">İletişim</th>
+
+
+
+                                <th style="width: 15%;">Notlar</th>
+
+
+
+                            </tr>
+
+
+
+                        </thead>
+
+
+
+                        <tbody>
+
+
+
+                            @foreach (var s in stakeholders)
+
+
+
+                            {
+
+
+
+                                <tr>
+
+
+
+                                    <td>
+
+
+
+                                        <div class="fw-bold text-dark">
+
+
+
+                                            <i class="bi bi-person-circle text-primary me-1"></i>
+
+
+
+                                            @(s.User?.DisplayName ?? s.User?.UserName ?? "İsimsiz Malik")
+
+
+
+                                        </div>
+
+
+
+                                        @if (!string.IsNullOrEmpty(s.Iban))
+
+
+
+                                        {
+
+
+
+                                            <small class="text-muted" style="font-size: 0.70rem;">IBAN: @s.Iban</small>
+
+
+
+                                        }
+
+
+
+                                    </td>
+
+
+
+                                    <td>
+
+
+
+                                        @switch (s.Role)
+
+
+
+                                        {
+
+
+
+                                            case StakeholderRole.Landowner:
+
+
+
+                                                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2 py-0.5 rounded-pill">Hak Sahibi</span>
+
+
+
+                                                break;
+
+
+
+                                            case StakeholderRole.Representative:
+
+
+
+                                                <span class="badge bg-warning bg-opacity-25 text-dark border border-warning px-2 py-0.5 rounded-pill">Malikler Temsilcisi</span>
+
+
+
+                                                break;
+
+
+
+                                            case StakeholderRole.Consultant:
+
+
+
+                                                <span class="badge bg-info bg-opacity-15 text-dark border px-2 py-0.5 rounded-pill">Danışman / Vekil</span>
+
+
+
+                                                break;
+
+
+
+                                            default:
+
+
+
+                                                <span class="badge bg-light text-dark border px-2 py-0.5 rounded-pill">Diğer</span>
+
+
+
+                                                break;
+
+
+
+                                        }
+
+
+
+                                    </td>
+
+
+
+                                    <td>
+
+
+
+                                        <span class="fw-bold text-dark">@(string.IsNullOrEmpty(s.UnitNumbers) ? (s.UnitCount.HasValue ? s.UnitCount + " Daire" : "-") : s.UnitNumbers)</span>
+
+
+
+                                    </td>
+
+
+
+                                    <td class="text-center">
+
+
+
+                                        <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-0.5 rounded-pill fw-bold">
+
+
+
+                                            @(s.SharePercentage.HasValue ? "%" + s.SharePercentage.Value.ToString("N2") : "-")
+
+
+
+                                        </span>
+
+
+
+                                    </td>
+
+
+
+                                    <td>
+
+
+
+                                        <div class="text-dark small"><i class="bi bi-telephone me-1 text-muted"></i>@(s.User?.PhoneNumber ?? "-")</div>
+
+
+
+                                        <div class="text-muted small" style="font-size: 0.70rem;"><i class="bi bi-envelope me-1"></i>@(s.User?.Email ?? "-")</div>
+
+
+
+                                    </td>
+
+
+
+                                    <td>
+
+
+
+                                        <span class="text-muted small text-truncate d-inline-block" style="max-width: 150px;" title="@s.Notes">
+
+
+
+                                            @(string.IsNullOrEmpty(s.Notes) ? "-" : s.Notes)
+
+
+
+                                        </span>
+
+
+
+                                    </td>
+
+
+
+                                </tr>
+
+
+
+                            }
+
+
+
+                        </tbody>
+
+
+
+                    </table>
+
+
+
+                </div>
+
+
+
+            }
+
+
+
+        </div>
+
+
+
+    </div>
+
+
+
+    <!-- 2. BÖLÜM: ESKİ BİNA DURUMU & KEŞİF VERİLERİ -->
+
+
+
+    <div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs overflow-hidden">
+
+
+
+        <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-light border-bottom flex-wrap gap-1"
+
+
+
+             role="button" data-bs-toggle="collapse" data-bs-target="#eskiBinaCollapse" aria-expanded="false" aria-controls="eskiBinaCollapse" style="cursor: pointer;">
+
+
+
+            
+
+
+
+            <div class="d-flex align-items-center gap-2">
+
+
+
+                <i class="bi bi-building-down text-warning fs-5"></i>
+
+
+
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+
+
+
+                    <span class="fw-bold text-dark small" style="font-size: 0.88rem;">2. Eski Bina Durumu & Keşif Verileri</span>
+
+
+
+                    <span class="badge bg-warning bg-opacity-25 text-dark border border-warning px-1.5 py-0 rounded-pill" style="font-size: 0.68rem;">
+
+
+
+                        <i class="bi bi-cone-striped me-1"></i>Yıkılacak Yapı Havuzu
+
+
+
+                    </span>
+
+
+
+                    <small class="text-muted d-none d-lg-inline" style="font-size: 0.72rem;">Mevcut bina özellikleri, kat/daire kütüğü ve saha keşfi</small>
+
+
+
+                </div>
+
+
+
+            </div>
+
+
+
+            <div class="d-flex align-items-center gap-1.5 flex-wrap" onclick="event.stopPropagation();">
+
+
+
+                <span class="badge bg-light text-dark border px-2 py-1 rounded-pill" style="font-size: 0.74rem;">
+
+
+
+                    <i class="bi bi-calendar-event me-1"></i>Yaş: <b>@(Model.BuildingAge.HasValue ? Model.BuildingAge + " Yaş" : "Bilinmiyor")</b>
+
+
+
+                </span>
+
+
+
+                <span class="badge bg-light text-dark border px-2 py-1 rounded-pill" style="font-size: 0.74rem;">
+
+
+
+                    <i class="bi bi-layers me-1"></i>Kat: <b>@(Model.EskiKatSayisi ?? 0)</b>
+
+
+
+                </span>
+
+
+
+                <span class="badge bg-warning bg-opacity-15 text-dark border border-warning px-2 py-1 rounded-pill" style="font-size: 0.74rem;">
+
+
+
+                    <i class="bi bi-door-open me-1"></i>Daire: <b>@(Model.EskiDaireSayisi ?? 0)</b> | Dükkan: <b>@(Model.EskiDukkanSayisi ?? 0)</b>
+
+
+
+                </span>
+
+
+
+                <button class="btn btn-sm btn-white border rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs text-secondary" 
+
+
+
+                        type="button" data-bs-toggle="collapse" data-bs-target="#eskiBinaCollapse" aria-expanded="false" aria-controls="eskiBinaCollapse" id="btnEskiBinaToggle" style="font-size: 0.74rem;">
+
+
+
+                    <span id="textEskiBinaToggle">Genişlet</span>
+
+
+
+                    <i class="bi bi-chevron-down ms-1" id="iconEskiBinaChevron"></i>
+
+
+
+                </button>
+
+
+
+            </div>
+
+
+
+        </div>
+
+
+
+        <div class="collapse p-2 p-md-3" id="eskiBinaCollapse">
+
+
+
+            <!-- METRİK ÖZET KARTLARI -->
+
+
+
+            <div class="row g-2 mb-3">
+
+
+
+                <div class="col-6 col-md-3">
+
+
+
+                    <div class="p-2 border rounded-3 bg-light text-center">
+
+
+
+                        <span class="text-muted d-block small" style="font-size: 0.72rem;">Toplam Bağımsız Bölüm</span>
+
+
+
+                        <span class="fw-bold text-dark fs-6">@((Model.EskiDaireSayisi ?? 0) + (Model.EskiDukkanSayisi ?? 0)) <small class="text-muted fw-normal" style="font-size: 0.72rem;">Adet</small></span>
+
+
+
+                    </div>
+
+
+
+                </div>
+
+
+
+                <div class="col-6 col-md-3">
+
+
+
+                    <div class="p-2 border rounded-3 bg-light text-center">
+
+
+
+                        <span class="text-muted d-block small" style="font-size: 0.72rem;">Mevcut Brüt Alan</span>
+
+
+
+                        <span class="fw-bold text-dark fs-6">@(Model.EskiToplamMetrekare.HasValue ? Model.EskiToplamMetrekare.Value.ToString("N0") : (landArea * 1.5).ToString("N0")) <small class="text-muted fw-normal" style="font-size: 0.72rem;">m²</small></span>
+
+
+
+                    </div>
+
+
+
+                </div>
+
+
+
+                <div class="col-6 col-md-3">
+
+
+
+                    <div class="p-2 border rounded-3 bg-light text-center">
+
+
+
+                        <span class="text-muted d-block small" style="font-size: 0.72rem;">Arsa / Parsel Alanı</span>
+
+
+
+                        <span class="fw-bold text-dark fs-6">@(Model.TotalLandArea.HasValue ? Model.TotalLandArea.Value.ToString("N0") : "-") <small class="text-muted fw-normal" style="font-size: 0.72rem;">m²</small></span>
+
+
+
+                    </div>
+
+
+
+                </div>
+
+
+
+                <div class="col-6 col-md-3">
+
+
+
+                    <div class="p-2 border rounded-3 bg-light text-center">
+
+
+
+                        <span class="text-muted d-block small" style="font-size: 0.72rem;">Riskli Yapı Raporu</span>
+
+
+
+                        <span class="badge bg-warning bg-opacity-25 text-dark border border-warning px-2 py-0.5 rounded-pill" style="font-size: 0.72rem;">
+
+
+
+                            <i class="bi bi-clock-history me-1"></i>Keşif Aşamasında
+
+
+
+                        </span>
+
+
+
+                    </div>
+
+
+
+                </div>
+
+
+
+            </div>
+
+
+
+            <!-- BİNA BİLGİ DETAYLARI -->
+
+
+
+            <div class="p-2.5 bg-light rounded-3 border mb-2">
+
+
+
+                <div class="row g-2 align-items-center" style="font-size: 0.82rem;">
+
+
+
+                    <div class="col-md-6">
+
+
+
+                        <i class="bi bi-geo-alt text-danger me-1"></i><b>Adres / Kapı No:</b> @(string.IsNullOrEmpty(Model.Address) ? "Belirtilmedi" : Model.Address)
+
+
+
+                    </div>
+
+
+
+                    <div class="col-md-3">
+
+
+
+                        <i class="bi bi-pin-map text-primary me-1"></i><b>Ada / Parsel:</b> @(string.IsNullOrEmpty(Model.Ada) ? "-" : Model.Ada) / @(string.IsNullOrEmpty(Model.Parsel) ? "-" : Model.Parsel)
+
+
+
+                    </div>
+
+
+
+                    <div class="col-md-3 text-md-end">
+
+
+
+                        <a href="/ConstructionProject/Workspace/@Model.Id" class="btn btn-sm btn-outline-secondary rounded-pill px-2.5 py-0 fw-bold" style="font-size: 0.74rem;">
+
+
+
+                            <i class="bi bi-pencil me-1"></i>Künyede Güncelle
+
+
+
+                        </a>
+
+
+
+                    </div>
+
+
+
+                </div>
+
+
+
+            </div>
+
+
+
+        </div>
+
+
+
+    </div>
+
+
+
+    <!-- 3. BÖLÜM: FAZLAR (ÖNCEKİ FAZLAR AMA YENİ ADIYLA) -->
+
+    <div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs overflow-hidden">
+
+        <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-light border-bottom flex-wrap gap-1"
+
+             role="button" data-bs-toggle="collapse" data-bs-target="#fazlarCollapse" aria-expanded="true" aria-controls="fazlarCollapse" style="cursor: pointer;">
+
+            
+
+            <div class="d-flex align-items-center gap-2">
+
+                <i class="bi bi-diagram-3-fill text-primary fs-5"></i>
+
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+
+                    <span class="fw-bold text-dark small" style="font-size: 0.88rem;">3. Fazlar (Önceki Fazlar Ama Yeni Adıyla)</span>
+
+                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-1.5 py-0 rounded-pill" style="font-size: 0.68rem;">
+
+                        <i class="bi bi-window-stack me-1"></i>Aşama & Faz Masası
+
+                    </span>
+
+                    <small class="text-muted d-none d-lg-inline" style="font-size: 0.72rem;">İşlemler yeni sekmede yürütülür, ön keşif ve imar detayları aşağıdadır</small>
+
+                </div>
+
+            </div>
+
+
+
+            <div class="d-flex align-items-center gap-1.5 flex-wrap" onclick="event.stopPropagation();">
+
+                <a href="/ConstructionProject/Details/@Model.Id#accordionFizibilite" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs" style="font-size: 0.74rem;">
+
+                    <i class="bi bi-box-arrow-up-right me-1"></i>Yeni Sekmede Aç
+
+                </a>
+
+                <button class="btn btn-sm btn-white border rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs text-secondary" 
+
+                        type="button" data-bs-toggle="collapse" data-bs-target="#fazlarCollapse" aria-expanded="true" aria-controls="fazlarCollapse" id="btnFazlarToggle" style="font-size: 0.74rem;">
+
+                    <span id="textFazlarToggle">Daralt</span>
+
+                    <i class="bi bi-chevron-up ms-1" id="iconFazlarChevron"></i>
+
+                </button>
+
+            </div>
+
+        </div>
+
+
+
+        <div class="collapse show p-3" id="fazlarCollapse">
+            <div class="p-3 bg-light rounded-3 border border-dashed text-center text-muted">
+                <i class="bi bi-diagram-3 fs-3 text-secondary d-block mb-1"></i>
+                <div class="fw-semibold text-dark small mb-1">Fazlar ve Süreç Masası</div>
+                <div class="small text-muted mb-2" style="font-size: 0.78rem;">
+                    Faz işlemleri ve adımları yeni sekmede çalıştırılacak şekilde kurgulanmıştır. İskelet div açık ve hazır beklemektedir.
+                </div>
+                <a href="/ConstructionProject/Details/@Model.Id#accordionFizibilite" target="_blank" class="btn btn-sm btn-primary rounded-pill px-3 py-1 fw-bold shadow-xs" style="font-size: 0.78rem;">
+                    <i class="bi bi-box-arrow-up-right me-1"></i>Fazları Yeni Sekmede Aç
+                </a>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 1. AŞAMA: ÖN KEŞİF & İMAR BÜROKRASİSİ (KİBAR & KOMPAKT BAR) -->
+
+
+
+    <div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs overflow-hidden">
+
+
+
+        <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-light border-bottom flex-wrap gap-1"
+
+
+
+             role="button" data-bs-toggle="collapse" data-bs-target="#burokrasiCollapse" aria-expanded="false" aria-controls="burokrasiCollapse" style="cursor: pointer;">
+
+
+
+            
+
+
+
+            <div class="d-flex align-items-center gap-2">
+
+
+
+                <i class="bi bi-folder-check text-primary fs-5"></i>
+
+
+
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+
+
+
+                    <span class="fw-bold text-dark small" style="font-size: 0.88rem;">1. Aşama: Ön Keşif & İmar Bürokrasisi</span>
+
+
+
+                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-1.5 py-0 rounded-pill" style="font-size: 0.68rem;">
+
+
+
+                        <i class="bi bi-shield-lock me-1"></i>Evrak Motoru
+
+
+
+                    </span>
+
+
+
+                    <small class="text-muted d-none d-lg-inline" style="font-size: 0.72rem;">Teklif öncesi resmi izin evrakları, takipçi ve harç yönetimi</small>
+
+
+
+                </div>
+
+
+
+            </div>
+
+
+
+            <div class="d-flex align-items-center gap-1.5 flex-wrap" onclick="event.stopPropagation();">
+
+
+
+                <span class="badge bg-primary bg-opacity-10 text-primary border px-2 py-1 rounded-pill" id="badgeTotalCost" style="font-size: 0.74rem;">
+
+
+
+                    <i class="bi bi-wallet2 me-1"></i>Toplam Harç: @totalInitialFee.ToString("N2") ₺
+
+
+
+                </span>
+
+
+
+                <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-1 rounded-pill fw-bold" style="font-size: 0.74rem;" id="badgeCompletedCount">
+
+
+
+                    <i class="bi bi-file-earmark-check me-1"></i>@completedCount / @initialDocs.Count Alındı
+
+
+
+                </span>
+
+
+
+                <button class="btn btn-sm btn-white border rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs text-secondary" 
+
+
+
+                        type="button" data-bs-toggle="collapse" data-bs-target="#burokrasiCollapse" aria-expanded="false" aria-controls="burokrasiCollapse" id="btnBurokrasiToggle" style="font-size: 0.74rem;">
+
+
+
+                    <span id="textBurokrasiToggle">Genişlet</span>
+
+
+
+                    <i class="bi bi-chevron-down ms-1" id="iconBurokrasiChevron"></i>
+
+
+
+                </button>
+
+
+
+            </div>
+
+
+
+        </div>
+
+
+
+        <div class="collapse p-2 p-md-3" id="burokrasiCollapse">
+
+
+
+            @if (!initialDocs.Any())
+
+
+
+            {
+
+
+
+                <div class="alert alert-info rounded-3 p-3 mb-0">
+
+
+
+                    <i class="bi bi-info-circle me-1"></i> 1. Aşama için tanımlı resmi evrak bulunamadı. Admin Kütüphanesi üzerinden kurallar senkronize edilebilir.
+
+
+
+                </div>
+
+
+
+            }
+
+
+
+            else
+
+
+
+            {
+
+
+
+                var allChildTemplateIds = stageRules != null ? stageRules.Where(r => r.Prerequisites != null).SelectMany(r => r.Prerequisites).Select(p => p.PrerequisiteTemplateId).ToHashSet() : new HashSet<int>();
+
+
+
+                <div class="table-responsive rounded-3 border">
+
+
+
+                    <table class="table table-hover align-middle mb-0" style="font-size: 0.88rem;">
+
+
+
+                        <thead class="table-light text-muted small text-uppercase">
+
+
+
+                            <tr>
+
+
+
+                                <th style="width: 32%;">Evrak / Süreç Adı</th>
+
+
+
+                                <th style="width: 23%;">Kimden Alınır / Kurum</th>
+
+
+
+                                <th style="width: 15%;">Kimin Takip Ettiği</th>
+
+
+
+                                <th class="text-end" style="width: 12%;">Ne Kadar Tuttuğu</th>
+
+
+
+                                <th class="text-center" style="width: 8%;">Durum</th>
+
+
+
+                                <th class="text-center" style="width: 4%;">Dosya</th>
+
+
+
+                                <th class="text-center" style="width: 6%;">İşlem</th>
+
+
+
+                            </tr>
+
+
+
+                        </thead>
+
+
+
+                        <tbody>
+
+
+
+                            @foreach (var doc in initialDocs)
+
+
+
+                            {
+
+
+
+                                // Eğer bu evrak başka bir evrakın zorunlu alt önkoşulu ise üst seviyede tekrarlama,
+
+
+
+                                // doğrudan ilgili ana evrakın altında girintili alt satır olarak gösterilir!
+
+
+
+                                if (allChildTemplateIds.Contains(doc.SystemTemplateId ?? -1))
+
+
+
+                                {
+
+
+
+                                    continue;
+
+
+
+                                }
+
+
+
+                                decimal lineTotal = (doc.DocumentFee ?? 0) + (doc.AdditionalCost ?? 0);
+
+
+
+                                var matchingRule = stageRules?.FirstOrDefault(r => r.SystemLegalDocumentTemplateId == doc.SystemTemplateId);
+
+
+
+                                var prereqs = matchingRule?.Prerequisites?.ToList();
+
+
+
+                                bool isDependent = prereqs != null && prereqs.Any();
+
+
+
+                                bool isReadyToApply = true;
+
+
+
+                                int completedPrereqCount = 0;
+
+
+
+                                if (isDependent)
+
+
+
+                                {
+
+
+
+                                    foreach (var pr in prereqs)
+
+
+
+                                    {
+
+
+
+                                        var cDoc = initialDocs.FirstOrDefault(d => d.SystemTemplateId == pr.PrerequisiteTemplateId);
+
+
+
+                                        if (cDoc != null && (cDoc.Status == "Alındı" || cDoc.Status == "Tamamlandı"))
+
+
+
+                                        {
+
+
+
+                                            completedPrereqCount++;
+
+
+
+                                        }
+
+
+
+                                        else
+
+
+
+                                        {
+
+
+
+                                            isReadyToApply = false;
+
+
+
+                                        }
+
+
+
+                                    }
+
+
+
+                                }
+
+
+
+                                <tr>
+
+
+
+                                    <td>
+
+
+
+                                        <div class="d-flex align-items-center gap-2">
+
+
+
+                                            @if (doc.DocumentName.Contains("İmar"))
+
+
+
+                                            {
+
+
+
+                                                <i class="bi bi-building-check text-primary fs-5"></i>
+
+
+
+                                            }
+
+
+
+                                            else if (doc.DocumentName.Contains("Riskli") || doc.DocumentName.Contains("Karot"))
+
+
+
+                                            {
+
+
+
+                                                <i class="bi bi-exclamation-diamond text-danger fs-5"></i>
+
+
+
+                                            }
+
+
+
+                                            else
+
+
+
+                                            {
+
+
+
+                                                <i class="bi bi-file-earmark-text text-secondary fs-5"></i>
+
+
+
+                                            }
+
+
+
+                                            <div>
+
+
+
+                                                <div class="fw-bold text-dark">
+
+
+
+                                                    @doc.DocumentName
+
+
+
+                                                    @if (isDependent)
+
+
+
+                                                    {
+
+
+
+                                                        <span class="badge @(isReadyToApply ? "bg-success-subtle text-success border border-success-subtle" : "bg-warning-subtle text-warning-emphasis border border-warning-subtle") ms-1" style="font-size:0.7rem;">
+
+
+
+                                                            <i class="bi @(isReadyToApply ? "bi-check2-all" : "bi-shield-lock") me-1"></i>@(isReadyToApply ? "Önkoşullar Hazır" : $"{completedPrereqCount}/{prereqs.Count} Alt Evrak Bekleniyor")
+
+
+
+                                                        </span>
+
+
+
+                                                    }
+
+
+
+                                                </div>
+
+
+
+                                                @if (doc.SystemTemplate != null && !string.IsNullOrWhiteSpace(doc.SystemTemplate.LegalReference))
+
+
+
+                                                {
+
+
+
+                                                    <small class="text-muted d-block" style="font-size: 0.72rem;">@doc.SystemTemplate.LegalReference</small>
+
+
+
+                                                }
+
+
+
+                                                @if (isDependent && !isReadyToApply)
+
+
+
+                                                {
+
+
+
+                                                    <small class="text-danger d-block mt-1" style="font-size: 0.72rem;">
+
+
+
+                                                        <i class="bi bi-exclamation-triangle-fill me-1"></i>Belediyeye gitmeden önce aşağıdaki @(prereqs.Count - completedPrereqCount) zorunlu alt evrak tamamlanmalıdır!
+
+
+
+                                                    </small>
+
+
+
+                                                }
+
+
+
+                                                else if (isDependent && isReadyToApply)
+
+
+
+                                                {
+
+
+
+                                                    <small class="text-success d-block mt-1" style="font-size: 0.72rem;">
+
+
+
+                                                        <i class="bi bi-check-circle-fill me-1"></i>Tüm alt evraklar hazır (@prereqs.Count/@prereqs.Count) — Belediye imar başvurusu yapılabilir.
+
+
+
+                                                    </small>
+
+
+
+                                                }
+
+
+
+                                            </div>
+
+
+
+                                        </div>
+
+
+
+                                    </td>
+
+
+
+                                    <td>
+
+
+
+                                        <span class="text-muted small">
+
+
+
+                                            @(string.IsNullOrWhiteSpace(doc.InstitutionContact) ? (doc.SystemTemplate?.IssuedBy ?? "İlgili Belediye / Kurum") : doc.InstitutionContact)
+
+
+
+                                        </span>
+
+
+
+                                    </td>
+
+
+
+                                    <td>
+
+
+
+                                        @if (!string.IsNullOrWhiteSpace(doc.AssignedUserId))
+
+
+
+                                        {
+
+
+
+                                            <span class="badge bg-light text-dark border px-2 py-1">
+
+
+
+                                                <i class="bi bi-person-fill text-primary me-1"></i>@doc.AssignedUserId
+
+
+
+                                            </span>
+
+
+
+                                        }
+
+
+
+                                        else
+
+
+
+                                        {
+
+
+
+                                            <span class="text-muted fst-italic small">Atanmadı</span>
+
+
+
+                                        }
+
+
+
+                                    </td>
+
+
+
+                                    <td class="text-end fw-bold">
+
+
+
+                                        @if (lineTotal > 0)
+
+
+
+                                        {
+
+
+
+                                            <span class="text-primary">@lineTotal.ToString("N2") ₺</span>
+
+
+
+                                            @if (doc.AdditionalCost > 0)
+
+
+
+                                            {
+
+
+
+                                                <div class="text-muted fw-normal" style="font-size: 0.70rem;">(+@((doc.AdditionalCost ?? 0).ToString("N2")) ₺ ek)</div>
+
+
+
+                                            }
+
+
+
+                                        }
+
+
+
+                                        else
+
+
+
+                                        {
+
+
+
+                                            <span class="text-muted small">0,00 ₺</span>
+
+
+
+                                        }
+
+
+
+                                    </td>
+
+
+
+                                    <td class="text-center">
+
+
+
+                                        @if (isDependent && !isReadyToApply)
+
+
+
+                                        {
+
+
+
+                                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 rounded-pill" title="Önkoşul alt evraklar tamamlanmadan başvuru yapılamaz">
+
+
+
+                                                <i class="bi bi-lock-fill me-1"></i>Kilitli (@completedPrereqCount/@prereqs.Count)
+
+
+
+                                            </span>
+
+
+
+                                        }
+
+
+
+                                        else if (doc.Status == "Alındı" || doc.Status == "Tamamlandı")
+
+
+
+                                        {
+
+
+
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 rounded-pill">
+
+
+
+                                                <i class="bi bi-check-circle-fill me-1"></i>Alındı
+
+
+
+                                            </span>
+
+
+
+                                        }
+
+
+
+                                        else if (doc.Status == "Başvuru Yapıldı")
+
+
+
+                                        {
+
+
+
+                                            <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1 rounded-pill">
+
+
+
+                                                <i class="bi bi-send me-1"></i>Başvuruldu
+
+
+
+                                            </span>
+
+
+
+                                        }
+
+
+
+                                        else if (doc.Status == "Muaf")
+
+
+
+                                        {
+
+
+
+                                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1 rounded-pill">
+
+
+
+                                                Muaf
+
+
+
+                                            </span>
+
+
+
+                                        }
+
+
+
+                                        else
+
+
+
+                                        {
+
+
+
+                                            <span class="badge bg-light text-muted border px-2 py-1 rounded-pill">
+
+
+
+                                                Bekliyor
+
+
+
+                                            </span>
+
+
+
+                                        }
+
+
+
+                                    </td>
+
+
+
+                                    <td class="text-center">
+
+
+
+                                        @if (!string.IsNullOrWhiteSpace(doc.FilePath))
+
+
+
+                                        {
+
+
+
+                                            <a href="@doc.FilePath" target="_blank" class="btn btn-sm btn-outline-success p-1 rounded-circle" title="Dosyayı Gör">
+
+
+
+                                                <i class="bi bi-file-earmark-pdf-fill"></i>
+
+
+
+                                            </a>
+
+
+
+                                        }
+
+
+
+                                        else
+
+
+
+                                        {
+
+
+
+                                            <span class="text-muted">-</span>
+
+
+
+                                        }
+
+
+
+                                    </td>
+
+
+
+                                    <td class="text-center">
+
+
+
+                                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-2 py-0 fw-bold shadow-xs" onclick="openDocModal(@doc.Id)" title="Evrak Durumu ve Harç Yönet">
+
+
+
+                                            @if (isDependent && !isReadyToApply) { <i class="bi bi-lock-fill text-danger me-1"></i> } else { <i class="bi bi-pencil-square me-1"></i> }Yönet
+
+
+
+                                        </button>
+
+
+
+                                    </td>
+
+
+
+                                </tr>
+
+
+
+                                @if (isDependent)
+
+
+
+                                {
+
+
+
+                                    @foreach (var pr in prereqs)
+
+
+
+                                    {
+
+
+
+                                        var childDoc = initialDocs.FirstOrDefault(d => d.SystemTemplateId == pr.PrerequisiteTemplateId);
+
+
+
+                                        if (childDoc != null)
+
+
+
+                                        {
+
+
+
+                                            decimal childFeeTotal = (childDoc.DocumentFee ?? 0) + (childDoc.AdditionalCost ?? 0);
+
+
+
+                                            bool isChildDone = childDoc.Status == "Alındı" || childDoc.Status == "Tamamlandı";
+
+
+
+                                            <tr class="bg-light bg-opacity-75 child-row" style="border-left: 4px solid @(isChildDone ? "#198754" : "#ffc107");">
+
+
+
+                                                <td class="ps-4">
+
+
+
+                                                    <div class="d-flex align-items-center gap-2 ps-3">
+
+
+
+                                                        <i class="bi bi-arrow-return-right @(isChildDone ? "text-success" : "text-warning") fs-6"></i>
+
+
+
+                                                        <div>
+
+
+
+                                                            <div class="fw-bold text-dark">
+
+
+
+                                                                @childDoc.DocumentName
+
+
+
+                                                                <span class="badge bg-light text-secondary border ms-1" style="font-size: 0.68rem;">Zorunlu Alt Evrak</span>
+
+
+
+                                                            </div>
+
+
+
+                                                            @if (childDoc.SystemTemplate != null && !string.IsNullOrWhiteSpace(childDoc.SystemTemplate.LegalReference))
+
+
+
+                                                            {
+
+
+
+                                                                <small class="text-muted" style="font-size: 0.70rem;">@childDoc.SystemTemplate.LegalReference</small>
+
+
+
+                                                            }
+
+
+
+                                                        </div>
+
+
+
+                                                    </div>
+
+
+
+                                                </td>
+
+
+
+                                                <td>
+
+
+
+                                                    <span class="text-muted small">
+
+
+
+                                                        <i class="bi bi-building me-1 text-muted"></i>
+
+
+
+                                                        @(string.IsNullOrWhiteSpace(childDoc.InstitutionContact) ? (childDoc.SystemTemplate?.IssuedBy ?? "İlgili Kurum / Servis") : childDoc.InstitutionContact)
+
+
+
+                                                    </span>
+
+
+
+                                                </td>
+
+
+
+                                                <td>
+
+
+
+                                                    @if (!string.IsNullOrWhiteSpace(childDoc.AssignedUserId))
+
+
+
+                                                    {
+
+
+
+                                                        <span class="badge bg-light text-dark border px-2 py-1">
+
+
+
+                                                            <i class="bi bi-person-fill text-primary me-1"></i>@childDoc.AssignedUserId
+
+
+
+                                                        </span>
+
+
+
+                                                    }
+
+
+
+                                                    else
+
+
+
+                                                    {
+
+
+
+                                                        <span class="text-muted fst-italic small">Atanmadı</span>
+
+
+
+                                                    }
+
+
+
+                                                </td>
+
+
+
+                                                <td class="text-end fw-bold">
+
+
+
+                                                    @if (childFeeTotal > 0)
+
+
+
+                                                    {
+
+
+
+                                                        <span class="text-primary">@childFeeTotal.ToString("N2") ₺</span>
+
+
+
+                                                        @if (childDoc.AdditionalCost > 0)
+
+
+
+                                                        {
+
+
+
+                                                            <div class="text-muted fw-normal" style="font-size: 0.68rem;">(+@((childDoc.AdditionalCost ?? 0).ToString("N2")) ₺ ek)</div>
+
+
+
+                                                        }
+
+
+
+                                                    }
+
+
+
+                                                    else
+
+
+
+                                                    {
+
+
+
+                                                        <span class="text-muted small">0,00 ₺</span>
+
+
+
+                                                    }
+
+
+
+                                                </td>
+
+
+
+                                                <td class="text-center">
+
+
+
+                                                    @if (isChildDone)
+
+
+
+                                                    {
+
+
+
+                                                        <span class="badge bg-success text-white px-2 py-1 rounded-pill" style="font-size: 0.72rem;">
+
+
+
+                                                            <i class="bi bi-check-circle-fill me-1"></i>Alındı
+
+
+
+                                                        </span>
+
+
+
+                                                    }
+
+
+
+                                                    else if (childDoc.Status == "Başvuru Yapıldı")
+
+
+
+                                                    {
+
+
+
+                                                        <span class="badge bg-info text-white px-2 py-1 rounded-pill" style="font-size: 0.72rem;">
+
+
+
+                                                            <i class="bi bi-send me-1"></i>Başvuruldu
+
+
+
+                                                        </span>
+
+
+
+                                                    }
+
+
+
+                                                    else
+
+
+
+                                                    {
+
+
+
+                                                        <span class="badge bg-warning text-dark px-2 py-1 rounded-pill" style="font-size: 0.72rem;">
+
+
+
+                                                            <i class="bi bi-hourglass-split me-1"></i>Bekliyor
+
+
+
+                                                        </span>
+
+
+
+                                                    }
+
+
+
+                                                </td>
+
+
+
+                                                <td class="text-center">
+
+
+
+                                                    @if (!string.IsNullOrWhiteSpace(childDoc.FilePath))
+
+
+
+                                                    {
+
+
+
+                                                        <a href="@childDoc.FilePath" target="_blank" class="btn btn-sm btn-outline-success p-1 rounded-circle" title="Dosyayı Gör">
+
+
+
+                                                            <i class="bi bi-file-earmark-pdf-fill"></i>
+
+
+
+                                                        </a>
+
+
+
+                                                    }
+
+
+
+                                                    else
+
+
+
+                                                    {
+
+
+
+                                                        <span class="text-muted">-</span>
+
+
+
+                                                    }
+
+
+
+                                                </td>
+
+
+
+                                                <td class="text-center">
+
+
+
+                                                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-2 py-0 fw-bold shadow-xs" onclick="openDocModal(@childDoc.Id)" title="Alt Evrak Durumu ve Harç Yönet">
+
+
+
+                                                        <i class="bi bi-pencil-square me-1"></i>Yönet
+
+
+
+                                                    </button>
+
+
+
+                                                </td>
+
+
+
+                                            </tr>
+
+
+
+                                        }
+
+
+
+                                    }
+
+
+
+                                }
+
+
+
+                            }
+
+
+
+                        </tbody>
+
+
+
+                        <tfoot class="table-light border-top">
+
+
+
+                            <tr>
+
+
+
+                                <th colspan="3" class="text-end fw-bold text-muted small text-uppercase">1. Aşama Toplam Masraf:</th>
+
+
+
+                                <th class="text-end fw-bold text-primary">@totalInitialFee.ToString("N2") ₺</th>
+
+
+
+                                <th colspan="3"></th>
+
+
+
+                            </tr>
+
+
+
+                        </tfoot>
+
+
+
+                    </table>
+
+
+
+                </div>
+
+
+
+            }
+
+
+
+        </div>
+
+
+
+    </div>
+
+
+
+    <!-- 2. BÖLÜM: RESMİ İMAR DURUMU & KAPASİTE SİMÜLASYONU (KİBAR & KOMPAKT BAR) -->
+
+
+
+    <form id="imarForm" asp-controller="ConstructionProject" asp-action="UpdateAnalysisImar" method="post">
+
+
+
+        <input type="hidden" name="id" value="@Model.Id" />
+
+
+
+        <input type="hidden" name="TargetTotalApartments" id="hiddenTargetUnits" value="@Model.TargetTotalApartments" />
+
+
+
+        <div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs overflow-hidden">
+
+
+
+            <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-light border-bottom flex-wrap gap-1"
+
+
+
+                 role="button" data-bs-toggle="collapse" data-bs-target="#imarCollapse" aria-expanded="false" aria-controls="imarCollapse" style="cursor: pointer;">
+
+
+
+                
+
+
+
+                <div class="d-flex align-items-center gap-2">
+
+
+
+                    <i class="bi bi-calculator text-success fs-5"></i>
+
+
+
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+
+
+
+                        <span class="fw-bold text-dark small" style="font-size: 0.88rem;">Resmi İmar Durumu & İnşaat Kapasitesi</span>
+
+
+
+                        <span class="badge bg-success bg-opacity-10 text-success border border-success px-1.5 py-0 rounded-pill" style="font-size: 0.68rem;">Çap Hesaplama</span>
+
+
+
+                        <small class="text-muted d-none d-lg-inline" style="font-size: 0.72rem;">Belediye resmi imar çapına göre KAKS, TAKS ve daire hesabı</small>
+
+
+
+                    </div>
+
+
+
+                </div>
+
+
+
+                <div class="d-flex align-items-center gap-1 flex-wrap" onclick="event.stopPropagation();">
+
+
+
+                    <a href="https://parselsorgu.tkgm.gov.tr" target="_blank" class="btn btn-outline-danger btn-sm rounded-pill px-2 py-0 fw-bold" style="font-size: 0.72rem;">
+
+
+
+                        <i class="bi bi-geo-alt-fill me-1"></i>TKGM Parsel
+
+
+
+                    </a>
+
+
+
+                    <a href="https://www.turkiye.gov.tr" target="_blank" class="btn btn-outline-primary btn-sm rounded-pill px-2 py-0 fw-bold" style="font-size: 0.72rem;">
+
+
+
+                        <i class="bi bi-bank me-1"></i>e-Devlet İmar
+
+
+
+                    </a>
+
+
+
+                    <button type="button" class="btn btn-success btn-sm rounded-pill px-2 py-0 fw-bold shadow-xs" onclick="downloadImarPdf()" style="font-size: 0.72rem;">
+
+
+
+                        <i class="bi bi-file-earmark-pdf-fill me-1"></i>İmar Raporu
+
+
+
+                    </button>
+
+
+
+                    <span id="imarSaveIndicator" class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-0 fw-bold" style="display:none; font-size: 0.70rem;">
+
+
+
+                        <i class="bi bi-check2-circle me-1"></i>Kaydedildi
+
+
+
+                    </span>
+
+
+
+                    <button class="btn btn-sm btn-white border rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs text-secondary"
+
+
+
+                            type="button" data-bs-toggle="collapse" data-bs-target="#imarCollapse" aria-expanded="false" aria-controls="imarCollapse" id="btnImarToggle" style="font-size: 0.74rem;">
+
+
+
+                        <span id="textImarToggle">Genişlet</span>
+
+
+
+                        <i class="bi bi-chevron-down ms-1" id="iconImarChevron"></i>
+
+
+
+                    </button>
+
+
+
+                </div>
+
+
+
+            </div>
+
+
+
+            <div class="collapse p-2 p-md-3" id="imarCollapse">
+
+
+
+                <div class="row g-3 mb-3">
+
+
+
+                    <div class="col-xl-3 col-md-6">
+
+
+
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+
+
+
+                            <label class="form-label fw-bold small text-muted mb-0">
+
+
+
+                                <i class="bi bi-bounding-box me-1"></i>Arsa Alanı (m²)
+
+
+
+                            </label>
+
+
+
+                            <button type="button" class="btn btn-xs btn-outline-danger rounded-pill px-2 py-0 fw-bold" onclick="openTkgmModal()" title="TKGM MEGSİS'ten resmi kadastro parselini sorgula">
+
+
+
+                                <i class="bi bi-geo-alt-fill me-1"></i>TKGM'den Çek
+
+
+
+                            </button>
+
+
+
+                        </div>
+
+
+
+                        <input type="number" step="0.01" name="totalLandArea" id="calcLandArea" class="form-control rounded-3 fw-bold text-success" value="@landArea" oninput="recalculateCapacity()" />
+
+
+
+                        <div class="d-flex align-items-center justify-content-between mt-1 text-muted" style="font-size: 0.72rem;">
+
+
+
+                            <span>Ada: <b id="lblAda" class="text-dark">@(string.IsNullOrWhiteSpace(Model.Ada) ? "-" : Model.Ada)</b> / Parsel: <b id="lblParsel" class="text-dark">@(string.IsNullOrWhiteSpace(Model.Parsel) ? "-" : Model.Parsel)</b></span>
+
+
+
+                            <span id="tkgmStatusBadge" class="badge @(Model.TotalLandArea.HasValue ? "bg-success-subtle text-success border border-success-subtle" : "bg-light text-muted border")">@(Model.TotalLandArea.HasValue ? "TKGM Onaylı" : "Bekliyor")</span>
+
+
+
+                        </div>
+
+
+
+                        <input type="hidden" name="ada" id="calcAda" value="@Model.Ada" />
+
+
+
+                        <input type="hidden" name="parsel" id="calcParsel" value="@Model.Parsel" />
+
+
+
+                    </div>
+
+
+
+                    <div class="col-xl-2 col-md-4">
+
+
+
+                        <label class="form-label fw-bold small text-muted">
+
+
+
+                            <i class="bi bi-percent me-1"></i>Onaylı Emsal (KAKS)
+
+
+
+                        </label>
+
+
+
+                        <input type="number" step="0.01" name="OnayliEmsal" id="calcEmsal" class="form-control rounded-3 fw-bold text-primary" value="@(ViewBag.OnayliEmsal ?? 2.00)" oninput="recalculateCapacity()" />
+
+
+
+                        <small class="text-muted" style="font-size: 0.72rem;">Resmi çaptaki emsal katsayısı</small>
+
+
+
+                    </div>
+
+
+
+                    <div class="col-xl-2 col-md-4">
+
+
+
+                        <label class="form-label fw-bold small text-muted">
+
+
+
+                            <i class="bi bi-pie-chart me-1"></i>Taban Oturumu (TAKS)
+
+
+
+                        </label>
+
+
+
+                        <input type="number" step="0.01" name="TabanOturumuTaks" id="calcTaks" class="form-control rounded-3 fw-bold" value="@(ViewBag.TabanOturumuTaks ?? 0.35)" oninput="recalculateCapacity()" />
+
+
+
+                        <small class="text-muted" style="font-size: 0.72rem;">Zemin katın taban oturum katsayısı</small>
+
+
+
+                    </div>
+
+
+
+                    <div class="col-xl-3 col-md-6">
+
+
+
+                        <label class="form-label fw-bold small text-muted">
+
+
+
+                            <i class="bi bi-building-up me-1"></i>İzinli Kat (Yençok)
+
+
+
+                        </label>
+
+
+
+                        <input type="number" name="TotalFloors" id="calcTotalFloors" class="form-control rounded-3 fw-bold" value="@(Model.TotalFloors ?? 8)" oninput="triggerImarAutosave()" />
+
+
+
+                        <small class="text-muted" style="font-size: 0.72rem;">Maksimum kat yüksekliği</small>
+
+
+
+                    </div>
+
+
+
+                    <div class="col-xl-3 col-md-6">
+
+
+
+                        <label class="form-label fw-bold small text-muted">
+
+
+
+                            <i class="bi bi-house-door me-1"></i>Hedef Daire m² (Ortalama)
+
+
+
+                        </label>
+
+
+
+                        <input type="number" id="calcFlatSqm" class="form-control rounded-3 fw-bold" value="100" oninput="recalculateCapacity()" />
+
+
+
+                        <small class="text-muted" style="font-size: 0.72rem;">Planlanan brüt daire büyüklüğü</small>
+
+
+
+                    </div>
+
+
+
+                </div>
+
+
+
+                <!-- KOMPAKT ÇAP KAPASİTE HESAPLAMA ŞERİDİ -->
+
+
+
+                <div class="p-3 rounded-4 border bg-light mb-3">
+
+
+
+                    <div class="d-flex align-items-center justify-content-between mb-2 pb-1 border-bottom flex-wrap gap-2">
+
+
+
+                        <span class="text-muted fw-bold small">
+
+
+
+                            <i class="bi bi-lightning-charge-fill text-warning me-1"></i>RESMİ ÇAP KAPASİTE SİMÜLASYONU
+
+
+
+                        </span>
+
+
+
+                        <div id="resSummaryBadge" class="badge bg-success bg-opacity-10 text-success border border-success px-3 py-1 rounded-pill">
+
+
+
+                            Hesaplanıyor...
+
+
+
+                        </div>
+
+
+
+                    </div>
+
+
+
+                    <div class="row g-2 text-center">
+
+
+
+                        <div class="col-md-3 col-6">
+
+
+
+                            <small class="text-muted d-block" style="font-size: 0.75rem;">Toplam Emsal İnşaat Alanı</small>
+
+
+
+                            <h5 class="fw-bold text-dark mb-0" id="resTotalBuildingArea">0 m²</h5>
+
+
+
+                        </div>
+
+
+
+                        <div class="col-md-3 col-6 border-start">
+
+
+
+                            <small class="text-muted d-block" style="font-size: 0.75rem;">Zemin Taban Oturum Alanı</small>
+
+
+
+                            <h5 class="fw-bold text-dark mb-0" id="resGroundBaseArea">0 m²</h5>
+
+
+
+                        </div>
+
+
+
+                        <div class="col-md-3 col-6 border-start">
+
+
+
+                            <small class="text-muted d-block" style="font-size: 0.75rem;">Üretilebilir Tahmin Daire</small>
+
+
+
+                            <h5 class="fw-bold text-primary mb-0" id="resEstimatedUnits">~0 Daire</h5>
+
+
+
+                        </div>
+
+
+
+                        <div class="col-md-3 col-6 border-start">
+
+
+
+                            <small class="text-muted d-block" style="font-size: 0.75rem;">Firma Satış Potansiyeli</small>
+
+
+
+                            <h5 class="fw-bold text-success mb-0" id="resSurplusUnits">+0 Daire</h5>
+
+
+
+                        </div>
+
+
+
+                    </div>
+
+
+
+                    <div class="mt-2 pt-2 border-top d-flex justify-content-between align-items-center small text-muted" style="font-size: 0.75rem;">
+
+
+
+                        <span><i class="bi bi-door-open me-1"></i>Eski Yapı: <b>@oldUnits Daire</b> ➔ Yeni Kapasite: <b id="resSummaryUnits">0 Daire</b></span>
+
+
+
+                        <span class="text-muted">Resmi çapa dayalı matematiksel projeksiyondur</span>
+
+
+
+                    </div>
+
+
+
+                </div>
+
+
+
+                <!-- TKGM RESMİ KADASTRO HARİTASI VE POLİGON KROKİSİ PANELİ (COLLAPSIBLE) -->
+
+
+
+                <div class="card border border-light-subtle rounded-4 mb-3 overflow-hidden bg-light bg-opacity-50">
+
+
+
+                    <div class="card-header bg-white py-2 px-3 d-flex justify-content-between align-items-center border-bottom flex-wrap gap-2">
+
+
+
+                        <div class="d-flex align-items-center gap-2">
+
+
+
+                            <span class="badge bg-danger rounded-circle p-1 d-flex align-items-center justify-content-center" style="width: 26px; height: 26px;">
+
+
+
+                                <i class="bi bi-map-fill text-white" style="font-size: 0.75rem;"></i>
+
+
+
+                            </span>
+
+
+
+                            <div>
+
+
+
+                                <span class="fw-bold text-dark small d-flex align-items-center gap-2">
+
+
+
+                                    Resmi Kadastro Haritası & Sınır Krokisi
+
+
+
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-0" style="font-size: 0.68rem;" id="tkgmInlineBadge">
+
+
+
+                                        @(string.IsNullOrWhiteSpace(Model.Ada) ? "MEGSİS Canlı Entegrasyon" : $"{Model.Ada} Ada / {Model.Parsel} Parsel")
+
+
+
+                                    </span>
+
+
+
+                                </span>
+
+
+
+                            </div>
+
+
+
+                        </div>
+
+
+
+                        <div class="d-flex align-items-center gap-2">
+
+
+
+                            <button type="button" class="btn btn-xs btn-outline-danger rounded-pill px-3 py-1 fw-bold d-flex align-items-center gap-1 shadow-xs" onclick="openTkgmModal()">
+
+
+
+                                <i class="bi bi-crosshair"></i>
+
+
+
+                                <span>Canlı Parseli Çek</span>
+
+
+
+                            </button>
+
+
+
+                            <button class="btn btn-xs btn-light border rounded-pill px-3 py-1 fw-bold d-flex align-items-center gap-1 shadow-xs" 
+
+
+
+                                    type="button" 
+
+
+
+                                    data-bs-toggle="collapse" 
+
+
+
+                                    data-bs-target="#tkgmInlineCollapse" 
+
+
+
+                                    aria-expanded="false" 
+
+
+
+                                    id="btnTkgmInlineToggle">
+
+
+
+                                <i class="bi bi-chevron-down" id="iconTkgmInlineChevron"></i>
+
+
+
+                                <span id="textTkgmInlineToggle">Haritayı Göster</span>
+
+
+
+                            </button>
+
+
+
+                        </div>
+
+
+
+                    </div>
+
+
+
+                    <div class="collapse" id="tkgmInlineCollapse">
+
+
+
+                        <div class="card-body p-3">
+
+
+
+                            <div class="row g-3">
+
+
+
+                                <div class="col-lg-8">
+
+
+
+                                    <div id="inlineTkgmMap" style="height: 340px; width: 100%; border-radius: 12px; border: 1px solid #dee2e6; z-index: 1;"></div>
+
+
+
+                                    <div class="d-flex justify-content-between align-items-center mt-2 px-1 text-muted" style="font-size: 0.72rem;">
+
+
+
+                                        <span><i class="bi bi-layers me-1"></i>Uydu görüntüsü üzerinde kırmızı çizgi TKGM'nin resmi parsel sınırıdır.</span>
+
+
+
+                                        <span>Kaynak: <b>TKGM MEGSİS CBS</b></span>
+
+
+
+                                    </div>
+
+
+
+                                </div>
+
+
+
+                                <div class="col-lg-4">
+
+
+
+                                    <div class="bg-white p-3 rounded-4 border h-100 d-flex flex-column justify-content-between">
+
+
+
+                                        <div>
+
+
+
+                                            <h6 class="fw-bold text-dark mb-2 pb-2 border-bottom d-flex align-items-center justify-content-between">
+
+
+
+                                                <span><i class="bi bi-card-checklist me-1 text-primary"></i>Kadastro Özeti</span>
+
+
+
+                                                <span class="badge bg-success-subtle text-success small" id="inlineNitelik">@(Model.ProjectType ?? "Arsa")</span>
+
+
+
+                                            </h6>
+
+
+
+                                            <table class="table table-sm table-borderless small mb-0">
+
+
+
+                                                <tbody>
+
+
+
+                                                    <tr>
+
+
+
+                                                        <td class="text-muted ps-0">İl / İlçe:</td>
+
+
+
+                                                        <td class="fw-bold text-end pe-0" id="inlineIlIlce">@cityName / @distName</td>
+
+
+
+                                                    </tr>
+
+
+
+                                                    <tr>
+
+
+
+                                                        <td class="text-muted ps-0">Mahalle:</td>
+
+
+
+                                                        <td class="fw-bold text-end pe-0" id="inlineMahalle">@neighName</td>
+
+
+
+                                                    </tr>
+
+
+
+                                                    <tr>
+
+
+
+                                                        <td class="text-muted ps-0">Ada / Parsel:</td>
+
+
+
+                                                        <td class="fw-bold text-end pe-0 text-primary" id="inlineAdaParsel">@(Model.Ada ?? "-") / @(Model.Parsel ?? "-")</td>
+
+
+
+                                                    </tr>
+
+
+
+                                                    <tr>
+
+
+
+                                                        <td class="text-muted ps-0">Pafta:</td>
+
+
+
+                                                        <td class="fw-bold text-end pe-0" id="inlinePafta">-</td>
+
+
+
+                                                    </tr>
+
+
+
+                                                    <tr>
+
+
+
+                                                        <td class="text-muted ps-0">Resmi Alan:</td>
+
+
+
+                                                        <td class="fw-bold text-end pe-0 text-success fs-6" id="inlineAlan">@(Model.TotalLandArea?.ToString("N2") ?? "-") m²</td>
+
+
+
+                                                    </tr>
+
+
+
+                                                </tbody>
+
+
+
+                                            </table>
+
+
+
+                                        </div>
+
+
+
+                                        <div class="pt-3 border-top mt-2">
+
+
+
+                                            <button type="button" class="btn btn-sm btn-outline-danger w-100 rounded-pill fw-bold py-2 shadow-xs" onclick="openTkgmModal()">
+
+
+
+                                                <i class="bi bi-arrow-repeat me-1"></i> TKGM MEGSİS'ten Güncelle
+
+
+
+                                            </button>
+
+
+
+                                        </div>
+
+
+
+                                    </div>
+
+
+
+                                </div>
+
+
+
+                            </div>
+
+
+
+                        </div>
+
+
+
+                    </div>
+
+
+
+                </div>
+
+
+
+                <!-- İMAR VE ÇAP NOTLARI -->
+
+
+
+                <div class="mb-3">
+
+
+
+                    <label class="form-label fw-bold small text-muted">
+
+
+
+                        <i class="bi bi-journal-text me-1"></i>İmar Durumu ve Çap Notları (Belediye Özel Şartları)
+
+
+
+                    </label>
+
+
+
+                    <textarea name="ImarNotlari" class="form-control rounded-3" rows="3" placeholder="Örn: Ön bahçe çekme mesafesi 5m, yan bahçeler 3m. Zemin etüt onayına göre bodrum otopark zorunluluğu var. Ayrık nizam H=24.50m.">@(ViewBag.ImarNotlari ?? "")</textarea>
+
+
+
+                </div>
+
+
+
+                <div class="d-flex justify-content-between align-items-center pt-2 border-top flex-wrap gap-2">
+
+
+
+                    <div class="text-muted small">
+
+
+
+                        <i class="bi bi-shield-check text-success me-1"></i> Değişiklikler anlık olarak arka planda kaydedilir.
+
+
+
+                    </div>
+
+
+
+                    <button type="submit" class="btn btn-sm btn-primary rounded-pill px-4 fw-bold shadow-xs">
+
+
+
+                        <i class="bi bi-floppy me-1"></i> Manuel Kaydet
+
+
+
+                    </button>
+
+
+
+                </div>
+
+
+
+            </div>
+
+
+
+        </div>
+
+
+
+    </form>
+
+
+
+</div>
+
+
+
+<!-- TKGM RESMİ KADASTRO SORGULAMA VE KROKİ MODALI -->
+
+
+
+<div class="modal fade" id="tkgmModal" tabindex="-1" aria-labelledby="tkgmModalLabel" aria-hidden="true">
+
+
+
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+
+
+
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+
+
+            <div class="modal-header border-bottom py-3 bg-light">
+
+
+
+                <div class="d-flex align-items-center gap-2">
+
+
+
+                    <span class="badge bg-danger rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+
+
+
+                        <i class="bi bi-geo-alt-fill text-white fs-6"></i>
+
+
+
+                    </span>
+
+
+
+                    <div>
+
+
+
+                        <h6 class="modal-title fw-bold text-dark mb-0" id="tkgmModalLabel">TKGM MEGSİS Resmi Kadastro Parsel Sorgulama</h6>
+
+
+
+                        <small class="text-muted" style="font-size: 0.75rem;">Tapu ve Kadastro Genel Müdürlüğü canlı harita veritabanından resmi sınır ve m² çekimi</small>
+
+
+
+                    </div>
+
+
+
+                </div>
+
+
+
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+
+
+
+            </div>
+
+
+
+            <div class="modal-body p-4">
+
+
+
+                <!-- SORGULAMA SEKMELERİ -->
+
+
+
+                <ul class="nav nav-pills mb-3 border-bottom pb-2" id="tkgmTab" role="tablist">
+
+
+
+                    <li class="nav-item" role="presentation">
+
+
+
+                        <button class="nav-link active rounded-pill fw-bold px-3 py-1 small" id="tkgm-coords-tab" data-bs-toggle="pill" data-bs-target="#tkgm-coords" type="button" role="tab">
+
+
+
+                            <i class="bi bi-pin-map-fill me-1"></i> Proje Konumundan Çek (Enlem / Boylam)
+
+
+
+                        </button>
+
+
+
+                    </li>
+
+
+
+                    <li class="nav-item" role="presentation">
+
+
+
+                        <button class="nav-link rounded-pill fw-bold px-3 py-1 small" id="tkgm-manual-tab" data-bs-toggle="pill" data-bs-target="#tkgm-manual" type="button" role="tab">
+
+
+
+                            <i class="bi bi-search me-1"></i> Ada / Parsel ile Ara
+
+
+
+                        </button>
+
+
+
+                    </li>
+
+
+
+                </ul>
+
+
+
+                <div class="tab-content" id="tkgmTabContent">
+
+
+
+                    <!-- SEKME 1: KOORDİNAT SORGUSU -->
+
+
+
+                    <div class="tab-pane fade show active" id="tkgm-coords" role="tabpanel">
+
+
+
+                        <div class="p-3 rounded-4 bg-light border mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+
+
+
+                            <div>
+
+
+
+                                <span class="fw-bold text-dark small d-block">
+
+
+
+                                    <i class="bi bi-geo-alt text-danger me-1"></i>Kayıtlı Proje Koordinatları: 
+
+
+
+                                    <code class="text-dark bg-white px-2 py-1 rounded border">@(Model.Latitude?.ToString("F6") ?? "40.927732"), @(Model.Longitude?.ToString("F6") ?? "29.164158")</code>
+
+
+
+                                </span>
+
+
+
+                                <small class="text-muted" style="font-size: 0.75rem;">Proje harita pininin altındaki resmi kadastro parseli MEGSİS API'den anlık taranır.</small>
+
+
+
+                            </div>
+
+
+
+                            <button type="button" class="btn btn-sm btn-danger rounded-pill px-4 fw-bold shadow-xs" onclick="queryTkgmByCoordinates(projectLat, projectLng)">
+
+
+
+                                <i class="bi bi-search me-1"></i> Koordinattan Parseli Bul
+
+
+
+                            </button>
+
+
+
+                        </div>
+
+
+
+                    </div>
+
+
+
+                    <!-- SEKME 2: MANUEL ADA / PARSEL SORGUSU -->
+
+
+
+                    <div class="tab-pane fade" id="tkgm-manual" role="tabpanel">
+
+
+
+                        <div class="p-3 rounded-4 bg-light border mb-3">
+
+
+
+                            <div class="row g-2 align-items-end">
+
+
+
+                                <div class="col-md-3">
+
+
+
+                                    <label class="form-label fw-bold small text-muted">İl</label>
+
+
+
+                                    <input type="text" class="form-control form-control-sm rounded-3 bg-white" value="@cityName" readonly />
+
+
+
+                                </div>
+
+
+
+                                <div class="col-md-3">
+
+
+
+                                    <label class="form-label fw-bold small text-muted">İlçe</label>
+
+
+
+                                    <input type="text" class="form-control form-control-sm rounded-3 bg-white" value="@distName" readonly />
+
+
+
+                                </div>
+
+
+
+                                <div class="col-md-2">
+
+
+
+                                    <label class="form-label fw-bold small text-muted">Mahalle</label>
+
+
+
+                                    <input type="text" class="form-control form-control-sm rounded-3 bg-white" value="@neighName" readonly />
+
+
+
+                                    <input type="hidden" id="modalQueryMahalleId" value="147616" />
+
+
+
+                                </div>
+
+
+
+                                <div class="col-md-2">
+
+
+
+                                    <label class="form-label fw-bold small text-muted">Ada No</label>
+
+
+
+                                    <input type="text" class="form-control form-control-sm rounded-3" id="modalQueryAda" value="@(Model.Ada ?? "2046")" placeholder="Örn: 2046" />
+
+
+
+                                </div>
+
+
+
+                                <div class="col-md-2">
+
+
+
+                                    <label class="form-label fw-bold small text-muted">Parsel No</label>
+
+
+
+                                    <div class="input-group input-group-sm">
+
+
+
+                                        <input type="text" class="form-control rounded-start-3" id="modalQueryParsel" value="@(Model.Parsel ?? "31")" placeholder="Örn: 31" />
+
+
+
+                                        <button type="button" class="btn btn-danger rounded-end-3 fw-bold" onclick="queryTkgmByAdaParselForm()">
+
+
+
+                                            <i class="bi bi-search"></i>
+
+
+
+                                        </button>
+
+
+
+                                    </div>
+
+
+
+                                </div>
+
+
+
+                            </div>
+
+
+
+                        </div>
+
+
+
+                    </div>
+
+
+
+                </div>
+
+
+
+                <!-- YÜKLENİYOR VE HATA BİLDİRİMLERİ -->
+
+
+
+                <div id="tkgmLoadingSpinner" class="text-center py-4 my-2" style="display: none;">
+
+
+
+                    <div class="spinner-border text-danger mb-2" role="status" style="width: 2.2rem; height: 2.2rem;"></div>
+
+
+
+                    <div class="fw-bold text-dark" id="tkgmLoadingText">TKGM MEGSİS Servisinden Parsel Geometrisi Çekiliyor...</div>
+
+
+
+                    <small class="text-muted">Tapu ve Kadastro Genel Müdürlüğü kadastro sunucusuna bağlanılıyor.</small>
+
+
+
+                </div>
+
+
+
+                <div id="tkgmErrorAlert" class="alert alert-danger rounded-4 py-2 px-3 small" style="display: none;">
+
+
+
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+
+
+
+                    <span id="tkgmErrorText">Parsel bilgisi bulunamadı.</span>
+
+
+
+                </div>
+
+
+
+                <!-- SONUÇ ALANI (HARİTA + KADASTRO DETAY KARTLARI) -->
+
+
+
+                <div id="tkgmResultContainer">
+
+
+
+                    <div class="row g-3">
+
+
+
+                        <div class="col-lg-8">
+
+
+
+                            <div class="border rounded-4 overflow-hidden position-relative shadow-xs">
+
+
+
+                                <div id="tkgmModalMap" style="height: 380px; width: 100%;"></div>
+
+
+
+                                <div class="position-absolute bottom-0 start-0 m-2 p-2 rounded-3 bg-dark bg-opacity-75 text-white small" style="z-index: 1000; font-size: 0.72rem;">
+
+
+
+                                    <i class="bi bi-info-circle me-1"></i>Kırmızı poligon TKGM'nin resmi parsel sınırını temsil eder.
+
+
+
+                                </div>
+
+
+
+                            </div>
+
+
+
+                        </div>
+
+
+
+                        <div class="col-lg-4">
+
+
+
+                            <div class="card border rounded-4 h-100 p-3 bg-white shadow-xs d-flex flex-column justify-content-between">
+
+
+
+                                <div>
+
+
+
+                                    <div class="d-flex align-items-center justify-content-between pb-2 mb-2 border-bottom">
+
+
+
+                                        <span class="badge bg-danger rounded-pill px-2 py-1 small">
+
+
+
+                                            <i class="bi bi-shield-check me-1"></i>TKGM MEGSİS
+
+
+
+                                        </span>
+
+
+
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle" id="modalResNitelik">Arsa</span>
+
+
+
+                                    </div>
+
+
+
+                                    <div class="mb-3">
+
+
+
+                                        <small class="text-muted d-block" style="font-size: 0.75rem;">Resmi Kadastro Yüzölçümü</small>
+
+
+
+                                        <h3 class="fw-bold text-success mb-0" id="modalResAlan">- m²</h3>
+
+
+
+                                    </div>
+
+
+
+                                    <div class="table-responsive">
+
+
+
+                                        <table class="table table-sm table-borderless small mb-0">
+
+
+
+                                            <tbody>
+
+
+
+                                                <tr>
+
+
+
+                                                    <td class="text-muted ps-0">İl / İlçe:</td>
+
+
+
+                                                    <td class="fw-bold text-end pe-0" id="modalResIlIlce">-</td>
+
+
+
+                                                </tr>
+
+
+
+                                                <tr>
+
+
+
+                                                    <td class="text-muted ps-0">Mahalle:</td>
+
+
+
+                                                    <td class="fw-bold text-end pe-0" id="modalResMahalle">-</td>
+
+
+
+                                                </tr>
+
+
+
+                                                <tr>
+
+
+
+                                                    <td class="text-muted ps-0">Ada / Parsel:</td>
+
+
+
+                                                    <td class="fw-bold text-end pe-0 text-primary fs-6" id="modalResAdaParsel">-</td>
+
+
+
+                                                </tr>
+
+
+
+                                                <tr>
+
+
+
+                                                    <td class="text-muted ps-0">Pafta:</td>
+
+
+
+                                                    <td class="fw-bold text-end pe-0" id="modalResPafta">-</td>
+
+
+
+                                                </tr>
+
+
+
+                                            </tbody>
+
+
+
+                                        </table>
+
+
+
+                                    </div>
+
+
+
+                                </div>
+
+
+
+                                <div class="pt-3 border-top mt-3">
+
+
+
+                                    <button type="button" id="btnApplyTkgmModal" class="btn btn-success w-100 rounded-pill fw-bold py-2 shadow-sm" onclick="applyTkgmToProject()" disabled>
+
+
+
+                                        <i class="bi bi-check2-circle me-1"></i> Bu Resmi Parsel Verilerini Projeye Aktar
+
+
+
+                                    </button>
+
+
+
+                                </div>
+
+
+
+                            </div>
+
+
+
+                        </div>
+
+
+
+                    </div>
+
+
+
+                </div>
+
+
+
+            </div>
+
+
+
+        </div>
+
+
+
+    </div>
+
+
+
+</div>
+
+
+
+
+
+
+
+    <!-- 4. BÖLÜM: PROJE GENEL KARAKTERİ NASIL OLACAK? -->
+
+    <div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs overflow-hidden">
+
+        <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-light border-bottom flex-wrap gap-1"
+
+             role="button" data-bs-toggle="collapse" data-bs-target="#projeKarakteriCollapse" aria-expanded="false" aria-controls="projeKarakteriCollapse" style="cursor: pointer;">
+
+            
+
+            <div class="d-flex align-items-center gap-2">
+
+                <i class="bi bi-palette2 text-primary fs-5"></i>
+
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+
+                    <span class="fw-bold text-dark small" style="font-size: 0.88rem;">4. Proje Genel Karakteri Nasıl Olacak?</span>
+
+                    <span class="badge bg-secondary bg-opacity-10 text-secondary border px-1.5 py-0 rounded-pill" style="font-size: 0.68rem;">
+
+                        <i class="bi bi-window-stack me-1"></i>Yeni Sekme / Kendi Sayfası
+
+                    </span>
+
+                    <small class="text-muted d-none d-lg-inline" style="font-size: 0.72rem;">Mimari konsept, cephe tasarımı, donatı ve kat planı karakteristiği</small>
+
+                </div>
+
+            </div>
+
+
+
+            <div class="d-flex align-items-center gap-1.5 flex-wrap" onclick="event.stopPropagation();">
+
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs" style="font-size: 0.74rem;">
+
+                    <i class="bi bi-box-arrow-up-right me-1"></i>Yeni Sekmede Aç
+
+                </button>
+
+                <button class="btn btn-sm btn-white border rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs text-secondary" 
+
+                        type="button" data-bs-toggle="collapse" data-bs-target="#projeKarakteriCollapse" aria-expanded="false" aria-controls="projeKarakteriCollapse" id="btnProjeKarakteriToggle" style="font-size: 0.74rem;">
+
+                    <span id="textProjeKarakteriToggle">Genişlet</span>
+
+                    <i class="bi bi-chevron-down ms-1" id="iconProjeKarakteriChevron"></i>
+
+                </button>
+
+            </div>
+
+        </div>
+
+
+
+        <div class="collapse p-2 p-md-3" id="projeKarakteriCollapse">
+
+            <div class="alert alert-light border rounded-3 p-3 mb-0 text-center">
+
+                <i class="bi bi-palette text-muted fs-3 d-block mb-1"></i>
+
+                <div class="fw-bold text-dark small">Proje Genel Karakteri Masası Hazır</div>
+
+                <div class="text-muted small mb-2" style="font-size: 0.76rem;">Bu div iskelet olarak açıldı ve beklemededir. İşlemler yeni sekmede kendi sayfasında yürütülecektir.</div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+
+    <!-- EVRAK YÖNETİM MODALI (FAZ 0 İLE BİREBİR AYNI STANDART) -->
+
+
+
+<div class="modal fade" id="docManageModal" tabindex="-1">
+
+
+
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+
+
+
+        <div class="modal-content border-0 shadow-lg rounded-4">
+
+
+
+            <form action="/PhaseZero/UpdateDoc" method="post" enctype="multipart/form-data">
+
+
+
+                <input type="hidden" name="id" id="modalDocId" />
+
+
+
+                <div class="modal-header border-bottom py-3 bg-light">
+
+
+
+                    <div class="d-flex align-items-center gap-2">
+
+
+
+                        <span class="badge bg-primary rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+
+
+
+                            <i class="bi bi-file-earmark-check text-white"></i>
+
+
+
+                        </span>
+
+
+
+                        <div>
+
+
+
+                            <h6 class="modal-title fw-bold text-dark mb-0" id="modalDocTitle">Evrak Yönetimi</h6>
+
+
+
+                            <small class="text-muted" style="font-size: 0.75rem;">1. Aşama resmi evrak takip ve harç güncelleme</small>
+
+
+
+                        </div>
+
+
+
+                    </div>
+
+
+
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+
+
+
+                </div>
+
+
+
+                <div class="modal-body p-4">
+
+
+
+                    <div class="row g-3">
+
+
+
+                        <div class="col-md-6">
+
+
+
+                            <label class="form-label fw-bold small text-muted">Evrak Süreç Durumu</label>
+
+
+
+                            <select name="status" id="modalDocStatus" class="form-select rounded-3 fw-bold">
+
+
+
+                                <option value="Bekliyor">⏳ Bekliyor</option>
+
+
+
+                                <option value="Başvuru Yapıldı">📝 Başvuru Yapıldı</option>
+
+
+
+                                <option value="Alındı">✅ Alındı (Onaylandı)</option>
+
+
+
+                                <option value="Muaf">🚫 Muaf</option>
+
+
+
+                            </select>
+
+
+
+                        </div>
+
+
+
+                        <div class="col-md-6">
+
+
+
+                            <label class="form-label fw-bold small text-muted">Kimin Takip Ettiği (Atanan Sorumlu)</label>
+
+
+
+                            <input type="text" name="assignedUserId" id="modalDocAssignedUser" class="form-control rounded-3" placeholder="Örn: Mimar Ahmet Bey veya Takipçi Ali" />
+
+
+
+                        </div>
+
+
+
+                        <div class="col-md-6">
+
+
+
+                            <label class="form-label fw-bold small text-muted">Resmi Harç / Makbuz Tutarı (₺)</label>
+
+
+
+                            <div class="input-group">
+
+
+
+                                <input type="number" step="0.01" name="documentFee" id="modalDocFee" class="form-control rounded-start-3" placeholder="0.00" />
+
+
+
+                                <span class="input-group-text rounded-end-3">₺</span>
+
+
+
+                            </div>
+
+
+
+                            <small class="text-muted" style="font-size: 0.72rem;">Belediyeye yatırılan resmi harç</small>
+
+
+
+                        </div>
+
+
+
+                        <div class="col-md-6">
+
+
+
+                            <label class="form-label fw-bold small text-muted">Ek Keşif / Rapor Masrafı (₺)</label>
+
+
+
+                            <div class="input-group">
+
+
+
+                                <input type="number" step="0.01" name="additionalCost" id="modalDocAddCost" class="form-control rounded-start-3" placeholder="0.00" />
+
+
+
+                                <span class="input-group-text rounded-end-3">₺</span>
+
+
+
+                            </div>
+
+
+
+                            <small class="text-muted" style="font-size: 0.72rem;">Laboratuvar veya müşavirlik masrafı</small>
+
+
+
+                        </div>
+
+
+
+                        <div class="col-md-12">
+
+
+
+                            <label class="form-label fw-bold small text-muted">İlgili Kurum / Birim Bilgisi</label>
+
+
+
+                            <input type="text" name="institutionContact" id="modalDocContact" class="form-control rounded-3" placeholder="Örn: Maltepe Belediyesi İmar ve Şehircilik Müdürlüğü" />
+
+
+
+                        </div>
+
+
+
+                        <div class="col-md-12">
+
+
+
+                            <label class="form-label fw-bold small text-muted">Resmi Taranmış Belge (PDF / Fotoğraf)</label>
+
+
+
+                            <input type="file" name="uploadedFile" class="form-control rounded-3" accept=".pdf,image/*" />
+
+
+
+                            <div id="modalFilePreview" class="mt-2" style="display: none;">
+
+
+
+                                <a href="#" id="modalFileLink" target="_blank" class="btn btn-sm btn-outline-success rounded-pill px-3">
+
+
+
+                                    <i class="bi bi-file-earmark-check me-1"></i> Yüklenmiş Mevcut Belgeyi Gör
+
+
+
+                                </a>
+
+
+
+                            </div>
+
+
+
+                        </div>
+
+
+
+                    </div>
+
+
+
+                </div>
+
+
+
+                <div class="modal-footer border-top py-3">
+
+
+
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Vazgeç</button>
+
+
+
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">
+
+
+
+                        <i class="bi bi-check2-circle me-1"></i> Güncelle ve Kaydet
+
+
+
+                    </button>
+
+
+
+                </div>
+
+
+
+            </form>
+
+
+
+        </div>
+
+
+
+    </div>
+
+
+
+</div>
+
+
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+
+
+<script>
+
+
+
+    // MARKDOWN DÖNÜŞTÜRÜCÜ (AI RAPORU İÇİN)
+
+
+
+    function parseAiMarkdown(md) {
+
+
+
+        if (!md) return '';
+
+
+
+        var lines = md.split('\n');
+
+
+
+        var html = '';
+
+
+
+        var inList = false;
+
+
+
+        for (var i = 0; i < lines.length; i++) {
+
+
+
+            var line = lines[i].trim();
+
+
+
+            if (!line) {
+
+
+
+                if (inList) { html += '</ul>'; inList = false; }
+
+
+
+                continue;
+
+
+
+            }
+
+
+
+            if (line.startsWith('### ')) {
+
+
+
+                if (inList) { html += '</ul>'; inList = false; }
+
+
+
+                html += '<h6 class="fw-bold text-dark mt-2 mb-2 pb-1 border-bottom"><i class="bi bi-geo-alt text-primary me-1"></i>' + line.substring(4) + '</h6>';
+
+
+
+            } else if (line.startsWith('#### ')) {
+
+
+
+                if (inList) { html += '</ul>'; inList = false; }
+
+
+
+                html += '<h6 class="fw-bold text-primary mt-3 mb-1"><i class="bi bi-chevron-right text-primary me-1"></i>' + line.substring(5) + '</h6>';
+
+
+
+            } else if (line.startsWith('* ') || line.startsWith('- ')) {
+
+
+
+                if (!inList) { html += '<ul class="mb-2 ps-3">'; inList = true; }
+
+
+
+                var content = line.substring(2);
+
+
+
+                content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+
+
+                html += '<li class="mb-1 text-secondary">' + content + '</li>';
+
+
+
+            } else {
+
+
+
+                if (inList) { html += '</ul>'; inList = false; }
+
+
+
+                var text = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+
+
+                html += '<p class="mb-2 text-dark" style="text-align: justify;">' + text + '</p>';
+
+
+
+            }
+
+
+
+        }
+
+
+
+        if (inList) { html += '</ul>'; }
+
+
+
+        return html;
+
+
+
+    }
+
+
+
+    function setupCollapseToggle(collapseId, btnTextId, iconId) {
+
+
+
+        var el = document.getElementById(collapseId);
+
+
+
+        if (!el) return;
+
+
+
+        el.addEventListener('show.bs.collapse', function () {
+
+
+
+            var textEl = document.getElementById(btnTextId);
+
+
+
+            var iconEl = document.getElementById(iconId);
+
+
+
+            if (textEl) textEl.innerText = 'Daralt';
+
+
+
+            if (iconEl) iconEl.className = 'bi bi-chevron-up';
+
+
+
+        });
+
+
+
+        el.addEventListener('hide.bs.collapse', function () {
+
+
+
+            var textEl = document.getElementById(btnTextId);
+
+
+
+            var iconEl = document.getElementById(iconId);
+
+
+
+            if (textEl) textEl.innerText = 'Genişlet';
+
+
+
+            if (iconEl) iconEl.className = 'bi bi-chevron-down';
+
+
+
+        });
+
+
+
+    }
+
+
+
+    document.addEventListener("DOMContentLoaded", function() {
+
+
+
+        // AI Raporunu Render Et
+
+
+
+        // Collapse Olaylarını Bağla
+
+
+
+        setupCollapseToggle('hakSahipleriCollapse', 'textHakSahipleriToggle', 'iconHakSahipleriChevron');
+
+        setupCollapseToggle('eskiBinaCollapse', 'textEskiBinaToggle', 'iconEskiBinaChevron');
+
+        setupCollapseToggle('burokrasiCollapse', 'textBurokrasiToggle', 'iconBurokrasiChevron');
+
+
+
+        setupCollapseToggle('imarCollapse', 'textImarToggle', 'iconImarChevron');
+        setupCollapseToggle('fazlarCollapse', 'textFazlarToggle', 'iconFazlarChevron');
+        setupCollapseToggle('projeKarakteriCollapse', 'textProjeKarakteriToggle', 'iconProjeKarakteriChevron');
+
+
+
+        // İmar Form Olaylarını Bağla
+
+
+
+        var form = document.getElementById('imarForm');
+
+
+
+        if (form) {
+
+
+
+            var inputs = form.querySelectorAll('input, textarea');
+
+
+
+            inputs.forEach(function(el) {
+
+
+
+                el.addEventListener('change', triggerImarAutosave);
+
+
+
+                if (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'number'))) {
+
+
+
+                    el.addEventListener('input', triggerImarAutosave);
+
+
+
+                }
+
+
+
+            });
+
+
+
+        }
+
+
+
+        recalculateCapacity();
+
+
+
+    });
+
+
+
+</script>
+
+
+
+<script>
+
+
+
+    document.addEventListener("DOMContentLoaded", function () {
+
+
+
+        ['hakSahipleriCollapse', 'eskiBinaCollapse', 'fazlarCollapse', 'burokrasiCollapse', 'imarCollapse', 'projeKarakteriCollapse'].forEach(function(colId) {
+
+
+
+            var el = document.getElementById(colId);
+
+
+
+            if (!el) return;
+
+
+
+            var prefix = colId === 'hakSahipleriCollapse' ? 'HakSahipleri' : (colId === 'eskiBinaCollapse' ? 'EskiBina' : (colId === 'fazlarCollapse' ? 'Fazlar' : (colId === 'projeKarakteriCollapse' ? 'ProjeKarakteri' : (colId === 'burokrasiCollapse' ? 'Burokrasi' : 'Imar'))));
+
+
+
+            var txt = document.getElementById('text' + prefix + 'Toggle');
+
+
+
+            var ico = document.getElementById('icon' + prefix + 'Chevron');
+
+
+
+            el.addEventListener('shown.bs.collapse', function () {
+
+
+
+                if (txt) txt.innerText = 'Daralt';
+
+
+
+                if (ico) { ico.classList.remove('bi-chevron-down'); ico.classList.add('bi-chevron-up'); }
+
+
+
+            });
+
+
+
+            el.addEventListener('hidden.bs.collapse', function () {
+
+
+
+                if (txt) txt.innerText = 'Genişlet';
+
+
+
+                if (ico) { ico.classList.remove('bi-chevron-up'); ico.classList.add('bi-chevron-down'); }
+
+
+
+            });
+
+
+
+        });
+
+
+
+    });
+
+
+
+</script>
+
+
+

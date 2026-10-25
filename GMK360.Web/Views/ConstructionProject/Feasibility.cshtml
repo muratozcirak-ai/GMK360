@@ -1,0 +1,2393 @@
+@model GMK360.Core.Entities.Construction.ConstructionProject
+
+@{
+    ViewData["Title"] = "Hızlı Arsa Ön Etüdü & Saha Keşfi: " + Model.Name;
+    Layout = "_ProjectLayout";
+
+    var landArea = Model.TotalLandArea ?? 774.30;
+    var cityName = (ViewBag.CityName as string) ?? "İstanbul";
+    var distName = (ViewBag.DistrictName as string) ?? "Kadıköy";
+    var neighName = (ViewBag.NeighborhoodName as string) ?? "Merdivenköy";
+
+    var lastExCost = ViewBag.LastExcavationCost ?? 120.0;
+    var lastRoughCost = ViewBag.LastRoughCost ?? 9500.0;
+    var ministryCost = ViewBag.MinistryCostPerM2 ?? 18500.0;
+}
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<style>
+    #feasibilityMap {
+        overflow: hidden !important;
+        position: relative !important;
+    }
+    .leaflet-container {
+        overflow: hidden !important;
+        position: relative !important;
+    }
+    .card-accordion-header {
+        transition: background-color 0.15s ease-in-out, transform 0.1s ease-in-out;
+        border-radius: 12px;
+        padding: 8px 12px !important;
+        margin: -4px -6px 0 -6px;
+    }
+    .card-accordion-header:hover {
+        background-color: rgba(13, 110, 253, 0.04) !important;
+    }
+    .card-accordion-header:active {
+        background-color: rgba(13, 110, 253, 0.08) !important;
+    }
+    .spin {
+        animation: spin 1s linear infinite;
+    }
+    @@keyframes spin {
+        100% { transform: rotate(360deg); }
+    }
+    .poi-card {
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .poi-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    }
+</style>
+
+<div class="container-fluid py-3">
+
+    <!-- BAŞLIK & LOKASYON BİLGİ ŞERİDİ -->
+    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom flex-wrap gap-2">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <a href="/ConstructionProject/Workspace/@Model.Id" class="btn btn-outline-secondary btn-sm rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;" title="Çalışma Masasına Dön">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h4 class="fw-bold text-dark mb-0">Arsa Ön Etüt Masası & Kentsel Dönüşüm Terazisi</h4>
+                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2 py-1 rounded-pill">
+                    Aday Proje Saha Keşfi
+                </span>
+            </div>
+            <div class="text-muted small mt-1 ms-4 ps-2">
+                <i class="bi bi-geo-alt-fill text-danger me-1"></i>
+                <b>@cityName</b> / @distName @(!string.IsNullOrWhiteSpace(neighName) ? " - " + neighName + " Mah." : "")
+                <span class="mx-2 text-muted">|</span>
+                Ada: <b class="text-dark" id="dispAda">@(string.IsNullOrWhiteSpace(Model.Ada) ? "-" : Model.Ada)</b>
+                <span class="mx-1 text-muted">/</span>
+                Parsel: <b class="text-dark" id="dispParsel">@(string.IsNullOrWhiteSpace(Model.Parsel) ? "-" : Model.Parsel)</b>
+                <span class="mx-2 text-muted">|</span>
+                Tapu Alanı: <b class="text-dark">@landArea.ToString("N2") m²</b>
+            </div>
+        </div>
+
+        <div id="simAutosaveStatus">
+            <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 small">
+                <i class="bi bi-check2-circle me-1"></i>Otomatik Kaydedildi
+            </span>
+        </div>
+    </div>
+
+    <!-- 1. BÖLÜM: YAPAY ZEKA DESTEKLİ BÖLGE & MAHALLE DEĞERLENDİRMESİ (VARSAYILAN KAPALI) -->
+    <div class="card border border-light-subtle rounded-4 p-2 p-md-3 bg-white mb-2 shadow-sm" id="cardAiNeighborhood">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 pb-2 border-bottom card-accordion-header" 
+             role="button" 
+             onclick="toggleSection('aiSectionCollapse')"
+             title="Yapay zeka analizini açmak / kapatmak için tıklayın"
+             style="cursor: pointer; user-select: none;">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-primary bg-opacity-10 text-primary rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                    <i class="bi bi-cpu-fill fs-5"></i>
+                </span>
+                <div>
+                    <h6 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                        Yapay Zeka Destekli Bölge & Mahalle Değerlendirmesi
+                        <span class="badge bg-info bg-opacity-10 text-info border border-info px-2 py-0 rounded-pill fw-bold" style="font-size: 0.68rem;">
+                            <i class="bi bi-stars me-1"></i>Gemini AI
+                        </span>
+                    </h6>
+                    <small class="text-muted" style="font-size: 0.74rem;">@cityName / @distName @(!string.IsNullOrWhiteSpace(neighName) ? " — " + neighName + " Mahallesi" : "") gayrimenkul rayiçleri, kira endeksi ve kentsel dönüşüm stratejisi</small>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-2" id="aiTopActionContainer" onclick="event.stopPropagation();">
+                @if (!string.IsNullOrWhiteSpace(ViewBag.AiReport as string))
+                {
+                    <span class="badge bg-success bg-opacity-10 text-success border border-success px-3 py-2 rounded-pill fw-bold" id="badgeAiStatus">
+                        <i class="bi bi-check-circle-fill me-1"></i>Analiz Kayıtlı
+                    </span>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold shadow-xs d-flex align-items-center gap-1" id="btnTriggerAiTop" onclick="triggerNeighborhoodAi()">
+                        <i class="bi bi-stars"></i>
+                        <span>Analizi Başlat</span>
+                    </button>
+                }
+                <button class="btn btn-sm btn-light border rounded-pill px-3 fw-bold d-flex align-items-center gap-1 shadow-xs" 
+                        type="button" 
+                        id="btnAiSectionToggle"
+                        onclick="toggleSection('aiSectionCollapse')">
+                    <i class="bi bi-chevron-down" id="iconAiSectionChevron"></i>
+                    <span id="textAiSectionToggle">Genişlet</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="collapse mt-3" id="aiSectionCollapse">
+            <!-- Spinner / Yükleniyor Göstergesi -->
+            <div id="aiLoadingIndicator" class="text-center py-4 my-2" style="display: none;">
+                <div class="spinner-border text-primary mb-2" role="status" style="width: 2.4rem; height: 2.4rem;"></div>
+                <div class="fw-bold text-dark fs-6">Yapay Zeka Bölge ve Fiyat Analizi Hazırlanıyor...</div>
+                <small class="text-muted">@distName / @neighName için satılık m² rayiçleri, ortalama kiralar ve dönüşüm dinamikleri taranıyor.</small>
+            </div>
+
+            <!-- Boş Başlangıç Durumu -->
+            <div id="aiEmptyContainer" style="@(!string.IsNullOrWhiteSpace(ViewBag.AiReport as string) ? "display: none;" : "display: block;")">
+                <div class="text-center py-4 px-3 rounded-4 bg-light border border-light-subtle">
+                    <div class="mb-3">
+                        <span class="badge bg-primary bg-opacity-10 text-primary p-3 rounded-circle shadow-xs">
+                            <i class="bi bi-robot fs-2"></i>
+                        </span>
+                    </div>
+                    <h6 class="fw-bold text-dark mb-1">Bu Bölge İçin Henüz Yapay Zeka Analizi Başlatılmadı</h6>
+                    <p class="text-muted small mx-auto mb-3" style="max-width: 580px;">
+                        Tek bir tıkla; <b>@distName / @neighName</b> bölgesi için ortalama satılık daire m² birim fiyatları, güncel kira endeksi, kentsel dönüşüm talebi ve müteahhit teklif stratejisi yapay zeka tarafından derlenir.
+                    </p>
+                    <button type="button" class="btn btn-primary rounded-pill px-4 py-2 fw-bold shadow-sm" onclick="triggerNeighborhoodAi()" id="btnStartAiMain">
+                        <i class="bi bi-stars me-1"></i> @(distName) / @(neighName) Yapay Zeka Bölge Analizini Başlat
+                    </button>
+                </div>
+            </div>
+
+            <!-- AI Rapor Gösterim Alanı -->
+            <div id="aiReportContainer" style="@(!string.IsNullOrWhiteSpace(ViewBag.AiReport as string) ? "display: block;" : "display: none;")">
+                <div class="p-3 p-md-4 rounded-4 bg-light bg-opacity-75 border border-light-subtle mb-3">
+                    <div id="aiReportBody" class="ai-markdown-content" style="line-height: 1.65; font-size: 0.90rem;">
+                        @if (!string.IsNullOrWhiteSpace(ViewBag.AiReport as string))
+                        {
+                            <div id="rawAiReport" style="display: none;">@Html.Raw(ViewBag.AiReport as string)</div>
+                        }
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center pt-2 mt-3 border-top text-muted flex-wrap gap-2" style="font-size: 0.74rem;">
+                        <span><i class="bi bi-clock-history me-1"></i>Son Analiz: <b id="aiUpdatedAtText">@(ViewBag.AiUpdatedAt != null ? ((DateTime)ViewBag.AiUpdatedAt).ToString("dd.MM.yyyy HH:mm") : "Yeni Üretildi")</b></span>
+                        <span><i class="bi bi-shield-check text-success me-1"></i>GMK360 AI Feasibility Intelligence</span>
+                    </div>
+                </div>
+
+                <!-- CANLI PİYASA DOĞRULAMA & EMLAK PORTALI LİNKLERİ -->
+                <div class="p-3 rounded-4 bg-white border border-light-subtle d-flex justify-content-between align-items-center flex-wrap gap-2 shadow-xs">
+                    <div>
+                        <span class="fw-bold text-dark small d-block">
+                            <i class="bi bi-box-arrow-up-right text-primary me-1"></i>Canlı Piyasa & İlan Doğrulama Portalları:
+                        </span>
+                        <small class="text-muted" style="font-size: 0.72rem;">@distName / @neighName bölgesindeki aktif ilanları ve resmi değerleme endeksini yeni sekmede açın</small>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <button type="button" class="btn btn-sm btn-outline-warning text-dark fw-bold rounded-pill px-3 shadow-xs" onclick="openMarketPortal('sahibinden-satilik')">
+                            <i class="bi bi-search me-1"></i>Sahibinden Satılık
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-warning text-dark fw-bold rounded-pill px-3 shadow-xs" onclick="openMarketPortal('sahibinden-kiralik')">
+                            <i class="bi bi-search me-1"></i>Sahibinden Kiralık
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary fw-bold rounded-pill px-3 shadow-xs" onclick="openMarketPortal('endeksa')">
+                            <i class="bi bi-graph-up me-1"></i>Endeksa Değerleme
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. BÖLÜM: BÖLGE İSTİHBARATI & ÇEVRE DONATILARI (VARSAYILAN KAPALI) -->
+    <div class="card border border-light-subtle rounded-4 p-2 p-md-3 bg-white mb-2 shadow-sm" id="cardLocationIntelligence">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 pb-2 border-bottom card-accordion-header"
+             role="button" 
+             onclick="toggleSection('poiSectionCollapse')"
+             title="Çevre donatılarını açmak / kapatmak için tıklayın"
+             style="cursor: pointer; user-select: none;">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-success bg-opacity-10 text-success rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                    <i class="bi bi-compass-fill fs-5"></i>
+                </span>
+                <div>
+                    <h6 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                        Bölge İstihbaratı & Yakın Çevre Donatıları
+                        <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-0 rounded-pill fw-bold" style="font-size: 0.68rem;" id="badgePoiCount">
+                            <i class="bi bi-geo-alt-fill me-1"></i>20 Donatı
+                        </span>
+                    </h6>
+                    <small class="text-muted" style="font-size: 0.74rem;">Okul, hastane, metro istasyonu, park ve ticari akslara yürüme mesafeleri</small>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-2" onclick="event.stopPropagation();">
+                <button class="btn btn-sm btn-light border rounded-pill px-3 fw-bold d-flex align-items-center gap-1 shadow-xs" 
+                        type="button" 
+                        id="btnPoiSectionToggle"
+                        onclick="toggleSection('poiSectionCollapse')">
+                    <i class="bi bi-chevron-down" id="iconPoiSectionChevron"></i>
+                    <span id="textPoiSectionToggle">Genişlet</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="collapse" id="poiSectionCollapse">
+            <!-- KATEGORİ FİLTRE BUTONLARI -->
+            <div class="d-flex align-items-center gap-1 flex-wrap mt-3 mb-3" id="poiFilterButtons">
+                <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold filter-btn active" onclick="filterPoiList('all', this)">
+                    <i class="bi bi-grid-fill me-1"></i>Tümü (<span id="cntAll">0</span>)
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold filter-btn" onclick="filterPoiList('Health', this)">
+                    <i class="bi bi-heart-pulse-fill me-1"></i>Sağlık & Hastane (<span id="cntHealth">0</span>)
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold filter-btn" onclick="filterPoiList('Education', this)">
+                    <i class="bi bi-mortarboard-fill me-1"></i>Okul & Eğitim (<span id="cntEducation">0</span>)
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold filter-btn" onclick="filterPoiList('Transport', this)">
+                    <i class="bi bi-train-front-fill me-1"></i>Ulaşım & Metro (<span id="cntTransport">0</span>)
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold filter-btn" onclick="filterPoiList('SocialAndPark', this)">
+                    <i class="bi bi-tree-fill me-1"></i>Park & Sosyal (<span id="cntPark">0</span>)
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold filter-btn" onclick="filterPoiList('Shopping', this)">
+                    <i class="bi bi-bag-fill me-1"></i>Alışveriş & Diğer (<span id="cntShopping">0</span>)
+                </button>
+            </div>
+
+            <!-- DONATI LİSTESİ GRID ALANI -->
+            <div id="poiListContainer" class="row g-3">
+                <div class="col-12 text-center py-4 text-muted">
+                    <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                    Bölge donatıları yükleniyor...
+                </div>
+            </div>
+
+            <!-- BİLGİLENDİRME ŞERİDİ -->
+            <div class="mt-3 pt-3 border-top d-flex align-items-center justify-content-between flex-wrap gap-2 text-muted" style="font-size: 0.74rem;">
+                <div>
+                    <i class="bi bi-info-circle-fill text-primary me-1"></i>
+                    <b>Satış & Teklif Değeri:</b> Bu donatılar, projenin prim kabiliyetini gösterir ve maliklere sunulacak kat karşılığı teklif dosyasında yer alır.
+                </div>
+                <div>
+                    <span class="badge bg-light text-muted border">GMK360 Location Intelligence Engine</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+        <!-- 3. BÖLÜM: TKGM HARİTASI & ARSA / KAT OTURUM KROKİSİ (TAM GENİŞLİK KART) -->
+    <div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-sm overflow-hidden" id="cardCadastralAndGeometry">
+        <div class="card-header bg-light border-bottom p-3 d-flex justify-content-between align-items-center flex-wrap gap-2 card-accordion-header"
+             role="button" 
+             onclick="toggleMapCollapse()"
+             title="Harita ve arsa krokisini açmak / kapatmak için tıklayın"
+             style="cursor: pointer; user-select: none;">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-danger rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                    <i class="bi bi-geo-alt-fill text-white fs-5"></i>
+                </span>
+                <div>
+                    <h6 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                        TKGM Uydu Haritası & Arsa / Kat Oturum Krokisi
+                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-0 rounded-pill fw-bold" style="font-size: 0.68rem;">
+                            MEGSİS Canlı Parsel
+                        </span>
+                    </h6>
+                    <small class="text-muted" style="font-size: 0.74rem;">Resmi kadastro sınırları, parsel ebatları ve dairelerin oturacağı kat alanı (~270 m²)</small>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-2" onclick="event.stopPropagation();">
+                <button type="button" class="btn btn-sm btn-white border rounded-pill px-3 fw-bold shadow-xs d-flex align-items-center gap-1" id="btnToggleFeasibilityMap" onclick="toggleMapCollapse()">
+                    <i class="bi bi-map me-1 text-danger"></i>
+                    <span id="textMapToggle">Haritayı Göster</span>
+                    <i class="bi bi-chevron-down ms-1" id="iconMapChevron"></i>
+                </button>
+                @if (!string.IsNullOrWhiteSpace(Model.ParcelPolygonGeoJson))
+                {
+                    <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-bold shadow-xs" onclick="openTkgmModal()">
+                        <i class="bi bi-check-circle-fill" id="btnTkgmBoundaryIcon"></i>
+                        <span id="btnTkgmBoundaryText">Resmi Sınır Kayıtlı</span>
+                    </button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-sm btn-danger rounded-pill px-3 fw-bold shadow-xs" onclick="openTkgmModal()">
+                        <i class="bi bi-crosshair" id="btnTkgmBoundaryIcon"></i>
+                        <span id="btnTkgmBoundaryText">TKGM'den Sınır Çek</span>
+                    </button>
+                }
+            </div>
+        </div>
+
+        <!-- HARİTA & KROKİ GÖVDE ALANI (VARSAYILAN AÇIK / FERAH) -->
+        <div id="feasibilityMapCollapse" style="display: none;">
+            <div class="p-3 border-bottom bg-light bg-opacity-50">
+                <div class="row g-3 align-items-center">
+
+                    <!-- Sol Taraf: Harita ve Katmanlar (Geniş Ekran) -->
+                    <div class="col-lg-7">
+                        <div class="p-2 border rounded-4 bg-white shadow-xs">
+                            <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button type="button" class="btn btn-outline-secondary active" id="btnLayerSat" onclick="setMapLayer('sat')">Uydu</button>
+                                    <button type="button" class="btn btn-outline-secondary" id="btnLayerOsm" onclick="setMapLayer('osm')">Sokak</button>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <button type="button" class="btn btn-sm btn-outline-dark rounded-pill px-3" onclick="toggleMapFullscreen()">
+                                        <i class="bi bi-arrows-fullscreen me-1" id="iconFullscreen"></i><span id="textFullscreen">Tam Ekran</span>
+                                    </button>
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1 rounded-pill" style="font-size: 0.68rem;">
+                                        Kırmızı Sınır = MEGSİS Parseli
+                                    </span>
+                                </div>
+                            </div>
+                            <div id="feasibilityMap" style="height: 280px; width: 100%; border-radius: 12px; z-index: 1;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Sağ Taraf: Mimari Kat Oturum Krokisi (Şematik Kutu) -->
+                    <div class="col-lg-5">
+                        <div class="p-3 rounded-4 border bg-white shadow-xs text-center position-relative">
+                            <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+                                <span class="fw-bold text-dark small">
+                                    <i class="bi bi-rulers text-primary me-1"></i>Arsa & Kat Oturum Ebatları
+                                </span>
+                                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2 py-1 rounded-pill fw-bold" style="font-size: 0.68rem;">
+                                    @landArea.ToString("N2") m² Arsa
+                                </span>
+                            </div>
+
+                            <!-- Şematik Arsa Kutusu -->
+                            <div class="mx-auto position-relative p-3 rounded-3 my-2" style="max-width: 320px; border: 2px dashed #0d6efd; background-color: rgba(13, 110, 253, 0.02);">
+                                <div class="text-primary fw-bold small mb-2" style="font-size: 0.76rem;">
+                                    <i class="bi bi-arrows-expand me-1"></i>Ön Cephe: <b>~24,5 m</b>
+                                </div>
+
+                                <!-- Dairelerin Oturacağı Kat Alanı Kutusu (Çıkmalar Dahil) -->
+                                <div class="mx-auto p-3 rounded-3 shadow-sm" style="width: 78%; border: 2px solid #198754; background-color: rgba(25, 135, 84, 0.12);">
+                                    <div class="text-success fw-bold small mb-1" style="font-size: 0.80rem;">
+                                        <i class="bi bi-building me-1"></i>DAİRELERİN KAT OTURUMU
+                                    </div>
+                                    <div class="text-dark fw-bold fs-6" id="badgeFootprintDims">~14,0 m × 19,5 m</div>
+                                    <span class="badge bg-success text-white rounded-pill px-2 py-1 mt-1" style="font-size: 0.70rem;" id="badgeFootprintArea">
+                                        Kat Başına Brüt Alan: ~271 m²
+                                    </span>
+                                </div>
+
+                                <div class="text-dark fw-bold small mt-2" style="font-size: 0.74rem;">
+                                    Derinlik: <b>~30,5 m</b>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-center gap-2 mt-2 pt-1 flex-wrap">
+                                <span class="badge bg-success bg-opacity-10 text-success border border-success px-3 py-2 fw-bold" style="font-size: 0.80rem;">
+                                    <i class="bi bi-building me-1"></i>KAT OTURUMU: ~271 m²
+                                </span>
+                                <span class="badge bg-secondary bg-opacity-10 text-dark border px-3 py-2 fw-bold" style="font-size: 0.80rem;">
+                                    <i class="bi bi-tree me-1"></i>AÇIK BAHÇE: ~503 m²
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Alt Bilgi Şeridi -->
+            <div class="card-footer bg-white text-muted p-3 d-flex justify-content-between align-items-center flex-wrap gap-2" style="font-size: 0.75rem;">
+                <div>
+                    <i class="bi bi-geo-alt me-1 text-danger"></i>
+                    Ada: <b class="text-dark" id="mapAdaText">@(string.IsNullOrWhiteSpace(Model.Ada) ? "-" : Model.Ada)</b> / 
+                    Parsel: <b class="text-dark" id="mapParselText">@(string.IsNullOrWhiteSpace(Model.Parsel) ? "-" : Model.Parsel)</b>
+                    <span class="ms-2">(@cityName / @distName - @neighName)</span>
+                </div>
+                <div>
+                    <span>Resmi Tapu Alanı:</span>
+                    <b class="text-dark fs-6 ms-1"><span id="mapAreaText">@landArea.ToString("N2")</span> m²</b>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. BÖLÜM: ÖN FİZİBİLİTE & TAHMİNİ DEĞERLER MASASI (TAM GENİŞLİK KART) -->
+    <div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-sm p-3 p-md-4" id="cardFeasibilityEstimates">
+
+        <!-- BAŞLIK -->
+        <div class="d-flex align-items-center justify-content-between pb-3 border-bottom mb-3 flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-success bg-opacity-10 text-success rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                    <i class="bi bi-calculator-fill fs-5"></i>
+                </span>
+                <div>
+                    <h6 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                        Ön Fizibilite & Tahmini Değerler Masası
+                        <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-0 rounded-pill fw-bold" style="font-size: 0.68rem;">
+                            Hızlı Karar & Teklif
+                        </span>
+                    </h6>
+                    <small class="text-muted" style="font-size: 0.74rem;">Kat sayısı, kata sığacak daire ve malik paylaşım oranıyla anında canlı senaryo</small>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-3 py-2 rounded-pill fw-bold" style="font-size: 0.72rem;">
+                    <i class="bi bi-people-fill me-1"></i>Künyedeki Hak Sahibi: @(Model.EskiDaireSayisi ?? 4) Malik (Eski Daire)
+                </span>
+            </div>
+        </div>
+
+        <!-- FORM / PARAMETRE GİRİŞLERİ -->
+        <form id="simForm" onsubmit="return false;">
+            <input type="hidden" name="id" value="@Model.Id" />
+            <input type="hidden" name="projectId" value="@Model.Id" />
+            <input type="hidden" name="ada" id="calcAda" value="@Model.Ada" />
+            <input type="hidden" name="parsel" id="calcParsel" value="@Model.Parsel" />
+            <input type="hidden" name="totalLandArea" id="calcLandArea" value="@landArea.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)" />
+            <input type="hidden" name="TargetTotalApartments" id="hiddenTargetUnits" value="@(Model.TargetTotalApartments ?? 30)" />
+
+            <div class="row g-2 mb-3">
+                <!-- 1. Girdi: İzinli Kat & Bodrum (Kullanıcı Çizimine Birebir Uygun) -->
+                <div class="col-xl-2 col-md-4 col-sm-6">
+                    <div class="p-3 rounded-4 bg-light bg-opacity-50 border h-100 d-flex flex-column justify-content-between">
+                        <div>
+                            <label class="form-label fw-bold text-dark mb-1" style="font-size: 0.75rem;">
+                                <i class="bi bi-building text-primary me-1"></i>İzinli Kat
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" id="calcTotalFloors" name="totalFloors" class="form-control rounded-start-3 fw-bold fs-6 text-dark" value="@(Model.TotalFloors ?? 15)" min="1" max="50" oninput="runContractorEstimate()" />
+                                <span class="input-group-text rounded-end-3 text-muted">Kat</span>
+                            </div>
+                            <small class="text-muted d-block" style="font-size: 0.65rem;">İmar izin katı</small>
+                        </div>
+
+                        <div class="mt-2 pt-2 border-top">
+                            <label class="form-label fw-bold text-dark mb-1" style="font-size: 0.73rem;">
+                                <i class="bi bi-layers text-secondary me-1"></i>Bodrum
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" id="calcBasementFloors" class="form-control rounded-start-3 fw-bold fs-6 text-dark" value="2" min="0" max="10" oninput="runContractorEstimate()" />
+                                <span class="input-group-text rounded-end-3 text-muted">Kat</span>
+                            </div>
+                            <small class="text-muted d-block mt-1" id="resTotalFloorsWithZeminCati" style="font-size: 0.63rem; line-height: 1.25;">
+                                Zemin ve çatı dahil edilince <b>19 kat</b> olur maliyet birim hesabı için
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Girdi: Kat Başına Daire Adedi -->
+                <div class="col-xl-3 col-md-4 col-sm-6">
+                    <div class="p-3 rounded-4 bg-light bg-opacity-50 border h-100">
+                        <label class="form-label fw-bold text-dark mb-1" style="font-size: 0.75rem;">
+                            <i class="bi bi-grid-3x2-gap-fill text-primary me-1"></i>Kata Düşen Daire
+                        </label>
+                        <div class="d-flex gap-1 mb-1">
+                            <button type="button" class="btn btn-sm btn-primary rounded-pill px-2 py-0 fw-bold flex-fill" onclick="setUnitsPerFloor(2, this)" id="btnUnitPreset2">
+                                2 Daire (~120 m²)
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-2 py-0 fw-bold flex-fill" onclick="setUnitsPerFloor(3, this)" id="btnUnitPreset3">
+                                3 Daire (~80 m²)
+                            </button>
+                        </div>
+                        <div class="input-group input-group-sm">
+                            <input type="number" id="calcUnitsPerFloor" class="form-control rounded-start-3 fw-bold fs-6 text-primary" value="2" min="1" max="10" oninput="onUnitsPerFloorChange(this.value)" />
+                            <span class="input-group-text rounded-end-3 text-muted">Daire / Kat</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Girdi & Mimari Etüt: Ortak Kat Alanı (Yangın Merv., Asansör) & Net Daire -->
+                <div class="col-xl-2 col-md-4 col-sm-6">
+                    <div class="p-3 rounded-4 bg-light bg-opacity-50 border h-100 d-flex flex-column justify-content-between">
+                        <div>
+                            <label class="form-label fw-bold text-dark mb-1" style="font-size: 0.75rem;">
+                                <i class="bi bi-shield-shaded text-danger me-1"></i>Ortak Kat Alanı
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" id="calcCoreLossSqm" class="form-control rounded-start-3 fw-bold fs-6 text-dark" value="35" min="15" max="100" oninput="runContractorEstimate()" />
+                                <span class="input-group-text rounded-end-3 text-muted">m²</span>
+                            </div>
+                            <small class="text-muted d-block" style="font-size: 0.63rem;">Asansör, yangın merv. & hol</small>
+                        </div>
+
+                        <div class="mt-2 pt-2 border-top text-center">
+                            <span class="fs-6 fw-bold text-primary" id="resUnitAvgSqm">~118 m² / Daire</span>
+                            <span class="d-block fw-bold text-success" id="resUnitArchitecturalType" style="font-size: 0.72rem;">Ferah 3+1</span>
+                            <small class="text-success text-center d-block fw-semibold" id="resUnitFeasibilityHint" style="font-size: 0.63rem;">Tabana rahat sığar</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Girdi: Malik Paylaşım Oranı (%) -->
+                <div class="col-xl-3 col-md-6 col-sm-6">
+                    <div class="p-3 rounded-4 bg-light bg-opacity-50 border h-100">
+                        <label class="form-label fw-bold text-dark mb-1" style="font-size: 0.75rem;">
+                            <i class="bi bi-pie-chart-fill text-success me-1"></i>Malik (Arsa Sahibi) Payı (%)
+                        </label>
+                        <div class="d-flex gap-1 mb-1">
+                            <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-2 py-0 fw-bold flex-fill" onclick="setOwnerShare(40, this)">%40</button>
+                            <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-2 py-0 fw-bold flex-fill" onclick="setOwnerShare(50, this)">%50</button>
+                            <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-2 py-0 fw-bold flex-fill" onclick="setOwnerShare(60, this)">%60 (İşi Al)</button>
+                        </div>
+                        <div class="input-group input-group-sm">
+                            <input type="number" id="calcOwnerShare" class="form-control rounded-start-3 fw-bold fs-6 text-success" value="50" min="10" max="90" oninput="runContractorEstimate()" />
+                            <span class="input-group-text rounded-end-3 text-muted fw-bold">% Malik</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. Girdi: Daire Satış Fiyatı (2+1 vs 3+1 Akıllı Fiyatlandırma) -->
+                <div class="col-xl-2 col-md-6 col-sm-6">
+                    <div class="p-3 rounded-4 bg-light bg-opacity-50 border h-100 d-flex flex-column justify-content-between">
+                        <div>
+                            <label class="form-label fw-bold text-dark mb-1" style="font-size: 0.75rem;">
+                                <i class="bi bi-tag-fill text-dark me-1"></i>Satış Fiyatı
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" id="calcFlatSalePrice" name="averageFlatSalePrice" class="form-control rounded-start-3 fw-bold fs-6 text-dark" value="10000000" step="250000" oninput="runContractorEstimate()" />
+                                <span class="input-group-text rounded-end-3 text-muted">₺</span>
+                            </div>
+                            <small class="text-muted d-block fw-semibold" id="resFlatPriceTypeNote" style="font-size: 0.64rem;">3+1 Sıfır Daire Rayici</small>
+                        </div>
+                        <div class="mt-2 pt-2 border-top text-center">
+                            <span class="badge bg-white text-primary border border-primary border-opacity-25 px-2 py-1 fw-bold" style="font-size: 0.72rem;" id="resPriceSqmRayicBadge">~83.000 ₺/m² Rayiç</span>
+                            <small class="text-muted d-block mt-1" style="font-size: 0.58rem; line-height: 1.25;">
+                                <i class="bi bi-info-circle text-primary me-1"></i>Sıfır bina ve lüks oranına göre fiyat esneyebilir.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+
+        <!-- BÜYÜK CANLI SONUÇ TERAZİSİ (KULLANICI ÇİZİMİNE BİREBİR UYGUN) -->
+        <div class="p-3 p-md-4 rounded-4 border mb-3 shadow-xs" style="background: linear-gradient(135deg, #f0fdf4 0%, #e6f9ed 100%); border-color: #86efac !important;">
+            <div class="row g-2 text-center align-items-center">
+
+                <!-- 1. YENİ TOPLAM BİNA -->
+                <div class="col-xl-2 col-md-4 col-6">
+                    <small class="text-muted d-block fw-semibold" style="font-size: 0.70rem;">YENİ TOPLAM BİNA</small>
+                    <span class="fs-3 fw-bold text-dark" id="resTotalBuildingUnits">30</span>
+                    <span class="text-muted small"> Daire</span>
+                    <div class="text-muted" style="font-size: 0.65rem;" id="resFloorsDetailText">15 Kat × 2 Daire</div>
+                </div>
+
+                <!-- 2. MALİKLERE GİDEN -->
+                <div class="col-xl-2 col-md-4 col-6 border-start">
+                    <small class="text-muted d-block fw-semibold" style="font-size: 0.70rem;">MALİKLERE GİDEN</small>
+                    <span class="fs-3 fw-bold text-secondary" id="resOwnerGivenUnits">15</span>
+                    <span class="text-muted small"> Daire</span>
+                    <div class="text-muted" style="font-size: 0.65rem;" id="resOwnerPerHeadNote">(4 Malike ~3.8 Daire)</div>
+                </div>
+
+                <!-- 3. SİZE KALAN (MÜTEAHHİT) -->
+                <div class="col-xl-2 col-md-4 col-12 border-start bg-success bg-opacity-10 py-2 rounded-3 border border-success border-opacity-25">
+                    <small class="text-success fw-bold d-block" style="font-size: 0.72rem;">⭐ SİZE KALAN</small>
+                    <span class="fs-3 fw-extrabold text-success" id="resContractorKeptUnits">15 DAİRE</span>
+                    <div class="text-success small fw-semibold" style="font-size: 0.66rem;" id="resContractorShareText">(Toplamın %50'si)</div>
+                </div>
+
+                <!-- 4. ORTA BLOK (DEVLET BİRİM, FİRMAMIZIN BİRİMİ, TOPLAM m²) - YEŞİL İLE TAM UYUMLU -->
+                <div class="col-xl-3 col-md-6 col-12 border-start">
+                    <div class="p-1 h-100 d-flex flex-column justify-content-between">
+                        <div class="row g-1 text-start align-items-center">
+                            <div class="col-6">
+                                <label class="text-muted d-block fw-semibold" style="font-size: 0.64rem;">DEVLET BİRİM MALİYET</label>
+                                <span class="badge bg-success bg-opacity-10 text-dark border border-success border-opacity-25 px-1 py-1 fw-bold w-100 text-center" style="font-size: 0.74rem;" id="resGovUnitCostBadge">18.500 ₺/m²</span>
+                                <small class="text-muted d-block text-center" style="font-size: 0.58rem;">ÇŞİDB Tebliği</small>
+                            </div>
+                            <div class="col-6">
+                                <label class="text-dark d-block fw-bold" style="font-size: 0.64rem;">FİRMAMIZIN BİRİMİ</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" id="calcFirmUnitCost" class="form-control form-control-sm px-1 text-center fw-bold text-dark border-success bg-white bg-opacity-75" value="25000" step="500" placeholder="Örn: 25000" oninput="runContractorEstimate()" style="font-size: 0.76rem;" />
+                                    <span class="input-group-text px-1 text-muted" style="font-size: 0.65rem;">₺/m²</span>
+                                </div>
+                                <small class="text-muted d-block text-center" style="font-size: 0.58rem;">Şantiye Birim Girdisi</small>
+                            </div>
+                        </div>
+
+                        <div class="mt-2 pt-1 border-top border-success border-opacity-25 text-center">
+                            <small class="text-muted d-block fw-semibold" style="font-size: 0.66rem;">TOPLAM İNŞAAT ALANI</small>
+                            <span class="fs-6 fw-bold text-dark" id="resTotalConstSqm">5.149 m²</span>
+                            <div class="text-muted" style="font-size: 0.62rem;" id="resConstCalcDetail">19 Kat × 271 m² (Zemin, Çatı, Bodrum Dahil)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. TAHMİNİ MÜTEAHHİT CİROSU -->
+                <div class="col-xl-3 col-md-6 col-12 border-start">
+                    <small class="text-muted d-block fw-semibold" style="font-size: 0.70rem;">TAHMİNİ MÜTEAHHİT CİROSU</small>
+                    <span class="fs-4 fw-extrabold text-dark" id="resContractorTotalRevenue">150.000.000 ₺</span>
+                    <div class="text-muted" style="font-size: 0.65rem;" id="resRevenueCalcDetail">15 Daire × 10.000.000 ₺</div>
+                </div>
+
+            </div>
+
+            <!-- NET PROJE KÂRI FORMÜL SATIRI (YEŞİL İLE BÜTÜNLEŞİK) -->
+            <div class="p-2 px-3 rounded-3 bg-success bg-opacity-10 border border-success border-opacity-50 mt-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="fw-bold text-dark" style="font-size: 0.83rem;" id="resNetProfitFormulaText">
+                    <i class="bi bi-calculator-fill text-success me-1"></i><b>Net Proje Kârı:</b> 
+                    <span class="text-primary fw-bold" id="resFormulaRevenue">150.000.000 TL (Ciro)</span> - 
+                    <span class="text-danger fw-bold" id="resFormulaCost">128.725.000 TL (Maliyet)</span> = 
+                    <span class="text-success fs-6 fw-extrabold" id="resFormulaProfit">21.275.000 TL</span>
+                </div>
+                <div>
+                    <span class="badge bg-success text-white px-3 py-2 fw-bold" id="resNetProfitBadge">
+                        <i class="bi bi-check-circle-fill me-1"></i>KÂRLI PROJE
+                    </span>
+                </div>
+            </div>
+
+            <!-- Canlı Senaryo Yorumu & Karar Notu -->
+            <div class="p-2 px-3 rounded-3 bg-white border border-success border-opacity-25 d-flex align-items-center gap-2" style="font-size: 0.78rem;">
+                <i class="bi bi-lightbulb-fill text-warning fs-5"></i>
+                <div id="resQuickScenarioNote">
+                    <b>Ön Karar Notu:</b> 15 katta 2'şer daireden toplam 30 daire üretilir. %50 payla maliklere 15 daire verilir (künyedeki 4 hak sahibini fazlasıyla karşılar); <b>müteahhide 15 satılabilir daire (150.000.000 ₺ ciro)</b> kalır.
+                </div>
+            </div>
+
+            <!-- ZEMİN KAT EMNİYET PAYI & RİSK REZERVİ NOTU -->
+            <div class="p-2 px-3 rounded-3 bg-warning bg-opacity-10 border border-warning border-opacity-50 d-flex align-items-start gap-2 mt-2" style="font-size: 0.74rem;">
+                <i class="bi bi-shield-check text-warning fs-5 flex-shrink-0 mt-1"></i>
+                <div class="text-dark">
+                    <b>Zemin Kat Emniyet Payı (Risk Rezervi):</b> Zemin kat şantiye inşaat maliyet hacmine dahil edilmiş olup, daire üretim hesabına <b>bilinçli olarak katılmamıştır</b>. Bu alan; şantiyede oluşabilecek öngörülemeyen ekstra maliyetler, zemin ticari/dükkan potansiyeli ve piyasa dalgalanmalarına karşı müteahhit için <b>mali tampon (güvenlik payı)</b> niteliğindedir. Projenin kesinleşen mimari ve statik projelendirmesinde netleşecektir.
+                </div>
+            </div>
+        </div>
+
+        <!-- ÇOKLU SENARYO & MODEL KARŞILAŞTIRMA TEPSİSİ (KALICI HAFIZA & PAYLAŞIM) -->
+        <div class="p-3 rounded-4 bg-light bg-opacity-75 border mb-3" id="scenarioTrayContainer" style="border-color: #cbd5e1 !important;">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2 pb-2 border-bottom">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="badge bg-primary bg-opacity-10 text-primary rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                        <i class="bi bi-layers-half fs-6"></i>
+                    </span>
+                    <div>
+                        <span class="fw-bold text-dark small d-block">
+                            Kayıtlı Fizibilite & Teklif Modelleri
+                        </span>
+                        <small class="text-muted" style="font-size: 0.72rem;">Sayfadan ayrılsanız dahi modeller masanızda saklanır; tek tıkla inceleyebilir, PDF alabilir veya ortağınıza gönderebilirsiniz.</small>
+                    </div>
+                </div>
+
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <!-- GÖSTER & İNCELE BUTONU -->
+                    <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-bold d-flex align-items-center gap-1 shadow-xs" onclick="openScenarioComparisonModal()" id="btnShowScenarios" style="display: none;">
+                        <i class="bi bi-eye-fill"></i>
+                        <span>Modelleri Göster & Karşılaştır (<span id="modalScenarioCountBadge">0</span>)</span>
+                    </button>
+
+                    <!-- BU MODELİ EKLE BUTONU -->
+                    <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold d-flex align-items-center gap-1 shadow-xs" onclick="addCurrentScenarioToComparison()">
+                        <i class="bi bi-plus-circle-fill"></i>
+                        <span>Bu Modeli Listeye Ekle (+ Model)</span>
+                    </button>
+
+                    <!-- ORTAĞA & MÜHENDİSE GÖNDER / PAYLAŞ BUTONU -->
+                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold d-flex align-items-center gap-1 shadow-xs" onclick="openShareModal()" id="btnOpenShareModal" title="Modelleri Seçerek Ortağa veya Mühendise Gönder">
+                        <i class="bi bi-send-fill text-primary"></i>
+                        <span>Ortağa & Mühendise Gönder</span>
+                    </button>
+
+                    <!-- TEMİZLE -->
+                    <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-2 fw-bold" onclick="clearScenariosComparison()" id="btnClearScenarios" style="display: none;" title="Tüm Modelleri Temizle">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- MODEL ROZETLERİ -->
+            <div id="scenarioBadgesList" class="d-flex align-items-center gap-2 flex-wrap pt-1">
+                <span class="text-muted small italic" id="emptyScenarioText">Henüz karşılaştırma modeli eklenmedi. Farklı daire veya paylaşım oranları deneyip <b>"+ Model"</b> butonuna basarak kaydedebilirsiniz.</span>
+            </div>
+        </div>
+
+        <!-- AKSİYON BUTONLARI -->
+        <div class="d-flex justify-content-between align-items-center pt-2 flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-success rounded-pill px-4 fw-bold shadow-xs d-flex align-items-center gap-2" onclick="saveQuickContractorPlan()" id="btnSaveSimParams">
+                <i class="bi bi-floppy2-fill"></i>
+                <span>Bu Ön Planı Projeye Kaydet</span>
+            </button>
+
+            <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm d-flex align-items-center gap-2" onclick="downloadFeasibilityPdf()" id="btnDownloadPdfMain">
+                <i class="bi bi-file-earmark-pdf-fill"></i>
+                <span id="btnDownloadPdfText">Ön Teklif & Fizibilite Raporu (PDF)</span>
+            </button>
+        </div>
+
+    </div>
+
+<!-- FİZİBİLİTE MODELLERİ KARŞILAŞTIRMA & İNCELEME MODALI -->
+<div class="modal fade" id="scenarioComparisonModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-bottom py-3 bg-primary text-white">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-white text-primary rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                        <i class="bi bi-collection-fill"></i>
+                    </span>
+                    <div>
+                        <h6 class="modal-title fw-bold mb-0">Ön Fizibilite & Teklif Modelleri Karşılaştırması</h6>
+                        <small class="text-white-50" style="font-size: 0.75rem;">Farklı daire adedi, m² ve malik paylaşım modellerinin yan yana analizi</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body p-4">
+                <div class="alert alert-info border-0 rounded-3 p-3 mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div class="small">
+                        <i class="bi bi-info-circle-fill text-primary me-2"></i>
+                        Aşağıdaki modeller masanızda saklanmaktadır. İstediğiniz modeli tek tıkla <b>"Masaya Yükle"</b> diyerek yukarıdaki hesaplayıcıda aktif hale getirebilir veya ortaklarınıza WhatsApp/E-posta ile gönderebilirsiniz.
+                    </div>
+                    <span class="badge bg-primary text-white px-3 py-2 rounded-pill fw-bold" id="modalComparisonCountText">0 Model Kayıtlı</span>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle border rounded-3 mb-0" id="tableScenarioComparison" style="font-size: 0.85rem;">
+                        <thead class="table-light text-secondary border-bottom">
+                            <tr>
+                                <th class="py-2">Model</th>
+                                <th class="py-2">Kat & Daire</th>
+                                <th class="py-2">Tip / Net Alan</th>
+                                <th class="py-2 text-center">Toplam Üretim</th>
+                                <th class="py-2 text-center">Malik Payı</th>
+                                <th class="py-2 text-center">Müteahhit</th>
+                                <th class="py-2 text-end">Satış Rayici</th>
+                                <th class="py-2 text-end">Tahmini Ciro</th>
+                                <th class="py-2 text-end">Maliyet</th>
+                                <th class="py-2 text-end">Net Proje Kârı</th>
+                                <th class="py-2 text-center" style="width: 140px;">İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyScenarioComparison">
+                            <!-- JS ile doldurulacak -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="modal-footer border-top py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-outline-success rounded-pill px-3 fw-bold d-flex align-items-center gap-1 shadow-xs" onclick="shareScenariosViaWhatsapp()">
+                        <i class="bi bi-whatsapp"></i>
+                        <span>WhatsApp'tan Gönder</span>
+                    </button>
+                    <button type="button" class="btn btn-outline-dark rounded-pill px-3 fw-bold d-flex align-items-center gap-1 shadow-xs" onclick="shareScenariosViaEmail()">
+                        <i class="bi bi-envelope-fill"></i>
+                        <span>E-posta Gönder</span>
+                    </button>
+                    <button type="button" class="btn btn-primary rounded-pill px-3 fw-bold d-flex align-items-center gap-1 shadow-xs" onclick="downloadFeasibilityPdf()">
+                        <i class="bi bi-file-earmark-pdf-fill"></i>
+                        <span>PDF Raporunu İndir</span>
+                    </button>
+                </div>
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ORTAĞA & MÜHENDİSE GÖNDER / PAYLAŞIM VE MODEL SEÇİM MODALI -->
+<div class="modal fade" id="shareModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-bottom py-3 bg-primary text-white">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-white text-primary rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 34px; height: 34px;">
+                        <i class="bi bi-send-fill fs-6"></i>
+                    </span>
+                    <div>
+                        <h6 class="modal-title fw-bold mb-0">Ön Fizibiliteyi Ortağa & Mühendise Gönder</h6>
+                        <small class="text-white-50" style="font-size: 0.74rem;">Nihai teklif öncesi istişare, değerlendirme ve mühendislik ön hazırlık dosyası</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body p-4">
+                <!-- PROJE, FİRMA & LOGO KURUMSAL BİLGİ KARTI -->
+                <div class="p-3 rounded-4 bg-light border mb-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 pb-2 mb-2 border-bottom">
+                        <!-- LOGO & FİRMA ADI -->
+                        <div class="d-flex align-items-center gap-3">
+                            @if (!string.IsNullOrWhiteSpace(Model.Agency?.LogoUrl))
+                            {
+                                <img src="@Model.Agency.LogoUrl" alt="Firma Logo" class="rounded-3 shadow-xs bg-white p-1 border" style="max-height: 48px; max-width: 140px; object-fit: contain;" />
+                            }
+                            else
+                            {
+                                <div class="d-flex align-items-center gap-1 bg-white px-2 py-1 rounded-3 border shadow-xs">
+                                    <i class="ph-fill ph-infinity text-orange fs-2"></i>
+                                    <span class="fs-5 fw-bold text-navy" style="letter-spacing:-0.5px;">GMK<span class="text-orange">360</span></span>
+                                </div>
+                            }
+                            <div>
+                                <span class="badge bg-secondary bg-opacity-10 text-dark border px-2 py-0 small fw-bold" style="font-size: 0.68rem;">
+                                    <i class="bi bi-building me-1 text-primary"></i>Yüklenici / Girişimci Firma
+                                </span>
+                                <h6 class="fw-bold text-dark mb-0" style="font-size: 0.95rem;">@(Model.Agency?.CompanyName ?? "Denge İnşaat & Gayrimenkul Geliştirme")</h6>
+                            </div>
+                        </div>
+
+                        <div>
+                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-1 rounded-pill small fw-bold">
+                                <i class="bi bi-clipboard-check me-1"></i>Nihai Teklif Ön Hazırlık Dosyası
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- PROJE ADI & AÇIK ADRES -->
+                    <div>
+                        <div class="text-muted small fw-semibold" style="font-size: 0.72rem;">ÇALIŞILAN PROJE:</div>
+                        <h6 class="fw-bold text-primary mb-1 fs-6">@Model.Name</h6>
+                        <div class="text-secondary small d-flex align-items-center flex-wrap gap-2 pt-1" style="font-size: 0.78rem;">
+                            <span>
+                                <i class="bi bi-geo-alt-fill text-danger me-1"></i>
+                                <b>@cityName / @distName</b> @(!string.IsNullOrWhiteSpace(neighName) ? " — " + neighName + " Mah." : "")
+                            </span>
+                            <span class="text-muted">|</span>
+                            <span>Ada: <b class="text-dark">@(string.IsNullOrWhiteSpace(Model.Ada) ? "-" : Model.Ada)</b> / Parsel: <b class="text-dark">@(string.IsNullOrWhiteSpace(Model.Parsel) ? "-" : Model.Parsel)</b></span>
+                            <span class="text-muted">|</span>
+                            <span>Tapu Alanı: <b class="text-dark">@landArea.ToString("N2") m²</b></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 1. MODEL SEÇİMİ: TÜMÜ MÜ YOKSA TEK MODEL Mİ? -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-dark small mb-2">
+                        <i class="bi bi-check2-square text-primary me-1"></i>Hangi Modeli / Modelleri Göndermek İstiyorsunuz?
+                    </label>
+                    <div class="d-flex flex-column gap-2" id="shareModelOptionsContainer">
+                        <!-- JS ile dinamik doldurulur -->
+                    </div>
+                </div>
+
+                <!-- 2. İLETİ METNİ ÖNİZLEMESİ -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="form-label fw-bold text-dark small mb-0">
+                            <i class="bi bi-chat-left-text-fill text-secondary me-1"></i>İleti Önizlemesi (E-posta & WhatsApp Gönderim Metni):
+                        </label>
+                        <button type="button" class="btn btn-sm btn-link text-primary text-decoration-none p-0 fw-semibold" onclick="copyShareMessageText()" style="font-size: 0.75rem;">
+                            <i class="bi bi-clipboard me-1"></i>Metni Kopyala
+                        </button>
+                    </div>
+                    <textarea id="shareMessagePreview" class="form-control bg-light rounded-3 small text-dark font-monospace" rows="7" readonly style="font-size: 0.78rem; line-height: 1.45;"></textarea>
+                    <small class="text-muted d-block mt-1" style="font-size: 0.70rem;">
+                        <i class="bi bi-info-circle text-primary me-1"></i>Metin; seçtiğiniz modele, açık adrese ve hesaplanan net kâra göre anlık otomatik güncellenir.
+                    </small>
+                </div>
+            </div>
+
+            <div class="modal-footer border-top py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <!-- PDF İNDİRME -->
+                <div>
+                    <button type="button" class="btn btn-primary rounded-pill px-3 fw-bold d-flex align-items-center gap-2 shadow-xs" onclick="downloadSelectedSharePdf()" id="btnDownloadSharePdf">
+                        <i class="bi bi-file-earmark-pdf-fill"></i>
+                        <span id="btnDownloadSharePdfText">Seçili Modelin PDF Raporunu İndir</span>
+                    </button>
+                </div>
+
+                <!-- PAYLAŞIM EYLEMLERİ -->
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <button type="button" class="btn btn-outline-success rounded-pill px-3 fw-bold d-flex align-items-center gap-1 shadow-xs" onclick="executeShareViaWhatsapp()">
+                        <i class="bi bi-whatsapp"></i>
+                        <span>WhatsApp'tan Gönder</span>
+                    </button>
+                    <button type="button" class="btn btn-outline-dark rounded-pill px-3 fw-bold d-flex align-items-center gap-1 shadow-xs" onclick="executeShareViaEmail()">
+                        <i class="bi bi-envelope-fill"></i>
+                        <span>E-posta Gönder</span>
+                    </button>
+                    <button type="button" class="btn btn-light rounded-pill px-3" data-bs-dismiss="modal">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- TKGM MEGSİS RESMİ KADASTRO SORGULAMA MODALI -->
+<div class="modal fade" id="tkgmModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-bottom py-3 bg-danger text-white">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-white text-danger rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                        <i class="bi bi-geo-alt-fill"></i>
+                    </span>
+                    <div>
+                        <h6 class="modal-title fw-bold mb-0">TKGM MEGSİS Canlı Parsel & Kadastro Sorgusu</h6>
+                        <small class="text-white-50" style="font-size: 0.75rem;">Tapu ve Kadastro Genel Müdürlüğü Resmi Servislerinden Arsa Çek</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small text-muted">İl (Şehir)</label>
+                        <select id="modalTkgmProvince" class="form-select rounded-3 fw-bold" onchange="loadTkgmDistricts()">
+                            <option value="">Seçiniz...</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small text-muted">İlçe</label>
+                        <select id="modalTkgmDistrict" class="form-select rounded-3 fw-bold" onchange="loadTkgmNeighborhoods()">
+                            <option value="">Önce İl Seçiniz...</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold small text-muted">Mahalle</label>
+                        <select id="modalTkgmNeighborhood" class="form-select rounded-3 fw-bold">
+                            <option value="">Önce İlçe Seçiniz...</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small text-muted">Ada Numarası</label>
+                        <input type="text" id="modalTkgmAda" class="form-control rounded-3 fw-bold" placeholder="Örn: 221" value="@Model.Ada" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small text-muted">Parsel Numarası</label>
+                        <input type="text" id="modalTkgmParsel" class="form-control rounded-3 fw-bold" placeholder="Örn: 9" value="@Model.Parsel" />
+                    </div>
+                </div>
+
+                <div id="tkgmQueryLoading" class="text-center py-4 my-2" style="display: none;">
+                    <div class="spinner-border text-danger" role="status"></div>
+                    <span class="d-block mt-2 text-muted fw-bold small">TKGM Harita ve Kadastro Sunucularından Parsel Sınırları Çekiliyor...</span>
+                </div>
+
+                <div id="tkgmResultBox" class="p-3 rounded-4 bg-light border mt-3" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="badge bg-success text-white px-3 py-1 rounded-pill"><i class="bi bi-check-circle-fill me-1"></i>Resmi TKGM Parseli Bulundu</span>
+                        <span class="fw-bold text-dark" id="resTkgmMevkii">-</span>
+                    </div>
+                    <div class="row g-2 small text-secondary">
+                        <div class="col-6">Resmi Alan: <b class="text-dark fs-6" id="resTkgmAlan">0.00</b> m²</div>
+                        <div class="col-6">Nitelik: <b class="text-dark" id="resTkgmNitelik">-</b></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer border-top py-3">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Kapat</button>
+                <button type="button" class="btn btn-danger rounded-pill px-4 fw-bold" onclick="executeTkgmQuery()" id="btnExecuteTkgm">
+                    <i class="bi bi-search me-1"></i> TKGM'den Canlı Çek
+                </button>
+                <button type="button" class="btn btn-success rounded-pill px-4 fw-bold" onclick="applyTkgmToProject()" id="btnApplyTkgm" style="display: none;">
+                    <i class="bi bi-check2-circle me-1"></i> Bu Verileri ve Haritayı Projeye İşle
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+    var mapInstance = null;
+    var currentParcelLayer = null;
+    var osmLayer = null;
+    var satLayer = null;
+    var lastFoundTkgmDto = null;
+    var simAutosaveTimer = null;
+    var allPoisData = [];
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // Raw AI rapor varsa parse et
+        var rawReportEl = document.getElementById('rawAiReport');
+        if (rawReportEl) {
+            var rawText = rawReportEl.innerText;
+            var reportBody = document.getElementById('aiReportBody');
+            if (reportBody) reportBody.innerHTML = parseAiMarkdown(rawText);
+        }
+
+        // Çevre donatılarını çek
+        loadLocationIntelligence();
+
+        // Haritayı başlat (varsayılan container gizli)
+        var mapCont = document.getElementById('feasibilityMapCollapse');
+        if (mapCont && mapCont.style.display !== 'none') {
+            initLeafletMap();
+        }
+
+        // İlk hesaplamayı çalıştır
+        runContractorEstimate();
+
+        // Kayıtlı modelleri yerel depolamadan yükle (Gezinip gelince kaybolmaz)
+        loadScenariosFromStorage();
+    });
+
+    // ==========================================
+    // AKORDEON AÇ/KAPA (TEK TIKLA BAŞLIKTAN)
+    // ==========================================
+    function toggleSection(sectionId) {
+        var el = document.getElementById(sectionId);
+        if (!el) return;
+
+        var bsCollapse = bootstrap.Collapse.getInstance(el);
+        if (!bsCollapse) {
+            bsCollapse = new bootstrap.Collapse(el, { toggle: false });
+        }
+
+        if (el.classList.contains('show')) {
+            bsCollapse.hide();
+            updateAccordionHeader(sectionId, false);
+        } else {
+            bsCollapse.show();
+            updateAccordionHeader(sectionId, true);
+        }
+    }
+
+    function updateAccordionHeader(sectionId, isOpen) {
+        if (sectionId === 'aiSectionCollapse') {
+            var icon = document.getElementById('iconAiSectionChevron');
+            var text = document.getElementById('textAiSectionToggle');
+            if (icon) icon.className = isOpen ? 'bi bi-chevron-up' : 'bi bi-chevron-down';
+            if (text) text.innerText = isOpen ? 'Daralt' : 'Genişlet';
+        } else if (sectionId === 'poiSectionCollapse') {
+            var icon = document.getElementById('iconPoiSectionChevron');
+            var text = document.getElementById('textPoiSectionToggle');
+            if (icon) icon.className = isOpen ? 'bi bi-chevron-up' : 'bi bi-chevron-down';
+            if (text) text.innerText = isOpen ? 'Daralt' : 'Genişlet';
+        }
+    }
+
+    // ==========================================
+    // HARİTA YÖNETİMİ
+    // ==========================================
+    function toggleMapCollapse(forceOpen) {
+        var container = document.getElementById('feasibilityMapCollapse');
+        var textEl = document.getElementById('textMapToggle');
+        var iconEl = document.getElementById('iconMapChevron');
+        if (!container) return;
+
+        var shouldOpen = forceOpen !== undefined ? forceOpen : (container.style.display === 'none');
+
+        if (shouldOpen) {
+            container.style.display = 'block';
+            if (textEl) textEl.innerText = 'Haritayı Gizle';
+            if (iconEl) iconEl.className = 'bi bi-chevron-up ms-1';
+            localStorage.setItem('gmk_map_feasibility', 'open');
+
+            setTimeout(function() {
+                if (!mapInstance) {
+                    initLeafletMap();
+                } else {
+                    mapInstance.invalidateSize();
+                    if (currentParcelLayer) {
+                        mapInstance.fitBounds(currentParcelLayer.getBounds(), { padding: [30, 30] });
+                    }
+                }
+            }, 100);
+        } else {
+            container.style.display = 'none';
+            if (textEl) textEl.innerText = 'Haritayı Göster';
+            if (iconEl) iconEl.className = 'bi bi-chevron-down ms-1';
+            localStorage.setItem('gmk_map_feasibility', 'closed');
+        }
+    }
+
+    function toggleMapFullscreen() {
+        var mapEl = document.getElementById('feasibilityMap');
+        var iconEl = document.getElementById('iconFullscreen');
+        var textEl = document.getElementById('textFullscreen');
+
+        if (mapEl.style.height === '80vh') {
+            mapEl.style.height = '480px';
+            if (iconEl) iconEl.className = 'bi bi-arrows-fullscreen me-1';
+            if (textEl) textEl.innerText = 'Tam Ekran';
+        } else {
+            mapEl.style.height = '80vh';
+            if (iconEl) iconEl.className = 'bi bi-fullscreen-exit me-1';
+            if (textEl) textEl.innerText = 'Küçült';
+        }
+
+        setTimeout(function() {
+            if (mapInstance) mapInstance.invalidateSize();
+        }, 200);
+    }
+
+    function initLeafletMap() {
+        var mapContainer = document.getElementById('feasibilityMap');
+        if (!mapContainer || mapInstance) return;
+
+        satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+            maxZoom: 19
+        });
+
+        osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 19
+        });
+
+        var defaultLat = 40.9814;
+        var defaultLng = 29.0731;
+
+        mapInstance = L.map('feasibilityMap', {
+            layers: [satLayer]
+        }).setView([defaultLat, defaultLng], 17);
+
+        var existingGeoJson = '@Html.Raw(Model.ParcelPolygonGeoJson ?? "")';
+        if (existingGeoJson && existingGeoJson.length > 10) {
+            try {
+                var geoData = JSON.parse(existingGeoJson);
+                renderParcelPolygon(geoData);
+            } catch (e) {
+                console.warn('Existing GeoJSON parse error', e);
+            }
+        }
+        setTimeout(function() { if (mapInstance) { mapInstance.invalidateSize(); if (currentParcelLayer) mapInstance.fitBounds(currentParcelLayer.getBounds(), { padding: [30, 30] }); } }, 150);
+    }
+
+    function setMapLayer(layerType) {
+        if (!mapInstance) return;
+        if (layerType === 'osm') {
+            mapInstance.removeLayer(satLayer);
+            mapInstance.addLayer(osmLayer);
+            document.getElementById('btnLayerOsm').classList.add('active');
+            document.getElementById('btnLayerSat').classList.remove('active');
+        } else {
+            mapInstance.removeLayer(osmLayer);
+            mapInstance.addLayer(satLayer);
+            document.getElementById('btnLayerSat').classList.add('active');
+            document.getElementById('btnLayerOsm').classList.remove('active');
+        }
+    }
+
+    function renderParcelPolygon(geoJson) {
+        if (!mapInstance) return;
+        if (currentParcelLayer) {
+            mapInstance.removeLayer(currentParcelLayer);
+        }
+
+        currentParcelLayer = L.geoJSON(geoJson, {
+            style: {
+                color: '#dc3545',
+                weight: 4,
+                opacity: 0.9,
+                fillColor: '#ffc107',
+                fillOpacity: 0.35
+            }
+        }).addTo(mapInstance);
+
+        mapInstance.fitBounds(currentParcelLayer.getBounds(), { padding: [30, 30] });
+    }
+
+    // ==========================================
+    // CANLI "BANA NE KALIR?" SİMÜLATÖRÜ
+    // ==========================================
+        // ==========================================
+    // MÜTEAHHİT HIZLI KARAR & ÖN FİZİBİLİTE TERAZİSİ
+    // ==========================================
+    function updateFlatPriceForUnits(units) {
+        var priceInp = document.getElementById('calcFlatSalePrice');
+        if (!priceInp) return;
+        if (units === 2) {
+            priceInp.value = 10000000;
+        } else if (units === 3) {
+            priceInp.value = 6800000;
+        } else if (units === 1) {
+            priceInp.value = 18000000;
+        } else if (units >= 4) {
+            priceInp.value = 4500000;
+        }
+    }
+
+    function syncUnitsPresetButtons(units) {
+        var btn2 = document.getElementById('btnUnitPreset2');
+        var btn3 = document.getElementById('btnUnitPreset3');
+        if (btn2) {
+            btn2.classList.toggle('btn-primary', units === 2);
+            btn2.classList.toggle('btn-outline-primary', units !== 2);
+        }
+        if (btn3) {
+            btn3.classList.toggle('btn-primary', units === 3);
+            btn3.classList.toggle('btn-outline-primary', units !== 3);
+        }
+    }
+
+    function setUnitsPerFloor(units, btn) {
+        var inp = document.getElementById('calcUnitsPerFloor');
+        if (inp) inp.value = units;
+        syncUnitsPresetButtons(units);
+        updateFlatPriceForUnits(units);
+        runContractorEstimate(true);
+    }
+
+    function onUnitsPerFloorChange(val) {
+        var units = parseInt(val) || 2;
+        syncUnitsPresetButtons(units);
+        updateFlatPriceForUnits(units);
+        runContractorEstimate(true);
+    }
+
+    function setOwnerShare(percent, btn) {
+        var inp = document.getElementById('calcOwnerShare');
+        if (inp) inp.value = percent;
+        var card = document.getElementById('cardFeasibilityEstimates');
+        if (card) {
+            var buttons = card.querySelectorAll('button[onclick^="setOwnerShare"]');
+            buttons.forEach(function(b) {
+                b.classList.remove('btn-success');
+                b.classList.add('btn-outline-success');
+            });
+        }
+        if (btn) {
+            btn.classList.remove('btn-outline-success');
+            btn.classList.add('btn-success');
+        }
+        runContractorEstimate(true);
+    }
+
+    function runContractorEstimate(isUserAction) {
+        var floors = parseInt(document.getElementById('calcTotalFloors').value) || 0;
+        var basementInp = document.getElementById('calcBasementFloors');
+        var basementFloors = basementInp ? (parseInt(basementInp.value) || 0) : 2;
+        var unitsPerFloor = parseInt(document.getElementById('calcUnitsPerFloor').value) || 0;
+        var coreLossInp = document.getElementById('calcCoreLossSqm');
+        var coreLoss = coreLossInp ? (parseFloat(coreLossInp.value) || 35) : 35;
+        var ownerSharePercent = parseFloat(document.getElementById('calcOwnerShare').value) || 0;
+        var flatSalePrice = parseFloat(document.getElementById('calcFlatSalePrice').value) || 0;
+        var firmUnitInp = document.getElementById('calcFirmUnitCost');
+        var firmUnitCost = firmUnitInp ? (parseFloat(firmUnitInp.value) || 0) : 25000;
+        var oldOwners = @(Model.EskiDaireSayisi ?? 4);
+
+        // Zemin ve çatı dahil toplam kat hacmi (Maliyet hesabı için)
+        var totalCostFloors = floors + basementFloors + 1 + 1; // +1 Zemin + 1 Çatı
+        var noteCostFloors = document.getElementById('resTotalFloorsWithZeminCati');
+        if (noteCostFloors) {
+            noteCostFloors.innerHTML = 'Zemin ve çatı dahil edilince <b>' + totalCostFloors + ' kat</b> olur maliyet birim hesabı için';
+        }
+
+        // Toplam Üretilen Daire = Kat x Kata Düşen Daire
+        var totalUnits = floors * unitsPerFloor;
+
+        // Maliklere Verilecek Daire
+        var ownerGivenUnits = Math.round(totalUnits * (ownerSharePercent / 100.0));
+
+        // Müteahhide Kalan Daire
+        var contractorKeptUnits = totalUnits - ownerGivenUnits;
+
+        // Müteahhit Satış Cirosu
+        var totalRevenue = contractorKeptUnits * flatSalePrice;
+
+        // Kat alanı ~271 m², merdiven, yangın merdiveni ve asansör çekirdeği düşüldüğünde net daire alanı:
+        var grossFloorArea = 271;
+        var usableFloorArea = Math.max(0, grossFloorArea - coreLoss);
+        var unitSqm = unitsPerFloor > 0 ? Math.round(usableFloorArea / unitsPerFloor) : 0;
+
+        var elUnitSqm = document.getElementById('resUnitAvgSqm');
+        if (elUnitSqm) elUnitSqm.innerText = '~' + unitSqm + ' m² / Daire';
+
+        var elArchType = document.getElementById('resUnitArchitecturalType');
+        var elHint = document.getElementById('resUnitFeasibilityHint');
+
+        if (elArchType && elHint) {
+            if (unitSqm >= 100) {
+                elArchType.className = 'd-block fw-bold text-success';
+                elArchType.innerText = 'Ferah 3+1';
+                elHint.className = 'text-success text-center d-block fw-semibold';
+                elHint.innerText = 'Tabana rahat sığar';
+            } else if (unitSqm >= 65) {
+                elArchType.className = 'd-block fw-bold text-warning';
+                elArchType.innerText = 'Kompakt 2+1';
+                elHint.className = 'text-danger text-center d-block fw-semibold';
+                elHint.innerText = unitsPerFloor >= 3 ? '3 daire zorlayabilir' : 'Kompakt plan';
+            } else {
+                elArchType.className = 'd-block fw-bold text-danger';
+                elArchType.innerText = 'Stüdyo / 1+1';
+                elHint.className = 'text-danger text-center d-block fw-semibold';
+                elHint.innerText = 'Çok sıkışık plan';
+            }
+        }
+
+        // Satış Fiyatı Kutusu Altındaki m² Rayici ve Daire Tipi Notu
+        var elPriceNote = document.getElementById('resFlatPriceTypeNote');
+        var elPriceBadge = document.getElementById('resPriceSqmRayicBadge');
+        var unitPricePerSqm = unitSqm > 0 ? Math.round(flatSalePrice / unitSqm) : 0;
+        if (elPriceBadge) {
+            elPriceBadge.innerText = '~' + unitPricePerSqm.toLocaleString('tr-TR') + ' ₺/m² Rayiç';
+        }
+        if (elPriceNote) {
+            if (unitSqm >= 100) {
+                elPriceNote.innerText = '3+1 Sıfır Daire Rayici';
+            } else if (unitSqm >= 65) {
+                elPriceNote.innerText = '2+1 Sıfır Daire Rayici';
+            } else {
+                elPriceNote.innerText = 'Stüdyo / 1+1 Daire Rayici';
+            }
+        }
+
+        // Malik Başına Düşen
+        var perHead = oldOwners > 0 ? (ownerGivenUnits / oldOwners).toFixed(1) : 0;
+
+        // DOM Güncellemeleri
+        var elTotal = document.getElementById('resTotalBuildingUnits');
+        if (elTotal) elTotal.innerText = totalUnits;
+
+        var elTarget = document.getElementById('hiddenTargetUnits');
+        if (elTarget) elTarget.value = totalUnits;
+
+        var elFloorsDetail = document.getElementById('resFloorsDetailText');
+        if (elFloorsDetail) elFloorsDetail.innerText = floors + ' Kat × ' + unitsPerFloor + ' Daire';
+
+        var elOwnerUnits = document.getElementById('resOwnerGivenUnits');
+        if (elOwnerUnits) elOwnerUnits.innerText = ownerGivenUnits;
+
+        var elPerHead = document.getElementById('resOwnerPerHeadNote');
+        if (elPerHead) elPerHead.innerText = '(' + oldOwners + ' Malike ~' + perHead + ' Daire)';
+
+        var elContractor = document.getElementById('resContractorKeptUnits');
+        if (elContractor) elContractor.innerText = contractorKeptUnits + ' DAİRE';
+
+        var contractorSharePercent = 100 - ownerSharePercent;
+        var elContractorShare = document.getElementById('resContractorShareText');
+        if (elContractorShare) elContractorShare.innerText = '(Toplamın %' + contractorSharePercent + "\'si)";
+
+        var elRevenue = document.getElementById('resContractorTotalRevenue');
+        if (elRevenue) elRevenue.innerText = totalRevenue.toLocaleString('tr-TR') + ' ₺';
+
+        var elRevCalc = document.getElementById('resRevenueCalcDetail');
+        if (elRevCalc) elRevCalc.innerText = contractorKeptUnits + ' Daire × ' + flatSalePrice.toLocaleString('tr-TR') + ' ₺';
+
+        // Toplam İnşaat Alanı (m²) = Toplam Kat Hacmi x Kat Oturumu (271 m²)
+        var totalConstSqm = totalCostFloors * 271;
+        var elConstSqm = document.getElementById('resTotalConstSqm');
+        if (elConstSqm) elConstSqm.innerText = totalConstSqm.toLocaleString('tr-TR') + ' m²';
+
+        var elConstCalc = document.getElementById('resConstCalcDetail');
+        if (elConstCalc) elConstCalc.innerText = totalCostFloors + ' Kat × 271 m² (Zemin, Çatı, Bodrum Dahil)';
+
+        // Firma Şantiye Maliyeti = Toplam m² x Firma Birim Maliyeti (Varsayılan 25.000 ₺)
+        var effFirmUnit = firmUnitCost > 0 ? firmUnitCost : 25000;
+        var totalCost = totalConstSqm * effFirmUnit;
+
+        // Net Proje Kârı = Ciro - Maliyet
+        var netProfit = totalRevenue - totalCost;
+
+        var elFormRev = document.getElementById('resFormulaRevenue');
+        if (elFormRev) elFormRev.innerText = totalRevenue.toLocaleString('tr-TR') + ' TL (Ciro)';
+
+        var elFormCost = document.getElementById('resFormulaCost');
+        if (elFormCost) elFormCost.innerText = totalCost.toLocaleString('tr-TR') + ' TL (Maliyet)';
+
+        var elFormProfit = document.getElementById('resFormulaProfit');
+        var elProfitBadge = document.getElementById('resNetProfitBadge');
+        if (elFormProfit) {
+            if (netProfit >= 0) {
+                elFormProfit.className = 'text-success fs-6 fw-extrabold';
+                elFormProfit.innerText = netProfit.toLocaleString('tr-TR') + ' TL';
+                if (elProfitBadge) {
+                    elProfitBadge.className = 'badge bg-success text-white px-3 py-2 fw-bold';
+                    elProfitBadge.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>KÂRLI PROJE';
+                }
+            } else {
+                elFormProfit.className = 'text-danger fs-6 fw-extrabold';
+                elFormProfit.innerText = netProfit.toLocaleString('tr-TR') + ' TL (ZARAR)';
+                if (elProfitBadge) {
+                    elProfitBadge.className = 'badge bg-danger text-white px-3 py-2 fw-bold';
+                    elProfitBadge.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i>ZARAR RİSKİ';
+                }
+            }
+        }
+
+        // Canlı Karar Yorumu
+        var noteEl = document.getElementById('resQuickScenarioNote');
+        if (noteEl) {
+            if (contractorKeptUnits > 0 && ownerGivenUnits >= oldOwners) {
+                noteEl.innerHTML = '<b>Ön Karar Notu:</b> ' + floors + ' katta ' + unitsPerFloor + "\'şer daireden <b>" + totalUnits + ' daire</b> üretilir. %' + ownerSharePercent + ' payla maliklere ' + ownerGivenUnits + ' daire verilir (künyedeki ' + oldOwners + ' maliki fazlasıyla karşılar); <b>müteahhide ' + contractorKeptUnits + ' satılabilir daire (' + totalRevenue.toLocaleString('tr-TR') + ' ₺ ciro)</b> kalır.';
+            } else if (ownerGivenUnits < oldOwners) {
+                noteEl.innerHTML = '<span class="text-danger"><b>Kritik Emsal Uyarısı:</b></span> Maliklere verilen ' + ownerGivenUnits + ' daire, mevcut ' + oldOwners + ' malikin hak edişini karşılamıyor. Kat sayısını artırın veya malik payını yükseltin.';
+            } else {
+                noteEl.innerHTML = '<b>Senaryo:</b> Değerleri girdiğinizde müteahhit ve malik terazi dağılımı burada anlık hesaplanacaktır.';
+            }
+        }
+
+        if (isUserAction) {
+            triggerSimAutosave();
+        }
+    }
+
+    function triggerSimAutosave() {
+        if (simAutosaveTimer) clearTimeout(simAutosaveTimer);
+        simAutosaveTimer = setTimeout(function () {
+            saveQuickContractorPlan(true);
+        }, 1200);
+    }
+
+    function saveQuickContractorPlan(isAuto) {
+        var form = document.getElementById('simForm');
+        var formData = new FormData(form);
+
+        var statusEl = document.getElementById('simAutosaveStatus');
+        if (statusEl) statusEl.innerHTML = '<span class="badge bg-warning text-dark px-2 py-1 small"><i class="bi bi-arrow-repeat spin me-1"></i>Kaydediliyor...</span>';
+
+        fetch('/ConstructionProject/UpdateAnalysisImar', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (statusEl) {
+                statusEl.innerHTML = '<span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 small"><i class="bi bi-check2-circle me-1"></i>Ön Plan Projeye Kaydedildi</span>';
+            }
+            if (!isAuto) {
+                alert('Tebrikler! Ön fizibilite ve teklif parametreleri başarıyla projeye kaydedildi.');
+            }
+        })
+        .catch(function (err) {
+            if (statusEl) statusEl.innerHTML = '<span class="badge bg-danger text-white px-2 py-1 small">Kayıt hatası</span>';
+            if (!isAuto) alert('Plan kaydedilirken bir hata oluştu.');
+        });
+    }
+
+    // ÇOKLU MODEL & SENARYO YÖNETİMİ (TARAYICI KALICI HAFIZASI & KARŞILAŞTIRMA)
+    var STORAGE_KEY_SCENARIOS = 'gmk360_scenarios_@Model.Id';
+    var savedScenarios = [];
+
+    function loadScenariosFromStorage() {
+        try {
+            var raw = localStorage.getItem(STORAGE_KEY_SCENARIOS);
+            if (raw) {
+                var parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    savedScenarios = parsed;
+                }
+            }
+        } catch (e) {
+            console.warn('Scenarios storage read error:', e);
+        }
+        renderScenarioTray();
+    }
+
+    function saveScenariosToStorage() {
+        try {
+            localStorage.setItem(STORAGE_KEY_SCENARIOS, JSON.stringify(savedScenarios));
+        } catch (e) {
+            console.warn('Scenarios storage write error:', e);
+        }
+    }
+
+    function addCurrentScenarioToComparison() {
+        var floors = parseInt(document.getElementById('calcTotalFloors').value) || 15;
+        var unitsPerFloor = parseInt(document.getElementById('calcUnitsPerFloor').value) || 2;
+        var ownerSharePercent = parseFloat(document.getElementById('calcOwnerShare').value) || 50;
+        var flatSalePrice = parseFloat(document.getElementById('calcFlatSalePrice').value) || 10000000;
+        var firmUnitCost = parseFloat(document.getElementById('calcFirmUnitCost').value) || 25000;
+        var basementInp = document.getElementById('calcBasementFloors');
+        var basementFloors = basementInp ? (parseInt(basementInp.value) || 2) : 2;
+        var coreLossInp = document.getElementById('calcCoreLossSqm');
+        var coreLoss = coreLossInp ? (parseFloat(coreLossInp.value) || 35) : 35;
+
+        var totalCostFloors = floors + basementFloors + 2;
+        var totalUnits = floors * unitsPerFloor;
+        var ownerUnits = Math.round(totalUnits * (ownerSharePercent / 100.0));
+        var contractorUnits = totalUnits - ownerUnits;
+        var totalRevenue = contractorUnits * flatSalePrice;
+        var totalConstSqm = totalCostFloors * 271;
+        var totalCost = totalConstSqm * firmUnitCost;
+        var netProfit = totalRevenue - totalCost;
+
+        var grossFloorArea = 271;
+        var usableFloorArea = Math.max(0, grossFloorArea - coreLoss);
+        var unitSqm = unitsPerFloor > 0 ? Math.round(usableFloorArea / unitsPerFloor) : 0;
+        var unitType = unitSqm >= 100 ? 'Ferah 3+1' : (unitSqm >= 65 ? 'Kompakt 2+1' : '1+1');
+
+        var modelLetter = String.fromCharCode(65 + savedScenarios.length);
+        var modelTitle = 'Model ' + modelLetter + ' (' + unitsPerFloor + ' Daire - ' + unitType + ')';
+
+        savedScenarios.push({
+            title: modelTitle,
+            floors: floors,
+            unitsPerFloor: unitsPerFloor,
+            totalUnits: totalUnits,
+            ownerUnits: ownerUnits,
+            contractorUnits: contractorUnits,
+            ownerSharePercent: ownerSharePercent,
+            unitSqm: unitSqm,
+            unitType: unitType,
+            unitPrice: flatSalePrice,
+            totalRevenue: totalRevenue,
+            totalConstSqm: totalConstSqm,
+            firmCost: totalCost,
+            netProfit: netProfit
+        });
+
+        saveScenariosToStorage();
+        renderScenarioTray();
+    }
+
+    function renderScenarioTray() {
+        var container = document.getElementById('scenarioBadgesList');
+        var clearBtn = document.getElementById('btnClearScenarios');
+        var showBtn = document.getElementById('btnShowScenarios');
+        var countBadge = document.getElementById('modalScenarioCountBadge');
+        var pdfBtnText = document.getElementById('btnDownloadPdfText');
+
+        if (!container) return;
+
+        if (savedScenarios.length === 0) {
+            if (clearBtn) clearBtn.style.display = 'none';
+            if (showBtn) showBtn.style.display = 'none';
+            if (pdfBtnText) pdfBtnText.innerText = 'Ön Teklif & Fizibilite Raporu (PDF)';
+            container.innerHTML = '<span class="text-muted small italic" id="emptyScenarioText">Henüz karşılaştırma modeli eklenmedi. Farklı daire veya paylaşım oranları deneyip <b>"+ Model"</b> butonuna basarak kaydedebilirsiniz.</span>';
+            return;
+        }
+
+        if (clearBtn) clearBtn.style.display = 'inline-block';
+        if (showBtn) showBtn.style.display = 'inline-flex';
+        if (countBadge) countBadge.innerText = savedScenarios.length;
+        if (pdfBtnText) pdfBtnText.innerText = 'Ön Teklif & Karşılaştırmalı Fizibilite Raporu (PDF - ' + savedScenarios.length + ' Model)';
+
+        var html = '';
+        savedScenarios.forEach(function(sc, idx) {
+            html += '<span class="badge bg-white text-dark border border-primary px-3 py-2 rounded-pill fw-bold small d-inline-flex align-items-center gap-2 shadow-xs" style="cursor: pointer;" onclick="loadScenarioToDesk(' + idx + ')" title="Bu Modeli Masaya Yüklemek İçin Tıklayın">';
+            html += '<i class="bi bi-layers-fill text-primary"></i> <b>' + sc.title + '</b>';
+            html += '<span class="badge bg-primary bg-opacity-10 text-primary">%' + sc.ownerSharePercent + ' Malik</span>';
+            html += '<span class="text-success fw-bold">Net: ' + Math.round(sc.netProfit / 1000000) + 'M ₺</span>';
+            html += '<button type="button" class="btn-close ms-1" style="font-size: 0.55rem; padding: 2px;" onclick="event.stopPropagation(); removeScenario(' + idx + ')" title="Kaldır"></button>';
+            html += '</span>';
+        });
+        container.innerHTML = html;
+    }
+
+    function removeScenario(idx) {
+        savedScenarios.splice(idx, 1);
+        saveScenariosToStorage();
+        renderScenarioTray();
+        refreshComparisonModalTable();
+    }
+
+    function clearScenariosComparison() {
+        if (!confirm('Kayıtlı tüm fizibilite modellerini silmek istediğinize emin misiniz?')) return;
+        savedScenarios = [];
+        saveScenariosToStorage();
+        renderScenarioTray();
+        refreshComparisonModalTable();
+    }
+
+    function openScenarioComparisonModal() {
+        refreshComparisonModalTable();
+        var modalEl = document.getElementById('scenarioComparisonModal');
+        if (modalEl) {
+            var modal = new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+    }
+
+    function refreshComparisonModalTable() {
+        var tbody = document.getElementById('tbodyScenarioComparison');
+        var countText = document.getElementById('modalComparisonCountText');
+        if (!tbody) return;
+
+        if (countText) countText.innerText = savedScenarios.length + ' Model Kayıtlı';
+
+        if (savedScenarios.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4 text-muted">Henüz kaydedilmiş bir model bulunmuyor. Ön fizibilite masasından <b>"+ Model"</b> butonuna basarak ekleyebilirsiniz.</td></tr>';
+            return;
+        }
+
+        var html = '';
+        savedScenarios.forEach(function(sc, idx) {
+            var profitClass = sc.netProfit >= 0 ? 'text-success fw-extrabold' : 'text-danger fw-extrabold';
+            html += '<tr>' +
+                '<td class="fw-bold text-dark"><span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2 py-1 rounded-pill me-1">' + sc.title + '</span></td>' +
+                '<td>' + sc.floors + ' Kat × ' + sc.unitsPerFloor + ' Daire</td>' +
+                '<td><span class="badge bg-light text-dark border">' + sc.unitType + ' (~' + sc.unitSqm + ' m²)</span></td>' +
+                '<td class="text-center fw-bold">' + sc.totalUnits + ' Adet</td>' +
+                '<td class="text-center"><span class="badge bg-success bg-opacity-10 text-success border border-success">%' + sc.ownerSharePercent + ' (' + sc.ownerUnits + ' Daire)</span></td>' +
+                '<td class="text-center fw-bold text-primary">' + sc.contractorUnits + ' Daire</td>' +
+                '<td class="text-end fw-semibold">' + sc.unitPrice.toLocaleString('tr-TR') + ' ₺</td>' +
+                '<td class="text-end fw-bold text-dark">' + sc.totalRevenue.toLocaleString('tr-TR') + ' ₺</td>' +
+                '<td class="text-end text-muted">' + sc.firmCost.toLocaleString('tr-TR') + ' ₺</td>' +
+                '<td class="text-end ' + profitClass + '" style="font-size: 0.95rem;">' + sc.netProfit.toLocaleString('tr-TR') + ' ₺</td>' +
+                '<td class="text-center">' +
+                    '<div class="btn-group btn-group-sm">' +
+                        '<button type="button" class="btn btn-outline-success fw-bold px-2" onclick="loadScenarioToDesk(' + idx + ')" title="Bu Modeli Masaya Yükle">' +
+                            '<i class="bi bi-box-arrow-in-down-left me-1"></i>Yükle' +
+                        '</button>' +
+                        '<button type="button" class="btn btn-outline-danger px-2" onclick="removeScenario(' + idx + ')" title="Sil">' +
+                            '<i class="bi bi-trash"></i>' +
+                        '</button>' +
+                    '</div>' +
+                '</td>' +
+            '</tr>';
+        });
+        tbody.innerHTML = html;
+    }
+
+    function loadScenarioToDesk(idx) {
+        var sc = savedScenarios[idx];
+        if (!sc) return;
+
+        document.getElementById('calcTotalFloors').value = sc.floors;
+        document.getElementById('calcUnitsPerFloor').value = sc.unitsPerFloor;
+        syncUnitsPresetButtons(sc.unitsPerFloor);
+        document.getElementById('calcOwnerShare').value = sc.ownerSharePercent;
+        document.getElementById('calcFlatSalePrice').value = sc.unitPrice;
+
+        runContractorEstimate(true);
+
+        // Modal açıksa kapat
+        var modalEl = document.getElementById('scenarioComparisonModal');
+        if (modalEl) {
+            var modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+        }
+
+        // Ön hesap masasına kaydır
+        var card = document.getElementById('cardFeasibilityEstimates');
+        if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    // PAYLAŞIM: WHATSAPP
+    function shareScenariosViaWhatsapp() {
+        var models = savedScenarios.length > 0 ? savedScenarios : [getCurrentActiveScenario()];
+        var projName = document.querySelector('h4.fw-bold') ? document.querySelector('h4.fw-bold').innerText.trim() : 'GMK360 Proje';
+        var ada = document.getElementById('dispAda') ? document.getElementById('dispAda').innerText.trim() : '-';
+        var parsel = document.getElementById('dispParsel') ? document.getElementById('dispParsel').innerText.trim() : '-';
+
+        var lines = [];
+        lines.push('*GMK360 | Kentsel Dönüşüm Ön Fizibilite & Teklif Dosyası*');
+        lines.push('Konum: ' + ada + ' Ada / ' + parsel + ' Parsel');
+        lines.push('');
+        lines.push('*DEĞERLENDİRİLEN MODELLER:*');
+
+        models.forEach(function(m) {
+            lines.push('');
+            lines.push('*' + m.title + '*');
+            lines.push('• ' + m.floors + ' Kat x ' + m.unitsPerFloor + ' Daire = ' + m.totalUnits + ' Daire (~' + m.unitSqm + ' m² Net)');
+            lines.push('• Dağılım: %' + m.ownerSharePercent + ' Malik (' + m.ownerUnits + ' Daire) | Müteahhit: ' + m.contractorUnits + ' Daire');
+            lines.push('• Daire Satış Rayici: ' + m.unitPrice.toLocaleString('tr-TR') + ' ₺');
+            lines.push('• Tahmini Müteahhit Cirosu: ' + m.totalRevenue.toLocaleString('tr-TR') + ' ₺');
+            lines.push('• Net Proje Kârı: ' + m.netProfit.toLocaleString('tr-TR') + ' ₺');
+        });
+
+        lines.push('');
+        lines.push('Detaylı teklif PDF raporu platformda hazırdır.');
+
+        var fullMsg = lines.join('\n');
+        var url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(fullMsg);
+        window.open(url, '_blank');
+    }
+
+    // PAYLAŞIM: E-POSTA
+    function shareScenariosViaEmail() {
+        var models = savedScenarios.length > 0 ? savedScenarios : [getCurrentActiveScenario()];
+        var ada = document.getElementById('dispAda') ? document.getElementById('dispAda').innerText.trim() : '-';
+        var parsel = document.getElementById('dispParsel') ? document.getElementById('dispParsel').innerText.trim() : '-';
+
+        var subject = '[GMK360] Ön Fizibilite & Teklif Modelleri - Ada: ' + ada + ' / Parsel: ' + parsel;
+        var lines = [];
+        lines.push('Sayın İlgili,');
+        lines.push('');
+        lines.push('Projenin ön fizibilite ve kentsel dönüşüm paylaşım modelleri aşağıda sunulmuştur:');
+        lines.push('');
+
+        models.forEach(function(m) {
+            lines.push('[' + m.title + ']');
+            lines.push('- Kat ve Daire: ' + m.floors + ' Kat x ' + m.unitsPerFloor + ' Daire = ' + m.totalUnits + ' Daire (' + m.unitType + ' ~' + m.unitSqm + ' m2)');
+            lines.push('- Malik Dağılımı: %' + m.ownerSharePercent + ' (' + m.ownerUnits + ' Daire) | Müteahhit Payı: ' + m.contractorUnits + ' Daire');
+            lines.push('- Satış Rayici: ' + m.unitPrice.toLocaleString('tr-TR') + ' TL');
+            lines.push('- Tahmini Ciro: ' + m.totalRevenue.toLocaleString('tr-TR') + ' TL');
+            lines.push('- Net Proje Kârı: ' + m.netProfit.toLocaleString('tr-TR') + ' TL');
+            lines.push('');
+        });
+
+        lines.push('İyi çalışmalar dileriz.');
+
+        var body = lines.join('\n');
+        var mailtoUrl = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+        window.location.href = mailtoUrl;
+    }
+
+    function getCurrentActiveScenario() {
+        var floors = parseInt(document.getElementById('calcTotalFloors').value) || 15;
+        var unitsPerFloor = parseInt(document.getElementById('calcUnitsPerFloor').value) || 2;
+        var ownerSharePercent = parseFloat(document.getElementById('calcOwnerShare').value) || 50;
+        var flatSalePrice = parseFloat(document.getElementById('calcFlatSalePrice').value) || 10000000;
+        var firmUnitCost = parseFloat(document.getElementById('calcFirmUnitCost').value) || 25000;
+        var basementInp = document.getElementById('calcBasementFloors');
+        var basementFloors = basementInp ? (parseInt(basementInp.value) || 2) : 2;
+        var coreLossInp = document.getElementById('calcCoreLossSqm');
+        var coreLoss = coreLossInp ? (parseFloat(coreLossInp.value) || 35) : 35;
+
+        var totalCostFloors = floors + basementFloors + 2;
+        var totalUnits = floors * unitsPerFloor;
+        var ownerUnits = Math.round(totalUnits * (ownerSharePercent / 100.0));
+        var contractorUnits = totalUnits - ownerUnits;
+        var totalRevenue = contractorUnits * flatSalePrice;
+        var totalConstSqm = totalCostFloors * 271;
+        var totalCost = totalConstSqm * firmUnitCost;
+        var netProfit = totalRevenue - totalCost;
+
+        var grossFloorArea = 271;
+        var usableFloorArea = Math.max(0, grossFloorArea - coreLoss);
+        var unitSqm = unitsPerFloor > 0 ? Math.round(usableFloorArea / unitsPerFloor) : 0;
+        var unitType = unitSqm >= 100 ? 'Ferah 3+1' : (unitSqm >= 65 ? 'Kompakt 2+1' : '1+1');
+
+        return {
+            title: 'Aktif Teklif Planı (' + unitsPerFloor + ' Daire - ' + unitType + ')',
+            floors: floors,
+            unitsPerFloor: unitsPerFloor,
+            totalUnits: totalUnits,
+            ownerUnits: ownerUnits,
+            contractorUnits: contractorUnits,
+            ownerSharePercent: ownerSharePercent,
+            unitSqm: unitSqm,
+            unitType: unitType,
+            unitPrice: flatSalePrice,
+            totalRevenue: totalRevenue,
+            totalConstSqm: totalConstSqm,
+            firmCost: totalCost,
+            netProfit: netProfit
+        };
+    }
+
+    function downloadFeasibilityPdf() {
+        var floors = parseInt(document.getElementById('calcTotalFloors').value) || 15;
+        var unitsPerFloor = parseInt(document.getElementById('calcUnitsPerFloor').value) || 2;
+        var ownerShare = parseFloat(document.getElementById('calcOwnerShare').value) || 50;
+
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/ConstructionProject/ExportFeasibilityPdfWithMap';
+        form.target = '_blank';
+
+        function addInput(name, value) {
+            var inp = document.createElement('input');
+            inp.type = 'hidden';
+            inp.name = name;
+            inp.value = value;
+            form.appendChild(inp);
+        }
+
+        addInput('projectId', '@Model.Id');
+        addInput('totalFloors', floors);
+        addInput('flatSqm', 100);
+        addInput('imarNotlari', 'Müteahhit Ön Fizibilite & Teklif Planı: ' + floors + ' Kat, Kat Başı ' + unitsPerFloor + ' Daire, %' + ownerShare + ' Malik Payı');
+
+        // Çoklu senaryo JSON verisi
+        if (savedScenarios && savedScenarios.length > 0) {
+            addInput('scenariosJson', JSON.stringify(savedScenarios));
+        } else {
+            var single = [getCurrentActiveScenario()];
+            addInput('scenariosJson', JSON.stringify(single));
+        }
+
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    }
+
+    // ==========================================
+    // ORTAĞA & MÜHENDİSE GÖNDERİM & PAYLAŞIM MASASI
+    // ==========================================
+    var currentShareChoice = 'all';
+
+    function openShareModal() {
+        renderShareModelOptions();
+        updateSharePreviewText();
+        var modalEl = document.getElementById('shareModal');
+        if (modalEl) {
+            var modal = new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+    }
+
+    function renderShareModelOptions() {
+        var container = document.getElementById('shareModelOptionsContainer');
+        if (!container) return;
+
+        var html = '';
+
+        if (savedScenarios.length === 0) {
+            // Kayıtlı model yoksa aktif masayı sun
+            currentShareChoice = 'active';
+            var activeSc = getCurrentActiveScenario();
+            html += '<div class="form-check p-2 px-3 border rounded-3 bg-white shadow-xs">';
+            html += '  <input class="form-check-input ms-0 me-2" type="radio" name="shareModelChoice" id="shareOptActive" value="active" checked onchange="onShareModelOptionChange(\'active\')">';
+            html += '  <label class="form-check-label fw-bold text-dark small" for="shareOptActive">';
+            html += '    <i class="bi bi-lightning-charge-fill text-warning me-1"></i>Aktif Masadaki Teklif Modeli: ' + activeSc.title + ' (%' + activeSc.ownerSharePercent + ' Malik | Net: ' + Math.round(activeSc.netProfit / 1000000) + 'M ₺)';
+            html += '  </label>';
+            html += '</div>';
+            container.innerHTML = html;
+            return;
+        }
+
+        // 1. Seçenek: Tüm Modeller (Karşılaştırmalı)
+        currentShareChoice = 'all';
+        html += '<div class="form-check p-2 px-3 border rounded-3 bg-white shadow-xs">';
+        html += '  <input class="form-check-input ms-0 me-2" type="radio" name="shareModelChoice" id="shareOptAll" value="all" checked onchange="onShareModelOptionChange(\'all\')">';
+        html += '  <label class="form-check-label fw-bold text-dark small" for="shareOptAll">';
+        html += '    <i class="bi bi-collection-fill text-primary me-1"></i>Tüm Modelleri Birlikte Gönder (Karşılaştırmalı Rapor — ' + savedScenarios.length + ' Model)';
+        html += '  </label>';
+        html += '</div>';
+
+        // 2. Her bir kayıtlı model için tekil seçenek
+        savedScenarios.forEach(function(sc, idx) {
+            html += '<div class="form-check p-2 px-3 border rounded-3 bg-white shadow-xs">';
+            html += '  <input class="form-check-input ms-0 me-2" type="radio" name="shareModelChoice" id="shareOpt_' + idx + '" value="' + idx + '" onchange="onShareModelOptionChange(' + idx + ')">';
+            html += '  <label class="form-check-label text-dark small" for="shareOpt_' + idx + '">';
+            html += '    <b>' + sc.title + '</b> — %' + sc.ownerSharePercent + ' Malik Payı | Ciro: ' + Math.round(sc.totalRevenue / 1000000) + 'M ₺ | <span class="text-success fw-bold">Net Kâr: ' + Math.round(sc.netProfit / 1000000) + 'M ₺</span>';
+            html += '  </label>';
+            html += '</div>';
+        });
+
+        container.innerHTML = html;
+    }
+
+    function onShareModelOptionChange(val) {
+        currentShareChoice = val;
+        updateSharePreviewText();
+
+        var btnText = document.getElementById('btnDownloadSharePdfText');
+        if (btnText) {
+            if (val === 'all') {
+                btnText.innerText = 'Karşılaştırmalı PDF Raporunu İndir (' + savedScenarios.length + ' Model)';
+            } else if (val === 'active') {
+                btnText.innerText = 'Aktif Modelin PDF Raporunu İndir';
+            } else {
+                var sc = savedScenarios[parseInt(val)];
+                btnText.innerText = (sc ? sc.title : 'Seçili Model') + ' PDF Raporunu İndir';
+            }
+        }
+    }
+
+    function getSelectedShareModels() {
+        if (currentShareChoice === 'all') {
+            return savedScenarios.length > 0 ? savedScenarios : [getCurrentActiveScenario()];
+        } else if (currentShareChoice === 'active') {
+            return [getCurrentActiveScenario()];
+        } else {
+            var idx = parseInt(currentShareChoice);
+            var sc = savedScenarios[idx];
+            return sc ? [sc] : [getCurrentActiveScenario()];
+        }
+    }
+
+    function updateSharePreviewText() {
+        var previewEl = document.getElementById('shareMessagePreview');
+        if (!previewEl) return;
+
+        var models = getSelectedShareModels();
+        var firmName = '@(Model.Agency?.CompanyName ?? "GMK360 İNŞAAT & MÜHENDİSLİK")';
+        var projName = '@Model.Name';
+        var city = '@cityName';
+        var dist = '@distName';
+        var neigh = '@neighName';
+        var ada = '@Model.Ada';
+        var parsel = '@Model.Parsel';
+        var area = '@landArea.ToString("N2")';
+
+        var lines = [];
+        lines.push('=========================================');
+        lines.push('🏗️ ' + firmName.toUpperCase());
+        lines.push('📋 PROJE ÖN FİZİBİLİTE & İSTİŞARE DOSYASI');
+        lines.push('=========================================');
+        lines.push('🏢 Proje Adı: ' + projName);
+        lines.push('📍 Açık Konum: ' + city + ' / ' + dist + (neigh ? ' — ' + neigh + ' Mah.' : ''));
+        lines.push('📌 Ada / Parsel: ' + ada + ' / ' + parsel);
+        lines.push('📐 Tapu Alanı: ' + area + ' m²');
+        lines.push('-----------------------------------------');
+        lines.push('Sayın Ortağım / Sayın İlgili,');
+        lines.push('');
+        lines.push('Nihai teklif öncesinde değerlendirmek üzere hazırladığımız ön fizibilite ve kentsel dönüşüm model çalışması aşağıda sunulmuştur:');
+        lines.push('');
+        lines.push('📊 DEĞERLENDİRİLEN MODEL(LER):');
+
+        models.forEach(function(m) {
+            lines.push('');
+            lines.push('[' + m.title + ']');
+            lines.push('• İmar Planı: ' + m.floors + ' Kat x ' + m.unitsPerFloor + ' Daire = ' + m.totalUnits + ' Daire (' + m.unitType + ' ~' + m.unitSqm + ' m²)');
+            lines.push('• Dağılım: %' + m.ownerSharePercent + ' Malik (' + m.ownerUnits + ' Daire) | Müteahhit Payı: ' + m.contractorUnits + ' Daire');
+            lines.push('• Daire Satış Rayici: ' + m.unitPrice.toLocaleString('tr-TR') + ' ₺');
+            lines.push('• Tahmini Müteahhit Cirosu: ' + m.totalRevenue.toLocaleString('tr-TR') + ' ₺');
+            lines.push('• Şantiye İnşaat Maliyeti: ~' + m.firmCost.toLocaleString('tr-TR') + ' ₺');
+            lines.push('⭐ Net Proje Kârı: ' + m.netProfit.toLocaleString('tr-TR') + ' ₺');
+        });
+
+        lines.push('');
+        lines.push('-----------------------------------------');
+        lines.push('📎 NOT: Detaylı TKGM MEGSİS uydu vaziyet krokisi, kat oturum şeması (~271 m²), şantiye inşaat maliyeti ve emniyet rezervi hesapları ekteki GMK360 PDF Raporunda yer almaktadır.');
+        lines.push('=========================================');
+        lines.push('Görüşlerinize sunar, iyi çalışmalar dileriz.');
+
+        previewEl.value = lines.join('\n');
+    }
+
+    function copyShareMessageText() {
+        var previewEl = document.getElementById('shareMessagePreview');
+        if (!previewEl || !previewEl.value) return;
+        navigator.clipboard.writeText(previewEl.value).then(function() {
+            alert('İleti metni panoya kopyalandı.');
+        });
+    }
+
+    function downloadSelectedSharePdf() {
+        var models = getSelectedShareModels();
+        var floors = parseInt(document.getElementById('calcTotalFloors').value) || 15;
+        var unitsPerFloor = parseInt(document.getElementById('calcUnitsPerFloor').value) || 2;
+        var ownerShare = parseFloat(document.getElementById('calcOwnerShare').value) || 50;
+
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/ConstructionProject/ExportFeasibilityPdfWithMap';
+        form.target = '_blank';
+
+        function addInput(name, value) {
+            var inp = document.createElement('input');
+            inp.type = 'hidden';
+            inp.name = name;
+            inp.value = value;
+            form.appendChild(inp);
+        }
+
+        addInput('projectId', '@Model.Id');
+        addInput('totalFloors', floors);
+        addInput('flatSqm', 100);
+        addInput('imarNotlari', 'Müteahhit Ön Fizibilite & Teklif Planı: ' + floors + ' Kat, Kat Başı ' + unitsPerFloor + ' Daire, %' + ownerShare + ' Malik Payı');
+        addInput('scenariosJson', JSON.stringify(models));
+
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    }
+
+    function executeShareViaWhatsapp() {
+        var previewEl = document.getElementById('shareMessagePreview');
+        if (!previewEl || !previewEl.value) updateSharePreviewText();
+        var text = document.getElementById('shareMessagePreview').value;
+        var url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(text);
+        window.open(url, '_blank');
+    }
+
+    function executeShareViaEmail() {
+        var previewEl = document.getElementById('shareMessagePreview');
+        if (!previewEl || !previewEl.value) updateSharePreviewText();
+        var body = document.getElementById('shareMessagePreview').value;
+        var projName = '@Model.Name';
+        var ada = '@Model.Ada';
+        var parsel = '@Model.Parsel';
+        var subject = '[GMK360] ' + projName + ' - Ön Fizibilite & İstişare Dosyası (Ada: ' + ada + ' / Parsel: ' + parsel + ')';
+
+        var mailtoUrl = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+        window.location.href = mailtoUrl;
+    }
+
+    // ==========================================
+    // YAPAY ZEKA (GEMINI) BÖLGE ANALİZİ
+    // ==========================================
+    function parseAiMarkdown(markdownText) {
+        if (!markdownText) return '';
+        var lines = markdownText.split('\n');
+        var html = '';
+        var inList = false;
+
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].trim();
+            if (!line) {
+                if (inList) { html += '</ul>'; inList = false; }
+                continue;
+            }
+            if (line.startsWith('### ')) {
+                if (inList) { html += '</ul>'; inList = false; }
+                html += '<h6 class="fw-bold text-primary mt-3 mb-2">' + line.substring(4) + '</h6>';
+            } else if (line.startsWith('## ')) {
+                if (inList) { html += '</ul>'; inList = false; }
+                html += '<h5 class="fw-bold text-dark mt-3 mb-2">' + line.substring(3) + '</h5>';
+            } else if (line.startsWith('# ')) {
+                if (inList) { html += '</ul>'; inList = false; }
+                html += '<h5 class="fw-bold text-dark mt-3 mb-2">' + line.substring(2) + '</h5>';
+            } else if (line.startsWith('- ') || line.startsWith('* ')) {
+                if (!inList) { html += '<ul class="ps-3 mb-2">'; inList = true; }
+                var content = line.substring(2);
+                content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                html += '<li class="mb-1 text-secondary">' + content + '</li>';
+            } else {
+                if (inList) { html += '</ul>'; inList = false; }
+                var pContent = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                html += '<p class="mb-2 text-secondary">' + pContent + '</p>';
+            }
+        }
+        if (inList) html += '</ul>';
+        return html;
+    }
+
+    function triggerNeighborhoodAi() {
+        var emptyBox = document.getElementById('aiEmptyContainer');
+        var loading = document.getElementById('aiLoadingIndicator');
+        var reportBox = document.getElementById('aiReportContainer');
+        var reportBody = document.getElementById('aiReportBody');
+        var btnTop = document.getElementById('btnTriggerAiTop');
+
+        if (emptyBox) emptyBox.style.display = 'none';
+        if (loading) loading.style.display = 'block';
+        if (reportBox) reportBox.style.display = 'none';
+        if (btnTop) btnTop.disabled = true;
+
+        fetch('/ConstructionProject/RefreshNeighborhoodAi?projectId=@Model.Id', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (loading) loading.style.display = 'none';
+
+            if (data.success && data.report) {
+                if (reportBox) reportBox.style.display = 'block';
+                if (reportBody) reportBody.innerHTML = parseAiMarkdown(data.report);
+                var updatedEl = document.getElementById('aiUpdatedAtText');
+                if (updatedEl && data.updatedAt) updatedEl.innerText = data.updatedAt;
+
+                if (btnTop) {
+                    btnTop.outerHTML = '<span class="badge bg-success bg-opacity-10 text-success border border-success px-3 py-2 rounded-pill fw-bold" id="badgeAiStatus"><i class="bi bi-check-circle-fill me-1"></i>Analiz Kayıtlı</span>';
+                }
+            } else {
+                if (emptyBox) emptyBox.style.display = 'block';
+                alert(data.message || 'Yapay zeka analizi oluşturulurken hata meydana geldi.');
+            }
+        })
+        .catch(function(err) {
+            if (loading) loading.style.display = 'none';
+            if (emptyBox) emptyBox.style.display = 'block';
+            alert('Yapay zeka servisine bağlanırken bir hata oluştu.');
+        });
+    }
+
+    function openMarketPortal(portal) {
+        var city = '@cityName';
+        var dist = '@distName';
+        var neigh = '@neighName';
+        var q = '';
+
+        if (portal === 'sahibinden-satilik') {
+            q = 'sahibinden satilik daire ' + city + ' ' + dist + ' ' + neigh;
+        } else if (portal === 'sahibinden-kiralik') {
+            q = 'sahibinden kiralik daire ' + city + ' ' + dist + ' ' + neigh;
+        } else if (portal === 'endeksa') {
+            q = 'endeksa ' + city + ' ' + dist + ' ' + neigh + ' konut fiyati degerleme';
+        }
+
+        var searchUrl = 'https://www.google.com/search?q=' + encodeURIComponent(q);
+        window.open(searchUrl, '_blank');
+    }
+
+    // ==========================================
+    // BÖLGE İSTİHBARATI & DONATILAR (20 POI)
+    // ==========================================
+    function loadLocationIntelligence() {
+        var neighborhoodId = @(Model.NeighborhoodId ?? 0);
+        if (!neighborhoodId) {
+            var container = document.getElementById('poiListContainer');
+            if (container) container.innerHTML = '<div class="col-12 text-center py-3 text-muted">Bu projeye atanmış mahalle bilgisi bulunamadı.</div>';
+            return;
+        }
+
+        fetch('/api/LocationIntelligence/GetNearbyPlaces?neighborhoodId=' + neighborhoodId)
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data && data.length > 0) {
+                    allPoisData = data;
+                    renderPoiCards(data);
+                    updatePoiCounts(data);
+                } else {
+                    fetch('/api/Location/POIs/' + neighborhoodId)
+                        .then(function(r) { return r.json(); })
+                        .then(function(data2) {
+                            if (data2 && data2.length > 0) {
+                                var mapped = data2.map(function(item) {
+                                    return {
+                                        id: item.id,
+                                        poiName: item.poiName,
+                                        category: item.categoryName || (item.poiCategory === 1 ? 'Education' : item.poiCategory === 2 ? 'Health' : item.poiCategory === 3 ? 'Transport' : item.poiCategory === 4 ? 'Security' : item.poiCategory === 5 ? 'SocialAndPark' : 'Shopping'),
+                                        subCategory: '',
+                                        distanceInMeters: item.distanceInMeters
+                                    };
+                                });
+                                allPoisData = mapped;
+                                renderPoiCards(mapped);
+                                updatePoiCounts(mapped);
+                            } else {
+                                var container = document.getElementById('poiListContainer');
+                                if (container) container.innerHTML = '<div class="col-12 text-center py-4 text-muted">Bu mahalle için henüz kayıtlı donatı bulunamadı.</div>';
+                            }
+                        });
+                }
+            })
+            .catch(function(err) {
+                console.error('POI yükleme hatası:', err);
+            });
+    }
+
+    function updatePoiCounts(data) {
+        var countBadge = document.getElementById('badgePoiCount');
+        if (countBadge) countBadge.innerHTML = '<i class="bi bi-geo-alt-fill me-1"></i>' + data.length + ' Donatı';
+
+        var cntAll = document.getElementById('cntAll');
+        var cntHealth = document.getElementById('cntHealth');
+        var cntEducation = document.getElementById('cntEducation');
+        var cntTransport = document.getElementById('cntTransport');
+        var cntPark = document.getElementById('cntPark');
+        var cntShopping = document.getElementById('cntShopping');
+
+        if (cntAll) cntAll.innerText = data.length;
+        if (cntHealth) cntHealth.innerText = data.filter(function(x) { return x.category === 'Health'; }).length;
+        if (cntEducation) cntEducation.innerText = data.filter(function(x) { return x.category === 'Education'; }).length;
+        if (cntTransport) cntTransport.innerText = data.filter(function(x) { return x.category === 'Transport'; }).length;
+        if (cntPark) cntPark.innerText = data.filter(function(x) { return x.category === 'SocialAndPark'; }).length;
+        if (cntShopping) cntShopping.innerText = data.filter(function(x) { return x.category === 'Shopping' || x.category === 'Security'; }).length;
+    }
+
+    function renderPoiCards(list) {
+        var container = document.getElementById('poiListContainer');
+        if (!container) return;
+        if (!list || list.length === 0) {
+            container.innerHTML = '<div class="col-12 text-center py-4 text-muted">Bu kategoride donatı bulunamadı.</div>';
+            return;
+        }
+
+        var html = '';
+        list.forEach(function(item) {
+            var iconClass = 'bi-geo-alt';
+            var catLabel = 'Donatı';
+            var badgeBg = 'bg-secondary bg-opacity-10 text-secondary border border-secondary';
+
+            if (item.category === 'Health') {
+                iconClass = 'bi-heart-pulse-fill text-danger';
+                catLabel = 'Sağlık';
+                badgeBg = 'bg-danger bg-opacity-10 text-danger border border-danger';
+            } else if (item.category === 'Education') {
+                iconClass = 'bi-mortarboard-fill text-info';
+                catLabel = 'Eğitim';
+                badgeBg = 'bg-info bg-opacity-10 text-info border border-info';
+            } else if (item.category === 'Transport') {
+                iconClass = 'bi-train-front-fill text-primary';
+                catLabel = 'Ulaşım';
+                badgeBg = 'bg-primary bg-opacity-10 text-primary border border-primary';
+            } else if (item.category === 'SocialAndPark') {
+                iconClass = 'bi-tree-fill text-success';
+                catLabel = 'Park & Sosyal';
+                badgeBg = 'bg-success bg-opacity-10 text-success border border-success';
+            } else if (item.category === 'Shopping') {
+                iconClass = 'bi-bag-fill text-warning';
+                catLabel = 'Alışveriş';
+                badgeBg = 'bg-warning bg-opacity-10 text-dark border border-warning';
+            } else if (item.category === 'Security') {
+                iconClass = 'bi-shield-shaded text-secondary';
+                catLabel = 'Güvenlik';
+                badgeBg = 'bg-secondary bg-opacity-10 text-secondary border border-secondary';
+            }
+
+            var distText = item.distanceInMeters >= 1000 
+                ? (item.distanceInMeters / 1000).toFixed(1) + ' km' 
+                : Math.round(item.distanceInMeters) + ' m';
+
+            var walkMins = Math.max(1, Math.round(item.distanceInMeters / 80));
+
+            html += '<div class="col-md-6 col-xl-4">' +
+                '<div class="card h-100 border border-light-subtle rounded-3 p-3 shadow-xs bg-white poi-card">' +
+                    '<div class="d-flex justify-content-between align-items-start mb-2">' +
+                        '<div class="d-flex align-items-center gap-2">' +
+                            '<span class="d-inline-flex align-items-center justify-content-center rounded-circle p-2 ' + badgeBg + '" style="width: 30px; height: 30px;">' +
+                                '<i class="bi ' + iconClass + ' fs-6"></i>' +
+                            '</span>' +
+                            '<div>' +
+                                '<span class="badge ' + badgeBg + ' px-2 py-0 fw-semibold" style="font-size: 0.66rem;">' + (item.subCategory || catLabel) + '</span>' +
+                            '</div>' +
+                        '</div>' +
+                        '<span class="badge bg-light text-dark border fw-bold px-2 py-1" style="font-size: 0.72rem;">' +
+                            '<i class="bi bi-geo-alt me-1 text-primary"></i>' + distText +
+                        '</span>' +
+                    '</div>' +
+                    '<h6 class="fw-bold text-dark mb-1 text-truncate" title="' + item.poiName + '">' + item.poiName + '</h6>' +
+                    '<div class="text-muted d-flex align-items-center gap-2 mt-auto pt-1" style="font-size: 0.72rem;">' +
+                        '<span><i class="bi bi-person-walking text-primary me-1"></i>~' + walkMins + ' dk yürüme mesafesinde</span>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        });
+
+        container.innerHTML = html;
+    }
+
+    function filterPoiList(category, btn) {
+        var buttons = document.querySelectorAll('#poiFilterButtons .filter-btn');
+        buttons.forEach(function(b) {
+            b.classList.remove('active');
+            b.classList.remove('btn-primary');
+            b.classList.add('btn-outline-primary');
+        });
+
+        btn.classList.add('active');
+        btn.classList.remove('btn-outline-primary');
+        btn.classList.add('btn-primary');
+
+        if (category === 'all') {
+            renderPoiCards(allPoisData);
+        } else if (category === 'Shopping') {
+            var filtered = allPoisData.filter(function(x) { return x.category === 'Shopping' || x.category === 'Security'; });
+            renderPoiCards(filtered);
+        } else {
+            var filtered = allPoisData.filter(function(x) { return x.category === category; });
+            renderPoiCards(filtered);
+        }
+    }
+
+    // ==========================================
+    // TKGM CANLI PARSEL SORGUSU
+    // ==========================================
+    function openTkgmModal() {
+        loadTkgmProvinces();
+        var modal = new bootstrap.Modal(document.getElementById('tkgmModal'));
+        modal.show();
+    }
+
+    function loadTkgmProvinces() {
+        var provSelect = document.getElementById('modalTkgmProvince');
+        if (provSelect.options.length > 1) return;
+
+        fetch('/ConstructionProject/GetTkgmProvinces')
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                provSelect.innerHTML = '<option value="">Seçiniz...</option>';
+                data.forEach(function (p) {
+                    var opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.text = p.name;
+                    if (p.name.toLowerCase().includes('istanbul')) opt.selected = true;
+                    provSelect.appendChild(opt);
+                });
+                if (provSelect.value) loadTkgmDistricts();
+            });
+    }
+
+    function loadTkgmDistricts() {
+        var provId = document.getElementById('modalTkgmProvince').value;
+        var distSelect = document.getElementById('modalTkgmDistrict');
+        distSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+
+        fetch('/ConstructionProject/GetTkgmDistricts?provinceId=' + provId)
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                distSelect.innerHTML = '<option value="">Seçiniz...</option>';
+                data.forEach(function (d) {
+                    var opt = document.createElement('option');
+                    opt.value = d.id;
+                    opt.text = d.name;
+                    if (d.name.toLowerCase().includes('@distName.ToLower()')) opt.selected = true;
+                    distSelect.appendChild(opt);
+                });
+                if (distSelect.value) loadTkgmNeighborhoods();
+            });
+    }
+
+    function loadTkgmNeighborhoods() {
+        var distId = document.getElementById('modalTkgmDistrict').value;
+        var neighSelect = document.getElementById('modalTkgmNeighborhood');
+        neighSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+
+        fetch('/ConstructionProject/GetTkgmNeighborhoods?districtId=' + distId)
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                neighSelect.innerHTML = '<option value="">Seçiniz...</option>';
+                data.forEach(function (n) {
+                    var opt = document.createElement('option');
+                    opt.value = n.id;
+                    opt.text = n.name;
+                    if (n.name.toLowerCase().includes('@neighName.ToLower()')) opt.selected = true;
+                    neighSelect.appendChild(opt);
+                });
+            });
+    }
+
+    function executeTkgmQuery() {
+        var neighId = document.getElementById('modalTkgmNeighborhood').value;
+        var ada = document.getElementById('modalTkgmAda').value.trim();
+        var parsel = document.getElementById('modalTkgmParsel').value.trim();
+
+        if (!neighId || !ada || !parsel) {
+            alert('Lütfen Mahalle, Ada ve Parsel alanlarını eksiksiz giriniz.');
+            return;
+        }
+
+        document.getElementById('tkgmQueryLoading').style.display = 'block';
+        document.getElementById('tkgmResultBox').style.display = 'none';
+        document.getElementById('btnApplyTkgm').style.display = 'none';
+
+        fetch('/ConstructionProject/QueryTkgmParcel?neighborhoodId=' + neighId + '&ada=' + ada + '&parsel=' + parsel)
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                document.getElementById('tkgmQueryLoading').style.display = 'none';
+                if (data.success && data.parcel) {
+                    lastFoundTkgmDto = data.parcel;
+                    document.getElementById('resTkgmMevkii').innerText = (data.parcel.ilAd || '') + ' / ' + (data.parcel.ilceAd || '') + ' - ' + (data.parcel.mahalleAd || '');
+                    document.getElementById('resTkgmAlan').innerText = data.parcel.alan.toLocaleString('tr-TR', { minimumFractionDigits: 2 });
+                    document.getElementById('resTkgmNitelik').innerText = data.parcel.nitelik || 'Arsa';
+                    document.getElementById('tkgmResultBox').style.display = 'block';
+                    document.getElementById('btnApplyTkgm').style.display = 'inline-block';
+                } else {
+                    alert('TKGM Parsel Sorgu Hatası: ' + (data.message || 'Parsel bulunamadı.'));
+                }
+            })
+            .catch(function (err) {
+                document.getElementById('tkgmQueryLoading').style.display = 'none';
+                alert('TKGM MEGSİS servisine bağlanırken bir hata oluştu.');
+            });
+    }
+
+    function applyTkgmToProject() {
+        if (!lastFoundTkgmDto) return;
+
+        var payload = {
+            projectId: @Model.Id,
+            ada: lastFoundTkgmDto.ada,
+            parsel: lastFoundTkgmDto.parsel,
+            area: lastFoundTkgmDto.alan,
+            geoJson: JSON.stringify(lastFoundTkgmDto.geoJsonCoordinates),
+            latitude: lastFoundTkgmDto.centerLatitude,
+            longitude: lastFoundTkgmDto.centerLongitude
+        };
+
+        fetch('/ConstructionProject/ApplyTkgmParcelData', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.success) {
+                document.getElementById('calcLandArea').value = lastFoundTkgmDto.alan;
+                document.getElementById('mapAreaText').innerText = lastFoundTkgmDto.alan.toLocaleString('tr-TR', { maximumFractionDigits: 2 });
+                document.getElementById('mapAdaText').innerText = lastFoundTkgmDto.ada;
+                document.getElementById('mapParselText').innerText = lastFoundTkgmDto.parsel;
+                document.getElementById('dispAda').innerText = lastFoundTkgmDto.ada;
+                document.getElementById('dispParsel').innerText = lastFoundTkgmDto.parsel;
+
+                if (lastFoundTkgmDto.geoJsonCoordinates) {
+                    renderParcelPolygon(lastFoundTkgmDto.geoJsonCoordinates);
+                }
+
+                runContractorEstimate(true);
+
+                var modalEl = document.getElementById('tkgmModal');
+                var modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+            }
+        });
+    }
+</script>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        if (localStorage.getItem('gmk_map_feasibility') === 'open') {
+            toggleMapCollapse(true);
+        }
+    });
+</script>
