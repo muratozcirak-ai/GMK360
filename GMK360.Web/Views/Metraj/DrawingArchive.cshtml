@@ -108,7 +108,8 @@
 
                 </span>
 
-                <h6 class="fw-bold text-dark mb-0" style="font-size: 0.88rem;">İşlem Bekleyen (Okunmamış) DWG Çizimleri</h6>
+                <h6 class="fw-bold text-dark mb-0" style="font-size: 0.88rem;">İşlem Bekleyen (Okunmamış) DWG Çizimleri</h6>
+                <span class="badge bg-light text-secondary border rounded-pill px-2 py-0.5 ms-1 d-inline-flex align-items-center gap-1" id="pendingToggleBadge"><i class="bi bi-chevron-down" id="pendingChevron"></i> <span id="pendingToggleText" style="font-size:0.72rem;">Aç</span></span>
 
                 <span class="badge bg-primary-subtle text-primary border px-2 py-0.5 rounded-pill" style="font-size: 0.72rem;">@pendingDrawings.Count Dosya</span>
 
@@ -156,7 +157,7 @@
 
         </div>
 
-        <div class="card-body p-0 collapse" id="pendingDrawingsContent">
+        <div class="card-body p-0 collapse" id="pendingDrawingsContent" style="display: none;">
 
             @if (pendingDrawings.Any())
 
@@ -373,10 +374,14 @@
                     <span class="input-group-text bg-white py-1 px-2"><i class="bi bi-search text-muted small"></i></span>
                     <input type="text" class="form-control form-control-sm py-1" id="matrixSearchInput" placeholder="Malzeme ara..." oninput="searchMatrix(this.value);" />
                 </div>
+                <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-2.5 py-1 d-inline-flex align-items-center gap-1" id="matrixHeaderToggleBtn" onclick="toggleMatrixCard();" title="Tabloyu Aç / Kapat">
+                    <i class="bi bi-chevron-down text-secondary" id="matrixHeaderChevron"></i>
+                    <span id="matrixHeaderChevronText" style="font-size: 0.78rem;">Aç</span>
+                </button>
             </div>
         </div>
 
-        <div id="masterBomContent" class="collapse">
+        <div id="masterBomContent" class="collapse" style="display: none;">
 
             <!-- 9 KOLONLU PROFESYONEL MALZEME TEDARİK TABLOSU -->
 
@@ -2279,6 +2284,7 @@
 
 </div>
 
+@section Scripts {
 <script>
 
     function openUploadModalForFloor(buildingId, floorLevel, blockName, floorName) {
@@ -2409,35 +2415,43 @@
 
     const storageKey = 'gmk360_material_matrix_proj_' + projectId;
 
-        function togglePendingDrawings() {
-        var content = document.getElementById('pendingDrawingsContent');
+        function toggleCollapseElement(elementId, chevronId, chevronTextId) {
+        var content = document.getElementById(elementId);
         if (!content) return;
-        var bsCollapse = bootstrap.Collapse.getOrCreateInstance(content);
-        bsCollapse.toggle();
+
+        var isHidden = (content.style.display === 'none' || !content.classList.contains('show'));
+
+        if (isHidden) {
+            content.classList.add('show');
+            content.style.display = 'block';
+            if (typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+                try { bootstrap.Collapse.getOrCreateInstance(content, { toggle: false }).show(); } catch (e) {}
+            }
+            var ch = document.getElementById(chevronId);
+            var txt = document.getElementById(chevronTextId);
+            if (ch) ch.className = 'bi bi-chevron-up text-primary';
+            if (txt) txt.innerText = 'Kapat';
+        } else {
+            content.classList.remove('show');
+            content.style.display = 'none';
+            if (typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+                try { bootstrap.Collapse.getOrCreateInstance(content, { toggle: false }).hide(); } catch (e) {}
+            }
+            var ch = document.getElementById(chevronId);
+            var txt = document.getElementById(chevronTextId);
+            if (ch) ch.className = 'bi bi-chevron-down text-secondary';
+            if (txt) txt.innerText = 'Aç';
+        }
+    }
+
+    function togglePendingDrawings() {
+        toggleCollapseElement('pendingDrawingsContent', 'pendingChevron', 'pendingToggleText');
     }
 
     function toggleMatrixCard() {
-        var content = document.getElementById('masterBomContent');
-        var chevron = document.getElementById('matrixHeaderChevron');
-        var chevronText = document.getElementById('matrixHeaderChevronText');
-        if (!content) return;
-        var bsCollapse = bootstrap.Collapse.getOrCreateInstance(content);
-        bsCollapse.toggle();
-        setTimeout(function() {
-            if (content.classList.contains('show')) {
-                if (chevron) chevron.className = 'bi bi-chevron-up text-primary';
-                if (chevronText) chevronText.innerText = 'Kapat';
-            } else {
-                if (chevron) chevron.className = 'bi bi-chevron-down text-secondary';
-                if (chevronText) chevronText.innerText = 'Aç';
-            }
-        }, 350);
-    }
-
-        }, 350);
-
-    }
-
+        toggleCollapseElement('masterBomContent', 'matrixHeaderChevron', 'matrixHeaderChevronText');
+    }
+
     function onPriceChanged(input) {
 
         var row = input.closest('tr');
@@ -2918,5 +2932,6 @@
 
     });
 
-</script>
+</script>
+}
 
