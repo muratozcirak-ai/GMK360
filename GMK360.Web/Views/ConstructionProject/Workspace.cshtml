@@ -78,7 +78,7 @@ Proje ID: #@Model.Id
 
 <hr class="opacity-25 my-3" />
 
-<!-- 1. BÖLÜM: HİSSEDARLAR & ORTAKLIK YAPISI (COLLAPSIBLE - SADE & KALABALIKSIZ) -->
+<!-- 1. BÖLÜM: HİSSEDARLAR & ORTAKLIK YAPISI (COLLAPSIBLE - TEK HİSSE GİRİŞİ, TAM OTOMATİK) -->
 
     <div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-sm overflow-hidden">
 
@@ -106,7 +106,7 @@ Proje ID: #@Model.Id
 
                     <h6 class="fw-bold text-dark mb-0">Hissedarlar & Ortaklık Yapısı</h6>
 
-                    <small class="text-muted" style="font-size: 0.78rem;">Proje hisse dağılımı, ortaklar ve ortaklık sözleşmesi</small>
+                    <small class="text-muted" style="font-size: 0.78rem;">Proje hisse dağılımı, ortaklar ve sözleşme</small>
 
                 </div>
 
@@ -142,7 +142,7 @@ Proje ID: #@Model.Id
 
                         <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-1 rounded-pill fw-bold" style="font-size: 0.82rem;">
 
-                            <i class="bi bi-person-fill me-1"></i>@pList[0].DisplayName (%@Model.OurSharePercentage.ToString("0.#") Biz / %@pList[0].SharePercentage.ToString("0.#") Ortak)
+                            <i class="bi bi-person-fill me-1"></i>@pList[0].DisplayName (Biz %@Model.OurSharePercentage.ToString("0.#") / Ortak %@pList[0].SharePercentage.ToString("0.#"))
 
                         </span>
 
@@ -188,55 +188,37 @@ if (!string.IsNullOrWhiteSpace(Model.PartnerContractDocumentPath))
 
                     @Html.AntiForgeryToken()
 
-                    <input type="hidden" name="id" value="@Model.Id" />
+                    <input type="hidden" name="id" value="@Model.Id" />
+
+                    <!-- Bizim pay gizli input (Ortağın hissesine göre otomatik hesaplanır) -->
+
+                    <input type="hidden" name="ourSharePercentage" id="ourShareInput" value="@(Model.IsJointVenture && pList.Count > 0 ? Model.OurSharePercentage.ToString("0.#") : "100")" />
 
-<!-- BİZİM FİRMA PAYI & TEK TIKLA ORTAK EKLEME BUTONU -->
+<!-- ŞİRKET PAYI VE ORTAK EKLEME BUTONU -->
 
                     <div class="p-3 bg-light rounded-3 border mb-3">
 
-                        <div class="row align-items-center g-3">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
 
-                            <div class="col-md-6">
+                            <div class="d-flex align-items-center gap-2">
 
-                                <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-primary p-2 rounded-circle"><i class="bi bi-building text-white"></i></span>
 
-                                    <span class="badge bg-primary p-2 rounded-circle"><i class="bi bi-building text-white"></i></span>
+                                <div>
 
-                                    <div>
+                                    <span class="text-muted small d-block">Şirketimize (Bize) Kalan Pay:</span>
 
-                                        <h6 class="fw-bold text-dark mb-0">Bizim Firma Payımız (%)</h6>
+                                    <strong class="text-primary fs-5" id="ourRemainingShareText">%@(Model.IsJointVenture && pList.Count > 0 ? Model.OurSharePercentage.ToString("0.#") : "100")</strong>
 
-                                        <small class="text-muted" style="font-size: 0.78rem;">Projedeki ana yüklenici şirket hissemiz</small>
-
-                                    </div>
+                                    <span class="text-muted small ms-1">(Ortak hisseleri düşüldükten sonra kalan şirket payımız)</span>
 
                                 </div>
 
                             </div>
 
-                            <div class="col-md-3">
+                            <div>
 
-                                <div class="input-group">
-
-                                    <span class="input-group-text bg-white fw-bold">%</span>
-
-                                    <input type="number" name="ourSharePercentage" id="ourShareInput" 
-
-                                           class="form-control fw-bold text-primary fs-5" 
-
-                                           min="0" max="100" step="1" 
-
-                                           value="@(Model.IsJointVenture && pList.Count > 0 ? Model.OurSharePercentage.ToString("0.#") : "100")" 
-
-                                           oninput="calcTotalShares()" />
-
-                                </div>
-
-                            </div>
-
-                            <div class="col-md-3 text-md-end">
-
-                                <button type="button" class="btn btn-primary rounded-pill px-3 py-2 fw-bold shadow-xs w-100 w-md-auto" onclick="addPartnerRow()">
+                                <button type="button" class="btn btn-primary rounded-pill px-3 py-2 fw-bold shadow-xs" onclick="addPartnerRow()">
 
                                     <i class="bi bi-plus-circle me-1"></i> Ortak Ekle
 
@@ -260,7 +242,7 @@ if (!string.IsNullOrWhiteSpace(Model.PartnerContractDocumentPath))
 
                         <h6 class="fw-bold text-dark mb-1">Harici Ortak / Hissedar Bulunmuyor</h6>
 
-                        <p class="text-muted small mb-0">Bu projenin tüm hak ve maliyeti (%100) şirketimize aittir. Yatırımcı veya ortak dahil olursa yukarıdaki <strong>"Ortak Ekle"</strong> butonuna tıklayabilirsiniz.</p>
+                        <p class="text-muted small mb-0">Bu projenin tüm hak ve maliyeti (%100) şirketimize aittir. Yatırımcı veya ortak dahil olduğunda <strong>"Ortak Ekle"</strong> butonuna tıklayarak sadece ortağın hissesini girmeniz yeterlidir.</p>
 
                     </div>
 
@@ -334,7 +316,7 @@ if (!string.IsNullOrWhiteSpace(Model.PartnerContractDocumentPath))
 
                                             <input type="number" name="partnerShares" class="form-control rounded-3 fw-bold text-danger partner-share-input" 
 
-                                                   min="0" max="100" step="1" 
+                                                   min="1" max="100" step="1" 
 
                                                    value="@p.SharePercentage.ToString("0.#")" 
 
@@ -372,51 +354,11 @@ if (!string.IsNullOrWhiteSpace(Model.PartnerContractDocumentPath))
 
                     </div>
 
-<!-- CANLI HİSSE DAĞILIM ÇUBUĞU (ORTAK VARSA GÖRÜNÜR) -->
+<!-- UYARI ALANI (SADECE 100 AŞILIRSA ÇIKAR) -->
 
-                    <div id="sharesSummaryBar" class="p-3 rounded-3 border d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 bg-light" style="display: @(pList.Count > 0 ? "flex" : "none") !important;">
+                    <div id="shareWarningBox" class="alert alert-danger py-2 px-3 rounded-3 mb-3 fw-bold" style="display: none;">
 
-                        <div class="d-flex align-items-center gap-3 flex-wrap">
-
-                            <div>
-
-                                <span class="text-muted small d-block">Bizim Payımız:</span>
-
-                                <strong class="text-primary fs-6" id="summaryOurShare">%(Model.OurSharePercentage.ToString("0.#"))</strong>
-
-                            </div>
-
-                            <div class="fs-4 text-muted">+</div>
-
-                            <div>
-
-                                <span class="text-muted small d-block">Ortaklar Toplamı:</span>
-
-                                <strong class="text-danger fs-6" id="summaryPartnersShare">%(Model.PartnerSharePercentage.ToString("0.#"))</strong>
-
-                            </div>
-
-                            <div class="fs-4 text-muted">=</div>
-
-                            <div>
-
-                                <span class="text-muted small d-block">Genel Toplam:</span>
-
-                                <strong class="fs-6" id="summaryTotalShare">%100</strong>
-
-                            </div>
-
-                        </div>
-
-                        <div id="shareStatusBadge">
-
-                            <span class="badge bg-success bg-opacity-15 text-success border border-success px-3 py-2 rounded-pill fw-bold">
-
-                                <i class="bi bi-check-circle-fill me-1"></i> Toplam %100 - Tam Eşitlik
-
-                            </span>
-
-                        </div>
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Ortakların hisseleri toplamı %100'ü geçemez!
 
                     </div>
 
@@ -1678,182 +1620,289 @@ executeKunyeAutosave();
 
 }
 
-// Çoklu Ortak & Hisse Dağılım Fonksiyonları (Sade & Hatasız)
+// Çoklu Ortak & Hisse Dağılım Fonksiyonları (Tek Giriş - Otomatik Kalan Hesaplama)
+
     function calcTotalShares() {
-        var ourShareInput = document.getElementById('ourShareInput');
-        var ourShare = parseFloat(ourShareInput ? ourShareInput.value : 0) || 0;
-        
+
         var shareInputs = document.querySelectorAll('.partner-share-input');
+
         var partnersTotal = 0;
+
         shareInputs.forEach(function(inp) {
+
             partnersTotal += parseFloat(inp.value) || 0;
-        });
 
-        var grandTotal = ourShare + partnersTotal;
+        });
+
+var ourShare = 100 - partnersTotal;
 
-        var elOur = document.getElementById('summaryOurShare');
-        var elPart = document.getElementById('summaryPartnersShare');
-        var elTot = document.getElementById('summaryTotalShare');
-        var elBadge = document.getElementById('shareStatusBadge');
+        var ourInput = document.getElementById('ourShareInput');
 
-        if (elOur) elOur.innerText = '%' + ourShare.toFixed(0);
-        if (elPart) elPart.innerText = '%' + partnersTotal.toFixed(0);
-        if (elTot) {
-            elTot.innerText = '%' + grandTotal.toFixed(0);
-            elTot.className = (grandTotal === 100 ? 'text-success' : 'text-danger') + ' fs-6 fw-bold';
-        }
+        var ourText = document.getElementById('ourRemainingShareText');
 
-        if (elBadge) {
-            if (grandTotal === 100) {
-                elBadge.innerHTML = '<span class="badge bg-success bg-opacity-15 text-success border border-success px-3 py-2 rounded-pill fw-bold"><i class="bi bi-check-circle-fill me-1"></i> Toplam %100 - Tam Eşitlik</span>';
+        var warningBox = document.getElementById('shareWarningBox');
+
+if (ourInput) ourInput.value = ourShare;
+
+if (ourText) {
+
+            if (ourShare >= 0) {
+
+                ourText.innerText = '%' + ourShare.toFixed(0);
+
+                ourText.className = 'text-primary fs-5';
+
             } else {
-                var diff = 100 - grandTotal;
-                var diffStr = diff > 0 ? ('%' + diff.toFixed(0) + ' Eksik') : ('%' + Math.abs(diff).toFixed(0) + ' Fazla');
-                elBadge.innerHTML = '<span class="badge bg-danger bg-opacity-15 text-danger border border-danger px-3 py-2 rounded-pill fw-bold"><i class="bi bi-exclamation-triangle-fill me-1"></i> Toplam %100 Olmalıdır (' + diffStr + ')</span>';
+
+                ourText.innerText = '%' + ourShare.toFixed(0) + ' (Geçersiz!)';
+
+                ourText.className = 'text-danger fs-5 fw-bold';
+
             }
-        }
-    }
 
-    function addPartnerRow() {
+        }
+
+if (warningBox) {
+
+            warningBox.style.display = partnersTotal > 100 ? 'block' : 'none';
+
+        }
+
+    }
+
+function addPartnerRow() {
+
         var container = document.getElementById('partnersContainer');
+
         var emptyState = document.getElementById('emptyPartnerState');
-        var summaryBar = document.getElementById('sharesSummaryBar');
-        if (!container) return;
 
-        if (emptyState) emptyState.style.display = 'none';
-        container.style.display = 'block';
-        if (summaryBar) summaryBar.style.setProperty('display', 'flex', 'important');
+        if (!container) return;
+
+if (emptyState) emptyState.style.display = 'none';
 
-        var rows = container.querySelectorAll('.partner-row');
-        var nextIdx = rows.length + 1;
+        container.style.display = 'block';
+
+var rows = container.querySelectorAll('.partner-row');
 
-        // Otomatik hisse ayarlama: Bizim payı azaltıp ortağa ver
-        var ourShareInput = document.getElementById('ourShareInput');
-        var currentOur = parseFloat(ourShareInput ? ourShareInput.value : 100) || 100;
-        var defaultPartnerShare = 30;
-        if (currentOur > defaultPartnerShare) {
-            currentOur = currentOur - defaultPartnerShare;
-        } else {
-            defaultPartnerShare = currentOur;
-            currentOur = 0;
-        }
-        if (ourShareInput) ourShareInput.value = currentOur.toFixed(0);
+        var nextIdx = rows.length + 1;
+
+// Kalan hisseye göre öneri ver
 
-        var rowDiv = document.createElement('div');
-        rowDiv.className = 'card p-3 border rounded-3 mb-2 shadow-xs partner-row bg-white';
-        rowDiv.innerHTML = `
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <span class="badge bg-secondary bg-opacity-10 text-secondary border px-2 py-1 rounded-pill fw-bold partner-idx-label">
-                    Ortak #${nextIdx}
-                </span>
-                <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-2 py-0 fw-bold btn-remove-partner" onclick="removePartnerRow(this)" title="Ortağı Kaldır">
-                    <i class="bi bi-trash3 me-1"></i>Kaldır
-                </button>
-            </div>
-            <div class="row g-2">
-                <div class="col-md-4">
-                    <label class="form-label fw-bold small text-muted">Firma Ünvanı <small class="text-secondary">(Varsa)</small></label>
-                    <input type="text" name="partnerCompanyNames" class="form-control rounded-3" placeholder="Örn: Denge İnşaat Ltd. Şti. (Şahıssa boş bırakın)" />
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label fw-bold small text-muted">Ortağın Adı <span class="text-danger">*</span></label>
-                    <input type="text" name="partnerFirstNames" class="form-control rounded-3 partner-fname-input" placeholder="Örn: Ali" />
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label fw-bold small text-muted">Ortağın Soyadı</label>
-                    <input type="text" name="partnerLastNames" class="form-control rounded-3 partner-lname-input" placeholder="Örn: Demir" />
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label fw-bold small text-muted">Hisse Payı (%) <span class="text-danger">*</span></label>
-                    <div class="input-group">
-                        <span class="input-group-text bg-white fw-bold px-2">%</span>
-                        <input type="number" name="partnerShares" class="form-control rounded-3 fw-bold text-danger partner-share-input" min="0" max="100" step="1" value="${defaultPartnerShare}" oninput="calcTotalShares()" />
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small text-muted"><i class="bi bi-telephone text-success me-1"></i> İrtibat Telefonu</label>
-                    <input type="tel" name="partnerPhones" class="form-control rounded-3" placeholder="Örn: 0532 123 45 67" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small text-muted"><i class="bi bi-envelope text-info me-1"></i> E-Posta Adresi</label>
-                    <input type="email" name="partnerEmails" class="form-control rounded-3" placeholder="Örn: ortak@firma.com" />
-                </div>
-            </div>
-        `;
-        container.appendChild(rowDiv);
-        reindexPartnerRows();
-        calcTotalShares();
-    }
+        var shareInputs = document.querySelectorAll('.partner-share-input');
 
-    function removePartnerRow(btn) {
-        var container = document.getElementById('partnersContainer');
-        var emptyState = document.getElementById('emptyPartnerState');
-        var summaryBar = document.getElementById('sharesSummaryBar');
-        var row = btn.closest('.partner-row');
-        if (row) {
-            row.remove();
-        }
+        var currentPartnersTotal = 0;
 
-        var remainingRows = container ? container.querySelectorAll('.partner-row') : [];
-        if (remainingRows.length === 0) {
-            if (emptyState) emptyState.style.display = 'block';
-            if (container) container.style.display = 'none';
-            if (summaryBar) summaryBar.style.setProperty('display', 'none', 'important');
-            var ourShareInput = document.getElementById('ourShareInput');
-            if (ourShareInput) ourShareInput.value = 100;
-        } else {
-            reindexPartnerRows();
-        }
-        calcTotalShares();
-    }
+        shareInputs.forEach(function(inp) {
 
-    function reindexPartnerRows() {
-        var container = document.getElementById('partnersContainer');
-        if (!container) return;
-        var rows = container.querySelectorAll('.partner-row');
-        rows.forEach(function(r, idx) {
-            var label = r.querySelector('.partner-idx-label');
-            if (label) label.innerText = 'Ortak #' + (idx + 1);
+            currentPartnersTotal += parseFloat(inp.value) || 0;
+
         });
-    }
 
-    function validatePartnerForm(e) {
-        var container = document.getElementById('partnersContainer');
-        var rows = container ? container.querySelectorAll('.partner-row') : [];
+        var availableShare = Math.max(0, 100 - currentPartnersTotal);
 
-        if (rows.length > 0) {
-            var ourShare = parseFloat(document.getElementById('ourShareInput')?.value || 0) || 0;
-            var partnersTotal = 0;
-            var hasInvalidName = false;
+        var suggestedShare = availableShare > 0 ? (availableShare >= 50 ? 50 : availableShare) : 10;
+
+var rowDiv = document.createElement('div');
 
-            rows.forEach(function(r) {
-                var fName = r.querySelector('.partner-fname-input')?.value?.trim() || '';
-                var cName = r.querySelector('input[name="partnerCompanyNames"]')?.value?.trim() || '';
-                var sVal = parseFloat(r.querySelector('.partner-share-input')?.value || 0) || 0;
+        rowDiv.className = 'card p-3 border rounded-3 mb-2 shadow-xs partner-row bg-white';
 
-                if (!fName && !cName) {
-                    hasInvalidName = true;
-                }
-                partnersTotal += sVal;
-            });
+        rowDiv.innerHTML = `
 
-            if (hasInvalidName) {
-                alert('Lütfen eklediğiniz her ortağın en azından Adını veya Firma Ünvanını giriniz.');
-                if (e) e.preventDefault();
-                return false;
-            }
+            <div class="d-flex justify-content-between align-items-center mb-2">
 
-            var grandTotal = ourShare + partnersTotal;
-            if (grandTotal !== 100) {
-                alert('Toplam hisse oranı %100 olmalıdır! Şu anki toplam: %' + grandTotal.toFixed(0));
-                if (e) e.preventDefault();
-                return false;
-            }
-        }
-        return true;
-    }
+                <span class="badge bg-secondary bg-opacity-10 text-secondary border px-2 py-1 rounded-pill fw-bold partner-idx-label">
 
-    document.addEventListener('DOMContentLoaded', function() {
+                    Ortak #${nextIdx}
+
+                </span>
+
+                <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-2 py-0 fw-bold btn-remove-partner" onclick="removePartnerRow(this)" title="Ortağı Kaldır">
+
+                    <i class="bi bi-trash3 me-1"></i>Kaldır
+
+                </button>
+
+            </div>
+
+            <div class="row g-2">
+
+                <div class="col-md-4">
+
+                    <label class="form-label fw-bold small text-muted">Firma Ünvanı <small class="text-secondary">(Varsa)</small></label>
+
+                    <input type="text" name="partnerCompanyNames" class="form-control rounded-3" placeholder="Örn: Denge İnşaat Ltd. Şti. (Şahıssa boş bırakın)" />
+
+                </div>
+
+                <div class="col-md-3">
+
+                    <label class="form-label fw-bold small text-muted">Ortağın Adı <span class="text-danger">*</span></label>
+
+                    <input type="text" name="partnerFirstNames" class="form-control rounded-3 partner-fname-input" placeholder="Örn: Ali" />
+
+                </div>
+
+                <div class="col-md-3">
+
+                    <label class="form-label fw-bold small text-muted">Ortağın Soyadı</label>
+
+                    <input type="text" name="partnerLastNames" class="form-control rounded-3 partner-lname-input" placeholder="Örn: Demir" />
+
+                </div>
+
+                <div class="col-md-2">
+
+                    <label class="form-label fw-bold small text-muted">Hisse Payı (%) <span class="text-danger">*</span></label>
+
+                    <div class="input-group">
+
+                        <span class="input-group-text bg-white fw-bold px-2">%</span>
+
+                        <input type="number" name="partnerShares" class="form-control rounded-3 fw-bold text-danger partner-share-input" min="1" max="100" step="1" value="" placeholder="Örn: 20" oninput="calcTotalShares()" />
+
+                    </div>
+
+                </div>
+
+                <div class="col-md-6">
+
+                    <label class="form-label fw-bold small text-muted"><i class="bi bi-telephone text-success me-1"></i> İrtibat Telefonu</label>
+
+                    <input type="tel" name="partnerPhones" class="form-control rounded-3" placeholder="Örn: 0532 123 45 67" />
+
+                </div>
+
+                <div class="col-md-6">
+
+                    <label class="form-label fw-bold small text-muted"><i class="bi bi-envelope text-info me-1"></i> E-Posta Adresi</label>
+
+                    <input type="email" name="partnerEmails" class="form-control rounded-3" placeholder="Örn: ortak@firma.com" />
+
+                </div>
+
+            </div>
+
+        `;
+
+        container.appendChild(rowDiv);
+
+        reindexPartnerRows();
+
         calcTotalShares();
+
+    }
+
+function removePartnerRow(btn) {
+
+        var container = document.getElementById('partnersContainer');
+
+        var emptyState = document.getElementById('emptyPartnerState');
+
+        var row = btn.closest('.partner-row');
+
+        if (row) {
+
+            row.remove();
+
+        }
+
+var remainingRows = container ? container.querySelectorAll('.partner-row') : [];
+
+        if (remainingRows.length === 0) {
+
+            if (emptyState) emptyState.style.display = 'block';
+
+            if (container) container.style.display = 'none';
+
+        } else {
+
+            reindexPartnerRows();
+
+        }
+
+        calcTotalShares();
+
+    }
+
+function reindexPartnerRows() {
+
+        var container = document.getElementById('partnersContainer');
+
+        if (!container) return;
+
+        var rows = container.querySelectorAll('.partner-row');
+
+        rows.forEach(function(r, idx) {
+
+            var label = r.querySelector('.partner-idx-label');
+
+            if (label) label.innerText = 'Ortak #' + (idx + 1);
+
+        });
+
+    }
+
+function validatePartnerForm(e) {
+
+        var container = document.getElementById('partnersContainer');
+
+        var rows = container ? container.querySelectorAll('.partner-row') : [];
+
+if (rows.length > 0) {
+
+            var partnersTotal = 0;
+
+            var hasInvalidName = false;
+
+rows.forEach(function(r) {
+
+                var fName = r.querySelector('.partner-fname-input')?.value?.trim() || '';
+
+                var cName = r.querySelector('input[name="partnerCompanyNames"]')?.value?.trim() || '';
+
+                var sVal = parseFloat(r.querySelector('.partner-share-input')?.value || 0) || 0;
+
+if (!fName && !cName) {
+
+                    hasInvalidName = true;
+
+                }
+
+                partnersTotal += sVal;
+
+            });
+
+if (hasInvalidName) {
+
+                alert('Lütfen eklediğiniz her ortağın Adını veya Firma Ünvanını giriniz.');
+
+                if (e) e.preventDefault();
+
+                return false;
+
+            }
+
+if (partnersTotal > 100) {
+
+                alert('Ortakların toplam hissesi %100\'ü aşamaz! Şu anki ortaklar toplamı: %' + partnersTotal.toFixed(0));
+
+                if (e) e.preventDefault();
+
+                return false;
+
+            }
+
+        }
+
+        return true;
+
+    }
+
+document.addEventListener('DOMContentLoaded', function() {
+
+        calcTotalShares();
+
     });
+
 </script>
+
