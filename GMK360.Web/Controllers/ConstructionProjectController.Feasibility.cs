@@ -2,7 +2,15 @@ using System;
 
 
 
+
+
+
+
 using System.IO;
+
+
+
+
 
 
 
@@ -10,7 +18,15 @@ using System.Linq;
 
 
 
+
+
+
+
 using System.Threading.Tasks;
+
+
+
+
 
 
 
@@ -18,7 +34,15 @@ using Microsoft.AspNetCore.Authorization;
 
 
 
+
+
+
+
 using Microsoft.AspNetCore.Http;
+
+
+
+
 
 
 
@@ -26,7 +50,15 @@ using Microsoft.AspNetCore.Mvc;
 
 
 
+
+
+
+
 using Microsoft.AspNetCore.Mvc.Rendering;
+
+
+
+
 
 
 
@@ -34,7 +66,15 @@ using Microsoft.EntityFrameworkCore;
 
 
 
+
+
+
+
 using Microsoft.Extensions.DependencyInjection;
+
+
+
+
 
 
 
@@ -42,11 +82,23 @@ using GMK360.Core.Entities;
 
 
 
+
+
+
+
 using GMK360.Core.Entities.Construction;
 
 
 
+
+
+
+
 using GMK360.Core.Entities.Identity;
+
+
+
+
 
 
 
@@ -58,7 +110,19 @@ using GMK360.Data.Contexts;
 
 
 
+
+
+
+
+
+
+
+
 namespace GMK360.Web.Controllers
+
+
+
+
 
 
 
@@ -66,7 +130,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
     public partial class ConstructionProjectController : Controller
+
+
+
+
 
 
 
@@ -74,7 +146,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         // GET: /ConstructionProject/Feasibility/5
+
+
+
+
 
 
 
@@ -82,7 +162,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         public async Task<IActionResult> Feasibility(int? id)
+
+
+
+
 
 
 
@@ -90,11 +178,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             if (id == null) return NotFound();
 
 
 
+
+
+
+
             var agencyId = await GetUserAgencyIdAsync();
+
+
+
+
 
 
 
@@ -106,7 +206,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var project = await _context.ConstructionProjects
+
+
+
+
 
 
 
@@ -114,7 +226,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .Include(p => p.Agency)
+
+
+
+
 
 
 
@@ -126,7 +246,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (project == null) return NotFound();
+
+
+
+
+
+
+
+
 
 
 
@@ -138,16 +274,33 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             ViewData["ProjectName"] = project.Name;
 
 
 
+
+
+
+
             ViewData["ProjectStatus"] = project.Status;
+
             if (project.CityId.HasValue)
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -155,11 +308,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.CityName = city?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -167,7 +332,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -175,11 +348,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.DistrictName = dist?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -187,7 +372,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -195,7 +388,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.NeighborhoodName = neigh?.Name;
+
+
+
+
 
 
 
@@ -203,11 +404,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.AiUpdatedAt = neigh?.AiAnalysisUpdatedAt;
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -219,7 +436,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             var lastProject = await _context.ConstructionProjects
+
+
+
+
 
 
 
@@ -227,7 +452,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .OrderByDescending(p => p.CreatedAt)
+
+
+
+
 
 
 
@@ -239,7 +472,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             ViewBag.LastProjectName = lastProject?.Name ?? "Önceki Referans Proje";
+
+
+
+
 
 
 
@@ -247,7 +492,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             ViewBag.LastExcavationCostPerM3 = 280m; // 280 ₺/m³ hafriyat kazı ve nakliye
+
+
+
+
 
 
 
@@ -259,7 +512,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (project.Latitude.HasValue && project.Longitude.HasValue)
+
+
+
+
 
 
 
@@ -267,7 +532,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 try
+
+
+
+
 
 
 
@@ -275,7 +548,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     var tkgmService = HttpContext.RequestServices.GetRequiredService<GMK360.Core.Interfaces.ITkgmService>();
+
+
+
+
 
 
 
@@ -283,7 +564,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     if (parcelRes != null && parcelRes.Success && !string.IsNullOrWhiteSpace(parcelRes.GeoJson))
+
+
+
+
 
 
 
@@ -291,7 +580,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                         ViewBag.TkgmPolygonGeoJson = parcelRes.GeoJson;
+
+
+
+
 
 
 
@@ -299,11 +596,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 }
 
 
 
+
+
+
+
                 catch { }
+
+
+
+
 
 
 
@@ -315,7 +624,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             return View(project);
+
+
+
+
 
 
 
@@ -327,7 +648,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
         // GET: /ConstructionProject/CadastralMap/5
+
+
+
+
 
 
 
@@ -335,7 +668,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         public async Task<IActionResult> CadastralMap(int id)
+
+
+
+
 
 
 
@@ -343,7 +684,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             var agencyId = await GetUserAgencyIdAsync();
+
+
+
+
 
 
 
@@ -355,11 +704,31 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var project = await _context.ConstructionProjects
 
 
 
+
+
+
+
                 .FirstOrDefaultAsync(p => p.Id == id && p.AgencyId == agencyId.Value && !p.IsDeleted);
+
+
+
+
+
+
+
+
 
 
 
@@ -375,11 +744,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (project.CityId.HasValue)
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -387,11 +772,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.CityName = city?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -399,7 +796,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -407,11 +812,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.DistrictName = dist?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -419,7 +836,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -427,11 +852,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.NeighborhoodName = neigh?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -439,7 +876,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -447,11 +892,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.StreetName = street?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -463,7 +924,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         }
+
+
+
+
+
+
+
+
 
 
 
@@ -475,7 +948,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         [HttpPost]
+
+
+
+
 
 
 
@@ -483,11 +964,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         {
 
 
 
+
+
+
+
             var agencyId = await GetUserAgencyIdAsync();
+
+
+
+
 
 
 
@@ -499,11 +992,31 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var project = await _context.ConstructionProjects
 
 
 
+
+
+
+
                 .FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId.Value && !p.IsDeleted);
+
+
+
+
+
+
+
+
 
 
 
@@ -519,7 +1032,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             project.Status = (GMK360.Core.Entities.Construction.ProjectStatus)status;
+
+
+
+
 
 
 
@@ -527,7 +1052,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -535,7 +1068,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 project.Description = string.IsNullOrWhiteSpace(project.Description)
+
+
+
+
 
 
 
@@ -543,7 +1084,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     : $"{project.Description}\n[Saha Kararı ({DateTime.Now:dd.MM.yyyy})]: {cleanReason}";
+
+
+
+
 
 
 
@@ -555,7 +1104,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             await _context.SaveChangesAsync();
+
+
+
+
 
 
 
@@ -563,7 +1124,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 success = true, 
+
+
+
+
 
 
 
@@ -571,11 +1140,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 statusName = project.Status.ToString() 
 
 
 
+
+
+
+
             });
+
+
+
+
 
 
 
@@ -587,7 +1168,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
         // GET: /ConstructionProject/Workspace/5
+
+
+
+
 
 
 
@@ -595,7 +1188,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -603,7 +1204,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             var agencyId = await GetUserAgencyIdAsync();
+
+
+
+
 
 
 
@@ -615,7 +1224,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var project = await _context.ConstructionProjects
+
+
+
+
 
 
 
@@ -623,11 +1244,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .Include(p => p.Blocks).ThenInclude(b => b.Units)
 
 
 
+
+
+
+
                 .Include(p => p.BinaYoneticisi)
+
+
+
+
 
 
 
@@ -639,7 +1272,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (project == null) return NotFound();
+
+
+
+
+
+
+
+
 
 
 
@@ -655,7 +1304,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             // 1. Hak Sahipleri
+
+
+
+
 
 
 
@@ -663,7 +1324,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .Include(s => s.User)
+
+
+
+
 
 
 
@@ -671,11 +1340,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .OrderByDescending(s => s.CreatedAt)
 
 
 
+
+
+
+
                 .ToListAsync();
+
+
+
+
 
 
 
@@ -687,7 +1368,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             // 2. Çizimler / DWG & Paftalar
+
+
+
+
 
 
 
@@ -695,7 +1388,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .Where(d => d.ProjectId == id && !d.IsDeleted)
+
+
+
+
 
 
 
@@ -703,7 +1404,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .ToListAsync();
+
+
+
+
 
 
 
@@ -715,11 +1424,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             // 3. Konum SelectList'leri
 
 
 
+
+
+
+
             var cities = await _context.Cities.OrderBy(c => c.Name).ToListAsync();
+
+
+
+
 
 
 
@@ -731,11 +1456,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (project.CityId.HasValue)
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -743,11 +1484,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.Districts = new SelectList(districts, "Id", "Name", project.DistrictId);
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -755,7 +1508,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -763,7 +1524,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -775,7 +1548,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -783,11 +1564,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.Neighborhoods = new SelectList(neighborhoods, "Id", "Name", project.NeighborhoodId);
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -795,7 +1588,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -803,7 +1604,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -815,7 +1628,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -823,11 +1644,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.Streets = new SelectList(streets, "Id", "Name", project.StreetId);
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -835,7 +1668,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -843,7 +1684,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -855,7 +1708,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .Where(d => d.ProjectId == id && d.Title == "Tapu Belgesi" && !d.IsDeleted)
+
+
+
+
 
 
 
@@ -863,7 +1724,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .FirstOrDefaultAsync();
+
+
+
+
 
 
 
@@ -875,11 +1744,31 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             return View(project);
 
 
 
+
+
+
+
         }
+
+
+
+
+
+
+
+
 
 
 
@@ -891,7 +1780,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         [HttpPost]
+
+
+
+
 
 
 
@@ -899,7 +1796,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             int id,
+
+
+
+
 
 
 
@@ -907,7 +1812,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             string? description,
+
+
+
+
 
 
 
@@ -915,7 +1828,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             int? projectOriginId,
+
+
+
+
 
 
 
@@ -923,7 +1844,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             int? districtId,
+
+
+
+
 
 
 
@@ -931,7 +1860,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             int? streetId,
+
+
+
+
 
 
 
@@ -939,7 +1876,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             string? ada,
+
+
+
+
 
 
 
@@ -947,7 +1892,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             double? totalLandArea,
+
+
+
+
 
 
 
@@ -955,7 +1908,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             double? longitude,
+
+
+
+
 
 
 
@@ -963,7 +1924,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             int? eskiKatSayisi,
+
+
+
+
 
 
 
@@ -971,7 +1940,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             int? eskiDukkanSayisi,
+
+
+
+
 
 
 
@@ -979,7 +1956,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             DateTime startDate,
+
+
+
+
 
 
 
@@ -987,7 +1972,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             ProjectStatus status,
+
+
+
+
 
 
 
@@ -995,7 +1988,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             IFormFile? tapuDocumentFile)
+
+
+
+
 
 
 
@@ -1003,7 +2004,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             var agencyId = await GetUserAgencyIdAsync();
+
+
+
+
 
 
 
@@ -1015,7 +2024,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var project = await _context.ConstructionProjects
+
+
+
+
 
 
 
@@ -1027,7 +2048,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (project == null) return NotFound();
+
+
+
+
+
+
+
+
 
 
 
@@ -1039,7 +2076,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             project.Description = description?.Trim();
+
+
+
+
 
 
 
@@ -1047,7 +2092,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             project.ProjectOriginId = projectOriginId ?? 1;
+
+
+
+
 
 
 
@@ -1055,7 +2108,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             project.DistrictId = districtId;
+
+
+
+
 
 
 
@@ -1063,7 +2124,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             project.StreetId = streetId;
+
+
+
+
 
 
 
@@ -1071,7 +2140,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             project.Ada = ada?.Trim();
+
+
+
+
 
 
 
@@ -1079,7 +2156,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             project.TotalLandArea = totalLandArea;
+
+
+
+
 
 
 
@@ -1087,7 +2172,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             project.Longitude = longitude;
+
+
+
+
 
 
 
@@ -1095,7 +2188,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             project.EskiKatSayisi = eskiKatSayisi;
+
+
+
+
 
 
 
@@ -1103,7 +2204,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             project.EskiDukkanSayisi = eskiDukkanSayisi;
+
+
+
+
 
 
 
@@ -1111,11 +2220,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             project.StartDate = startDate;
 
 
 
+
+
+
+
             project.EndDate = endDate;
+
+
+
+
 
 
 
@@ -1127,7 +2248,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             // Fotoğraf yükleme
+
+
+
+
 
 
 
@@ -1135,7 +2268,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -1143,7 +2284,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
+
+
+
+
+
+
+
+
 
 
 
@@ -1155,7 +2308,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+
+
+
+
 
 
 
@@ -1163,7 +2324,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 {
+
+
+
+
 
 
 
@@ -1171,7 +2340,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     var filePath = Path.Combine(uploadsFolder, fileName);
+
+
+
+
 
 
 
@@ -1179,7 +2356,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     {
+
+
+
+
 
 
 
@@ -1187,7 +2372,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     }
+
+
+
+
 
 
 
@@ -1195,11 +2388,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 }
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -1211,7 +2420,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             if (tapuDocumentFile != null && tapuDocumentFile.Length > 0)
+
+
+
+
 
 
 
@@ -1219,7 +2436,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 var uploadsFolder = Path.Combine(_hostEnvironment.WebRootPath, "uploads", $"Agency_{agencyId.Value}", $"Project_{project.Id}", "documents");
+
+
+
+
 
 
 
@@ -1231,11 +2456,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
                 var extension = Path.GetExtension(tapuDocumentFile.FileName).ToLower();
 
 
 
+
+
+
+
                 var standardizedName = $"Tapu_Belgesi_{DateTime.Now:yyyyMMdd_HHmmss}{extension}";
+
+
+
+
 
 
 
@@ -1247,7 +2488,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
                 using (var stream = new FileStream(filePath, FileMode.Create))
+
+
+
+
 
 
 
@@ -1255,11 +2508,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     await tapuDocumentFile.CopyToAsync(stream);
 
 
 
+
+
+
+
                 }
+
+
+
+
+
+
+
+
 
 
 
@@ -1271,7 +2540,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 {
+
+
+
+
 
 
 
@@ -1279,7 +2556,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     ProjectId = project.Id,
+
+
+
+
 
 
 
@@ -1287,7 +2572,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     Category = "Resmi Evraklar",
+
+
+
+
 
 
 
@@ -1295,7 +2588,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     DocumentUrl = $"/uploads/Agency_{agencyId.Value}/Project_{project.Id}/documents/{standardizedName}",
+
+
+
+
 
 
 
@@ -1303,7 +2604,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     FileExtension = extension,
+
+
+
+
 
 
 
@@ -1311,7 +2620,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     UploadDate = DateTime.UtcNow,
+
+
+
+
 
 
 
@@ -1319,7 +2636,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 };
+
+
+
+
 
 
 
@@ -1327,7 +2652,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -1339,11 +2676,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             TempData["SuccessMessage"] = "Proje künyesi ve keşif bilgileri başarıyla güncellendi.";
 
 
 
+
+
+
+
             return RedirectToAction(nameof(Workspace), new { id = id, tab = "kunye" });
+
+
+
+
 
 
 
@@ -1355,21 +2704,32 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
         // POST: /ConstructionProject/UpdateProjectPartners
+
+
+
+
 
 
 
         [HttpPost]
         public async Task<IActionResult> UpdateProjectPartners(
             int id, 
-            bool isJointVenture,
             decimal? ourSharePercentage,
             List<string>? partnerCompanyNames,
             List<string>? partnerFirstNames,
             List<string>? partnerLastNames,
             List<string>? partnerPhones,
             List<string>? partnerEmails,
-            List<decimal>? partnerShares,
+            List<string>? partnerShares,
             Microsoft.AspNetCore.Http.IFormFile? contractDocument)
         {
             var agencyId = await GetUserAgencyIdAsync();
@@ -1380,35 +2740,41 @@ namespace GMK360.Web.Controllers
 
             if (project == null) return NotFound();
 
-            project.IsJointVenture = isJointVenture;
+            var partners = new List<GMK360.Core.DTOs.Construction.ProjectPartnerDto>();
 
-            if (isJointVenture)
+            if (partnerFirstNames != null && partnerFirstNames.Count > 0)
             {
-                var partners = new List<GMK360.Core.DTOs.Construction.ProjectPartnerDto>();
-                if (partnerFirstNames != null)
+                for (int i = 0; i < partnerFirstNames.Count; i++)
                 {
-                    for (int i = 0; i < partnerFirstNames.Count; i++)
-                    {
-                        var fName = partnerFirstNames[i]?.Trim() ?? "";
-                        var lName = (partnerLastNames != null && i < partnerLastNames.Count) ? (partnerLastNames[i]?.Trim() ?? "") : "";
-                        var cName = (partnerCompanyNames != null && i < partnerCompanyNames.Count) ? (partnerCompanyNames[i]?.Trim() ?? "") : "";
+                    var fName = partnerFirstNames[i]?.Trim() ?? "";
+                    var lName = (partnerLastNames != null && i < partnerLastNames.Count) ? (partnerLastNames[i]?.Trim() ?? "") : "";
+                    var cName = (partnerCompanyNames != null && i < partnerCompanyNames.Count) ? (partnerCompanyNames[i]?.Trim() ?? "") : "";
 
-                        if (!string.IsNullOrWhiteSpace(fName) || !string.IsNullOrWhiteSpace(cName))
+                    if (!string.IsNullOrWhiteSpace(fName) || !string.IsNullOrWhiteSpace(cName))
+                    {
+                        decimal share = 0m;
+                        if (partnerShares != null && i < partnerShares.Count)
                         {
-                            var partner = new GMK360.Core.DTOs.Construction.ProjectPartnerDto
-                            {
-                                CompanyName = string.IsNullOrWhiteSpace(cName) ? null : cName,
-                                FirstName = fName,
-                                LastName = lName,
-                                Phone = (partnerPhones != null && i < partnerPhones.Count) ? partnerPhones[i]?.Trim() : null,
-                                Email = (partnerEmails != null && i < partnerEmails.Count) ? partnerEmails[i]?.Trim() : null,
-                                SharePercentage = (partnerShares != null && i < partnerShares.Count) ? Math.Max(0m, partnerShares[i]) : 0m
-                            };
-                            partners.Add(partner);
+                            var sStr = partnerShares[i]?.Replace(',', '.')?.Trim();
+                            decimal.TryParse(sStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out share);
                         }
+
+                        partners.Add(new GMK360.Core.DTOs.Construction.ProjectPartnerDto
+                        {
+                            CompanyName = string.IsNullOrWhiteSpace(cName) ? null : cName,
+                            FirstName = fName,
+                            LastName = lName,
+                            Phone = (partnerPhones != null && i < partnerPhones.Count) ? partnerPhones[i]?.Trim() : null,
+                            Email = (partnerEmails != null && i < partnerEmails.Count) ? partnerEmails[i]?.Trim() : null,
+                            SharePercentage = Math.Max(0m, share)
+                        });
                     }
                 }
+            }
 
+            if (partners.Count > 0)
+            {
+                project.IsJointVenture = true;
                 project.PartnersJson = System.Text.Json.JsonSerializer.Serialize(partners);
 
                 decimal totalPartnerShare = partners.Sum(p => p.SharePercentage);
@@ -1419,29 +2785,23 @@ namespace GMK360.Web.Controllers
                 project.OurSharePercentage = ourShare;
                 project.PartnerSharePercentage = totalPartnerShare;
 
-                if (partners.Count > 0)
-                {
-                    project.PartnerCompanyName = partners[0].CompanyName ?? partners[0].FullName;
-                    project.PartnerContactPerson = partners[0].FullName;
-                    project.PartnerPhone = partners[0].Phone;
-                    project.PartnerEmail = partners[0].Email;
+                project.PartnerCompanyName = partners[0].CompanyName ?? partners[0].FullName;
+                project.PartnerContactPerson = partners[0].FullName;
+                project.PartnerPhone = partners[0].Phone;
+                project.PartnerEmail = partners[0].Email;
 
-                    if (partners.Count == 1)
-                    {
-                        project.ProjectOwnerContact = $"Ortak Girişim (%{ourShare:0.#} Biz / %{totalPartnerShare:0.#} {partners[0].DisplayName})";
-                    }
-                    else
-                    {
-                        project.ProjectOwnerContact = $"Çoklu Ortaklık (%{ourShare:0.#} Biz / {partners.Count} Ortak: %{totalPartnerShare:0.#})";
-                    }
+                if (partners.Count == 1)
+                {
+                    project.ProjectOwnerContact = $"Ortak Girişim (%{ourShare:0.#} Biz / %{totalPartnerShare:0.#} {partners[0].DisplayName})";
                 }
                 else
                 {
-                    project.ProjectOwnerContact = "Ortak Girişim";
+                    project.ProjectOwnerContact = $"Çoklu Ortaklık (%{ourShare:0.#} Biz / {partners.Count} Ortak: %{totalPartnerShare:0.#})";
                 }
             }
             else
             {
+                project.IsJointVenture = false;
                 project.PartnerCompanyName = null;
                 project.PartnerContactPerson = null;
                 project.PartnerPhone = null;
@@ -1500,13 +2860,13 @@ namespace GMK360.Web.Controllers
                 }
                 catch (Exception ex)
                 {
-                    TempData["ErrorMessage"] = "Sözleşme dosyası yüklenirken bir hata oluştu: " + ex.Message;
+                    TempData["ErrorMessage"] = "Sözleşme yüklenirken hata oluştu: " + ex.Message;
                 }
             }
 
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = isJointVenture 
+            TempData["SuccessMessage"] = project.IsJointVenture 
                 ? "Ortaklık, hisse ve sözleşme bilgileri başarıyla kaydedildi." 
                 : "Proje tekil yüklenici (%100) olarak kaydedildi.";
 
@@ -1519,7 +2879,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
         // POST: /ConstructionProject/UpdateProjectContact
+
+
+
+
 
 
 
@@ -1527,7 +2899,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         public async Task<IActionResult> UpdateProjectContact(
+
+
+
+
 
 
 
@@ -1535,7 +2915,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             string? contactType, 
+
+
+
+
 
 
 
@@ -1543,7 +2931,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             string? lastName, 
+
+
+
+
 
 
 
@@ -1551,7 +2947,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             string? email, 
+
+
+
+
 
 
 
@@ -1559,11 +2963,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         {
 
 
 
+
+
+
+
             var agencyId = await GetUserAgencyIdAsync();
+
+
+
+
 
 
 
@@ -1575,11 +2991,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var project = await _context.ConstructionProjects
 
 
 
+
+
+
+
                 .Include(p => p.BinaYoneticisi)
+
+
+
+
 
 
 
@@ -1591,7 +3023,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (project == null) return NotFound();
+
+
+
+
+
+
+
+
 
 
 
@@ -1607,11 +3055,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (project.BinaYoneticisi != null)
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -1619,7 +3083,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 project.BinaYoneticisi.FirstName = firstName?.Trim() ?? "";
+
+
+
+
 
 
 
@@ -1627,7 +3099,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 project.BinaYoneticisi.PhoneNumber = phoneNumber?.Trim();
+
+
+
+
 
 
 
@@ -1635,7 +3115,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 project.BinaYoneticisi.Notes = notes?.Trim();
+
+
+
+
 
 
 
@@ -1643,7 +3131,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             else if (!string.IsNullOrWhiteSpace(firstName) || !string.IsNullOrWhiteSpace(phoneNumber))
+
+
+
+
 
 
 
@@ -1651,7 +3147,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 var newContact = new GMK360.Core.Entities.CrmContact
+
+
+
+
 
 
 
@@ -1659,7 +3163,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     ApplicationUserId = userId,
+
+
+
+
 
 
 
@@ -1667,7 +3179,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     FirstName = firstName?.Trim() ?? "",
+
+
+
+
 
 
 
@@ -1675,7 +3195,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     PhoneNumber = phoneNumber?.Trim(),
+
+
+
+
 
 
 
@@ -1683,7 +3211,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     Notes = notes?.Trim()
+
+
+
+
 
 
 
@@ -1691,11 +3227,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 _context.CrmContacts.Add(newContact);
 
 
 
+
+
+
+
                 await _context.SaveChangesAsync();
+
+
+
+
+
+
+
+
 
 
 
@@ -1707,6 +3259,10 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             }
 
 
@@ -1715,7 +3271,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             await _context.SaveChangesAsync();
+
+
+
+
+
+
+
+
 
 
 
@@ -1727,11 +3299,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             return RedirectToAction(nameof(Workspace), new { id = id });
 
 
 
+
+
+
+
         }
+
+
+
+
+
+
+
+
 
 
 
@@ -1743,7 +3331,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         [HttpPost]
+
+
+
+
 
 
 
@@ -1751,7 +3347,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             int projectId,
+
+
+
+
 
 
 
@@ -1759,7 +3363,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             string title,
+
+
+
+
 
 
 
@@ -1767,7 +3379,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             int? floorLevel,
+
+
+
+
 
 
 
@@ -1775,7 +3395,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -1783,7 +3411,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             if (agencyId == null) return Unauthorized();
+
+
+
+
+
+
+
+
 
 
 
@@ -1795,7 +3435,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -1803,11 +3451,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 return RedirectToAction(nameof(Workspace), new { id = projectId, tab = "teknik" });
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -1819,11 +3483,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
 
 
 
+
+
+
+
                 string uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "projects", projectId.ToString(), "drawings");
+
+
+
+
 
 
 
@@ -1835,7 +3511,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
                 string ext = Path.GetExtension(drawingFile.FileName).ToLower();
+
+
+
+
 
 
 
@@ -1843,7 +3531,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 string uniqueFileName = $"{safeName}_{DateTime.Now:yyyyMMdd_HHmmss}{ext}";
+
+
+
+
 
 
 
@@ -1855,7 +3551,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
                 using (var stream = new FileStream(filePath, FileMode.Create))
+
+
+
+
 
 
 
@@ -1863,11 +3571,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     await drawingFile.CopyToAsync(stream);
 
 
 
+
+
+
+
                 }
+
+
+
+
+
+
+
+
 
 
 
@@ -1879,7 +3603,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 {
+
+
+
+
 
 
 
@@ -1887,7 +3619,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     Title = string.IsNullOrWhiteSpace(title) ? drawingFile.FileName : title.Trim(),
+
+
+
+
 
 
 
@@ -1895,7 +3635,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     DocumentUrl = $"/uploads/projects/{projectId}/drawings/{uniqueFileName}",
+
+
+
+
 
 
 
@@ -1903,7 +3651,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     FileName = uniqueFileName,
+
+
+
+
 
 
 
@@ -1911,11 +3667,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     UploadDate = DateTime.Now,
 
 
 
+
+
+
+
                     CreatedAt = DateTime.UtcNow
+
+
+
+
 
 
 
@@ -1927,7 +3695,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
                 _context.DocumentArchives.Add(doc);
+
+
+
+
 
 
 
@@ -1935,11 +3715,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 TempData["SuccessMessage"] = $"{drawingFile.FileName} çizimi başarıyla teknik ofis arşivine yüklendi.";
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -1947,7 +3739,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -1955,7 +3755,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -1967,7 +3779,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         }
+
+
+
+
+
+
+
+
 
 
 
@@ -1979,7 +3803,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         public async Task<IActionResult> Analysis(int? id)
+
+
+
+
 
 
 
@@ -1987,11 +3819,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             if (id == null) return NotFound();
 
 
 
+
+
+
+
             var agencyId = await GetUserAgencyIdAsync();
+
+
+
+
 
 
 
@@ -2003,11 +3847,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var project = await _context.ConstructionProjects
 
 
 
+
+
+
+
                 .Include(p => p.BinaYoneticisi)
+
+
+
+
 
 
 
@@ -2019,7 +3879,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (project == null) return NotFound();
+
+
+
+
+
+
+
+
 
 
 
@@ -2031,7 +3907,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             ViewData["ProjectName"] = project.Name;
+
+
+
+
 
 
 
@@ -2043,7 +3927,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             // 1. Hak Sahipleri
+
+
+
+
 
 
 
@@ -2051,7 +3947,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .Include(s => s.User)
+
+
+
+
 
 
 
@@ -2059,11 +3963,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .OrderByDescending(s => s.CreatedAt)
 
 
 
+
+
+
+
                 .ToListAsync();
+
+
+
+
 
 
 
@@ -2075,7 +3991,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             // 2. Bloklar ve Bağımsız Bölümler (Eski Bina Durumu)
+
+
+
+
 
 
 
@@ -2083,7 +4011,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .Include(b => b.ChildBuildings).ThenInclude(c => c.Units)
+
+
+
+
 
 
 
@@ -2091,11 +4027,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .Where(b => b.ConstructionProjectId == id)
 
 
 
+
+
+
+
                 .ToListAsync();
+
+
+
+
 
 
 
@@ -2107,7 +4055,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             // 3. 1. Aşama Bürokrasi Evrakları
+
+
+
+
 
 
 
@@ -2115,7 +4075,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .Include(d => d.SystemTemplate)
+
+
+
+
 
 
 
@@ -2123,7 +4091,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .ToListAsync();
+
+
+
+
 
 
 
@@ -2131,7 +4107,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             ViewBag.TotalInitialFee = initialDocs.Sum(d => (d.DocumentFee ?? 0) + (d.AdditionalCost ?? 0));
+
+
+
+
 
 
 
@@ -2143,7 +4127,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var stageRules = await _context.ModuleDocumentRules
+
+
+
+
 
 
 
@@ -2151,7 +4147,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .ThenInclude(p => p.PrerequisiteTemplate)
+
+
+
+
 
 
 
@@ -2159,7 +4163,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .ToListAsync();
+
+
+
+
 
 
 
@@ -2171,11 +4183,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (project.CityId.HasValue)
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -2183,11 +4211,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.CityName = city?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -2195,7 +4235,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -2203,11 +4251,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.DistrictName = dist?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -2215,7 +4275,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -2223,11 +4291,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.NeighborhoodName = neigh?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -2239,7 +4323,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         }
+
+
+
+
+
+
+
+
 
 
 
@@ -2251,7 +4347,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         [HttpPost]
+
+
+
+
 
 
 
@@ -2259,7 +4363,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             int id,
+
+
+
+
 
 
 
@@ -2267,7 +4379,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             int? totalFloors,
+
+
+
+
 
 
 
@@ -2275,7 +4395,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             decimal? averageFlatSalePrice,
+
+
+
+
 
 
 
@@ -2283,11 +4411,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         {
 
 
 
+
+
+
+
             var agencyId = await GetUserAgencyIdAsync();
+
+
+
+
 
 
 
@@ -2299,11 +4439,31 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var project = await _context.ConstructionProjects
 
 
 
+
+
+
+
                 .FirstOrDefaultAsync(p => p.Id == id && p.AgencyId == agencyId.Value && !p.IsDeleted);
+
+
+
+
+
+
+
+
 
 
 
@@ -2319,7 +4479,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (totalLandArea.HasValue && totalLandArea > 0) project.TotalLandArea = totalLandArea;
+
+
+
+
 
 
 
@@ -2327,11 +4499,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             project.TargetTotalApartments = targetTotalApartments;
 
 
 
+
+
+
+
             if (averageFlatSalePrice.HasValue) project.AverageFlatSalePrice = averageFlatSalePrice.Value;
+
+
+
+
 
 
 
@@ -2343,7 +4527,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             await _context.SaveChangesAsync();
+
+
+
+
+
+
+
+
 
 
 
@@ -2355,7 +4555,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -2363,7 +4571,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -2375,11 +4595,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             return RedirectToAction(nameof(Analysis), new { id = id });
 
 
 
+
+
+
+
         }
+
+
+
+
+
+
+
+
 
 
 
@@ -2391,7 +4627,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         [HttpPost]
+
+
+
+
 
 
 
@@ -2399,7 +4643,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         public async Task<IActionResult> RefreshNeighborhoodAi(int projectId)
+
+
+
+
 
 
 
@@ -2407,11 +4659,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             var agencyId = await GetUserAgencyIdAsync();
 
 
 
+
+
+
+
             if (agencyId == null) return Unauthorized();
+
+
+
+
+
+
+
+
 
 
 
@@ -2423,7 +4691,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             if (project == null || !project.NeighborhoodId.HasValue)
+
+
+
+
 
 
 
@@ -2435,7 +4711,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var neigh = await _context.Neighborhoods.FirstOrDefaultAsync(n => n.Id == project.NeighborhoodId.Value);
+
+
+
+
 
 
 
@@ -2447,7 +4735,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var dist = project.DistrictId.HasValue ? await _context.Districts.FirstOrDefaultAsync(d => d.Id == project.DistrictId.Value) : null;
+
+
+
+
 
 
 
@@ -2459,7 +4759,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var geminiService = HttpContext.RequestServices.GetService<GMK360.Core.Interfaces.IGeminiAiService>();
+
+
+
+
 
 
 
@@ -2471,7 +4783,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var report = await geminiService.AnalyzeNeighborhoodAsync(districtName, neigh.Name);
+
+
+
+
 
 
 
@@ -2479,11 +4803,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             neigh.AiAnalysisUpdatedAt = DateTime.UtcNow;
 
 
 
+
+
+
+
             _context.Neighborhoods.Update(neigh);
+
+
+
+
 
 
 
@@ -2495,7 +4831,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             return Json(new { 
+
+
+
+
 
 
 
@@ -2503,7 +4851,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 report = report, 
+
+
+
+
 
 
 
@@ -2511,11 +4867,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             });
 
 
 
+
+
+
+
         }
+
+
+
+
+
+
+
+
 
 
 
@@ -2527,7 +4899,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         [HttpGet]
+
+
+
+
 
 
 
@@ -2535,11 +4915,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         {
 
 
 
+
+
+
+
             mahalleId = mahalleId ?? neighborhoodId;
+
+
+
+
 
 
 
@@ -2551,7 +4943,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             // 1. MahalleId + Ada + Parsel ile doğrudan sorgu
+
+
+
+
 
 
 
@@ -2559,7 +4963,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -2567,11 +4979,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 return FormatTkgmResponse(res);
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -2583,7 +5011,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             if (lat.HasValue && lng.HasValue)
+
+
+
+
 
 
 
@@ -2591,7 +5027,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 var res = await tkgmService.GetParcelByCoordinatesAsync(lat.Value, lng.Value);
+
+
+
+
 
 
 
@@ -2599,7 +5043,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -2611,7 +5067,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             if (projectId.HasValue)
+
+
+
+
 
 
 
@@ -2619,7 +5083,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == projectId.Value && !p.IsDeleted);
+
+
+
+
 
 
 
@@ -2627,7 +5099,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 {
+
+
+
+
 
 
 
@@ -2635,7 +5115,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     return FormatTkgmResponse(res);
+
+
+
+
 
 
 
@@ -2643,11 +5131,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 return Json(new { success = false, message = "Projeye ait koordinat (Enlem / Boylam) bulunamadı. Lütfen haritadan konum belirleyiniz veya Ada/Parsel giriniz." });
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -2659,7 +5163,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         }
+
+
+
+
+
+
+
+
 
 
 
@@ -2671,7 +5187,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -2679,11 +5203,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
 
 
 
+
+
+
+
                 return Json(new { success = false, message = res.Message ?? "Parsel bulunamadı." });
+
+
+
+
 
 
 
@@ -2695,7 +5231,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             return Json(new
+
+
+
+
 
 
 
@@ -2703,7 +5251,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 success = true,
+
+
+
+
 
 
 
@@ -2711,7 +5267,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 parcel = res,
+
+
+
+
 
 
 
@@ -2719,7 +5283,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ilceAd = res.IlceAd,
+
+
+
+
 
 
 
@@ -2727,7 +5299,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ada = res.AdaNo,
+
+
+
+
 
 
 
@@ -2735,7 +5315,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 pafta = res.Pafta,
+
+
+
+
 
 
 
@@ -2743,7 +5331,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 zeminKmdurum = res.ZeminKmdurum,
+
+
+
+
 
 
 
@@ -2751,7 +5347,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 area = res.AreaSquareMeters,
+
+
+
+
 
 
 
@@ -2759,7 +5363,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 centerLatitude = res.CenterLat,
+
+
+
+
 
 
 
@@ -2767,7 +5379,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 latitude = res.CenterLat,
+
+
+
+
 
 
 
@@ -2775,11 +5395,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 geoJson = res.GeoJson
 
 
 
+
+
+
+
             });
+
+
+
+
 
 
 
@@ -2791,7 +5423,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
         // POST: /ConstructionProject/ApplyTkgmParcelData
+
+
+
+
 
 
 
@@ -2799,7 +5443,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         public async Task<IActionResult> ApplyTkgmParcelData([FromBody] GMK360.Core.DTOs.ApplyTkgmDto dto)
+
+
+
+
 
 
 
@@ -2807,7 +5459,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             var agencyId = await GetUserAgencyIdAsync();
+
+
+
+
 
 
 
@@ -2819,7 +5479,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (dto == null || dto.ProjectId <= 0)
+
+
+
+
 
 
 
@@ -2831,11 +5503,31 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var project = await _context.ConstructionProjects
 
 
 
+
+
+
+
                 .FirstOrDefaultAsync(p => p.Id == dto.ProjectId && p.AgencyId == agencyId.Value && !p.IsDeleted);
+
+
+
+
+
+
+
+
 
 
 
@@ -2851,11 +5543,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (!string.IsNullOrWhiteSpace(dto.Ada)) project.Ada = dto.Ada.Trim();
 
 
 
+
+
+
+
             if (!string.IsNullOrWhiteSpace(dto.Parsel)) project.Parsel = dto.Parsel.Trim();
+
+
+
+
 
 
 
@@ -2867,11 +5575,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var landArea = dto.TotalLandArea ?? dto.Area;
 
 
 
+
+
+
+
             if (landArea.HasValue && landArea.Value > 0)
+
+
+
+
 
 
 
@@ -2883,7 +5607,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (dto.CenterLatitude.HasValue && dto.CenterLatitude.Value > 0) project.Latitude = dto.CenterLatitude.Value;
+
+
+
+
 
 
 
@@ -2895,7 +5631,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             await _context.SaveChangesAsync();
+
+
+
+
 
 
 
@@ -2903,7 +5651,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         }
+
+
+
+
+
+
+
+
 
 
 
@@ -2915,7 +5675,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         [HttpGet]
+
+
+
+
 
 
 
@@ -2923,7 +5691,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -2931,7 +5707,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             var list = await tkgmService.GetProvincesAsync();
+
+
+
+
 
 
 
@@ -2939,7 +5723,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         }
+
+
+
+
+
+
+
+
 
 
 
@@ -2951,7 +5747,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         [HttpGet]
+
+
+
+
 
 
 
@@ -2959,7 +5763,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -2967,7 +5779,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             var list = await tkgmService.GetDistrictsAsync(provinceId);
+
+
+
+
 
 
 
@@ -2975,7 +5795,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         }
+
+
+
+
+
+
+
+
 
 
 
@@ -2987,7 +5819,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         [HttpGet]
+
+
+
+
 
 
 
@@ -2995,7 +5835,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -3003,7 +5851,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             var list = await tkgmService.GetNeighborhoodsAsync(districtId);
+
+
+
+
 
 
 
@@ -3011,7 +5867,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         }
+
+
+
+
+
+
+
+
 
 
 
@@ -3023,7 +5891,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         [HttpGet]
+
+
+
+
 
 
 
@@ -3031,7 +5907,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -3039,7 +5923,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         }
+
+
+
+
+
+
+
+
 
 
 
@@ -3051,7 +5947,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         [HttpPost]
+
+
+
+
 
 
 
@@ -3059,7 +5963,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         public async Task<IActionResult> ExportFeasibilityPdfWithMap(
+
+
+
+
 
 
 
@@ -3067,7 +5979,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             [FromForm] double? emsal,
+
+
+
+
 
 
 
@@ -3075,7 +5995,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             [FromForm] int? totalFloors,
+
+
+
+
 
 
 
@@ -3083,7 +6011,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             [FromForm] string? imarNotlari,
+
+
+
+
 
 
 
@@ -3091,7 +6027,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             [FromForm] string? scenariosJson)
+
+
+
+
 
 
 
@@ -3099,11 +6043,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             return await GenerateFeasibilityPdfInternal(projectId, emsal, taks, totalFloors, flatSqm, imarNotlari, mapBase64, scenariosJson);
 
 
 
+
+
+
+
         }
+
+
+
+
+
+
+
+
 
 
 
@@ -3115,7 +6075,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             int projectId,
+
+
+
+
 
 
 
@@ -3123,7 +6091,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             double? taks,
+
+
+
+
 
 
 
@@ -3131,7 +6107,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             double? flatSqm,
+
+
+
+
 
 
 
@@ -3139,7 +6123,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             string? mapBase64,
+
+
+
+
 
 
 
@@ -3147,11 +6139,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         {
 
 
 
+
+
+
+
             var agencyId = await GetUserAgencyIdAsync();
+
+
+
+
 
 
 
@@ -3163,11 +6167,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var project = await _context.ConstructionProjects
 
 
 
+
+
+
+
                 .Include(p => p.Agency)
+
+
+
+
 
 
 
@@ -3179,7 +6199,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (project == null) return NotFound();
+
+
+
+
+
+
+
+
 
 
 
@@ -3191,7 +6227,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             var dist = project.DistrictId.HasValue ? await _context.Districts.FindAsync(project.DistrictId.Value) : null;
+
+
+
+
 
 
 
@@ -3203,7 +6247,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             double calcLandArea = project.TotalLandArea ?? 850;
+
+
+
+
 
 
 
@@ -3211,7 +6267,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             double calcTaks = taks ?? 0.35;
+
+
+
+
 
 
 
@@ -3219,7 +6283,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             double calcFlatSqm = flatSqm ?? 100;
+
+
+
+
 
 
 
@@ -3231,7 +6303,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             double totalBuildingArea = calcLandArea * calcEmsal;
+
+
+
+
 
 
 
@@ -3239,7 +6323,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             int estimatedUnits = calcFlatSqm > 0 ? (int)Math.Floor(totalBuildingArea / calcFlatSqm) : 0;
+
+
+
+
 
 
 
@@ -3251,7 +6343,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var dto = new GMK360.Core.DTOs.FeasibilityPdfRequestDto
+
+
+
+
 
 
 
@@ -3259,7 +6363,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ProjectId = project.Id,
+
+
+
+
 
 
 
@@ -3267,7 +6379,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 CompanyName = project.Agency?.CompanyName ?? "GMK360 İNŞAAT & MÜHENDİSLİK",
+
+
+
+
 
 
 
@@ -3275,7 +6395,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 DistrictName = dist?.Name ?? "Maltepe",
+
+
+
+
 
 
 
@@ -3283,7 +6411,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 Ada = project.Ada,
+
+
+
+
 
 
 
@@ -3291,7 +6427,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 Pafta = "65/1",
+
+
+
+
 
 
 
@@ -3299,7 +6443,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 Latitude = project.Latitude,
+
+
+
+
 
 
 
@@ -3307,7 +6459,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 LandArea = calcLandArea,
+
+
+
+
 
 
 
@@ -3315,7 +6475,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 Taks = calcTaks,
+
+
+
+
 
 
 
@@ -3323,7 +6491,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 FlatSqm = calcFlatSqm,
+
+
+
+
 
 
 
@@ -3331,7 +6507,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 EstimatedUnits = estimatedUnits,
+
+
+
+
 
 
 
@@ -3339,7 +6523,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 TotalBuildingArea = totalBuildingArea,
+
+
+
+
 
 
 
@@ -3347,7 +6539,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ImarNotlari = imarNotlari,
+
+
+
+
 
 
 
@@ -3355,7 +6555,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             };
+
+
+
+
+
+
+
+
 
 
 
@@ -3367,7 +6579,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -3375,7 +6595,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 {
+
+
+
+
 
 
 
@@ -3383,7 +6611,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                         scenariosJson, 
+
+
+
+
 
 
 
@@ -3391,7 +6627,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                     if (parsedScenarios != null && parsedScenarios.Count > 0)
+
+
+
+
 
 
 
@@ -3399,7 +6643,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                         dto.Scenarios = parsedScenarios;
+
+
+
+
 
 
 
@@ -3407,7 +6659,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 }
+
+
+
+
 
 
 
@@ -3415,7 +6675,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -3427,7 +6699,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             var pdfBytes = pdfService.GenerateFeasibilityReport(dto);
+
+
+
+
+
+
+
+
 
 
 
@@ -3439,7 +6723,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             string safeParsel = string.IsNullOrWhiteSpace(project.Parsel) ? "Parsel" : project.Parsel;
+
+
+
+
 
 
 
@@ -3451,11 +6743,31 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             return File(pdfBytes, "application/pdf", fileName);
 
 
 
+
+
+
+
         }
+
+
+
+
+
+
+
+
 
 
 
@@ -3467,7 +6779,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         public async Task<IActionResult> Proposal(int? id)
+
+
+
+
 
 
 
@@ -3475,11 +6795,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             if (id == null) return NotFound();
 
 
 
+
+
+
+
             var agencyId = await GetUserAgencyIdAsync();
+
+
+
+
 
 
 
@@ -3491,7 +6823,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var project = await _context.ConstructionProjects
+
+
+
+
 
 
 
@@ -3499,11 +6843,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .Include(p => p.Agency)
 
 
 
+
+
+
+
                 .FirstOrDefaultAsync(p => p.Id == id && p.AgencyId == agencyId.Value && !p.IsDeleted);
+
+
+
+
+
+
+
+
 
 
 
@@ -3519,11 +6879,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             ViewData["ProjectId"] = project.Id;
 
 
 
+
+
+
+
             ViewData["ProjectName"] = project.Name;
+
+
+
+
 
 
 
@@ -3535,11 +6911,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (project.CityId.HasValue)
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -3547,11 +6939,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.CityName = city?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -3559,7 +6963,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -3567,11 +6979,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.DistrictName = dist?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -3579,7 +7003,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -3587,11 +7019,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.NeighborhoodName = neigh?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -3603,7 +7051,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .Include(s => s.User)
+
+
+
+
 
 
 
@@ -3611,11 +7067,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .OrderByDescending(s => s.CreatedAt)
 
 
 
+
+
+
+
                 .ToListAsync();
+
+
+
+
 
 
 
@@ -3627,11 +7095,31 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             return View(project);
 
 
 
+
+
+
+
         }
+
+
+
+
+
+
+
+
 
 
 
@@ -3643,7 +7131,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
         public async Task<IActionResult> Finance(int? id)
+
+
+
+
 
 
 
@@ -3651,11 +7147,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             if (id == null) return NotFound();
 
 
 
+
+
+
+
             var agencyId = await GetUserAgencyIdAsync();
+
+
+
+
 
 
 
@@ -3667,7 +7175,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var project = await _context.ConstructionProjects
+
+
+
+
 
 
 
@@ -3675,11 +7195,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .Include(p => p.Agency)
 
 
 
+
+
+
+
                 .FirstOrDefaultAsync(p => p.Id == id && p.AgencyId == agencyId.Value && !p.IsDeleted);
+
+
+
+
+
+
+
+
 
 
 
@@ -3695,11 +7231,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             ViewData["ProjectId"] = project.Id;
 
 
 
+
+
+
+
             ViewData["ProjectName"] = project.Name;
+
+
+
+
 
 
 
@@ -3711,11 +7263,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (project.CityId.HasValue)
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -3723,11 +7291,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.CityName = city?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -3735,7 +7315,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -3743,11 +7331,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.DistrictName = dist?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -3755,7 +7355,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -3763,11 +7371,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.NeighborhoodName = neigh?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -3779,7 +7403,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .Include(s => s.User)
+
+
+
+
 
 
 
@@ -3787,11 +7419,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .OrderByDescending(s => s.CreatedAt)
 
 
 
+
+
+
+
                 .ToListAsync();
+
+
+
+
 
 
 
@@ -3803,7 +7447,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var legalDocs = await _context.ProjectLegalDocuments
+
+
+
+
 
 
 
@@ -3811,7 +7467,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .ToListAsync();
+
+
+
+
 
 
 
@@ -3819,529 +7483,1059 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             decimal paidLegalFees = legalDocs.Where(d => d.Status == "Tamamlandı").Sum(d => (d.DocumentFee ?? 0) + (d.AdditionalCost ?? 0));
+
             decimal pendingFees = legalDocs.Where(d => d.Status != "Tamamlandı").Sum(d => (d.DocumentFee ?? 0) + (d.AdditionalCost ?? 0));
 
+
+
             // 1. Proje Kasaları & Alt Hesaplar (Resmi Banka + Şantiye Nakit + Banka Kiralık Kasa)
+
             var projectAccounts = await EnsureProjectAccountsAsync(project.Id, project.Name);
+
             var officialBank = projectAccounts.FirstOrDefault(a => a.IBAN != null && (a.IBAN.Contains("TRY") || a.IBAN.StartsWith("TR")) || a.BankName.Contains("Resmi")) ?? projectAccounts[0];
+
             var siteCashVault = projectAccounts.FirstOrDefault(a => a != officialBank && (a.IBAN != null && (a.IBAN.Contains("SNT") || a.IBAN.Contains("NAKIT")) || a.BankName.Contains("Şantiye"))) ?? (projectAccounts.Count > 1 ? projectAccounts[1] : officialBank);
+
             var safetyBox = projectAccounts.FirstOrDefault(a => a != officialBank && a != siteCashVault && (a.IBAN != null && (a.IBAN.Contains("USD") || a.IBAN.Contains("KIRALIK") || a.IBAN.Contains("KAS")) || a.BankName.Contains("Kiralık"))) ?? (projectAccounts.Count > 2 ? projectAccounts[2] : officialBank);
 
+
+
             ViewBag.ProjectAccount = officialBank;
+
             ViewBag.OfficialBank = officialBank;
+
             ViewBag.SiteCashVault = siteCashVault;
+
             ViewBag.SafetyBoxAccount = safetyBox;
+
             ViewBag.ProjectAccounts = projectAccounts;
 
+
+
             // 2. Güncel TCMB Döviz Kurları (USD, EUR) & Hareketli Çapraz Kur Takibi
+
             var latestRate = await _context.ExchangeRates
+
                 .OrderByDescending(r => r.Date)
+
                 .FirstOrDefaultAsync();
 
+
+
             decimal usdRate = (latestRate?.UsdRate > 0) ? latestRate.UsdRate : 49.6540m;
+
             decimal eurRate = (latestRate?.EurRate > 0) ? latestRate.EurRate : 55.5997m;
+
             DateTime rateDate = latestRate?.Date ?? DateTime.Today;
 
+
+
             ViewBag.UsdRate = usdRate;
+
             ViewBag.EurRate = eurRate;
+
             ViewBag.RateDate = rateDate;
 
+
+
             decimal usdBalance = safetyBox != null ? safetyBox.CurrentBalance : 0m;
+
             decimal usdEquivalentTL = Math.Round(usdBalance * usdRate, 2);
+
             ViewBag.UsdBalance = usdBalance;
+
             ViewBag.UsdEquivalentTL = usdEquivalentTL;
 
+
+
             decimal officialBalance = officialBank?.CurrentBalance ?? 0m;
+
             decimal siteCashBalance = siteCashVault?.CurrentBalance ?? 0m;
+
             decimal consolidatedTotalTL = officialBalance + siteCashBalance + usdEquivalentTL;
 
+
+
             ViewBag.OfficialBankBalance = officialBalance;
+
             ViewBag.SiteCashBalance = siteCashBalance;
+
             ViewBag.ConsolidatedTotalTL = consolidatedTotalTL;
 
+
+
             // 3. Gerçek Masraf Kalemleri (Resmi vs Gayriresmi / KDV Ayrıştırmalı)
+
             var expenses = await _context.ConstructionProjectExpenses
+
                 .Where(e => e.ProjectId == id && !e.IsDeleted)
+
                 .OrderByDescending(e => e.ExpenseDate)
+
                 .ToListAsync();
+
             ViewBag.Expenses = expenses;
 
+
+
             // Altın Kural: KDV'siz Net Rakamlar Esas Alınır
+
             var officialExpenses = expenses.Where(e => e.ApprovalType != "Unofficial").ToList();
+
             var unofficialExpenses = expenses.Where(e => e.ApprovalType == "Unofficial").ToList();
 
+
+
             decimal totalNetExpense = expenses.Sum(e => e.AmountExcludingVat ?? (e.VatRate > 0 ? (e.Amount / (1m + ((decimal)e.VatRate / 100m))) : e.Amount));
+
             decimal totalVat = expenses.Sum(e => e.VatAmount ?? (e.Amount - (e.AmountExcludingVat ?? (e.VatRate > 0 ? (e.Amount / (1m + ((decimal)e.VatRate / 100m))) : e.Amount))));
+
             decimal totalGrossExpense = expenses.Sum(e => e.Amount);
 
+
+
             decimal officialNetExpense = officialExpenses.Sum(e => e.AmountExcludingVat ?? (e.VatRate > 0 ? (e.Amount / (1m + ((decimal)e.VatRate / 100m))) : e.Amount));
+
             decimal officialVat = officialExpenses.Sum(e => e.VatAmount ?? (e.Amount - (e.AmountExcludingVat ?? (e.VatRate > 0 ? (e.Amount / (1m + ((decimal)e.VatRate / 100m))) : e.Amount))));
+
             decimal officialGrossExpense = officialExpenses.Sum(e => e.Amount);
+
+
 
             decimal unofficialNetExpense = unofficialExpenses.Sum(e => e.Amount);
 
+
+
             ViewBag.TotalNetExpense = totalNetExpense;
+
             ViewBag.TotalVat = totalVat;
+
             ViewBag.TotalGrossExpense = totalGrossExpense;
+
             ViewBag.PaidFees = paidLegalFees;
+
             ViewBag.PendingFees = pendingFees;
+
             decimal totalInitialNetCosts = totalNetExpense + paidLegalFees;
+
             ViewBag.TotalInitialNetCosts = totalInitialNetCosts;
 
+
+
             ViewBag.OfficialNetExpense = officialNetExpense;
+
             ViewBag.OfficialVat = officialVat;
+
             ViewBag.OfficialGrossExpense = officialGrossExpense;
+
             ViewBag.UnofficialNetExpense = unofficialNetExpense;
 
+
+
             // 4. Ortaklık & Sermaye Durumu (Net Avans / Eksiye Düşme Takibi)
+
             decimal ourAdvance = project.OurVaultAdvance ?? 0m;
+
             decimal partnerAdvance = project.PartnerVaultAdvance ?? 0m;
+
             decimal ourShareRatio = (project.OurSharePercentage > 0 ? project.OurSharePercentage : 100m) / 100m;
+
             decimal partnerShareRatio = (project.PartnerSharePercentage) / 100m;
 
+
+
             decimal ourCostShare = totalInitialNetCosts * ourShareRatio;
+
             decimal partnerCostShare = totalInitialNetCosts * partnerShareRatio;
 
+
+
             decimal ourNetBalance = ourAdvance - ourCostShare;
+
             decimal partnerNetBalance = partnerAdvance - partnerCostShare;
 
+
+
             ViewBag.OurAdvance = ourAdvance;
+
             ViewBag.PartnerAdvance = partnerAdvance;
+
             ViewBag.OurCostShare = ourCostShare;
+
             ViewBag.PartnerCostShare = partnerCostShare;
+
             ViewBag.OurNetBalance = ourNetBalance;
+
             ViewBag.PartnerNetBalance = partnerNetBalance;
+
             return View(project);
+
         }
 
+
+
         // Proje Alt Kasalarını Garantiye Alma (Resmi Banka + Şantiye Nakit + Banka Kiralık Kasası)
+
         public async Task<List<BankAccount>> EnsureProjectAccountsAsync(int projectId, string projectName)
+
         {
+
             var accounts = await _context.BankAccounts
+
                 .Where(b => b.OwnerType == OwnerType.ConstructionProject && b.OwnerId == projectId && !b.IsDeleted)
+
                 .OrderBy(b => b.Id)
+
                 .ToListAsync();
+
+
 
             bool hasChanges = false;
 
+
+
             // 1. Resmi Proje Banka Hesabı (TL)
+
             var officialBank = accounts.FirstOrDefault(a => a.IBAN != null && (a.IBAN.Contains("TRY") || a.IBAN.StartsWith("TR")) || a.BankName.Contains("Resmi") || a.BankName.Contains("Banka"));
-            if (officialBank == null)
-            {
-                officialBank = accounts.FirstOrDefault();
-            }
 
             if (officialBank == null)
+
             {
-                officialBank = new BankAccount
-                {
-                    OwnerType = OwnerType.ConstructionProject,
-                    OwnerId = projectId,
-                    BankName = "Resmi Proje Banka Hesabı",
-                    AccountName = $"{projectName} - Vadesiz TL Hesabı",
-                    IBAN = $"TR-PRJ-{projectId:D4}-TRY",
-                    CurrentBalance = 0m,
-                    IsActive = true,
-                    CreatedAt = DateTime.UtcNow
-                };
-                _context.BankAccounts.Add(officialBank);
-                accounts.Add(officialBank);
-                hasChanges = true;
+
+                officialBank = accounts.FirstOrDefault();
+
             }
+
+
+
+            if (officialBank == null)
+
+            {
+
+                officialBank = new BankAccount
+
+                {
+
+                    OwnerType = OwnerType.ConstructionProject,
+
+                    OwnerId = projectId,
+
+                    BankName = "Resmi Proje Banka Hesabı",
+
+                    AccountName = $"{projectName} - Vadesiz TL Hesabı",
+
+                    IBAN = $"TR-PRJ-{projectId:D4}-TRY",
+
+                    CurrentBalance = 0m,
+
+                    IsActive = true,
+
+                    CreatedAt = DateTime.UtcNow
+
+                };
+
+                _context.BankAccounts.Add(officialBank);
+
+                accounts.Add(officialBank);
+
+                hasChanges = true;
+
+            }
+
+
 
             // 2. Şantiye Nakit Kasası (TL)
+
             var siteCashVault = accounts.FirstOrDefault(a => a != officialBank && (a.IBAN != null && (a.IBAN.Contains("SNT") || a.IBAN.Contains("NAKIT")) || a.BankName.Contains("Şantiye")));
+
             if (siteCashVault == null)
+
             {
+
                 siteCashVault = new BankAccount
+
                 {
+
                     OwnerType = OwnerType.ConstructionProject,
+
                     OwnerId = projectId,
+
                     BankName = "Şantiye Nakit Kasası",
+
                     AccountName = $"{projectName} - Şantiye Kasası (TL)",
+
                     IBAN = $"KASA-SNT-{projectId:D4}-TL",
+
                     CurrentBalance = 0m,
+
                     IsActive = true,
+
                     CreatedAt = DateTime.UtcNow
+
                 };
+
                 _context.BankAccounts.Add(siteCashVault);
+
                 accounts.Add(siteCashVault);
+
                 hasChanges = true;
+
             }
+
+
 
             // 3. Banka Kiralık Kasası (USD / Döviz Rezervi)
+
             var safetyBox = accounts.FirstOrDefault(a => a != officialBank && a != siteCashVault && (a.IBAN != null && (a.IBAN.Contains("USD") || a.IBAN.Contains("KIRALIK") || a.IBAN.Contains("KAS")) || a.BankName.Contains("Kiralık")));
+
             if (safetyBox == null)
+
             {
+
                 safetyBox = new BankAccount
+
                 {
+
                     OwnerType = OwnerType.ConstructionProject,
+
                     OwnerId = projectId,
+
                     BankName = "Banka Kiralık Kasası (USD)",
+
                     AccountName = $"{projectName} - Kiralık Kasa Rezervi (USD)",
+
                     IBAN = $"KASA-KAS-{projectId:D4}-USD",
+
                     CurrentBalance = 0m,
+
                     IsActive = true,
+
                     CreatedAt = DateTime.UtcNow
+
                 };
+
                 _context.BankAccounts.Add(safetyBox);
+
                 accounts.Add(safetyBox);
+
                 hasChanges = true;
+
             }
+
+
 
             if (hasChanges)
+
             {
+
                 await _context.SaveChangesAsync();
+
             }
+
+
 
             return accounts;
+
         }
+
+
 
         // Tekli Hesap İstekleri İçin Geriye Dönük Uyumluluk
+
         public async Task<BankAccount> EnsureProjectAccountAsync(int projectId, string projectName)
+
         {
+
             var accounts = await EnsureProjectAccountsAsync(projectId, projectName);
+
             return accounts.First();
+
         }
 
+
+
         // POST: /ConstructionProject/AddProjectExpense
+
         [HttpPost]
+
         [ValidateAntiForgeryToken]
+
         public async Task<IActionResult> AddProjectExpense(
+
             int projectId,
+
             string title,
+
             int expenseType,
+
             string? description,
+
             string expenseDate,
+
             string? expenseTime,
+
             decimal netAmount,
+
             int vatRate,
+
             decimal? vatAmount,
+
             decimal? totalAmount,
+
             int? bankAccountId,
+
             string? paymentSource,
+
             string? documentNo,
+
             string? payeeOrSupplier,
+
             string? approvalType,
+
             bool isSplitPayment = false,
+
             decimal? officialPartAmount = null,
+
             int? officialVatRate = null,
+
             decimal? officialVatAmount = null,
+
             decimal? officialTotalAmount = null,
+
             int? officialAccountId = null,
+
             string? officialDocNo = null,
+
             decimal? unofficialPartAmount = null,
+
             int? unofficialAccountId = null,
+
             string? unofficialDocNo = null,
+
             IFormFile? documentFile = null)
+
         {
+
             var agencyId = await GetUserAgencyIdAsync();
+
             if (agencyId == null) return Unauthorized();
 
+
+
             var project = await _context.ConstructionProjects
+
                 .FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId.Value && !p.IsDeleted);
+
             if (project == null) return NotFound();
 
+
+
             if (string.IsNullOrWhiteSpace(title))
+
             {
+
                 TempData["ErrorMessage"] = "Masraf başlığı zorunludur.";
+
                 return RedirectToAction(nameof(Finance), new { id = projectId });
+
             }
+
+
 
             // AI Kuralları 8: Ayrık Tarih ve Saat Güvenli Birleştirme
+
             DateTime parsedDateTime = DateTime.Today;
+
             if (!string.IsNullOrWhiteSpace(expenseDate) && DateTime.TryParse(expenseDate, out var dt))
+
             {
+
                 parsedDateTime = dt;
+
             }
+
             if (!string.IsNullOrWhiteSpace(expenseTime) && TimeSpan.TryParse(expenseTime, out var ts))
+
             {
+
                 parsedDateTime = parsedDateTime.Date.Add(ts);
+
             }
+
+
 
             // Belge / Fatura / Fiş Dosyası Yükleme
+
             string? photoPath = null;
+
             if (documentFile != null && documentFile.Length > 0)
+
             {
+
                 var ext = Path.GetExtension(documentFile.FileName).ToLowerInvariant();
+
                 var allowedExts = new[] { ".jpg", ".jpeg", ".png", ".pdf", ".webp" };
+
                 if (allowedExts.Contains(ext))
+
                 {
+
                     var fileName = $"exp_{projectId}_{Guid.NewGuid():N}{ext}";
+
                     var folder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "expenses");
+
                     Directory.CreateDirectory(folder);
+
                     var fullPath = Path.Combine(folder, fileName);
+
                     using (var stream = new FileStream(fullPath, FileMode.Create))
+
                     {
+
                         await documentFile.CopyToAsync(stream);
+
                     }
+
                     photoPath = $"/uploads/expenses/{fileName}";
+
                 }
+
             }
 
+
+
             var accounts = await EnsureProjectAccountsAsync(projectId, project.Name);
+
             var officialBank = accounts.FirstOrDefault(a => a.IBAN != null && (a.IBAN.Contains("TRY") || a.IBAN.StartsWith("TR")) || a.BankName.Contains("Resmi")) ?? accounts[0];
+
             var siteCashVault = accounts.FirstOrDefault(a => a != officialBank && (a.IBAN != null && (a.IBAN.Contains("SNT") || a.IBAN.Contains("NAKIT")) || a.BankName.Contains("Şantiye"))) ?? (accounts.Count > 1 ? accounts[1] : accounts[0]);
 
+
+
             if (isSplitPayment && (officialPartAmount.GetValueOrDefault() > 0 || unofficialPartAmount.GetValueOrDefault() > 0))
+
             {
+
                 // DUAL SPLIT PAYMENT (Parçalı Hakediş Çıkışı: 350k Resmi Banka + 150k Elden Şantiye)
+
                 decimal offNet = officialPartAmount.GetValueOrDefault();
+
                 int offVatRate = officialVatRate.GetValueOrDefault(20);
+
                 decimal offVat = officialVatAmount.HasValue && officialVatAmount.Value > 0 ? officialVatAmount.Value : Math.Round(offNet * offVatRate / 100m, 2);
+
                 decimal offTotal = officialTotalAmount.HasValue && officialTotalAmount.Value > 0 ? officialTotalAmount.Value : (offNet + offVat);
+
+
 
                 decimal unoffAmount = unofficialPartAmount.GetValueOrDefault();
 
+
+
                 var targetOfficialAcc = accounts.FirstOrDefault(a => a.Id == (officialAccountId ?? officialBank.Id)) ?? officialBank;
+
                 var targetUnofficialAcc = accounts.FirstOrDefault(a => a.Id == (unofficialAccountId ?? siteCashVault.Id)) ?? siteCashVault;
 
+
+
                 // 1. Resmi Masraf Kaydı
+
                 if (offTotal > 0)
+
                 {
+
                     var officialExp = new ConstructionProjectExpense
+
                     {
+
                         AgencyId = agencyId.Value,
+
                         ProjectId = projectId,
+
                         Title = $"{title.Trim()} (Resmi Hakediş / Banka)",
+
                         ExpenseType = (ConstructionExpenseType)expenseType,
+
                         Description = $"{description?.Trim()} [Parçalı Hakediş - Resmi Kanat]".Trim(),
+
                         AmountExcludingVat = offNet,
+
                         VatRate = offVatRate,
+
                         VatAmount = offVat,
+
                         Amount = offTotal,
+
                         ExpenseDate = parsedDateTime,
+
                         PaymentSource = targetOfficialAcc.BankName,
+
                         DocumentNo = !string.IsNullOrWhiteSpace(officialDocNo) ? officialDocNo.Trim() : documentNo?.Trim(),
+
                         PayeeOrSupplier = payeeOrSupplier?.Trim(),
+
                         PhotoPath = photoPath,
+
                         IsPaid = true,
+
                         ApprovalStatus = "Approved",
+
                         ApprovalType = "Official",
+
                         CreatedAt = DateTime.UtcNow
+
                     };
+
                     _context.ConstructionProjectExpenses.Add(officialExp);
+
                     targetOfficialAcc.CurrentBalance -= offTotal;
+
                     targetOfficialAcc.UpdatedAt = DateTime.UtcNow;
+
                 }
+
+
 
                 // 2. Elden / Şantiye Nakit Kaydı
+
                 if (unoffAmount > 0)
+
                 {
+
                     var unofficialExp = new ConstructionProjectExpense
+
                     {
+
                         AgencyId = agencyId.Value,
+
                         ProjectId = projectId,
+
                         Title = $"{title.Trim()} (Elden Şantiye Nakit Payı)",
+
                         ExpenseType = (ConstructionExpenseType)expenseType,
+
                         Description = $"{description?.Trim()} [Parçalı Hakediş - Sözleşme Dışı Elden Nakit]".Trim(),
+
                         AmountExcludingVat = unoffAmount,
+
                         VatRate = 0,
+
                         VatAmount = 0m,
+
                         Amount = unoffAmount,
+
                         ExpenseDate = parsedDateTime,
+
                         PaymentSource = targetUnofficialAcc.BankName,
+
                         DocumentNo = !string.IsNullOrWhiteSpace(unofficialDocNo) ? unofficialDocNo.Trim() : $"ELDEN-{DateTime.Now:yyMMddHHmm}",
+
                         PayeeOrSupplier = payeeOrSupplier?.Trim(),
+
                         PhotoPath = null,
+
                         IsPaid = true,
+
                         ApprovalStatus = "Approved",
+
                         ApprovalType = "Unofficial", // GİZLENEBİLİR ELDEN MOD
+
                         CreatedAt = DateTime.UtcNow
+
                     };
+
                     _context.ConstructionProjectExpenses.Add(unofficialExp);
+
                     targetUnofficialAcc.CurrentBalance -= unoffAmount;
+
                     targetUnofficialAcc.UpdatedAt = DateTime.UtcNow;
+
                 }
 
+
+
                 await _context.SaveChangesAsync();
+
                 TempData["SuccessMessage"] = $"Çift kanallı hakediş çıkışı yapıldı: Resmi Bankadan {offTotal:N2} ₺ ve Şantiye Kasasından {unoffAmount:N2} ₺ başarıyla düşüldü.";
+
                 return RedirectToAction(nameof(Finance), new { id = projectId });
+
             }
+
             else
+
             {
+
                 // NORMAL TEK KANALLI MASRAF ÇIKIŞI
+
                 if (vatRate < 0) vatRate = 0;
+
                 if (!vatAmount.HasValue || vatAmount.Value == 0)
+
                 {
+
                     vatAmount = Math.Round(netAmount * vatRate / 100m, 2);
+
                 }
+
                 if (!totalAmount.HasValue || totalAmount.Value == 0)
+
                 {
+
                     totalAmount = netAmount + (vatAmount ?? 0m);
+
                 }
+
+
 
                 var targetAcc = accounts.FirstOrDefault(a => a.Id == (bankAccountId ?? officialBank.Id)) ?? officialBank;
+
                 string effApproval = !string.IsNullOrWhiteSpace(approvalType) ? approvalType : "Official";
 
+
+
                 var expense = new ConstructionProjectExpense
+
                 {
+
                     AgencyId = agencyId.Value,
+
                     ProjectId = projectId,
+
                     Title = title.Trim(),
+
                     ExpenseType = (ConstructionExpenseType)expenseType,
+
                     Description = description?.Trim(),
+
                     AmountExcludingVat = netAmount,
+
                     VatRate = vatRate,
+
                     VatAmount = vatAmount,
+
                     Amount = totalAmount.Value,
+
                     ExpenseDate = parsedDateTime,
+
                     PaymentSource = targetAcc.BankName,
+
                     DocumentNo = documentNo?.Trim(),
+
                     PayeeOrSupplier = payeeOrSupplier?.Trim(),
+
                     PhotoPath = photoPath,
+
                     IsPaid = true,
+
                     ApprovalStatus = "Approved",
+
                     ApprovalType = effApproval,
+
                     CreatedAt = DateTime.UtcNow
+
                 };
 
+
+
                 _context.ConstructionProjectExpenses.Add(expense);
+
                 targetAcc.CurrentBalance -= totalAmount.Value;
+
                 targetAcc.UpdatedAt = DateTime.UtcNow;
 
+
+
                 await _context.SaveChangesAsync();
+
                 TempData["SuccessMessage"] = $"'{expense.Title}' masrafı ({netAmount:N2} ₺ + %{vatRate} KDV) başarıyla kaydedildi.";
+
                 return RedirectToAction(nameof(Finance), new { id = projectId });
+
             }
+
         }
+
+
 
         // POST: /ConstructionProject/AddProjectDeposit
+
         [HttpPost]
+
         [ValidateAntiForgeryToken]
+
         public async Task<IActionResult> AddProjectDeposit(
+
             int projectId,
+
             int bankAccountId,
+
             decimal amount,
+
             string? currency,
+
             string? depositorName,
+
             string? notes)
+
         {
+
             var agencyId = await GetUserAgencyIdAsync();
+
             if (agencyId == null) return Unauthorized();
 
+
+
             var project = await _context.ConstructionProjects
+
                 .FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId.Value && !p.IsDeleted);
+
             if (project == null) return NotFound();
+
+
 
             var account = await _context.BankAccounts
+
                 .FirstOrDefaultAsync(b => b.Id == bankAccountId && b.OwnerType == OwnerType.ConstructionProject && b.OwnerId == projectId && !b.IsDeleted);
+
             if (account == null)
+
             {
+
                 TempData["ErrorMessage"] = "Hedef kasa / hesap bulunamadı.";
+
                 return RedirectToAction(nameof(Finance), new { id = projectId });
+
             }
+
+
 
             if (amount <= 0)
+
             {
+
                 TempData["ErrorMessage"] = "Geçerli bir aktarım tutarı giriniz.";
+
                 return RedirectToAction(nameof(Finance), new { id = projectId });
+
             }
+
+
 
             // Kasa Bakiyesini Arttır
+
             account.CurrentBalance += amount;
+
             account.UpdatedAt = DateTime.UtcNow;
 
+
+
             // Ortak Avansı Takibi
+
             if (!string.IsNullOrWhiteSpace(depositorName))
+
             {
+
                 if (depositorName.Contains("Ortak") || depositorName.Contains("Partner"))
+
                 {
+
                     project.PartnerVaultAdvance = (project.PartnerVaultAdvance ?? 0m) + amount;
+
                 }
+
                 else
+
                 {
+
                     project.OurVaultAdvance = (project.OurVaultAdvance ?? 0m) + amount;
+
                 }
+
                 project.UpdatedAt = DateTime.UtcNow;
+
             }
 
+
+
             await _context.SaveChangesAsync();
+
+
 
             string currSymbol = (currency == "USD" || account.IBAN.Contains("USD") || account.BankName.Contains("USD")) ? "$" : "₺";
+
             TempData["SuccessMessage"] = $"{account.BankName} hesabına {amount:N2} {currSymbol} para aktarımı başarıyla işlendi.";
+
             return RedirectToAction(nameof(Finance), new { id = projectId });
+
         }
 
+
+
         // POST: /ConstructionProject/DeleteProjectExpense
+
         [HttpPost]
+
         [ValidateAntiForgeryToken]
+
         public async Task<IActionResult> DeleteProjectExpense(int id, int projectId)
+
         {
+
             var agencyId = await GetUserAgencyIdAsync();
+
             if (agencyId == null) return Unauthorized();
 
+
+
             var expense = await _context.ConstructionProjectExpenses
+
                 .FirstOrDefaultAsync(e => e.Id == id && e.ProjectId == projectId && e.AgencyId == agencyId.Value && !e.IsDeleted);
 
+
+
             if (expense == null)
+
             {
+
                 TempData["ErrorMessage"] = "Silinecek masraf kaydı bulunamadı.";
+
                 return RedirectToAction(nameof(Finance), new { id = projectId });
+
             }
+
+
 
             expense.IsDeleted = true;
+
             expense.UpdatedAt = DateTime.UtcNow;
 
+
+
             var accounts = await EnsureProjectAccountsAsync(projectId, "Proje");
+
             var matchingAccount = accounts.FirstOrDefault(a => a.BankName == expense.PaymentSource) ?? accounts.FirstOrDefault();
+
             if (matchingAccount != null)
+
             {
+
                 matchingAccount.CurrentBalance += expense.Amount;
+
                 matchingAccount.UpdatedAt = DateTime.UtcNow;
+
             }
+
+
 
             await _context.SaveChangesAsync();
 
+
+
             TempData["SuccessMessage"] = "Masraf kaydı silindi ve tutar kasaya iade edildi.";
+
             return RedirectToAction(nameof(Finance), new { id = projectId });
+
         }
+
+
 
         // POST: /ConstructionProject/UpdateProjectAccount
+
         [HttpPost]
+
         [ValidateAntiForgeryToken]
+
         public async Task<IActionResult> UpdateProjectAccount(int projectId, int? accountId, string bankName, string accountName, string iban, decimal openingBalance)
+
         {
+
             var agencyId = await GetUserAgencyIdAsync();
+
             if (agencyId == null) return Unauthorized();
 
+
+
             var project = await _context.ConstructionProjects
+
                 .FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId.Value && !p.IsDeleted);
+
             if (project == null) return NotFound();
 
+
+
             BankAccount? account = null;
+
             if (accountId.HasValue)
+
             {
+
                 account = await _context.BankAccounts
+
                     .FirstOrDefaultAsync(b => b.Id == accountId.Value && b.OwnerType == OwnerType.ConstructionProject && b.OwnerId == projectId && !b.IsDeleted);
+
             }
+
             if (account == null)
+
             {
+
                 var accounts = await EnsureProjectAccountsAsync(projectId, project.Name);
+
                 account = accounts.FirstOrDefault();
+
             }
+
+
 
             if (account != null)
+
             {
+
                 account.BankName = string.IsNullOrWhiteSpace(bankName) ? account.BankName : bankName.Trim();
+
                 account.AccountName = string.IsNullOrWhiteSpace(accountName) ? account.AccountName : accountName.Trim();
+
                 account.IBAN = string.IsNullOrWhiteSpace(iban) ? account.IBAN : iban.Trim();
+
                 account.CurrentBalance = openingBalance;
+
                 account.UpdatedAt = DateTime.UtcNow;
+
                 await _context.SaveChangesAsync();
+
             }
 
+
+
             TempData["SuccessMessage"] = "Kasa / hesap bilgileri başarıyla güncellendi.";
+
             return RedirectToAction(nameof(Finance), new { id = projectId });
+
         }
 
+
+
         // GET: /ConstructionProject/Archive/5
+
         public async Task<IActionResult> Archive(int? id, string? category = null)
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -4349,7 +8543,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             var agencyId = await GetUserAgencyIdAsync();
+
+
+
+
 
 
 
@@ -4361,7 +8563,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             var project = await _context.ConstructionProjects
+
+
+
+
 
 
 
@@ -4369,7 +8583,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .Include(p => p.Agency)
+
+
+
+
 
 
 
@@ -4381,7 +8603,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (project == null) return NotFound();
+
+
+
+
+
+
+
+
 
 
 
@@ -4393,7 +8631,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             ViewData["ProjectName"] = project.Name;
+
+
+
+
 
 
 
@@ -4405,11 +8651,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             if (project.CityId.HasValue)
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -4417,11 +8679,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.CityName = city?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -4429,7 +8703,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -4437,11 +8719,23 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.DistrictName = dist?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -4449,7 +8743,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -4457,11 +8759,27 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 ViewBag.NeighborhoodName = neigh?.Name;
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -4473,7 +8791,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
                 .Where(d => d.ProjectId == id && !d.IsDeleted);
+
+
+
+
+
+
+
+
 
 
 
@@ -4485,7 +8815,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             {
+
+
+
+
 
 
 
@@ -4493,7 +8831,19 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -4505,7 +8855,15 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
             ViewBag.Documents = docs;
+
+
+
+
 
 
 
@@ -4517,11 +8875,31 @@ namespace GMK360.Web.Controllers
 
 
 
+
+
+
+
+
+
+
+
             return View(project);
 
 
 
+
+
+
+
         }
+
+
+
+
+
+
+
+
 
 
 
@@ -4530,119 +8908,236 @@ namespace GMK360.Web.Controllers
 
 
     
+
         // GET: /ConstructionProject/Meetings/5
+
         // ADAY PROJEYE AİT TOPLANTI VE GÖRÜŞMELER (MERKEZLE ENTEGRE, PROJE SİDEBAR'INI KORUR)
+
         public async Task<IActionResult> Meetings(int? id, byte? statusId)
+
         {
+
             if (id == null) return NotFound();
+
             var agencyId = await GetUserAgencyIdAsync();
+
             if (agencyId == null) return Unauthorized();
 
+
+
             var project = await _context.ConstructionProjects
+
                 .Include(p => p.BinaYoneticisi)
+
                 .FirstOrDefaultAsync(p => p.Id == id && p.AgencyId == agencyId.Value && !p.IsDeleted);
+
+
 
             if (project == null) return NotFound();
 
+
+
             ViewData["ProjectId"] = project.Id;
+
             ViewData["ProjectName"] = project.Name;
+
             ViewData["ProjectStatus"] = project.Status;
+
             ViewData["Title"] = project.Name + " - Görüşmeler ve Toplantılar";
 
+
+
             if (project.CityId.HasValue)
+
             {
+
                 var city = await _context.Cities.FirstOrDefaultAsync(c => c.Id == project.CityId.Value);
+
                 ViewBag.CityName = city?.Name;
+
             }
+
             if (project.DistrictId.HasValue)
+
             {
+
                 var dist = await _context.Districts.FirstOrDefaultAsync(d => d.Id == project.DistrictId.Value);
+
                 ViewBag.DistrictName = dist?.Name;
+
             }
+
             if (project.NeighborhoodId.HasValue)
+
             {
+
                 var neigh = await _context.Neighborhoods.FirstOrDefaultAsync(n => n.Id == project.NeighborhoodId.Value);
+
                 ViewBag.NeighborhoodName = neigh?.Name;
+
             }
+
+
 
             var query = _context.AgendaRecords
+
                 .Include(a => a.Phonebook)
+
                 .Include(a => a.Items)
+
                 .Include(a => a.Participants)
+
                 .Where(a => a.AgencyId == agencyId.Value && a.ProjectId == id && !a.IsDeleted);
 
+
+
             if (statusId.HasValue)
+
             {
+
                 query = query.Where(a => a.StatusId == statusId.Value);
+
             }
+
+
 
             var records = await query.OrderByDescending(a => a.EventDate).ToListAsync();
+
             ViewBag.Meetings = records;
+
             ViewBag.SelectedStatusId = statusId;
 
+
+
             ViewBag.Phonebook = await _context.AgencyPhonebooks
+
                 .Where(p => p.AgencyId == agencyId.Value && !p.IsDeleted)
+
                 .OrderBy(p => p.Name)
+
                 .ToListAsync();
+
+
 
             ViewBag.Stakeholders = await _context.ProjectStakeholders
+
                 .Include(s => s.User)
+
                 .Where(s => s.ProjectId == id && !s.IsDeleted)
+
                 .ToListAsync();
 
+
+
             return View(project);
+
         }
+
+
 
         // POST: /ConstructionProject/CreateProjectMeeting
+
         // TARİH VE SAAT AYRI ALANLARDAN GELİR (ALTIN KURAL)
+
         [HttpPost]
+
         [ValidateAntiForgeryToken]
+
         public async Task<IActionResult> CreateProjectMeeting(int projectId, string title, string? notes, string eventDate, string? eventTime, byte recordTypeId = AgendaConstants.TypeMusteriGorusmesi, int? phonebookId = null)
+
         {
+
             var agencyId = await GetUserAgencyIdAsync();
+
             if (agencyId == null) return Unauthorized();
 
+
+
             if (string.IsNullOrWhiteSpace(title))
+
             {
+
                 TempData["ErrorMessage"] = "Lütfen toplantı veya görüşme başlığı giriniz.";
+
                 return RedirectToAction(nameof(Meetings), new { id = projectId });
+
             }
+
+
 
             // Tarih ve saat ayrı alanlardan güvenli birleştirilir
+
             DateTime parsedDateTime = DateTime.Now;
+
             if (DateTime.TryParse(eventDate, out var d))
+
             {
+
                 if (!string.IsNullOrWhiteSpace(eventTime) && TimeSpan.TryParse(eventTime, out var t))
+
                 {
+
                     parsedDateTime = d.Date.Add(t);
+
                 }
+
                 else
+
                 {
+
                     parsedDateTime = d.Date.Add(DateTime.Now.TimeOfDay);
+
                 }
+
             }
 
+
+
             var record = new AgendaRecord
+
             {
+
                 AgencyId = agencyId.Value,
+
                 ProjectId = projectId,
+
                 Title = title.Trim(),
+
                 Notes = notes?.Trim() ?? string.Empty,
+
                 EventDate = parsedDateTime,
+
                 RecordTypeId = recordTypeId,
+
                 StatusId = AgendaConstants.StatusPlanlandi,
+
                 PhonebookId = phonebookId,
+
                 ImageUrl = string.Empty,
+
                 CreatedAt = DateTime.Now,
+
                 IsDeleted = false
+
             };
 
+
+
             _context.AgendaRecords.Add(record);
+
             await _context.SaveChangesAsync();
 
+
+
             TempData["SuccessMessage"] = "Toplantı/görüşme kaydı başarıyla oluşturuldu.";
+
             return RedirectToAction(nameof(Meetings), new { id = projectId });
+
         }
 
+
+
     }
+
 }
+
