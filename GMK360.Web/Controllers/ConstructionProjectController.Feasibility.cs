@@ -3734,21 +3734,64 @@ namespace GMK360.Web.Controllers
             decimal paidLegalFees = legalDocs.Where(d => d.Status == "Tamamlandı").Sum(d => (d.DocumentFee ?? 0) + (d.AdditionalCost ?? 0));
             decimal pendingFees = legalDocs.Where(d => d.Status != "Tamamlandı").Sum(d => (d.DocumentFee ?? 0) + (d.AdditionalCost ?? 0));
 
-            // 1. Proje Hesabını Otomatik Aç / Getir (Boş proje ile eş zamanlı açılır)
-            var projectAccount = await EnsureProjectAccountAsync(project.Id, project.Name);
-            ViewBag.ProjectAccount = projectAccount;
+            // 1. Proje Kasaları & Alt Hesaplar (Resmi Banka + Şantiye Nakit + Banka Kiralık Kasa)
+            var projectAccounts = await EnsureProjectAccountsAsync(project.Id, project.Name);
+            var officialBank = projectAccounts.FirstOrDefault(a => a.IBAN != null && (a.IBAN.Contains("TRY") || a.IBAN.StartsWith("TR")) || a.BankName.Contains("Resmi")) ?? projectAccounts[0];
+            var siteCashVault = projectAccounts.FirstOrDefault(a => a != officialBank && (a.IBAN != null && (a.IBAN.Contains("SNT") || a.IBAN.Contains("NAKIT")) || a.BankName.Contains("Şantiye"))) ?? (projectAccounts.Count > 1 ? projectAccounts[1] : officialBank);
+            var safetyBox = projectAccounts.FirstOrDefault(a => a != officialBank && a != siteCashVault && (a.IBAN != null && (a.IBAN.Contains("USD") || a.IBAN.Contains("KIRALIK") || a.IBAN.Contains("KAS")) || a.BankName.Contains("Kiralık"))) ?? (projectAccounts.Count > 2 ? projectAccounts[2] : officialBank);
 
-            // 2. Gerçek Masraf Kalemleri (KDV Ayrıştırmalı)
+            ViewBag.ProjectAccount = officialBank;
+            ViewBag.OfficialBank = officialBank;
+            ViewBag.SiteCashVault = siteCashVault;
+            ViewBag.SafetyBoxAccount = safetyBox;
+            ViewBag.ProjectAccounts = projectAccounts;
+
+            // 2. Güncel TCMB Döviz Kurları (USD, EUR) & Hareketli Çapraz Kur Takibi
+            var latestRate = await _context.ExchangeRates
+                .OrderByDescending(r => r.Date)
+                .FirstOrDefaultAsync();
+
+            decimal usdRate = (latestRate?.UsdRate > 0) ? latestRate.UsdRate : 49.6540m;
+            decimal eurRate = (latestRate?.EurRate > 0) ? latestRate.EurRate : 55.5997m;
+            DateTime rateDate = latestRate?.Date ?? DateTime.Today;
+
+            ViewBag.UsdRate = usdRate;
+            ViewBag.EurRate = eurRate;
+            ViewBag.RateDate = rateDate;
+
+            decimal usdBalance = safetyBox != null ? safetyBox.CurrentBalance : 0m;
+            decimal usdEquivalentTL = Math.Round(usdBalance * usdRate, 2);
+            ViewBag.UsdBalance = usdBalance;
+            ViewBag.UsdEquivalentTL = usdEquivalentTL;
+
+            decimal officialBalance = officialBank?.CurrentBalance ?? 0m;
+            decimal siteCashBalance = siteCashVault?.CurrentBalance ?? 0m;
+            decimal consolidatedTotalTL = officialBalance + siteCashBalance + usdEquivalentTL;
+
+            ViewBag.OfficialBankBalance = officialBalance;
+            ViewBag.SiteCashBalance = siteCashBalance;
+            ViewBag.ConsolidatedTotalTL = consolidatedTotalTL;
+
+            // 3. Gerçek Masraf Kalemleri (Resmi vs Gayriresmi / KDV Ayrıştırmalı)
             var expenses = await _context.ConstructionProjectExpenses
                 .Where(e => e.ProjectId == id && !e.IsDeleted)
                 .OrderByDescending(e => e.ExpenseDate)
                 .ToListAsync();
             ViewBag.Expenses = expenses;
 
-            // Altın Kural: KDV'siz Net Rakamlar Esas Alınır (Fatura Dahil Kesilse Bile KDV Ayrıştırılır)
+            // Altın Kural: KDV'siz Net Rakamlar Esas Alınır
+            var officialExpenses = expenses.Where(e => e.ApprovalType != "Unofficial").ToList();
+            var unofficialExpenses = expenses.Where(e => e.ApprovalType == "Unofficial").ToList();
+
             decimal totalNetExpense = expenses.Sum(e => e.AmountExcludingVat ?? (e.VatRate > 0 ? (e.Amount / (1m + ((decimal)e.VatRate / 100m))) : e.Amount));
             decimal totalVat = expenses.Sum(e => e.VatAmount ?? (e.Amount - (e.AmountExcludingVat ?? (e.VatRate > 0 ? (e.Amount / (1m + ((decimal)e.VatRate / 100m))) : e.Amount))));
             decimal totalGrossExpense = expenses.Sum(e => e.Amount);
+
+            decimal officialNetExpense = officialExpenses.Sum(e => e.AmountExcludingVat ?? (e.VatRate > 0 ? (e.Amount / (1m + ((decimal)e.VatRate / 100m))) : e.Amount));
+            decimal officialVat = officialExpenses.Sum(e => e.VatAmount ?? (e.Amount - (e.AmountExcludingVat ?? (e.VatRate > 0 ? (e.Amount / (1m + ((decimal)e.VatRate / 100m))) : e.Amount))));
+            decimal officialGrossExpense = officialExpenses.Sum(e => e.Amount);
+
+            decimal unofficialNetExpense = unofficialExpenses.Sum(e => e.Amount);
 
             ViewBag.TotalNetExpense = totalNetExpense;
             ViewBag.TotalVat = totalVat;
@@ -3757,51 +3800,123 @@ namespace GMK360.Web.Controllers
             ViewBag.PendingFees = pendingFees;
             ViewBag.TotalInitialNetCosts = totalNetExpense + paidLegalFees;
 
+            ViewBag.OfficialNetExpense = officialNetExpense;
+            ViewBag.OfficialVat = officialVat;
+            ViewBag.OfficialGrossExpense = officialGrossExpense;
+            ViewBag.UnofficialNetExpense = unofficialNetExpense;
 
+            // 4. Taşeron & Usta Alacağı / Hakediş Mutabakatı (Demirci & Kalıpçı Örneği: 500k = 350k Resmi + 150k Elden)
+            decimal ustaAgreedTotal = 500000m;
+            decimal ustaAgreedOfficial = 350000m;
+            decimal ustaAgreedUnofficial = 150000m;
 
+            var ustaExpenses = expenses.Where(e => (e.Title != null && (e.Title.Contains("Demir") || e.Title.Contains("Kalıp") || e.Title.Contains("Ahmet") || e.Title.Contains("Hakediş"))) || (e.PayeeOrSupplier != null && (e.PayeeOrSupplier.Contains("Ahmet") || e.PayeeOrSupplier.Contains("Kaya")))).ToList();
 
+            decimal ustaPaidOfficial = ustaExpenses.Where(e => e.ApprovalType != "Unofficial").Sum(e => e.AmountExcludingVat ?? e.Amount);
+            decimal ustaPaidUnofficial = ustaExpenses.Where(e => e.ApprovalType == "Unofficial").Sum(e => e.Amount);
+            decimal ustaPaidTotal = ustaPaidOfficial + ustaPaidUnofficial;
 
-
+            ViewBag.UstaAgreedTotal = ustaAgreedTotal;
+            ViewBag.UstaAgreedOfficial = ustaAgreedOfficial;
+            ViewBag.UstaAgreedUnofficial = ustaAgreedUnofficial;
+            ViewBag.UstaPaidOfficial = ustaPaidOfficial;
+            ViewBag.UstaPaidUnofficial = ustaPaidUnofficial;
+            ViewBag.UstaPaidTotal = ustaPaidTotal;
+            ViewBag.UstaRemainingTotal = Math.Max(0m, ustaAgreedTotal - ustaPaidTotal);
+            ViewBag.UstaRemainingOfficial = Math.Max(0m, ustaAgreedOfficial - ustaPaidOfficial);
+            ViewBag.UstaRemainingUnofficial = Math.Max(0m, ustaAgreedUnofficial - ustaPaidUnofficial);
 
             return View(project);
-
-
-
         }
 
-
-
-
-
-
-
-        // GET: /ConstructionProject/Archive/5
-
-
-
-        // Proje Hesabını Garantiye Alma (Boş Proje İle Eş Zamanlı Açılır)
-        public async Task<BankAccount> EnsureProjectAccountAsync(int projectId, string projectName)
+        // Proje Alt Kasalarını Garantiye Alma (Resmi Banka + Şantiye Nakit + Banka Kiralık Kasası)
+        public async Task<List<BankAccount>> EnsureProjectAccountsAsync(int projectId, string projectName)
         {
-            var account = await _context.BankAccounts
-                .FirstOrDefaultAsync(b => b.OwnerType == OwnerType.ConstructionProject && b.OwnerId == projectId && !b.IsDeleted);
+            var accounts = await _context.BankAccounts
+                .Where(b => b.OwnerType == OwnerType.ConstructionProject && b.OwnerId == projectId && !b.IsDeleted)
+                .OrderBy(b => b.Id)
+                .ToListAsync();
 
-            if (account == null)
+            bool hasChanges = false;
+
+            // 1. Resmi Proje Banka Hesabı (TL)
+            var officialBank = accounts.FirstOrDefault(a => a.IBAN != null && (a.IBAN.Contains("TRY") || a.IBAN.StartsWith("TR")) || a.BankName.Contains("Resmi") || a.BankName.Contains("Banka"));
+            if (officialBank == null)
             {
-                account = new BankAccount
+                officialBank = accounts.FirstOrDefault();
+            }
+
+            if (officialBank == null)
+            {
+                officialBank = new BankAccount
                 {
                     OwnerType = OwnerType.ConstructionProject,
                     OwnerId = projectId,
-                    BankName = "Proje Ana Hesabı & Kasası",
-                    AccountName = $"{projectName} - Proje Hesabı",
-                    IBAN = $"PRJ-{projectId:D4}-TRY",
+                    BankName = "Resmi Proje Banka Hesabı",
+                    AccountName = $"{projectName} - Vadesiz TL Hesabı",
+                    IBAN = $"TR-PRJ-{projectId:D4}-TRY",
                     CurrentBalance = 0m,
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow
                 };
-                _context.BankAccounts.Add(account);
+                _context.BankAccounts.Add(officialBank);
+                accounts.Add(officialBank);
+                hasChanges = true;
+            }
+
+            // 2. Şantiye Nakit Kasası (TL)
+            var siteCashVault = accounts.FirstOrDefault(a => a != officialBank && (a.IBAN != null && (a.IBAN.Contains("SNT") || a.IBAN.Contains("NAKIT")) || a.BankName.Contains("Şantiye")));
+            if (siteCashVault == null)
+            {
+                siteCashVault = new BankAccount
+                {
+                    OwnerType = OwnerType.ConstructionProject,
+                    OwnerId = projectId,
+                    BankName = "Şantiye Nakit Kasası",
+                    AccountName = $"{projectName} - Şantiye Kasası (TL)",
+                    IBAN = $"KASA-SNT-{projectId:D4}-TL",
+                    CurrentBalance = 0m,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.BankAccounts.Add(siteCashVault);
+                accounts.Add(siteCashVault);
+                hasChanges = true;
+            }
+
+            // 3. Banka Kiralık Kasası (USD / Döviz Rezervi)
+            var safetyBox = accounts.FirstOrDefault(a => a != officialBank && a != siteCashVault && (a.IBAN != null && (a.IBAN.Contains("USD") || a.IBAN.Contains("KIRALIK") || a.IBAN.Contains("KAS")) || a.BankName.Contains("Kiralık")));
+            if (safetyBox == null)
+            {
+                safetyBox = new BankAccount
+                {
+                    OwnerType = OwnerType.ConstructionProject,
+                    OwnerId = projectId,
+                    BankName = "Banka Kiralık Kasası (USD)",
+                    AccountName = $"{projectName} - Kiralık Kasa Rezervi (USD)",
+                    IBAN = $"KASA-KAS-{projectId:D4}-USD",
+                    CurrentBalance = 0m,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.BankAccounts.Add(safetyBox);
+                accounts.Add(safetyBox);
+                hasChanges = true;
+            }
+
+            if (hasChanges)
+            {
                 await _context.SaveChangesAsync();
             }
-            return account;
+
+            return accounts;
+        }
+
+        // Tekli Hesap İstekleri İçin Geriye Dönük Uyumluluk
+        public async Task<BankAccount> EnsureProjectAccountAsync(int projectId, string projectName)
+        {
+            var accounts = await EnsureProjectAccountsAsync(projectId, projectName);
+            return accounts.First();
         }
 
         // POST: /ConstructionProject/AddProjectExpense
@@ -3818,10 +3933,22 @@ namespace GMK360.Web.Controllers
             int vatRate,
             decimal? vatAmount,
             decimal? totalAmount,
+            int? bankAccountId,
             string? paymentSource,
             string? documentNo,
             string? payeeOrSupplier,
-            IFormFile? documentFile)
+            string? approvalType,
+            bool isSplitPayment = false,
+            decimal? officialPartAmount = null,
+            int? officialVatRate = null,
+            decimal? officialVatAmount = null,
+            decimal? officialTotalAmount = null,
+            int? officialAccountId = null,
+            string? officialDocNo = null,
+            decimal? unofficialPartAmount = null,
+            int? unofficialAccountId = null,
+            string? unofficialDocNo = null,
+            IFormFile? documentFile = null)
         {
             var agencyId = await GetUserAgencyIdAsync();
             if (agencyId == null) return Unauthorized();
@@ -3836,25 +3963,11 @@ namespace GMK360.Web.Controllers
                 return RedirectToAction(nameof(Finance), new { id = projectId });
             }
 
-            // Altın Kural: KDV Ayrıştırması & Net Tutar Odaklı Hesaplama
-            if (vatRate < 0) vatRate = 0;
-            if (!vatAmount.HasValue || vatAmount.Value == 0)
-            {
-                vatAmount = Math.Round(netAmount * vatRate / 100m, 2);
-            }
-            if (!totalAmount.HasValue || totalAmount.Value == 0)
-            {
-                totalAmount = netAmount + (vatAmount ?? 0m);
-            }
-
             // AI Kuralları 8: Ayrık Tarih ve Saat Güvenli Birleştirme
             DateTime parsedDateTime = DateTime.Today;
-            if (!string.IsNullOrWhiteSpace(expenseDate))
+            if (!string.IsNullOrWhiteSpace(expenseDate) && DateTime.TryParse(expenseDate, out var dt))
             {
-                if (DateTime.TryParse(expenseDate, out var dt))
-                {
-                    parsedDateTime = dt;
-                }
+                parsedDateTime = dt;
             }
             if (!string.IsNullOrWhiteSpace(expenseTime) && TimeSpan.TryParse(expenseTime, out var ts))
             {
@@ -3881,40 +3994,187 @@ namespace GMK360.Web.Controllers
                 }
             }
 
-            var expense = new ConstructionProjectExpense
-            {
-                AgencyId = agencyId.Value,
-                ProjectId = projectId,
-                Title = title.Trim(),
-                ExpenseType = (ConstructionExpenseType)expenseType,
-                Description = description?.Trim(),
-                AmountExcludingVat = netAmount, // Altın Kural: KDV'siz Net
-                VatRate = vatRate,
-                VatAmount = vatAmount,
-                Amount = totalAmount.Value,     // KDV Dahil Toplam Belge Tutarı
-                ExpenseDate = parsedDateTime,
-                PaymentSource = string.IsNullOrWhiteSpace(paymentSource) ? "Proje Kasası" : paymentSource.Trim(),
-                DocumentNo = documentNo?.Trim(),
-                PayeeOrSupplier = payeeOrSupplier?.Trim(),
-                PhotoPath = photoPath,
-                IsPaid = true,
-                ApprovalStatus = "Approved",
-                CreatedAt = DateTime.UtcNow
-            };
+            var accounts = await EnsureProjectAccountsAsync(projectId, project.Name);
+            var officialBank = accounts.FirstOrDefault(a => a.IBAN != null && (a.IBAN.Contains("TRY") || a.IBAN.StartsWith("TR")) || a.BankName.Contains("Resmi")) ?? accounts[0];
+            var siteCashVault = accounts.FirstOrDefault(a => a != officialBank && (a.IBAN != null && (a.IBAN.Contains("SNT") || a.IBAN.Contains("NAKIT")) || a.BankName.Contains("Şantiye"))) ?? (accounts.Count > 1 ? accounts[1] : accounts[0]);
 
-            _context.ConstructionProjectExpenses.Add(expense);
-
-            // Proje Hesabı Kasa Çıkışını Güncelle
-            var projectAccount = await EnsureProjectAccountAsync(projectId, project.Name);
-            if (projectAccount != null)
+            if (isSplitPayment && (officialPartAmount.GetValueOrDefault() > 0 || unofficialPartAmount.GetValueOrDefault() > 0))
             {
-                projectAccount.CurrentBalance -= totalAmount.Value;
-                projectAccount.UpdatedAt = DateTime.UtcNow;
+                // DUAL SPLIT PAYMENT (Parçalı Hakediş Çıkışı: 350k Resmi Banka + 150k Elden Şantiye)
+                decimal offNet = officialPartAmount.GetValueOrDefault();
+                int offVatRate = officialVatRate.GetValueOrDefault(20);
+                decimal offVat = officialVatAmount.HasValue && officialVatAmount.Value > 0 ? officialVatAmount.Value : Math.Round(offNet * offVatRate / 100m, 2);
+                decimal offTotal = officialTotalAmount.HasValue && officialTotalAmount.Value > 0 ? officialTotalAmount.Value : (offNet + offVat);
+
+                decimal unoffAmount = unofficialPartAmount.GetValueOrDefault();
+
+                var targetOfficialAcc = accounts.FirstOrDefault(a => a.Id == (officialAccountId ?? officialBank.Id)) ?? officialBank;
+                var targetUnofficialAcc = accounts.FirstOrDefault(a => a.Id == (unofficialAccountId ?? siteCashVault.Id)) ?? siteCashVault;
+
+                // 1. Resmi Masraf Kaydı
+                if (offTotal > 0)
+                {
+                    var officialExp = new ConstructionProjectExpense
+                    {
+                        AgencyId = agencyId.Value,
+                        ProjectId = projectId,
+                        Title = $"{title.Trim()} (Resmi Hakediş / Banka)",
+                        ExpenseType = (ConstructionExpenseType)expenseType,
+                        Description = $"{description?.Trim()} [Parçalı Hakediş - Resmi Kanat]".Trim(),
+                        AmountExcludingVat = offNet,
+                        VatRate = offVatRate,
+                        VatAmount = offVat,
+                        Amount = offTotal,
+                        ExpenseDate = parsedDateTime,
+                        PaymentSource = targetOfficialAcc.BankName,
+                        DocumentNo = !string.IsNullOrWhiteSpace(officialDocNo) ? officialDocNo.Trim() : documentNo?.Trim(),
+                        PayeeOrSupplier = payeeOrSupplier?.Trim(),
+                        PhotoPath = photoPath,
+                        IsPaid = true,
+                        ApprovalStatus = "Approved",
+                        ApprovalType = "Official",
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _context.ConstructionProjectExpenses.Add(officialExp);
+                    targetOfficialAcc.CurrentBalance -= offTotal;
+                    targetOfficialAcc.UpdatedAt = DateTime.UtcNow;
+                }
+
+                // 2. Elden / Şantiye Nakit Kaydı
+                if (unoffAmount > 0)
+                {
+                    var unofficialExp = new ConstructionProjectExpense
+                    {
+                        AgencyId = agencyId.Value,
+                        ProjectId = projectId,
+                        Title = $"{title.Trim()} (Elden Şantiye Nakit Payı)",
+                        ExpenseType = (ConstructionExpenseType)expenseType,
+                        Description = $"{description?.Trim()} [Parçalı Hakediş - Sözleşme Dışı Elden Nakit]".Trim(),
+                        AmountExcludingVat = unoffAmount,
+                        VatRate = 0,
+                        VatAmount = 0m,
+                        Amount = unoffAmount,
+                        ExpenseDate = parsedDateTime,
+                        PaymentSource = targetUnofficialAcc.BankName,
+                        DocumentNo = !string.IsNullOrWhiteSpace(unofficialDocNo) ? unofficialDocNo.Trim() : $"ELDEN-{DateTime.Now:yyMMddHHmm}",
+                        PayeeOrSupplier = payeeOrSupplier?.Trim(),
+                        PhotoPath = null,
+                        IsPaid = true,
+                        ApprovalStatus = "Approved",
+                        ApprovalType = "Unofficial", // GİZLENEBİLİR ELDEN MOD
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _context.ConstructionProjectExpenses.Add(unofficialExp);
+                    targetUnofficialAcc.CurrentBalance -= unoffAmount;
+                    targetUnofficialAcc.UpdatedAt = DateTime.UtcNow;
+                }
+
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = $"Çift kanallı hakediş çıkışı yapıldı: Resmi Bankadan {offTotal:N2} ₺ ve Şantiye Kasasından {unoffAmount:N2} ₺ başarıyla düşüldü.";
+                return RedirectToAction(nameof(Finance), new { id = projectId });
+            }
+            else
+            {
+                // NORMAL TEK KANALLI MASRAF ÇIKIŞI
+                if (vatRate < 0) vatRate = 0;
+                if (!vatAmount.HasValue || vatAmount.Value == 0)
+                {
+                    vatAmount = Math.Round(netAmount * vatRate / 100m, 2);
+                }
+                if (!totalAmount.HasValue || totalAmount.Value == 0)
+                {
+                    totalAmount = netAmount + (vatAmount ?? 0m);
+                }
+
+                var targetAcc = accounts.FirstOrDefault(a => a.Id == (bankAccountId ?? officialBank.Id)) ?? officialBank;
+                string effApproval = !string.IsNullOrWhiteSpace(approvalType) ? approvalType : "Official";
+
+                var expense = new ConstructionProjectExpense
+                {
+                    AgencyId = agencyId.Value,
+                    ProjectId = projectId,
+                    Title = title.Trim(),
+                    ExpenseType = (ConstructionExpenseType)expenseType,
+                    Description = description?.Trim(),
+                    AmountExcludingVat = netAmount,
+                    VatRate = vatRate,
+                    VatAmount = vatAmount,
+                    Amount = totalAmount.Value,
+                    ExpenseDate = parsedDateTime,
+                    PaymentSource = targetAcc.BankName,
+                    DocumentNo = documentNo?.Trim(),
+                    PayeeOrSupplier = payeeOrSupplier?.Trim(),
+                    PhotoPath = photoPath,
+                    IsPaid = true,
+                    ApprovalStatus = "Approved",
+                    ApprovalType = effApproval,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.ConstructionProjectExpenses.Add(expense);
+                targetAcc.CurrentBalance -= totalAmount.Value;
+                targetAcc.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = $"'{expense.Title}' masrafı ({netAmount:N2} ₺ + %{vatRate} KDV) başarıyla kaydedildi.";
+                return RedirectToAction(nameof(Finance), new { id = projectId });
+            }
+        }
+
+        // POST: /ConstructionProject/AddProjectDeposit
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddProjectDeposit(
+            int projectId,
+            int bankAccountId,
+            decimal amount,
+            string? currency,
+            string? depositorName,
+            string? notes)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var project = await _context.ConstructionProjects
+                .FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId.Value && !p.IsDeleted);
+            if (project == null) return NotFound();
+
+            var account = await _context.BankAccounts
+                .FirstOrDefaultAsync(b => b.Id == bankAccountId && b.OwnerType == OwnerType.ConstructionProject && b.OwnerId == projectId && !b.IsDeleted);
+            if (account == null)
+            {
+                TempData["ErrorMessage"] = "Hedef kasa / hesap bulunamadı.";
+                return RedirectToAction(nameof(Finance), new { id = projectId });
+            }
+
+            if (amount <= 0)
+            {
+                TempData["ErrorMessage"] = "Geçerli bir aktarım tutarı giriniz.";
+                return RedirectToAction(nameof(Finance), new { id = projectId });
+            }
+
+            // Kasa Bakiyesini Arttır
+            account.CurrentBalance += amount;
+            account.UpdatedAt = DateTime.UtcNow;
+
+            // Ortak Avansı Takibi
+            if (!string.IsNullOrWhiteSpace(depositorName))
+            {
+                if (depositorName.Contains("Ortak") || depositorName.Contains("Partner"))
+                {
+                    project.PartnerVaultAdvance = (project.PartnerVaultAdvance ?? 0m) + amount;
+                }
+                else
+                {
+                    project.OurVaultAdvance = (project.OurVaultAdvance ?? 0m) + amount;
+                }
+                project.UpdatedAt = DateTime.UtcNow;
             }
 
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = $"'{expense.Title}' masrafı ({netAmount:N2} ₺ + %{vatRate} KDV) başarıyla kaydedildi.";
+            string currSymbol = (currency == "USD" || account.IBAN.Contains("USD") || account.BankName.Contains("USD")) ? "$" : "₺";
+            TempData["SuccessMessage"] = $"{account.BankName} hesabına {amount:N2} {currSymbol} para aktarımı başarıyla işlendi.";
             return RedirectToAction(nameof(Finance), new { id = projectId });
         }
 
@@ -3938,24 +4198,24 @@ namespace GMK360.Web.Controllers
             expense.IsDeleted = true;
             expense.UpdatedAt = DateTime.UtcNow;
 
-            var projectAccount = await _context.BankAccounts
-                .FirstOrDefaultAsync(b => b.OwnerType == OwnerType.ConstructionProject && b.OwnerId == projectId && !b.IsDeleted);
-            if (projectAccount != null)
+            var accounts = await EnsureProjectAccountsAsync(projectId, "Proje");
+            var matchingAccount = accounts.FirstOrDefault(a => a.BankName == expense.PaymentSource) ?? accounts.FirstOrDefault();
+            if (matchingAccount != null)
             {
-                projectAccount.CurrentBalance += expense.Amount;
-                projectAccount.UpdatedAt = DateTime.UtcNow;
+                matchingAccount.CurrentBalance += expense.Amount;
+                matchingAccount.UpdatedAt = DateTime.UtcNow;
             }
 
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Masraf kaydı başarıyla silindi.";
+            TempData["SuccessMessage"] = "Masraf kaydı silindi ve tutar kasaya iade edildi.";
             return RedirectToAction(nameof(Finance), new { id = projectId });
         }
 
         // POST: /ConstructionProject/UpdateProjectAccount
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateProjectAccount(int projectId, string bankName, string accountName, string iban, decimal openingBalance)
+        public async Task<IActionResult> UpdateProjectAccount(int projectId, int? accountId, string bankName, string accountName, string iban, decimal openingBalance)
         {
             var agencyId = await GetUserAgencyIdAsync();
             if (agencyId == null) return Unauthorized();
@@ -3964,16 +4224,29 @@ namespace GMK360.Web.Controllers
                 .FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId.Value && !p.IsDeleted);
             if (project == null) return NotFound();
 
-            var account = await EnsureProjectAccountAsync(projectId, project.Name);
-            account.BankName = string.IsNullOrWhiteSpace(bankName) ? "Proje Ana Hesabı & Kasası" : bankName.Trim();
-            account.AccountName = string.IsNullOrWhiteSpace(accountName) ? $"{project.Name} - Proje Hesabı" : accountName.Trim();
-            account.IBAN = !string.IsNullOrWhiteSpace(iban) ? iban.Trim() : $"PRJ-{projectId:D4}-TRY";
-            account.CurrentBalance = openingBalance;
-            account.UpdatedAt = DateTime.UtcNow;
+            BankAccount? account = null;
+            if (accountId.HasValue)
+            {
+                account = await _context.BankAccounts
+                    .FirstOrDefaultAsync(b => b.Id == accountId.Value && b.OwnerType == OwnerType.ConstructionProject && b.OwnerId == projectId && !b.IsDeleted);
+            }
+            if (account == null)
+            {
+                var accounts = await EnsureProjectAccountsAsync(projectId, project.Name);
+                account = accounts.FirstOrDefault();
+            }
 
-            await _context.SaveChangesAsync();
+            if (account != null)
+            {
+                account.BankName = string.IsNullOrWhiteSpace(bankName) ? account.BankName : bankName.Trim();
+                account.AccountName = string.IsNullOrWhiteSpace(accountName) ? account.AccountName : accountName.Trim();
+                account.IBAN = string.IsNullOrWhiteSpace(iban) ? account.IBAN : iban.Trim();
+                account.CurrentBalance = openingBalance;
+                account.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+            }
 
-            TempData["SuccessMessage"] = "Proje hesabı bilgileri başarıyla güncellendi.";
+            TempData["SuccessMessage"] = "Kasa / hesap bilgileri başarıyla güncellendi.";
             return RedirectToAction(nameof(Finance), new { id = projectId });
         }
 
