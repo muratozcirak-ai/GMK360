@@ -129,6 +129,9 @@ public decimal AverageFlatSalePrice { get; set; } = 0; // Ortalama Daire Fiyatı
         // Finans, Kasa ve Ortaklık Bilgileri
         public bool IsJointVenture { get; set; } = false;
         public string? PartnerCompanyName { get; set; }
+        public string? PartnerContactPerson { get; set; }
+        public string? PartnerPhone { get; set; }
+        public string? PartnerEmail { get; set; }
         public decimal OurSharePercentage { get; set; } = 100m;
         public decimal PartnerSharePercentage { get; set; } = 0m;
         public string? ManagerApprovalPin { get; set; }

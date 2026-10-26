@@ -1360,69 +1360,63 @@ namespace GMK360.Web.Controllers
 
 
         [HttpPost]
-
-
-
-        public async Task<IActionResult> UpdateProjectPartners(int id, string? projectOwnerContact)
-
-
-
+        public async Task<IActionResult> UpdateProjectPartners(
+            int id, 
+            bool isJointVenture,
+            string? partnerCompanyName,
+            string? partnerContactPerson,
+            string? partnerPhone,
+            string? partnerEmail,
+            decimal? ourSharePercentage,
+            decimal? partnerSharePercentage)
         {
-
-
-
             var agencyId = await GetUserAgencyIdAsync();
-
-
-
             if (agencyId == null) return Unauthorized();
 
-
-
-
-
-
-
             var project = await _context.ConstructionProjects
-
-
-
                 .FirstOrDefaultAsync(p => p.Id == id && p.AgencyId == agencyId.Value && !p.IsDeleted);
-
-
-
-
-
-
 
             if (project == null) return NotFound();
 
+            project.IsJointVenture = isJointVenture;
 
+            if (isJointVenture)
+            {
+                project.PartnerCompanyName = string.IsNullOrWhiteSpace(partnerCompanyName) ? null : partnerCompanyName.Trim();
+                project.PartnerContactPerson = string.IsNullOrWhiteSpace(partnerContactPerson) ? null : partnerContactPerson.Trim();
+                project.PartnerPhone = string.IsNullOrWhiteSpace(partnerPhone) ? null : partnerPhone.Trim();
+                project.PartnerEmail = string.IsNullOrWhiteSpace(partnerEmail) ? null : partnerEmail.Trim();
 
+                decimal ourRatio = ourSharePercentage ?? 50m;
+                decimal partnerRatio = partnerSharePercentage ?? 50m;
 
+                if (ourRatio < 0) ourRatio = 0;
+                if (ourRatio > 100) ourRatio = 100;
+                if (partnerRatio < 0) partnerRatio = 0;
+                if (partnerRatio > 100) partnerRatio = 100;
 
-
-
-            project.ProjectOwnerContact = string.IsNullOrWhiteSpace(projectOwnerContact) ? null : projectOwnerContact.Trim();
-
-
+                project.OurSharePercentage = ourRatio;
+                project.PartnerSharePercentage = partnerRatio;
+                project.ProjectOwnerContact = $"Ortak Girişim (%{ourRatio:0.#} Biz / %{partnerRatio:0.#} {project.PartnerCompanyName ?? "Harici Ortak"})";
+            }
+            else
+            {
+                project.PartnerCompanyName = null;
+                project.PartnerContactPerson = null;
+                project.PartnerPhone = null;
+                project.PartnerEmail = null;
+                project.OurSharePercentage = 100m;
+                project.PartnerSharePercentage = 0m;
+                project.ProjectOwnerContact = "Tekil Yüklenici (%100)";
+            }
 
             await _context.SaveChangesAsync();
 
-
-
-
-
-
-
-            TempData["SuccessMessage"] = "Hissedarlık bilgileri başarıyla güncellendi.";
-
-
+            TempData["SuccessMessage"] = isJointVenture 
+                ? "Ortaklık ve hisse oranları başarıyla kaydedildi." 
+                : "Proje tekil yüklenici (%100) olarak kaydedildi.";
 
             return RedirectToAction(nameof(Workspace), new { id = id });
-
-
-
         }
 
 
