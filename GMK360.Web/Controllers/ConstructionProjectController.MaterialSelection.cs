@@ -446,5 +446,60 @@ namespace GMK360.Web.Controllers
                 priceDiff = measurement.PriceDifference
             });
         }
+
+        // POST: ConstructionProject/UploadMeasurementPhoto (Ölçü Satırına Özel Fotoğraf & Tercih Yükleme)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UploadMeasurementPhoto(int measurementId, string materialName, string? colorCode, decimal? priceDifference, string? notes, IFormFile? photoFile)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var measurement = await _context.SpaceMeasurements.FindAsync(measurementId);
+            if (measurement == null) return NotFound(new { success = false, message = "Ölçü satırı bulunamadı." });
+
+            string? photoUrl = null;
+            if (photoFile != null && photoFile.Length > 0)
+            {
+                var uploadFolder = Path.Combine(_hostEnvironment.WebRootPath, "uploads", "materials", "requests");
+                if (!Directory.Exists(uploadFolder)) Directory.CreateDirectory(uploadFolder);
+
+                var ext = Path.GetExtension(photoFile.FileName).ToLowerInvariant();
+                var fileName = $"sm_{measurementId}_{DateTime.Now:yyyyMMdd_HHmmss}{ext}";
+                var filePath = Path.Combine(uploadFolder, fileName);
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await photoFile.CopyToAsync(stream);
+                }
+                photoUrl = $"/uploads/materials/requests/{fileName}";
+            }
+
+            string fullTitle = string.IsNullOrWhiteSpace(materialName) ? "Özel Tercih" : materialName.Trim();
+            if (!string.IsNullOrWhiteSpace(colorCode))
+            {
+                fullTitle += $" (Kod: {colorCode.Trim()})";
+            }
+
+            measurement.SelectedMaterialOption = fullTitle;
+            measurement.PriceDifference = priceDifference ?? 0m;
+
+            string notesCombined = notes ?? "";
+            if (!string.IsNullOrEmpty(photoUrl))
+            {
+                notesCombined = (notesCombined + $" [Foto: {photoUrl}]").Trim();
+            }
+            measurement.MaterialSelectionNotes = notesCombined;
+
+            await _context.SaveChangesAsync();
+
+            return Json(new
+            {
+                success = true,
+                message = "Özel malzeme tercihi ve fotoğraf başarıyla kaydedildi.",
+                selectedOption = fullTitle,
+                photoUrl = photoUrl,
+                priceDiff = measurement.PriceDifference
+            });
+        }
     }
 }

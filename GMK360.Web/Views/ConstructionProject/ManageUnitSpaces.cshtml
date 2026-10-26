@@ -425,6 +425,56 @@
     var totalFixturesCount = Model.Spaces?.Sum(s => s.Fixtures?.Count ?? 0) ?? 0;
 }
 
+<!-- Custom Material / Sample Upload Modal -->
+<div class="modal fade" id="customMaterialModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form id="customMaterialForm" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="customMeasId" name="measurementId" value="0" />
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-camera text-primary me-2"></i>Özel Malzeme / Numune Yükle</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info border-0 rounded-3 p-3 mb-3 small">
+                        <i class="bi bi-info-circle me-1"></i><strong id="customMeasDesc">Oda - Zemin</strong> için firmanın sunduğu standart skala dışında müşterinin veya şantiyenin talep ettiği özel numuneyi/rengi kaydedin.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Malzeme / Marka / Model Adı <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control rounded-3" id="customMatName" name="materialName" placeholder="Örn: Jotun Somon Rengi, Kütahya 60x120 Seramik" required />
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Renk / Seri Kodu</label>
+                            <input type="text" class="form-control rounded-3" id="customMatColor" name="colorCode" placeholder="Örn: 10342 Kireçtaşı, RAL 9010" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Fiyat Farkı (Varsa - ₺/Birim)</label>
+                            <input type="number" step="0.01" class="form-control rounded-3" id="customMatPrice" name="priceDifference" placeholder="0" value="0" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Şantiye / Showroom Fotoğrafı (Opsiyonel)</label>
+                        <input type="file" class="form-control rounded-3" id="customMatPhoto" name="photoFile" accept="image/*" />
+                        <div class="form-text small">Cep telefonundan çekilen numune kartelası veya showroom fotoğrafını seçebilirsiniz.</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-bold small">Müşteri / Şantiye İmalat Notu</label>
+                        <textarea class="form-control rounded-3" id="customMatNotes" name="notes" rows="2" placeholder="Örn: Müşteri showroomdan bizzat beğendi, teyit edildi."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4" id="btnSaveCustomMaterial">
+                        <i class="bi bi-check2-circle me-1"></i>Kaydet ve Bağla
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Clone Unit Spaces Modal -->
 <div class="modal fade" id="cloneUnitModal" tabindex="-1" aria-labelledby="cloneUnitModalLabel" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -862,27 +912,29 @@
                       } else {
                           let html = '';
                           data.forEach(function(m) {
-                              html += `<tr>
-                                  <td class="text-muted small">${m.category || m.Category || "-"}</td>
+                              let mId = m.id || m.Id;
+                              html += `<tr class="measurement-main-row align-middle" id="row_m_${mId}">
+                                  <td class="text-muted small"><span class="badge bg-light text-secondary border">${m.category || m.Category || "-"}</span></td>
                                   <td class="fw-bold text-dark">${m.description || m.Description || "-"}</td>
                                   <td>${renderMaterialSelector(m)}</td>
                                    <td>
-                                       <div class="input-group input-group-sm" style="width: 170px;">
-                                          <input type="number" step="0.01" class="form-control text-center" placeholder="En" value="${m.width || ''}" id="w_${m.id || m.Id}" onchange="updateMeasurementQty(${m.id || m.Id})" onkeydown="if(event.key==='Enter') this.blur();" />
+                                       <div class="input-group input-group-sm" style="width: 160px;">
+                                          <input type="number" step="0.01" class="form-control text-center" placeholder="En" value="${m.width || ''}" id="w_${mId}" onchange="updateMeasurementQty(${mId})" onkeydown="if(event.key==='Enter') this.blur();" />
                                           <span class="input-group-text px-1">x</span>
-                                          <input type="number" step="0.01" class="form-control text-center" placeholder="Boy" value="${m.length || ''}" id="l_${m.id || m.Id}" onchange="updateMeasurementQty(${m.id || m.Id})" onkeydown="if(event.key==='Enter') this.blur();" />
+                                          <input type="number" step="0.01" class="form-control text-center" placeholder="Boy" value="${m.length || ''}" id="l_${mId}" onchange="updateMeasurementQty(${mId})" onkeydown="if(event.key==='Enter') this.blur();" />
                                       </div>
                                   </td>
                                   <td>
-                                      <div class="input-group input-group-sm" style="width: 130px;">
-                                          <input type="number" step="0.01" class="form-control fw-bold text-primary" value="${m.quantity || m.Quantity || 0}" id="q_${m.id || m.Id}" onchange="updateMeasurementQty(${m.id || m.Id})" />
+                                      <div class="input-group input-group-sm" style="width: 120px;">
+                                          <input type="number" step="0.01" class="form-control fw-bold text-primary" value="${m.quantity || m.Quantity || 0}" id="q_${mId}" onchange="updateMeasurementQty(${mId})" />
                                           <span class="input-group-text bg-light">${m.unit || m.Unit || ""}</span>
                                       </div>
                                   </td>
                                   <td>
-                                      <button class="btn btn-sm btn-light text-danger" onclick="deleteMeasurement(${m.id || m.Id})"><i class="bi bi-trash"></i></button>
+                                      <button class="btn btn-sm btn-light text-danger rounded-circle p-1" style="width:28px;height:28px;" onclick="deleteMeasurement(${mId})" title="Sil"><i class="bi bi-trash"></i></button>
                                   </td>
-                              </tr>`;
+                              </tr>
+                              ${renderMaterialPaletteSubrow(m)}`;
                           });
                           $('#measurementsTableBody').html(html);
                       }
@@ -945,126 +997,228 @@
             });
         }
         
-        function renderMaterialSelector(m) {
-            let cat = (m.category || m.Category || '').toLowerCase();
-            let currentOpt = m.selectedMaterialOption || m.SelectedMaterialOption || '';
-            let mId = m.id || m.Id;
-            let isWet = (currentSpaceType === 'Islak Hacim') || (currentSpaceName && (currentSpaceName.includes('Banyo') || currentSpaceName.includes('WC')));
+        function getMaterialDataForCategory(catRaw, spaceName, spaceType) {
+            let cat = (catRaw || '').toLowerCase();
+            let sLower = (spaceName || '').toLowerCase();
+            let isWet = (spaceType === 'Islak Hacim') || sLower.includes('banyo') || sLower.includes('wc');
 
             if (cat.includes('zemin')) {
-                let defaultVal = isWet ? 'VitrA 60x120 Calacatta (0 ₺)' : 'AGT Effect Doğal Meşe (0 ₺)';
-                let activeVal = currentOpt || defaultVal;
-                let options = isWet ? [
-                    { title: 'VitrA 60x120 Calacatta Porselen', badge: '0 ₺ Standart', diff: 0 },
-                    { title: 'Çanakkale 60x120 Brüt Beton Gri', badge: '0 ₺ Standart', diff: 0 },
-                    { title: 'VitrA Marmori Calacatta Gold (Showroom)', badge: '+Fark', diff: 3500 }
-                ] : [
-                    { title: 'AGT Effect 10mm Doğal Meşe', badge: '0 ₺ Standart', diff: 0 },
-                    { title: 'AGT Effect 10mm Kül Gri', badge: '0 ₺ Standart', diff: 0 },
-                    { title: 'Çamsan 10mm Sıcak Ceviz', badge: '0 ₺ Standart', diff: 0 },
-                    { title: 'Floorpan Macar Balıksırtı Parke', badge: '+180 ₺/m²', diff: 180 }
-                ];
+                if (isWet) {
+                    return {
+                        standard: { title: 'VitrA 60x120 Calacatta Rektifiye Porselen', img: '/uploads/materials/vitra_calacatta.svg', diff: 0, code: 'VitrA K94892' },
+                        alternatives: [
+                            { title: 'Çanakkale 60x120 Brüt Beton Gri', img: '/uploads/materials/canakkale_beton_gri.svg', diff: 0, code: 'Çanakkale GS-D710' }
+                        ]
+                    };
+                } else {
+                    return {
+                        standard: { title: 'AGT Effect 10mm Derzli Doğal Meşe', img: '/uploads/materials/agt_dogal_mese.svg', diff: 0, code: 'AGT PRK-901' },
+                        alternatives: [
+                            { title: 'AGT Effect 10mm Derzli Kül Gri', img: '/uploads/materials/agt_kul_gri.svg', diff: 0, code: 'AGT PRK-904' },
+                            { title: 'Çamsan Avangarde 10mm Sıcak Ceviz', img: '/uploads/materials/camsan_sicak_ceviz.svg', diff: 0, code: 'Çamsan CEV-10' },
+                            { title: 'Floorpan Macar Balıksırtı Parke', img: '/uploads/materials/floorpan_baliksirti.svg', diff: 180, code: 'Floorpan HBR-12' }
+                        ]
+                    };
+                }
+            } else if (cat.includes('duvar')) {
+                if (isWet) {
+                    return {
+                        standard: { title: 'VitrA 60x120 Calacatta Duvar Seramiği', img: '/uploads/materials/vitra_calacatta.svg', diff: 0, code: 'VitrA DW-6012' },
+                        alternatives: [
+                            { title: 'Çanakkale 60x120 Beton Gri Duvar Seramiği', img: '/uploads/materials/canakkale_beton_gri.svg', diff: 0, code: 'Çanakkale DW-702' }
+                        ]
+                    };
+                } else {
+                    return {
+                        standard: { title: 'Dyo 0108 Buz Beyazı', img: '/uploads/materials/dyo_buz_beyazi.svg', diff: 0, code: 'Dyo 0108' },
+                        alternatives: [
+                            { title: 'Dyo 7244 Kum Beji', img: '/uploads/materials/dyo_kum_beji.svg', diff: 0, code: 'Dyo 7244' },
+                            { title: 'Dyo 9120 Açık Fildişi', img: '/uploads/materials/dyo_acik_fildisi.svg', diff: 0, code: 'Dyo 9120' },
+                            { title: 'Jotun 10342 Kireçtaşı', img: '/uploads/materials/jotun_kirectasi.svg', diff: 45, code: 'Jotun 10342' }
+                        ]
+                    };
+                }
+            } else if (cat.includes('süpürgelik') || cat.includes('supergelik')) {
+                return {
+                    standard: { title: '8cm Lake Ahşap Beyaz Süpürgelik', img: '/uploads/materials/supergelik_lake_beyaz.svg', diff: 0, code: 'SPG-8W' },
+                    alternatives: [
+                        { title: 'Zemin ile Uyumlu Doğal Meşe Süpürgelik', img: '/uploads/materials/supergelik_dogal_mese.svg', diff: 0, code: 'SPG-OAK' }
+                    ]
+                };
+            } else {
+                return {
+                    standard: { title: 'Firma Standart İmalat Taahhüdü', img: '/uploads/materials/agt_dogal_mese.svg', diff: 0, code: 'STD' },
+                    alternatives: []
+                };
+            }
+        }
 
-                let menuHtml = options.map(o => `
-                    <li><a class="dropdown-item d-flex justify-content-between align-items-center py-2" href="javascript:void(0)" onclick="setMeasurementMaterial(${mId}, '${o.title}', ${o.diff})">
-                        <span class="small font-monospace">${o.title}</span>
-                        <span class="badge ${o.diff === 0 ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-primary-subtle text-primary border border-primary-subtle'} ms-2">${o.badge}</span>
-                    </a></li>
-                `).join('');
+        function renderMaterialSelector(m) {
+            let mId = m.id || m.Id;
+            let matData = getMaterialDataForCategory(m.category || m.Category, currentSpaceName, currentSpaceType);
+            let activeOpt = m.selectedMaterialOption || m.SelectedMaterialOption || matData.standard.title;
+            let activeDiff = m.priceDifference || m.PriceDifference || 0;
+            
+            let activeImg = matData.standard.img;
+            let allOpts = [matData.standard].concat(matData.alternatives);
+            let found = allOpts.find(o => o.title.toLowerCase() === activeOpt.toLowerCase());
+            if (found) {
+                activeImg = found.img;
+            } else if ((m.materialSelectionNotes || '').includes('[Foto: ')) {
+                let match = (m.materialSelectionNotes || '').match(/\[Foto:\s*([^\]]+)\]/);
+                if (match) activeImg = match[1];
+            }
 
-                menuHtml += `<li><hr class="dropdown-divider my-1"></li>
-                    <li><a class="dropdown-item text-primary small py-1" href="javascript:void(0)" onclick="promptCustomMaterial(${mId})">
-                        <i class="bi bi-pencil-square me-1"></i> + Özel Malzeme / Renk Gir
-                    </a></li>`;
+            return `
+                <div class="d-flex align-items-center gap-2 p-1 bg-white border rounded shadow-sm" style="min-width: 220px; max-width: 280px;">
+                    <img src="${activeImg}" id="activeImg_${mId}" class="rounded border shadow-xs flex-shrink-0" style="width: 32px; height: 32px; object-fit: cover;" alt="${activeOpt}" />
+                    <div class="flex-grow-1 text-truncate">
+                        <div class="fw-bold text-dark small text-truncate" id="activeTitle_${mId}" title="${activeOpt}">${activeOpt}</div>
+                        <span class="badge ${activeDiff === 0 ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-primary-subtle text-primary border border-primary-subtle'}" id="activeDiff_${mId}" style="font-size: 0.65rem;">
+                            ${activeDiff === 0 ? 'Firma Standardı (0 ₺)' : `+${Number(activeDiff).toLocaleString('tr-TR')} ₺`}
+                        </span>
+                    </div>
+                    <button type="button" class="btn btn-xs btn-outline-primary rounded-pill px-2 py-1 flex-shrink-0" onclick="toggleMaterialPalette(${mId})" title="Kartelayı Aç/Kapat">
+                        <i class="bi bi-palette me-1"></i>Skala
+                    </button>
+                </div>`;
+        }
 
+        function renderMaterialPaletteSubrow(m) {
+            let mId = m.id || m.Id;
+            let matData = getMaterialDataForCategory(m.category || m.Category, currentSpaceName, currentSpaceType);
+            let activeOpt = m.selectedMaterialOption || m.SelectedMaterialOption || matData.standard.title;
+            let activeDiff = m.priceDifference || m.PriceDifference || 0;
+            let isStdSelected = (activeOpt.toLowerCase() === matData.standard.title.toLowerCase());
+
+            // 1. Firma Taahhüdü Kartı
+            let stdHtml = `
+                <div class="material-opt-card p-2 rounded-3 border bg-white shadow-sm position-relative ${isStdSelected ? 'border-success border-2 shadow' : ''}" 
+                     style="width: 165px; cursor: pointer;" 
+                     data-title="${matData.standard.title.replace(/"/g, '&quot;')}"
+                     onclick="selectMeasurementOption(${mId}, '${matData.standard.title.replace(/'/g, "\'")}', 0, '${matData.standard.img}')">
+                    <span class="position-absolute top-0 end-0 badge bg-success m-1 rounded-pill" style="font-size: 0.62rem; z-index: 2;">
+                        Firma Taahhüdü
+                    </span>
+                    <div class="rounded overflow-hidden mb-1 border" style="height: 65px; background:#f8f9fa;">
+                        <img src="${matData.standard.img}" class="w-100 h-100 object-fit-cover" alt="${matData.standard.title}" />
+                    </div>
+                    <div class="fw-bold text-dark text-truncate" style="font-size: 0.75rem;" title="${matData.standard.title}">${matData.standard.title}</div>
+                    <div class="d-flex justify-content-between align-items-center mt-1">
+                        <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.65rem;">0 ₺ Standart</span>
+                        <i class="bi bi-check-circle-fill text-success fs-6 sel-icon" style="display: ${isStdSelected ? 'inline-block' : 'none'};"></i>
+                    </div>
+                </div>`;
+
+            // 2. Ücretsiz Alternatifler Kartları
+            let altHtml = matData.alternatives.map(o => {
+                let isSel = (activeOpt.toLowerCase() === o.title.toLowerCase());
+                let diffBadge = o.diff === 0 
+                    ? '<span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.65rem;">0 ₺ Fark</span>' 
+                    : `<span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.65rem;">+${o.diff} ₺</span>`;
                 return `
-                    <div class="dropdown">
-                        <button class="btn btn-sm btn-light border dropdown-toggle d-flex align-items-center justify-content-between text-truncate rounded-pill px-3 py-1 shadow-sm" 
-                                type="button" data-bs-toggle="dropdown" aria-expanded="false" style="max-width: 230px;" id="matBtn_${mId}" title="${activeVal}">
-                            <span class="text-truncate small fw-semibold text-dark"><i class="bi ${isWet ? 'bi-moisture text-info' : 'bi-layers text-warning'} me-1"></i>${activeVal}</span>
-                        </button>
-                        <ul class="dropdown-menu shadow rounded-4 py-2 border-0" style="min-width: 270px; z-index: 1050;">
-                            <li class="dropdown-header small text-muted text-uppercase fw-bold pb-1">Firma Standartı & Alternatifler</li>
-                            ${menuHtml}
-                        </ul>
+                    <div class="material-opt-card p-2 rounded-3 border bg-white shadow-sm position-relative ${isSel ? 'border-success border-2 shadow' : ''}" 
+                         style="width: 165px; cursor: pointer;" 
+                         data-title="${o.title.replace(/"/g, '&quot;')}"
+                         onclick="selectMeasurementOption(${mId}, '${o.title.replace(/'/g, "\'")}', ${o.diff}, '${o.img}')">
+                        <span class="position-absolute top-0 end-0 badge bg-secondary-subtle text-secondary border border-secondary-subtle m-1 rounded-pill" style="font-size: 0.62rem; z-index: 2;">
+                            Alternatif
+                        </span>
+                        <div class="rounded overflow-hidden mb-1 border" style="height: 65px; background:#f8f9fa;">
+                            <img src="${o.img}" class="w-100 h-100 object-fit-cover" alt="${o.title}" />
+                        </div>
+                        <div class="fw-bold text-dark text-truncate" style="font-size: 0.75rem;" title="${o.title}">${o.title}</div>
+                        <div class="d-flex justify-content-between align-items-center mt-1">
+                            ${diffBadge}
+                            <i class="bi bi-check-circle-fill text-success fs-6 sel-icon" style="display: ${isSel ? 'inline-block' : 'none'};"></i>
+                        </div>
                     </div>`;
-            }
-            else if (cat.includes('duvar')) {
-                if (isWet) {
-                    let activeVal = currentOpt || 'VitrA 60x120 Calacatta Duvar Seramiği (0 ₺)';
-                    let options = [
-                        { title: 'VitrA 60x120 Calacatta Duvar Seramiği', badge: '0 ₺ Standart', diff: 0 },
-                        { title: 'Çanakkale 60x120 Beton Gri', badge: '0 ₺ Standart', diff: 0 }
-                    ];
-                    let menuHtml = options.map(o => `
-                        <li><a class="dropdown-item d-flex justify-content-between align-items-center py-2" href="javascript:void(0)" onclick="setMeasurementMaterial(${mId}, '${o.title}', ${o.diff})">
-                            <span class="small font-monospace">${o.title}</span>
-                            <span class="badge bg-success-subtle text-success border border-success-subtle ms-2">${o.badge}</span>
-                        </a></li>
-                    `).join('');
-                    menuHtml += `<li><hr class="dropdown-divider my-1"></li>
-                        <li><a class="dropdown-item text-primary small py-1" href="javascript:void(0)" onclick="promptCustomMaterial(${mId})">
-                            <i class="bi bi-pencil-square me-1"></i> + Özel Seramik Kodu Gir
-                        </a></li>`;
-                    return `
-                        <div class="dropdown">
-                            <button class="btn btn-sm btn-light border dropdown-toggle d-flex align-items-center justify-content-between text-truncate rounded-pill px-3 py-1 shadow-sm" 
-                                    type="button" data-bs-toggle="dropdown" aria-expanded="false" style="max-width: 230px;" id="matBtn_${mId}" title="${activeVal}">
-                                <span class="text-truncate small fw-semibold text-dark"><i class="bi bi-bricks text-info me-1"></i>${activeVal}</span>
-                            </button>
-                            <ul class="dropdown-menu shadow rounded-4 py-2 border-0" style="min-width: 270px; z-index: 1050;">
-                                <li class="dropdown-header small text-muted text-uppercase fw-bold pb-1">Banyo Duvar Seramiği</li>
-                                ${menuHtml}
-                            </ul>
-                        </div>`;
+            }).join('');
+
+            // 3. Sizin Zevkiniz Bunlar Arasında Yok mu?
+            let isCustomActive = (!isStdSelected && !matData.alternatives.some(o => o.title.toLowerCase() === activeOpt.toLowerCase()));
+            let customCard = `
+                <div class="material-opt-card p-2 rounded-3 border border-dashed bg-white d-flex flex-column align-items-center justify-content-center text-center shadow-sm position-relative ${isCustomActive ? 'border-primary border-2 shadow' : ''}" 
+                     style="width: 145px; cursor: pointer; border-style: dashed !important; border-color: ${isCustomActive ? '#0d6efd' : '#adb5bd'} !important;" 
+                     onclick="openCustomMaterialModal(${mId}, '${(m.description || m.category || '').replace(/'/g, "\'")}')">
+                    <i class="bi bi-camera-fill fs-3 text-primary mb-1"></i>
+                    <span class="fw-bold text-dark" style="font-size: 0.75rem;">Farklı Bir Zevk mi?</span>
+                    <span class="text-muted" style="font-size: 0.65rem;">Özel Foto / Kod</span>
+                    <button type="button" class="btn btn-xs btn-outline-primary rounded-pill px-2 py-0 mt-1" style="font-size: 0.68rem;">+ Özel Yükle</button>
+                </div>`;
+
+            return `
+                <tr class="material-palette-subrow" id="palette_${mId}">
+                    <td colspan="6" class="p-2 bg-light bg-opacity-75 border-bottom border-start border-end rounded-bottom-3">
+                        <div class="d-flex align-items-center justify-content-between mb-2 pb-1 border-bottom flex-wrap gap-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-dark text-white"><i class="bi bi-palette-fill me-1"></i>${m.description || m.category} Tercih Kartelası</span>
+                                <span class="small text-muted"><strong class="text-success"><i class="bi bi-shield-check me-1"></i>Firma Taahhüdü:</strong> Değişiklik yapılmazsa sözleşme gereği bu malzeme uygulanacaktır.</span>
+                            </div>
+                            <div class="small fw-semibold text-secondary">
+                                Aktif Tercih: <span class="badge bg-primary text-white" id="palette_sel_${mId}">${activeOpt}</span>
+                            </div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 align-items-stretch">
+                            ${stdHtml}
+                            ${altHtml}
+                            ${customCard}
+                        </div>
+                    </td>
+                </tr>`;
+        }
+
+        function toggleMaterialPalette(mId) {
+            $('#palette_' + mId).toggle();
+        }
+
+        function openCustomMaterialModal(mId, desc) {
+            $('#customMeasId').val(mId);
+            $('#customMeasDesc').text(currentSpaceName + ' - ' + desc);
+            $('#customMatName').val('');
+            $('#customMatColor').val('');
+            $('#customMatPrice').val(0);
+            $('#customMatPhoto').val('');
+            $('#customMatNotes').val('');
+
+            var modalEl = document.getElementById('customMaterialModal');
+            var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
+
+        function selectMeasurementOption(mId, optionTitle, priceDiff, imgUrl) {
+            $.post('/ConstructionProject/UpdateMeasurementMaterial', {
+                id: mId,
+                materialOption: optionTitle,
+                priceDifference: priceDiff,
+                __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+            })
+            .done(function(res) {
+                if (res.success) {
+                    $('#activeTitle_' + mId).text(optionTitle);
+                    if (imgUrl) {
+                        $('#activeImg_' + mId).attr('src', imgUrl);
+                    }
+                    if (priceDiff === 0) {
+                        $('#activeDiff_' + mId).attr('class', 'badge bg-success-subtle text-success border border-success-subtle').text('0 ₺');
+                    } else {
+                        $('#activeDiff_' + mId).attr('class', 'badge bg-primary-subtle text-primary border border-primary-subtle').text('+' + Number(priceDiff).toLocaleString('tr-TR') + ' ₺');
+                    }
+
+                    $('#palette_sel_' + mId).text(optionTitle);
+
+                    $('#palette_' + mId + ' .material-opt-card').removeClass('border-success border-2 shadow').find('.sel-icon').hide();
+                    var matched = $('#palette_' + mId + ' .material-opt-card[data-title="' + optionTitle.replace(/"/g, '\"') + '"]');
+                    if (matched.length) {
+                        matched.addClass('border-success border-2 shadow').find('.sel-icon').show();
+                    }
                 } else {
-                    let defaultVal = 'Dyo 0101 Buz Beyazı (0 ₺)';
-                    let activeVal = currentOpt || defaultVal;
-                    let options = [
-                        { title: 'Dyo 0101 Buz Beyazı', badge: '0 ₺ Standart', diff: 0 },
-                        { title: 'Dyo 1450 Kumtaşı', badge: '0 ₺ Standart', diff: 0 },
-                        { title: 'Dyo 7230 Keten Gri', badge: '0 ₺ Standart', diff: 0 },
-                        { title: 'Dyo 5120 Fildişi', badge: '0 ₺ Standart', diff: 0 },
-                        { title: 'Dyo 3210 Şampanya', badge: '0 ₺ Standart', diff: 0 },
-                        { title: 'Jotun 1024 Zamansız Gri', badge: '0 ₺ Standart', diff: 0 }
-                    ];
-                    let menuHtml = options.map(o => `
-                        <li><a class="dropdown-item d-flex justify-content-between align-items-center py-2" href="javascript:void(0)" onclick="setMeasurementMaterial(${mId}, '${o.title}', ${o.diff})">
-                            <span class="small font-monospace">${o.title}</span>
-                            <span class="badge bg-success-subtle text-success border border-success-subtle ms-2">${o.badge}</span>
-                        </a></li>
-                    `).join('');
-                    menuHtml += `<li><hr class="dropdown-divider my-1"></li>
-                        <li><a class="dropdown-item text-primary small py-1" href="javascript:void(0)" onclick="promptCustomMaterial(${mId})">
-                            <i class="bi bi-palette me-1"></i> + Özel Renk Kodu Belirt
-                        </a></li>`;
-                    return `
-                        <div class="dropdown">
-                            <button class="btn btn-sm btn-light border dropdown-toggle d-flex align-items-center justify-content-between text-truncate rounded-pill px-3 py-1 shadow-sm" 
-                                    type="button" data-bs-toggle="dropdown" aria-expanded="false" style="max-width: 230px;" id="matBtn_${mId}" title="${activeVal}">
-                                <span class="text-truncate small fw-semibold text-dark"><i class="bi bi-paint-bucket text-primary me-1"></i>${activeVal}</span>
-                            </button>
-                            <ul class="dropdown-menu shadow rounded-4 py-2 border-0" style="min-width: 270px; z-index: 1050;">
-                                <li class="dropdown-header small text-muted text-uppercase fw-bold pb-1">Boya Kartelası & Alternatifler</li>
-                                ${menuHtml}
-                            </ul>
-                        </div>`;
+                    alert(res.message || 'Güncellenemedi');
                 }
-            }
-            else if (cat.includes('süpürgelik')) {
-                return `<span class="badge bg-light text-muted border py-1 px-2 small"><i class="bi bi-link-45deg me-1"></i>Zemin / Kapı Standardı</span>`;
-            }
-            else if (cat.includes('tavan')) {
-                if (isWet) {
-                    return `<span class="badge bg-info-subtle text-info border border-info-subtle py-1 px-2 small"><i class="bi bi-grid-3x3 me-1"></i>60x60 Klipin Asma Tavan</span>`;
-                } else {
-                    return `<span class="badge bg-light text-muted border py-1 px-2 small"><i class="bi bi-brush me-1"></i>Tavan Beyazı (Plastik)</span>`;
-                }
-            }
-            else {
-                let activeVal = currentOpt || '-';
-                return `<span class="badge bg-light text-dark border py-1 px-2 small" onclick="promptCustomMaterial(${mId})" style="cursor:pointer;" title="Tıkla ve Belirt">${activeVal}</span>`;
-            }
+            })
+            .fail(function() {
+                alert('Bağlantı hatası oluştu.');
+            });
         }
 
         function setMeasurementMaterial(id, optionTitle, priceDiff) {
