@@ -8700,20 +8700,36 @@ namespace GMK360.Web.Controllers
             }
             else if (layout == "2+1")
             {
-                // 2+1 Daire
-                var salon = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Salon", Type = "Oda", SquareMeters = 26, Description = "Lamine parke, alçı sıva boya" };
+                // 2+1 Daire (Zengin Mimari Ölçü, Kapı, Doğrama, Denizlik, Perdelik ve Isıtma)
+                var salon = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Salon", Type = "Oda", SquareMeters = 26, Description = "Ferah salon, lamine parke, alçı sıva boya" };
                 salon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Derzli Lamine Parke 8mm", Quantity = 26, Unit = "m2" });
                 salon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Lake Ahşap Süpürgelik 8cm", Quantity = 21, Unit = "mt" });
                 salon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Alçı Sıva & Su Bazlı Boya", Quantity = 56, Unit = "m2" });
+                salon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Tavan", Description = "Düz Alçı Stropiyer & Tavan Boyası", Quantity = 21, Unit = "mt" });
+                salon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Kapı", Description = "Lake Boyalı Ahşap Salon Kapısı", Quantity = 1, Unit = "Adet", Width = 0.90, Length = 2.10 });
+                salon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Doğrama", Description = "70lik Beyaz PVC Çift Açılım Pencere (Dış Cephe)", Quantity = 1, Unit = "Adet", Width = 1.80, Length = 1.50 });
+                salon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Denizlik", Description = "3cm Muğla Beyazı Mermer Denizlik", Quantity = 1.9, Unit = "mt", Width = 0.25, Length = 1.90 });
+                salon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Perdelik", Description = "Gizli Korniş / Perdelik Yuvası", Quantity = 3.2, Unit = "mt" });
                 salon.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
                     Category = "Yangın & Güvenlik", ItemName = "Optik Duman Dedektörü (Adresli)", Quantity = 1, Unit = "Adet",
                     StandardBrand = "Finder / Mavigard", StandardModel = "FDL-800 Adresli", TechnicalServiceName = "Yangın İhbar Santral Servisi 0216 444 0 911",
                     NextMaintenanceDate = DateTime.Now.AddYears(1), MaintenanceNotes = "Yılda bir kalibrasyon ve test butonu testi yapılmalıdır.", IsCustomizable = false
                 });
+                salon.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
+                    Category = "Isıtma & Mekanik", ItemName = "Panel Radyatör PKKP 600x1400", Quantity = 1, Unit = "Adet",
+                    StandardBrand = "DemirDöküm Plus", StandardModel = "PKKP 600x1400 Tip 22", TechnicalServiceName = "DemirDöküm 0850 222 1 833",
+                    WarrantyExpiryDate = DateTime.Now.AddYears(10), MaintenanceNotes = "Termostatik vana montajlıdır. Yıllık hava alma ve vana kontrolü önerilir.", IsCustomizable = true
+                });
 
-                var mutfak = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Mutfak", Type = "Mutfak", SquareMeters = 11, Description = "Ankastre uyumlu mutfak" };
-                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Granit Seramik", Quantity = 11, Unit = "m2" });
-                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Tezgah Arası Seramik", Quantity = 3.6, Unit = "m2" });
+                var mutfak = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Mutfak", Type = "Mutfak", SquareMeters = 11, Description = "Ankastre uyumlu modern mutfak" };
+                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Granit Seramik 60x120", Quantity = 11, Unit = "m2" });
+                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Granit Süpürgelik 8cm", Quantity = 13, Unit = "mt" });
+                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Tezgah Arası Seramik / Porselen", Quantity = 3.6, Unit = "m2" });
+                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Alçı Sıva & Silinebilir Su Bazlı Boya", Quantity = 26, Unit = "m2" });
+                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Kapı", Description = "Lake Boyalı Ahşap Mutfak Kapısı", Quantity = 1, Unit = "Adet", Width = 0.90, Length = 2.10 });
+                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Doğrama", Description = "70lik Beyaz PVC Balkon Kapısı / Pencere (Dış Cephe)", Quantity = 1, Unit = "Adet", Width = 1.40, Length = 2.15 });
+                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Denizlik", Description = "3cm Muğla Beyazı Mermer Denizlik", Quantity = 1.5, Unit = "mt" });
+                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Perdelik", Description = "Korniş / Perdelik Yuvası", Quantity = 1.6, Unit = "mt" });
                 mutfak.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
                     Category = "Isıtma & Mekanik", ItemName = "Yoğuşmalı Kombi 24 kW", Quantity = 1, Unit = "Adet",
                     StandardBrand = "Buderus", StandardModel = "Logamax Plus GB122i 24 kW", SupplierName = "Buderus Isıtma Sistemleri Bayi",
@@ -8739,16 +8755,41 @@ namespace GMK360.Web.Controllers
 
                 var yatak = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Yatak Odası", Type = "Oda", SquareMeters = 16, Description = "Geniş yatak odası" };
                 yatak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Lamine Parke", Quantity = 16, Unit = "m2" });
-                yatak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Lake Süpürgelik", Quantity = 16, Unit = "mt" });
+                yatak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Lake Süpürgelik 8cm", Quantity = 16, Unit = "mt" });
+                yatak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Alçı Sıva & İpeksi Mat Boya", Quantity = 42, Unit = "m2" });
+                yatak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Tavan", Description = "Alçı Stropiyer", Quantity = 16, Unit = "mt" });
+                yatak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Kapı", Description = "Lake Ahşap Panel Oda Kapısı", Quantity = 1, Unit = "Adet", Width = 0.90, Length = 2.10 });
+                yatak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Doğrama", Description = "70lik Beyaz PVC Çift Açılım Pencere (Dış Cephe)", Quantity = 1, Unit = "Adet", Width = 1.50, Length = 1.40 });
+                yatak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Denizlik", Description = "3cm Muğla Beyazı Mermer Denizlik", Quantity = 1.6, Unit = "mt" });
+                yatak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Perdelik", Description = "Korniş / Perdelik Yuvası", Quantity = 2.6, Unit = "mt" });
+                yatak.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
+                    Category = "Isıtma & Mekanik", ItemName = "Panel Radyatör PKKP 600x1200", Quantity = 1, Unit = "Adet",
+                    StandardBrand = "DemirDöküm Plus", StandardModel = "PKKP 600x1200 Tip 22", TechnicalServiceName = "DemirDöküm Servisi",
+                    WarrantyExpiryDate = DateTime.Now.AddYears(10), IsCustomizable = true
+                });
 
                 var cocuk = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Çocuk Odası", Type = "Oda", SquareMeters = 11, Description = "Çocuk / genç odası" };
                 cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Lamine Parke", Quantity = 11, Unit = "m2" });
-                cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Lake Süpürgelik", Quantity = 13.5, Unit = "mt" });
+                cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Lake Süpürgelik 8cm", Quantity = 13.5, Unit = "mt" });
+                cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Alçı Sıva & Su Bazlı Boya", Quantity = 34, Unit = "m2" });
+                cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Tavan", Description = "Alçı Stropiyer", Quantity = 13.5, Unit = "mt" });
+                cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Kapı", Description = "Lake Ahşap Panel Oda Kapısı", Quantity = 1, Unit = "Adet", Width = 0.90, Length = 2.10 });
+                cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Doğrama", Description = "70lik Beyaz PVC Çift Açılım Pencere (Dış Cephe)", Quantity = 1, Unit = "Adet", Width = 1.40, Length = 1.40 });
+                cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Denizlik", Description = "3cm Muğla Beyazı Mermer Denizlik", Quantity = 1.5, Unit = "mt" });
+                cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Perdelik", Description = "Korniş / Perdelik Yuvası", Quantity = 2.2, Unit = "mt" });
+                cocuk.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
+                    Category = "Isıtma & Mekanik", ItemName = "Panel Radyatör PKKP 600x1000", Quantity = 1, Unit = "Adet",
+                    StandardBrand = "DemirDöküm Plus", StandardModel = "PKKP 600x1000 Tip 22", TechnicalServiceName = "DemirDöküm Servisi",
+                    WarrantyExpiryDate = DateTime.Now.AddYears(10), IsCustomizable = true
+                });
 
                 var banyo = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Genel Banyo & WC", Type = "Islak Hacim", SquareMeters = 5, Description = "Duşakabin ve banyo dolabı" };
                 banyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Kaymaz Banyo Seramiği", Quantity = 5, Unit = "m2" });
                 banyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Seramik Duvar Kaplama", Quantity = 25, Unit = "m2" });
                 banyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Tavan", Description = "60x60 Klipin Modüler Asma Tavan", Quantity = 5, Unit = "m2" });
+                banyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Kapı", Description = "Lake Ahşap Banyo Kapısı (WC Kilitli)", Quantity = 1, Unit = "Adet", Width = 0.80, Length = 2.10 });
+                banyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Doğrama", Description = "PVC Banyo Menfez Penceresi (Dış Cephe)", Quantity = 1, Unit = "Adet", Width = 0.50, Length = 0.50 });
+                banyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Denizlik", Description = "3cm Muğla Beyazı Mermer Denizlik", Quantity = 0.6, Unit = "mt" });
                 banyo.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
                     Category = "Vitrifiye & Banyo Mobilyası", ItemName = "Hilton Banyo Dolabı 85cm", Quantity = 1, Unit = "Takım",
                     StandardBrand = "VitrA", StandardModel = "S50 Banyo Mobilyası Takımı", TechnicalServiceName = "VitrA Müşteri Hizmetleri 0850 311 70 70",
@@ -8764,9 +8805,17 @@ namespace GMK360.Web.Controllers
                     StandardBrand = "E.C.A.", StandardModel = "Niobe Serisi Krom", TechnicalServiceName = "E.C.A. Servis 444 0 322",
                     WarrantyExpiryDate = DateTime.Now.AddYears(5), IsCustomizable = true
                 });
+                banyo.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
+                    Category = "Isıtma & Mekanik", ItemName = "Havlupan Radyatör 500x1000", Quantity = 1, Unit = "Adet",
+                    StandardBrand = "E.C.A. / DemirDöküm", StandardModel = "Krom Havlupan 500x1000", TechnicalServiceName = "E.C.A. Servis",
+                    WarrantyExpiryDate = DateTime.Now.AddYears(5), IsCustomizable = true
+                });
 
                 var hol = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Antre & Hol", Type = "Dolaşım", SquareMeters = 9, Description = "Giriş holü ve vestiyer nişi" };
-                hol.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Granit Seramik", Quantity = 9, Unit = "m2" });
+                hol.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Granit Seramik 60x120", Quantity = 9, Unit = "m2" });
+                hol.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Granit / Ahşap Süpürgelik 8cm", Quantity = 14, Unit = "mt" });
+                hol.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Alçı Sıva & Su Bazlı Boya", Quantity = 32, Unit = "m2" });
+                hol.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Tavan", Description = "Alçı Stropiyer & Giriş Spot Aydınlatma", Quantity = 14, Unit = "mt" });
                 hol.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
                     Category = "Kapı & Güvenlik", ItemName = "Merkezi Kilitli Çelik Kapı", Quantity = 1, Unit = "Adet",
                     StandardBrand = "Kale Çelik Kapı", StandardModel = "14 Noktadan Merkezi Kilit", TechnicalServiceName = "Kale Çelik Eşya 444 0 243",
@@ -8778,29 +8827,46 @@ namespace GMK360.Web.Controllers
                     WarrantyExpiryDate = DateTime.Now.AddYears(3), MaintenanceNotes = "Bina girişi, güvenlik kamerası ve yangın santrali entegre.", IsCustomizable = false
                 });
 
-                var balkon = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Balkon", Type = "Balkon", SquareMeters = 6, Description = "Korkuluklu balkon" };
-                balkon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Kaymaz Seramik", Quantity = 6, Unit = "m2" });
+                var balkon = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Balkon", Type = "Balkon", SquareMeters = 6, Description = "Korkuluklu açık balkon" };
+                balkon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Kaymaz Seramik & Su Yalıtımı", Quantity = 6, Unit = "m2" });
+                balkon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Balkon Seramik Süpürgeliği", Quantity = 8, Unit = "mt" });
+                balkon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Denizlik", Description = "Parapet Mermeri & Damlalık", Quantity = 4, Unit = "mt" });
+                balkon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Doğrama", Description = "Alüminyum & Cam Balkon Korkuluğu (Dış Cephe)", Quantity = 4, Unit = "mt" });
 
                 spacesToAdd.AddRange(new[] { salon, mutfak, yatak, cocuk, banyo, hol, balkon });
             }
             else
             {
-                // Standart 3+1 Daire
-                var salon = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Salon", Type = "Oda", SquareMeters = 32, Description = "Lamine parke zemin, alçıpan asma tavan" };
+                // Standart 3+1 Daire (Zengin Mimari Ölçü, Kapı, Doğrama, Denizlik, Perdelik ve Isıtma)
+                var salon = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Salon", Type = "Oda", SquareMeters = 32, Description = "Ferah panoramik salon, lamine parke, alçı sıva boya" };
                 salon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Lamine Parke Kaplama 10mm", Quantity = 32, Unit = "m2" });
                 salon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Lake Ahşap Süpürgelik 8cm", Quantity = 23.2, Unit = "mt" });
                 salon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Alçı Sıva & Su Bazlı Boya", Quantity = 64.9, Unit = "m2" });
+                salon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Tavan", Description = "Düz Alçı Stropiyer & Tavan Boyası", Quantity = 23.2, Unit = "mt" });
+                salon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Kapı", Description = "Lake Boyalı Ahşap Salon Kapısı", Quantity = 1, Unit = "Adet", Width = 0.90, Length = 2.10 });
+                salon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Doğrama", Description = "70lik Beyaz PVC Çift Açılım Pencere (Dış Cephe)", Quantity = 1, Unit = "Adet", Width = 2.00, Length = 1.50 });
+                salon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Denizlik", Description = "3cm Muğla Beyazı Mermer Denizlik", Quantity = 2.1, Unit = "mt", Width = 0.25, Length = 2.10 });
+                salon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Perdelik", Description = "Gizli Korniş / Perdelik Yuvası", Quantity = 3.6, Unit = "mt" });
                 salon.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
                     Category = "Yangın & Güvenlik", ItemName = "Optik Duman Dedektörü (Adresli)", Quantity = 1, Unit = "Adet",
                     StandardBrand = "Finder / Mavigard", StandardModel = "FDL-800 Adresli", TechnicalServiceName = "Yangın İhbar Santral Servisi 0216 444 0 911",
                     NextMaintenanceDate = DateTime.Now.AddYears(1), MaintenanceNotes = "Yılda bir kalibrasyon ve test butonu testi yapılmalıdır.", IsCustomizable = false
                 });
+                salon.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
+                    Category = "Isıtma & Mekanik", ItemName = "Panel Radyatör PKKP 600x1600", Quantity = 1, Unit = "Adet",
+                    StandardBrand = "DemirDöküm Plus", StandardModel = "PKKP 600x1600 Tip 22", TechnicalServiceName = "DemirDöküm 0850 222 1 833",
+                    WarrantyExpiryDate = DateTime.Now.AddYears(10), MaintenanceNotes = "Termostatik vana montajlıdır. Yıllık hava alma ve vana kontrolü önerilir.", IsCustomizable = true
+                });
 
                 var mutfak = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Mutfak", Type = "Mutfak", SquareMeters = 14, Description = "Granit seramik, ankastre mutfak ve kombi nişi" };
                 mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Granit Seramik 60x120", Quantity = 14, Unit = "m2" });
-                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Granit Süpürgelik", Quantity = 15, Unit = "mt" });
-                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Tezgah Arası Seramik", Quantity = 4.2, Unit = "m2" });
-
+                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Granit Süpürgelik 8cm", Quantity = 15, Unit = "mt" });
+                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Tezgah Arası Seramik / Porselen", Quantity = 4.2, Unit = "m2" });
+                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Alçı Sıva & Silinebilir Su Bazlı Boya", Quantity = 32, Unit = "m2" });
+                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Kapı", Description = "Lake Boyalı Ahşap Mutfak Kapısı", Quantity = 1, Unit = "Adet", Width = 0.90, Length = 2.10 });
+                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Doğrama", Description = "70lik Beyaz PVC Balkon Kapısı / Pencere (Dış Cephe)", Quantity = 1, Unit = "Adet", Width = 1.40, Length = 2.15 });
+                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Denizlik", Description = "3cm Muğla Beyazı Mermer Denizlik", Quantity = 1.5, Unit = "mt" });
+                mutfak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Perdelik", Description = "Korniş / Perdelik Yuvası", Quantity = 1.6, Unit = "mt" });
                 mutfak.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
                     Category = "Isıtma & Mekanik", ItemName = "Yoğuşmalı Kombi 24 kW", Quantity = 1, Unit = "Adet",
                     StandardBrand = "Buderus", StandardModel = "Logamax Plus GB122i 24 kW", SupplierName = "Buderus Isıtma Sistemleri Bayi",
@@ -8827,11 +8893,25 @@ namespace GMK360.Web.Controllers
                 var ebYatak = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Ebeveyn Yatak Odası", Type = "Oda", SquareMeters = 18, Description = "Lamine parke, ebeveyn banyo geçişi" };
                 ebYatak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Lamine Parke Kaplama", Quantity = 18, Unit = "m2" });
                 ebYatak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Lake Süpürgelik 8cm", Quantity = 17.5, Unit = "mt" });
+                ebYatak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Alçı Sıva & İpeksi Mat Boya", Quantity = 45, Unit = "m2" });
+                ebYatak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Tavan", Description = "Alçı Stropiyer", Quantity = 17.5, Unit = "mt" });
+                ebYatak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Kapı", Description = "Lake Ahşap Panel Oda Kapısı", Quantity = 1, Unit = "Adet", Width = 0.90, Length = 2.10 });
+                ebYatak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Doğrama", Description = "70lik Beyaz PVC Çift Açılım Pencere (Dış Cephe)", Quantity = 1, Unit = "Adet", Width = 1.60, Length = 1.40 });
+                ebYatak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Denizlik", Description = "3cm Muğla Beyazı Mermer Denizlik", Quantity = 1.7, Unit = "mt" });
+                ebYatak.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Perdelik", Description = "Korniş / Perdelik Yuvası", Quantity = 2.8, Unit = "mt" });
+                ebYatak.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
+                    Category = "Isıtma & Mekanik", ItemName = "Panel Radyatör PKKP 600x1200", Quantity = 1, Unit = "Adet",
+                    StandardBrand = "DemirDöküm Plus", StandardModel = "PKKP 600x1200 Tip 22", TechnicalServiceName = "DemirDöküm Servisi",
+                    WarrantyExpiryDate = DateTime.Now.AddYears(10), IsCustomizable = true
+                });
 
                 var ebBanyo = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Ebeveyn Banyo", Type = "Islak Hacim", SquareMeters = 4, Description = "Klipin modüler asma tavan, seramik" };
                 ebBanyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Kaymaz Porselen Seramik", Quantity = 4, Unit = "m2" });
                 ebBanyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Seramik Duvar Kaplama", Quantity = 22, Unit = "m2" });
                 ebBanyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Tavan", Description = "60x60 Klipin Modüler Asma Tavan", Quantity = 4, Unit = "m2" });
+                ebBanyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Kapı", Description = "Lake Ahşap Banyo Kapısı", Quantity = 1, Unit = "Adet", Width = 0.80, Length = 2.10 });
+                ebBanyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Doğrama", Description = "PVC Banyo Menfez Penceresi (Dış Cephe)", Quantity = 1, Unit = "Adet", Width = 0.50, Length = 0.50 });
+                ebBanyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Denizlik", Description = "3cm Muğla Beyazı Mermer Denizlik", Quantity = 0.6, Unit = "mt" });
                 ebBanyo.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
                     Category = "Vitrifiye & Banyo Mobilyası", ItemName = "Ebeveyn Hilton Dolabı 80cm", Quantity = 1, Unit = "Takım",
                     StandardBrand = "VitrA", StandardModel = "S20 Serisi Aynalı Banyo Dolabı", TechnicalServiceName = "VitrA Müşteri Hizmetleri 0850 311 70 70",
@@ -8842,19 +8922,49 @@ namespace GMK360.Web.Controllers
                     StandardBrand = "Hüppe", StandardModel = "Aura 6mm Şeffaf Temperli", TechnicalServiceName = "Hüppe Montaj & Servis",
                     WarrantyExpiryDate = DateTime.Now.AddYears(5), IsCustomizable = true
                 });
+                ebBanyo.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
+                    Category = "Isıtma & Mekanik", ItemName = "Havlupan Radyatör 500x1000", Quantity = 1, Unit = "Adet",
+                    StandardBrand = "E.C.A.", StandardModel = "Krom Havlupan", TechnicalServiceName = "E.C.A. Servis",
+                    WarrantyExpiryDate = DateTime.Now.AddYears(5), IsCustomizable = true
+                });
 
                 var cocuk = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Çocuk Odası", Type = "Oda", SquareMeters = 12, Description = "Lamine parke, su bazlı boya" };
                 cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Lamine Parke", Quantity = 12, Unit = "m2" });
-                cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Lake Süpürgelik", Quantity = 14, Unit = "mt" });
+                cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Lake Süpürgelik 8cm", Quantity = 14, Unit = "mt" });
+                cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Alçı Sıva & Su Bazlı Boya", Quantity = 36, Unit = "m2" });
+                cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Tavan", Description = "Alçı Stropiyer", Quantity = 14, Unit = "mt" });
+                cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Kapı", Description = "Lake Ahşap Panel Oda Kapısı", Quantity = 1, Unit = "Adet", Width = 0.90, Length = 2.10 });
+                cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Doğrama", Description = "70lik Beyaz PVC Çift Açılım Pencere (Dış Cephe)", Quantity = 1, Unit = "Adet", Width = 1.40, Length = 1.40 });
+                cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Denizlik", Description = "3cm Muğla Beyazı Mermer Denizlik", Quantity = 1.5, Unit = "mt" });
+                cocuk.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Perdelik", Description = "Korniş / Perdelik Yuvası", Quantity = 2.2, Unit = "mt" });
+                cocuk.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
+                    Category = "Isıtma & Mekanik", ItemName = "Panel Radyatör PKKP 600x1000", Quantity = 1, Unit = "Adet",
+                    StandardBrand = "DemirDöküm Plus", StandardModel = "PKKP 600x1000 Tip 22", TechnicalServiceName = "DemirDöküm Servisi",
+                    WarrantyExpiryDate = DateTime.Now.AddYears(10), IsCustomizable = true
+                });
 
                 var misafir = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Misafir Odası", Type = "Oda", SquareMeters = 11, Description = "Lamine parke, alçı sıva boya" };
                 misafir.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Lamine Parke", Quantity = 11, Unit = "m2" });
-                misafir.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Lake Süpürgelik", Quantity = 13.5, Unit = "mt" });
+                misafir.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Lake Süpürgelik 8cm", Quantity = 13.5, Unit = "mt" });
+                misafir.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Alçı Sıva & Su Bazlı Boya", Quantity = 34, Unit = "m2" });
+                misafir.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Tavan", Description = "Alçı Stropiyer", Quantity = 13.5, Unit = "mt" });
+                misafir.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Kapı", Description = "Lake Ahşap Panel Oda Kapısı", Quantity = 1, Unit = "Adet", Width = 0.90, Length = 2.10 });
+                misafir.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Doğrama", Description = "70lik Beyaz PVC Çift Açılım Pencere (Dış Cephe)", Quantity = 1, Unit = "Adet", Width = 1.40, Length = 1.40 });
+                misafir.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Denizlik", Description = "3cm Muğla Beyazı Mermer Denizlik", Quantity = 1.5, Unit = "mt" });
+                misafir.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Perdelik", Description = "Korniş / Perdelik Yuvası", Quantity = 2.2, Unit = "mt" });
+                misafir.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
+                    Category = "Isıtma & Mekanik", ItemName = "Panel Radyatör PKKP 600x1000", Quantity = 1, Unit = "Adet",
+                    StandardBrand = "DemirDöküm Plus", StandardModel = "PKKP 600x1000 Tip 22", TechnicalServiceName = "DemirDöküm Servisi",
+                    WarrantyExpiryDate = DateTime.Now.AddYears(10), IsCustomizable = true
+                });
 
                 var genelBanyo = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Genel Banyo", Type = "Islak Hacim", SquareMeters = 6, Description = "Klipin modüler asma tavan, seramik zemin/duvar" };
                 genelBanyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Kaymaz Banyo Seramiği", Quantity = 6, Unit = "m2" });
                 genelBanyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Seramik Duvar Kaplama", Quantity = 28, Unit = "m2" });
                 genelBanyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Tavan", Description = "60x60 Klipin Modüler Asma Tavan", Quantity = 6, Unit = "m2" });
+                genelBanyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Kapı", Description = "Lake Ahşap Banyo Kapısı (WC Kilitli)", Quantity = 1, Unit = "Adet", Width = 0.80, Length = 2.10 });
+                genelBanyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Doğrama", Description = "PVC Banyo Menfez Penceresi (Dış Cephe)", Quantity = 1, Unit = "Adet", Width = 0.50, Length = 0.50 });
+                genelBanyo.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Denizlik", Description = "3cm Muğla Beyazı Mermer Denizlik", Quantity = 0.6, Unit = "mt" });
                 
                 var banyoHilton = new GMK360.Core.Entities.SpaceFixture {
                     Category = "Vitrifiye & Banyo Mobilyası", ItemName = "Hilton Banyo Dolabı 100cm", Quantity = 1, Unit = "Takım",
@@ -8873,10 +8983,17 @@ namespace GMK360.Web.Controllers
                     StandardBrand = "E.C.A.", StandardModel = "Niobe Serisi Krom", TechnicalServiceName = "E.C.A. Servis 444 0 322",
                     WarrantyExpiryDate = DateTime.Now.AddYears(5), IsCustomizable = true
                 });
+                genelBanyo.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
+                    Category = "Isıtma & Mekanik", ItemName = "Havlupan Radyatör 500x1000", Quantity = 1, Unit = "Adet",
+                    StandardBrand = "E.C.A.", StandardModel = "Krom Havlupan", TechnicalServiceName = "E.C.A. Servis",
+                    WarrantyExpiryDate = DateTime.Now.AddYears(5), IsCustomizable = true
+                });
 
                 var antre = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Antre & Hol", Type = "Dolaşım", SquareMeters = 12, Description = "Seramik zemin, vestiyer nişi" };
                 antre.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Granit Seramik 60x120", Quantity = 12, Unit = "m2" });
-                antre.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Lake Ahşap Süpürgelik", Quantity = 14, Unit = "mt" });
+                antre.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Lake Ahşap Süpürgelik 8cm", Quantity = 14, Unit = "mt" });
+                antre.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Duvar", Description = "Alçı Sıva & Su Bazlı Boya", Quantity = 38, Unit = "m2" });
+                antre.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Tavan", Description = "Alçı Stropiyer & Giriş Spot Aydınlatma", Quantity = 14, Unit = "mt" });
                 antre.Fixtures.Add(new GMK360.Core.Entities.SpaceFixture {
                     Category = "Kapı & Güvenlik", ItemName = "Merkezi Kilitli Çelik Kapı", Quantity = 1, Unit = "Adet",
                     StandardBrand = "Kale Çelik Kapı", StandardModel = "14 Noktadan Merkezi Kilit", TechnicalServiceName = "Kale Çelik Eşya 444 0 243",
@@ -8890,6 +9007,9 @@ namespace GMK360.Web.Controllers
 
                 var balkon = new GMK360.Core.Entities.UnitSpace { BuildingUnitId = unitId, Name = "Balkon", Type = "Balkon", SquareMeters = 8, Description = "Kaymaz seramik zemin, alüminyum korkuluk" };
                 balkon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Zemin", Description = "Kaymaz Dış Cephe Seramiği", Quantity = 8, Unit = "m2" });
+                balkon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Süpürgelik", Description = "Balkon Seramik Süpürgeliği", Quantity = 9, Unit = "mt" });
+                balkon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Denizlik", Description = "Parapet Mermeri & Damlalık", Quantity = 5, Unit = "mt" });
+                balkon.Measurements.Add(new GMK360.Core.Entities.SpaceMeasurement { Category = "Doğrama", Description = "Alüminyum & Cam Balkon Korkuluğu (Dış Cephe)", Quantity = 5, Unit = "mt" });
 
                 spacesToAdd.AddRange(new[] { salon, mutfak, ebYatak, ebBanyo, cocuk, misafir, genelBanyo, antre, balkon });
             }

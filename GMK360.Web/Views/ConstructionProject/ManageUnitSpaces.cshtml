@@ -1042,6 +1042,40 @@
                         { title: 'Zemin ile Uyumlu Doğal Meşe Süpürgelik', img: '/uploads/materials/supergelik_dogal_mese.svg', diff: 0, code: 'SPG-OAK' }
                     ]
                 };
+            } else if (cat.includes('kapı') || cat.includes('kapi')) {
+                return {
+                    standard: { title: 'Lake Boyalı Beyaz Modern Kapı', img: '/uploads/materials/kapi_beyaz_lake.svg', diff: 0, code: 'LAK-90W' },
+                    alternatives: [
+                        { title: 'Doğal Meşe Kaplama Ahşap Kapı', img: '/uploads/materials/kapi_dogal_mese.svg', diff: 0, code: 'OAK-90M' },
+                        { title: 'Antrasit Modern Panel Kapı', img: '/uploads/materials/kapi_antrasit.svg', diff: 0, code: 'ANT-90P' }
+                    ]
+                };
+            } else if (cat.includes('denizlik') || cat.includes('mermer')) {
+                return {
+                    standard: { title: 'Muğla Beyazı Mermer Denizlik (3cm)', img: '/uploads/materials/denizlik_mugla_beyazi.svg', diff: 0, code: 'MRM-MUG' },
+                    alternatives: [
+                        { title: 'Afyon Gri Mermer Denizlik (3cm)', img: '/uploads/materials/denizlik_afyon_gri.svg', diff: 0, code: 'MRM-AFY' }
+                    ]
+                };
+            } else if (cat.includes('tavan') || cat.includes('kartonpiyer') || cat.includes('stropiyer')) {
+                return {
+                    standard: { title: 'Düz Alçı Stropiyer / Kartonpiyer', img: '/uploads/materials/tavan_kartonpiyer.svg', diff: 0, code: 'TVN-STR' },
+                    alternatives: [
+                        { title: 'Gizli LED Işık Bandı Havuz Tavan', img: '/uploads/materials/tavan_led_isik_bandi.svg', diff: 120, code: 'TVN-LED' }
+                    ]
+                };
+            } else if (cat.includes('doğrama') || cat.includes('dograma') || cat.includes('pencere')) {
+                return {
+                    standard: { title: '70lik Beyaz PVC + Isıcam Konfor', img: '/uploads/materials/dograma_pvc.svg', diff: 0, code: 'PVC-70W' },
+                    alternatives: [],
+                    isFixedFacade: true
+                };
+            } else if (cat.includes('perdelik') || cat.includes('korni')) {
+                return {
+                    standard: { title: 'Gizli Korniş / Perdelik Yuvası', img: '/uploads/materials/perdelik_kornissiz.svg', diff: 0, code: 'PRD-STD' },
+                    alternatives: [],
+                    isRenovationOnly: true
+                };
             } else {
                 return {
                     standard: { title: 'Firma Standart İmalat Taahhüdü', img: '/uploads/materials/agt_dogal_mese.svg', diff: 0, code: 'STD' },
@@ -1066,17 +1100,27 @@
                 if (match) activeImg = match[1];
             }
 
+            let badgeHtml = matData.isFixedFacade 
+                ? '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle" style="font-size: 0.65rem;"><i class="bi bi-lock-fill me-1 text-warning"></i>Dış Cephe Sabit</span>'
+                : (matData.isRenovationOnly 
+                    ? '<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle" style="font-size: 0.65rem;"><i class="bi bi-rulers me-1"></i>Tadilat Metrajı</span>'
+                    : (activeDiff === 0 
+                        ? '<span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.65rem;">Firma Standardı (0 ₺)</span>' 
+                        : `<span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.65rem;">+${Number(activeDiff).toLocaleString('tr-TR')} ₺</span>`));
+
+            let btnText = matData.isFixedFacade ? '<i class="bi bi-shield-lock me-1"></i>Künye' : (matData.isRenovationOnly ? '<i class="bi bi-rulers me-1"></i>Metraj' : '<i class="bi bi-palette me-1"></i>Skala');
+
             return `
                 <div class="d-flex align-items-center gap-2 p-1 bg-white border rounded shadow-sm" style="min-width: 220px; max-width: 280px;">
                     <img src="${activeImg}" id="activeImg_${mId}" class="rounded border shadow-xs flex-shrink-0" style="width: 32px; height: 32px; object-fit: cover;" alt="${activeOpt}" />
                     <div class="flex-grow-1 text-truncate">
                         <div class="fw-bold text-dark small text-truncate" id="activeTitle_${mId}" title="${activeOpt}">${activeOpt}</div>
-                        <span class="badge ${activeDiff === 0 ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-primary-subtle text-primary border border-primary-subtle'}" id="activeDiff_${mId}" style="font-size: 0.65rem;">
-                            ${activeDiff === 0 ? 'Firma Standardı (0 ₺)' : `+${Number(activeDiff).toLocaleString('tr-TR')} ₺`}
-                        </span>
+                        <div id="activeDiff_${mId}">
+                            ${badgeHtml}
+                        </div>
                     </div>
-                    <button type="button" class="btn btn-xs btn-outline-primary rounded-pill px-2 py-1 flex-shrink-0" onclick="toggleMaterialPalette(${mId})" title="Kartelayı Aç/Kapat">
-                        <i class="bi bi-palette me-1"></i>Skala
+                    <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill px-2 py-1 flex-shrink-0" onclick="toggleMaterialPalette(${mId})" title="Detay / Kartelayı Aç">
+                        ${btnText}
                     </button>
                 </div>`;
         }
@@ -1087,6 +1131,48 @@
             let activeOpt = m.selectedMaterialOption || m.SelectedMaterialOption || matData.standard.title;
             let activeDiff = m.priceDifference || m.PriceDifference || 0;
             let isStdSelected = (activeOpt.toLowerCase() === matData.standard.title.toLowerCase());
+
+            if (matData.isFixedFacade) {
+                return `
+                    <tr class="material-palette-subrow" id="palette_${mId}">
+                        <td colspan="6" class="p-3 bg-light bg-opacity-75 border-bottom border-start border-end rounded-bottom-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <img src="${matData.standard.img}" class="rounded border shadow-xs" style="width: 75px; height: 50px; object-fit: cover;" alt="${matData.standard.title}" />
+                                <div>
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <span class="badge bg-dark text-white"><i class="bi bi-lock-fill text-warning me-1"></i>Dış Cephe Bütünlüğü & Sabit Standart</span>
+                                        <span class="badge bg-success">Firma Taahhüdü</span>
+                                    </div>
+                                    <div class="fw-bold text-dark">${matData.standard.title}</div>
+                                    <div class="small text-muted mt-1">
+                                        <i class="bi bi-shield-check text-success me-1"></i>Belediye onaylı mimari proje ve Kat Mülkiyeti Kanunu gereği bina dış cephe doğramaları (pencere ve balkon kapıları) yeknesaktır, münferit daire tercihi ile değiştirilemez. Ölçüler tadilat ve imalat kontrolü için kayıtlıdır.
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>`;
+            }
+
+            if (matData.isRenovationOnly) {
+                return `
+                    <tr class="material-palette-subrow" id="palette_${mId}">
+                        <td colspan="6" class="p-3 bg-light bg-opacity-75 border-bottom border-start border-end rounded-bottom-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <img src="${matData.standard.img}" class="rounded border shadow-xs" style="width: 75px; height: 50px; object-fit: cover;" alt="${matData.standard.title}" />
+                                <div>
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <span class="badge bg-primary text-white"><i class="bi bi-rulers me-1"></i>Tadilat & Montaj Metrajı</span>
+                                        <span class="badge bg-info text-dark">Hazır Metraj</span>
+                                    </div>
+                                    <div class="fw-bold text-dark">${matData.standard.title}</div>
+                                    <div class="small text-muted mt-1">
+                                        <i class="bi bi-info-circle text-primary me-1"></i>Daire tesliminde veya ileride yapılacak tadilatta kornişçi ve perdeci montajı için tavan tül ve perdelik metrajı hazır olarak sistemde tutulmaktadır.
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>`;
+            }
 
             // 1. Firma Taahhüdü Kartı
             let stdHtml = `
