@@ -118,6 +118,20 @@ namespace GMK360.Web.Controllers
 
 
 
+                        // Ortak evrak yolu eşleştirmesi (varsa)
+
+            if (project.PartnerList.Count == 1 && string.IsNullOrWhiteSpace(project.PartnerList[0].ContractDocumentPath) && !string.IsNullOrWhiteSpace(project.PartnerContractDocumentPath))
+
+            {
+
+                project.PartnerList[0].ContractDocumentPath = project.PartnerContractDocumentPath;
+
+                project.PartnerList[0].ContractDocumentName = System.IO.Path.GetFileName(project.PartnerContractDocumentPath);
+
+            }
+
+
+
             ViewData["ProjectId"] = project.Id;
 
 
@@ -1199,218 +1213,536 @@ namespace GMK360.Web.Controllers
 
 
                 // POST: /ConstructionProject/SaveProjectPartner
+
+        // POST: /ConstructionProject/SaveProjectPartner
+
         [HttpPost]
+
         [ValidateAntiForgeryToken]
+
         public async Task<IActionResult> SaveProjectPartner(
+
             int projectId,
+
             string? partnerId,
+
             string? companyName,
+
             string firstName,
+
             string? lastName,
+
             decimal sharePercentage,
+
             string? phone,
-            string? email)
+
+            string? email,
+
+            Microsoft.AspNetCore.Http.IFormFile? contractFile)
+
         {
+
             var agencyId = await GetUserAgencyIdAsync();
+
             if (agencyId == null) return Unauthorized();
 
+
+
             var project = await _context.ConstructionProjects
+
                 .FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId.Value && !p.IsDeleted);
+
+
 
             if (project == null) return NotFound();
 
+
+
             var partners = project.PartnerList;
+
             var existing = !string.IsNullOrWhiteSpace(partnerId) 
+
                 ? partners.FirstOrDefault(p => p.Id == partnerId) 
+
                 : null;
 
+
+
             decimal otherPartnersTotal = partners.Where(p => p.Id != partnerId).Sum(p => p.SharePercentage);
+
             if (otherPartnersTotal + sharePercentage > 100m)
+
             {
+
                 TempData["ErrorMessage"] = $"Ortakların toplam hissesi %100'ü geçemez! Kalan verilebilir en fazla hisse: %{(100m - otherPartnersTotal):0.#}";
+
                 return RedirectToAction(nameof(Workspace), new { id = projectId });
+
             }
 
-            if (existing != null)
+
+
+            var partner = existing;
+
+            if (partner == null)
+
             {
-                existing.CompanyName = string.IsNullOrWhiteSpace(companyName) ? null : companyName.Trim();
-                existing.FirstName = (firstName ?? "").Trim();
-                existing.LastName = (lastName ?? "").Trim();
-                existing.SharePercentage = Math.Max(0m, sharePercentage);
-                existing.Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
-                existing.Email = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
-            }
-            else
-            {
-                partners.Add(new GMK360.Core.DTOs.Construction.ProjectPartnerDto
+
+                partner = new GMK360.Core.DTOs.Construction.ProjectPartnerDto
+
                 {
-                    Id = Guid.NewGuid().ToString("N"),
-                    CompanyName = string.IsNullOrWhiteSpace(companyName) ? null : companyName.Trim(),
-                    FirstName = (firstName ?? "").Trim(),
-                    LastName = (lastName ?? "").Trim(),
-                    SharePercentage = Math.Max(0m, sharePercentage),
-                    Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim(),
-                    Email = string.IsNullOrWhiteSpace(email) ? null : email.Trim()
-                });
+
+                    Id = Guid.NewGuid().ToString("N")
+
+                };
+
+                partners.Add(partner);
+
             }
 
-            project.IsJointVenture = partners.Count > 0;
-            project.PartnersJson = System.Text.Json.JsonSerializer.Serialize(partners);
 
-            decimal totalPartnerShare = partners.Sum(p => p.SharePercentage);
-            project.PartnerSharePercentage = totalPartnerShare;
-            project.OurSharePercentage = 100m - totalPartnerShare;
 
-            if (partners.Count > 0)
+            partner.CompanyName = string.IsNullOrWhiteSpace(companyName) ? null : companyName.Trim();
+
+            partner.FirstName = (firstName ?? "").Trim();
+
+            partner.LastName = (lastName ?? "").Trim();
+
+            partner.SharePercentage = Math.Max(0m, sharePercentage);
+
+            partner.Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
+
+            partner.Email = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
+
+
+
+            // Evrak / Sözleşme doğrudan bu ortağa kaydedilir
+
+            if (contractFile != null && contractFile.Length > 0)
+
             {
-                project.PartnerCompanyName = partners[0].CompanyName ?? partners[0].FullName;
-                project.PartnerContactPerson = partners[0].FullName;
-                project.PartnerPhone = partners[0].Phone;
-                project.PartnerEmail = partners[0].Email;
-                project.ProjectOwnerContact = partners.Count == 1
-                    ? $"Ortak Girişim (%{project.OurSharePercentage:0.#} Biz / %{totalPartnerShare:0.#} {partners[0].DisplayName})"
-                    : $"Çoklu Ortaklık (%{project.OurSharePercentage:0.#} Biz / {partners.Count} Ortak: %{totalPartnerShare:0.#})";
-            }
-            else
-            {
-                project.PartnerCompanyName = null;
-                project.PartnerContactPerson = null;
-                project.PartnerPhone = null;
-                project.PartnerEmail = null;
-                project.PartnersJson = null;
-                project.ProjectOwnerContact = "Tekil Yüklenici (%100)";
-            }
 
-            await _context.SaveChangesAsync();
-            TempData["SuccessMessage"] = existing != null 
-                ? "Ortak bilgileri başarıyla güncellendi." 
-                : "Yeni ortak başarıyla eklendi.";
-
-            return RedirectToAction(nameof(Workspace), new { id = projectId });
-        }
-
-        // POST: /ConstructionProject/DeleteProjectPartner
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteProjectPartner(int projectId, string partnerId)
-        {
-            var agencyId = await GetUserAgencyIdAsync();
-            if (agencyId == null) return Unauthorized();
-
-            var project = await _context.ConstructionProjects
-                .FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId.Value && !p.IsDeleted);
-
-            if (project == null) return NotFound();
-
-            var partners = project.PartnerList;
-            partners.RemoveAll(p => p.Id == partnerId);
-
-            project.IsJointVenture = partners.Count > 0;
-            project.PartnersJson = partners.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(partners) : null;
-
-            decimal totalPartnerShare = partners.Sum(p => p.SharePercentage);
-            project.PartnerSharePercentage = totalPartnerShare;
-            project.OurSharePercentage = 100m - totalPartnerShare;
-
-            if (partners.Count > 0)
-            {
-                project.PartnerCompanyName = partners[0].CompanyName ?? partners[0].FullName;
-                project.PartnerContactPerson = partners[0].FullName;
-                project.PartnerPhone = partners[0].Phone;
-                project.PartnerEmail = partners[0].Email;
-                project.ProjectOwnerContact = partners.Count == 1
-                    ? $"Ortak Girişim (%{project.OurSharePercentage:0.#} Biz / %{totalPartnerShare:0.#} {partners[0].DisplayName})"
-                    : $"Çoklu Ortaklık (%{project.OurSharePercentage:0.#} Biz / {partners.Count} Ortak: %{totalPartnerShare:0.#})";
-            }
-            else
-            {
-                project.PartnerCompanyName = null;
-                project.PartnerContactPerson = null;
-                project.PartnerPhone = null;
-                project.PartnerEmail = null;
-                project.PartnersJson = null;
-                project.ProjectOwnerContact = "Tekil Yüklenici (%100)";
-            }
-
-            await _context.SaveChangesAsync();
-            TempData["SuccessMessage"] = "Ortak başarıyla silindi.";
-
-            return RedirectToAction(nameof(Workspace), new { id = projectId });
-        }
-
-        // POST: /ConstructionProject/UploadPartnerContract
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UploadPartnerContract(int projectId, Microsoft.AspNetCore.Http.IFormFile contractDocument)
-        {
-            var agencyId = await GetUserAgencyIdAsync();
-            if (agencyId == null) return Unauthorized();
-
-            var project = await _context.ConstructionProjects
-                .FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId.Value && !p.IsDeleted);
-
-            if (project == null) return NotFound();
-
-            if (contractDocument != null && contractDocument.Length > 0)
-            {
                 try
+
                 {
-                    var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "projects", projectId.ToString(), "contracts");
+
+                    var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "projects", projectId.ToString(), "partners");
+
                     if (!Directory.Exists(uploadsDir)) Directory.CreateDirectory(uploadsDir);
 
-                    var ext = Path.GetExtension(contractDocument.FileName).ToLowerInvariant();
-                    var fileName = $"ortaklik_sozlesmesi_{DateTime.Now:yyyyMMdd_HHmmss}{ext}";
+
+
+                    var ext = Path.GetExtension(contractFile.FileName).ToLowerInvariant();
+
+                    var cleanName = (partner.FirstName + "_" + partner.LastName).Trim().Replace(" ", "_");
+
+                    var fileName = $"sozlesme_{cleanName}_{DateTime.Now:yyyyMMdd_HHmmss}{ext}";
+
                     var fullPath = Path.Combine(uploadsDir, fileName);
 
+
+
                     using (var stream = new FileStream(fullPath, FileMode.Create))
+
                     {
-                        await contractDocument.CopyToAsync(stream);
+
+                        await contractFile.CopyToAsync(stream);
+
                     }
 
-                    var relativePath = $"/uploads/projects/{projectId}/contracts/{fileName}";
-                    project.PartnerContractDocumentPath = relativePath;
+
+
+                    var relativePath = $"/uploads/projects/{projectId}/partners/{fileName}";
+
+                    partner.ContractDocumentPath = relativePath;
+
+                    partner.ContractDocumentName = contractFile.FileName;
+
+
+
+                    // Projenin resmi evrak arşivine de otomatik kaydet
+
+                    var docTitle = $"Ortaklık Sözleşmesi - {partner.FullName}";
 
                     var archiveDoc = await _context.ProjectLegalDocuments
-                        .FirstOrDefaultAsync(d => d.ConstructionProjectId == projectId && d.DocumentName == "Ortaklık / Hissedarlık Sözleşmesi");
+
+                        .FirstOrDefaultAsync(d => d.ConstructionProjectId == projectId && d.DocumentName == docTitle);
+
+
 
                     if (archiveDoc == null)
+
                     {
+
                         archiveDoc = new GMK360.Core.Entities.Construction.ProjectLegalDocument
+
                         {
+
                             ConstructionProjectId = projectId,
-                            DocumentName = "Ortaklık / Hissedarlık Sözleşmesi",
+
+                            DocumentName = docTitle,
+
                             Stage = "Sözleşmeler & Ortaklık",
+
                             Status = "Tamamlandı",
+
                             CompletedDate = DateTime.Now,
+
                             FilePath = relativePath,
+
                             OriginalLocation = "Dijital / Hissedar Künyesi",
+
                             IsCustom = true,
+
                             IsActive = true
+
                         };
+
                         _context.ProjectLegalDocuments.Add(archiveDoc);
-                    }
-                    else
-                    {
-                        archiveDoc.FilePath = relativePath;
-                        archiveDoc.Status = "Tamamlandı";
-                        archiveDoc.CompletedDate = DateTime.Now;
+
                     }
 
-                    await _context.SaveChangesAsync();
-                    TempData["SuccessMessage"] = "Ortaklık sözleşmesi yüklendi ve projenin resmi evrak arşivine kaydedildi.";
+                    else
+
+                    {
+
+                        archiveDoc.FilePath = relativePath;
+
+                        archiveDoc.Status = "Tamamlandı";
+
+                        archiveDoc.CompletedDate = DateTime.Now;
+
+                    }
+
                 }
+
                 catch (Exception ex)
+
                 {
-                    TempData["ErrorMessage"] = $"Sözleşme yüklenirken hata oluştu: {ex.Message}";
+
+                    TempData["ErrorMessage"] = $"Evrak yüklenirken hata oluştu: {ex.Message}";
+
                 }
+
             }
-            else
+
+
+
+            project.IsJointVenture = partners.Count > 0;
+
+            project.PartnersJson = System.Text.Json.JsonSerializer.Serialize(partners);
+
+
+
+            decimal totalPartnerShare = partners.Sum(p => p.SharePercentage);
+
+            project.PartnerSharePercentage = totalPartnerShare;
+
+            project.OurSharePercentage = 100m - totalPartnerShare;
+
+
+
+            if (partners.Count > 0)
+
             {
-                TempData["ErrorMessage"] = "Lütfen yüklenecek bir sözleşme dosyası seçiniz.";
+
+                project.PartnerCompanyName = partners[0].CompanyName ?? partners[0].FullName;
+
+                project.PartnerContactPerson = partners[0].FullName;
+
+                project.PartnerPhone = partners[0].Phone;
+
+                project.PartnerEmail = partners[0].Email;
+
+                project.ProjectOwnerContact = partners.Count == 1
+
+                    ? $"Ortak Girişim (%{project.OurSharePercentage:0.#} Biz / %{totalPartnerShare:0.#} {partners[0].DisplayName})"
+
+                    : $"Çoklu Ortaklık (%{project.OurSharePercentage:0.#} Biz / {partners.Count} Ortak: %{totalPartnerShare:0.#})";
+
             }
+
+            else
+
+            {
+
+                project.PartnerCompanyName = null;
+
+                project.PartnerContactPerson = null;
+
+                project.PartnerPhone = null;
+
+                project.PartnerEmail = null;
+
+                project.PartnersJson = null;
+
+                project.ProjectOwnerContact = "Tekil Yüklenici (%100)";
+
+            }
+
+
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = existing != null 
+
+                ? "Ortak bilgileri güncellendi." 
+
+                : "Yeni ortak eklendi.";
+
+
 
             return RedirectToAction(nameof(Workspace), new { id = projectId });
+
         }
+
+
+
+        // POST: /ConstructionProject/DeleteProjectPartner
+
+        [HttpPost]
+
+        [ValidateAntiForgeryToken]
+
+        public async Task<IActionResult> DeleteProjectPartner(int projectId, string partnerId)
+
+        {
+
+            var agencyId = await GetUserAgencyIdAsync();
+
+            if (agencyId == null) return Unauthorized();
+
+
+
+            var project = await _context.ConstructionProjects
+
+                .FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId.Value && !p.IsDeleted);
+
+
+
+            if (project == null) return NotFound();
+
+
+
+            var partners = project.PartnerList;
+
+            partners.RemoveAll(p => p.Id == partnerId);
+
+
+
+            project.IsJointVenture = partners.Count > 0;
+
+            project.PartnersJson = partners.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(partners) : null;
+
+
+
+            decimal totalPartnerShare = partners.Sum(p => p.SharePercentage);
+
+            project.PartnerSharePercentage = totalPartnerShare;
+
+            project.OurSharePercentage = 100m - totalPartnerShare;
+
+
+
+            if (partners.Count > 0)
+
+            {
+
+                project.PartnerCompanyName = partners[0].CompanyName ?? partners[0].FullName;
+
+                project.PartnerContactPerson = partners[0].FullName;
+
+                project.PartnerPhone = partners[0].Phone;
+
+                project.PartnerEmail = partners[0].Email;
+
+                project.ProjectOwnerContact = partners.Count == 1
+
+                    ? $"Ortak Girişim (%{project.OurSharePercentage:0.#} Biz / %{totalPartnerShare:0.#} {partners[0].DisplayName})"
+
+                    : $"Çoklu Ortaklık (%{project.OurSharePercentage:0.#} Biz / {partners.Count} Ortak: %{totalPartnerShare:0.#})";
+
+            }
+
+            else
+
+            {
+
+                project.PartnerCompanyName = null;
+
+                project.PartnerContactPerson = null;
+
+                project.PartnerPhone = null;
+
+                project.PartnerEmail = null;
+
+                project.PartnersJson = null;
+
+                project.ProjectOwnerContact = "Tekil Yüklenici (%100)";
+
+            }
+
+
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Ortak başarıyla silindi.";
+
+
+
+            return RedirectToAction(nameof(Workspace), new { id = projectId });
+
+        }
+
+
+
+        // POST: /ConstructionProject/UploadPartnerContract
+
+        [HttpPost]
+
+        [ValidateAntiForgeryToken]
+
+        public async Task<IActionResult> UploadPartnerContract(int projectId, Microsoft.AspNetCore.Http.IFormFile contractDocument)
+
+        {
+
+            var agencyId = await GetUserAgencyIdAsync();
+
+            if (agencyId == null) return Unauthorized();
+
+
+
+            var project = await _context.ConstructionProjects
+
+                .FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId.Value && !p.IsDeleted);
+
+
+
+            if (project == null) return NotFound();
+
+
+
+            if (contractDocument != null && contractDocument.Length > 0)
+
+            {
+
+                try
+
+                {
+
+                    var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "projects", projectId.ToString(), "contracts");
+
+                    if (!Directory.Exists(uploadsDir)) Directory.CreateDirectory(uploadsDir);
+
+
+
+                    var ext = Path.GetExtension(contractDocument.FileName).ToLowerInvariant();
+
+                    var fileName = $"ortaklik_sozlesmesi_{DateTime.Now:yyyyMMdd_HHmmss}{ext}";
+
+                    var fullPath = Path.Combine(uploadsDir, fileName);
+
+
+
+                    using (var stream = new FileStream(fullPath, FileMode.Create))
+
+                    {
+
+                        await contractDocument.CopyToAsync(stream);
+
+                    }
+
+
+
+                    var relativePath = $"/uploads/projects/{projectId}/contracts/{fileName}";
+
+                    project.PartnerContractDocumentPath = relativePath;
+
+
+
+                    var archiveDoc = await _context.ProjectLegalDocuments
+
+                        .FirstOrDefaultAsync(d => d.ConstructionProjectId == projectId && d.DocumentName == "Ortaklık / Hissedarlık Sözleşmesi");
+
+
+
+                    if (archiveDoc == null)
+
+                    {
+
+                        archiveDoc = new GMK360.Core.Entities.Construction.ProjectLegalDocument
+
+                        {
+
+                            ConstructionProjectId = projectId,
+
+                            DocumentName = "Ortaklık / Hissedarlık Sözleşmesi",
+
+                            Stage = "Sözleşmeler & Ortaklık",
+
+                            Status = "Tamamlandı",
+
+                            CompletedDate = DateTime.Now,
+
+                            FilePath = relativePath,
+
+                            OriginalLocation = "Dijital / Hissedar Künyesi",
+
+                            IsCustom = true,
+
+                            IsActive = true
+
+                        };
+
+                        _context.ProjectLegalDocuments.Add(archiveDoc);
+
+                    }
+
+                    else
+
+                    {
+
+                        archiveDoc.FilePath = relativePath;
+
+                        archiveDoc.Status = "Tamamlandı";
+
+                        archiveDoc.CompletedDate = DateTime.Now;
+
+                    }
+
+
+
+                    await _context.SaveChangesAsync();
+
+                    TempData["SuccessMessage"] = "Ortaklık sözleşmesi yüklendi ve projenin resmi evrak arşivine kaydedildi.";
+
+                }
+
+                catch (Exception ex)
+
+                {
+
+                    TempData["ErrorMessage"] = $"Sözleşme yüklenirken hata oluştu: {ex.Message}";
+
+                }
+
+            }
+
+            else
+
+            {
+
+                TempData["ErrorMessage"] = "Lütfen yüklenecek bir sözleşme dosyası seçiniz.";
+
+            }
+
+
+
+            return RedirectToAction(nameof(Workspace), new { id = projectId });
+
+        }
+
+
 
 // POST: /ConstructionProject/UpdateProjectContact
 
