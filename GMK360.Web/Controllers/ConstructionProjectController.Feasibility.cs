@@ -3798,34 +3798,32 @@ namespace GMK360.Web.Controllers
             ViewBag.TotalGrossExpense = totalGrossExpense;
             ViewBag.PaidFees = paidLegalFees;
             ViewBag.PendingFees = pendingFees;
-            ViewBag.TotalInitialNetCosts = totalNetExpense + paidLegalFees;
+            decimal totalInitialNetCosts = totalNetExpense + paidLegalFees;
+            ViewBag.TotalInitialNetCosts = totalInitialNetCosts;
 
             ViewBag.OfficialNetExpense = officialNetExpense;
             ViewBag.OfficialVat = officialVat;
             ViewBag.OfficialGrossExpense = officialGrossExpense;
             ViewBag.UnofficialNetExpense = unofficialNetExpense;
 
-            // 4. Taşeron & Usta Alacağı / Hakediş Mutabakatı (Demirci & Kalıpçı Örneği: 500k = 350k Resmi + 150k Elden)
-            decimal ustaAgreedTotal = 500000m;
-            decimal ustaAgreedOfficial = 350000m;
-            decimal ustaAgreedUnofficial = 150000m;
+            // 4. Ortaklık & Sermaye Durumu (Net Avans / Eksiye Düşme Takibi)
+            decimal ourAdvance = project.OurVaultAdvance ?? 0m;
+            decimal partnerAdvance = project.PartnerVaultAdvance ?? 0m;
+            decimal ourShareRatio = (project.OurSharePercentage > 0 ? project.OurSharePercentage : 100m) / 100m;
+            decimal partnerShareRatio = (project.PartnerSharePercentage) / 100m;
 
-            var ustaExpenses = expenses.Where(e => (e.Title != null && (e.Title.Contains("Demir") || e.Title.Contains("Kalıp") || e.Title.Contains("Ahmet") || e.Title.Contains("Hakediş"))) || (e.PayeeOrSupplier != null && (e.PayeeOrSupplier.Contains("Ahmet") || e.PayeeOrSupplier.Contains("Kaya")))).ToList();
+            decimal ourCostShare = totalInitialNetCosts * ourShareRatio;
+            decimal partnerCostShare = totalInitialNetCosts * partnerShareRatio;
 
-            decimal ustaPaidOfficial = ustaExpenses.Where(e => e.ApprovalType != "Unofficial").Sum(e => e.AmountExcludingVat ?? e.Amount);
-            decimal ustaPaidUnofficial = ustaExpenses.Where(e => e.ApprovalType == "Unofficial").Sum(e => e.Amount);
-            decimal ustaPaidTotal = ustaPaidOfficial + ustaPaidUnofficial;
+            decimal ourNetBalance = ourAdvance - ourCostShare;
+            decimal partnerNetBalance = partnerAdvance - partnerCostShare;
 
-            ViewBag.UstaAgreedTotal = ustaAgreedTotal;
-            ViewBag.UstaAgreedOfficial = ustaAgreedOfficial;
-            ViewBag.UstaAgreedUnofficial = ustaAgreedUnofficial;
-            ViewBag.UstaPaidOfficial = ustaPaidOfficial;
-            ViewBag.UstaPaidUnofficial = ustaPaidUnofficial;
-            ViewBag.UstaPaidTotal = ustaPaidTotal;
-            ViewBag.UstaRemainingTotal = Math.Max(0m, ustaAgreedTotal - ustaPaidTotal);
-            ViewBag.UstaRemainingOfficial = Math.Max(0m, ustaAgreedOfficial - ustaPaidOfficial);
-            ViewBag.UstaRemainingUnofficial = Math.Max(0m, ustaAgreedUnofficial - ustaPaidUnofficial);
-
+            ViewBag.OurAdvance = ourAdvance;
+            ViewBag.PartnerAdvance = partnerAdvance;
+            ViewBag.OurCostShare = ourCostShare;
+            ViewBag.PartnerCostShare = partnerCostShare;
+            ViewBag.OurNetBalance = ourNetBalance;
+            ViewBag.PartnerNetBalance = partnerNetBalance;
             return View(project);
         }
 

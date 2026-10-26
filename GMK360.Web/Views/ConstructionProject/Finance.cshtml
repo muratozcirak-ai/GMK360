@@ -3,7 +3,7 @@
 @using GMK360.Core.Entities
 
 @{
-    ViewData["Title"] = "Proje Finansı & Kasa Havuzu: " + Model.Name;
+    ViewData["Title"] = "Proje Finansı & Kasa: " + Model.Name;
     ViewData["ProjectId"] = Model.Id;
     ViewData["ProjectName"] = Model.Name;
     ViewData["ProjectStatus"] = Model.Status;
@@ -19,7 +19,6 @@
     var safetyBox = ViewBag.SafetyBoxAccount as BankAccount ?? (projectAccounts.Count > 2 ? projectAccounts[2] : null);
 
     var expenses = ViewBag.Expenses as List<ConstructionProjectExpense> ?? new List<ConstructionProjectExpense>();
-    var stakeholders = ViewBag.Stakeholders as List<ProjectStakeholder> ?? new List<ProjectStakeholder>();
 
     decimal usdRate = ViewBag.UsdRate != null ? (decimal)ViewBag.UsdRate : 49.6540m;
     decimal eurRate = ViewBag.EurRate != null ? (decimal)ViewBag.EurRate : 55.5997m;
@@ -38,21 +37,13 @@
     decimal pendingFees = ViewBag.PendingFees != null ? (decimal)ViewBag.PendingFees : 0m;
     decimal totalInitialNetCosts = ViewBag.TotalInitialNetCosts != null ? (decimal)ViewBag.TotalInitialNetCosts : 0m;
 
-    decimal officialNetExpense = ViewBag.OfficialNetExpense != null ? (decimal)ViewBag.OfficialNetExpense : 0m;
-    decimal officialVat = ViewBag.OfficialVat != null ? (decimal)ViewBag.OfficialVat : 0m;
-    decimal officialGrossExpense = ViewBag.OfficialGrossExpense != null ? (decimal)ViewBag.OfficialGrossExpense : 0m;
-    decimal unofficialNetExpense = ViewBag.UnofficialNetExpense != null ? (decimal)ViewBag.UnofficialNetExpense : 0m;
-
-    // Usta Alacağı & Hakediş Değerleri
-    decimal ustaAgreedTotal = ViewBag.UstaAgreedTotal != null ? (decimal)ViewBag.UstaAgreedTotal : 500000m;
-    decimal ustaAgreedOfficial = ViewBag.UstaAgreedOfficial != null ? (decimal)ViewBag.UstaAgreedOfficial : 350000m;
-    decimal ustaAgreedUnofficial = ViewBag.UstaAgreedUnofficial != null ? (decimal)ViewBag.UstaAgreedUnofficial : 150000m;
-    decimal ustaPaidTotal = ViewBag.UstaPaidTotal != null ? (decimal)ViewBag.UstaPaidTotal : 0m;
-    decimal ustaPaidOfficial = ViewBag.UstaPaidOfficial != null ? (decimal)ViewBag.UstaPaidOfficial : 0m;
-    decimal ustaPaidUnofficial = ViewBag.UstaPaidUnofficial != null ? (decimal)ViewBag.UstaPaidUnofficial : 0m;
-    decimal ustaRemainingTotal = ViewBag.UstaRemainingTotal != null ? (decimal)ViewBag.UstaRemainingTotal : 500000m;
-    decimal ustaRemainingOfficial = ViewBag.UstaRemainingOfficial != null ? (decimal)ViewBag.UstaRemainingOfficial : 350000m;
-    decimal ustaRemainingUnofficial = ViewBag.UstaRemainingUnofficial != null ? (decimal)ViewBag.UstaRemainingUnofficial : 150000m;
+    // Ortaklık Avans / Borç-Alacak Durumu
+    decimal ourAdvance = ViewBag.OurAdvance != null ? (decimal)ViewBag.OurAdvance : 0m;
+    decimal partnerAdvance = ViewBag.PartnerAdvance != null ? (decimal)ViewBag.PartnerAdvance : 0m;
+    decimal ourCostShare = ViewBag.OurCostShare != null ? (decimal)ViewBag.OurCostShare : 0m;
+    decimal partnerCostShare = ViewBag.PartnerCostShare != null ? (decimal)ViewBag.PartnerCostShare : 0m;
+    decimal ourNetBalance = ViewBag.OurNetBalance != null ? (decimal)ViewBag.OurNetBalance : 0m;
+    decimal partnerNetBalance = ViewBag.PartnerNetBalance != null ? (decimal)ViewBag.PartnerNetBalance : 0m;
 
     string partnerDisplay = string.IsNullOrWhiteSpace(Model.ProjectOwnerContact) 
         ? "Bayraktar İnşaat (%100 - Ana Yüklenici)" 
@@ -69,7 +60,7 @@
         <span class="badge bg-warning text-dark border border-warning px-2 py-0 rounded-pill fw-bold" style="font-size: 0.70rem;">
             <i class="bi bi-hourglass-split me-1"></i>@(Model.Status == ProjectStatus.Projelendirme_Teklif ? "ADAY PROJE" : Model.Status.ToString().ToUpperInvariant())
         </span>
-        <span class="text-muted small" style="font-size: 0.76rem;">— Proje Kasa Havuzu & Finans Kokpiti</span>
+        <span class="text-muted small" style="font-size: 0.76rem;">— Proje Finansı & Kasa Yönetimi</span>
         <span class="text-muted opacity-50">|</span>
         <span class="badge bg-light text-dark border px-2 py-0 rounded-pill small" style="font-size: 0.72rem;">
             <i class="bi bi-geo-alt-fill text-danger me-1"></i>@cityName / @distName (@neighName Mah.)
@@ -101,35 +92,53 @@
     </div>
 }
 
-<!-- ================= 2. TEK TIKLA MAHREMİYET & YÖNETİCİ GÖZÜ KONTROL ÇUBUĞU ================= -->
-<div class="card border border-primary-subtle bg-white rounded-3 p-2 px-3 mb-2 shadow-xs">
+<!-- ================= 2. CANLI TCMB DÖVİZ KURLARI ŞERİDİ ================= -->
+<div class="card border border-info-subtle bg-white rounded-3 p-2 px-3 mb-2 shadow-xs">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <!-- Sol Taraf: 3 Seviyeli Görünüm Seçici -->
         <div class="d-flex align-items-center gap-2 flex-wrap">
-            <span class="text-muted small fw-bold" style="font-size: 0.78rem;">
-                <i class="bi bi-shield-shaded text-primary me-1"></i>Görünüm Filtresi:
+            <span class="badge bg-info bg-opacity-10 text-info rounded-circle p-1.5 d-flex align-items-center justify-content-center">
+                <i class="bi bi-currency-exchange fs-6"></i>
             </span>
-            <div class="btn-group btn-group-sm p-0.5 bg-light rounded-pill border shadow-xs" role="group">
-                <button type="button" class="btn btn-sm rounded-pill fw-bold px-3 active shadow-xs" id="btnScopeAll" onclick="setFinanceScope('all')">
-                    <i class="bi bi-globe2 text-primary me-1"></i>🌐 Tümü (Gerçek Bilanço)
-                </button>
-                <button type="button" class="btn btn-sm rounded-pill fw-bold px-3 text-secondary" id="btnScopeOfficial" onclick="setFinanceScope('official')">
-                    <i class="bi bi-shield-check text-success me-1"></i>📄 Resmi & Sözleşmeli
-                </button>
-                <button type="button" class="btn btn-sm rounded-pill fw-bold px-3 text-secondary" id="btnScopeUnofficial" onclick="setFinanceScope('unofficial')">
-                    <i class="bi bi-cash-stack text-warning me-1"></i>💼 Elden & Şantiye Nakit
-                </button>
+            <div>
+                <span class="fw-bold text-dark small" style="font-size: 0.82rem;">TCMB Güncel Efektif Satış Kurları</span>
+                <span class="text-muted small ms-1" style="font-size: 0.70rem;">(@rateDate.ToString("dd.MM.yyyy") İtibarıyla)</span>
             </div>
-            <span id="scopeBadge" class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2.5 py-1 rounded-pill small" style="font-size: 0.72rem;">
-                <i class="bi bi-eye-fill me-1"></i>Tüm Hareketler Açık (Patron Gözü)
-            </span>
+            <div class="d-flex align-items-center gap-2 ms-md-2">
+                <span class="badge bg-light text-dark border font-monospace px-2.5 py-1 rounded-pill fw-bold" style="font-size: 0.76rem;">
+                    🇺🇸 USD: <span class="text-primary">@usdRate.ToString("N4") ₺</span>
+                </span>
+                <span class="badge bg-light text-dark border font-monospace px-2.5 py-1 rounded-pill fw-bold" style="font-size: 0.76rem;">
+                    🇪🇺 EUR: <span class="text-success">@eurRate.ToString("N4") ₺</span>
+                </span>
+            </div>
+        </div>
+        <div class="text-muted small d-none d-lg-block" style="font-size: 0.70rem;">
+            <i class="bi bi-info-circle me-1"></i>Ortakla döviz kasası / döviz hesabı kararları için canlı referans göstergesidir.
+        </div>
+    </div>
+</div>
+
+<!-- ================= 3. PROJE KASALARI (BOŞ & SIFIR TEMEL) ================= -->
+<div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs overflow-hidden">
+    <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-light border-bottom flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-safe2 text-warning fs-5"></i>
+            <div>
+                <span class="fw-bold text-dark small" style="font-size: 0.88rem;">Proje Kasaları & Varlık Durumu</span>
+                <span class="badge bg-warning bg-opacity-20 text-dark border border-warning px-1.5 py-0 rounded-pill ms-1" style="font-size: 0.68rem;">
+                    Açılan Kasalar
+                </span>
+            </div>
         </div>
 
-        <!-- Sağ Taraf: Hızlı Sermaye / Kasa İşlemleri -->
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <span class="badge bg-success bg-opacity-15 text-success border border-success px-3 py-1 rounded-pill fw-bold" style="font-size: 0.80rem;">
+                <i class="bi bi-wallet2 me-1"></i>Toplam Portföy: 
+                <span class="font-monospace fs-6">@consolidatedTotalTL.ToString("N2") ₺</span>
+            </span>
             <button type="button" class="btn btn-sm btn-success rounded-pill px-3 py-1 fw-bold shadow-xs d-flex align-items-center gap-1" 
                     data-bs-toggle="modal" data-bs-target="#depositModal" style="font-size: 0.76rem;">
-                <i class="bi bi-box-arrow-in-down"></i>+ Kasaya Para / Sermaye Aktar
+                <i class="bi bi-box-arrow-in-down"></i>+ Kasaya Para / Sermaye Yatır
             </button>
             <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2.5 py-1 fw-bold shadow-xs" 
                     data-bs-toggle="modal" data-bs-target="#accountModal" style="font-size: 0.74rem;">
@@ -137,52 +146,23 @@
             </button>
         </div>
     </div>
-</div>
-
-<!-- ================= 3. PROJE KASA HAVUZU & 3 TEMEL ALT KASA (CANLI ÇAPRAZ KUR) ================= -->
-<div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs overflow-hidden">
-    <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-light border-bottom flex-wrap gap-2">
-        <div class="d-flex align-items-center gap-2">
-            <i class="bi bi-safe2-fill text-warning fs-5"></i>
-            <div>
-                <span class="fw-bold text-dark small" style="font-size: 0.88rem;">Proje Kasa Havuzu & Alt Kasalar</span>
-                <span class="badge bg-warning bg-opacity-20 text-dark border border-warning px-1.5 py-0 rounded-pill ms-1" style="font-size: 0.68rem;">
-                    3 Temel Varlık Bileşeni
-                </span>
-                <span class="text-muted small ms-1 d-none d-md-inline" style="font-size: 0.72rem;">
-                    (Resmi Banka + Şantiye Nakit + Banka Kiralık Kasa Rezervi)
-                </span>
-            </div>
-        </div>
-
-        <!-- Konsolide Portföy Rozeti -->
-        <div class="d-flex align-items-center gap-2 flex-wrap">
-            <span class="badge bg-success bg-opacity-15 text-success border border-success px-3 py-1 rounded-pill fw-bold" style="font-size: 0.80rem;">
-                <i class="bi bi-calculator-fill me-1"></i>Toplam Konsolide Portföy: 
-                <span class="font-monospace fs-6">@consolidatedTotalTL.ToString("N2") ₺</span>
-            </span>
-            <span class="badge bg-info bg-opacity-10 text-info border border-info px-2 py-0.5 rounded-pill font-monospace" style="font-size: 0.70rem;" title="TCMB Güncel Efektif Satış Kuru">
-                <i class="bi bi-currency-exchange me-1"></i>1 USD = @usdRate.ToString("N4") ₺ (@rateDate.ToString("dd.MM"))
-            </span>
-        </div>
-    </div>
 
     <div class="p-2 p-md-3 bg-white">
         <div class="row g-2">
             <!-- 1. KASA: RESMİ PROJE BANKA HESABI (TL) -->
             <div class="col-12 col-md-4">
-                <div class="p-2.5 border border-primary-subtle rounded-3 bg-primary bg-opacity-10 h-100 position-relative shadow-xs vault-card" data-vault-type="official">
+                <div class="p-2.5 border border-primary-subtle rounded-3 bg-primary bg-opacity-10 h-100 shadow-xs">
                     <div class="d-flex justify-content-between align-items-start mb-1">
                         <div class="d-flex align-items-center gap-1.5">
                             <span class="badge bg-primary text-white rounded-circle p-1 d-flex align-items-center justify-content-center" style="width: 24px; height: 24px;">
                                 <i class="bi bi-bank"></i>
                             </span>
-                            <span class="fw-bold text-dark small" style="font-size: 0.82rem;">1. Resmi Proje Banka Hesabı</span>
+                            <span class="fw-bold text-dark small" style="font-size: 0.82rem;">1. Resmi Banka Hesabı</span>
                         </div>
                         <span class="badge bg-primary text-white px-1.5 py-0 rounded-pill font-monospace" style="font-size: 0.66rem;">TL</span>
                     </div>
                     <div class="small text-muted mb-1" style="font-size: 0.72rem;">
-                        <i class="bi bi-building me-1"></i>@(officialBank?.BankName ?? "Ziraat / Garanti BBVA")
+                        <i class="bi bi-building me-1"></i>@(officialBank?.BankName ?? "Resmi Proje Banka Hesabı")
                         <br />
                         <span class="font-monospace text-dark">@(officialBank?.IBAN ?? $"TR-PRJ-{Model.Id:D4}-TRY")</span>
                     </div>
@@ -191,7 +171,7 @@
                             <span class="text-muted d-block small" style="font-size: 0.68rem;">Cari Bakiye</span>
                             <span class="fw-bold text-primary font-monospace fs-6">@officialBalance.ToString("N2") ₺</span>
                         </div>
-                        <span class="badge bg-white text-secondary border px-1.5 py-0.5 rounded-pill small" style="font-size: 0.66rem;" title="Faturalı Hakediş, Çek, Senet, Harçlar">
+                        <span class="badge bg-white text-secondary border px-1.5 py-0.5 rounded-pill small" style="font-size: 0.66rem;">
                             Faturalı / Çek / Senet
                         </span>
                     </div>
@@ -200,7 +180,7 @@
 
             <!-- 2. KASA: ŞANTİYE NAKİT KASASI (TL) -->
             <div class="col-12 col-md-4">
-                <div class="p-2.5 border border-warning-subtle rounded-3 bg-warning bg-opacity-10 h-100 position-relative shadow-xs vault-card" data-vault-type="unofficial" id="cardSiteCash">
+                <div class="p-2.5 border border-warning-subtle rounded-3 bg-warning bg-opacity-10 h-100 shadow-xs">
                     <div class="d-flex justify-content-between align-items-start mb-1">
                         <div class="d-flex align-items-center gap-1.5">
                             <span class="badge bg-warning text-dark rounded-circle p-1 d-flex align-items-center justify-content-center" style="width: 24px; height: 24px;">
@@ -220,37 +200,37 @@
                             <span class="text-muted d-block small" style="font-size: 0.68rem;">Fiziki Kasa Mevcudu</span>
                             <span class="fw-bold text-dark font-monospace fs-6">@siteCashBalance.ToString("N2") ₺</span>
                         </div>
-                        <span class="badge bg-white text-secondary border px-1.5 py-0.5 rounded-pill small" style="font-size: 0.66rem;" title="Günlük Elden Yevmiye, Hamaliye, Elden Hakediş">
+                        <span class="badge bg-white text-secondary border px-1.5 py-0.5 rounded-pill small" style="font-size: 0.66rem;">
                             Elden / Şantiye Şefi
                         </span>
                     </div>
                 </div>
             </div>
 
-            <!-- 3. KASA: BANKA KİRALIK KASASI (USD / DÖVİZ REZERVİ) -->
+            <!-- 3. KASA: BANKA KİRALIK KASASI (DÖVİZ REZERVİ) -->
             <div class="col-12 col-md-4">
-                <div class="p-2.5 border border-success-subtle rounded-3 bg-success bg-opacity-10 h-100 position-relative shadow-xs vault-card" data-vault-type="official">
+                <div class="p-2.5 border border-success-subtle rounded-3 bg-success bg-opacity-10 h-100 shadow-xs">
                     <div class="d-flex justify-content-between align-items-start mb-1">
                         <div class="d-flex align-items-center gap-1.5">
                             <span class="badge bg-success text-white rounded-circle p-1 d-flex align-items-center justify-content-center" style="width: 24px; height: 24px;">
                                 <i class="bi bi-safe"></i>
                             </span>
-                            <span class="fw-bold text-dark small" style="font-size: 0.82rem;">3. Banka Kiralık Kasası (Döviz)</span>
+                            <span class="fw-bold text-dark small" style="font-size: 0.82rem;">3. Banka Kiralık Kasası / Döviz</span>
                         </div>
                         <span class="badge bg-success text-white px-1.5 py-0 rounded-pill font-monospace" style="font-size: 0.66rem;">USD / EUR</span>
                     </div>
                     <div class="small text-muted mb-1" style="font-size: 0.72rem;">
-                        <i class="bi bi-key-fill me-1"></i>@(safetyBox?.AccountName ?? "Kiralık Kasa Rezerv Hesabı (USD)")
+                        <i class="bi bi-key-fill me-1"></i>@(safetyBox?.AccountName ?? "Kiralık Kasa Rezervi (USD)")
                         <br />
                         <span class="font-monospace text-dark">@(safetyBox?.IBAN ?? $"KASA-KAS-{Model.Id:D4}-USD")</span>
                     </div>
                     <div class="d-flex justify-content-between align-items-end mt-2 pt-1 border-top border-success-subtle">
                         <div>
-                            <span class="text-muted d-block small" style="font-size: 0.68rem;">Fiziki Döviz / Canlı Kur</span>
+                            <span class="text-muted d-block small" style="font-size: 0.68rem;">Fiziki Döviz</span>
                             <span class="fw-bold text-success font-monospace fs-6">$@usdBalance.ToString("N2")</span>
                         </div>
                         <div class="text-end">
-                            <span class="text-muted d-block small" style="font-size: 0.66rem;">Çapraz Kur TL Karşılığı</span>
+                            <span class="text-muted d-block small" style="font-size: 0.66rem;">Çapraz Kur TL Değeri</span>
                             <span class="fw-bold text-dark font-monospace small">@usdEquivalentTL.ToString("N2") ₺</span>
                         </div>
                     </div>
@@ -260,275 +240,161 @@
     </div>
 </div>
 
-<!-- ================= 4. TAŞERON & HAKEDİŞ MUTABAKAT MASASI (USTA ALACAĞI KOKPİTİ) ================= -->
-<div class="card border border-warning-subtle bg-white rounded-3 mb-2 shadow-xs overflow-hidden">
-    <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-warning bg-opacity-10 border-bottom flex-wrap gap-2">
+<!-- ================= 4. ORTAKLIK & HİSSE DURUMU (SADECE ORTAKLIK VARSA DEVREYE GİRER) ================= -->
+<div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs p-2.5">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div class="d-flex align-items-center gap-2">
-            <span class="badge bg-warning text-dark rounded-circle p-1.5 d-flex align-items-center justify-content-center shadow-xs">
-                <i class="bi bi-person-lines-fill"></i>
+            <span class="badge bg-secondary bg-opacity-10 text-secondary rounded-circle p-1.5 d-flex align-items-center justify-content-center">
+                <i class="bi bi-people-fill"></i>
             </span>
             <div>
-                <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <span class="fw-bold text-dark small" style="font-size: 0.88rem;">
-                        Taşeron Hakediş Mutabakatı: <span class="text-primary">Ahmet Usta (Demir & Kalıp İşçiliği - Kaya Yapı)</span>
+                <span class="fw-bold text-dark small" style="font-size: 0.82rem;">Proje Ortaklık & Hissedarlık Durumu</span>
+                @if (Model.IsJointVenture)
+                {
+                    <span class="badge bg-warning bg-opacity-20 text-dark border border-warning px-1.5 py-0 rounded-pill ms-1" style="font-size: 0.68rem;">
+                        Ortak Girişim (Joint Venture)
                     </span>
-                    <span class="badge bg-success bg-opacity-15 text-success border border-success px-1.5 py-0 rounded-pill" style="font-size: 0.68rem;">
-                        1. Aşama Kaba Yapı
+                }
+                else
+                {
+                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-1.5 py-0 rounded-pill ms-1" style="font-size: 0.68rem;">
+                        %100 Tek Yüklenici (Bayraktar İnşaat)
                     </span>
-                </div>
-                <div class="text-muted small" style="font-size: 0.72rem;">
-                    Tek tıkla resmi veya gerçek alacak görünümüne geçer. Resmi modda usta alacağı anında sözleşme bedeline (350.000 ₺) iner.
-                </div>
+                }
             </div>
         </div>
 
-        <button type="button" class="btn btn-sm btn-warning text-dark fw-bold rounded-pill px-3 py-1 shadow-xs d-flex align-items-center gap-1"
-                onclick="openSplitHakedisModal('Ahmet Usta - Demir & Kalıp 1. Hakediş', 'Ahmet Usta (Kaya Yapı)', 350000, 20, 150000)" style="font-size: 0.76rem;">
-            <i class="bi bi-lightning-charge-fill text-dark"></i>⚡ Parçalı Hakediş Öde (350k Resmi + 150k Elden)
-        </button>
+        <a href="/ConstructionProject/Workspace/@Model.Id#partnerModal" class="btn btn-sm btn-outline-primary rounded-pill px-2.5 py-0 fw-bold shadow-xs" style="font-size: 0.72rem;">
+            <i class="bi bi-pencil me-1"></i>Ortaklık Ayarları
+        </a>
     </div>
 
-    <div class="p-2.5 px-3 bg-white">
-        <div class="row g-2 align-items-center">
-            <!-- Anlaşılan Bedel Kartı -->
-            <div class="col-6 col-md-3">
-                <div class="p-2 border rounded-3 bg-light text-center">
-                    <span class="text-muted d-block small" style="font-size: 0.70rem;">Anlaşılan İş Bedeli</span>
-                    <span class="fw-bold text-dark fs-6 font-monospace" id="ustaAgreedDisplay">@ustaAgreedTotal.ToString("N2") ₺</span>
-                    <small class="text-muted d-block" id="ustaAgreedSubtitle" style="font-size: 0.66rem;">(350k Resmi + 150k Elden)</small>
-                </div>
-            </div>
-
-            <!-- Resmi Banka Payı -->
-            <div class="col-6 col-md-3">
-                <div class="p-2 border rounded-3 bg-primary bg-opacity-10 border-primary-subtle text-center">
-                    <span class="text-primary d-block small fw-bold" style="font-size: 0.70rem;">1. Resmi Banka / Fatura Payı</span>
-                    <span class="fw-bold text-primary fs-6 font-monospace">350.000,00 ₺</span>
-                    <small class="text-muted d-block" style="font-size: 0.66rem;">+ %20 KDV (Faturalı & Çek/Senet)</small>
-                </div>
-            </div>
-
-            <!-- Şantiye Elden Nakit Payı -->
-            <div class="col-6 col-md-3" id="colUstaUnofficial">
-                <div class="p-2 border rounded-3 bg-warning bg-opacity-10 border-warning-subtle text-center">
-                    <span class="text-dark d-block small fw-bold" style="font-size: 0.70rem;">2. Şantiye Elden Nakit Payı</span>
-                    <span class="fw-bold text-dark fs-6 font-monospace">150.000,00 ₺</span>
-                    <small class="text-muted d-block" style="font-size: 0.66rem;">(Sözleşme Dışı / Şantiye Kasası)</small>
-                </div>
-            </div>
-
-            <!-- Kalan Usta Alacağı (Dinamik Tek Tıkla Değişen) -->
-            <div class="col-6 col-md-3">
-                <div class="p-2 border rounded-3 bg-danger bg-opacity-10 border-danger-subtle text-center">
-                    <span class="text-danger d-block small fw-bold" style="font-size: 0.70rem;">Kalan Net Usta Alacağı</span>
-                    <span class="fw-bold text-danger fs-5 font-monospace" id="ustaRemainingDisplay">@ustaRemainingTotal.ToString("N2") ₺</span>
-                    <small class="text-danger d-block fw-bold" id="ustaRemainingSubtitle" style="font-size: 0.66rem;">(Gerçek Toplam Bakiye)</small>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ================= 5. PROJE KASASI & ÖN MASRAFLAR TABLOSU ================= -->
-<div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs overflow-hidden">
-    <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-light border-bottom flex-wrap gap-1"
-         role="button" data-bs-toggle="collapse" data-bs-target="#kasaCollapse" aria-expanded="true" aria-controls="kasaCollapse" style="cursor: pointer;">
-        
-        <div class="d-flex align-items-center gap-2">
-            <i class="bi bi-journal-text text-warning fs-5"></i>
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-                <span class="fw-bold text-dark small" style="font-size: 0.88rem;">1. Masraflar & Harcama Çıkışları Tablosu</span>
-                <span class="badge bg-warning bg-opacity-25 text-dark border border-warning px-1.5 py-0 rounded-pill" style="font-size: 0.68rem;">
-                    <i class="bi bi-shield-check me-1"></i>Altın Kural: KDV'siz Net
-                </span>
-                <small class="text-muted d-none d-lg-inline" style="font-size: 0.72rem;">Belediye harçları, zemin etüdü, tasarım ve hakediş ödemeleri</small>
-            </div>
-        </div>
-
-        <div class="d-flex align-items-center gap-1.5 flex-wrap" onclick="event.stopPropagation();">
-            <span class="badge bg-primary bg-opacity-10 text-primary border px-2 py-1 rounded-pill" style="font-size: 0.74rem;">
-                <i class="bi bi-wallet-fill me-1"></i>Toplam Net: <b id="kpiNetTotal">@totalInitialNetCosts.ToString("N2") ₺</b>
-            </span>
-            <span class="badge bg-info bg-opacity-10 text-info border border-info px-2 py-1 rounded-pill" style="font-size: 0.74rem;" title="Ay sonu iade veya diğer vergilerden mahsup bekleyen vergi havuzu">
-                <i class="bi bi-receipt-cutoff me-1"></i>KDV İade/Mahsup: <b id="kpiVatTotal">@totalVat.ToString("N2") ₺</b>
-            </span>
-            <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-1 rounded-pill fw-bold" style="font-size: 0.74rem;">
-                <i class="bi bi-check2-circle me-1"></i>Fiili Çıkış: <b id="kpiGrossTotal">@(totalGrossExpense + paidFees).ToString("N2") ₺</b>
-            </span>
-            <button class="btn btn-sm btn-white border rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs text-secondary" 
-                    type="button" data-bs-toggle="collapse" data-bs-target="#kasaCollapse" aria-expanded="true" aria-controls="kasaCollapse" id="btnKasaToggle" style="font-size: 0.74rem;">
-                <span id="textKasaToggle">Daralt</span>
-                <i class="bi bi-chevron-up ms-1" id="iconKasaChevron"></i>
-            </button>
-        </div>
-    </div>
-
-    <div class="collapse show p-2 p-md-3" id="kasaCollapse">
-        <!-- 5.1 METRİK ÖZET KARTLARI -->
-        <div class="row g-2 mb-3">
-            <div class="col-6 col-md-3">
-                <div class="p-2 border rounded-3 bg-light text-center h-100 d-flex flex-column justify-content-center">
-                    <span class="text-muted d-block small" style="font-size: 0.72rem;">Toplam Proje Maliyeti (Net)</span>
-                    <span class="fw-bold text-dark fs-6 font-monospace" id="cardNetExpense">@totalInitialNetCosts.ToString("N2") ₺</span>
-                    <small class="text-muted" style="font-size: 0.66rem;">KDV Hariç Esas Maliyet</small>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="p-2 border rounded-3 bg-light text-center h-100 d-flex flex-column justify-content-center">
-                    <span class="text-muted d-block small" style="font-size: 0.72rem;">KDV İade / Mahsup Havuzu</span>
-                    <span class="fw-bold text-info fs-6 font-monospace" id="cardVatExpense">@totalVat.ToString("N2") ₺</span>
-                    <small class="text-muted" style="font-size: 0.66rem;">Ay Sonu Geri Dönen Nakit</small>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="p-2 border rounded-3 bg-light text-center h-100 d-flex flex-column justify-content-center">
-                    <span class="text-muted d-block small" style="font-size: 0.72rem;">Ödenen Resmi Harçlar</span>
-                    <span class="fw-bold text-success fs-6 font-monospace">@paidFees.ToString("N2") ₺</span>
-                    <small class="text-muted" style="font-size: 0.66rem;">Belediye & İmar (KDV Muaf)</small>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="p-2 border rounded-3 bg-light text-center h-100 d-flex flex-column justify-content-center">
-                    <span class="text-muted d-block small" style="font-size: 0.72rem;">Bekleyen Harç / Masraf</span>
-                    <span class="fw-bold text-danger fs-6 font-monospace">@pendingFees.ToString("N2") ₺</span>
-                    <small class="text-muted" style="font-size: 0.66rem;">İşlemdeki Resmi Belgeler</small>
-                </div>
-            </div>
-        </div>
-
-        <!-- 5.2 ORTAKLIK PAYI VE DAĞILIM -->
-        <div class="p-2.5 bg-light rounded-3 border mb-3">
-            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
-                <div class="fw-bold text-dark small" style="font-size: 0.82rem;">
-                    <i class="bi bi-people-fill text-primary me-1"></i>Hissedarlar & Ortaklık Masraf Paylaşımı
-                </div>
-                <a href="/ConstructionProject/Workspace/@Model.Id#partnerModal" class="btn btn-sm btn-outline-primary rounded-pill px-2 py-0 fw-bold" style="font-size: 0.72rem;">
-                    <i class="bi bi-pencil me-1"></i>Paydaşları Yönet
-                </a>
-            </div>
-
-            <div class="table-responsive rounded-3 border bg-white">
-                <table class="table table-hover align-middle mb-0" style="font-size: 0.82rem;">
-                    <thead class="table-light text-muted small text-uppercase">
-                        <tr>
-                            <th style="width: 35%;">Ortak / Şirket</th>
-                            <th class="text-center" style="width: 15%;">Hisse Oranı (%)</th>
-                            <th class="text-end" style="width: 18%;">Düşen Net Masraf Payı</th>
-                            <th class="text-end" style="width: 18%;">Fiili Kasa Katkısı</th>
-                            <th class="text-center" style="width: 14%;">Durum</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if (stakeholders.Any())
+    @if (Model.IsJointVenture)
+    {
+        <div class="row g-2 mt-2 pt-2 border-top">
+            <!-- 1. Ortak: Bizim Durum -->
+            <div class="col-12 col-md-6">
+                <div class="p-2 border rounded-3 bg-light">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fw-bold text-dark small">
+                            <i class="bi bi-building text-primary me-1"></i>Ana Yüklenici (Biz) - %@Model.OurSharePercentage
+                        </span>
+                        @if (ourNetBalance >= 0)
                         {
-                            foreach (var s in stakeholders)
-                            {
-                                decimal shareVal = s.SharePercentage ?? 0m;
-                                decimal shareRatio = shareVal / 100m;
-                                decimal netShare = totalInitialNetCosts * shareRatio;
-                                decimal grossShare = (totalGrossExpense + paidFees) * shareRatio;
-                                <tr>
-                                    <td>
-                                        <span class="fw-bold text-dark">
-                                            <i class="bi bi-person-fill text-primary me-1"></i>@(s.User != null ? $"{s.User.FirstName} {s.User.LastName}" : s.Role.ToString())
-                                        </span>
-                                    </td>
-                                    <td class="text-center">
-                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2 py-0.5 rounded-pill fw-bold">
-                                            %@shareVal.ToString("F1")
-                                        </span>
-                                    </td>
-                                    <td class="text-end fw-bold text-dark font-monospace">@netShare.ToString("N2") ₺</td>
-                                    <td class="text-end text-success fw-bold font-monospace">@grossShare.ToString("N2") ₺</td>
-                                    <td class="text-center">
-                                        <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-0.5 rounded-pill">Aktif Ortak</span>
-                                    </td>
-                                </tr>
-                            }
-                        }
-                        else if (Model.IsJointVenture)
-                        {
-                            decimal ourRatio = Model.OurSharePercentage / 100m;
-                            decimal partnerRatio = Model.PartnerSharePercentage / 100m;
-                            <tr>
-                                <td>
-                                    <span class="fw-bold text-dark">
-                                        <i class="bi bi-building text-primary me-1"></i>Ana Yüklenici (Biz)
-                                    </span>
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2 py-0.5 rounded-pill fw-bold">%@Model.OurSharePercentage</span>
-                                </td>
-                                <td class="text-end fw-bold text-dark font-monospace">@((totalInitialNetCosts * ourRatio).ToString("N2")) ₺</td>
-                                <td class="text-end text-success fw-bold font-monospace">@(((totalGrossExpense + paidFees) * ourRatio).ToString("N2")) ₺</td>
-                                <td class="text-center">
-                                    <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-0.5 rounded-pill">Aktif</span>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>
-                                    <span class="fw-bold text-dark">
-                                        <i class="bi bi-buildings text-warning me-1"></i>@(string.IsNullOrWhiteSpace(Model.PartnerCompanyName) ? "Ortak Girişim Firması" : Model.PartnerCompanyName)
-                                    </span>
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge bg-warning bg-opacity-10 text-dark border border-warning px-2 py-0.5 rounded-pill fw-bold">%@Model.PartnerSharePercentage</span>
-                                </td>
-                                <td class="text-end fw-bold text-dark font-monospace">@((totalInitialNetCosts * partnerRatio).ToString("N2")) ₺</td>
-                                <td class="text-end text-success fw-bold font-monospace">@(((totalGrossExpense + paidFees) * partnerRatio).ToString("N2")) ₺</td>
-                                <td class="text-center">
-                                    <span class="badge bg-warning bg-opacity-25 text-dark border border-warning px-2 py-0.5 rounded-pill">Ortak</span>
-                                </td>
-                            </tr>
+                            <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-0.5 rounded-pill font-monospace">
+                                +@ourNetBalance.ToString("N2") ₺ (Alacaklı / Avans Artıda)
+                            </span>
                         }
                         else
                         {
-                            <tr>
-                                <td>
-                                    <span class="fw-bold text-dark">
-                                        <i class="bi bi-building text-primary me-1"></i>@partnerDisplay
-                                    </span>
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2 py-0.5 rounded-pill fw-bold">%100</span>
-                                </td>
-                                <td class="text-end fw-bold text-dark font-monospace">@totalInitialNetCosts.ToString("N2") ₺</td>
-                                <td class="text-end text-success fw-bold font-monospace">@(totalGrossExpense + paidFees).ToString("N2") ₺</td>
-                                <td class="text-center">
-                                    <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-0.5 rounded-pill">Ana Yüklenici</span>
-                                </td>
-                            </tr>
+                            <span class="badge bg-danger bg-opacity-15 text-danger border border-danger px-2 py-0.5 rounded-pill font-monospace">
+                                @ourNetBalance.ToString("N2") ₺ (Borçlu / Eksiye Düştü)
+                            </span>
                         }
-                    </tbody>
-                </table>
+                    </div>
+                    <div class="d-flex justify-content-between small text-muted font-monospace" style="font-size: 0.72rem;">
+                        <span>Kasaya Yatırılan: <b>@ourAdvance.ToString("N2") ₺</b></span>
+                        <span>Düşen Harcama Payı: <b>@ourCostShare.ToString("N2") ₺</b></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Ortak: Partner Durum -->
+            <div class="col-12 col-md-6">
+                <div class="p-2 border rounded-3 bg-light">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fw-bold text-dark small">
+                            <i class="bi bi-buildings text-warning me-1"></i>@(string.IsNullOrWhiteSpace(Model.PartnerCompanyName) ? "Ortak Firma" : Model.PartnerCompanyName) - %@Model.PartnerSharePercentage
+                        </span>
+                        @if (partnerNetBalance >= 0)
+                        {
+                            <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-0.5 rounded-pill font-monospace">
+                                +@partnerNetBalance.ToString("N2") ₺ (Alacaklı / Avans Artıda)
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-danger bg-opacity-15 text-danger border border-danger px-2 py-0.5 rounded-pill font-monospace">
+                                @partnerNetBalance.ToString("N2") ₺ (Şirkete Borçlu / Eksi Bakiye)
+                            </span>
+                        }
+                    </div>
+                    <div class="d-flex justify-content-between small text-muted font-monospace" style="font-size: 0.72rem;">
+                        <span>Kasaya Yatırılan: <b>@partnerAdvance.ToString("N2") ₺</b></span>
+                        <span>Düşen Harcama Payı: <b>@partnerCostShare.ToString("N2") ₺</b></span>
+                    </div>
+                </div>
             </div>
         </div>
+    }
+</div>
 
-        <!-- 5.3 HARCAMA KALEMLERİ LİSTESİ -->
-        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
+<!-- ================= 5. MAHREMİYET & YÖNETİCİ GÖZÜ FİLTRE ÇUBUĞU ================= -->
+<div class="card border border-primary-subtle bg-white rounded-3 p-2 px-3 mb-2 shadow-xs">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <span class="text-muted small fw-bold" style="font-size: 0.78rem;">
+                <i class="bi bi-shield-shaded text-primary me-1"></i>Görünüm Filtresi:
+            </span>
+            <div class="btn-group btn-group-sm p-0.5 bg-light rounded-pill border shadow-xs" role="group">
+                <button type="button" class="btn btn-sm rounded-pill fw-bold px-3 active shadow-xs" id="btnScopeAll" onclick="setFinanceScope('all')">
+                    <i class="bi bi-globe2 text-primary me-1"></i>🌐 Tümü (Gerçek Bilanço)
+                </button>
+                <button type="button" class="btn btn-sm rounded-pill fw-bold px-3 text-secondary" id="btnScopeOfficial" onclick="setFinanceScope('official')">
+                    <i class="bi bi-shield-check text-success me-1"></i>📄 Resmi & Sözleşmeli
+                </button>
+                <button type="button" class="btn btn-sm rounded-pill fw-bold px-3 text-secondary" id="btnScopeUnofficial" onclick="setFinanceScope('unofficial')">
+                    <i class="bi bi-cash-stack text-warning me-1"></i>💼 Elden & Şantiye Nakit
+                </button>
+            </div>
+            <span id="scopeBadge" class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2.5 py-1 rounded-pill small" style="font-size: 0.72rem;">
+                <i class="bi bi-eye-fill me-1"></i>Tüm Hareketler Açık
+            </span>
+        </div>
+
+        <button type="button" class="btn btn-sm btn-warning text-dark border-warning rounded-pill px-3 py-1 fw-bold shadow-xs" 
+                data-bs-toggle="modal" data-bs-target="#addExpenseModal" style="font-size: 0.76rem;">
+            <i class="bi bi-plus-circle-fill me-1"></i>+ Yeni Masraf / Hakediş Gir
+        </button>
+    </div>
+</div>
+
+<!-- ================= 6. MASRAFLAR & HAKEDİŞLER ÇALIŞMA ALANI (MOKAPSIZ & SIFIR TEMİZLİK) ================= -->
+<div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs overflow-hidden">
+    <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-light border-bottom flex-wrap gap-1">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-journal-text text-warning fs-5"></i>
             <div>
-                <span class="fw-bold text-dark small" style="font-size: 0.84rem;">
-                    <i class="bi bi-receipt text-warning me-1"></i>Masraflar & Hakediş Çıkışları
-                </span>
-                <span class="text-muted small ms-1" style="font-size: 0.72rem;" id="expenseCountText">(@expenses.Count adet masraf kaydı)</span>
+                <span class="fw-bold text-dark small" style="font-size: 0.88rem;">Harcama & Hakediş Çıkışları Masası</span>
+                <span class="text-muted small ms-1" style="font-size: 0.72rem;">(Altın Kural: KDV'siz Net)</span>
             </div>
-            <button type="button" class="btn btn-sm btn-warning text-dark border-warning rounded-pill px-3 py-1 fw-bold shadow-xs" 
-                    data-bs-toggle="modal" data-bs-target="#addExpenseModal" style="font-size: 0.76rem;">
-                <i class="bi bi-plus-circle-fill me-1"></i>+ Yeni Masraf / Hakediş Ekle
-            </button>
         </div>
 
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <span class="badge bg-primary bg-opacity-10 text-primary border px-2 py-1 rounded-pill" style="font-size: 0.74rem;">
+                Toplam Net: <b id="kpiNetTotal">@totalInitialNetCosts.ToString("N2") ₺</b>
+            </span>
+            <span class="badge bg-info bg-opacity-10 text-info border border-info px-2 py-1 rounded-pill" style="font-size: 0.74rem;">
+                KDV İade/Mahsup: <b id="kpiVatTotal">@totalVat.ToString("N2") ₺</b>
+            </span>
+            <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-1 rounded-pill fw-bold" style="font-size: 0.74rem;">
+                Fiili Çıkış: <b id="kpiGrossTotal">@(totalGrossExpense + paidFees).ToString("N2") ₺</b>
+            </span>
+        </div>
+    </div>
+
+    <div class="p-2 p-md-3 bg-white">
         <div class="table-responsive rounded-3 border bg-white">
             <table class="table table-hover align-middle mb-0" id="expensesTable" style="font-size: 0.82rem;">
                 <thead class="table-light text-muted small text-uppercase">
                     <tr>
                         <th style="width: 10%;">Tarih</th>
-                        <th style="width: 24%;">Harcama / Hakediş Kalemi</th>
+                        <th style="width: 26%;">Harcama / Hakediş Kalemi</th>
                         <th style="width: 14%;">Kategori</th>
                         <th style="width: 14%;">Çıkış Kasası</th>
                         <th style="width: 12%;">Tür / Kapsam</th>
-                        <th style="width: 10%;">Belge / Tutanak</th>
-                        <th class="text-center" style="width: 8%;">KDV</th>
+                        <th style="width: 10%;">Belge No</th>
+                        <th class="text-center" style="width: 6%;">KDV</th>
                         <th class="text-end" style="width: 12%;">Net Tutar</th>
                         <th class="text-center" style="width: 4%;">İşlem</th>
                     </tr>
@@ -542,30 +408,6 @@
                             decimal vat = exp.VatAmount ?? (exp.Amount - net);
                             string scopeType = exp.ApprovalType == "Unofficial" ? "unofficial" : "official";
 
-                            string badgeClass = exp.ExpenseType switch
-                            {
-                                ConstructionExpenseType.BelediyeHarci => "bg-info bg-opacity-10 text-info border border-info",
-                                ConstructionExpenseType.MuhendislikEtud => "bg-primary bg-opacity-10 text-primary border border-primary",
-                                ConstructionExpenseType.MimariTasarim => "bg-warning bg-opacity-15 text-dark border border-warning",
-                                ConstructionExpenseType.YapiDenetim => "bg-danger bg-opacity-10 text-danger border border-danger",
-                                ConstructionExpenseType.SantiyeKurulum => "bg-secondary bg-opacity-10 text-secondary border",
-                                ConstructionExpenseType.MalzemeHakedis => "bg-success bg-opacity-10 text-success border border-success",
-                                _ => "bg-light text-dark border"
-                            };
-
-                            string categoryName = exp.ExpenseType switch
-                            {
-                                ConstructionExpenseType.BelediyeHarci => "Belediye Harcı",
-                                ConstructionExpenseType.MuhendislikEtud => "Mühendislik / Etüd",
-                                ConstructionExpenseType.MimariTasarim => "Mimari Tasarım",
-                                ConstructionExpenseType.YapiDenetim => "Yapı Denetim",
-                                ConstructionExpenseType.SantiyeKurulum => "Şantiye Mobilizasyon",
-                                ConstructionExpenseType.MalzemeHakedis => "Malzeme & Hakediş",
-                                ConstructionExpenseType.SantiyeIasesi => "Şantiye İaşesi",
-                                ConstructionExpenseType.Demirbas => "Demirbaş",
-                                _ => exp.ExpenseType.ToString()
-                            };
-
                             <tr class="expense-row" data-scope="@scopeType" data-net="@net.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-vat="@vat.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-gross="@exp.Amount.ToString(System.Globalization.CultureInfo.InvariantCulture)">
                                 <td class="text-muted">@exp.ExpenseDate.ToString("dd.MM.yyyy")</td>
                                 <td>
@@ -576,13 +418,9 @@
                                             <i class="bi bi-person me-1"></i>@exp.PayeeOrSupplier
                                         </small>
                                     }
-                                    @if (!string.IsNullOrWhiteSpace(exp.Description))
-                                    {
-                                        <small class="text-muted d-block" style="font-size: 0.70rem;">@exp.Description</small>
-                                    }
                                 </td>
                                 <td>
-                                    <span class="badge @badgeClass px-2 py-0.5 rounded-pill">@categoryName</span>
+                                    <span class="badge bg-light text-dark border px-2 py-0.5 rounded-pill">@exp.ExpenseType.ToString()</span>
                                 </td>
                                 <td class="small text-muted">
                                     <i class="bi bi-wallet2 me-1"></i>@(exp.PaymentSource ?? "Proje Kasası")
@@ -601,33 +439,21 @@
                                         </span>
                                     }
                                 </td>
-                                <td class="small">
-                                    @if (!string.IsNullOrWhiteSpace(exp.DocumentNo))
-                                    {
-                                        <span class="badge bg-light text-dark border font-monospace">@exp.DocumentNo</span>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(exp.PhotoPath))
-                                    {
-                                        <a href="@exp.PhotoPath" target="_blank" class="btn btn-xs btn-outline-secondary p-0 px-1 ms-1" title="Belgeyi Görüntüle">
-                                            <i class="bi bi-paperclip"></i>
-                                        </a>
-                                    }
-                                </td>
+                                <td class="small font-monospace">@(exp.DocumentNo ?? "-")</td>
                                 <td class="text-center">
-                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border px-1.5 py-0.5 rounded-pill small" title="Ayrılan KDV: @vat.ToString("N2") ₺">
-                                        %@exp.VatRate <span class="text-muted opacity-75">(+@vat.ToString("N0") ₺)</span>
+                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border px-1.5 py-0.5 rounded-pill small">
+                                        %@exp.VatRate
                                     </span>
                                 </td>
-                                <td class="text-end">
-                                    <span class="fw-bold text-danger font-monospace fs-6">-@net.ToString("N2") ₺</span>
-                                    <div class="text-muted small" style="font-size: 0.68rem;">Brüt: @exp.Amount.ToString("N2") ₺</div>
+                                <td class="text-end fw-bold text-danger font-monospace fs-6">
+                                    -@net.ToString("N2") ₺
                                 </td>
                                 <td class="text-center">
-                                    <form asp-action="DeleteProjectExpense" asp-controller="ConstructionProject" method="post" class="d-inline" onsubmit="return confirm('Bu masraf kaydını silmek ve bedelini ilgili kasaya iade etmek istediğinize emin misiniz?');">
+                                    <form asp-action="DeleteProjectExpense" asp-controller="ConstructionProject" method="post" class="d-inline" onsubmit="return confirm('Bu masraf kaydını silmek ve tutarı kasaya iade etmek istediğinize emin misiniz?');">
                                         @Html.AntiForgeryToken()
                                         <input type="hidden" name="id" value="@exp.Id" />
                                         <input type="hidden" name="projectId" value="@Model.Id" />
-                                        <button type="submit" class="btn btn-sm btn-outline-danger border-0 p-1 py-0 rounded-circle" title="Masrafı Sil ve İade Et">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger border-0 p-1 py-0 rounded-circle" title="Sil">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </form>
@@ -637,18 +463,17 @@
                     }
                     else
                     {
-                        <tr id="noExpenseRow">
-                            <td colspan="9" class="text-center py-4 text-muted">
-                                <i class="bi bi-inbox fs-2 text-secondary opacity-50 d-block mb-1"></i>
-                                <span>Henüz bu projeye ait harcama/hakediş kaydı bulunmuyor.</span><br />
-                                <small class="text-muted">
-                                    Proje açılışıyla otomatik oluşturulan 3 alt kasa üzerinden tüm işlemler <b>KDV'siz Net</b> olarak işlenir.
+                        <tr>
+                            <td colspan="9" class="text-center py-5 text-muted">
+                                <i class="bi bi-inbox fs-1 text-secondary opacity-50 d-block mb-2"></i>
+                                <span class="fw-bold text-dark fs-6 d-block">Henüz Bu Projeye Ait Masraf / Hakediş Girilmedi</span>
+                                <small class="text-muted d-block mb-3">
+                                    Proje açılışıyla 3 alt kasa (Resmi Banka, Şantiye Kasası, Kiralık Kasa) 0,00 ₺ olarak hazırdır.<br />
+                                    Yukarıdaki butonlardan <b>Kasaya Sermaye Yatırabilir</b> veya <b>Yeni Masraf / Hakediş</b> ekleyebilirsiniz.
                                 </small>
-                                <div class="mt-2">
-                                    <button type="button" class="btn btn-sm btn-warning text-dark fw-bold rounded-pill px-3 shadow-xs" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
-                                        <i class="bi bi-plus-circle-fill me-1"></i>İlk Masrafı / Hakedişi Ekle
-                                    </button>
-                                </div>
+                                <button type="button" class="btn btn-sm btn-warning text-dark fw-bold rounded-pill px-3 shadow-xs" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
+                                    <i class="bi bi-plus-circle-fill me-1"></i>İlk Masrafı / Hakedişi Ekle
+                                </button>
                             </td>
                         </tr>
                     }
@@ -658,50 +483,11 @@
     </div>
 </div>
 
-<!-- ================= 6. GELİRLER & ŞANTİYE İMALAT MASASI KARTLARI ================= -->
-<div class="row g-2">
-    <div class="col-md-6">
-        <div class="card border border-light-subtle rounded-3 bg-white shadow-xs p-2.5">
-            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                <div class="d-flex align-items-center gap-2">
-                    <i class="bi bi-graph-up-arrow text-success fs-5"></i>
-                    <div>
-                        <span class="fw-bold text-dark small" style="font-size: 0.84rem;">2. Gelirler Masası</span>
-                        <span class="badge bg-secondary bg-opacity-10 text-secondary border px-1.5 py-0 rounded-pill ms-1" style="font-size: 0.66rem;">Aşama Modülü</span>
-                        <div class="text-muted small" style="font-size: 0.70rem;">Topraktan daire satışları, ön peşinatlar ve ortak sermaye katkıları</div>
-                    </div>
-                </div>
-                <a href="/ConstructionProject/Units/@Model.Id" class="btn btn-sm btn-outline-secondary rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs" style="font-size: 0.72rem;">
-                    <i class="bi bi-grid-3x3-gap me-1"></i>Bağımsız Bölümler ➔
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-6">
-        <div class="card border border-light-subtle rounded-3 bg-white shadow-xs p-2.5">
-            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                <div class="d-flex align-items-center gap-2">
-                    <i class="bi bi-graph-down-arrow text-danger fs-5"></i>
-                    <div>
-                        <span class="fw-bold text-dark small" style="font-size: 0.84rem;">3. Şantiye İmalat Masası</span>
-                        <span class="badge bg-secondary bg-opacity-10 text-secondary border px-1.5 py-0 rounded-pill ms-1" style="font-size: 0.66rem;">Aşama Modülü</span>
-                        <div class="text-muted small" style="font-size: 0.70rem;">Taşeron sözleşmeleri, demir-beton malzeme alımları ve metraj hakedişleri</div>
-                    </div>
-                </div>
-                <a href="/ConstructionProject/Budget/@Model.Id" class="btn btn-sm btn-outline-secondary rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs" style="font-size: 0.72rem;">
-                    <i class="bi bi-calculator me-1"></i>Keşif & Metraj Bütçesi ➔
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ================= MODAL 1: YENİ MASRAF / HAKEDİŞ EKLE (PARÇALI HAKEDİŞ DESTEKLİ) ================= -->
+<!-- ================= MODAL 1: YENİ MASRAF / HAKEDİŞ EKLE ================= -->
 <div class="modal fade" id="addExpenseModal" tabindex="-1" aria-labelledby="addExpenseModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content border-0 shadow-lg rounded-3">
-            <form asp-action="AddProjectExpense" asp-controller="ConstructionProject" method="post" enctype="multipart/form-data" id="expenseForm">
+            <form asp-action="AddProjectExpense" asp-controller="ConstructionProject" method="post" enctype="multipart/form-data">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="projectId" value="@Model.Id" />
 
@@ -725,7 +511,7 @@
                             <span class="fw-bold text-dark small d-block" style="font-size: 0.82rem;">
                                 <i class="bi bi-lightning-charge-fill text-warning me-1"></i>Parçalı Hakediş Çıkışı (Çift Kanallı: Resmi Banka + Elden Şantiye)
                             </span>
-                            <small class="text-muted" style="font-size: 0.70rem;">Örn: 500k hakedişin 350k'sı resmi bankadan, 150k'sı şantiyeden elden çıkar.</small>
+                            <small class="text-muted" style="font-size: 0.70rem;">Örn: Hakedişin bir kısmı resmi bankadan, kalanı şantiyeden elden çıkar.</small>
                         </div>
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input" type="checkbox" role="switch" id="chkSplitPayment" name="isSplitPayment" value="true" onchange="toggleSplitPaymentMode()">
@@ -739,7 +525,7 @@
                             <label class="form-label small fw-bold text-dark mb-1">
                                 Harcama / Hakediş Başlığı <span class="text-danger">*</span>
                             </label>
-                            <input type="text" name="title" id="inpTitle" class="form-control form-control-sm rounded-2" placeholder="Örn: Zemin Sondajı veya Demirci 1. Hakediş" required />
+                            <input type="text" name="title" id="inpTitle" class="form-control form-control-sm rounded-2" placeholder="Örn: Zemin Sondajı veya Kalıpçı 1. Hakediş" required />
                         </div>
 
                         <!-- Kategori -->
@@ -763,7 +549,7 @@
                         <!-- Kime Ödendi -->
                         <div class="col-12 col-md-6">
                             <label class="form-label small fw-bold text-dark mb-1">Kime Ödendi / Tedarikçi / Taşeron</label>
-                            <input type="text" name="payeeOrSupplier" id="inpPayee" class="form-control form-control-sm rounded-2" placeholder="Örn: Ahmet Usta (Kaya Yapı) / Kadıköy Belediyesi" />
+                            <input type="text" name="payeeOrSupplier" id="inpPayee" class="form-control form-control-sm rounded-2" placeholder="Örn: Kadıköy Belediyesi / Taşeron Usta" />
                         </div>
 
                         <!-- Ayrık Tarih ve Saat (AI Kuralları 8) -->
@@ -776,7 +562,7 @@
                             <input type="time" name="expenseTime" class="form-control form-control-sm rounded-2" value="@DateTime.Now.ToString("HH:mm")" />
                         </div>
 
-                        <!-- ================= TEK KANALLI MASRAF BÖLÜMÜ (VARSAYILAN) ================= -->
+                        <!-- TEK KANALLI MASRAF BÖLÜMÜ -->
                         <div class="col-12 mt-2" id="singleExpenseSection">
                             <div class="row g-2">
                                 <div class="col-12 col-md-6">
@@ -792,17 +578,16 @@
                                     <label class="form-label small fw-bold text-dark mb-1">Görünürlük / Kapsam</label>
                                     <select name="approvalType" class="form-select form-select-sm rounded-2">
                                         <option value="Official" selected>📄 Resmi & Sözleşmeli (Faturalı / Banka)</option>
-                                        <option value="Unofficial">💼 Elden & Şantiye Nakit (Sözleşme Dışı / Gizlenebilir)</option>
+                                        <option value="Unofficial">💼 Elden & Şantiye Nakit (Sözleşme Dışı)</option>
                                     </select>
                                 </div>
 
-                                <!-- Altın Kural: KDV Hesaplama Kutusu -->
                                 <div class="col-12">
                                     <div class="p-2.5 bg-warning bg-opacity-10 border border-warning rounded-3">
                                         <div class="d-flex align-items-center gap-1.5 mb-2">
                                             <i class="bi bi-shield-check text-warning fs-6"></i>
                                             <span class="fw-bold text-dark small" style="font-size: 0.78rem;">
-                                                KDV Ayrıştırma Paneli (Fatura Kesilse Bile KDV Ayrıştırılır)
+                                                KDV Ayrıştırma Paneli
                                             </span>
                                         </div>
                                         <div class="row g-2">
@@ -814,13 +599,12 @@
                                                     <input type="number" step="0.01" min="0" name="netAmount" id="inpNetAmount" class="form-control fw-bold font-monospace text-dark" placeholder="0.00" value="0.00" />
                                                     <span class="input-group-text bg-white text-muted">₺</span>
                                                 </div>
-                                                <small class="text-muted" style="font-size: 0.66rem;">Esas proje maliyetidir.</small>
                                             </div>
 
                                             <div class="col-6 col-md-2">
                                                 <label class="form-label small fw-bold text-dark mb-0.5">KDV Oranı</label>
                                                 <select name="vatRate" id="selVatRate" class="form-select form-select-sm fw-bold">
-                                                    <option value="0">%0 (Harç/Muaf)</option>
+                                                    <option value="0">%0</option>
                                                     <option value="1">%1</option>
                                                     <option value="10">%10</option>
                                                     <option value="20" selected>%20</option>
@@ -833,7 +617,6 @@
                                                     <input type="number" step="0.01" min="0" name="vatAmount" id="inpVatAmount" class="form-control font-monospace text-info fw-bold" placeholder="0.00" />
                                                     <span class="input-group-text bg-white text-muted">₺</span>
                                                 </div>
-                                                <small class="text-muted" style="font-size: 0.66rem;">Vergi mahsubu (İndirilecek)</small>
                                             </div>
 
                                             <div class="col-12 col-md-3">
@@ -842,7 +625,6 @@
                                                     <input type="number" step="0.01" min="0" name="totalAmount" id="inpTotalAmount" class="form-control font-monospace text-danger fw-bold" placeholder="0.00" />
                                                     <span class="input-group-text bg-white text-muted">₺</span>
                                                 </div>
-                                                <small class="text-muted" style="font-size: 0.66rem;">Fiili nakit/banka çıkışı</small>
                                             </div>
                                         </div>
                                     </div>
@@ -855,7 +637,7 @@
                             </div>
                         </div>
 
-                        <!-- ================= ÇİFT KANALLI PARÇALI HAKEDİŞ BÖLÜMÜ (GİZLİ/AÇILIR) ================= -->
+                        <!-- ÇİFT KANALLI PARÇALI HAKEDİŞ BÖLÜMÜ -->
                         <div class="col-12 mt-2 d-none" id="splitExpenseSection">
                             <div class="p-3 border border-warning rounded-3 bg-light">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -877,7 +659,7 @@
                                             <div class="mb-1.5">
                                                 <label class="form-label small fw-bold text-dark mb-0.5">Resmi Net Tutar (KDV'siz)</label>
                                                 <div class="input-group input-group-sm">
-                                                    <input type="number" step="0.01" min="0" name="officialPartAmount" id="inpOfficialNet" class="form-control font-monospace fw-bold" placeholder="350000.00" oninput="recalcSplit()" />
+                                                    <input type="number" step="0.01" min="0" name="officialPartAmount" id="inpOfficialNet" class="form-control font-monospace fw-bold" placeholder="0.00" oninput="recalcSplit()" />
                                                     <span class="input-group-text bg-white">₺</span>
                                                 </div>
                                             </div>
@@ -893,7 +675,7 @@
                                                 </div>
                                                 <div class="col-6">
                                                     <label class="form-label small fw-bold text-dark mb-0.5">Fatura Toplamı</label>
-                                                    <input type="number" step="0.01" name="officialTotalAmount" id="inpOfficialTotal" class="form-control form-control-sm font-monospace fw-bold text-primary" placeholder="420000.00" readonly />
+                                                    <input type="number" step="0.01" name="officialTotalAmount" id="inpOfficialTotal" class="form-control form-control-sm font-monospace fw-bold text-primary" placeholder="0.00" readonly />
                                                 </div>
                                             </div>
                                             <div class="mb-1.5">
@@ -921,10 +703,9 @@
                                             <div class="mb-1.5">
                                                 <label class="form-label small fw-bold text-dark mb-0.5">Elden Nakit Bedel</label>
                                                 <div class="input-group input-group-sm">
-                                                    <input type="number" step="0.01" min="0" name="unofficialPartAmount" id="inpUnofficialAmount" class="form-control font-monospace fw-bold text-dark" placeholder="150000.00" oninput="recalcSplit()" />
+                                                    <input type="number" step="0.01" min="0" name="unofficialPartAmount" id="inpUnofficialAmount" class="form-control font-monospace fw-bold text-dark" placeholder="0.00" oninput="recalcSplit()" />
                                                     <span class="input-group-text bg-white">₺</span>
                                                 </div>
-                                                <small class="text-muted" style="font-size: 0.66rem;">Sözleşme dışı nakit ödeme tutarıdır.</small>
                                             </div>
                                             <div class="mb-1.5">
                                                 <label class="form-label small fw-bold text-dark mb-0.5">Çıkış Yapılacak Şantiye Kasası</label>
@@ -986,8 +767,8 @@
                             <i class="bi bi-box-arrow-in-down"></i>
                         </span>
                         <div>
-                            <h6 class="modal-title fw-bold text-dark mb-0" id="depositModalLabel">Kasaya Para / Sermaye Aktar</h6>
-                            <small class="text-muted" style="font-size: 0.70rem;">Ortak sermaye payı veya merkezden şantiyeye nakit ikmali</small>
+                            <h6 class="modal-title fw-bold text-dark mb-0" id="depositModalLabel">Kasaya Para / Sermaye Yatır</h6>
+                            <small class="text-muted" style="font-size: 0.70rem;">Ortak sermaye avansı veya şantiyeye nakit ikmal</small>
                         </div>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
@@ -1032,7 +813,7 @@
 
                     <div class="mb-2">
                         <label class="form-label small fw-bold text-dark mb-1">Açıklama / Dekont Notu</label>
-                        <textarea name="notes" rows="2" class="form-control form-control-sm rounded-2" placeholder="Örn: Kaba inşaat öncesi demir alımı avansı..."></textarea>
+                        <textarea name="notes" rows="2" class="form-control form-control-sm rounded-2" placeholder="Örn: 1. Aşama sermaye girişi..."></textarea>
                     </div>
                 </div>
 
@@ -1062,7 +843,7 @@
                         </span>
                         <div>
                             <h6 class="modal-title fw-bold text-dark mb-0" id="accountModalLabel">Kasa / Hesap Düzenleme</h6>
-                            <small class="text-muted" style="font-size: 0.70rem;">Seçilen kasanın açılış bakiyesini veya IBAN/adını güncelleyin</small>
+                            <small class="text-muted" style="font-size: 0.70rem;">Kasa adı, IBAN ve bakiye ayarları</small>
                         </div>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
@@ -1099,7 +880,6 @@
                         <label class="form-label small fw-bold text-dark mb-1">Cari Kasa Bakiyesi</label>
                         <input type="number" step="0.01" name="openingBalance" id="inpEditBalance" class="form-control form-control-sm rounded-2 font-monospace fw-bold" 
                                value="@(officialBank?.CurrentBalance.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) ?? "0.00")" />
-                        <small class="text-muted" style="font-size: 0.68rem;">Kasada bulunan fiili açılış tutarını düzeltir.</small>
                     </div>
                 </div>
 
@@ -1116,7 +896,7 @@
 
 @section Scripts {
 <script>
-    // ================= 1-CLICK PRIVACY & SCOPE ENGINE (YÖNETİCİ GÖZÜ) =================
+    // ================= 1-CLICK PRIVACY & SCOPE ENGINE =================
     let currentScope = 'all';
 
     function setFinanceScope(scope) {
@@ -1127,7 +907,6 @@
         const btnUnofficial = document.getElementById("btnScopeUnofficial");
         const scopeBadge = document.getElementById("scopeBadge");
 
-        // Buton stilleri
         [btnAll, btnOfficial, btnUnofficial].forEach(b => {
             if (b) {
                 b.classList.remove("active", "shadow-xs");
@@ -1135,67 +914,23 @@
             }
         });
 
-        const cardSiteCash = document.getElementById("cardSiteCash");
-        const colUstaUnofficial = document.getElementById("colUstaUnofficial");
-        const ustaAgreedDisplay = document.getElementById("ustaAgreedDisplay");
-        const ustaAgreedSubtitle = document.getElementById("ustaAgreedSubtitle");
-        const ustaRemainingDisplay = document.getElementById("ustaRemainingDisplay");
-        const ustaRemainingSubtitle = document.getElementById("ustaRemainingSubtitle");
-
         if (scope === 'all') {
             btnAll.classList.add("active", "shadow-xs");
             btnAll.classList.remove("text-secondary");
             scopeBadge.className = "badge bg-primary bg-opacity-10 text-primary border border-primary px-2.5 py-1 rounded-pill small";
             scopeBadge.innerHTML = '<i class="bi bi-eye-fill me-1"></i>Tüm Hareketler Açık (Patron Gözü)';
-
-            if (cardSiteCash) cardSiteCash.style.opacity = "1";
-            if (colUstaUnofficial) colUstaUnofficial.style.display = "";
-
-            if (ustaAgreedDisplay) ustaAgreedDisplay.textContent = "@ustaAgreedTotal.ToString("N2") ₺";
-            if (ustaAgreedSubtitle) ustaAgreedSubtitle.textContent = "(350k Resmi + 150k Elden)";
-            if (ustaRemainingDisplay) ustaRemainingDisplay.textContent = "@ustaRemainingTotal.ToString("N2") ₺";
-            if (ustaRemainingSubtitle) {
-                ustaRemainingSubtitle.textContent = "(Gerçek Toplam Bakiye)";
-                ustaRemainingSubtitle.className = "text-danger d-block fw-bold";
-            }
-        } 
-        else if (scope === 'official') {
+        } else if (scope === 'official') {
             btnOfficial.classList.add("active", "shadow-xs");
             btnOfficial.classList.remove("text-secondary");
             scopeBadge.className = "badge bg-success bg-opacity-15 text-success border border-success px-2.5 py-1 rounded-pill small";
-            scopeBadge.innerHTML = '<i class="bi bi-shield-check me-1"></i>Resmi Mod (Sözleşmeli & Denetim Gözü — Elden Maskelendi)';
-
-            if (cardSiteCash) cardSiteCash.style.opacity = "0.35";
-            if (colUstaUnofficial) colUstaUnofficial.style.display = "none";
-
-            // USTA ALACAĞI ANINDA 350.000 ₺'YE DÜŞER!
-            if (ustaAgreedDisplay) ustaAgreedDisplay.textContent = "350.000,00 ₺";
-            if (ustaAgreedSubtitle) ustaAgreedSubtitle.textContent = "(Kanuni Sözleşme Bedeli)";
-            if (ustaRemainingDisplay) ustaRemainingDisplay.textContent = "@ustaRemainingOfficial.ToString("N2") ₺";
-            if (ustaRemainingSubtitle) {
-                ustaRemainingSubtitle.textContent = "(Resmi Sözleşmeli Kalan)";
-                ustaRemainingSubtitle.className = "text-success d-block fw-bold";
-            }
-        } 
-        else if (scope === 'unofficial') {
+            scopeBadge.innerHTML = '<i class="bi bi-shield-check me-1"></i>Resmi Mod (Elden Kayıtlar Maskelendi)';
+        } else if (scope === 'unofficial') {
             btnUnofficial.classList.add("active", "shadow-xs");
             btnUnofficial.classList.remove("text-secondary");
             scopeBadge.className = "badge bg-warning bg-opacity-25 text-dark border border-warning px-2.5 py-1 rounded-pill small";
-            scopeBadge.innerHTML = '<i class="bi bi-cash-stack me-1"></i>Elden / Şantiye Nakit Modu (Sözleşme Dışı)';
-
-            if (cardSiteCash) cardSiteCash.style.opacity = "1";
-            if (colUstaUnofficial) colUstaUnofficial.style.display = "";
-
-            if (ustaAgreedDisplay) ustaAgreedDisplay.textContent = "150.000,00 ₺";
-            if (ustaAgreedSubtitle) ustaAgreedSubtitle.textContent = "(Şantiye Nakit Elden Bedeli)";
-            if (ustaRemainingDisplay) ustaRemainingDisplay.textContent = "@ustaRemainingUnofficial.ToString("N2") ₺";
-            if (ustaRemainingSubtitle) {
-                ustaRemainingSubtitle.textContent = "(Kalan Elden Alacak)";
-                ustaRemainingSubtitle.className = "text-warning d-block fw-bold";
-            }
+            scopeBadge.innerHTML = '<i class="bi bi-cash-stack me-1"></i>Elden / Şantiye Nakit Modu';
         }
 
-        // Tablo satırlarını dinamik filtrele ve toplamları anlık topla
         filterTableRows(scope);
     }
 
@@ -1232,15 +967,7 @@
             }
         });
 
-        const countText = document.getElementById("expenseCountText");
-        if (countText) {
-            countText.textContent = `(${visibleCount} adet listelenen kayıt)`;
-        }
-
-        // Dinamik KPI Kartlarını Güncelle
         const paidFees = @paidFees.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        const cardNet = document.getElementById("cardNetExpense");
-        const cardVat = document.getElementById("cardVatExpense");
         const kpiNet = document.getElementById("kpiNetTotal");
         const kpiVat = document.getElementById("kpiVatTotal");
         const kpiGross = document.getElementById("kpiGrossTotal");
@@ -1248,14 +975,12 @@
         const displayNet = scope === 'unofficial' ? sumNet : (sumNet + paidFees);
         const displayGross = scope === 'unofficial' ? sumGross : (sumGross + paidFees);
 
-        if (cardNet) cardNet.textContent = displayNet.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ₺";
-        if (cardVat) cardVat.textContent = sumVat.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ₺";
         if (kpiNet) kpiNet.textContent = displayNet.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ₺";
         if (kpiVat) kpiVat.textContent = sumVat.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ₺";
         if (kpiGross) kpiGross.textContent = displayGross.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ₺";
     }
 
-    // ================= MODAL & PARÇALI HAKEDİŞ ETKİLEŞİMİ =================
+    // ================= PARÇALI HAKEDİŞ HESAPLAYICI =================
     function toggleSplitPaymentMode() {
         const chk = document.getElementById("chkSplitPayment");
         const singleSec = document.getElementById("singleExpenseSection");
@@ -1286,25 +1011,6 @@
         if (badge) {
             badge.textContent = `✓ Toplam Anlaşılan: ${totalAgreed.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺ (${offNet.toLocaleString('tr-TR')} ₺ Resmi + ${unoffAmount.toLocaleString('tr-TR')} ₺ Elden)`;
         }
-    }
-
-    function openSplitHakedisModal(title, payee, officialNet, officialVat, unofficialAmount) {
-        const modal = new bootstrap.Modal(document.getElementById('addExpenseModal'));
-        document.getElementById("inpTitle").value = title;
-        document.getElementById("inpPayee").value = payee;
-        document.getElementById("selExpenseType").value = "15"; // Malzeme & Hakediş
-
-        const chk = document.getElementById("chkSplitPayment");
-        chk.checked = true;
-        toggleSplitPaymentMode();
-
-        document.getElementById("inpOfficialNet").value = officialNet;
-        document.getElementById("selOfficialVat").value = officialVat;
-        document.getElementById("inpUnofficialAmount").value = unofficialAmount;
-        document.getElementById("inpDescription").value = "Ahmet Usta Kaba Yapı 1. Hakediş Mutabakatı (350.000 ₺ Resmi Banka + 150.000 ₺ Şantiye Elden Nakit)";
-
-        recalcSplit();
-        modal.show();
     }
 
     // Tekli Masraf KDV Hesaplayıcı
@@ -1341,31 +1047,8 @@
             selVat.addEventListener("change", calculateFromNet);
             inpTotal.addEventListener("input", calculateFromTotal);
         }
-
-        // Kasa kartı daraltma butonu animasyonu
-        const kasaCollapse = document.getElementById("kasaCollapse");
-        const textToggle = document.getElementById("textKasaToggle");
-        const iconToggle = document.getElementById("iconKasaChevron");
-
-        if (kasaCollapse) {
-            kasaCollapse.addEventListener("hidden.bs.collapse", function () {
-                if (textToggle) textToggle.textContent = "Genişlet";
-                if (iconToggle) {
-                    iconToggle.classList.remove("bi-chevron-up");
-                    iconToggle.classList.add("bi-chevron-down");
-                }
-            });
-            kasaCollapse.addEventListener("shown.bs.collapse", function () {
-                if (textToggle) textToggle.textContent = "Daralt";
-                if (iconToggle) {
-                    iconToggle.classList.remove("bi-chevron-down");
-                    iconToggle.classList.add("bi-chevron-up");
-                }
-            });
-        }
     });
 
-    // Hesap Düzenleme Modalında Seçilen Hesabı Doldurma
     function onSelectAccountToEdit() {
         const sel = document.getElementById("selEditAccountId");
         const opt = sel.options[sel.selectedIndex];
