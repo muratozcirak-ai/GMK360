@@ -4025,304 +4025,58 @@ namespace GMK360.Web.Controllers
 
 
         public async Task<List<BankAccount>> EnsureProjectAccountsAsync(int projectId, string projectName)
-
-
-
         {
-
-
-
             var accounts = await _context.BankAccounts
-
-
-
                 .Where(b => b.OwnerType == OwnerType.ConstructionProject && b.OwnerId == projectId && !b.IsDeleted)
-
-
-
                 .OrderBy(b => b.Id)
-
-
-
                 .ToListAsync();
-
-
 
             bool hasChanges = false;
 
+            // Eski sistem tarafından zorla açılmış, bakiyesi 0 olan şantiye/kiralık kasaları temizle
+            if (accounts.Count > 1)
+            {
+                var dummyAccounts = accounts.Skip(1).Where(a => a.CurrentBalance == 0 && (a.IBAN != null && (a.IBAN.Contains("KASA-SNT-") || a.IBAN.Contains("KASA-KAS-")))).ToList();
+                if (dummyAccounts.Any())
+                {
+                    _context.BankAccounts.RemoveRange(dummyAccounts);
+                    accounts.RemoveAll(a => dummyAccounts.Contains(a));
+                    hasChanges = true;
+                }
+            }
 
-
-            // 1. Resmi Proje Banka Hesabı (TL)
-
-
-
+            // Projede hiç hesap yoksa SADECE 1 adet ana resmi proje hesabı açılır
             var officialBank = accounts.FirstOrDefault(a => a.IBAN != null && (a.IBAN.Contains("TRY") || a.IBAN.StartsWith("TR")) || a.BankName.Contains("Resmi") || a.BankName.Contains("Banka"));
-
-
-
             if (officialBank == null)
-
-
-
             {
-
-
-
                 officialBank = accounts.FirstOrDefault();
-
-
-
             }
-
-
 
             if (officialBank == null)
-
-
-
             {
-
-
-
                 officialBank = new BankAccount
-
-
-
                 {
-
-
-
                     OwnerType = OwnerType.ConstructionProject,
-
-
-
                     OwnerId = projectId,
-
-
-
                     BankName = "Resmi Proje Banka Hesabı",
-
-
-
-                    AccountName = $"{projectName} - Vadesiz TL Hesabı",
-
-
-
-                    IBAN = $"TR-PRJ-{projectId:D4}-TRY",
-
-
-
+                    AccountName = $"{projectName} - Ana Hesap",
+                    IBAN = "",
                     CurrentBalance = 0m,
-
-
-
                     IsActive = true,
-
-
-
                     CreatedAt = DateTime.UtcNow
-
-
-
                 };
-
-
-
                 _context.BankAccounts.Add(officialBank);
-
-
-
                 accounts.Add(officialBank);
-
-
-
                 hasChanges = true;
-
-
-
             }
-
-
-
-            // 2. Şantiye Nakit Kasası (TL)
-
-
-
-            var siteCashVault = accounts.FirstOrDefault(a => a != officialBank && (a.IBAN != null && (a.IBAN.Contains("SNT") || a.IBAN.Contains("NAKIT")) || a.BankName.Contains("Şantiye")));
-
-
-
-            if (siteCashVault == null)
-
-
-
-            {
-
-
-
-                siteCashVault = new BankAccount
-
-
-
-                {
-
-
-
-                    OwnerType = OwnerType.ConstructionProject,
-
-
-
-                    OwnerId = projectId,
-
-
-
-                    BankName = "Şantiye Nakit Kasası",
-
-
-
-                    AccountName = $"{projectName} - Şantiye Kasası (TL)",
-
-
-
-                    IBAN = $"KASA-SNT-{projectId:D4}-TL",
-
-
-
-                    CurrentBalance = 0m,
-
-
-
-                    IsActive = true,
-
-
-
-                    CreatedAt = DateTime.UtcNow
-
-
-
-                };
-
-
-
-                _context.BankAccounts.Add(siteCashVault);
-
-
-
-                accounts.Add(siteCashVault);
-
-
-
-                hasChanges = true;
-
-
-
-            }
-
-
-
-            // 3. Banka Kiralık Kasası (USD / Döviz Rezervi)
-
-
-
-            var safetyBox = accounts.FirstOrDefault(a => a != officialBank && a != siteCashVault && (a.IBAN != null && (a.IBAN.Contains("USD") || a.IBAN.Contains("KIRALIK") || a.IBAN.Contains("KAS")) || a.BankName.Contains("Kiralık")));
-
-
-
-            if (safetyBox == null)
-
-
-
-            {
-
-
-
-                safetyBox = new BankAccount
-
-
-
-                {
-
-
-
-                    OwnerType = OwnerType.ConstructionProject,
-
-
-
-                    OwnerId = projectId,
-
-
-
-                    BankName = "Banka Kiralık Kasası (USD)",
-
-
-
-                    AccountName = $"{projectName} - Kiralık Kasa Rezervi (USD)",
-
-
-
-                    IBAN = $"KASA-KAS-{projectId:D4}-USD",
-
-
-
-                    CurrentBalance = 0m,
-
-
-
-                    IsActive = true,
-
-
-
-                    CreatedAt = DateTime.UtcNow
-
-
-
-                };
-
-
-
-                _context.BankAccounts.Add(safetyBox);
-
-
-
-                accounts.Add(safetyBox);
-
-
-
-                hasChanges = true;
-
-
-
-            }
-
-
 
             if (hasChanges)
-
-
-
             {
-
-
-
                 await _context.SaveChangesAsync();
-
-
-
             }
 
-
-
             return accounts;
-
-
-
         }
-
-
-
-        // Tekli Hesap İstekleri İçin Geriye Dönük Uyumluluk
-
-
 
         public async Task<BankAccount> EnsureProjectAccountAsync(int projectId, string projectName)
 
@@ -5391,6 +5145,79 @@ namespace GMK360.Web.Controllers
         }
 
 
+
+                // POST: /ConstructionProject/CreateProjectAccount
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CreateProjectAccount(int projectId, string accountName, string? bankName, string? iban, string currency, decimal openingBalance)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var project = await _context.ConstructionProjects
+                .FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId.Value && !p.IsDeleted);
+            if (project == null) return NotFound();
+
+            if (string.IsNullOrWhiteSpace(accountName) && string.IsNullOrWhiteSpace(bankName))
+            {
+                TempData["ErrorMessage"] = "Lütfen hesap veya kasa adı giriniz.";
+                return RedirectToAction(nameof(Finance), new { id = projectId });
+            }
+
+            var curr = string.IsNullOrWhiteSpace(currency) ? "TRY" : currency.Trim().ToUpperInvariant();
+            var account = new BankAccount
+            {
+                OwnerType = OwnerType.ConstructionProject,
+                OwnerId = projectId,
+                AccountName = string.IsNullOrWhiteSpace(accountName) ? bankName! : accountName.Trim(),
+                BankName = string.IsNullOrWhiteSpace(bankName) ? accountName.Trim() : bankName.Trim(),
+                IBAN = string.IsNullOrWhiteSpace(iban) ? "" : iban.Trim(),
+                CurrentBalance = Math.Max(0m, openingBalance),
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.BankAccounts.Add(account);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"'{account.AccountName}' hesabı başarıyla açıldı.";
+            return RedirectToAction(nameof(Finance), new { id = projectId });
+        }
+
+        // GET: /ConstructionProject/GetHistoricalExchangeRate
+        [HttpGet]
+        public async Task<IActionResult> GetHistoricalExchangeRate(string date)
+        {
+            DateTime targetDate = DateTime.Today;
+            if (!string.IsNullOrWhiteSpace(date) && DateTime.TryParse(date, out var parsed))
+            {
+                targetDate = parsed;
+            }
+
+            // O güne veya en yakın geçmiş tarihe ait TCMB kurunu bul
+            var rate = await _context.ExchangeRates
+                .Where(r => r.Date.Date <= targetDate.Date)
+                .OrderByDescending(r => r.Date)
+                .FirstOrDefaultAsync();
+
+            if (rate == null)
+            {
+                rate = await _context.ExchangeRates.OrderBy(r => r.Date).FirstOrDefaultAsync();
+            }
+
+            decimal usd = rate?.UsdRate > 0 ? rate.UsdRate : 49.6540m;
+            decimal eur = rate?.EurRate > 0 ? rate.EurRate : 55.5997m;
+            string actualDate = rate?.Date.ToString("dd.MM.yyyy") ?? targetDate.ToString("dd.MM.yyyy");
+
+            return Json(new
+            {
+                success = true,
+                requestedDate = targetDate.ToString("dd.MM.yyyy"),
+                rateDate = actualDate,
+                usdRate = usd.ToString("N4"),
+                eurRate = eur.ToString("N4")
+            });
+        }
 
         // POST: /ConstructionProject/UpdateProjectAccount
 
