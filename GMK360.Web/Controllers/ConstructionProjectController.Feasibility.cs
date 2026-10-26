@@ -3945,8 +3945,16 @@ namespace GMK360.Web.Controllers
 
 
             // 4. Ortaklık & Sermaye Durumu (Net Avans / Eksiye Düşme Takibi)
-
-
+            // Kasalarda bakiye yoksa (0 TL) eski test avansı kalıntılarını sıfırla
+            if (consolidatedTotalTL == 0)
+            {
+                if ((project.OurVaultAdvance ?? 0m) > 0 || (project.PartnerVaultAdvance ?? 0m) > 0)
+                {
+                    project.OurVaultAdvance = 0m;
+                    project.PartnerVaultAdvance = 0m;
+                    await _context.SaveChangesAsync();
+                }
+            }
 
             decimal ourAdvance = project.OurVaultAdvance ?? 0m;
 
