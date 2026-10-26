@@ -138,6 +138,46 @@ public decimal AverageFlatSalePrice { get; set; } = 0; // Ortalama Daire Fiyatı
         public decimal? OurVaultAdvance { get; set; } = 0m;
         public decimal? PartnerVaultAdvance { get; set; } = 0m;
 
+        // Çoklu Ortak & Hissedar Yapısı (JSON) ve Sözleşme Evrakı
+        public string? PartnersJson { get; set; }
+        public string? PartnerContractDocumentPath { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+        public List<GMK360.Core.DTOs.Construction.ProjectPartnerDto> PartnerList
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(PartnersJson))
+                {
+                    if (IsJointVenture && (!string.IsNullOrWhiteSpace(PartnerCompanyName) || !string.IsNullOrWhiteSpace(PartnerContactPerson)))
+                    {
+                        return new List<GMK360.Core.DTOs.Construction.ProjectPartnerDto>
+                        {
+                            new GMK360.Core.DTOs.Construction.ProjectPartnerDto
+                            {
+                                CompanyName = PartnerCompanyName,
+                                FirstName = PartnerContactPerson ?? "",
+                                LastName = "",
+                                Phone = PartnerPhone,
+                                Email = PartnerEmail,
+                                SharePercentage = PartnerSharePercentage
+                            }
+                        };
+                    }
+                    return new List<GMK360.Core.DTOs.Construction.ProjectPartnerDto>();
+                }
+                try
+                {
+                    return System.Text.Json.JsonSerializer.Deserialize<List<GMK360.Core.DTOs.Construction.ProjectPartnerDto>>(PartnersJson) 
+                           ?? new List<GMK360.Core.DTOs.Construction.ProjectPartnerDto>();
+                }
+                catch
+                {
+                    return new List<GMK360.Core.DTOs.Construction.ProjectPartnerDto>();
+                }
+            }
+        }
+
         public virtual ICollection<ConstructionProjectExpense> Expenses { get; set; } = new List<ConstructionProjectExpense>();
 
         public string? DxfFilePath { get; set; }
