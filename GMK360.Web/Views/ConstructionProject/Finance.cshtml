@@ -13,9 +13,16 @@
     string distName = ViewBag.DistrictName as string ?? "Kadıköy";
     string neighName = ViewBag.NeighborhoodName as string ?? "Merdivenköy";
 
+    var projectAccount = ViewBag.ProjectAccount as BankAccount;
+    var expenses = ViewBag.Expenses as List<ConstructionProjectExpense> ?? new List<ConstructionProjectExpense>();
+    var stakeholders = ViewBag.Stakeholders as List<ProjectStakeholder> ?? new List<ProjectStakeholder>();
+
+    decimal totalNetExpense = ViewBag.TotalNetExpense != null ? (decimal)ViewBag.TotalNetExpense : 0m;
+    decimal totalVat = ViewBag.TotalVat != null ? (decimal)ViewBag.TotalVat : 0m;
+    decimal totalGrossExpense = ViewBag.TotalGrossExpense != null ? (decimal)ViewBag.TotalGrossExpense : 0m;
     decimal paidFees = ViewBag.PaidFees != null ? (decimal)ViewBag.PaidFees : 0m;
     decimal pendingFees = ViewBag.PendingFees != null ? (decimal)ViewBag.PendingFees : 0m;
-    decimal totalInitialExpenses = paidFees + pendingFees;
+    decimal totalInitialNetCosts = ViewBag.TotalInitialNetCosts != null ? (decimal)ViewBag.TotalInitialNetCosts : 0m;
 
     string partnerDisplay = string.IsNullOrWhiteSpace(Model.ProjectOwnerContact) 
         ? "Bayraktar İnşaat (%100 - Ana Yüklenici)" 
@@ -30,7 +37,7 @@
         </span>
         <span class="fw-bold text-dark fs-6">@Model.Name</span>
         <span class="badge bg-warning text-dark border border-warning px-2 py-0 rounded-pill fw-bold" style="font-size: 0.70rem;">
-            <i class="bi bi-hourglass-split me-1"></i>ADAY PROJE
+            <i class="bi bi-hourglass-split me-1"></i>@(Model.Status == ProjectStatus.Projelendirme_Teklif ? "ADAY PROJE" : Model.Status.ToString().ToUpperInvariant())
         </span>
         <span class="text-muted small" style="font-size: 0.76rem;">— Proje Finansı & Ön Masraflar Kasası</span>
         <span class="text-muted opacity-50">|</span>
@@ -56,8 +63,54 @@
         <button type="button" class="btn-close py-2" data-bs-dismiss="alert" aria-label="Kapat"></button>
     </div>
 }
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show rounded-3 py-1.5 px-3 mb-2 small shadow-xs" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-1"></i> @TempData["ErrorMessage"]
+        <button type="button" class="btn-close py-2" data-bs-dismiss="alert" aria-label="Kapat"></button>
+    </div>
+}
 
-<!-- 1. BÖLÜM: PROJE KASASI & VARSA ORTAKLIK PAYI (KOMPAKT & LAPTOP DOSTU) -->
+<!-- PROJE HESABI KİMLİK ŞERİDİ (BOŞ PROJEYLE AÇILAN KASA) -->
+<div class="card border border-warning-subtle bg-warning bg-opacity-10 rounded-3 p-2 px-3 mb-2 shadow-xs">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <div class="bg-warning text-dark rounded-circle p-2 d-flex align-items-center justify-content-center shadow-xs" style="width: 32px; height: 32px;">
+                <i class="bi bi-bank2 fs-6"></i>
+            </div>
+            <div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="fw-bold text-dark small" style="font-size: 0.88rem;">
+                        @(projectAccount?.AccountName ?? $"{Model.Name} - Proje Hesabı")
+                    </span>
+                    <span class="badge bg-success bg-opacity-15 text-success border border-success px-1.5 py-0 rounded-pill" style="font-size: 0.68rem;">
+                        <i class="bi bi-check-circle-fill me-1"></i>Aktif Proje Hesabı
+                    </span>
+                    <span class="badge bg-white text-dark border px-1.5 py-0 rounded-pill font-monospace" style="font-size: 0.70rem;">
+                        <i class="bi bi-qr-code me-1"></i>@(projectAccount?.IBAN ?? $"PRJ-{Model.Id:D4}-TRY")
+                    </span>
+                </div>
+                <div class="text-muted small" style="font-size: 0.72rem;">
+                    Banka/Kasa: <b>@(projectAccount?.BankName ?? "Proje Ana Hesabı & Kasası")</b> | 
+                    <span class="text-secondary">Proje oluşturulurken eş zamanlı açılmıştır. Tüm işlemler aşama aşama <b>KDV'siz Net</b> olarak işlenir.</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <div class="text-end me-1">
+                <span class="text-muted d-block small" style="font-size: 0.68rem;">Kasa Cari Bakiyesi</span>
+                <span class="fw-bold text-dark fs-6 font-monospace">@((projectAccount?.CurrentBalance ?? 0m).ToString("N2")) ₺</span>
+            </div>
+            <button type="button" class="btn btn-sm btn-white border rounded-pill px-2.5 py-1 fw-bold text-secondary shadow-xs" 
+                    data-bs-toggle="modal" data-bs-target="#accountModal" style="font-size: 0.74rem;">
+                <i class="bi bi-gear-fill me-1 text-warning"></i>Hesap Ayarları
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 1. BÖLÜM: PROJE KASASI & ÖN HAZIRLIK HARCAMALARI -->
 <div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs overflow-hidden">
     <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-light border-bottom flex-wrap gap-1"
          role="button" data-bs-toggle="collapse" data-bs-target="#kasaCollapse" aria-expanded="true" aria-controls="kasaCollapse" style="cursor: pointer;">
@@ -65,20 +118,23 @@
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-safe2 text-warning fs-5"></i>
             <div class="d-flex align-items-center gap-2 flex-wrap">
-                <span class="fw-bold text-dark small" style="font-size: 0.88rem;">1. Proje Kasası & Varsa Ortaklık Payı</span>
+                <span class="fw-bold text-dark small" style="font-size: 0.88rem;">1. Proje Kasası & Ön Masraflar Tablosu</span>
                 <span class="badge bg-warning bg-opacity-25 text-dark border border-warning px-1.5 py-0 rounded-pill" style="font-size: 0.68rem;">
-                    <i class="bi bi-wallet2 me-1"></i>Ön Masraf & Kasa
+                    <i class="bi bi-shield-check me-1"></i>Altın Kural: KDV'siz Net
                 </span>
-                <small class="text-muted d-none d-lg-inline" style="font-size: 0.72rem;">Belediye harçları, etüd giderleri ve varsa proje ortaklarının harcama payları</small>
+                <small class="text-muted d-none d-lg-inline" style="font-size: 0.72rem;">Belediye harçları, zemin etüdü, avan mimari tasarım ve şantiye ön masrafları</small>
             </div>
         </div>
 
         <div class="d-flex align-items-center gap-1.5 flex-wrap" onclick="event.stopPropagation();">
             <span class="badge bg-primary bg-opacity-10 text-primary border px-2 py-1 rounded-pill" style="font-size: 0.74rem;">
-                <i class="bi bi-wallet-fill me-1"></i>Toplam Harç/Ön Masraf: <b>@totalInitialExpenses.ToString("N2") ₺</b>
+                <i class="bi bi-wallet-fill me-1"></i>Toplam Net Maliyet: <b>@totalInitialNetCosts.ToString("N2") ₺</b>
+            </span>
+            <span class="badge bg-info bg-opacity-10 text-info border border-info px-2 py-1 rounded-pill" style="font-size: 0.74rem;">
+                <i class="bi bi-receipt-cutoff me-1"></i>Ayrılan KDV: @totalVat.ToString("N2") ₺
             </span>
             <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-1 rounded-pill fw-bold" style="font-size: 0.74rem;">
-                <i class="bi bi-check2-circle me-1"></i>Ödenen: @paidFees.ToString("N2") ₺
+                <i class="bi bi-check2-circle me-1"></i>Fiili Çıkış: @(totalGrossExpense + paidFees).ToString("N2") ₺
             </span>
             <button class="btn btn-sm btn-white border rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs text-secondary" 
                     type="button" data-bs-toggle="collapse" data-bs-target="#kasaCollapse" aria-expanded="true" aria-controls="kasaCollapse" id="btnKasaToggle" style="font-size: 0.74rem;">
@@ -89,42 +145,46 @@
     </div>
 
     <div class="collapse show p-2 p-md-3" id="kasaCollapse">
-        <!-- 1.1 ALT BÖLÜM: KASA METRİK ÖZET KARTLARI -->
+        <!-- 1.1 ALT BÖLÜM: KASA METRİK ÖZET KARTLARI (GERÇEK VERİTABANI VERİSİ & NET ESASLI) -->
         <div class="row g-2 mb-3">
             <div class="col-6 col-md-3">
-                <div class="p-2 border rounded-3 bg-light text-center">
-                    <span class="text-muted d-block small" style="font-size: 0.72rem;">Toplam Ön Hazırlık Bütçesi</span>
-                    <span class="fw-bold text-dark fs-6">@(totalInitialExpenses > 0 ? totalInitialExpenses.ToString("N2") + " ₺" : "75.000,00 ₺")</span>
+                <div class="p-2 border rounded-3 bg-light text-center h-100 d-flex flex-column justify-content-center">
+                    <span class="text-muted d-block small" style="font-size: 0.72rem;">Toplam Proje Ön Maliyeti (Net)</span>
+                    <span class="fw-bold text-dark fs-6 font-monospace">@totalInitialNetCosts.ToString("N2") ₺</span>
+                    <small class="text-muted" style="font-size: 0.66rem;">KDV Hariç Esas Maliyet</small>
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="p-2 border rounded-3 bg-light text-center">
+                <div class="p-2 border rounded-3 bg-light text-center h-100 d-flex flex-column justify-content-center">
+                    <span class="text-muted d-block small" style="font-size: 0.72rem;">Ayrılan Toplam KDV</span>
+                    <span class="fw-bold text-info fs-6 font-monospace">@totalVat.ToString("N2") ₺</span>
+                    <small class="text-muted" style="font-size: 0.66rem;">İndirilecek KDV / Vergi Mahsubu</small>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="p-2 border rounded-3 bg-light text-center h-100 d-flex flex-column justify-content-center">
                     <span class="text-muted d-block small" style="font-size: 0.72rem;">Ödenen Resmi Harçlar</span>
-                    <span class="fw-bold text-success fs-6">@paidFees.ToString("N2") ₺</span>
+                    <span class="fw-bold text-success fs-6 font-monospace">@paidFees.ToString("N2") ₺</span>
+                    <small class="text-muted" style="font-size: 0.66rem;">Belediye & İmar (KDV Muaf)</small>
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="p-2 border rounded-3 bg-light text-center">
-                    <span class="text-muted d-block small" style="font-size: 0.72rem;">Bekleyen Harç & Etüd Gideri</span>
-                    <span class="fw-bold text-danger fs-6">@(pendingFees > 0 ? pendingFees.ToString("N2") + " ₺" : "18.500,00 ₺")</span>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="p-2 border rounded-3 bg-light text-center">
-                    <span class="text-muted d-block small" style="font-size: 0.72rem;">Kasa Nakit Durumu</span>
-                    <span class="fw-bold text-primary fs-6">56.500,00 ₺</span>
+                <div class="p-2 border rounded-3 bg-light text-center h-100 d-flex flex-column justify-content-center">
+                    <span class="text-muted d-block small" style="font-size: 0.72rem;">Bekleyen Harç / Masraf</span>
+                    <span class="fw-bold text-danger fs-6 font-monospace">@pendingFees.ToString("N2") ₺</span>
+                    <small class="text-muted" style="font-size: 0.66rem;">İşlemdeki Resmi Belgeler</small>
                 </div>
             </div>
         </div>
 
-        <!-- 1.2 ALT BÖLÜM: VARSA ORTAKLIK PAYI VE DAĞILIM -->
+        <!-- 1.2 ALT BÖLÜM: VARSA ORTAKLIK PAYI VE DAĞILIM (GERÇEK VERİTABANI İLE HESAPLANAN) -->
         <div class="p-2.5 bg-light rounded-3 border mb-3">
             <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
                 <div class="fw-bold text-dark small" style="font-size: 0.82rem;">
                     <i class="bi bi-people-fill text-primary me-1"></i>Hissedarlar & Ortaklık Masraf Paylaşımı
                 </div>
                 <a href="/ConstructionProject/Workspace/@Model.Id#partnerModal" class="btn btn-sm btn-outline-primary rounded-pill px-2 py-0 fw-bold" style="font-size: 0.72rem;">
-                    <i class="bi bi-pencil me-1"></i>Ortaklığı Düzenle
+                    <i class="bi bi-pencil me-1"></i>Paydaşları Yönet
                 </a>
             </div>
 
@@ -134,82 +194,229 @@
                         <tr>
                             <th style="width: 35%;">Ortak / Şirket</th>
                             <th class="text-center" style="width: 15%;">Hisse Oranı (%)</th>
-                            <th class="text-end" style="width: 18%;">Düşen Masraf Payı</th>
-                            <th class="text-end" style="width: 18%;">Ödenen Katkı</th>
+                            <th class="text-end" style="width: 18%;">Düşen Net Masraf Payı</th>
+                            <th class="text-end" style="width: 18%;">Fiili Kasa Katkısı</th>
                             <th class="text-center" style="width: 14%;">Durum</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td>
-                                <span class="fw-bold text-dark">
-                                    <i class="bi bi-building text-primary me-1"></i>@partnerDisplay
-                                </span>
-                            </td>
-                            <td class="text-center">
-                                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2 py-0.5 rounded-pill fw-bold">%100</span>
-                            </td>
-                            <td class="text-end fw-bold text-dark">75.000,00 ₺</td>
-                            <td class="text-end text-success fw-bold">56.500,00 ₺</td>
-                            <td class="text-center">
-                                <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-0.5 rounded-pill">Aktif</span>
-                            </td>
-                        </tr>
+                        @if (stakeholders.Any())
+                        {
+                            foreach (var s in stakeholders)
+                            {
+                                decimal shareVal = s.SharePercentage ?? 0m;
+                                decimal shareRatio = shareVal / 100m;
+                                decimal netShare = totalInitialNetCosts * shareRatio;
+                                decimal grossShare = (totalGrossExpense + paidFees) * shareRatio;
+                                <tr>
+                                    <td>
+                                        <span class="fw-bold text-dark">
+                                            <i class="bi bi-person-fill text-primary me-1"></i>@(s.User != null ? $"{s.User.FirstName} {s.User.LastName}" : s.Role.ToString())
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2 py-0.5 rounded-pill fw-bold">
+                                            %@shareVal.ToString("F1")
+                                        </span>
+                                    </td>
+                                    <td class="text-end fw-bold text-dark font-monospace">@netShare.ToString("N2") ₺</td>
+                                    <td class="text-end text-success fw-bold font-monospace">@grossShare.ToString("N2") ₺</td>
+                                    <td class="text-center">
+                                        <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-0.5 rounded-pill">Aktif Ortak</span>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else if (Model.IsJointVenture)
+                        {
+                            decimal ourRatio = Model.OurSharePercentage / 100m;
+                            decimal partnerRatio = Model.PartnerSharePercentage / 100m;
+                            <tr>
+                                <td>
+                                    <span class="fw-bold text-dark">
+                                        <i class="bi bi-building text-primary me-1"></i>Ana Yüklenici (Biz)
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2 py-0.5 rounded-pill fw-bold">%@Model.OurSharePercentage</span>
+                                </td>
+                                <td class="text-end fw-bold text-dark font-monospace">@((totalInitialNetCosts * ourRatio).ToString("N2")) ₺</td>
+                                <td class="text-end text-success fw-bold font-monospace">@(((totalGrossExpense + paidFees) * ourRatio).ToString("N2")) ₺</td>
+                                <td class="text-center">
+                                    <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-0.5 rounded-pill">Aktif</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <span class="fw-bold text-dark">
+                                        <i class="bi bi-buildings text-warning me-1"></i>@(string.IsNullOrWhiteSpace(Model.PartnerCompanyName) ? "Ortak Girişim Firması" : Model.PartnerCompanyName)
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-warning bg-opacity-10 text-dark border border-warning px-2 py-0.5 rounded-pill fw-bold">%@Model.PartnerSharePercentage</span>
+                                </td>
+                                <td class="text-end fw-bold text-dark font-monospace">@((totalInitialNetCosts * partnerRatio).ToString("N2")) ₺</td>
+                                <td class="text-end text-success fw-bold font-monospace">@(((totalGrossExpense + paidFees) * partnerRatio).ToString("N2")) ₺</td>
+                                <td class="text-center">
+                                    <span class="badge bg-warning bg-opacity-25 text-dark border border-warning px-2 py-0.5 rounded-pill">Ortak</span>
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            <tr>
+                                <td>
+                                    <span class="fw-bold text-dark">
+                                        <i class="bi bi-building text-primary me-1"></i>@partnerDisplay
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2 py-0.5 rounded-pill fw-bold">%100</span>
+                                </td>
+                                <td class="text-end fw-bold text-dark font-monospace">@totalInitialNetCosts.ToString("N2") ₺</td>
+                                <td class="text-end text-success fw-bold font-monospace">@(totalGrossExpense + paidFees).ToString("N2") ₺</td>
+                                <td class="text-center">
+                                    <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-0.5 rounded-pill">Ana Yüklenici</span>
+                                </td>
+                            </tr>
+                        }
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <!-- 1.3 ALT BÖLÜM: PROJE KASASI HARCAMA KALEMLERİ -->
+        <!-- 1.3 ALT BÖLÜM: PROJE KASASI GERÇEK HARCAMA KALEMLERİ -->
         <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
-            <span class="fw-bold text-dark small" style="font-size: 0.82rem;">
-                <i class="bi bi-receipt text-warning me-1"></i>Ön Hazırlık Masrafları & Harç Çıkışları
-            </span>
-            <button type="button" class="btn btn-sm btn-outline-warning text-dark border-warning rounded-pill px-2.5 py-0 fw-bold shadow-xs" style="font-size: 0.74rem;">
-                <i class="bi bi-plus-circle-fill text-warning me-1"></i>Yeni Masraf / Çıkış Ekle
+            <div>
+                <span class="fw-bold text-dark small" style="font-size: 0.84rem;">
+                    <i class="bi bi-receipt text-warning me-1"></i>Ön Hazırlık Masrafları & Harç Çıkışları
+                </span>
+                <span class="text-muted small ms-1" style="font-size: 0.72rem;">(@expenses.Count adet kayıtlı masraf)</span>
+            </div>
+            <button type="button" class="btn btn-sm btn-warning text-dark border-warning rounded-pill px-3 py-1 fw-bold shadow-xs" 
+                    data-bs-toggle="modal" data-bs-target="#addExpenseModal" style="font-size: 0.76rem;">
+                <i class="bi bi-plus-circle-fill me-1"></i>+ Yeni Masraf / Çıkış Ekle
             </button>
         </div>
 
-        <div class="table-responsive rounded-3 border">
+        <div class="table-responsive rounded-3 border bg-white">
             <table class="table table-hover align-middle mb-0" style="font-size: 0.82rem;">
                 <thead class="table-light text-muted small text-uppercase">
                     <tr>
-                        <th style="width: 15%;">Tarih</th>
-                        <th style="width: 30%;">Harcama Kalemi</th>
-                        <th style="width: 20%;">Kategori</th>
-                        <th style="width: 15%;">Ödeyen</th>
-                        <th class="text-end" style="width: 20%;">Tutar</th>
+                        <th style="width: 12%;">Tarih</th>
+                        <th style="width: 26%;">Harcama Kalemi</th>
+                        <th style="width: 14%;">Kategori</th>
+                        <th style="width: 12%;">Ödeyen / Kasa</th>
+                        <th style="width: 10%;">Belge No</th>
+                        <th class="text-center" style="width: 10%;">KDV Ayrımı</th>
+                        <th class="text-end" style="width: 12%;">Net Tutar (KDV'siz)</th>
+                        <th class="text-center" style="width: 4%;">İşlem</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td class="text-muted">@(DateTime.Today.AddDays(-12).ToString("dd.MM.yyyy"))</td>
-                        <td class="fw-bold text-dark">İmar Durum Belgesi & Çap Harcı</td>
-                        <td><span class="badge bg-light text-dark border px-2 py-0.5 rounded-pill">Belediye Harcı</span></td>
-                        <td class="small text-muted">Şirket Kasası</td>
-                        <td class="text-end fw-bold text-danger">-4.500,00 ₺</td>
-                    </tr>
-                    <tr>
-                        <td class="text-muted">@(DateTime.Today.AddDays(-8).ToString("dd.MM.yyyy"))</td>
-                        <td class="fw-bold text-dark">Zemin Sondajı & Jeoteknik Ön Rapor</td>
-                        <td><span class="badge bg-light text-dark border px-2 py-0.5 rounded-pill">Mühendislik / Etüd</span></td>
-                        <td class="small text-muted">Şirket Kasası</td>
-                        <td class="text-end fw-bold text-danger">-22.000,00 ₺</td>
-                    </tr>
-                    <tr>
-                        <td class="text-muted">@(DateTime.Today.AddDays(-3).ToString("dd.MM.yyyy"))</td>
-                        <td class="fw-bold text-dark">Avan Proje Mimari Çizim Avansı</td>
-                        <td><span class="badge bg-light text-dark border px-2 py-0.5 rounded-pill">Mimari Tasarım</span></td>
-                        <td class="small text-muted">Şirket Kasası</td>
-                        <td class="text-end fw-bold text-danger">-30.000,00 ₺</td>
-                    </tr>
+                    @if (expenses.Any())
+                    {
+                        foreach (var exp in expenses)
+                        {
+                            decimal net = exp.AmountExcludingVat ?? (exp.VatRate > 0 ? (exp.Amount / (1m + ((decimal)exp.VatRate / 100m))) : exp.Amount);
+                            decimal vat = exp.VatAmount ?? (exp.Amount - net);
+                            string badgeClass = exp.ExpenseType switch
+                            {
+                                ConstructionExpenseType.BelediyeHarci => "bg-info bg-opacity-10 text-info border border-info",
+                                ConstructionExpenseType.MuhendislikEtud => "bg-primary bg-opacity-10 text-primary border border-primary",
+                                ConstructionExpenseType.MimariTasarim => "bg-warning bg-opacity-15 text-dark border border-warning",
+                                ConstructionExpenseType.YapiDenetim => "bg-danger bg-opacity-10 text-danger border border-danger",
+                                ConstructionExpenseType.SantiyeKurulum => "bg-secondary bg-opacity-10 text-secondary border",
+                                ConstructionExpenseType.MalzemeHakedis => "bg-success bg-opacity-10 text-success border border-success",
+                                _ => "bg-light text-dark border"
+                            };
+
+                            string categoryName = exp.ExpenseType switch
+                            {
+                                ConstructionExpenseType.BelediyeHarci => "Belediye Harcı",
+                                ConstructionExpenseType.MuhendislikEtud => "Mühendislik / Etüd",
+                                ConstructionExpenseType.MimariTasarim => "Mimari Tasarım",
+                                ConstructionExpenseType.YapiDenetim => "Yapı Denetim",
+                                ConstructionExpenseType.SantiyeKurulum => "Şantiye Mobilizasyon",
+                                ConstructionExpenseType.MalzemeHakedis => "Malzeme & Hakediş",
+                                ConstructionExpenseType.SantiyeIasesi => "Şantiye İaşesi",
+                                ConstructionExpenseType.Demirbas => "Demirbaş",
+                                _ => exp.ExpenseType.ToString()
+                            };
+
+                            <tr>
+                                <td class="text-muted">@exp.ExpenseDate.ToString("dd.MM.yyyy")</td>
+                                <td>
+                                    <div class="fw-bold text-dark">@exp.Title</div>
+                                    @if (!string.IsNullOrWhiteSpace(exp.Description))
+                                    {
+                                        <small class="text-muted d-block" style="font-size: 0.70rem;">@exp.Description</small>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge @badgeClass px-2 py-0.5 rounded-pill">@categoryName</span>
+                                </td>
+                                <td class="small text-muted">
+                                    <i class="bi bi-wallet2 me-1"></i>@(exp.PaymentSource ?? "Proje Kasası")
+                                </td>
+                                <td class="small">
+                                    @if (!string.IsNullOrWhiteSpace(exp.DocumentNo))
+                                    {
+                                        <span class="badge bg-light text-dark border font-monospace">@exp.DocumentNo</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(exp.PhotoPath))
+                                    {
+                                        <a href="@exp.PhotoPath" target="_blank" class="btn btn-xs btn-outline-secondary p-0 px-1 ms-1" title="Belgeyi Görüntüle">
+                                            <i class="bi bi-paperclip"></i>
+                                        </a>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border px-1.5 py-0.5 rounded-pill small" title="Ayrılan KDV: @vat.ToString("N2") ₺">
+                                        %@exp.VatRate <span class="text-muted opacity-75">(+@vat.ToString("N0") ₺)</span>
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <span class="fw-bold text-danger font-monospace fs-6">-@net.ToString("N2") ₺</span>
+                                    <div class="text-muted small" style="font-size: 0.68rem;">Brüt: @exp.Amount.ToString("N2") ₺</div>
+                                </td>
+                                <td class="text-center">
+                                    <form asp-action="DeleteProjectExpense" asp-controller="ConstructionProject" method="post" class="d-inline" onsubmit="return confirm('Bu masraf kaydını silmek istediğinize emin misiniz?');">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@exp.Id" />
+                                        <input type="hidden" name="projectId" value="@Model.Id" />
+                                        <button type="submit" class="btn btn-sm btn-outline-danger border-0 p-1 py-0 rounded-circle" title="Masrafı Sil">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="8" class="text-center py-4 text-muted">
+                                <i class="bi bi-inbox fs-2 text-secondary opacity-50 d-block mb-1"></i>
+                                <span>Henüz bu projeye ait harcama/masraf kaydı girilmedi.</span><br />
+                                <small class="text-muted">
+                                    Boş proje ile açılan proje hesabı üzerinden aşama aşama tüm maliyetler <b>KDV'siz Net</b> olarak kaydedilecektir.
+                                </small>
+                                <div class="mt-2">
+                                    <button type="button" class="btn btn-sm btn-warning text-dark fw-bold rounded-pill px-3 shadow-xs" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
+                                        <i class="bi bi-plus-circle-fill me-1"></i>İlk Masrafı / Çıkışı Ekle
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
                 </tbody>
             </table>
         </div>
     </div>
 </div>
 
-<!-- 2. BÖLÜM: GELİRLER & GİDERLER (BİLGİLENDİRME İSKELETİ - EXCEL NOTU: YENİ SEKME OLACAK KENDİ SAYFASI) -->
+<!-- 2. BÖLÜM: GELİRLER & GİDERLER (MODÜLER KARTLAR) -->
 <div class="row g-2">
     <div class="col-md-6">
         <div class="card border border-light-subtle rounded-3 bg-white shadow-xs p-2.5">
@@ -218,13 +425,13 @@
                     <i class="bi bi-graph-up-arrow text-success fs-5"></i>
                     <div>
                         <span class="fw-bold text-dark small" style="font-size: 0.84rem;">2. Gelirler Masası</span>
-                        <span class="badge bg-secondary bg-opacity-10 text-secondary border px-1.5 py-0 rounded-pill ms-1" style="font-size: 0.66rem;">Yeni Sekme</span>
-                        <div class="text-muted small" style="font-size: 0.70rem;">Topraktan daire satışları ve ortak sermaye katkıları</div>
+                        <span class="badge bg-secondary bg-opacity-10 text-secondary border px-1.5 py-0 rounded-pill ms-1" style="font-size: 0.66rem;">Aşama Modülü</span>
+                        <div class="text-muted small" style="font-size: 0.70rem;">Topraktan daire satışları, ön peşinatlar ve ortak sermaye katkıları</div>
                     </div>
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs" style="font-size: 0.72rem;">
-                    <i class="bi bi-box-arrow-up-right me-1"></i>Yeni Sekmede Aç
-                </button>
+                <a href="/ConstructionProject/Units/@Model.Id" class="btn btn-sm btn-outline-secondary rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs" style="font-size: 0.72rem;">
+                    <i class="bi bi-grid-3x3-gap me-1"></i>Bağımsız Bölümler ➔
+                </a>
             </div>
         </div>
     </div>
@@ -235,15 +442,285 @@
                 <div class="d-flex align-items-center gap-2">
                     <i class="bi bi-graph-down-arrow text-danger fs-5"></i>
                     <div>
-                        <span class="fw-bold text-dark small" style="font-size: 0.84rem;">3. Giderler Masası</span>
-                        <span class="badge bg-secondary bg-opacity-10 text-secondary border px-1.5 py-0 rounded-pill ms-1" style="font-size: 0.66rem;">Yeni Sekme</span>
-                        <div class="text-muted small" style="font-size: 0.70rem;">Taşeron hakedişleri, malzeme alımları ve şantiye genel giderleri</div>
+                        <span class="fw-bold text-dark small" style="font-size: 0.84rem;">3. Şantiye İmalat Masası</span>
+                        <span class="badge bg-secondary bg-opacity-10 text-secondary border px-1.5 py-0 rounded-pill ms-1" style="font-size: 0.66rem;">Aşama Modülü</span>
+                        <div class="text-muted small" style="font-size: 0.70rem;">Taşeron hakedişleri, demir-beton malzeme alımları ve şantiye hakedişleri</div>
                     </div>
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs" style="font-size: 0.72rem;">
-                    <i class="bi bi-box-arrow-up-right me-1"></i>Yeni Sekmede Aç
-                </button>
+                <a href="/ConstructionProject/Budget/@Model.Id" class="btn btn-sm btn-outline-secondary rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs" style="font-size: 0.72rem;">
+                    <i class="bi bi-calculator me-1"></i>Keşif & Metraj Bütçesi ➔
+                </a>
             </div>
         </div>
     </div>
 </div>
+
+<!-- ================= MODAL: YENİ MASRAF / HARÇ ÇIKIŞI EKLE ================= -->
+<div class="modal fade" id="addExpenseModal" tabindex="-1" aria-labelledby="addExpenseModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-3">
+            <form asp-action="AddProjectExpense" asp-controller="ConstructionProject" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="projectId" value="@Model.Id" />
+
+                <div class="modal-header py-2.5 px-3 bg-light border-bottom">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-warning text-dark rounded-circle p-1.5 d-flex align-items-center justify-content-center">
+                            <i class="bi bi-receipt-cutoff"></i>
+                        </span>
+                        <div>
+                            <h6 class="modal-title fw-bold text-dark mb-0" id="addExpenseModalLabel">Yeni Masraf / Harç Çıkışı Ekle</h6>
+                            <small class="text-muted" style="font-size: 0.70rem;">Altın Kural: KDV'siz Net tutar esas proje maliyeti olarak işlenir.</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+                </div>
+
+                <div class="modal-body p-3">
+                    <div class="row g-2">
+                        <!-- Başlık -->
+                        <div class="col-12 col-md-7">
+                            <label class="form-label small fw-bold text-dark mb-1">
+                                Harcama Kalemi / Başlık <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" name="title" class="form-control form-control-sm rounded-2" placeholder="Örn: Zemin Sondajı & Jeoteknik Raporu" required />
+                        </div>
+
+                        <!-- Kategori -->
+                        <div class="col-12 col-md-5">
+                            <label class="form-label small fw-bold text-dark mb-1">
+                                Kategori <span class="text-danger">*</span>
+                            </label>
+                            <select name="expenseType" class="form-select form-select-sm rounded-2">
+                                <option value="10">Belediye Harçları & İmar Çapı</option>
+                                <option value="11" selected>Mühendislik / Zemin Sondajı & Etüd</option>
+                                <option value="12">Mimari & Statik Tasarım / Avan Proje</option>
+                                <option value="13">Yapı Denetim & Ruhsat Harçları</option>
+                                <option value="14">Şantiye Kurulum & Mobilizasyon</option>
+                                <option value="15">Malzeme Alımı & Taşeron Hakedişi</option>
+                                <option value="1">Şantiye Yemek / Su / İaşe</option>
+                                <option value="6">Demirbaş Alımı</option>
+                                <option value="9">Diğer Masraflar</option>
+                            </select>
+                        </div>
+
+                        <!-- Ayrık Tarih ve Saat (AI Kuralları 8) -->
+                        <div class="col-6 col-md-4">
+                            <label class="form-label small fw-bold text-dark mb-1">İşlem Tarihi</label>
+                            <input type="date" name="expenseDate" class="form-control form-control-sm rounded-2" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small fw-bold text-dark mb-1">İşlem Saati</label>
+                            <input type="time" name="expenseTime" class="form-control form-control-sm rounded-2" value="@DateTime.Now.ToString("HH:mm")" />
+                        </div>
+                        <div class="col-12 col-md-5">
+                            <label class="form-label small fw-bold text-dark mb-1">Ödeyen / Çıkış Kanalı</label>
+                            <select name="paymentSource" class="form-select form-select-sm rounded-2">
+                                <option value="Proje Kasası">Proje Hesabı & Kasası</option>
+                                <option value="Şirket Kasası">Şirket Ana Kasası</option>
+                                <option value="Banka">Banka Hesabı (Havale/EFT)</option>
+                                <option value="Ortak A">Ortak Katkısı</option>
+                            </select>
+                        </div>
+
+                        <!-- ALTIN KURAL: KDV AYRIŞTIRMA KUTUSU -->
+                        <div class="col-12 mt-2">
+                            <div class="p-2.5 bg-warning bg-opacity-10 border border-warning rounded-3">
+                                <div class="d-flex align-items-center gap-1.5 mb-2">
+                                    <i class="bi bi-shield-check text-warning fs-6"></i>
+                                    <span class="fw-bold text-dark small" style="font-size: 0.78rem;">
+                                        KDV Ayrıştırma Paneli (Fatura Kesilse Bile KDV Ayrıştırılır)
+                                    </span>
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label small fw-bold text-dark mb-0.5">
+                                            KDV'siz Net Tutar <span class="text-danger">*</span>
+                                        </label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="number" step="0.01" min="0" name="netAmount" id="inpNetAmount" class="form-control fw-bold font-monospace text-dark" placeholder="0.00" required />
+                                            <span class="input-group-text bg-white text-muted">₺</span>
+                                        </div>
+                                        <small class="text-muted" style="font-size: 0.66rem;">Esas proje maliyetidir.</small>
+                                    </div>
+
+                                    <div class="col-6 col-md-2">
+                                        <label class="form-label small fw-bold text-dark mb-0.5">KDV Oranı</label>
+                                        <select name="vatRate" id="selVatRate" class="form-select form-select-sm fw-bold">
+                                            <option value="0">%0 (Harç/Muaf)</option>
+                                            <option value="1">%1</option>
+                                            <option value="10">%10</option>
+                                            <option value="20" selected>%20</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-6 col-md-3">
+                                        <label class="form-label small fw-bold text-dark mb-0.5">Ayrılan KDV Tutarı</label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="number" step="0.01" min="0" name="vatAmount" id="inpVatAmount" class="form-control font-monospace text-info fw-bold" placeholder="0.00" />
+                                            <span class="input-group-text bg-white text-muted">₺</span>
+                                        </div>
+                                        <small class="text-muted" style="font-size: 0.66rem;">Vergi mahsubu (İndirilecek)</small>
+                                    </div>
+
+                                    <div class="col-12 col-md-3">
+                                        <label class="form-label small fw-bold text-dark mb-0.5">KDV Dahil Toplam</label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="number" step="0.01" min="0" name="totalAmount" id="inpTotalAmount" class="form-control font-monospace text-danger fw-bold" placeholder="0.00" />
+                                            <span class="input-group-text bg-white text-muted">₺</span>
+                                        </div>
+                                        <small class="text-muted" style="font-size: 0.66rem;">Fiili nakit/banka çıkışı</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Belge Bilgileri -->
+                        <div class="col-12 col-md-6 mt-2">
+                            <label class="form-label small fw-bold text-dark mb-1">Kime Ödendi / Tedarikçi / Kurum</label>
+                            <input type="text" name="payeeOrSupplier" class="form-control form-control-sm rounded-2" placeholder="Örn: Kadıköy Belediyesi / Alfa Zemin A.Ş." />
+                        </div>
+                        <div class="col-12 col-md-6 mt-2">
+                            <label class="form-label small fw-bold text-dark mb-1">Belge / Fatura / Makbuz No</label>
+                            <input type="text" name="documentNo" class="form-control form-control-sm rounded-2 font-monospace" placeholder="Örn: GIB20260000123" />
+                        </div>
+
+                        <!-- Belge Dosyası & Açıklama -->
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-bold text-dark mb-1">Fatura / Fiş / Dekont Dosyası (Opsiyonel)</label>
+                            <input type="file" name="documentFile" class="form-control form-control-sm rounded-2" accept=".jpg,.jpeg,.png,.pdf,.webp" />
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-bold text-dark mb-1">Not / Açıklama</label>
+                            <textarea name="description" rows="1" class="form-control form-control-sm rounded-2" placeholder="Ek detaylar..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer py-2 px-3 bg-light border-top">
+                    <button type="button" class="btn btn-sm btn-white border rounded-pill px-3" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-sm btn-warning text-dark fw-bold rounded-pill px-4 shadow-xs">
+                        <i class="bi bi-save2 me-1"></i>Masrafı Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL: PROJE HESABI AYARLARI ================= -->
+<div class="modal fade" id="accountModal" tabindex="-1" aria-labelledby="accountModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-3">
+            <form asp-action="UpdateProjectAccount" asp-controller="ConstructionProject" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="projectId" value="@Model.Id" />
+
+                <div class="modal-header py-2.5 px-3 bg-light border-bottom">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary text-white rounded-circle p-1.5 d-flex align-items-center justify-content-center">
+                            <i class="bi bi-bank2"></i>
+                        </span>
+                        <div>
+                            <h6 class="modal-title fw-bold text-dark mb-0" id="accountModalLabel">Proje Hesabı & Kasa Ayarları</h6>
+                            <small class="text-muted" style="font-size: 0.70rem;">Şantiyeye tahsis edilen resmi banka veya kasa bilgileri</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+                </div>
+
+                <div class="modal-body p-3">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-dark mb-1">Hesap / Kasa Adı</label>
+                        <input type="text" name="accountName" class="form-control form-control-sm rounded-2" 
+                               value="@(projectAccount?.AccountName ?? $"{Model.Name} - Proje Hesabı")" required />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-dark mb-1">Banka / Şube / Kasa Türü</label>
+                        <input type="text" name="bankName" class="form-control form-control-sm rounded-2" 
+                               value="@(projectAccount?.BankName ?? "Proje Ana Hesabı & Kasası")" placeholder="Örn: Garanti BBVA Kadıköy / Proje Kasası" required />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-dark mb-1">IBAN / Hesap Kodu</label>
+                        <input type="text" name="iban" class="form-control form-control-sm rounded-2 font-monospace" 
+                               value="@(projectAccount?.IBAN ?? $"PRJ-{Model.Id:D4}-TRY")" placeholder="TR..." />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-dark mb-1">Cari Kasa Bakiyesi (₺)</label>
+                        <input type="number" step="0.01" name="openingBalance" class="form-control form-control-sm rounded-2 font-monospace fw-bold" 
+                               value="@(projectAccount?.CurrentBalance.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) ?? "0.00")" />
+                        <small class="text-muted" style="font-size: 0.68rem;">Açılış avansı veya kasada bulunan güncel fiziki tutar.</small>
+                    </div>
+                </div>
+
+                <div class="modal-footer py-2 px-3 bg-light border-top">
+                    <button type="button" class="btn btn-sm btn-white border rounded-pill px-3" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-sm btn-primary fw-bold rounded-pill px-4 shadow-xs">
+                        <i class="bi bi-check-lg me-1"></i>Hesabı Güncelle
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const inpNet = document.getElementById("inpNetAmount");
+        const selVat = document.getElementById("selVatRate");
+        const inpVat = document.getElementById("inpVatAmount");
+        const inpTotal = document.getElementById("inpTotalAmount");
+
+        function calculateFromNet() {
+            const net = parseFloat(inpNet.value) || 0;
+            const rate = parseFloat(selVat.value) || 0;
+            const vat = Math.round((net * rate / 100) * 100) / 100;
+            const total = Math.round((net + vat) * 100) / 100;
+
+            inpVat.value = vat > 0 ? vat.toFixed(2) : "0.00";
+            inpTotal.value = total > 0 ? total.toFixed(2) : "0.00";
+        }
+
+        function calculateFromTotal() {
+            const total = parseFloat(inpTotal.value) || 0;
+            const rate = parseFloat(selVat.value) || 0;
+            if (total <= 0) return;
+
+            const net = Math.round((total / (1 + (rate / 100))) * 100) / 100;
+            const vat = Math.round((total - net) * 100) / 100;
+
+            inpNet.value = net.toFixed(2);
+            inpVat.value = vat.toFixed(2);
+        }
+
+        if (inpNet && selVat && inpVat && inpTotal) {
+            inpNet.addEventListener("input", calculateFromNet);
+            selVat.addEventListener("change", calculateFromNet);
+            inpTotal.addEventListener("input", calculateFromTotal);
+        }
+
+        // Kasa kartı daraltma butonu animasyonu & metin değişimi
+        const kasaCollapse = document.getElementById("kasaCollapse");
+        const textToggle = document.getElementById("textKasaToggle");
+        const iconToggle = document.getElementById("iconKasaChevron");
+
+        if (kasaCollapse) {
+            kasaCollapse.addEventListener("hidden.bs.collapse", function () {
+                if (textToggle) textToggle.textContent = "Genişlet";
+                if (iconToggle) {
+                    iconToggle.classList.remove("bi-chevron-up");
+                    iconToggle.classList.add("bi-chevron-down");
+                }
+            });
+            kasaCollapse.addEventListener("shown.bs.collapse", function () {
+                if (textToggle) textToggle.textContent = "Daralt";
+                if (iconToggle) {
+                    iconToggle.classList.remove("bi-chevron-down");
+                    iconToggle.classList.add("bi-chevron-up");
+                }
+            });
+        }
+    });
+</script>
+}

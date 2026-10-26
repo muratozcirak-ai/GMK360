@@ -126,6 +126,17 @@ public decimal AverageFlatSalePrice { get; set; } = 0; // Ortalama Daire Fiyatı
         // DXF & Çizim / İmalat Modeli (Mühendislik & Metraj vs Dökümantasyon & Teklif/RFQ)
         public bool HasDxfDrawing { get; set; } = false;
         public string? ProjectExecutionMode { get; set; } // "DxfEngineering" (DXF & Metraj Odaklı), "DocumentProcurement" (Dökümantasyon & Teklif/RFQ Odaklı)
+        // Finans, Kasa ve Ortaklık Bilgileri
+        public bool IsJointVenture { get; set; } = false;
+        public string? PartnerCompanyName { get; set; }
+        public decimal OurSharePercentage { get; set; } = 100m;
+        public decimal PartnerSharePercentage { get; set; } = 0m;
+        public string? ManagerApprovalPin { get; set; }
+        public decimal? OurVaultAdvance { get; set; } = 0m;
+        public decimal? PartnerVaultAdvance { get; set; } = 0m;
+
+        public virtual ICollection<ConstructionProjectExpense> Expenses { get; set; } = new List<ConstructionProjectExpense>();
+
         public string? DxfFilePath { get; set; }
     }
 }

@@ -2032,6 +2032,7 @@ namespace GMK360.Web.Controllers
 
 
 
+                await EnsureProjectAccountAsync(project.Id, project.Name);
                 return RedirectToAction(nameof(Details), new { id = project.Id });
 
 
@@ -2127,6 +2128,8 @@ namespace GMK360.Web.Controllers
                 await _context.SaveChangesAsync();
 
 
+
+                await EnsureProjectAccountAsync(project.Id, project.Name);
 
                 return RedirectToAction(nameof(Index));
 

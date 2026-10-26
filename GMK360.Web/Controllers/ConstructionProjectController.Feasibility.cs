@@ -3731,7 +3731,31 @@ namespace GMK360.Web.Controllers
 
 
 
-            ViewBag.PendingFees = legalDocs.Where(d => d.Status != "Tamamlandı").Sum(d => (d.DocumentFee ?? 0) + (d.AdditionalCost ?? 0));
+            decimal paidLegalFees = legalDocs.Where(d => d.Status == "Tamamlandı").Sum(d => (d.DocumentFee ?? 0) + (d.AdditionalCost ?? 0));
+            decimal pendingFees = legalDocs.Where(d => d.Status != "Tamamlandı").Sum(d => (d.DocumentFee ?? 0) + (d.AdditionalCost ?? 0));
+
+            // 1. Proje Hesabını Otomatik Aç / Getir (Boş proje ile eş zamanlı açılır)
+            var projectAccount = await EnsureProjectAccountAsync(project.Id, project.Name);
+            ViewBag.ProjectAccount = projectAccount;
+
+            // 2. Gerçek Masraf Kalemleri (KDV Ayrıştırmalı)
+            var expenses = await _context.ConstructionProjectExpenses
+                .Where(e => e.ProjectId == id && !e.IsDeleted)
+                .OrderByDescending(e => e.ExpenseDate)
+                .ToListAsync();
+            ViewBag.Expenses = expenses;
+
+            // Altın Kural: KDV'siz Net Rakamlar Esas Alınır (Fatura Dahil Kesilse Bile KDV Ayrıştırılır)
+            decimal totalNetExpense = expenses.Sum(e => e.AmountExcludingVat ?? (e.VatRate > 0 ? (e.Amount / (1m + ((decimal)e.VatRate / 100m))) : e.Amount));
+            decimal totalVat = expenses.Sum(e => e.VatAmount ?? (e.Amount - (e.AmountExcludingVat ?? (e.VatRate > 0 ? (e.Amount / (1m + ((decimal)e.VatRate / 100m))) : e.Amount))));
+            decimal totalGrossExpense = expenses.Sum(e => e.Amount);
+
+            ViewBag.TotalNetExpense = totalNetExpense;
+            ViewBag.TotalVat = totalVat;
+            ViewBag.TotalGrossExpense = totalGrossExpense;
+            ViewBag.PaidFees = paidLegalFees;
+            ViewBag.PendingFees = pendingFees;
+            ViewBag.TotalInitialNetCosts = totalNetExpense + paidLegalFees;
 
 
 
@@ -3755,6 +3779,205 @@ namespace GMK360.Web.Controllers
 
 
 
+        // Proje Hesabını Garantiye Alma (Boş Proje İle Eş Zamanlı Açılır)
+        public async Task<BankAccount> EnsureProjectAccountAsync(int projectId, string projectName)
+        {
+            var account = await _context.BankAccounts
+                .FirstOrDefaultAsync(b => b.OwnerType == OwnerType.ConstructionProject && b.OwnerId == projectId && !b.IsDeleted);
+
+            if (account == null)
+            {
+                account = new BankAccount
+                {
+                    OwnerType = OwnerType.ConstructionProject,
+                    OwnerId = projectId,
+                    BankName = "Proje Ana Hesabı & Kasası",
+                    AccountName = $"{projectName} - Proje Hesabı",
+                    IBAN = $"PRJ-{projectId:D4}-TRY",
+                    CurrentBalance = 0m,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.BankAccounts.Add(account);
+                await _context.SaveChangesAsync();
+            }
+            return account;
+        }
+
+        // POST: /ConstructionProject/AddProjectExpense
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddProjectExpense(
+            int projectId,
+            string title,
+            int expenseType,
+            string? description,
+            string expenseDate,
+            string? expenseTime,
+            decimal netAmount,
+            int vatRate,
+            decimal? vatAmount,
+            decimal? totalAmount,
+            string? paymentSource,
+            string? documentNo,
+            string? payeeOrSupplier,
+            IFormFile? documentFile)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var project = await _context.ConstructionProjects
+                .FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId.Value && !p.IsDeleted);
+            if (project == null) return NotFound();
+
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                TempData["ErrorMessage"] = "Masraf başlığı zorunludur.";
+                return RedirectToAction(nameof(Finance), new { id = projectId });
+            }
+
+            // Altın Kural: KDV Ayrıştırması & Net Tutar Odaklı Hesaplama
+            if (vatRate < 0) vatRate = 0;
+            if (!vatAmount.HasValue || vatAmount.Value == 0)
+            {
+                vatAmount = Math.Round(netAmount * vatRate / 100m, 2);
+            }
+            if (!totalAmount.HasValue || totalAmount.Value == 0)
+            {
+                totalAmount = netAmount + (vatAmount ?? 0m);
+            }
+
+            // AI Kuralları 8: Ayrık Tarih ve Saat Güvenli Birleştirme
+            DateTime parsedDateTime = DateTime.Today;
+            if (!string.IsNullOrWhiteSpace(expenseDate))
+            {
+                if (DateTime.TryParse(expenseDate, out var dt))
+                {
+                    parsedDateTime = dt;
+                }
+            }
+            if (!string.IsNullOrWhiteSpace(expenseTime) && TimeSpan.TryParse(expenseTime, out var ts))
+            {
+                parsedDateTime = parsedDateTime.Date.Add(ts);
+            }
+
+            // Belge / Fatura / Fiş Dosyası Yükleme
+            string? photoPath = null;
+            if (documentFile != null && documentFile.Length > 0)
+            {
+                var ext = Path.GetExtension(documentFile.FileName).ToLowerInvariant();
+                var allowedExts = new[] { ".jpg", ".jpeg", ".png", ".pdf", ".webp" };
+                if (allowedExts.Contains(ext))
+                {
+                    var fileName = $"exp_{projectId}_{Guid.NewGuid():N}{ext}";
+                    var folder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "expenses");
+                    Directory.CreateDirectory(folder);
+                    var fullPath = Path.Combine(folder, fileName);
+                    using (var stream = new FileStream(fullPath, FileMode.Create))
+                    {
+                        await documentFile.CopyToAsync(stream);
+                    }
+                    photoPath = $"/uploads/expenses/{fileName}";
+                }
+            }
+
+            var expense = new ConstructionProjectExpense
+            {
+                AgencyId = agencyId.Value,
+                ProjectId = projectId,
+                Title = title.Trim(),
+                ExpenseType = (ConstructionExpenseType)expenseType,
+                Description = description?.Trim(),
+                AmountExcludingVat = netAmount, // Altın Kural: KDV'siz Net
+                VatRate = vatRate,
+                VatAmount = vatAmount,
+                Amount = totalAmount.Value,     // KDV Dahil Toplam Belge Tutarı
+                ExpenseDate = parsedDateTime,
+                PaymentSource = string.IsNullOrWhiteSpace(paymentSource) ? "Proje Kasası" : paymentSource.Trim(),
+                DocumentNo = documentNo?.Trim(),
+                PayeeOrSupplier = payeeOrSupplier?.Trim(),
+                PhotoPath = photoPath,
+                IsPaid = true,
+                ApprovalStatus = "Approved",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.ConstructionProjectExpenses.Add(expense);
+
+            // Proje Hesabı Kasa Çıkışını Güncelle
+            var projectAccount = await EnsureProjectAccountAsync(projectId, project.Name);
+            if (projectAccount != null)
+            {
+                projectAccount.CurrentBalance -= totalAmount.Value;
+                projectAccount.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"'{expense.Title}' masrafı ({netAmount:N2} ₺ + %{vatRate} KDV) başarıyla kaydedildi.";
+            return RedirectToAction(nameof(Finance), new { id = projectId });
+        }
+
+        // POST: /ConstructionProject/DeleteProjectExpense
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteProjectExpense(int id, int projectId)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var expense = await _context.ConstructionProjectExpenses
+                .FirstOrDefaultAsync(e => e.Id == id && e.ProjectId == projectId && e.AgencyId == agencyId.Value && !e.IsDeleted);
+
+            if (expense == null)
+            {
+                TempData["ErrorMessage"] = "Silinecek masraf kaydı bulunamadı.";
+                return RedirectToAction(nameof(Finance), new { id = projectId });
+            }
+
+            expense.IsDeleted = true;
+            expense.UpdatedAt = DateTime.UtcNow;
+
+            var projectAccount = await _context.BankAccounts
+                .FirstOrDefaultAsync(b => b.OwnerType == OwnerType.ConstructionProject && b.OwnerId == projectId && !b.IsDeleted);
+            if (projectAccount != null)
+            {
+                projectAccount.CurrentBalance += expense.Amount;
+                projectAccount.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Masraf kaydı başarıyla silindi.";
+            return RedirectToAction(nameof(Finance), new { id = projectId });
+        }
+
+        // POST: /ConstructionProject/UpdateProjectAccount
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateProjectAccount(int projectId, string bankName, string accountName, string iban, decimal openingBalance)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var project = await _context.ConstructionProjects
+                .FirstOrDefaultAsync(p => p.Id == projectId && p.AgencyId == agencyId.Value && !p.IsDeleted);
+            if (project == null) return NotFound();
+
+            var account = await EnsureProjectAccountAsync(projectId, project.Name);
+            account.BankName = string.IsNullOrWhiteSpace(bankName) ? "Proje Ana Hesabı & Kasası" : bankName.Trim();
+            account.AccountName = string.IsNullOrWhiteSpace(accountName) ? $"{project.Name} - Proje Hesabı" : accountName.Trim();
+            account.IBAN = !string.IsNullOrWhiteSpace(iban) ? iban.Trim() : $"PRJ-{projectId:D4}-TRY";
+            account.CurrentBalance = openingBalance;
+            account.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Proje hesabı bilgileri başarıyla güncellendi.";
+            return RedirectToAction(nameof(Finance), new { id = projectId });
+        }
+
+        // GET: /ConstructionProject/Archive/5
         public async Task<IActionResult> Archive(int? id, string? category = null)
 
 

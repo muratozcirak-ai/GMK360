@@ -7,16 +7,17 @@ namespace GMK360.Core.Entities
         Platform = 1,
         HousingComplex = 2,
         Building = 3,
-        Agency = 4 // Emlak Şirketleri için
+        Agency = 4, // Emlak Şirketleri için
+        ConstructionProject = 5 // İnşaat Projeleri İçin Proje Hesabı / Kasası
     }
 
     public class BankAccount : BaseEntity
     {
         public OwnerType OwnerType { get; set; }
-        public int? OwnerId { get; set; } // HousingComplexId, BuildingId, AgencyId vb.
+        public int? OwnerId { get; set; } // HousingComplexId, BuildingId, AgencyId, ConstructionProjectId vb.
 
-        public string BankName { get; set; } // Örn: Ziraat Bankası
-        public string AccountName { get; set; } // Örn: İşletme Hesabı, Havuz Hesabı
+        public string BankName { get; set; } // Örn: Ziraat Bankası, Proje Ana Kasası
+        public string AccountName { get; set; } // Örn: İşletme Hesabı, Proje Kasası
         public string IBAN { get; set; }
         
         public decimal CurrentBalance { get; set; }
