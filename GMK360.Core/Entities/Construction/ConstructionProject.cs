@@ -141,6 +141,7 @@ public decimal AverageFlatSalePrice { get; set; } = 0; // Ortalama Daire Fiyatı
         // Çoklu Ortak & Hissedar Yapısı (JSON) ve Sözleşme Evrakı
         public string? PartnersJson { get; set; }
         public string? PartnerContractDocumentPath { get; set; }
+        public string? RentPolicyJson { get; set; }
 
         [System.ComponentModel.DataAnnotations.Schema.NotMapped]
         public List<GMK360.Core.DTOs.Construction.ProjectPartnerDto> PartnerList

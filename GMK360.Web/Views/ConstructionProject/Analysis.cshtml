@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+﻿﻿<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
 
 
@@ -214,460 +214,352 @@
 
 
 
-    <!-- 1. BÖLÜM: KAÇ TANE HAK SAHİBİ VAR? (MALİK & PAYDAŞ HAVUZU) -->
 
+    <!-- 1. BÖLÜM: ESKİ BİNA DAİRE & DÜKKAN HAK SAHİPLERİ -->
+    @{
+        int shopCount = Model.EskiDukkanSayisi ?? 0;
+        int flatCount = Model.EskiDaireSayisi ?? 0;
 
+        // Otomatik sıralı bağımsız bölüm listesi (Önce Dükkanlar, sonra Daireler)
+        var unitOrderList = new List<string>();
+        for (int i = 1; i <= shopCount; i++) { unitOrderList.Add($"Dükkan {i}"); }
+        for (int i = 1; i <= flatCount; i++) { unitOrderList.Add($"Daire {i}"); }
+
+        // Normalizasyon fonksiyonu
+        Func<string, string> normalizeUnitKey = u => {
+            if (string.IsNullOrWhiteSpace(u)) return "";
+            var s = u.Trim().ToLowerInvariant()
+                .Replace("ı", "i").Replace("ç", "c").Replace("ş", "s").Replace("ğ", "g").Replace("ü", "u").Replace("ö", "o").Replace(" ", "");
+            if (int.TryParse(s, out int n)) return $"daire{n}";
+            return s;
+        };
+
+        // Eğer sistemde kayıtlı fakat standart listenin dışındaki birimler varsa onları da ekle
+        foreach (var st in stakeholders)
+        {
+            if (!string.IsNullOrWhiteSpace(st.UnitNumbers))
+            {
+                string norm = normalizeUnitKey(st.UnitNumbers);
+                if (!unitOrderList.Any(k => normalizeUnitKey(k) == norm))
+                {
+                    unitOrderList.Add(st.UnitNumbers.Trim());
+                }
+            }
+        }
+
+        if (!unitOrderList.Any())
+        {
+            unitOrderList.Add("Daire 1");
+        }
+    }
 
     <div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs overflow-hidden">
-
-
-
-        <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-light border-bottom flex-wrap gap-1"
-
-
-
+        <div class="d-flex justify-content-between align-items-center p-2.5 px-3 bg-light border-bottom flex-wrap gap-2"
              role="button" data-bs-toggle="collapse" data-bs-target="#hakSahipleriCollapse" aria-expanded="true" aria-controls="hakSahipleriCollapse" style="cursor: pointer;">
-
-
-
             
-
-
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-people-fill text-primary fs-5"></i>
+                <span class="fw-bold text-dark fs-6">1. Eski Bina Daire & Dükkan Hak Sahipleri</span>
+                <span class="text-muted small">(@(shopCount) Dükkan, @(flatCount) Daire — Toplam @unitOrderList.Count Bağımsız Bölüm)</span>
+            </div>
 
             <div class="d-flex align-items-center gap-2">
-
-
-
-                <i class="bi bi-people-fill text-primary fs-5"></i>
-
-
-
-                <div class="d-flex align-items-center gap-2 flex-wrap">
-
-
-
-                    <span class="fw-bold text-dark small" style="font-size: 0.88rem;">1. Kaç Tane Hak Sahibi Var?</span>
-
-
-
-                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-1.5 py-0 rounded-pill" style="font-size: 0.68rem;">
-
-
-
-                        <i class="bi bi-person-lines-fill me-1"></i>Malik & Paydaş Havuzu
-
-
-
-                    </span>
-
-
-
-                    <small class="text-muted d-none d-lg-inline" style="font-size: 0.72rem;">Arsa payı sahipleri, bağımsız bölüm malikleri ve vekilleri</small>
-
-
-
-                </div>
-
-
-
-            </div>
-
-
-
-            <div class="d-flex align-items-center gap-1.5 flex-wrap" onclick="event.stopPropagation();">
-
-
-
-                <span class="badge bg-primary bg-opacity-10 text-primary border px-2 py-1 rounded-pill" style="font-size: 0.74rem;">
-
-
-
-                    <i class="bi bi-person-check me-1"></i>Toplam Malik: <b>@stakeholders.Count</b> Kişi
-
-
-
-                </span>
-
-
-
-                <span class="badge bg-info bg-opacity-15 text-dark border px-2 py-1 rounded-pill" style="font-size: 0.74rem;">
-
-
-
-                    <i class="bi bi-building me-1"></i>Eski Daire: <b>@(Model.EskiDaireSayisi ?? 0)</b> Adet
-
-
-
-                </span>
-
-
-
-                <a href="/ConstructionProject/Workspace/@Model.Id#partnerModal" class="btn btn-sm btn-outline-primary rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs" style="font-size: 0.74rem;">
-
-
-
-                    <i class="bi bi-plus-circle me-1"></i>Malik Ekle
-
-
-
-                </a>
-
-
-
-                <button class="btn btn-sm btn-white border rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs text-secondary" 
-
-
-
-                        type="button" data-bs-toggle="collapse" data-bs-target="#hakSahipleriCollapse" aria-expanded="true" aria-controls="hakSahipleriCollapse" id="btnHakSahipleriToggle" style="font-size: 0.74rem;">
-
-
-
-                    <span id="textHakSahipleriToggle">Daralt</span>
-
-
-
-                    <i class="bi bi-chevron-up ms-1" id="iconHakSahipleriChevron"></i>
-
-
-
+                <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 py-1 fw-bold shadow-xs" 
+                        onclick="event.stopPropagation(); openUnitOwnerModal('', '', '', '', '', '', '')">
+                    <i class="bi bi-plus-circle me-1"></i>Hak Sahibi Ekle
                 </button>
-
-
-
+                <button class="btn btn-sm btn-white border rounded-pill px-2.5 py-1 fw-bold text-secondary" 
+                        type="button" data-bs-toggle="collapse" data-bs-target="#hakSahipleriCollapse" aria-expanded="true" aria-controls="hakSahipleriCollapse" id="btnHakSahipleriToggle">
+                    <span id="textHakSahipleriToggle">Daralt</span>
+                    <i class="bi bi-chevron-up ms-1" id="iconHakSahipleriChevron"></i>
+                </button>
             </div>
-
-
-
         </div>
-
-
 
         <div class="collapse show p-2 p-md-3" id="hakSahipleriCollapse">
-
-
-
-            @if (!stakeholders.Any())
-
-
-
-            {
-
-
-
-                <div class="alert alert-light border rounded-3 p-3 mb-0 text-center">
-
-
-
-                    <i class="bi bi-people text-muted fs-3 d-block mb-1"></i>
-
-
-
-                    <div class="fw-bold text-dark small">Bu projeye henüz hak sahibi / malik kaydı eklenmedi.</div>
-
-
-
-                    <div class="text-muted small mb-2" style="font-size: 0.76rem;">Eski binadaki malikleri künye üzerinden veya aşağıdaki butondan ekleyebilirsiniz.</div>
-
-
-
-                    <a href="/ConstructionProject/Workspace/@Model.Id" class="btn btn-sm btn-primary rounded-pill px-3 py-1 fw-bold shadow-xs" style="font-size: 0.76rem;">
-
-
-
-                        <i class="bi bi-person-plus-fill me-1"></i>Künyede Malik Tanımla
-
-
-
-                    </a>
-
-
-
-                </div>
-
-
-
-            }
-
-
-
-            else
-
-
-
-            {
-
-
-
-                <div class="table-responsive rounded-3 border">
-
-
-
-                    <table class="table table-hover align-middle mb-0" style="font-size: 0.84rem;">
-
-
-
-                        <thead class="table-light text-muted small text-uppercase">
-
-
-
-                            <tr>
-
-
-
-                                <th style="width: 25%;">Malik / Hak Sahibi</th>
-
-
-
-                                <th style="width: 15%;">Rol / Sıfat</th>
-
-
-
-                                <th style="width: 15%;">Bağımsız Bölüm</th>
-
-
-
-                                <th class="text-center" style="width: 12%;">Arsa Payı (%)</th>
-
-
-
-                                <th style="width: 18%;">İletişim</th>
-
-
-
-                                <th style="width: 15%;">Notlar</th>
-
-
-
-                            </tr>
-
-
-
-                        </thead>
-
-
-
-                        <tbody>
-
-
-
-                            @foreach (var s in stakeholders)
-
-
-
+            <div class="table-responsive rounded-3 border">
+                <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                    <thead class="table-light text-muted small text-uppercase">
+                        <tr>
+                            <th style="width: 14%;">Bağımsız Bölüm</th>
+                            <th style="width: 20%;">Hak Sahibi (Şahıs)</th>
+                            <th style="width: 14%;">Telefon</th>
+                            <th style="width: 18%;">E-Posta</th>
+                            <th style="width: 18%;">Banka IBAN</th>
+                            <th style="width: 8%;">Not</th>
+                            <th class="text-end pe-3" style="width: 8%;">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var unitName in unitOrderList)
+                        {
+                            string normName = normalizeUnitKey(unitName);
+                            var unitOwners = stakeholders.Where(s => normalizeUnitKey(s.UnitNumbers) == normName).ToList();
+
+                            if (!unitOwners.Any())
                             {
-
-
-
-                                <tr>
-
-
-
-                                    <td>
-
-
-
-                                        <div class="fw-bold text-dark">
-
-
-
-                                            <i class="bi bi-person-circle text-primary me-1"></i>
-
-
-
-                                            @(s.User?.DisplayName ?? s.User?.UserName ?? "İsimsiz Malik")
-
-
-
-                                        </div>
-
-
-
-                                        @if (!string.IsNullOrEmpty(s.Iban))
-
-
-
-                                        {
-
-
-
-                                            <small class="text-muted" style="font-size: 0.70rem;">IBAN: @s.Iban</small>
-
-
-
-                                        }
-
-
-
+                                <tr class="table-light bg-opacity-25">
+                                    <td class="fw-bold text-dark">
+                                        @unitName
                                     </td>
-
-
-
-                                    <td>
-
-
-
-                                        @switch (s.Role)
-
-
-
-                                        {
-
-
-
-                                            case StakeholderRole.Landowner:
-
-
-
-                                                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2 py-0.5 rounded-pill">Hak Sahibi</span>
-
-
-
-                                                break;
-
-
-
-                                            case StakeholderRole.Representative:
-
-
-
-                                                <span class="badge bg-warning bg-opacity-25 text-dark border border-warning px-2 py-0.5 rounded-pill">Malikler Temsilcisi</span>
-
-
-
-                                                break;
-
-
-
-                                            case StakeholderRole.Consultant:
-
-
-
-                                                <span class="badge bg-info bg-opacity-15 text-dark border px-2 py-0.5 rounded-pill">Danışman / Vekil</span>
-
-
-
-                                                break;
-
-
-
-                                            default:
-
-
-
-                                                <span class="badge bg-light text-dark border px-2 py-0.5 rounded-pill">Diğer</span>
-
-
-
-                                                break;
-
-
-
-                                        }
-
-
-
+                                    <td class="text-muted fst-italic">
+                                        (Henüz kayıt girilmedi)
                                     </td>
-
-
-
-                                    <td>
-
-
-
-                                        <span class="fw-bold text-dark">@(string.IsNullOrEmpty(s.UnitNumbers) ? (s.UnitCount.HasValue ? s.UnitCount + " Daire" : "-") : s.UnitNumbers)</span>
-
-
-
+                                    <td class="text-muted">—</td>
+                                    <td class="text-muted">—</td>
+                                    <td class="text-muted">—</td>
+                                    <td class="text-muted">—</td>
+                                    <td class="text-end pe-3">
+                                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-2.5 py-0.5" 
+                                                onclick="openUnitOwnerModal('', '@unitName', '', '', '', '', '')">
+                                            <i class="bi bi-plus me-1"></i>Ekle
+                                        </button>
                                     </td>
-
-
-
-                                    <td class="text-center">
-
-
-
-                                        <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-0.5 rounded-pill fw-bold">
-
-
-
-                                            @(s.SharePercentage.HasValue ? "%" + s.SharePercentage.Value.ToString("N2") : "-")
-
-
-
-                                        </span>
-
-
-
-                                    </td>
-
-
-
-                                    <td>
-
-
-
-                                        <div class="text-dark small"><i class="bi bi-telephone me-1 text-muted"></i>@(s.User?.PhoneNumber ?? "-")</div>
-
-
-
-                                        <div class="text-muted small" style="font-size: 0.70rem;"><i class="bi bi-envelope me-1"></i>@(s.User?.Email ?? "-")</div>
-
-
-
-                                    </td>
-
-
-
-                                    <td>
-
-
-
-                                        <span class="text-muted small text-truncate d-inline-block" style="max-width: 150px;" title="@s.Notes">
-
-
-
-                                            @(string.IsNullOrEmpty(s.Notes) ? "-" : s.Notes)
-
-
-
-                                        </span>
-
-
-
-                                    </td>
-
-
-
                                 </tr>
-
-
-
                             }
+                            else
+                            {
+                                for (int i = 0; i < unitOwners.Count; i++)
+                                {
+                                    var o = unitOwners[i];
+                                    string fullNameVal = !string.IsNullOrWhiteSpace(o.User?.FirstName) || !string.IsNullOrWhiteSpace(o.User?.LastName)
+                                        ? $"{o.User?.FirstName} {o.User?.LastName}".Trim()
+                                        : (o.User?.DisplayName ?? o.User?.UserName ?? "");
+                                    string phoneVal = o.User?.PhoneNumber ?? "";
+                                    string emailVal = (o.User?.Email != null && !o.User.Email.EndsWith("@gmk360.local")) ? o.User.Email : "";
+                                    string ibanVal = o.Iban ?? "";
+                                    string notesVal = o.Notes ?? "";
 
+                                    <tr>
+                                        <!-- Bağımsız Bölüm -->
+                                        <td>
+                                            @if (i == 0)
+                                            {
+                                                <div class="fw-bold text-dark">
+                                                    @unitName
+                                                    @if (unitOwners.Count > 1)
+                                                    {
+                                                        <small class="text-muted fw-normal d-block">(@unitOwners.Count Hissedar)</small>
+                                                    }
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted small ps-2">↳ @unitName</span>
+                                            }
+                                        </td>
 
+                                        <!-- Hak Sahibi Adı -->
+                                        <td class="fw-bold text-dark">
+                                            @fullNameVal
+                                        </td>
 
-                        </tbody>
+                                        <!-- Telefon -->
+                                        <td class="font-monospace">
+                                            @(string.IsNullOrWhiteSpace(phoneVal) ? "—" : phoneVal)
+                                        </td>
 
+                                        <!-- E-Posta -->
+                                        <td class="text-muted small">
+                                            @(string.IsNullOrWhiteSpace(emailVal) ? "—" : emailVal)
+                                        </td>
 
+                                        <!-- IBAN -->
+                                        <td class="font-monospace small">
+                                            @(string.IsNullOrWhiteSpace(ibanVal) ? "—" : ibanVal)
+                                        </td>
 
-                    </table>
+                                        <!-- Not -->
+                                        <td class="text-muted small">
+                                            @(string.IsNullOrWhiteSpace(notesVal) ? "—" : notesVal)
+                                        </td>
 
+                                        <!-- İşlemler -->
+                                        <td class="text-end pe-3">
+                                            <div class="d-flex align-items-center justify-content-end gap-1">
+                                                <button type="button" class="btn btn-sm btn-light border rounded px-2 py-0 text-secondary" 
+                                                        title="Düzenle: @fullNameVal"
+                                                        onclick="openUnitOwnerModal('@o.Id', '@unitName', '@fullNameVal', '@phoneVal', '@emailVal', '@ibanVal', '@notesVal')">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
 
+                                                <form asp-action="DeleteUnitStakeholder" asp-controller="ConstructionProject" method="post" class="d-inline" onsubmit="return confirm('@fullNameVal kaydı silinsin mi?');">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="projectId" value="@Model.Id" />
+                                                    <input type="hidden" name="stakeholderId" value="@o.Id" />
+                                                    <button type="submit" class="btn btn-sm btn-light border rounded px-2 py-0 text-danger" title="Sil">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </form>
 
-                </div>
-
-
-
-            }
-
-
-
+                                                @if (i == unitOwners.Count - 1)
+                                                {
+                                                    <button type="button" class="btn btn-sm btn-light border rounded px-1.5 py-0 text-primary ms-1" 
+                                                            title="Bu daireye yeni hissedar ekle"
+                                                            onclick="openUnitOwnerModal('', '@unitName', '', '', '', '', '')">
+                                                        <i class="bi bi-person-plus"></i>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
         </div>
-
-
-
     </div>
 
+
+        @{
+        var rentPolicy = ViewBag.RentPolicy as GMK360.Core.DTOs.Construction.ProjectRentPolicyDto ?? new GMK360.Core.DTOs.Construction.ProjectRentPolicyDto();
+    }
+
+    <!-- 1.1 BÖLÜM: KİRA & TAŞINMA BEDELLERİ POLİTİKASI -->
+    <div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs overflow-hidden">
+        <div class="d-flex justify-content-between align-items-center p-2.5 px-3 bg-light border-bottom flex-wrap gap-2"
+             role="button" data-bs-toggle="collapse" data-bs-target="#kiraBedellerCollapse" aria-expanded="true" aria-controls="kiraBedellerCollapse" style="cursor: pointer;">
+            
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-cash-stack text-success fs-5"></i>
+                <span class="fw-bold text-dark fs-6">Kira & Taşınma Bedelleri</span>
+                <span class="text-muted small">(Daire ve dükkan bazında genel hakediş ve banka ödeme takvimi)</span>
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-sm btn-white border rounded-pill px-2.5 py-1 fw-bold text-secondary" 
+                        type="button" data-bs-toggle="collapse" data-bs-target="#kiraBedellerCollapse" aria-expanded="true" aria-controls="kiraBedellerCollapse" id="btnKiraBedellerToggle">
+                    <span id="textKiraBedellerToggle">Daralt</span>
+                    <i class="bi bi-chevron-up ms-1" id="iconKiraBedellerChevron"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="collapse show p-2 p-md-3" id="kiraBedellerCollapse">
+            <form asp-action="SaveProjectRentPolicy" asp-controller="ConstructionProject" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="projectId" value="@Model.Id" />
+                <input type="hidden" name="applyToStakeholders" id="hfApplyToStakeholders" value="false" />
+
+                <div class="table-responsive rounded-3 border mb-3">
+                    <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                        <thead class="table-light text-muted small text-uppercase">
+                            <tr>
+                                <th style="width: 16%;">Nitelik</th>
+                                <th style="width: 14%;">Taşınma Bedeli</th>
+                                <th style="width: 14%;">Aylık Kira</th>
+                                <th style="width: 14%;">Başlama Tarihi</th>
+                                <th style="width: 14%;">Bitiş Tarihi</th>
+                                <th style="width: 14%;">Ödeme Günü</th>
+                                <th style="width: 14%;">Emniyet (Gün)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Daireler İçin -->
+                            <tr>
+                                <td class="fw-bold text-dark">
+                                    🏠 Daireler İçin
+                                    <small class="text-muted d-block">(@flatCount Adet)</small>
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" step="1000" name="FlatRelocationFee" class="form-control form-control-sm font-monospace fw-bold" value="@rentPolicy.FlatRelocationFee.ToString("0")" required />
+                                        <span class="input-group-text">₺</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" step="500" name="FlatMonthlyRent" class="form-control form-control-sm font-monospace fw-bold text-success" value="@rentPolicy.FlatMonthlyRent.ToString("0")" required />
+                                        <span class="input-group-text">₺</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <input type="date" name="FlatStartDate" class="form-control form-control-sm" value="@(rentPolicy.FlatStartDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))" required />
+                                </td>
+                                <td>
+                                    <input type="date" name="FlatEndDate" class="form-control form-control-sm" value="@(rentPolicy.FlatEndDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.AddMonths(18).ToString("yyyy-MM-dd"))" required />
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" min="1" max="31" name="FlatPaymentDay" class="form-control form-control-sm font-monospace fw-bold text-center" value="@rentPolicy.FlatPaymentDay" required />
+                                        <span class="input-group-text text-muted" style="font-size:0.75rem;">. Günü</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" min="0" max="30" name="FlatGraceDays" class="form-control form-control-sm font-monospace fw-bold text-center text-primary" value="@rentPolicy.FlatGraceDays" required />
+                                        <span class="input-group-text text-muted" style="font-size:0.75rem;">Gün</span>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <!-- Dükkanlar İçin -->
+                            <tr>
+                                <td class="fw-bold text-dark">
+                                    🏢 Dükkanlar İçin
+                                    <small class="text-muted d-block">(@shopCount Adet)</small>
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" step="1000" name="ShopRelocationFee" class="form-control form-control-sm font-monospace fw-bold" value="@rentPolicy.ShopRelocationFee.ToString("0")" required />
+                                        <span class="input-group-text">₺</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" step="500" name="ShopMonthlyRent" class="form-control form-control-sm font-monospace fw-bold text-success" value="@rentPolicy.ShopMonthlyRent.ToString("0")" required />
+                                        <span class="input-group-text">₺</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <input type="date" name="ShopStartDate" class="form-control form-control-sm" value="@(rentPolicy.ShopStartDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))" required />
+                                </td>
+                                <td>
+                                    <input type="date" name="ShopEndDate" class="form-control form-control-sm" value="@(rentPolicy.ShopEndDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.AddMonths(18).ToString("yyyy-MM-dd"))" required />
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" min="1" max="31" name="ShopPaymentDay" class="form-control form-control-sm font-monospace fw-bold text-center" value="@rentPolicy.ShopPaymentDay" required />
+                                        <span class="input-group-text text-muted" style="font-size:0.75rem;">. Günü</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" min="0" max="30" name="ShopGraceDays" class="form-control form-control-sm font-monospace fw-bold text-center text-primary" value="@rentPolicy.ShopGraceDays" required />
+                                        <span class="input-group-text text-muted" style="font-size:0.75rem;">Gün</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Eylem ve Finans Özet Çubuğu -->
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 bg-light p-2 px-3 rounded-3 border">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="small text-muted">
+                            Aylık Kira Toplamı: <b class="text-success font-monospace fs-6">@(((flatCount * rentPolicy.FlatMonthlyRent) + (shopCount * rentPolicy.ShopMonthlyRent)).ToString("N0")) ₺ / Ay</b>
+                        </span>
+                        <span class="text-muted">|</span>
+                        <span class="small text-muted">
+                            Toplam Taşınma Yardımı: <b class="text-dark font-monospace fs-6">@(((flatCount * rentPolicy.FlatRelocationFee) + (shopCount * rentPolicy.ShopRelocationFee)).ToString("N0")) ₺</b>
+                        </span>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="submit" class="btn btn-sm btn-white border rounded-pill px-3 py-1 fw-bold text-dark shadow-xs" onclick="document.getElementById('hfApplyToStakeholders').value='false';">
+                            <i class="bi bi-save me-1"></i>Bedelleri Kaydet
+                        </button>
+                        <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 py-1 fw-bold shadow-xs" onclick="document.getElementById('hfApplyToStakeholders').value='true';">
+                            <i class="bi bi-lightning-charge-fill me-1"></i>Bedelleri Hak Sahiplerine Dağıt
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
 
 
     <!-- 2. BÖLÜM: ESKİ BİNA DURUMU & KEŞİF VERİLERİ -->
@@ -730,7 +622,7 @@
 
 
 
-            <div class="d-flex align-items-center gap-1.5 flex-wrap" onclick="event.stopPropagation();">
+            <div class="d-flex align-items-center gap-1.5 flex-wrap" >
 
 
 
@@ -1022,9 +914,9 @@
 
 
 
-            <div class="d-flex align-items-center gap-1.5 flex-wrap" onclick="event.stopPropagation();">
+            <div class="d-flex align-items-center gap-1.5 flex-wrap" >
 
-                <a href="/ConstructionProject/Details/@Model.Id#accordionFizibilite" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs" style="font-size: 0.74rem;">
+                <a href="/ConstructionProject/Details/@Model.Id#accordionFizibilite" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs" style="font-size: 0.74rem;" onclick="event.stopPropagation();">
 
                     <i class="bi bi-box-arrow-up-right me-1"></i>Yeni Sekmede Aç
 
@@ -1121,7 +1013,7 @@
 
 
 
-            <div class="d-flex align-items-center gap-1.5 flex-wrap" onclick="event.stopPropagation();">
+            <div class="d-flex align-items-center gap-1.5 flex-wrap" >
 
 
 
@@ -2401,11 +2293,11 @@
 
 
 
-                <div class="d-flex align-items-center gap-1 flex-wrap" onclick="event.stopPropagation();">
+                <div class="d-flex align-items-center gap-1 flex-wrap" >
 
 
 
-                    <a href="https://parselsorgu.tkgm.gov.tr" target="_blank" class="btn btn-outline-danger btn-sm rounded-pill px-2 py-0 fw-bold" style="font-size: 0.72rem;">
+                    <a href="https://parselsorgu.tkgm.gov.tr" target="_blank" class="btn btn-outline-danger btn-sm rounded-pill px-2 py-0 fw-bold" style="font-size: 0.72rem;" onclick="event.stopPropagation();">
 
 
 
@@ -2417,7 +2309,7 @@
 
 
 
-                    <a href="https://www.turkiye.gov.tr" target="_blank" class="btn btn-outline-primary btn-sm rounded-pill px-2 py-0 fw-bold" style="font-size: 0.72rem;">
+                    <a href="https://www.turkiye.gov.tr" target="_blank" class="btn btn-outline-primary btn-sm rounded-pill px-2 py-0 fw-bold" style="font-size: 0.72rem;" onclick="event.stopPropagation();">
 
 
 
@@ -2429,7 +2321,7 @@
 
 
 
-                    <button type="button" class="btn btn-success btn-sm rounded-pill px-2 py-0 fw-bold shadow-xs" onclick="downloadImarPdf()" style="font-size: 0.72rem;">
+                    <button type="button" class="btn btn-success btn-sm rounded-pill px-2 py-0 fw-bold shadow-xs" onclick="event.stopPropagation(); downloadImarPdf()" style="font-size: 0.72rem;">
 
 
 
@@ -3857,9 +3749,9 @@
 
 
 
-            <div class="d-flex align-items-center gap-1.5 flex-wrap" onclick="event.stopPropagation();">
+            <div class="d-flex align-items-center gap-1.5 flex-wrap" >
 
-                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs" style="font-size: 0.74rem;">
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs" style="font-size: 0.74rem;" onclick="event.stopPropagation();">
 
                     <i class="bi bi-box-arrow-up-right me-1"></i>Yeni Sekmede Aç
 
@@ -4408,6 +4300,7 @@
 
 
         setupCollapseToggle('hakSahipleriCollapse', 'textHakSahipleriToggle', 'iconHakSahipleriChevron');
+        setupCollapseToggle('kiraBedellerCollapse', 'textKiraBedellerToggle', 'iconKiraBedellerChevron');
 
         setupCollapseToggle('eskiBinaCollapse', 'textEskiBinaToggle', 'iconEskiBinaChevron');
 
@@ -4477,79 +4370,89 @@
 
 
 
+
+
+<!-- MODAL: HAK SAHİBİ EKLE / DÜZENLE -->
+<div class="modal fade" id="unitOwnerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-3">
+            <form asp-action="SaveUnitStakeholder" asp-controller="ConstructionProject" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="projectId" value="@Model.Id" />
+                <input type="hidden" name="stakeholderId" id="uoStakeholderId" value="" />
+
+                <div class="modal-header border-bottom py-2.5 px-3 bg-light">
+                    <h6 class="modal-title fw-bold text-dark" id="uoModalTitle">Hak Sahibi Bilgisi</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body p-3">
+                    <div class="mb-2">
+                        <label class="form-label fw-bold small text-muted">Bağımsız Bölüm (Daire / Dükkan No) *</label>
+                        <input type="text" name="unitNumber" id="uoUnitNumber" class="form-control" required />
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-bold small text-muted">Hak Sahibi Adı Soyadı (Şahıs) *</label>
+                        <input type="text" name="fullName" id="uoFullName" class="form-control" required />
+                    </div>
+
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label fw-bold small text-muted">Telefon *</label>
+                            <input type="text" name="phone" id="uoPhone" class="form-control font-monospace" required />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-bold small text-muted">E-Posta</label>
+                            <input type="email" name="email" id="uoEmail" class="form-control" />
+                        </div>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-bold small text-muted">Banka IBAN (Kira & Taşınma Desteği İçin)</label>
+                        <input type="text" name="iban" id="uoIban" class="form-control font-monospace" />
+                    </div>
+
+                    <div class="mb-1">
+                        <label class="form-label fw-bold small text-muted">Not / Hisse Durumu</label>
+                        <input type="text" name="notes" id="uoNotes" class="form-control" />
+                    </div>
+                </div>
+
+                <div class="modal-footer py-2 px-3 bg-light border-top">
+                    <button type="button" class="btn btn-sm btn-white border rounded px-3" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-sm btn-primary rounded px-4 fw-bold">
+                        Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
-
-
-
-    document.addEventListener("DOMContentLoaded", function () {
-
-
-
-        ['hakSahipleriCollapse', 'eskiBinaCollapse', 'fazlarCollapse', 'burokrasiCollapse', 'imarCollapse', 'projeKarakteriCollapse'].forEach(function(colId) {
-
-
-
-            var el = document.getElementById(colId);
-
-
-
-            if (!el) return;
-
-
-
-            var prefix = colId === 'hakSahipleriCollapse' ? 'HakSahipleri' : (colId === 'eskiBinaCollapse' ? 'EskiBina' : (colId === 'fazlarCollapse' ? 'Fazlar' : (colId === 'projeKarakteriCollapse' ? 'ProjeKarakteri' : (colId === 'burokrasiCollapse' ? 'Burokrasi' : 'Imar'))));
-
-
-
-            var txt = document.getElementById('text' + prefix + 'Toggle');
-
-
-
-            var ico = document.getElementById('icon' + prefix + 'Chevron');
-
-
-
-            el.addEventListener('shown.bs.collapse', function () {
-
-
-
-                if (txt) txt.innerText = 'Daralt';
-
-
-
-                if (ico) { ico.classList.remove('bi-chevron-down'); ico.classList.add('bi-chevron-up'); }
-
-
-
-            });
-
-
-
-            el.addEventListener('hidden.bs.collapse', function () {
-
-
-
-                if (txt) txt.innerText = 'Genişlet';
-
-
-
-                if (ico) { ico.classList.remove('bi-chevron-up'); ico.classList.add('bi-chevron-down'); }
-
-
-
-            });
-
-
-
-        });
-
-
-
-    });
-
-
-
+    function openUnitOwnerModal(id, unit, name, phone, email, iban, notes) {
+        document.getElementById('uoStakeholderId').value = id || '';
+        document.getElementById('uoUnitNumber').value = unit || '';
+        document.getElementById('uoFullName').value = name || '';
+        document.getElementById('uoPhone').value = phone || '';
+        document.getElementById('uoEmail').value = email || '';
+        document.getElementById('uoIban').value = iban || '';
+        document.getElementById('uoNotes').value = notes || '';
+        
+        var titleEl = document.getElementById('uoModalTitle');
+        if (titleEl) {
+            titleEl.textContent = id ? ('Düzenle: ' + unit + ' - ' + name) : (unit ? ('Yeni Hak Sahibi: ' + unit) : 'Yeni Hak Sahibi Ekle');
+        }
+        
+        var modalEl = document.getElementById('unitOwnerModal');
+        if (modalEl) {
+            var modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+    }
 </script>
+
 
 
 
