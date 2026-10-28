@@ -427,9 +427,13 @@
                     <small class="text-muted" style="font-size: 0.74rem;">Kat sayısı, kata sığacak daire ve malik paylaşım oranıyla anında canlı senaryo</small>
                 </div>
             </div>
-            <div class="d-flex align-items-center gap-2">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span id="simAutosaveStatus"></span>
+                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2.5 py-2 rounded-pill fw-bold" style="font-size: 0.72rem;">
+                    <i class="bi bi-bricks me-1"></i>@(Model.RentAndRontgenPolicy.BuildingOrderType) | Ön Uzlaşı: %@(Model.RentAndRontgenPolicy.OwnerPreConsensusRate)
+                </span>
                 <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-3 py-2 rounded-pill fw-bold" style="font-size: 0.72rem;">
-                    <i class="bi bi-people-fill me-1"></i>Künyedeki Hak Sahibi: @(Model.EskiDaireSayisi ?? 4) Malik (Eski Daire)
+                    <i class="bi bi-people-fill me-1"></i>Künyedeki Hak Sahibi: @(Model.EskiDaireSayisi ?? 4) Daire + @(Model.EskiDukkanSayisi ?? 0) Dükkan
                 </span>
             </div>
         </div>
@@ -443,7 +447,7 @@
             <input type="hidden" name="totalLandArea" id="calcLandArea" value="@landArea.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)" />
             <input type="hidden" name="TargetTotalApartments" id="hiddenTargetUnits" value="@(Model.TargetTotalApartments ?? 30)" />
 
-            <div class="row g-2 mb-3">
+            <div class="row g-2 mb-2">
                 <!-- 1. Girdi: İzinli Kat & Bodrum (Kullanıcı Çizimine Birebir Uygun) -->
                 <div class="col-xl-2 col-md-4 col-sm-6">
                     <div class="p-3 rounded-4 bg-light bg-opacity-50 border h-100 d-flex flex-column justify-content-between">
@@ -452,7 +456,7 @@
                                 <i class="bi bi-building text-primary me-1"></i>İzinli Kat
                             </label>
                             <div class="input-group input-group-sm">
-                                <input type="number" id="calcTotalFloors" name="totalFloors" class="form-control rounded-start-3 fw-bold fs-6 text-dark" value="@(Model.TotalFloors ?? 15)" min="1" max="50" oninput="runContractorEstimate()" />
+                                <input type="number" id="calcTotalFloors" name="totalFloors" class="form-control rounded-start-3 fw-bold fs-6 text-dark" value="@(Model.TotalFloors ?? 15)" min="1" max="50" oninput="runContractorEstimate(true)" />
                                 <span class="input-group-text rounded-end-3 text-muted">Kat</span>
                             </div>
                             <small class="text-muted d-block" style="font-size: 0.65rem;">İmar izin katı</small>
@@ -463,7 +467,7 @@
                                 <i class="bi bi-layers text-secondary me-1"></i>Bodrum
                             </label>
                             <div class="input-group input-group-sm">
-                                <input type="number" id="calcBasementFloors" class="form-control rounded-start-3 fw-bold fs-6 text-dark" value="2" min="0" max="10" oninput="runContractorEstimate()" />
+                                <input type="number" id="calcBasementFloors" name="basementFloors" class="form-control rounded-start-3 fw-bold fs-6 text-dark" value="@(Model.RentAndRontgenPolicy.BasementFloors)" min="0" max="10" oninput="runContractorEstimate(true)" />
                                 <span class="input-group-text rounded-end-3 text-muted">Kat</span>
                             </div>
                             <small class="text-muted d-block mt-1" id="resTotalFloorsWithZeminCati" style="font-size: 0.63rem; line-height: 1.25;">
@@ -488,7 +492,7 @@
                             </button>
                         </div>
                         <div class="input-group input-group-sm">
-                            <input type="number" id="calcUnitsPerFloor" class="form-control rounded-start-3 fw-bold fs-6 text-primary" value="2" min="1" max="10" oninput="onUnitsPerFloorChange(this.value)" />
+                            <input type="number" id="calcUnitsPerFloor" name="unitsPerFloor" class="form-control rounded-start-3 fw-bold fs-6 text-primary" value="@(Model.RentAndRontgenPolicy.UnitsPerFloor > 0 ? Model.RentAndRontgenPolicy.UnitsPerFloor : 2)" min="1" max="10" oninput="onUnitsPerFloorChange(this.value)" />
                             <span class="input-group-text rounded-end-3 text-muted">Daire / Kat</span>
                         </div>
                     </div>
@@ -502,7 +506,7 @@
                                 <i class="bi bi-shield-shaded text-danger me-1"></i>Ortak Kat Alanı
                             </label>
                             <div class="input-group input-group-sm">
-                                <input type="number" id="calcCoreLossSqm" class="form-control rounded-start-3 fw-bold fs-6 text-dark" value="35" min="15" max="100" oninput="runContractorEstimate()" />
+                                <input type="number" id="calcCoreLossSqm" name="coreLossSqm" class="form-control rounded-start-3 fw-bold fs-6 text-dark" value="@(Model.RentAndRontgenPolicy.CoreLossSqm > 0 ? Model.RentAndRontgenPolicy.CoreLossSqm : 35)" min="15" max="100" oninput="runContractorEstimate(true)" />
                                 <span class="input-group-text rounded-end-3 text-muted">m²</span>
                             </div>
                             <small class="text-muted d-block" style="font-size: 0.63rem;">Asansör, yangın merv. & hol</small>
@@ -528,7 +532,7 @@
                             <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-2 py-0 fw-bold flex-fill" onclick="setOwnerShare(60, this)">%60 (İşi Al)</button>
                         </div>
                         <div class="input-group input-group-sm">
-                            <input type="number" id="calcOwnerShare" class="form-control rounded-start-3 fw-bold fs-6 text-success" value="50" min="10" max="90" oninput="runContractorEstimate()" />
+                            <input type="number" id="calcOwnerShare" name="ownerSharePercent" class="form-control rounded-start-3 fw-bold fs-6 text-success" value="@(Model.RentAndRontgenPolicy.OwnerSharePercent > 0 ? Model.RentAndRontgenPolicy.OwnerSharePercent.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) : "50")" min="10" max="90" oninput="runContractorEstimate(true)" />
                             <span class="input-group-text rounded-end-3 text-muted fw-bold">% Malik</span>
                         </div>
                     </div>
@@ -542,7 +546,7 @@
                                 <i class="bi bi-tag-fill text-dark me-1"></i>Satış Fiyatı
                             </label>
                             <div class="input-group input-group-sm">
-                                <input type="number" id="calcFlatSalePrice" name="averageFlatSalePrice" class="form-control rounded-start-3 fw-bold fs-6 text-dark" value="10000000" step="250000" oninput="runContractorEstimate()" />
+                                <input type="number" id="calcFlatSalePrice" name="averageFlatSalePrice" class="form-control rounded-start-3 fw-bold fs-6 text-dark" value="@((Model.AverageFlatSalePrice > 0 ? Model.AverageFlatSalePrice : 10000000).ToString("0"))" step="250000" oninput="runContractorEstimate(true)" />
                                 <span class="input-group-text rounded-end-3 text-muted">₺</span>
                             </div>
                             <small class="text-muted d-block fw-semibold" id="resFlatPriceTypeNote" style="font-size: 0.64rem;">3+1 Sıfır Daire Rayici</small>
@@ -552,6 +556,60 @@
                             <small class="text-muted d-block mt-1" style="font-size: 0.58rem; line-height: 1.25;">
                                 <i class="bi bi-info-circle text-primary me-1"></i>Sıfır bina ve lüks oranına göre fiyat esneyebilir.
                             </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 6. Satır: TİCARİ DÜKKAN PAYLAŞIMI & KİRA/TAŞINMA MALİ YÜKÜ TERAZİSİ -->
+            <div class="p-2.5 px-3 rounded-4 bg-light border mb-3">
+                <div class="row g-2 align-items-center">
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <label class="form-label fw-bold text-dark mb-0.5" style="font-size: 0.72rem;">
+                            <i class="bi bi-shop text-warning me-1"></i>Yeni Dükkan Üretimi
+                        </label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" id="calcPlannedNewShops" name="plannedNewShops" class="form-control fw-bold text-dark" value="@(Model.RentAndRontgenPolicy.PlannedNewShops > 0 ? Model.RentAndRontgenPolicy.PlannedNewShops : (Model.EskiDukkanSayisi ?? 0))" min="0" max="50" oninput="runContractorEstimate(true)" />
+                            <span class="input-group-text text-muted">Adet</span>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <label class="form-label fw-bold text-dark mb-0.5" style="font-size: 0.72rem;">
+                            <i class="bi bi-people text-secondary me-1"></i>Maliklere Dükkan
+                        </label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" id="calcOwnerGivenShops" name="ownerGivenShops" class="form-control fw-bold text-secondary" value="@(Model.RentAndRontgenPolicy.OwnerGivenShops > 0 ? Model.RentAndRontgenPolicy.OwnerGivenShops : (Model.EskiDukkanSayisi ?? 0))" min="0" max="50" oninput="runContractorEstimate(true)" />
+                            <span class="input-group-text text-muted">Adet</span>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-4 col-12">
+                        <label class="form-label fw-bold text-dark mb-0.5" style="font-size: 0.72rem;">
+                            <i class="bi bi-cash-coin text-success me-1"></i>Dükkan Satış Rayici (Birim)
+                        </label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" id="calcShopSalePrice" name="estimatedShopSalePrice" class="form-control fw-bold text-success" value="@((Model.RentAndRontgenPolicy.EstimatedShopSalePrice > 0 ? Model.RentAndRontgenPolicy.EstimatedShopSalePrice : 15000000).ToString("0"))" step="500000" oninput="runContractorEstimate(true)" />
+                            <span class="input-group-text text-muted">₺</span>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <label class="form-label fw-bold text-dark mb-0.5" style="font-size: 0.72rem;">
+                            <i class="bi bi-calendar-range text-primary me-1"></i>Kira Süresi
+                        </label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" id="calcRentMonths" name="rentDurationMonths" class="form-control fw-bold text-primary" value="@(Model.RentAndRontgenPolicy.RentDurationMonths > 0 ? Model.RentAndRontgenPolicy.RentDurationMonths : 18)" min="6" max="48" oninput="runContractorEstimate(true)" />
+                            <span class="input-group-text text-muted">Ay</span>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-8 col-6">
+                        <div class="p-2 rounded-3 bg-white border d-flex align-items-center justify-content-between h-100">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" id="calcIncludeRent" name="includeRentInFeasibility" value="true" @(Model.RentAndRontgenPolicy.IncludeRentInFeasibility ? "checked" : "") onchange="runContractorEstimate(true)" />
+                                <label class="form-check-label fw-bold text-dark" for="calcIncludeRent" style="font-size: 0.72rem;">
+                                    Kira & Taşınma Yükü
+                                </label>
+                                <small class="d-block text-danger fw-bold" id="resRentRelocationTotalText" style="font-size: 0.68rem;">0 ₺</small>
+                            </div>
+                            <span class="badge bg-warning bg-opacity-15 text-dark border border-warning" style="font-size: 0.64rem;" title="Kira politikasındaki daire ve dükkan kira+taşınma toplamı">Maliyete Ekle</span>
                         </div>
                     </div>
                 </div>
@@ -597,7 +655,7 @@
                             <div class="col-6">
                                 <label class="text-dark d-block fw-bold" style="font-size: 0.64rem;">FİRMAMIZIN BİRİMİ</label>
                                 <div class="input-group input-group-sm">
-                                    <input type="number" id="calcFirmUnitCost" class="form-control form-control-sm px-1 text-center fw-bold text-dark border-success bg-white bg-opacity-75" value="25000" step="500" placeholder="Örn: 25000" oninput="runContractorEstimate()" style="font-size: 0.76rem;" />
+                                    <input type="number" id="calcFirmUnitCost" name="firmUnitCostPerSqm" form="simForm" class="form-control form-control-sm px-1 text-center fw-bold text-dark border-success bg-white bg-opacity-75" value="@((Model.RentAndRontgenPolicy.FirmUnitCostPerSqm > 0 ? Model.RentAndRontgenPolicy.FirmUnitCostPerSqm : 25000).ToString("0"))" step="500" placeholder="Örn: 25000" oninput="runContractorEstimate(true)" style="font-size: 0.76rem;" />
                                     <span class="input-group-text px-1 text-muted" style="font-size: 0.65rem;">₺/m²</span>
                                 </div>
                                 <small class="text-muted d-block text-center" style="font-size: 0.58rem;">Şantiye Birim Girdisi</small>
@@ -702,15 +760,21 @@
 
         <!-- AKSİYON BUTONLARI -->
         <div class="d-flex justify-content-between align-items-center pt-2 flex-wrap gap-2">
-            <button type="button" class="btn btn-outline-success rounded-pill px-4 fw-bold shadow-xs d-flex align-items-center gap-2" onclick="saveQuickContractorPlan()" id="btnSaveSimParams">
+            <button type="button" class="btn btn-outline-success rounded-pill px-4 fw-bold shadow-xs d-flex align-items-center gap-2" onclick="saveQuickContractorPlan(false)" id="btnSaveSimParams">
                 <i class="bi bi-floppy2-fill"></i>
                 <span>Bu Ön Planı Projeye Kaydet</span>
             </button>
 
-            <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm d-flex align-items-center gap-2" onclick="downloadFeasibilityPdf()" id="btnDownloadPdfMain">
-                <i class="bi bi-file-earmark-pdf-fill"></i>
-                <span id="btnDownloadPdfText">Ön Teklif & Fizibilite Raporu (PDF)</span>
-            </button>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm d-flex align-items-center gap-2" onclick="downloadFeasibilityPdf()" id="btnDownloadPdfMain">
+                    <i class="bi bi-file-earmark-pdf-fill"></i>
+                    <span id="btnDownloadPdfText">Ön Teklif & Fizibilite Raporu (PDF)</span>
+                </button>
+                <a href="/ConstructionProject/Analysis/@Model.Id" class="btn btn-dark rounded-pill px-4 fw-bold shadow-sm d-flex align-items-center gap-2">
+                    <i class="bi bi-clipboard2-pulse-fill text-warning"></i>
+                    <span>3. Adım: Detaylı İnceleme (Röntgen) Masasına Geç ➔</span>
+                </a>
+            </div>
         </div>
 
     </div>
@@ -1256,6 +1320,29 @@
         var firmUnitInp = document.getElementById('calcFirmUnitCost');
         var firmUnitCost = firmUnitInp ? (parseFloat(firmUnitInp.value) || 0) : 25000;
         var oldOwners = @(Model.EskiDaireSayisi ?? 4);
+        var oldShops = @(Model.EskiDukkanSayisi ?? 0);
+
+        var plannedShopsInp = document.getElementById('calcPlannedNewShops');
+        var plannedNewShops = plannedShopsInp ? (parseInt(plannedShopsInp.value) || 0) : 0;
+        var ownerShopsInp = document.getElementById('calcOwnerGivenShops');
+        var ownerGivenShops = ownerShopsInp ? (parseInt(ownerShopsInp.value) || 0) : 0;
+        var shopPriceInp = document.getElementById('calcShopSalePrice');
+        var shopSalePrice = shopPriceInp ? (parseFloat(shopPriceInp.value) || 0) : 0;
+        var rentMonthsInp = document.getElementById('calcRentMonths');
+        var rentMonths = rentMonthsInp ? (parseInt(rentMonthsInp.value) || 18) : 18;
+        var includeRentInp = document.getElementById('calcIncludeRent');
+        var includeRent = includeRentInp ? includeRentInp.checked : true;
+
+        var flatMonthlyRent = @(Model.RentAndRontgenPolicy.FlatMonthlyRent.ToString("0", System.Globalization.CultureInfo.InvariantCulture));
+        var flatRelocFee = @(Model.RentAndRontgenPolicy.FlatRelocationFee.ToString("0", System.Globalization.CultureInfo.InvariantCulture));
+        var shopMonthlyRent = @(Model.RentAndRontgenPolicy.ShopMonthlyRent.ToString("0", System.Globalization.CultureInfo.InvariantCulture));
+        var shopRelocFee = @(Model.RentAndRontgenPolicy.ShopRelocationFee.ToString("0", System.Globalization.CultureInfo.InvariantCulture));
+
+        var totalRentAndRelocBurden = (oldOwners * ((flatMonthlyRent * rentMonths) + flatRelocFee)) + (oldShops * ((shopMonthlyRent * rentMonths) + shopRelocFee));
+        var elRentRelocText = document.getElementById('resRentRelocationTotalText');
+        if (elRentRelocText) {
+            elRentRelocText.innerText = (includeRent ? '+' : '(Hariç) ') + totalRentAndRelocBurden.toLocaleString('tr-TR') + ' ₺';
+        }
 
         // Zemin ve çatı dahil toplam kat hacmi (Maliyet hesabı için)
         var totalCostFloors = floors + basementFloors + 1 + 1; // +1 Zemin + 1 Çatı
@@ -1270,11 +1357,12 @@
         // Maliklere Verilecek Daire
         var ownerGivenUnits = Math.round(totalUnits * (ownerSharePercent / 100.0));
 
-        // Müteahhide Kalan Daire
+        // Müteahhide Kalan Daire ve Dükkan
         var contractorKeptUnits = totalUnits - ownerGivenUnits;
+        var contractorKeptShops = Math.max(0, plannedNewShops - ownerGivenShops);
 
-        // Müteahhit Satış Cirosu
-        var totalRevenue = contractorKeptUnits * flatSalePrice;
+        // Müteahhit Satış Cirosu (Daire + Kalan Dükkanlar)
+        var totalRevenue = (contractorKeptUnits * flatSalePrice) + (contractorKeptShops * shopSalePrice);
 
         // Kat alanı ~271 m², merdiven, yangın merdiveni ve asansör çekirdeği düşüldüğünde net daire alanı:
         var grossFloorArea = 271;
@@ -1334,16 +1422,22 @@
         if (elTarget) elTarget.value = totalUnits;
 
         var elFloorsDetail = document.getElementById('resFloorsDetailText');
-        if (elFloorsDetail) elFloorsDetail.innerText = floors + ' Kat × ' + unitsPerFloor + ' Daire';
+        if (elFloorsDetail) {
+            elFloorsDetail.innerText = floors + ' Kat × ' + unitsPerFloor + ' Daire' + (plannedNewShops > 0 ? (' + ' + plannedNewShops + ' Dükkan') : '');
+        }
 
         var elOwnerUnits = document.getElementById('resOwnerGivenUnits');
         if (elOwnerUnits) elOwnerUnits.innerText = ownerGivenUnits;
 
         var elPerHead = document.getElementById('resOwnerPerHeadNote');
-        if (elPerHead) elPerHead.innerText = '(' + oldOwners + ' Malike ~' + perHead + ' Daire)';
+        if (elPerHead) {
+            elPerHead.innerText = '(' + oldOwners + ' Malike ~' + perHead + ' Daire' + (ownerGivenShops > 0 ? (' + ' + ownerGivenShops + ' Dükkan') : '') + ')';
+        }
 
         var elContractor = document.getElementById('resContractorKeptUnits');
-        if (elContractor) elContractor.innerText = contractorKeptUnits + ' DAİRE';
+        if (elContractor) {
+            elContractor.innerText = contractorKeptUnits + ' DAİRE' + (contractorKeptShops > 0 ? (' + ' + contractorKeptShops + ' DÜKKAN') : '');
+        }
 
         var contractorSharePercent = 100 - ownerSharePercent;
         var elContractorShare = document.getElementById('resContractorShareText');
@@ -1353,7 +1447,9 @@
         if (elRevenue) elRevenue.innerText = totalRevenue.toLocaleString('tr-TR') + ' ₺';
 
         var elRevCalc = document.getElementById('resRevenueCalcDetail');
-        if (elRevCalc) elRevCalc.innerText = contractorKeptUnits + ' Daire × ' + flatSalePrice.toLocaleString('tr-TR') + ' ₺';
+        if (elRevCalc) {
+            elRevCalc.innerText = contractorKeptUnits + ' Daire × ' + flatSalePrice.toLocaleString('tr-TR') + ' ₺' + (contractorKeptShops > 0 ? (' + ' + contractorKeptShops + ' Dükkan') : '');
+        }
 
         // Toplam İnşaat Alanı (m²) = Toplam Kat Hacmi x Kat Oturumu (271 m²)
         var totalConstSqm = totalCostFloors * 271;
@@ -1363,9 +1459,10 @@
         var elConstCalc = document.getElementById('resConstCalcDetail');
         if (elConstCalc) elConstCalc.innerText = totalCostFloors + ' Kat × 271 m² (Zemin, Çatı, Bodrum Dahil)';
 
-        // Firma Şantiye Maliyeti = Toplam m² x Firma Birim Maliyeti (Varsayılan 25.000 ₺)
+        // Firma Şantiye Maliyeti = (Toplam m² x Firma Birim Maliyeti) + (Varsa Kira & Taşınma Yükü)
         var effFirmUnit = firmUnitCost > 0 ? firmUnitCost : 25000;
-        var totalCost = totalConstSqm * effFirmUnit;
+        var constructionCostOnly = totalConstSqm * effFirmUnit;
+        var totalCost = constructionCostOnly + (includeRent ? totalRentAndRelocBurden : 0);
 
         // Net Proje Kârı = Ciro - Maliyet
         var netProfit = totalRevenue - totalCost;
@@ -1374,7 +1471,9 @@
         if (elFormRev) elFormRev.innerText = totalRevenue.toLocaleString('tr-TR') + ' TL (Ciro)';
 
         var elFormCost = document.getElementById('resFormulaCost');
-        if (elFormCost) elFormCost.innerText = totalCost.toLocaleString('tr-TR') + ' TL (Maliyet)';
+        if (elFormCost) {
+            elFormCost.innerText = totalCost.toLocaleString('tr-TR') + ' TL (' + (includeRent ? 'İnşaat + Kira/Taşınma Maliyeti' : 'İnşaat Maliyeti') + ')';
+        }
 
         var elFormProfit = document.getElementById('resFormulaProfit');
         var elProfitBadge = document.getElementById('resNetProfitBadge');
@@ -1400,7 +1499,7 @@
         var noteEl = document.getElementById('resQuickScenarioNote');
         if (noteEl) {
             if (contractorKeptUnits > 0 && ownerGivenUnits >= oldOwners) {
-                noteEl.innerHTML = '<b>Ön Karar Notu:</b> ' + floors + ' katta ' + unitsPerFloor + "\'şer daireden <b>" + totalUnits + ' daire</b> üretilir. %' + ownerSharePercent + ' payla maliklere ' + ownerGivenUnits + ' daire verilir (künyedeki ' + oldOwners + ' maliki fazlasıyla karşılar); <b>müteahhide ' + contractorKeptUnits + ' satılabilir daire (' + totalRevenue.toLocaleString('tr-TR') + ' ₺ ciro)</b> kalır.';
+                noteEl.innerHTML = '<b>Ön Karar Notu:</b> ' + floors + ' katta ' + unitsPerFloor + "\'şer daireden <b>" + totalUnits + ' daire' + (plannedNewShops > 0 ? (' + ' + plannedNewShops + ' dükkan') : '') + '</b> üretilir. %' + ownerSharePercent + ' payla maliklere ' + ownerGivenUnits + ' daire' + (ownerGivenShops > 0 ? (' + ' + ownerGivenShops + ' dükkan') : '') + ' verilir; <b>müteahhide ' + contractorKeptUnits + ' daire' + (contractorKeptShops > 0 ? (' + ' + contractorKeptShops + ' dükkan') : '') + ' (' + totalRevenue.toLocaleString('tr-TR') + ' ₺ ciro)</b> kalır.';
             } else if (ownerGivenUnits < oldOwners) {
                 noteEl.innerHTML = '<span class="text-danger"><b>Kritik Emsal Uyarısı:</b></span> Maliklere verilen ' + ownerGivenUnits + ' daire, mevcut ' + oldOwners + ' malikin hak edişini karşılamıyor. Kat sayısını artırın veya malik payını yükseltin.';
             } else {
@@ -1423,12 +1522,17 @@
     function saveQuickContractorPlan(isAuto) {
         var form = document.getElementById('simForm');
         var formData = new FormData(form);
+        var firmUnitInp = document.getElementById('calcFirmUnitCost');
+        if (firmUnitInp) formData.set('firmUnitCostPerSqm', firmUnitInp.value);
+        var incRentInp = document.getElementById('calcIncludeRent');
+        if (incRentInp) formData.set('includeRentInFeasibility', incRentInp.checked ? 'true' : 'false');
 
         var statusEl = document.getElementById('simAutosaveStatus');
         if (statusEl) statusEl.innerHTML = '<span class="badge bg-warning text-dark px-2 py-1 small"><i class="bi bi-arrow-repeat spin me-1"></i>Kaydediliyor...</span>';
 
         fetch('/ConstructionProject/UpdateAnalysisImar', {
             method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
             body: formData
         })
         .then(function (res) { return res.json(); })

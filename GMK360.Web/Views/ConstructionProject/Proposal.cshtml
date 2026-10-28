@@ -16,7 +16,16 @@
     var stakeholders = ViewBag.Stakeholders as List<ProjectStakeholder> ?? new List<ProjectStakeholder>();
     int landownerCount = stakeholders.Count;
     int oldUnits = Model.EskiDaireSayisi ?? 10;
+    int oldShops = Model.EskiDukkanSayisi ?? 0;
     double landArea = Model.TotalLandArea ?? 850;
+    var rentPolicy = ViewBag.RentPolicy as GMK360.Core.DTOs.Construction.ProjectRentPolicyDto ?? Model.RentAndRontgenPolicy;
+    decimal ownerShare = rentPolicy.OwnerSharePercent > 0 ? rentPolicy.OwnerSharePercent : 50m;
+    decimal contractorShare = 100m - ownerShare;
+    decimal extraSiteTotal = rentPolicy.EstimatedShoringCost + rentPolicy.EstimatedRetainingWallCost + rentPolicy.EstimatedPilingCost + rentPolicy.EstimatedGroundwaterCost + rentPolicy.DemolitionExtraPolicyCost;
+    string goDecision = rentPolicy.GoNoGoDecision ?? "CONDITIONAL_GO";
+    string defaultShieldText = !string.IsNullOrWhiteSpace(rentPolicy.ContractShieldClauses)
+        ? rentPolicy.ContractShieldClauses
+        : "• [YIKIM & KOMŞU BİNA GÜVENCE ŞARTI]: Yıkım işlemi başlamadan önce bitişik/komşu binalar için Noter Delil Tespiti yaptırılacak ve Komşu Mali Mesuliyet Klozlu All-Risk Sigorta Poliçesi düzenlenecektir.\n• [ZEMİN, İSTİNAT VE İKSA MALİYET KALKANI]: Resmi zemin etüdü sonucunda çıkabilecek ekstra fore kazık, istinat duvarı ve ağır iksa maliyetleri (" + rentPolicy.ExtraGroundCostPayer + ") esasına göre yürütülecektir.\n• [KİRA & TAHLİYE BAŞLANGIÇ KALKANI]: Kira yardımları, tüm maliklerin (%100) noter sözleşmesini imzalayıp binayı boş ve ilişiği kesilmiş olarak teslim ettiği tarihte başlar.";
 }
 
 <!-- KOMPAKT PROJE BAŞLIK ŞERİDİ (TEK SATIR & SIFIR DİKEY İSRAF) -->
@@ -54,6 +63,42 @@
     </div>
 }
 
+<!-- 3. SAYFA (DETAYLI İNCELEME / RÖNTGEN) ÖZET & KARAR KALKANI ŞERİDİ -->
+<div class="p-2.5 px-3 mb-2 rounded-3 border bg-white shadow-xs d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        @if (goDecision == "GO")
+        {
+            <span class="badge bg-success text-white px-2.5 py-1 rounded-pill fw-bold" style="font-size: 0.74rem;">
+                🟢 RÖNTGEN KARARI: GİRİLİR (GO)
+            </span>
+        }
+        else if (goDecision == "NO_GO")
+        {
+            <span class="badge bg-danger text-white px-2.5 py-1 rounded-pill fw-bold" style="font-size: 0.74rem;">
+                🔴 RÖNTGEN KARARI: GİRİLMEZ (NO-GO)
+            </span>
+        }
+        else
+        {
+            <span class="badge bg-warning text-dark border border-warning px-2.5 py-1 rounded-pill fw-bold" style="font-size: 0.74rem;">
+                🟡 RÖNTGEN KARARI: ŞARTLI GİRİLİR (KALKAN MADDELİ)
+            </span>
+        }
+        <span class="badge bg-light text-dark border px-2 py-1 rounded-pill" style="font-size: 0.72rem;">
+            <i class="bi bi-bricks text-primary me-1"></i>Nizam: <b>@rentPolicy.AdjacentBuildingRisk</b>
+        </span>
+        <span class="badge bg-light text-dark border px-2 py-1 rounded-pill" style="font-size: 0.72rem;">
+            <i class="bi bi-cone-striped text-warning me-1"></i>Yıkım: <b>@(rentPolicy.DemolitionExecutionMode.StartsWith("Dışarıdan") ? "Dışarıdan İhale" : "Kendi Bünyemizde")</b>
+        </span>
+        <span class="badge bg-light text-dark border px-2 py-1 rounded-pill" style="font-size: 0.72rem;">
+            <i class="bi bi-layers-half text-danger me-1"></i>Ekstra Saha/Zemin/İksa: <b>@extraSiteTotal.ToString("N0") ₺</b> (@(rentPolicy.ExtraGroundCostPayer.StartsWith("Sözleşmeye") ? "Malik/Şartname" : (rentPolicy.ExtraGroundCostPayer.StartsWith("Yarı") ? "%50-%50" : "Müteahhit")))
+        </span>
+    </div>
+    <a href="/ConstructionProject/Analysis/@Model.Id" class="btn btn-xs btn-outline-secondary rounded-pill px-2.5 py-0.5 fw-bold" style="font-size: 0.72rem;">
+        <i class="bi bi-arrow-left me-1"></i>3. Adım: Röntgene Dön
+    </a>
+</div>
+
 <!-- 1. BÖLÜM: RESMİ TEKLİF HAZIRLAMA (KOMPAKT & AKILLI MASASI) -->
 <div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs overflow-hidden">
     <div class="d-flex justify-content-between align-items-center p-2 px-3 bg-light border-bottom flex-wrap gap-1"
@@ -66,16 +111,16 @@
                 <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-1.5 py-0 rounded-pill" style="font-size: 0.68rem;">
                     <i class="bi bi-file-earmark-check me-1"></i>Kat Karşılığı & Kentsel Dönüşüm
                 </span>
-                <small class="text-muted d-none d-lg-inline" style="font-size: 0.72rem;">Malik paylaşım oranı, maliyet projeksiyonu ve resmi teklif mektubu çıktısı</small>
+                <small class="text-muted d-none d-lg-inline" style="font-size: 0.72rem;">Malik paylaşım oranı, maliyet projeksiyonu, sözleşme kalkanı ve resmi teklif mektubu çıktısı</small>
             </div>
         </div>
 
         <div class="d-flex align-items-center gap-1.5 flex-wrap" onclick="event.stopPropagation();">
-            <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-1 rounded-pill fw-bold" style="font-size: 0.74rem;">
-                <i class="bi bi-pie-chart me-1"></i>Paylaşım: %50 / %50
+            <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-1 rounded-pill fw-bold" style="font-size: 0.74rem;" id="badgeHeaderShare">
+                <i class="bi bi-pie-chart me-1"></i>Paylaşım: %@ownerShare.ToString("0.#") Malik / %@contractorShare.ToString("0.#") Müteahhit
             </span>
             <span class="badge bg-primary bg-opacity-10 text-primary border px-2 py-1 rounded-pill" style="font-size: 0.74rem;">
-                <i class="bi bi-people me-1"></i>@oldUnits Hak Sahibi
+                <i class="bi bi-people me-1"></i>@oldUnits Daire + @oldShops Dükkan Hak Sahibi
             </span>
             <button class="btn btn-sm btn-white border rounded-pill px-2.5 py-0 fw-bold d-flex align-items-center gap-1 shadow-xs text-secondary" 
                     type="button" data-bs-toggle="collapse" data-bs-target="#teklifCollapse" aria-expanded="true" aria-controls="teklifCollapse" id="btnTeklifToggle" style="font-size: 0.74rem;">
@@ -86,96 +131,168 @@
     </div>
 
     <div class="collapse show p-2 p-md-3" id="teklifCollapse">
-        <!-- 1.1 ALT BÖLÜM: TEMEL TEKLİF PARAMETRELERİ -->
-        <div class="row g-2 mb-3">
-            <div class="col-md-3">
-                <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Malik (Arsa Sahibi) Payı (%)</label>
-                <div class="input-group input-group-sm">
-                    <span class="input-group-text bg-light fw-bold">%</span>
-                    <input type="number" step="0.5" class="form-control fw-bold text-primary" id="inputMalikOran" value="50" placeholder="50" />
-                </div>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Müteahhit Payı (%)</label>
-                <div class="input-group input-group-sm">
-                    <span class="input-group-text bg-light fw-bold">%</span>
-                    <input type="number" step="0.5" class="form-control fw-bold text-success" id="inputMuteahhitOran" value="50" placeholder="50" readonly />
-                </div>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Aylık Kira Desteği (₺/Malik)</label>
-                <div class="input-group input-group-sm">
-                    <input type="number" step="1000" class="form-control" id="inputKiraYardimi" value="15000" placeholder="15.000" />
-                    <span class="input-group-text bg-light">₺/Ay</span>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Taşınma Yardımı (₺/Malik)</label>
-                <div class="input-group input-group-sm">
-                    <input type="number" step="1000" class="form-control" id="inputTasinmaYardimi" value="30000" placeholder="30.000" />
-                    <span class="input-group-text bg-light">₺</span>
-                </div>
-            </div>
-        </div>
+        <form asp-action="SaveProjectProposal" asp-controller="ConstructionProject" method="post" id="proposalForm">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="projectId" value="@Model.Id" />
 
-        <!-- 1.2 ALT BÖLÜM: PROJE VE TESLİM TAAHHÜTLERİ -->
-        <div class="row g-2 mb-3">
-            <div class="col-md-3">
-                <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">İnşaat Teslim Süresi</label>
-                <div class="input-group input-group-sm">
-                    <input type="number" class="form-control" id="inputTeslimAy" value="18" placeholder="18" />
-                    <span class="input-group-text bg-light">Ay</span>
+            <!-- 1.1 ALT BÖLÜM: TEMEL TEKLİF PARAMETRELERİ -->
+            <div class="row g-2 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Malik (Arsa Sahibi) Payı (%)</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-light fw-bold">%</span>
+                        <input type="number" step="0.5" name="ownerSharePercent" class="form-control fw-bold text-primary" id="inputMalikOran" value="@ownerShare.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)" oninput="syncProposalShares()" />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Müteahhit Payı (%)</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-light fw-bold">%</span>
+                        <input type="number" step="0.5" class="form-control fw-bold text-success" id="inputMuteahhitOran" value="@contractorShare.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)" readonly />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Aylık Kira Desteği (₺/Daire)</label>
+                    <div class="input-group input-group-sm">
+                        <input type="number" step="1000" name="flatMonthlyRent" class="form-control fw-bold text-success" id="inputKiraYardimi" value="@rentPolicy.FlatMonthlyRent.ToString("0")" />
+                        <span class="input-group-text bg-light">₺/Ay</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Taşınma Yardımı (₺/Daire)</label>
+                    <div class="input-group input-group-sm">
+                        <input type="number" step="1000" name="flatRelocationFee" class="form-control fw-bold" id="inputTasinmaYardimi" value="@rentPolicy.FlatRelocationFee.ToString("0")" />
+                        <span class="input-group-text bg-light">₺</span>
+                    </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Tahmini İnşaat m² Maliyeti</label>
-                <div class="input-group input-group-sm">
-                    <input type="number" step="500" class="form-control" id="inputBirimMaliyet" value="22500" placeholder="22.500" />
-                    <span class="input-group-text bg-light">₺/m²</span>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Banka Teminat Mektubu</label>
-                <div class="input-group input-group-sm">
-                    <span class="input-group-text bg-light">%</span>
-                    <input type="number" step="1" class="form-control" id="inputTeminatOran" value="10" placeholder="10" />
-                    <span class="input-group-text bg-light">Maliyet Oranı</span>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Hedef Yeni Daire Sayısı</label>
-                <div class="input-group input-group-sm">
-                    <input type="number" class="form-control fw-bold" id="inputYeniDaire" value="@(Model.TargetTotalApartments ?? (oldUnits * 2))" placeholder="20" />
-                    <span class="input-group-text bg-light">Adet</span>
-                </div>
-            </div>
-        </div>
 
-        <!-- 1.3 ALT BÖLÜM: RESMİ TEKLİF METNİ VE TAAHHÜT ŞARTLARI -->
-        <div class="mb-3">
-            <label class="form-label fw-bold small text-dark mb-1" style="font-size: 0.80rem;">
-                <i class="bi bi-card-text text-primary me-1"></i>Teklif Ön Yazısı & Maliklere Sunulacak Şartname Özeti
-            </label>
-            <textarea class="form-control rounded-3" rows="3" style="font-size: 0.82rem;" placeholder="Şirketimiz tarafından arsanız üzerinde yapılacak kentsel dönüşüm projesinde uygulanacak teknik şartname, malzeme kalitesi ve hak sahiplerine taahhütlerimiz...">Sayın Malikler Kurulu,
-@cityName ili, @distName ilçesi, @neighName Mahallesi sınırları içerisinde yer alan @Model.Ada Ada / @Model.Parsel Parsel üzerindeki yapınız için hazırlanan resmi teklifimizdir. Projemiz C35/45 sınıfı hazır beton, B420C nervürlü donatı çeliği, birinci sınıf ısı ve su yalıtımı, kapalı otopark ve modern mimari ile anahtar teslimi olarak inşa edilecektir.</textarea>
-        </div>
+            <!-- 1.2 ALT BÖLÜM: PROJE, DÜKKAN VE TESLİM TAAHHÜTLERİ -->
+            <div class="row g-2 mb-3">
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">İnşaat Teslim Süresi</label>
+                    <div class="input-group input-group-sm">
+                        <input type="number" name="rentDurationMonths" class="form-control fw-bold" id="inputTeslimAy" value="@(rentPolicy.RentDurationMonths > 0 ? rentPolicy.RentDurationMonths : 18)" />
+                        <span class="input-group-text bg-light">Ay</span>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Birim İnşaat Maliyeti</label>
+                    <div class="input-group input-group-sm">
+                        <input type="number" step="500" name="firmUnitCostPerSqm" class="form-control fw-bold" id="inputBirimMaliyet" value="@(rentPolicy.FirmUnitCostPerSqm > 0 ? rentPolicy.FirmUnitCostPerSqm.ToString("0") : "25000")" />
+                        <span class="input-group-text bg-light">₺/m²</span>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Banka Teminat Oranı</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-light">%</span>
+                        <input type="number" step="1" name="bankGuaranteeRate" class="form-control fw-bold" id="inputTeminatOran" value="@rentPolicy.BankGuaranteeRate.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)" />
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Hedef Yeni Daire</label>
+                    <div class="input-group input-group-sm">
+                        <input type="number" name="targetTotalApartments" class="form-control fw-bold text-primary" id="inputYeniDaire" value="@(Model.TargetTotalApartments ?? (oldUnits * 2))" />
+                        <span class="input-group-text bg-light">Adet</span>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Hedef Yeni Dükkan</label>
+                    <div class="input-group input-group-sm">
+                        <input type="number" name="plannedNewShops" class="form-control fw-bold text-warning" id="inputYeniDukkan" value="@rentPolicy.PlannedNewShops" />
+                        <span class="input-group-text bg-light">Adet</span>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.75rem;">Malik Dükkan Payı</label>
+                    <div class="input-group input-group-sm">
+                        <input type="number" name="ownerGivenShops" class="form-control fw-bold text-secondary" id="inputMalikDukkan" value="@rentPolicy.OwnerGivenShops" />
+                        <span class="input-group-text bg-light">Adet</span>
+                    </div>
+                </div>
+            </div>
 
-        <!-- BUTONLAR ŞERİDİ -->
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 pt-2 border-top">
-            <div class="text-muted small" style="font-size: 0.74rem;">
-                <i class="bi bi-info-circle me-1"></i>Teklif parametreleri güncellendikçe resmi teklif mektubu dinamik olarak yeniden üretilir.
+            <!-- 1.3 ALT BÖLÜM: RESMİ TEKLİF METNİ VE SÖZLEŞME KALKANI MADDELERİ -->
+            <div class="row g-2 mb-3">
+                <div class="col-lg-6">
+                    <label class="form-label fw-bold small text-dark mb-1" style="font-size: 0.80rem;">
+                        <i class="bi bi-card-text text-primary me-1"></i>Teklif Ön Yazısı & Maliklere Sunulacak Teknik Şartname Özeti
+                    </label>
+                    <textarea name="proposalSummaryText" id="inputProposalSummary" class="form-control rounded-3" rows="4" style="font-size: 0.80rem;">@(!string.IsNullOrWhiteSpace(Model.PublicDescription) ? Model.PublicDescription : $"Sayın Malikler Kurulu,\n{cityName} ili, {distName} ilçesi, {neighName} Mahallesi sınırları içerisinde yer alan {Model.Ada} Ada / {Model.Parsel} Parsel üzerindeki yapınız için hazırlanan resmi teklifimizdir. Projemiz C35/45 sınıfı hazır beton, B420C nervürlü donatı çeliği, birinci sınıf ısı ve su yalıtımı, kapalı otopark ve modern mimari ile anahtar teslimi olarak inşa edilecektir.")</textarea>
+                </div>
+                <div class="col-lg-6">
+                    <label class="form-label fw-bold small text-dark mb-1" style="font-size: 0.80rem;">
+                        <i class="bi bi-shield-fill-check text-success me-1"></i>3. Sayfa Röntgenden Gelen Sözleşme Kalkanı & Özel Şartlar
+                    </label>
+                    <textarea name="contractShieldClauses" id="inputShieldClauses" class="form-control rounded-3 font-monospace bg-light bg-opacity-50" rows="4" style="font-size: 0.76rem;">@defaultShieldText</textarea>
+                </div>
             </div>
-            <div class="d-flex gap-2">
-                <button type="button" class="btn btn-outline-primary rounded-pill px-3 py-1 fw-bold btn-sm shadow-xs" style="font-size: 0.78rem;">
-                    <i class="bi bi-save me-1"></i>Teklif Parametrelerini Kaydet
-                </button>
-                <button type="button" class="btn btn-success rounded-pill px-3 py-1 fw-bold btn-sm shadow-xs text-white" style="font-size: 0.78rem;">
-                    <i class="bi bi-file-earmark-pdf me-1"></i>Resmi Teklif PDF'i Oluştur
-                </button>
+
+            <!-- BUTONLAR ŞERİDİ -->
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 pt-2 border-top">
+                <div class="text-muted small" style="font-size: 0.74rem;">
+                    <i class="bi bi-info-circle me-1"></i>Teklif parametreleri ve sözleşme kalkanı maddeleri resmi teklif çıktısına doğrudan yansıtılır.
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="submit" class="btn btn-outline-primary rounded-pill px-3 py-1 fw-bold btn-sm shadow-xs" style="font-size: 0.78rem;">
+                        <i class="bi bi-save me-1"></i>Teklif Parametrelerini Kaydet
+                    </button>
+                    <a href="/ConstructionProject/ExportFeasibilityPdf?projectId=@Model.Id" target="_blank" class="btn btn-outline-dark rounded-pill px-3 py-1 fw-bold btn-sm shadow-xs" style="font-size: 0.78rem;">
+                        <i class="bi bi-bar-chart-steps me-1"></i>Fizibilite & İmar PDF İndir
+                    </a>
+                    <button type="button" class="btn btn-success rounded-pill px-3 py-1 fw-bold btn-sm shadow-xs text-white" style="font-size: 0.78rem;" onclick="printOfficialProposalLetter()">
+                        <i class="bi bi-file-earmark-pdf me-1"></i>Resmi Teklif Mektubu & Şartname Yazdır (PDF)
+                    </button>
+                </div>
             </div>
-        </div>
+        </form>
     </div>
 </div>
+
+<script>
+    function syncProposalShares() {
+        var malik = parseFloat(document.getElementById('inputMalikOran').value) || 0;
+        var mut = Math.max(0, 100 - malik);
+        var mutEl = document.getElementById('inputMuteahhitOran');
+        if (mutEl) mutEl.value = mut.toFixed(1).replace('.0', '');
+        var badgeEl = document.getElementById('badgeHeaderShare');
+        if (badgeEl) badgeEl.innerHTML = '<i class="bi bi-pie-chart me-1"></i>Paylaşım: %' + malik + ' Malik / %' + mut.toFixed(1).replace('.0', '') + ' Müteahhit';
+    }
+
+    function printOfficialProposalLetter() {
+        var malikOran = document.getElementById('inputMalikOran').value;
+        var mutOran = document.getElementById('inputMuteahhitOran').value;
+        var kira = parseFloat(document.getElementById('inputKiraYardimi').value || 0).toLocaleString('tr-TR');
+        var tasinma = parseFloat(document.getElementById('inputTasinmaYardimi').value || 0).toLocaleString('tr-TR');
+        var teslimAy = document.getElementById('inputTeslimAy').value;
+        var teminat = document.getElementById('inputTeminatOran').value;
+        var yeniDaire = document.getElementById('inputYeniDaire').value;
+        var yeniDukkan = document.getElementById('inputYeniDukkan').value;
+        var malikDukkan = document.getElementById('inputMalikDukkan').value;
+        var summary = document.getElementById('inputProposalSummary').value.replace(/\n/g, '<br/>');
+        var shields = document.getElementById('inputShieldClauses').value.replace(/\n/g, '<br/>');
+
+        var w = window.open('', '_blank', 'width=900,height=800');
+        var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"><title>Resmi Teklif Mektubu - @Model.Name</title>' +
+            '<style>body{font-family:Arial,sans-serif;color:#1e293b;padding:32px;line-height:1.5;} .hdr{border-bottom:2px solid #0f172a;padding-bottom:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;} .box{border:1px solid #cbd5e1;border-radius:8px;padding:14px;margin-bottom:16px;background:#f8fafc;} table{width:100%;border-collapse:collapse;margin-bottom:16px;} th,td{border:1px solid #cbd5e1;padding:8px 10px;text-align:left;font-size:13px;} th{background:#f1f5f9;} h2,h3{margin:0 0 8px 0;color:#0f172a;} .shield{border-left:4px solid #16a34a;background:#f0fdf4;padding:12px;border-radius:6px;font-size:13px;}</style></head><body>' +
+            '<div class="hdr"><div><h2>@(Model.Agency?.CompanyName ?? "GMK360 İNŞAAT & GAYRİMENKUL GELİŞTİRME")</h2><div>Kentsel Dönüşüm & Kat Karşılığı Resmi Teklif Mektubu</div></div><div style="text-align:right;font-size:13px;"><b>Tarih:</b> ' + new Date().toLocaleDateString('tr-TR') + '<br/><b>Proje:</b> @Model.Name<br/><b>Konum:</b> @cityName / @distName (@neighName Mah. @Model.Ada Ada / @Model.Parsel Parsel)</div></div>' +
+            '<div class="box"><h3>1. Teklif Ön Yazısı & Teknik Taahhüt Özeti</h3><div style="font-size:13.5px;">' + summary + '</div></div>' +
+            '<h3>2. Paylaşım, Kira ve Teslim Taahhüt Tablosu</h3>' +
+            '<table><tr><th>Parametre</th><th>Teklif Edilen Değer</th><th>Parametre</th><th>Teklif Edilen Değer</th></tr>' +
+            '<tr><td><b>Arsa Sahibi (Malik) Payı</b></td><td>%' + malikOran + '</td><td><b>Yüklenici (Müteahhit) Payı</b></td><td>%' + mutOran + '</td></tr>' +
+            '<tr><td><b>Planlanan Yeni Daire</b></td><td>' + yeniDaire + ' Daire</td><td><b>Planlanan Yeni Dükkan</b></td><td>' + yeniDukkan + ' Dükkan (Malik Payı: ' + malikDukkan + ')</td></tr>' +
+            '<tr><td><b>Aylık Kira Desteği (Daire)</b></td><td>' + kira + ' ₺ / Ay</td><td><b>Taşınma Yardımı (Daire)</b></td><td>' + tasinma + ' ₺</td></tr>' +
+            '<tr><td><b>İnşaat Teslim Süresi</b></td><td>' + teslimAy + ' Ay (Ruhsat/Tahliye Sonrası)</td><td><b>Banka Teminat Mektubu</b></td><td>%' + teminat + '</td></tr></table>' +
+            '<div class="shield"><h3>3. Teknik Şartname & Sözleşme Güvence (Kalkan) Maddeleri</h3><div>' + shields + '</div></div>' +
+            '<div style="margin-top:36px;display:flex;justify-content:space-between;font-size:13px;"><div><b>Yüklenici Firma Yetkilisi</b><br/><br/>İmza / Kaşe</div><div><b>Apartman / Site Yönetimi (Malikler Temsilcisi)</b><br/><br/>İmza</div></div>' +
+            '</body></html>';
+        w.document.write(html);
+        w.document.close();
+        w.focus();
+        setTimeout(function() { w.print(); }, 300);
+    }
+</script>
 
 <!-- 2. BÖLÜM: SÖZLEŞMELER (BİLGİLENDİRME İSKELETİ - EXCEL NOTU: YENİ SEKME OLACAK KENDİ SAYFASI) -->
 <div class="card border border-light-subtle rounded-3 bg-white mb-2 shadow-xs">

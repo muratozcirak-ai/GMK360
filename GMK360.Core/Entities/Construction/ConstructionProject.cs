@@ -182,6 +182,27 @@ public decimal AverageFlatSalePrice { get; set; } = 0; // Ortalama Daire Fiyatı
         public virtual ICollection<ConstructionProjectExpense> Expenses { get; set; } = new List<ConstructionProjectExpense>();
 
         public string? DxfFilePath { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+        public GMK360.Core.DTOs.Construction.ProjectRentPolicyDto RentAndRontgenPolicy
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(RentPolicyJson))
+                {
+                    return new GMK360.Core.DTOs.Construction.ProjectRentPolicyDto();
+                }
+                try
+                {
+                    return System.Text.Json.JsonSerializer.Deserialize<GMK360.Core.DTOs.Construction.ProjectRentPolicyDto>(RentPolicyJson)
+                           ?? new GMK360.Core.DTOs.Construction.ProjectRentPolicyDto();
+                }
+                catch
+                {
+                    return new GMK360.Core.DTOs.Construction.ProjectRentPolicyDto();
+                }
+            }
+        }
     }
 }
 
