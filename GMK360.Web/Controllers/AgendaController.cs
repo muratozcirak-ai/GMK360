@@ -1880,6 +1880,7 @@ namespace GMK360.Web.Controllers
                     await _context.SaveChangesAsync();
                     proj.BinaYoneticisiId = crm.Id;
                     await _context.SaveChangesAsync();
+                }
                 else if (proj != null && proj.BinaYoneticisi != null)
                 {
                     proj.BinaYoneticisi.PhoneNumber = newContact.PhoneNumber;
@@ -1887,6 +1888,7 @@ namespace GMK360.Web.Controllers
                     await _context.SaveChangesAsync();
                 }
             }
+            TempData["SuccessMessage"] = $"{newContact.Name} rehbere, toplantıya ve proje künyesine başarıyla kaydedildi.";
             TempData["NewParticipantName"] = newContact.Name;
             TempData["NewParticipantPhone"] = newContact.PhoneNumber ?? "";
             TempData["NewParticipantToken"] = participant.AccessToken;
