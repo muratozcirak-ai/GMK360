@@ -554,10 +554,40 @@ namespace GMK360.Web.Controllers
                 project.PartnersJson = null;
                 project.ProjectOwnerContact = "Tekil Yüklenici (%100)";
             }
+            // Ortak bilgilerini Merkezi Rehbere (AgencyPhonebooks) otomatik senkronize et (Toplantı & Saha konularında çağrılabilsin)
+            if (!string.IsNullOrWhiteSpace(partner.FullName) && !string.IsNullOrWhiteSpace(partner.Phone))
+            {
+                var pPhoneClean = partner.Phone.Trim();
+                var existingPb = await _context.AgencyPhonebooks
+                    .FirstOrDefaultAsync(pb => pb.AgencyId == agencyId.Value && !pb.IsDeleted && (pb.PhoneNumber == pPhoneClean || pb.Name == partner.FullName));
+                var matchedUser = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == pPhoneClean);
+                if (existingPb == null)
+                {
+                    _context.AgencyPhonebooks.Add(new AgencyPhonebook
+                    {
+                        AgencyId = agencyId.Value,
+                        Name = !string.IsNullOrWhiteSpace(partner.CompanyName) ? $"{partner.FullName} ({partner.CompanyName})" : partner.FullName,
+                        PhoneNumber = pPhoneClean,
+                        Email = partner.Email,
+                        ContactType = 2, // Firma / Ortak
+                        Tags = $"Proje Ortağı (%{partner.SharePercentage:0.#})",
+                        Notes = $"{project.Name} projesi hissedarı / ortağı olarak künyeden otomatik eklendi.",
+                        LinkedUserId = matchedUser?.Id,
+                        IsRegistered = matchedUser != null,
+                        CreatedAt = DateTime.Now,
+                        IsDeleted = false
+                    });
+                }
+                else if (matchedUser != null && string.IsNullOrEmpty(existingPb.LinkedUserId))
+                {
+                    existingPb.LinkedUserId = matchedUser.Id;
+                    existingPb.IsRegistered = true;
+                }
+            }
             await _context.SaveChangesAsync();
             TempData["SuccessMessage"] = existing != null 
-                ? "Ortak bilgileri güncellendi." 
-                : "Yeni ortak eklendi.";
+                ? "Ortak bilgileri güncellendi ve toplantı rehberiyle senkronize edildi." 
+                : "Yeni ortak eklendi ve toplantı rehberine otomatik tanımlandı.";
             return RedirectToAction(nameof(Workspace), new { id = projectId });
         }
         // POST: /ConstructionProject/DeleteProjectPartner
@@ -706,8 +736,44 @@ namespace GMK360.Web.Controllers
                 await _context.SaveChangesAsync();
                 project.BinaYoneticisiId = newContact.Id;
             }
+            // Proje Muhatabını Merkezi Rehbere (AgencyPhonebooks) otomatik senkronize et (Toplantı & Saha Masasında hazır çıksın)
+            string fullContactName = $"{firstName?.Trim()} {lastName?.Trim()}".Trim();
+            string cleanContactPhone = phoneNumber?.Trim() ?? "";
+            if (!string.IsNullOrWhiteSpace(fullContactName) && !string.IsNullOrWhiteSpace(cleanContactPhone))
+            {
+                var existingPb = await _context.AgencyPhonebooks
+                    .FirstOrDefaultAsync(pb => pb.AgencyId == agencyId.Value && !pb.IsDeleted && (pb.PhoneNumber == cleanContactPhone || pb.Name == fullContactName));
+                var matchedUser = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == cleanContactPhone);
+                if (existingPb == null)
+                {
+                    _context.AgencyPhonebooks.Add(new AgencyPhonebook
+                    {
+                        AgencyId = agencyId.Value,
+                        Name = fullContactName,
+                        PhoneNumber = cleanContactPhone,
+                        Email = email?.Trim(),
+                        ContactType = 4,
+                        Tags = contactType?.Trim() ?? "Bina Yöneticisi",
+                        Notes = $"{project.Name} proje künyesinden muhatap olarak otomatik eklendi. {notes?.Trim()}".Trim(),
+                        LinkedUserId = matchedUser?.Id,
+                        IsRegistered = matchedUser != null,
+                        CreatedAt = DateTime.Now,
+                        IsDeleted = false
+                    });
+                }
+                else
+                {
+                    existingPb.PhoneNumber = cleanContactPhone;
+                    if (!string.IsNullOrWhiteSpace(email)) existingPb.Email = email.Trim();
+                    if (matchedUser != null && string.IsNullOrEmpty(existingPb.LinkedUserId))
+                    {
+                        existingPb.LinkedUserId = matchedUser.Id;
+                        existingPb.IsRegistered = true;
+                    }
+                }
+            }
             await _context.SaveChangesAsync();
-            TempData["SuccessMessage"] = "Proje muhatap bilgileri başarıyla güncellendi.";
+            TempData["SuccessMessage"] = "Proje muhatap bilgileri güncellendi ve toplantı rehberiyle senkronize edildi.";
             return RedirectToAction(nameof(Workspace), new { id = id });
         }
         // POST: /ConstructionProject/UploadWorkspaceDrawing

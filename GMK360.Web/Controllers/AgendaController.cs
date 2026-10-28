@@ -1745,7 +1745,28 @@ namespace GMK360.Web.Controllers
                     record.PhonebookId = phonebookId;
                 }
                 await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = "Katılımcı toplantıya başarıyla eklendi ve canlı konu bağlantısı oluşturuldu.";
+                if (record.ProjectId.HasValue && record.ProjectId.Value > 0 && phonebook != null)
+                {
+                    var proj = await _context.ConstructionProjects.Include(p => p.BinaYoneticisi).FirstOrDefaultAsync(p => p.Id == record.ProjectId.Value && !p.IsDeleted);
+                    if (proj != null && (proj.BinaYoneticisi == null || string.IsNullOrWhiteSpace(proj.BinaYoneticisi.FirstName)))
+                    {
+                        var currUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+                        var crm = new CrmContact
+                        {
+                            ApplicationUserId = currUserId,
+                            ContactType = !string.IsNullOrWhiteSpace(phonebook.Tags) ? phonebook.Tags : "Bina Yöneticisi",
+                            FirstName = phonebook.Name,
+                            PhoneNumber = phonebook.PhoneNumber,
+                            Email = phonebook.Email,
+                            Notes = "Toplantı masasından otomatik olarak Proje Muhatabı atandı."
+                        };
+                        _context.CrmContacts.Add(crm);
+                        await _context.SaveChangesAsync();
+                        proj.BinaYoneticisiId = crm.Id;
+                        await _context.SaveChangesAsync();
+                    }
+                }
+                TempData["SuccessMessage"] = "Katılımcı toplantıya eklendi, proje künyesiyle eşitlendi ve canlı konu bağlantısı oluşturuldu.";
                 TempData["NewParticipantName"] = phonebook?.Name ?? "Katılımcı";
                 TempData["NewParticipantPhone"] = phonebook?.PhoneNumber ?? "";
                 TempData["NewParticipantToken"] = participant.AccessToken;
@@ -1799,7 +1820,37 @@ namespace GMK360.Web.Controllers
                 record.PhonebookId = newContact.Id;
                 await _context.SaveChangesAsync();
             }
-            TempData["SuccessMessage"] = $"{newContact.Name} rehbere ve toplantıya başarıyla eklendi.";
+            var matchedPortalUser = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == newContact.PhoneNumber);
+            if (matchedPortalUser != null)
+            {
+                newContact.LinkedUserId = matchedPortalUser.Id;
+                newContact.IsRegistered = true;
+                participant.UserId = matchedPortalUser.Id;
+                await _context.SaveChangesAsync();
+            }
+
+            if (record.ProjectId.HasValue && record.ProjectId.Value > 0)
+            {
+                var proj = await _context.ConstructionProjects.Include(p => p.BinaYoneticisi).FirstOrDefaultAsync(p => p.Id == record.ProjectId.Value && !p.IsDeleted);
+                if (proj != null && (proj.BinaYoneticisi == null || string.IsNullOrWhiteSpace(proj.BinaYoneticisi.FirstName)))
+                {
+                    var currUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+                    var crm = new CrmContact
+                    {
+                        ApplicationUserId = currUserId,
+                        ContactType = !string.IsNullOrWhiteSpace(role) ? role.Trim() : "Bina Yöneticisi",
+                        FirstName = newContact.Name,
+                        PhoneNumber = newContact.PhoneNumber,
+                        Notes = "Toplantı masasından otomatik olarak Proje Muhatabı atandı."
+                    };
+                    _context.CrmContacts.Add(crm);
+                    await _context.SaveChangesAsync();
+                    proj.BinaYoneticisiId = crm.Id;
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            TempData["SuccessMessage"] = $"{newContact.Name} rehbere, toplantıya ve proje künyesine başarıyla eklendi.";
             TempData["NewParticipantName"] = newContact.Name;
             TempData["NewParticipantPhone"] = newContact.PhoneNumber ?? "";
             TempData["NewParticipantToken"] = participant.AccessToken;
