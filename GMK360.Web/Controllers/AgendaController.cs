@@ -51,7 +51,7 @@ namespace GMK360.Web.Controllers
 
     [Authorize]
 
-    public class AgendaController : Controller
+    public partial class AgendaController : Controller
 
     {
 
@@ -637,7 +637,23 @@ namespace GMK360.Web.Controllers
 
                 .ThenInclude(r => r.Items)
 
+                .Include(p => p.AgendaRecord).ThenInclude(r => r.Project)
+                .Include(p => p.AgendaRecord).ThenInclude(r => r.Phonebook)
+                .Include(p => p.AgendaRecord).ThenInclude(r => r.Participants)
                 .FirstOrDefaultAsync(p => p.AccessToken == token);
+
+            if (participant != null && participant.AgendaRecord != null)
+            {
+                var gContact = await _context.AgencyPhonebooks.FirstOrDefaultAsync(c => c.Id == participant.PhonebookId);
+                var gItemIds = participant.AgendaRecord.Items != null ? participant.AgendaRecord.Items.Select(i => i.Id).ToList() : new System.Collections.Generic.List<int>();
+                var gDocs = await _context.DocumentArchives
+                    .Where(d => d.SourceModule == "AgendaItem" && d.SourceRecordId.HasValue && gItemIds.Contains(d.SourceRecordId.Value) && !d.IsDeleted)
+                    .OrderBy(d => d.Id)
+                    .ToListAsync();
+                ViewBag.ParticipantToken = participant.AccessToken;
+                ViewBag.ParticipantContact = gContact;
+                ViewBag.TopicDocuments = gDocs;
+            }
 
 
 
@@ -684,6 +700,157 @@ namespace GMK360.Web.Controllers
             {
 
                 p.ParticipantNotes = notes;
+                await _context.SaveChangesAsync();
+            }
+            return Ok();
+        }
+
+        [AllowAnonymous]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> GuestAddEntry(string token, string? messageText, string? docTitle, IFormFile? mediaFile)
+        {
+            if (string.IsNullOrWhiteSpace(token)) return NotFound();
+
+            var participant = await _context.AgendaParticipants
+                .Include(p => p.AgendaRecord)
+                    .ThenInclude(r => r.Items)
+                .FirstOrDefaultAsync(p => p.AccessToken == token);
+
+            if (participant == null || participant.AgendaRecord == null) return NotFound();
+
+            var record = participant.AgendaRecord;
+            var contact = await _context.AgencyPhonebooks.FirstOrDefaultAsync(c => c.Id == participant.PhonebookId);
+            string speakerName = contact != null && !string.IsNullOrWhiteSpace(contact.Name) ? contact.Name : "Katılımcı";
+
+            bool hasText = !string.IsNullOrWhiteSpace(messageText);
+            bool hasFile = mediaFile != null && mediaFile.Length > 0;
+
+            if (!hasText && !hasFile)
+            {
+                TempData["GuestError"] = "Lütfen bir soru/açıklama yazın veya bir fotoğraf/video/evrak seçin.";
+                return RedirectToAction(nameof(Guest), new { token = token });
+            }
+
+            int nextOrder = (record.Items != null && record.Items.Any() ? record.Items.Max(i => i.OrderNo) : 0) + 1;
+            string cleanTitle = !string.IsNullOrWhiteSpace(docTitle)
+                ? docTitle.Trim()
+                : $"{speakerName} Eki ({DateTime.Now:dd.MM.yyyy HH:mm})";
+
+            string statement = hasText
+                ? $"[{speakerName}]: {messageText!.Trim()}"
+                : $"[{speakerName} tarafından '{cleanTitle}' paylaşıldı]";
+
+            var newItem = new AgendaItem
+            {
+                AgendaRecordId = record.Id,
+                TopicTitle = "Katılımcı",
+                PresentationText = statement,
+                LiveMeetingNotes = "",
+                ImageUrl = "",
+                OrderNo = nextOrder
+            };
+
+            _context.AgendaItems.Add(newItem);
+            await _context.SaveChangesAsync();
+
+            if (hasFile && mediaFile != null)
+            {
+                string uploadsFolder = Path.Combine(_hostEnvironment.WebRootPath, "uploads", "agenda");
+                Directory.CreateDirectory(uploadsFolder);
+                string safeExt = Path.GetExtension(mediaFile.FileName).ToLowerInvariant();
+                if (string.IsNullOrEmpty(safeExt)) safeExt = ".jpg";
+                string uniqueFileName = Guid.NewGuid().ToString("N") + safeExt;
+                string filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                using (var fileStream = new FileStream(filePath, FileMode.Create))
+                {
+                    await mediaFile.CopyToAsync(fileStream);
+                }
+
+                string docUrl = "/uploads/agenda/" + uniqueFileName;
+                var doc = new DocumentArchive
+                {
+                    AgencyId = record.AgencyId,
+                    ProjectId = record.ProjectId,
+                    SourceModule = "AgendaItem",
+                    SourceRecordId = newItem.Id,
+                    Title = cleanTitle,
+                    FileName = cleanTitle + safeExt,
+                    FileExtension = safeExt,
+                    DocumentUrl = docUrl,
+                    Category = "Alınan Belge",
+                    UploadDate = DateTime.Now,
+                    Status = "Tamamlandı",
+                    CreatedAt = DateTime.Now,
+                    IsDeleted = false
+                };
+
+                _context.DocumentArchives.Add(doc);
+                await _context.SaveChangesAsync();
+            }
+
+            TempData["GuestSuccess"] = "Mesajınız ve ekleriniz canlı konu masasına başarıyla iletildi.";
+            return RedirectToAction(nameof(Guest), new { token = token });
+        }
+
+        [AllowAnonymous]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> GuestRequestNextSession(string token, string requestedDate, string? requestedTime, string? requestNote)
+        {
+            if (string.IsNullOrWhiteSpace(token)) return NotFound();
+
+            var participant = await _context.AgendaParticipants
+                .Include(p => p.AgendaRecord)
+                    .ThenInclude(r => r.Items)
+                .FirstOrDefaultAsync(p => p.AccessToken == token);
+
+            if (participant == null || participant.AgendaRecord == null) return NotFound();
+
+            var record = participant.AgendaRecord;
+            var contact = await _context.AgencyPhonebooks.FirstOrDefaultAsync(c => c.Id == participant.PhonebookId);
+            string speakerName = contact != null && !string.IsNullOrWhiteSpace(contact.Name) ? contact.Name : "Katılımcı";
+
+            DateTime targetDate = DateTime.Today.AddDays(2).AddHours(14);
+            if (!string.IsNullOrWhiteSpace(requestedDate) && DateTime.TryParse(requestedDate, out var d))
+            {
+                if (!string.IsNullOrWhiteSpace(requestedTime) && TimeSpan.TryParse(requestedTime, out var t))
+                {
+                    targetDate = d.Date.Add(t);
+                }
+                else
+                {
+                    targetDate = d.Date.AddHours(14);
+                }
+            }
+
+            int nextOrder = (record.Items != null && record.Items.Any() ? record.Items.Max(i => i.OrderNo) : 0) + 1;
+            string notePart = !string.IsNullOrWhiteSpace(requestNote) ? $" — Not: {requestNote.Trim()}" : "";
+            string reqText = $"📅 [2. RANDEVU / DEVAM OTURUMU TALEBİ - {speakerName}]: {targetDate:dd.MM.yyyy} Saat {targetDate:HH:mm} için yeni görüşme talep edildi.{notePart}";
+
+            var newItem = new AgendaItem
+            {
+                AgendaRecordId = record.Id,
+                TopicTitle = "Katılımcı",
+                PresentationText = reqText,
+                LiveMeetingNotes = "",
+                ImageUrl = "",
+                OrderNo = nextOrder
+            };
+
+            _context.AgendaItems.Add(newItem);
+            record.Notes = (record.Notes ?? "") + $"\n{reqText}";
+            await _context.SaveChangesAsync();
+
+            TempData["GuestSuccess"] = $"{targetDate:dd.MM.yyyy} saat {targetDate:HH:mm} için randevu talebiniz firma yetkilisine iletildi.";
+            return RedirectToAction(nameof(Guest), new { token = token });
+        }
+
+        private async Task<IActionResult> CleanupUnused(AgendaParticipant p)
+        {
+            if (false)
+            {
 
                 await _context.SaveChangesAsync();
 
@@ -1195,7 +1362,32 @@ namespace GMK360.Web.Controllers
 
 
 
-                        var phonebookIds = record.Participants.Select(p => p.PhonebookId).ToList();
+            if (record.PhonebookId.HasValue && record.PhonebookId.Value > 0 && !record.Participants.Any(p => p.PhonebookId == record.PhonebookId.Value))
+            {
+                var mainParticipant = new AgendaParticipant
+                {
+                    AgendaRecordId = record.Id,
+                    PhonebookId = record.PhonebookId.Value,
+                    AccessToken = Guid.NewGuid().ToString("N")
+                };
+                _context.AgendaParticipants.Add(mainParticipant);
+                record.Participants.Add(mainParticipant);
+                await _context.SaveChangesAsync();
+            }
+            bool tokenUpdated = false;
+            foreach (var part in record.Participants)
+            {
+                if (string.IsNullOrWhiteSpace(part.AccessToken))
+                {
+                    part.AccessToken = Guid.NewGuid().ToString("N");
+                    tokenUpdated = true;
+                }
+            }
+            if (tokenUpdated)
+            {
+                await _context.SaveChangesAsync();
+            }
+            var phonebookIds = record.Participants.Select(p => p.PhonebookId).ToList();
             var participantsPhonebook = await _context.AgencyPhonebooks
                 .Where(p => phonebookIds.Contains(p.Id))
                 .ToListAsync();
@@ -1548,7 +1740,12 @@ namespace GMK360.Web.Controllers
                 };
                 _context.AgendaParticipants.Add(participant);
                 await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = "Katılımcı toplantıya başarıyla eklendi.";
+                if (!record.PhonebookId.HasValue || record.PhonebookId.Value <= 0)
+                {
+                    record.PhonebookId = phonebookId;
+                }
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = "Katılımcı toplantıya başarıyla eklendi ve canlı konu bağlantısı oluşturuldu.";
             }
 
             return RedirectToAction(nameof(MeetingRoom), new { id = recordId });
@@ -1594,6 +1791,11 @@ namespace GMK360.Web.Controllers
             _context.AgendaParticipants.Add(participant);
             await _context.SaveChangesAsync();
 
+            if (!record.PhonebookId.HasValue || record.PhonebookId.Value <= 0)
+            {
+                record.PhonebookId = newContact.Id;
+                await _context.SaveChangesAsync();
+            }
             TempData["SuccessMessage"] = $"{newContact.Name} rehbere ve toplantıya başarıyla eklendi.";
             return RedirectToAction(nameof(MeetingRoom), new { id = recordId });
         }
@@ -1691,7 +1893,7 @@ namespace GMK360.Web.Controllers
 
         [HttpPost]
         [IgnoreAntiforgeryToken]
-        public async Task<IActionResult> UploadGridDocumentAuto(int itemId, int recordId, string direction, IFormFile file)
+        public async Task<IActionResult> UploadGridDocumentAuto(int itemId, int recordId, string direction, IFormFile file, string? customTitle = null, string? goldenDocType = null)
         {
             var agencyId = await GetCurrentAgencyIdAsync();
             var record = await _context.AgendaRecords
@@ -1730,6 +1932,86 @@ namespace GMK360.Web.Controllers
 
             string docUrl = "/uploads/agenda/" + uniqueFileName;
             string category = direction?.ToLower() == "gönder" ? "Gönderilen Belge" : "Alınan Belge";
+            string rawBaseName = Path.GetFileNameWithoutExtension(file.FileName);
+            if (rawBaseName.StartsWith("kamera_evrak_", StringComparison.OrdinalIgnoreCase))
+            {
+                rawBaseName = $"Kamera Çekimi ({DateTime.Now:dd.MM.yyyy HH:mm})";
+            }
+            string cleanTitle = !string.IsNullOrWhiteSpace(customTitle) ? customTitle.Trim() : rawBaseName;
+            string cleanFileName = cleanTitle + safeExt;
+
+            var customDoc = new DocumentArchive
+            {
+                AgencyId = agencyId,
+                ProjectId = record.ProjectId,
+                SourceModule = "AgendaItem",
+                SourceRecordId = itemId,
+                Title = cleanTitle,
+                FileName = cleanFileName,
+                FileExtension = safeExt,
+                DocumentUrl = docUrl,
+                Category = category,
+                UploadDate = DateTime.Now,
+                Status = "Tamamlandı",
+                CreatedAt = DateTime.Now,
+                IsDeleted = false
+            };
+            _context.DocumentArchives.Add(customDoc);
+
+            if (record.ProjectId.HasValue && record.ProjectId.Value > 0)
+            {
+                var proj = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == record.ProjectId.Value && !p.IsDeleted);
+                if (proj != null)
+                {
+                    var gType = (goldenDocType ?? "").Trim().ToLowerInvariant();
+                    var titleLower = cleanTitle.ToLowerInvariant();
+                    var rentPolicy = proj.RentAndRontgenPolicy;
+                    bool policyChanged = false;
+
+                    if (gType == "imar" || titleLower.Contains("imar"))
+                    {
+                        rentPolicy.ImarCapiDocumentUrl = docUrl;
+                        policyChanged = true;
+                    }
+                    else if (gType == "karar" || titleLower.Contains("karar defteri"))
+                    {
+                        rentPolicy.KararDefteriDocumentUrl = docUrl;
+                        policyChanged = true;
+                    }
+                    else if (gType == "bina_foto" || titleLower.Contains("bina cephe") || titleLower.Contains("sokak foto"))
+                    {
+                        if (string.IsNullOrWhiteSpace(proj.CurrentStateImageUrl))
+                        {
+                            proj.CurrentStateImageUrl = docUrl;
+                        }
+                    }
+
+                    if (policyChanged)
+                    {
+                        proj.RentPolicyJson = System.Text.Json.JsonSerializer.Serialize(rentPolicy);
+                    }
+                }
+            }
+
+            await _context.SaveChangesAsync();
+
+            bool isVid = safeExt == ".mp4" || safeExt == ".mov" || safeExt == ".webm" || safeExt == ".avi" || safeExt == ".mkv";
+            if (true)
+            {
+                return Json(new
+                {
+                    success = true,
+                    itemId = itemId,
+                    docId = customDoc.Id,
+                    title = customDoc.Title,
+                    fileName = customDoc.FileName,
+                    fileUrl = customDoc.DocumentUrl,
+                    category = customDoc.Category,
+                    isImage = safeExt == ".jpg" || safeExt == ".jpeg" || safeExt == ".png" || safeExt == ".webp",
+                    isVideo = isVid,
+                    isPdf = safeExt == ".pdf"
+                });
+            }
 
             var doc = new DocumentArchive
             {

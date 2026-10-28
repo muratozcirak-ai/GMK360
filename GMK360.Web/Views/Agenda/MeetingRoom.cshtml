@@ -168,7 +168,7 @@
                                                 <div class="btn-group btn-group-sm shadow-none" role="group">
                                                     <label class="btn btn-xs btn-outline-primary py-0 px-1.5 rounded-start-pill mb-0 shadow-none" style="font-size: 0.68rem; cursor: pointer;" title="Dosya / Belge Seç">
                                                         <i class="bi bi-box-arrow-in-down me-1"></i>Al
-                                                        <input type="file" class="d-none" onchange="uploadRowFile(this, 'al')" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+                                                        <input type="file" class="d-none" onchange="uploadRowFile(this, 'al')" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx" />
                                                     </label>
                                                     <button type="button" class="btn btn-xs btn-outline-primary py-0 px-1.5 rounded-end-pill mb-0 shadow-none" style="font-size: 0.68rem;" onclick="openCameraModal(this)" title="Laptop / Tablet Kamerasıyla Fotoğraf Çek">
                                                         <i class="bi bi-camera-fill"></i>
@@ -179,7 +179,7 @@
                                                     {
                                                         <span class="badge bg-light text-dark border p-1 px-1.5 rounded-pill d-inline-flex align-items-center gap-1" id="docBadge_@doc.Id" style="font-size: 0.68rem;">
                                                             <a href="@doc.DocumentUrl" target="_blank" class="text-decoration-none text-dark text-truncate" style="max-width: 80px;" title="@doc.FileName">
-                                                                <i class="bi bi-file-earmark text-primary"></i> @doc.FileName
+                                                                <i class="bi @((doc.FileExtension ?? "").ToLower().Contains("mp4") || (doc.FileExtension ?? "").ToLower().Contains("mov") ? "bi-camera-video-fill text-danger" : ((doc.FileExtension ?? "").ToLower().Contains("pdf") ? "bi-file-pdf-fill text-danger" : "bi-file-earmark-check text-primary"))"></i> @(!string.IsNullOrWhiteSpace(doc.Title) ? doc.Title : doc.FileName)
                                                             </a>
                                                             <i class="bi bi-x text-danger" style="cursor: pointer;" onclick="deleteRowDoc(@doc.Id)" title="Kaldır"></i>
                                                         </span>
@@ -197,7 +197,7 @@
                                                     {
                                                         <span class="badge bg-light text-dark border p-1 px-1.5 rounded-pill d-inline-flex align-items-center gap-1" id="docBadge_@doc.Id" style="font-size: 0.68rem;">
                                                             <a href="@doc.DocumentUrl" target="_blank" class="text-decoration-none text-dark text-truncate" style="max-width: 80px;" title="@doc.FileName">
-                                                                <i class="bi bi-send text-secondary"></i> @doc.FileName
+                                                                <i class="bi bi-send text-secondary"></i> @(!string.IsNullOrWhiteSpace(doc.Title) ? doc.Title : doc.FileName)
                                                             </a>
                                                             <i class="bi bi-x text-danger" style="cursor: pointer;" onclick="deleteRowDoc(@doc.Id)" title="Kaldır"></i>
                                                         </span>
@@ -253,7 +253,7 @@
                                             <div class="btn-group btn-group-sm shadow-none" role="group">
                                                 <label class="btn btn-xs btn-outline-primary py-0 px-1.5 rounded-start-pill mb-0 shadow-none" style="font-size: 0.68rem; cursor: pointer;" title="Malikten Alınan Belge / Fotoğraf Yükle">
                                                     <i class="bi bi-box-arrow-in-down me-1"></i>Al
-                                                    <input type="file" class="d-none" onchange="uploadRowFile(this, 'al')" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+                                                    <input type="file" class="d-none" onchange="uploadRowFile(this, 'al')" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx" />
                                                 </label>
                                                 <button type="button" class="btn btn-xs btn-outline-primary py-0 px-1.5 rounded-end-pill mb-0 shadow-none" style="font-size: 0.68rem;" onclick="openCameraModal(this)" title="Laptop / Tablet Kamerasıyla Fotoğraf Çek">
                                                     <i class="bi bi-camera-fill"></i>
@@ -361,7 +361,30 @@
                                 <div class="d-flex align-items-center justify-content-between p-1 px-2 rounded-2 bg-light border" style="font-size: 0.76rem;">
                                     <div class="d-flex align-items-center gap-1 text-truncate">
                                         <i class="bi bi-person-check-fill text-success" style="font-size: 0.75rem;"></i>
+                                        @{
+                                            var partRec = Model.Participants?.FirstOrDefault(x => x.PhonebookId == p.Id);
+                                            string pToken = partRec?.AccessToken ?? "";
+                                            bool pViewed = partRec?.IsViewed ?? false;
+                                            var pCleanPhone = (p.PhoneNumber ?? "").Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
+                                            if (pCleanPhone.StartsWith("0")) pCleanPhone = "90" + pCleanPhone.Substring(1);
+                                            else if (!string.IsNullOrEmpty(pCleanPhone) && !pCleanPhone.StartsWith("90")) pCleanPhone = "90" + pCleanPhone;
+                                        }
                                         <span class="fw-bold text-dark text-truncate">@p.Name</span>
+                                        @if (pViewed)
+                                        {
+                                            <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle rounded-pill px-1 py-0" style="font-size: 0.60rem;" title="Gölge Kullanıcı ekranı açıldı">✓ Görüldü</span>
+                                        }
+                                        @if (!string.IsNullOrEmpty(pToken))
+                                        {
+                                            <button type="button" class="btn btn-success btn-xs rounded-pill py-0 px-1.5 fw-bold ms-1" style="font-size: 0.65rem;"
+                                                    onclick="sendShadowUserWhatsApp('@pCleanPhone', '@Html.Raw((p.Name ?? "").Replace("'", "\\'"))', '@pToken', '@Html.Raw((Model.Title ?? "").Replace("'", "\\'"))')"
+                                                    title="WhatsApp'tan PWA Canlı Konu / Gölge Kullanıcı Linki Gönder">
+                                                <i class="bi bi-whatsapp me-0.5"></i>Gölge Link
+                                            </button>
+                                            <a href="/Agenda/Guest?token=@pToken" target="_blank" class="btn btn-outline-primary btn-xs rounded-pill py-0 px-1.5 fw-bold" style="font-size: 0.65rem;" title="Gölge Kullanıcı (PWA) Ekranını Aç">
+                                                <i class="bi bi-phone-fill"></i>
+                                            </a>
+                                        }
                                     </div>
                                     @if (!string.IsNullOrWhiteSpace(p.PhoneNumber))
                                     {
@@ -375,7 +398,10 @@
                     }
                     else
                     {
-                        <small class="text-muted fst-italic" style="font-size: 0.72rem;">Ek katılımcı eklenmedi. Yukarıdaki butonla rehberden veya hızlı yeni kayıtla ekleyebilirsiniz.</small>
+                        <div class="p-2 rounded-2 bg-warning bg-opacity-10 border border-warning-subtle small" style="font-size: 0.72rem;">
+                            <i class="bi bi-lightbulb-fill text-warning me-1"></i>
+                            <strong>Çat Kapı Misafir veya Saha Ekibi:</strong> Yukarıdaki <b>+ Katılımcı Ekle</b> butonuyla maliki, taşeronu veya patronu eklediğiniz anda <b>PWA Gölge Kullanıcı / Canlı Konu Linki</b> otomatik üretilir.
+                        </div>
                     }
                 </div>
             </div>
@@ -636,6 +662,103 @@
     </div>
 </div>
 
+<!-- MODAL: ALINAN EVRAK / FOTOĞRAF / VİDEO İSİMLENDİRME VE NİTELİK BELİRLEME -->
+<div class="modal fade" id="nameDocumentModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-header border-bottom py-2.5 bg-primary text-white">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-tag-fill text-warning fs-5"></i>
+                    <div>
+                        <h6 class="modal-title fw-bold mb-0" style="font-size: 0.90rem;">Alınan Evrak / Fotoğraf / Video Adını Belirle</h6>
+                        <small class="text-white-50" style="font-size: 0.70rem;">Rastgele dosya adı yerine resmi arşiv ve künye adını seçin veya yazın</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="cancelPendingDocUpload()"></button>
+            </div>
+            <div class="modal-body p-3">
+                <!-- 1. GRUP: KENTSEL DÖNÜŞÜM 4 ALTIN EVRAK (KÜNYEYİ OTOMATİK YEŞİLLER) -->
+                <div class="mb-2.5">
+                    <small class="fw-bold text-primary d-block mb-1" style="font-size: 0.72rem;">
+                        <i class="bi bi-stars me-1"></i>1. Proje Künyesi Altın Evrakları (Seçildiğinde Künyede Otomatik Yeşillenir)
+                    </small>
+                    <div class="d-flex flex-wrap gap-1">
+                        <button type="button" class="btn btn-xs btn-outline-primary rounded-pill px-2.5 py-1 fw-bold doc-preset-btn" style="font-size: 0.72rem;" onclick="selectDocNamingPreset('Tapu Belgesi', 'tapu', this)">
+                            📜 Tapu Belgesi
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline-primary rounded-pill px-2.5 py-1 fw-bold doc-preset-btn" style="font-size: 0.72rem;" onclick="selectDocNamingPreset('İmar Durum Belgesi (İmar Çapı)', 'imar', this)">
+                            📐 İmar Durum Belgesi (Çap)
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline-primary rounded-pill px-2.5 py-1 fw-bold doc-preset-btn" style="font-size: 0.72rem;" onclick="selectDocNamingPreset('Apartman Karar Defteri / Ön Uzlaşı', 'karar', this)">
+                            📒 Apartman Karar Defteri
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline-primary rounded-pill px-2.5 py-1 fw-bold doc-preset-btn" style="font-size: 0.72rem;" onclick="selectDocNamingPreset('Bina Cephe & Sokak Fotoğrafı', 'bina_foto', this)">
+                            🏢 Bina & Sokak Fotoğrafı
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 2. GRUP: ŞANTİYE SAHA VUKUAT, KUSUR & DENETİM (FOTO / VİDEO KANIT) -->
+                <div class="mb-2.5 mt-2 pt-2 border-top">
+                    <small class="fw-bold text-danger d-block mb-1" style="font-size: 0.72rem;">
+                        <i class="bi bi-camera-video-fill me-1"></i>2. Şantiye Saha Olayı, Kusur & Denetim Kanıtı (Patron / Taşeron Paylaşımı)
+                    </small>
+                    <div class="d-flex flex-wrap gap-1">
+                        <button type="button" class="btn btn-xs btn-outline-danger rounded-pill px-2.5 py-1 fw-bold doc-preset-btn" style="font-size: 0.72rem;" onclick="selectDocNamingPreset('Saha Kusur / İhlal Tespiti (Asansör Şaftı vb.)', 'saha_vukuat', this)">
+                            🚨 Saha Kusur / Şaft İhlali
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline-danger rounded-pill px-2.5 py-1 fw-bold doc-preset-btn" style="font-size: 0.72rem;" onclick="selectDocNamingPreset('Şantiye Temizlik & Düzen Kontrolü', 'saha_temizlik', this)">
+                            🧹 Temizlik & Düzen Tespiti
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline-danger rounded-pill px-2.5 py-1 fw-bold doc-preset-btn" style="font-size: 0.72rem;" onclick="selectDocNamingPreset('İSG / İş Güvenliği Tutanak & Görseli', 'isg', this)">
+                            🦺 İSG / Tutanak Kanıtı
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline-danger rounded-pill px-2.5 py-1 fw-bold doc-preset-btn" style="font-size: 0.72rem;" onclick="selectDocNamingPreset('Malzeme İrsaliyesi & Saha Teslimatı', 'irsaliye', this)">
+                            🚚 Malzeme / İrsaliye
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 3. GRUP: ŞİRKET İÇİ, TAŞERON & İK PERSONEL ALIMI -->
+                <div class="mb-3 mt-2 pt-2 border-top">
+                    <small class="fw-bold text-secondary d-block mb-1" style="font-size: 0.72rem;">
+                        <i class="bi bi-briefcase-fill me-1"></i>3. Şirket İçi, Taşeron & İK Personel Evrakları
+                    </small>
+                    <div class="d-flex flex-wrap gap-1">
+                        <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill px-2.5 py-1 fw-bold doc-preset-btn" style="font-size: 0.72rem;" onclick="selectDocNamingPreset('Personel Adayı CV & Yeterlilik Belgesi', 'ik_personel', this)">
+                            👤 Personel CV / Evrakı
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill px-2.5 py-1 fw-bold doc-preset-btn" style="font-size: 0.72rem;" onclick="selectDocNamingPreset('Taşeron Teklif & İmalat Evrakı', 'taseron', this)">
+                            🛠️ Taşeron Teklif / Ek
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill px-2.5 py-1 fw-bold doc-preset-btn" style="font-size: 0.72rem;" onclick="selectDocNamingPreset('Vekaletname / Kimlik Fotokopisi', 'resmi', this)">
+                            📝 Vekaletname / Kimlik
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ÖZEL EVRAK / MEDYA BAŞLIĞI GİRİŞİ -->
+                <div class="p-2.5 rounded-3 bg-light border">
+                    <label class="form-label fw-bold small text-dark mb-1" style="font-size: 0.78rem;">
+                        Evrak / Fotoğraf / Video Kayıt Adı <span class="text-danger">*</span>
+                    </label>
+                    <input type="text" id="inpPendingDocTitle" class="form-control form-control-sm fw-bold rounded-2 border-primary"
+                           placeholder="Örn: Tapu Belgesi veya Asansör Şaftı Moloz İhlali Videosu..."
+                           onkeydown="if(event.key==='Enter'){ event.preventDefault(); confirmPendingDocUpload(); }" />
+                    <input type="hidden" id="inpPendingGoldenType" value="" />
+                    <small class="text-muted d-block mt-1" id="lblPendingRawFileInfo" style="font-size: 0.68rem;"></small>
+                </div>
+            </div>
+            <div class="modal-footer border-top py-2 bg-light d-flex justify-content-between">
+                <button type="button" class="btn btn-light border rounded-pill px-3 btn-sm" data-bs-dismiss="modal" onclick="cancelPendingDocUpload()">Vazgeç</button>
+                <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold shadow-xs btn-sm" onclick="confirmPendingDocUpload()">
+                    <i class="bi bi-check2-circle me-1"></i>Bu İsimle Kaydet & Masaya Bağla
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- MODAL: CANLI KAMERA FOTOĞRAF ÇEKİCİ (LAPTOP & TABLET) -->
 <div class="modal fade" id="cameraCaptureModal" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered">
@@ -810,7 +933,7 @@
                         <div class="btn-group btn-group-sm shadow-none" role="group">
                             <label class="btn btn-xs btn-outline-primary py-0 px-1.5 rounded-start-pill mb-0 shadow-none" style="font-size: 0.68rem; cursor: pointer;" title="Dosya / Belge Seç">
                                 <i class="bi bi-box-arrow-in-down me-1"></i>Al
-                                <input type="file" class="d-none" onchange="uploadRowFile(this, 'al')" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+                                <input type="file" class="d-none" onchange="uploadRowFile(this, 'al')" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx" />
                             </label>
                             <button type="button" class="btn btn-xs btn-outline-primary py-0 px-1.5 rounded-end-pill mb-0 shadow-none" style="font-size: 0.68rem;" onclick="openCameraModal(this)" title="Laptop / Tablet Kamerasıyla Fotoğraf Çek">
                                 <i class="bi bi-camera-fill"></i>
@@ -862,7 +985,157 @@
         });
     }
 
+    var pendingUploadFile = null;
+    var pendingUploadDirection = 'al';
+    var pendingUploadRow = null;
+    var pendingUploadInput = null;
+
+    function openDocNamingModal(file, direction, row, inputEl) {
+        pendingUploadFile = file;
+        pendingUploadDirection = direction || 'al';
+        pendingUploadRow = row;
+        pendingUploadInput = inputEl || null;
+
+        document.querySelectorAll('.doc-preset-btn').forEach(function(b) {
+            b.classList.remove('active', 'btn-primary', 'btn-danger', 'btn-secondary', 'text-white');
+        });
+
+        var rawName = (file && file.name) ? file.name.replace(/\.[^/.]+$/, "") : "";
+        if (/^kamera_evrak_/i.test(rawName) || /^IMG_/i.test(rawName) || /^WhatsApp/i.test(rawName) || /^DSC/i.test(rawName)) {
+            rawName = "";
+        }
+
+        var inpTitle = document.getElementById('inpPendingDocTitle');
+        var inpGolden = document.getElementById('inpPendingGoldenType');
+        var lblRaw = document.getElementById('lblPendingRawFileInfo');
+        if (inpTitle) inpTitle.value = rawName;
+        if (inpGolden) inpGolden.value = '';
+        if (lblRaw && file) {
+            var sizeKb = Math.round((file.size || 0) / 1024);
+            lblRaw.innerText = 'Seçilen dosya: ' + file.name + ' (' + sizeKb + ' KB)';
+        }
+
+        var modalEl = document.getElementById('nameDocumentModal');
+        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+        setTimeout(function() {
+            if (inpTitle) inpTitle.focus();
+        }, 250);
+    }
+
+    function selectDocNamingPreset(presetTitle, goldenType, btnEl) {
+        var inpTitle = document.getElementById('inpPendingDocTitle');
+        var inpGolden = document.getElementById('inpPendingGoldenType');
+        if (inpTitle) {
+            inpTitle.value = presetTitle;
+            inpTitle.focus();
+        }
+        if (inpGolden) {
+            inpGolden.value = goldenType || '';
+        }
+        document.querySelectorAll('.doc-preset-btn').forEach(function(b) {
+            b.classList.remove('active');
+        });
+        if (btnEl) btnEl.classList.add('active');
+    }
+
+    function cancelPendingDocUpload() {
+        if (pendingUploadInput) pendingUploadInput.value = '';
+        pendingUploadFile = null;
+        pendingUploadRow = null;
+        pendingUploadInput = null;
+    }
+
+    function confirmPendingDocUpload() {
+        if (!pendingUploadFile || !pendingUploadRow) return;
+        var inpTitle = document.getElementById('inpPendingDocTitle');
+        var inpGolden = document.getElementById('inpPendingGoldenType');
+        var customTitle = (inpTitle && inpTitle.value.trim()) ? inpTitle.value.trim() : 'Alınan Evrak';
+        var goldenType = (inpGolden && inpGolden.value) ? inpGolden.value : '';
+
+        var modalEl = document.getElementById('nameDocumentModal');
+        var modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+
+        executeNamedFileUpload(pendingUploadFile, pendingUploadDirection, pendingUploadRow, customTitle, goldenType, pendingUploadInput);
+    }
+
+    function sendShadowUserWhatsApp(cleanPhone, contactName, token, meetingTitle) {
+        var guestUrl = window.location.origin + '/Agenda/Guest?token=' + token;
+        var msg = 'Sayın ' + (contactName || 'Yetkili') + ',\n\n'
+            + '📋 "' + (meetingTitle || 'Görüşme / Saha Konusu') + '" başlıklı konuya ait paylaşılan tüm evraklar, fotoğraf/video kayıtları, canlı soru-cevap ekranı ve randevu bağlantınız aşağıdadır:\n\n'
+            + '🔗 ' + guestUrl + '\n\n'
+            + '(Bu bağlantıyı telefonunuzda açarak belgeleri her zaman görüntüleyebilir, sorularınızı veya saha fotoğraflarınızı doğrudan iletebilirsiniz.)';
+
+        if (cleanPhone && cleanPhone.length >= 10) {
+            var waUrl = 'https://wa.me/' + cleanPhone + '?text=' + encodeURIComponent(msg);
+            window.open(waUrl, '_blank');
+        } else {
+            navigator.clipboard.writeText(guestUrl).then(function() {
+                alert('Katılımcı Gölge Kullanıcı (PWA) bağlantısı panoya kopyalandı:\n' + guestUrl);
+            });
+        }
+    }
+
     function uploadRowFile(input, direction) {
+        if (!input.files || input.files.length === 0) return;
+        var file = input.files[0];
+        var row = input.closest('tr');
+        openDocNamingModal(file, direction, row, input);
+        return;
+    }
+
+    function executeNamedFileUpload(file, direction, row, customTitle, goldenType, input) {
+        var itemId = parseInt(row.getAttribute('data-item-id') || "0");
+        var formData = new FormData();
+        formData.append('itemId', itemId);
+        formData.append('recordId', currentMeetingRecordId);
+        formData.append('direction', direction);
+        formData.append('customTitle', customTitle || '');
+        formData.append('goldenDocType', goldenType || '');
+        formData.append('file', file);
+        var targetContainer = direction === 'al' ? row.querySelector('.doc-list-al') : row.querySelector('.doc-list-gonder');
+        fetch('/Agenda/UploadGridDocumentAuto', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.success) {
+                if (itemId <= 0 && data.itemId) {
+                    row.setAttribute('data-item-id', data.itemId);
+                }
+                var dispName = data.title || data.fileName;
+                var iconHtml = data.isVideo ? 'bi-camera-video-fill text-danger' : (data.isImage ? 'bi-image text-info' : (data.isPdf ? 'bi-file-pdf-fill text-danger' : 'bi-file-earmark-check text-primary'));
+                if (targetContainer) {
+                    var badge = document.createElement('span');
+                    badge.className = 'badge bg-light text-dark border p-1 px-1.5 rounded-pill d-inline-flex align-items-center gap-1';
+                    badge.id = 'docBadge_' + data.docId;
+                    badge.style.fontSize = '0.68rem';
+                    badge.innerHTML = `
+                        <a href="${data.fileUrl}" target="_blank" class="text-decoration-none text-dark text-truncate fw-semibold" style="max-width: 145px;" title="${dispName}">
+                            <i class="bi ${iconHtml}"></i> ${dispName}
+                        </a>
+                        <i class="bi bi-x text-danger" style="cursor: pointer;" onclick="deleteRowDoc(${data.docId})" title="Kaldır"></i>
+                    `;
+                    targetContainer.appendChild(badge);
+                }
+                if (input) input.value = '';
+                var tbody = document.getElementById('matrixGridBody');
+                var allRows = tbody.querySelectorAll('tr.grid-row');
+                if (allRows[allRows.length - 1] === row) {
+                    var currentSpeaker = row.querySelector('.row-speaker').value;
+                    var nextSpeaker = (currentSpeaker === 'Katılımcı') ? 'Biz' : 'Katılımcı';
+                    spawnNewRow(nextSpeaker);
+                }
+            }
+        })
+        .catch(function(err) {
+            console.error('Belge yükleme hatası:', err);
+        });
+    }
+
+    function legacyUploadRowFileUnused(input, direction) {
         if (!input.files || input.files.length === 0) return;
         var file = input.files[0];
         var row = input.closest('tr');
@@ -1412,7 +1685,13 @@
             var fileName = 'kamera_evrak_' + new Date().getTime() + '.jpg';
             var file = new File([blob], fileName, { type: 'image/jpeg' });
 
-            uploadDirectFileToRow(file, 'al', activeCameraTargetRow);
+            var targetRowForCam = activeCameraTargetRow;
+            stopCameraStream();
+            var modalEl = document.getElementById('cameraCaptureModal');
+            var modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+            openDocNamingModal(file, 'al', targetRowForCam, null);
+            if (false) uploadDirectFileToRow(file, 'al', activeCameraTargetRow);
 
             stopCameraStream();
             var modalEl = document.getElementById('cameraCaptureModal');

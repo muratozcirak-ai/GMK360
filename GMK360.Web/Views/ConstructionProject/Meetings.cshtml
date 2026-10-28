@@ -156,6 +156,12 @@
                             {
                                 bool isPast = m.EventDate < DateTime.Now && m.StatusId == AgendaConstants.StatusPlanlandi;
                                 bool isToday = m.EventDate.Date == today;
+                                var firstParticipant = m.Participants?.FirstOrDefault(p => !string.IsNullOrEmpty(p.AccessToken));
+                                var firstParticipantPhonebook = firstParticipant != null
+                                    ? phonebook.FirstOrDefault(pb => pb.Id == firstParticipant.PhonebookId)
+                                    : null;
+                                var displayContact = m.Phonebook ?? firstParticipantPhonebook;
+                                string guestToken = firstParticipant?.AccessToken ?? "";
 
                                 <tr>
                                     <td>
@@ -181,37 +187,69 @@
                                     </td>
                                     <td>
                                         <div class="d-flex flex-column">
-                                            <span class="fw-bold text-dark">@m.Title</span>
+                                            <a href="/Agenda/MeetingRoom/@m.Id" class="fw-bold text-dark text-decoration-none">
+                                                @m.Title
+                                            </a>
                                             @if (!string.IsNullOrWhiteSpace(m.Notes))
                                             {
-                                                <small class="text-muted text-truncate" style="max-width: 380px; font-size: 0.72rem;">
+                                                <small class="text-muted text-truncate" style="max-width: 340px; font-size: 0.72rem;">
                                                     @m.Notes
                                                 </small>
                                             }
                                         </div>
                                     </td>
                                     <td>
-                                        @if (m.Phonebook != null)
+                                        @if (m.RecordTypeId == 1)
                                         {
-                                            <div class="d-flex align-items-center gap-1.5">
-                                                <i class="bi bi-person-fill text-secondary"></i>
-                                                <span class="fw-semibold text-dark">@m.Phonebook.Name</span>
-                                                @if (!string.IsNullOrEmpty(m.Phonebook.PhoneNumber))
+                                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle px-2 py-0.5 rounded-pill" style="font-size: 0.70rem;">
+                                                <i class="bi bi-people me-1"></i>Malik / Müşteri
+                                            </span>
+                                        }
+                                        else if (m.RecordTypeId == 2)
+                                        {
+                                            <span class="badge bg-info bg-opacity-10 text-dark border border-info px-2 py-0.5 rounded-pill" style="font-size: 0.70rem;">
+                                                <i class="bi bi-tools me-1"></i>Taşeron / Teknik
+                                            </span>
+                                        }
+                                        else if (m.RecordTypeId == 3)
+                                        {
+                                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle px-2 py-0.5 rounded-pill" style="font-size: 0.70rem;">
+                                                <i class="bi bi-camera-video me-1"></i>Saha Denetim / Vukuat
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary bg-opacity-10 text-secondary border px-2 py-0.5 rounded-pill" style="font-size: 0.70rem;">
+                                                <i class="bi bi-building-gear me-1"></i>Şirket İçi / İK
+                                            </span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (displayContact != null)
+                                        {
+                                            <div class="d-flex align-items-center gap-1.5 flex-wrap">
+                                                <i class="bi bi-person-check-fill text-success"></i>
+                                                <span class="fw-semibold text-dark">@displayContact.Name</span>
+                                                @if (!string.IsNullOrEmpty(displayContact.PhoneNumber))
                                                 {
-                                                    <small class="text-muted" style="font-size: 0.70rem;">(@m.Phonebook.PhoneNumber)</small>
+                                                    <small class="text-muted" style="font-size: 0.70rem;">(@displayContact.PhoneNumber)</small>
+                                                }
+                                                @if ((m.Participants?.Count ?? 0) > 1)
+                                                {
+                                                    <span class="badge bg-light text-dark border rounded-pill" style="font-size: 0.65rem;">+@(m.Participants!.Count - 1) kişi</span>
                                                 }
                                             </div>
                                         }
                                         else
                                         {
-                                            <span class="text-muted small" style="font-size: 0.72rem;">Muhatap Atanmadı</span>
+                                            <span class="text-muted small fst-italic" style="font-size: 0.72rem;">Masada Eklenecek</span>
                                         }
                                     </td>
                                     <td>
                                         @if (m.StatusId == AgendaConstants.StatusPlanlandi)
                                         {
                                             <span class="badge bg-warning text-dark border border-warning px-2 py-0.5 rounded-pill" style="font-size: 0.70rem;">
-                                                <i class="bi bi-clock me-1"></i>Planlandı
+                                                <i class="bi bi-broadcast me-1"></i>Açık / Canlı
                                             </span>
                                         }
                                         else if (m.StatusId == AgendaConstants.StatusTamamlandi)
@@ -229,16 +267,22 @@
                                     </td>
                                     <td class="text-end">
                                         <div class="d-inline-flex align-items-center gap-1">
-                                            <a href="/Agenda/MeetingRoom/@m.Id" target="_blank" class="btn btn-primary btn-sm rounded-pill px-3 py-1 fw-bold shadow-xs d-inline-flex align-items-center gap-1" style="font-size: 0.76rem;" title="Toplantıyı Başlat (Yeni Sekmede Açılır)">
-                                                <i class="bi bi-box-arrow-up-right"></i>
-                                                <span>Toplantıyı Başlat (Canlı Masa) ➔</span>
+                                            <a href="/Agenda/MeetingRoom/@m.Id" class="btn btn-primary btn-sm rounded-pill px-3 py-1 fw-bold shadow-xs d-inline-flex align-items-center gap-1" style="font-size: 0.75rem;" title="Canlı Müzakere ve Konu Masasına Gir">
+                                                <i class="bi bi-door-open-fill"></i>
+                                                <span>Masaya Gir ➔</span>
                                             </a>
+                                            @if (!string.IsNullOrEmpty(guestToken))
+                                            {
+                                                <a href="/Agenda/Guest?token=@guestToken" target="_blank" class="btn btn-outline-success btn-sm rounded-pill px-2 py-1 fw-bold shadow-xs" style="font-size: 0.72rem;" title="Gölge Kullanıcı (PWA) Ekranını Aç">
+                                                    <i class="bi bi-phone-fill"></i>
+                                                </a>
+                                            }
                                             @if (m.StatusId == AgendaConstants.StatusPlanlandi)
                                             {
-                                                <button type="button" class="btn btn-outline-success btn-sm rounded-pill px-2 py-0 fw-bold shadow-xs" style="font-size: 0.72rem;" onclick="updateStatus(@m.Id, 2)" title="Tamamla">
+                                                <button type="button" class="btn btn-outline-success btn-sm rounded-pill px-2 py-0.5 fw-bold shadow-xs" style="font-size: 0.72rem;" onclick="updateStatus(@m.Id, 2)" title="Tamamla">
                                                     <i class="bi bi-check-lg"></i>
                                                 </button>
-                                                <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-2 py-0 fw-bold shadow-xs" style="font-size: 0.72rem;" onclick="updateStatus(@m.Id, 3)" title="İptal">
+                                                <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-2 py-0.5 fw-bold shadow-xs" style="font-size: 0.72rem;" onclick="updateStatus(@m.Id, 3)" title="İptal">
                                                     <i class="bi bi-x-lg"></i>
                                                 </button>
                                             }
@@ -293,18 +337,18 @@
                             <input type="time" name="eventTime" class="form-control form-control-sm rounded-pill fw-bold" value="@DateTime.Now.ToString("HH:mm")" required />
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.76rem;">Görüşme Tipi</label>
+                            <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.76rem;">Konu / Görüşme Tipi</label>
                             <select name="recordTypeId" class="form-select form-select-sm rounded-pill">
-                                <option value="1">Müşteri / Hak Sahibi Görüşmesi</option>
-                                <option value="2">Taşeron / Mühendislik Toplantısı</option>
-                                <option value="3">Saha / Şantiye Keşfi & Denetimi</option>
-                                <option value="4">Genel Karar / Şirket İçi Not</option>
+                                <option value="1">👥 Müşteri / Hak Sahibi Görüşmesi (Kentsel Dönüşüm)</option>
+                                <option value="3">🚨 Saha Olay / Kusur Tespiti & Denetim (Foto/Video Kanıtlı)</option>
+                                <option value="2">🛠️ Taşeron / Mühendislik & İmalat Koordinasyonu</option>
+                                <option value="4">👔 Şirket İçi / Personel Alımı & Genel Karar</option>
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.76rem;">Muhatap / Kişi (Telefon Rehberi)</label>
+                            <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.76rem;">Muhatap / Kişi (Çat Kapı İse Masada Eklenebilir)</label>
                             <select name="phonebookId" class="form-select form-select-sm rounded-pill">
-                                <option value="">-- Muhatap Seçiniz (İsteğe Bağlı) --</option>
+                                <option value="">-- Muhatap Seçiniz veya Boş Bırakıp Masada Ekleyiniz --</option>
                                 @foreach (var contact in phonebook)
                                 {
                                     <option value="@contact.Id">@contact.Name @(!string.IsNullOrEmpty(contact.PhoneNumber) ? $"({contact.PhoneNumber})" : "")</option>
@@ -312,8 +356,16 @@
                             </select>
                         </div>
                         <div class="col-12">
-                            <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.76rem;">Gündem Maddeleri / Hazırlık Notları</label>
-                            <textarea name="notes" class="form-control rounded-3" rows="3" placeholder="Görüşülecek konular, malik talepleri, imar çapı notları veya kararlar..."></textarea>
+                            <label class="form-label fw-bold small text-muted mb-1" style="font-size: 0.76rem;">Gündem / Olay Özeti / Hazırlık Notları</label>
+                            <textarea name="notes" class="form-control rounded-3" rows="2" placeholder="Örn: Malik ön görüşmesi, saha temizlik/şaft ihlali tespiti, taşeron hakediş veya personel mülakat notu..."></textarea>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check p-2 px-3 rounded-3 bg-warning bg-opacity-10 border border-warning-subtle mt-1">
+                                <input class="form-check-input" type="checkbox" name="openImmediately" value="true" id="chkOpenImmediately" checked>
+                                <label class="form-check-label small fw-bold text-dark" for="chkOpenImmediately" style="font-size: 0.78rem;">
+                                    <i class="bi bi-door-open-fill text-primary me-1"></i>Kaydettikten sonra doğrudan <strong>Canlı Müzakere & Konu Masasını</strong> aç
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -212,18 +212,24 @@ namespace GMK360.Web.Controllers
                 ViewBag.Streets = new SelectList(Enumerable.Empty<SelectListItem>());
             }
             var tapuDoc = await _context.DocumentArchives
-                .Where(d => d.ProjectId == id && d.Title == "Tapu Belgesi" && !d.IsDeleted)
+                .Where(d => d.ProjectId == id && (d.Title == "Tapu Belgesi" || (d.Title != null && d.Title.Contains("Tapu"))) && !d.IsDeleted)
                 .OrderByDescending(d => d.UploadDate)
                 .FirstOrDefaultAsync();
             ViewBag.TapuDocumentUrl = tapuDoc?.DocumentUrl;
-            ViewBag.CurrentStateImageUrl = project.CurrentStateImageUrl;
+
+            var binaFotoDoc = await _context.DocumentArchives
+                .Where(d => d.ProjectId == id && (d.Category == "Bina Görselleri" || (d.Title != null && (d.Title.Contains("Bina Cephe") || d.Title.Contains("Sokak Foto")))) && !d.IsDeleted)
+                .OrderByDescending(d => d.UploadDate)
+                .FirstOrDefaultAsync();
+            ViewBag.CurrentStateImageUrl = !string.IsNullOrWhiteSpace(project.CurrentStateImageUrl) ? project.CurrentStateImageUrl : binaFotoDoc?.DocumentUrl;
+
             var imarDoc = await _context.DocumentArchives
-                .Where(d => d.ProjectId == id && d.Title == "İmar Durum Belgesi (İmar Çapı)" && !d.IsDeleted)
+                .Where(d => d.ProjectId == id && (d.Title == "İmar Durum Belgesi (İmar Çapı)" || (d.Title != null && d.Title.Contains("İmar"))) && !d.IsDeleted)
                 .OrderByDescending(d => d.UploadDate)
                 .FirstOrDefaultAsync();
             ViewBag.ImarCapiDocumentUrl = imarDoc?.DocumentUrl ?? rentPolicy.ImarCapiDocumentUrl;
             var kararDoc = await _context.DocumentArchives
-                .Where(d => d.ProjectId == id && d.Title == "Apartman Karar Defteri / Ön Uzlaşı" && !d.IsDeleted)
+                .Where(d => d.ProjectId == id && (d.Title == "Apartman Karar Defteri / Ön Uzlaşı" || (d.Title != null && d.Title.Contains("Karar Defteri"))) && !d.IsDeleted)
                 .OrderByDescending(d => d.UploadDate)
                 .FirstOrDefaultAsync();
             ViewBag.KararDefteriDocumentUrl = kararDoc?.DocumentUrl ?? rentPolicy.KararDefteriDocumentUrl;
@@ -4311,7 +4317,7 @@ await SaveProjectExpectedTransactionsAsync(projectId, expectedList);
         // TARİH VE SAAT AYRI ALANLARDAN GELİR (ALTIN KURAL)
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CreateProjectMeeting(int projectId, string title, string? notes, string eventDate, string? eventTime, byte recordTypeId = AgendaConstants.TypeMusteriGorusmesi, int? phonebookId = null)
+        public async Task<IActionResult> CreateProjectMeeting(int projectId, string title, string? notes, string eventDate, string? eventTime, byte recordTypeId = AgendaConstants.TypeMusteriGorusmesi, int? phonebookId = null, bool openImmediately = false)
         {
             var agencyId = await GetUserAgencyIdAsync();
             if (agencyId == null) return Unauthorized();
@@ -4345,11 +4351,29 @@ await SaveProjectExpectedTransactionsAsync(projectId, expectedList);
                 PhonebookId = phonebookId,
                 ImageUrl = string.Empty,
                 CreatedAt = DateTime.Now,
-                IsDeleted = false
+                IsDeleted = false,
+                Participants = new System.Collections.Generic.List<AgendaParticipant>()
             };
+            if (phonebookId.HasValue && phonebookId.Value > 0)
+            {
+                var pb = await _context.AgencyPhonebooks.FirstOrDefaultAsync(p => p.Id == phonebookId.Value && p.AgencyId == agencyId.Value);
+                if (pb != null)
+                {
+                    record.Participants.Add(new AgendaParticipant
+                    {
+                        PhonebookId = pb.Id,
+                        UserId = pb.LinkedUserId,
+                        AccessToken = Guid.NewGuid().ToString("N")
+                    });
+                }
+            }
             _context.AgendaRecords.Add(record);
             await _context.SaveChangesAsync();
-            TempData["SuccessMessage"] = "Toplantı/görüşme kaydı başarıyla oluşturuldu.";
+            TempData["SuccessMessage"] = "Toplantı/konu kaydı başarıyla oluşturuldu.";
+            if (openImmediately)
+            {
+                return RedirectToAction("MeetingRoom", "Agenda", new { id = record.Id });
+            }
             return RedirectToAction(nameof(Meetings), new { id = projectId });
         }
     }
