@@ -1746,6 +1746,9 @@ namespace GMK360.Web.Controllers
                 }
                 await _context.SaveChangesAsync();
                 TempData["SuccessMessage"] = "Katılımcı toplantıya başarıyla eklendi ve canlı konu bağlantısı oluşturuldu.";
+                TempData["NewParticipantName"] = phonebook?.Name ?? "Katılımcı";
+                TempData["NewParticipantPhone"] = phonebook?.PhoneNumber ?? "";
+                TempData["NewParticipantToken"] = participant.AccessToken;
             }
 
             return RedirectToAction(nameof(MeetingRoom), new { id = recordId });
@@ -1797,6 +1800,9 @@ namespace GMK360.Web.Controllers
                 await _context.SaveChangesAsync();
             }
             TempData["SuccessMessage"] = $"{newContact.Name} rehbere ve toplantıya başarıyla eklendi.";
+            TempData["NewParticipantName"] = newContact.Name;
+            TempData["NewParticipantPhone"] = newContact.PhoneNumber ?? "";
+            TempData["NewParticipantToken"] = participant.AccessToken;
             return RedirectToAction(nameof(MeetingRoom), new { id = recordId });
         }
 

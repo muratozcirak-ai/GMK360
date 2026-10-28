@@ -273,7 +273,17 @@
                                             </a>
                                             @if (!string.IsNullOrEmpty(guestToken))
                                             {
-                                                <a href="/Agenda/Guest?token=@guestToken" target="_blank" class="btn btn-outline-success btn-sm rounded-pill px-2 py-1 fw-bold shadow-xs" style="font-size: 0.72rem;" title="Gölge Kullanıcı (PWA) Ekranını Aç">
+                                                var rowCleanPhone = (displayContact?.PhoneNumber ?? "").Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
+                                                if (rowCleanPhone.StartsWith("0")) rowCleanPhone = "90" + rowCleanPhone.Substring(1);
+                                                else if (!string.IsNullOrEmpty(rowCleanPhone) && !rowCleanPhone.StartsWith("90")) rowCleanPhone = "90" + rowCleanPhone;
+
+                                                <button type="button" class="btn btn-success btn-sm rounded-pill px-2.5 py-1 fw-bold shadow-xs d-inline-flex align-items-center gap-1" style="font-size: 0.72rem;"
+                                                        onclick="sendRowWhatsAppInvite('@rowCleanPhone', '@Html.Raw((displayContact?.Name ?? "Yetkili").Replace("'", "\\'"))', '@guestToken', '@Html.Raw((m.Title ?? "").Replace("'", "\\'"))')"
+                                                        title="Kendi WhatsApp'ınızdan Davet & PWA Canlı Konu Linki Gönder">
+                                                    <i class="bi bi-whatsapp"></i>
+                                                    <span class="d-none d-xl-inline">Davet</span>
+                                                </button>
+                                                <a href="/Agenda/Guest?token=@guestToken" target="_blank" class="btn btn-outline-primary btn-sm rounded-pill px-2 py-1 fw-bold shadow-xs" style="font-size: 0.72rem;" title="Gölge Kullanıcı (PWA) Ekranını Aç">
                                                     <i class="bi bi-phone-fill"></i>
                                                 </a>
                                             }
@@ -381,6 +391,22 @@
 </div>
 
 <script>
+function sendRowWhatsAppInvite(cleanPhone, contactName, token, meetingTitle) {
+    var guestUrl = window.location.origin + '/Agenda/Guest?token=' + token;
+    var msg = 'Sayın ' + (contactName || 'Yetkili') + ',\n\n'
+        + '📋 "' + (meetingTitle || 'Görüşme / Saha Konusu') + '" başlıklı konuya ait paylaşılan tüm evraklar, fotoğraf/video kayıtları, canlı soru-cevap ekranı ve randevu bağlantınız aşağıdadır:\n\n'
+        + '🔗 ' + guestUrl + '\n\n'
+        + '(Bu bağlantıyı telefonunuzda açıp "Uygulama Olarak İndir" butonuna basarak her zaman tek tıkla ulaşabilirsiniz.)';
+
+    if (cleanPhone && cleanPhone.length >= 10) {
+        window.open('https://wa.me/' + cleanPhone + '?text=' + encodeURIComponent(msg), '_blank');
+    } else {
+        navigator.clipboard.writeText(guestUrl).then(function() {
+            alert('Katılımcı Gölge Kullanıcı (PWA) bağlantısı panoya kopyalandı:\n' + guestUrl);
+        });
+    }
+}
+
 function updateStatus(id, statusId) {
     if (!confirm('Toplantı durumunu güncellemek istediğinize emin misiniz?')) return;
     fetch('/Agenda/UpdateStatus?id=' + id + '&statusId=' + statusId, {

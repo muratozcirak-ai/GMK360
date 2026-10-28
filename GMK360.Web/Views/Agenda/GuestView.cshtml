@@ -18,6 +18,49 @@
 
 <div class="container py-3 px-2 px-md-3" style="max-width: 860px;">
 
+    <!-- 0. PWA UYGULAMA OLARAK İNDİR & KAYITLI KONULARIM ŞERİDİ -->
+    <div class="card border-0 shadow-sm rounded-4 p-2.5 px-3 mb-3 text-white" style="background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-warning text-dark rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 34px; height: 34px;">
+                    <i class="bi bi-phone-vibrate-fill fs-6"></i>
+                </span>
+                <div>
+                    <div class="fw-bold" style="font-size: 0.84rem;">GMK360 Cep Uygulaması (PWA) & Dijital Çanta</div>
+                    <small class="text-white-50" style="font-size: 0.71rem;">Bu ekranı telefonunuzun ana ekranına indirerek şifresiz, tek tıkla her zaman açabilirsiniz.</small>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-1.5">
+                <button type="button" id="btnInstallPwaGuest" class="btn btn-warning text-dark btn-sm rounded-pill px-3 fw-bold shadow-xs" style="font-size: 0.75rem;" onclick="triggerGuestPwaInstall()">
+                    <i class="bi bi-download me-1"></i>Telefona Uygulama Olarak Kur
+                </button>
+                <button type="button" class="btn btn-outline-light btn-sm rounded-pill px-2.5 fw-bold" style="font-size: 0.73rem;" data-bs-toggle="collapse" data-bs-target="#savedTopicsCollapse" title="Telefonunuzda Kayıtlı Tüm Konularınız">
+                    <i class="bi bi-collection-play me-1"></i>Konularım <span id="savedTopicsCountBadge" class="badge bg-warning text-dark rounded-pill ms-0.5">1</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- TELEFON HAFIZASINDAKİ TÜM DAVETLİ KONULAR LİSTESİ -->
+        <div class="collapse mt-2 pt-2 border-top border-secondary" id="savedTopicsCollapse">
+            <small class="text-white-50 d-block mb-1" style="font-size: 0.70rem;">
+                <i class="bi bi-bookmark-check-fill text-warning me-1"></i>Telefonunuzda tanımlı toplantı ve saha konuları (Tek tıkla geçiş yapabilirsiniz):
+            </small>
+            <div id="savedTopicsListContainer" class="d-flex flex-wrap gap-1.5"></div>
+        </div>
+
+        <!-- İOS / ANDROID MANUEL KURULUM REHBERİ (EĞER TARAYICI OTOMATİK PROMPT VERMEZSE) -->
+        <div id="pwaManualGuideBox" class="mt-2 pt-2 border-top border-secondary small text-white-50" style="display: none; font-size: 0.74rem;">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <strong class="text-warning"><i class="bi bi-info-circle-fill me-1"></i>Telefon Ana Ekranına Ekleme Adımı:</strong><br/>
+                    • <b>iPhone (Safari):</b> Alt ortadaki <b>Paylaş (<i class="bi bi-box-arrow-up"></i>)</b> tuşuna basıp <b>"Ana Ekrana Ekle"</b> seçeneğine dokunun.<br/>
+                    • <b>Android (Chrome):</b> Sağ üstteki <b>Üç Nokta (⋮)</b> menüsünden <b>"Uygulamayı Yükle / Ana Ekrana Ekle"</b> seçeneğine dokunun.
+                </div>
+                <button type="button" class="btn-close btn-close-white ms-2" onclick="document.getElementById('pwaManualGuideBox').style.display='none';"></button>
+            </div>
+        </div>
+    </div>
+
     @if (TempData["GuestSuccess"] != null)
     {
         <div class="alert alert-success alert-dismissible fade show rounded-3 py-2 px-3 mb-3 shadow-xs small fw-semibold" role="alert">
@@ -311,6 +354,78 @@
 
 @section Scripts {
     <script>
+        // 1. PWA Service Worker Kaydı & Telefona İndirme (beforeinstallprompt)
+        let deferredPwaPrompt = null;
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(function(err) {
+                console.log('SW register info:', err);
+            });
+        }
+
+        window.addEventListener('beforeinstallprompt', function(e) {
+            e.preventDefault();
+            deferredPwaPrompt = e;
+            const btn = document.getElementById('btnInstallPwaGuest');
+            if (btn) {
+                btn.classList.add('btn-warning');
+            }
+        });
+
+        function triggerGuestPwaInstall() {
+            if (deferredPwaPrompt) {
+                deferredPwaPrompt.prompt();
+                deferredPwaPrompt.userChoice.then(function() {
+                    deferredPwaPrompt = null;
+                });
+            } else {
+                const guide = document.getElementById('pwaManualGuideBox');
+                if (guide) {
+                    guide.style.display = (guide.style.display === 'none') ? 'block' : 'none';
+                }
+            }
+        }
+
+        // 2. Gölge Kullanıcının Katıldığı Konuları Telefon Hafızasında (localStorage) Tutma
+        (function syncGuestTopicMemory() {
+            try {
+                const currentToken = '@Html.Raw(participantToken)';
+                const currentTitle = '@Html.Raw((Model.Title ?? "Toplantı / Konu").Replace("'", "\\'"))';
+                const currentProject = '@Html.Raw((Model.Project?.Name ?? "Genel").Replace("'", "\\'"))';
+                const currentDate = '@Model.EventDate.ToString("dd.MM.yyyy HH:mm")';
+
+                let saved = JSON.parse(localStorage.getItem('gmk360_guest_topics') || '[]');
+                if (currentToken) {
+                    localStorage.setItem('gmk360_last_guest_token', currentToken);
+                    saved = saved.filter(x => x.token !== currentToken);
+                    saved.unshift({
+                        token: currentToken,
+                        title: currentTitle,
+                        project: currentProject,
+                        date: currentDate
+                    });
+                    if (saved.length > 15) saved = saved.slice(0, 15);
+                    localStorage.setItem('gmk360_guest_topics', JSON.stringify(saved));
+                }
+
+                const badge = document.getElementById('savedTopicsCountBadge');
+                if (badge) badge.innerText = saved.length;
+
+                const container = document.getElementById('savedTopicsListContainer');
+                if (container) {
+                    container.innerHTML = saved.map(function(item) {
+                        const isCurrent = item.token === currentToken;
+                        return `<a href="/Agenda/Guest?token=${item.token}" class="badge ${isCurrent ? 'bg-warning text-dark' : 'bg-white text-dark'} text-decoration-none px-2.5 py-1.5 rounded-pill d-inline-flex align-items-center gap-1" style="font-size: 0.72rem;">
+                            <i class="bi ${isCurrent ? 'bi-broadcast-pin' : 'bi-folder2-open text-primary'}"></i>
+                            <span><b>${item.project}:</b> ${item.title}</span>
+                        </a>`;
+                    }).join('');
+                }
+            } catch (e) {
+                console.warn('Guest memory error:', e);
+            }
+        })();
+
+        // 3. Kişisel Not Otomatik Kayıt
         let timeout = null;
         document.getElementById('participantNotes').addEventListener('input', function() {
             clearTimeout(timeout);
