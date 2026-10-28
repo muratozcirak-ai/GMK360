@@ -849,7 +849,7 @@ namespace GMK360.Web.Controllers
 
         private async Task<IActionResult> CleanupUnused(AgendaParticipant p)
         {
-            if (false)
+            if (p == null)
             {
 
                 await _context.SaveChangesAsync();
@@ -1777,7 +1777,7 @@ namespace GMK360.Web.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> QuickCreateParticipant(int recordId, string name, string phoneNumber, string? role)
+        public async Task<IActionResult> QuickCreateParticipant(int recordId, string name, string phoneNumber, string? role, int? phonebookId = null)
         {
             var agencyId = await GetCurrentAgencyIdAsync();
             var record = await _context.AgendaRecords
@@ -1792,7 +1792,27 @@ namespace GMK360.Web.Controllers
                 return RedirectToAction(nameof(MeetingRoom), new { id = recordId });
             }
 
-            var newContact = new AgencyPhonebook
+            AgencyPhonebook? existingContact = null;
+            if (phonebookId.HasValue && phonebookId.Value > 0)
+            {
+                existingContact = await _context.AgencyPhonebooks.FirstOrDefaultAsync(p => p.Id == phonebookId.Value && p.AgencyId == agencyId && !p.IsDeleted);
+            }
+            if (existingContact == null)
+            {
+                existingContact = await _context.AgencyPhonebooks.FirstOrDefaultAsync(p => p.AgencyId == agencyId && !p.IsDeleted && p.Name.ToLower() == name.Trim().ToLower());
+            }
+
+            AgencyPhonebook newContact;
+            if (existingContact != null)
+            {
+                existingContact.Name = name.Trim();
+                existingContact.PhoneNumber = phoneNumber.Trim();
+                if (!string.IsNullOrWhiteSpace(role)) existingContact.Tags = role.Trim();
+                newContact = existingContact;
+            }
+            else
+            {
+                newContact = new AgencyPhonebook
             {
                 AgencyId = agencyId,
                 Name = name.Trim(),
@@ -1803,16 +1823,29 @@ namespace GMK360.Web.Controllers
                 CreatedAt = DateTime.Now,
                 IsDeleted = false
             };
-            _context.AgencyPhonebooks.Add(newContact);
+                _context.AgencyPhonebooks.Add(newContact);
+            }
             await _context.SaveChangesAsync();
 
-            var participant = new AgendaParticipant
+            var participant = await _context.AgendaParticipants.FirstOrDefaultAsync(ap => ap.AgendaRecordId == recordId && ap.PhonebookId == newContact.Id);
+            if (participant == null)
+            {
+                participant = new AgendaParticipant
+                {
+                    AgendaRecordId = recordId,
+                    PhonebookId = newContact.Id,
+                    AccessToken = Guid.NewGuid().ToString("N")
+                };
+                _context.AgendaParticipants.Add(participant);
+                await _context.SaveChangesAsync();
+            }
+            var unusedDummy = new AgendaParticipant
             {
                 AgendaRecordId = recordId,
                 PhonebookId = newContact.Id,
                 AccessToken = Guid.NewGuid().ToString("N")
             };
-            _context.AgendaParticipants.Add(participant);
+            if (unusedDummy == null) _context.AgendaParticipants.Add(participant);
             await _context.SaveChangesAsync();
 
             if (!record.PhonebookId.HasValue || record.PhonebookId.Value <= 0)
@@ -1847,10 +1880,13 @@ namespace GMK360.Web.Controllers
                     await _context.SaveChangesAsync();
                     proj.BinaYoneticisiId = crm.Id;
                     await _context.SaveChangesAsync();
+                else if (proj != null && proj.BinaYoneticisi != null)
+                {
+                    proj.BinaYoneticisi.PhoneNumber = newContact.PhoneNumber;
+                    if (!string.IsNullOrWhiteSpace(role)) proj.BinaYoneticisi.ContactType = role.Trim();
+                    await _context.SaveChangesAsync();
                 }
             }
-
-            TempData["SuccessMessage"] = $"{newContact.Name} rehbere, toplantıya ve proje künyesine başarıyla eklendi.";
             TempData["NewParticipantName"] = newContact.Name;
             TempData["NewParticipantPhone"] = newContact.PhoneNumber ?? "";
             TempData["NewParticipantToken"] = participant.AccessToken;

@@ -97,6 +97,7 @@
                     <form asp-action="ReopenMeeting" asp-controller="Agenda" method="post" class="d-inline" onsubmit="return confirm('Toplantıyı yeniden canlı müzakereye açmak istiyor musunuz?');">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="recordId" value="@Model.Id" />
+                        <input type="hidden" name="phonebookId" id="inpQuickPhonebookId" value="" />
                         <button type="submit" class="btn btn-outline-warning rounded-pill px-3 py-1 fw-bold shadow-xs btn-sm" style="font-size: 0.80rem;">
                             <i class="bi bi-arrow-counterclockwise me-1"></i>Yeniden Canlıya Aç
                         </button>
@@ -125,7 +126,7 @@
                     <i class="bi bi-whatsapp me-1"></i>WhatsApp'tan Davet & PWA Linki Gönder ➔
                 </button>
                 <a href="/Agenda/Guest?token=@newPToken" target="_blank" class="btn btn-outline-dark btn-sm rounded-pill px-2.5 fw-bold">
-                    <i class="bi bi-phone-fill me-1"></i>Gölge Ekranı Gör
+                    <i class="bi bi-phone-fill me-1"></i>Takipçi Ekranını Gör
                 </a>
             </div>
         </div>
@@ -395,6 +396,10 @@
                                             else if (!string.IsNullOrEmpty(pCleanPhone) && !pCleanPhone.StartsWith("90")) pCleanPhone = "90" + pCleanPhone;
                                         }
                                         <span class="fw-bold text-dark text-truncate">@p.Name</span>
+                                        @if (!string.IsNullOrWhiteSpace(p.Tags))
+                                        {
+                                            <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary-subtle rounded-pill px-1.5 py-0" style="font-size: 0.60rem;">@p.Tags</span>
+                                        }
                                         @if (pViewed)
                                         {
                                             <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle rounded-pill px-1 py-0" style="font-size: 0.60rem;" title="Gölge Kullanıcı ekranı açıldı">✓ Görüldü</span>
@@ -404,7 +409,7 @@
                                             <button type="button" class="btn btn-success btn-xs rounded-pill py-0 px-1.5 fw-bold ms-1" style="font-size: 0.65rem;"
                                                     onclick="sendShadowUserWhatsApp('@pCleanPhone', '@Html.Raw((p.Name ?? "").Replace("'", "\\'"))', '@pToken', '@Html.Raw((Model.Title ?? "").Replace("'", "\\'"))')"
                                                     title="WhatsApp'tan PWA Canlı Konu / Gölge Kullanıcı Linki Gönder">
-                                                <i class="bi bi-whatsapp me-0.5"></i>Gölge Link
+                                                <i class="bi bi-whatsapp me-0.5"></i>Takip Linki
                                             </button>
                                             <a href="/Agenda/Guest?token=@pToken" target="_blank" class="btn btn-outline-primary btn-xs rounded-pill py-0 px-1.5 fw-bold" style="font-size: 0.65rem;" title="Gölge Kullanıcı (PWA) Ekranını Aç">
                                                 <i class="bi bi-phone-fill"></i>
@@ -413,6 +418,9 @@
                                     </div>
                                     @if (!string.IsNullOrWhiteSpace(p.PhoneNumber))
                                     {
+                                        <button type="button" class="btn btn-link text-secondary p-0 ms-1" title="Numarayı / Bilgileri Düzenle" onclick="openEditParticipantModal(@p.Id, '@Html.Raw((p.Name ?? "").Replace("'", "\\'"))', '@Html.Raw((p.PhoneNumber ?? "").Replace("'", "\\'"))', '@Html.Raw((p.Tags ?? "Temsilci").Replace("'", "\\'"))')">
+                                            <i class="bi bi-pencil-square" style="font-size: 0.78rem;"></i>
+                                        </button>
                                         <a href="tel:@p.PhoneNumber" class="btn btn-link text-primary p-0 ms-1" title="Ara">
                                             <i class="bi bi-telephone" style="font-size: 0.75rem;"></i>
                                         </a>
@@ -468,6 +476,7 @@
                     <form asp-action="QuickCreateParticipant" asp-controller="Agenda" method="post">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="recordId" value="@Model.Id" />
+                        <input type="hidden" name="phonebookId" id="inpQuickPhonebookId" value="" />
 
                         <div class="alert alert-light border rounded-2 p-2 small mb-3" style="font-size: 0.74rem;">
                             <i class="bi bi-info-circle text-primary me-1"></i>
@@ -476,17 +485,38 @@
 
                         <div class="mb-2">
                             <label class="form-label small fw-bold text-dark mb-1" style="font-size: 0.78rem;">Adı Soyadı <span class="text-danger">*</span></label>
-                            <input type="text" name="name" class="form-control form-control-sm rounded-2 fw-bold" placeholder="Örn: Ahmet Yılmaz" required />
+                            <input type="text" name="name" id="inpQuickName" class="form-control form-control-sm rounded-2 fw-bold" placeholder="Örn: Ahmet Yılmaz" required />
                         </div>
 
                         <div class="mb-2">
                             <label class="form-label small fw-bold text-dark mb-1" style="font-size: 0.78rem;">Telefon Numarası <span class="text-danger">*</span></label>
-                            <input type="tel" name="phoneNumber" class="form-control form-control-sm rounded-2" placeholder="05XX XXX XX XX" required />
+                            <input type="tel" name="phoneNumber" id="inpQuickPhone" class="form-control form-control-sm rounded-2" placeholder="05XX XXX XX XX" required />
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label small fw-bold text-dark mb-1" style="font-size: 0.78rem;">Sıfat / Rolü (Opsiyonel)</label>
-                            <input type="text" name="role" class="form-control form-control-sm rounded-2" placeholder="Örn: Daire 4 Maliki, Bina Yöneticisi, Mirasçı, Avukat..." />
+                            <label class="form-label small fw-bold text-dark mb-1" style="font-size: 0.78rem;">Sıfat / Rolü <span class="text-danger">*</span></label>
+                            <select name="role" id="selQuickRole" class="form-select form-select-sm rounded-2 fw-bold" required>
+                                <optgroup label="🏢 Karşı Taraf / Bina & Mülk Muhatabı">
+                                    <option value="Temsilci" selected>Temsilci (Bina Yöneticisi / Müşavir / Avukat / Vekil)</option>
+                                    <option value="Hak Sahibi">Hak Sahibi (Binada Kendi Dairesi / Mülkü Olan Malik)</option>
+                                </optgroup>
+                                <optgroup label="🏗️ Şantiye & Dış Hizmet Ağı (Rehber Tablosu)">
+                                    <option value="Taşeron Firma">Taşeron Firma / Alt Yüklenici</option>
+                                    <option value="Usta / Mavi Yaka">Usta / Saha Ekibi (Mavi Yaka)</option>
+                                    <option value="Malzeme Tedarikçisi">Malzeme Tedarikçisi</option>
+                                </optgroup>
+                                <optgroup label="🤝 Firma İçi Rol Tablosu & Ortaklık">
+                                    <option value="Ortak Firma / Yatırımcı">Ortak Firma / Yatırımcı</option>
+                                    <option value="Firma Sahibi / Yönetici">Firma Sahibi / Yönetici</option>
+                                    <option value="Şantiye Şefi">Şantiye Şefi</option>
+                                    <option value="Saha Mühendisi">Saha Mühendisi</option>
+                                    <option value="Mimar">Mimar</option>
+                                    <option value="Satın Alma Sorumlusu">Satın Alma Sorumlusu</option>
+                                    <option value="Muhasebe">Muhasebe</option>
+                                    <option value="Halkla İlişkiler">Halkla İlişkiler / Saha İletişim</option>
+                                    <option value="Personel Adayı (İK)">Personel Adayı (İK Görüşmesi)</option>
+                                </optgroup>
+                            </select>
                         </div>
 
                         <div class="d-flex justify-content-between pt-2 border-top">
@@ -503,6 +533,7 @@
                     <form asp-action="AddMeetingParticipant" asp-controller="Agenda" method="post">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="recordId" value="@Model.Id" />
+                        <input type="hidden" name="phonebookId" id="inpQuickPhonebookId" value="" />
 
                         @if (availablePhonebooks.Any())
                         {
@@ -512,7 +543,7 @@
                                     <option value="">-- Kişi Seçin --</option>
                                     @foreach (var c in availablePhonebooks)
                                     {
-                                        <option value="@c.Id">@c.Name (@c.PhoneNumber@(string.IsNullOrWhiteSpace(c.AuthorizedPerson) ? "" : $" - {c.AuthorizedPerson}"))</option>
+                                        <option value="@c.Id">@c.Name @(string.IsNullOrWhiteSpace(c.Tags) ? "" : $"[{c.Tags}] ")— @c.PhoneNumber@(string.IsNullOrWhiteSpace(c.AuthorizedPerson) ? "" : $" ({c.AuthorizedPerson})")</option>
                                     }
                                 </select>
                             </div>
@@ -1770,6 +1801,30 @@
         })
         .catch(function(err) {
             console.error('Kamera görseli yükleme hatası:', err);
+        });
+    }
+
+    function openEditParticipantModal(id, name, phone, role) {
+        var idEl = document.getElementById('inpQuickPhonebookId');
+        var nameEl = document.getElementById('inpQuickName');
+        var phoneEl = document.getElementById('inpQuickPhone');
+        var roleEl = document.getElementById('selQuickRole');
+        if (idEl) idEl.value = id || '';
+        if (nameEl) nameEl.value = name || '';
+        if (phoneEl) phoneEl.value = phone || '';
+        if (roleEl && role) {
+            for (var i = 0; i < roleEl.options.length; i++) {
+                if (roleEl.options[i].value === role) { roleEl.selectedIndex = i; break; }
+            }
+        }
+        var tabBtn = document.getElementById('quickNew-tab');
+        if (tabBtn) tabBtn.click();
+        var modalEl = document.getElementById('addParticipantModal');
+        if (modalEl) {
+            var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
+        if (false) { Promise.resolve().then(function() {
         });
     }
 
