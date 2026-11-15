@@ -117,7 +117,6 @@ namespace GMK360.Web.Controllers
             return View();
         }
 
-        [AllowAnonymous]
         public async Task<IActionResult> SeedDengeGrup(
             [FromServices] GMK360.Data.Contexts.ApplicationDbContext context,
             [FromServices] Microsoft.AspNetCore.Identity.UserManager<GMK360.Core.Entities.Identity.ApplicationUser> userManager,

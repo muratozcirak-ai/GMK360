@@ -4,10 +4,10 @@
     ViewData["Title"] = "Hızlı Arsa Ön Etüdü & Saha Keşfi: " + Model.Name;
     Layout = "_ProjectLayout";
 
-    var landArea = Model.TotalLandArea ?? 774.30;
-    var cityName = (ViewBag.CityName as string) ?? "İstanbul";
-    var distName = (ViewBag.DistrictName as string) ?? "Kadıköy";
-    var neighName = (ViewBag.NeighborhoodName as string) ?? "Merdivenköy";
+    var landArea = Model.TotalLandArea ?? 0;
+    var cityName = (ViewBag.CityName as string) ?? "İl Seçilmedi";
+    var distName = (ViewBag.DistrictName as string) ?? "İlçe Seçilmedi";
+    var neighName = (ViewBag.NeighborhoodName as string) ?? "";
 
     var lastExCost = ViewBag.LastExcavationCost ?? 120.0;
     var lastRoughCost = ViewBag.LastRoughCost ?? 9500.0;
@@ -649,13 +649,13 @@
                         <div class="row g-1 text-start align-items-center">
                             <div class="col-6">
                                 <label class="text-muted d-block fw-semibold" style="font-size: 0.64rem;">DEVLET BİRİM MALİYET</label>
-                                <span class="badge bg-success bg-opacity-10 text-dark border border-success border-opacity-25 px-1 py-1 fw-bold w-100 text-center" style="font-size: 0.74rem;" id="resGovUnitCostBadge">18.500 ₺/m²</span>
+                                <span class="badge bg-success bg-opacity-10 text-dark border border-success border-opacity-25 px-1 py-1 fw-bold w-100 text-center" style="font-size: 0.74rem;" id="resGovUnitCostBadge">@(((double)ministryCost).ToString("N0")) ₺/m²</span>
                                 <small class="text-muted d-block text-center" style="font-size: 0.58rem;">ÇŞİDB Tebliği</small>
                             </div>
                             <div class="col-6">
                                 <label class="text-dark d-block fw-bold" style="font-size: 0.64rem;">FİRMAMIZIN BİRİMİ</label>
                                 <div class="input-group input-group-sm">
-                                    <input type="number" id="calcFirmUnitCost" name="firmUnitCostPerSqm" form="simForm" class="form-control form-control-sm px-1 text-center fw-bold text-dark border-success bg-white bg-opacity-75" value="@((Model.RentAndRontgenPolicy.FirmUnitCostPerSqm > 0 ? Model.RentAndRontgenPolicy.FirmUnitCostPerSqm : 25000).ToString("0"))" step="500" placeholder="Örn: 25000" oninput="runContractorEstimate(true)" style="font-size: 0.76rem;" />
+                                    <input type="number" id="calcFirmUnitCost" name="firmUnitCostPerSqm" form="simForm" class="form-control form-control-sm px-1 text-center fw-bold text-dark border-success bg-white bg-opacity-75" value="@((Model.RentAndRontgenPolicy.FirmUnitCostPerSqm > 0 ? Model.RentAndRontgenPolicy.FirmUnitCostPerSqm : (decimal)(ViewBag.DefaultFirmUnitCostPerSqm ?? 25000m)).ToString("0"))" step="500" placeholder="Örn: 25000" oninput="runContractorEstimate(true)" style="font-size: 0.76rem;" />
                                     <span class="input-group-text px-1 text-muted" style="font-size: 0.65rem;">₺/m²</span>
                                 </div>
                                 <small class="text-muted d-block text-center" style="font-size: 0.58rem;">Şantiye Birim Girdisi</small>
@@ -1135,7 +1135,7 @@
             container.style.display = 'block';
             if (textEl) textEl.innerText = 'Haritayı Gizle';
             if (iconEl) iconEl.className = 'bi bi-chevron-up ms-1';
-            localStorage.setItem('gmk_map_feasibility', 'open');
+            localStorage.setItem('gmk_map_feasibility_@Model.Id', 'open');
 
             setTimeout(function() {
                 if (!mapInstance) {
@@ -1151,7 +1151,7 @@
             container.style.display = 'none';
             if (textEl) textEl.innerText = 'Haritayı Göster';
             if (iconEl) iconEl.className = 'bi bi-chevron-down ms-1';
-            localStorage.setItem('gmk_map_feasibility', 'closed');
+            localStorage.setItem('gmk_map_feasibility_@Model.Id', 'closed');
         }
     }
 
@@ -1189,12 +1189,30 @@
             maxZoom: 19
         });
 
-        var defaultLat = 40.9814;
-        var defaultLng = 29.0731;
+        var hasProjectCoords = @(Model.Latitude.HasValue && Model.Longitude.HasValue ? "true" : "false");
+        var defaultLat = @(Model.Latitude.HasValue ? Model.Latitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : "41.0082");
+        var defaultLng = @(Model.Longitude.HasValue ? Model.Longitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : "28.9784");
+        var initZoom = hasProjectCoords ? 18 : 12;
 
         mapInstance = L.map('feasibilityMap', {
             layers: [satLayer]
-        }).setView([defaultLat, defaultLng], 17);
+        }).setView([defaultLat, defaultLng], initZoom);
+
+        if (hasProjectCoords) {
+            L.marker([defaultLat, defaultLng]).addTo(mapInstance);
+        } else {
+            var locQuery = '@Html.Raw(((ViewBag.NeighborhoodName as string) != null ? (ViewBag.NeighborhoodName as string) + ", " : "") + ((ViewBag.DistrictName as string) != null ? (ViewBag.DistrictName as string) + ", " : "") + ((ViewBag.CityName as string) ?? ""))';
+            if (locQuery && locQuery.trim().length > 2) {
+                fetch('https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=1&SingleLine=' + encodeURIComponent(locQuery + ', Türkiye'))
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (d && d.candidates && d.candidates.length > 0 && mapInstance) {
+                            var loc = d.candidates[0].location;
+                            mapInstance.setView([loc.y, loc.x], 15);
+                        }
+                    }).catch(function() {});
+            }
+        }
 
         var existingGeoJson = '@Html.Raw(Model.ParcelPolygonGeoJson ?? "")';
         if (existingGeoJson && existingGeoJson.length > 10) {
@@ -2490,7 +2508,7 @@
 </script>
 <script>
     document.addEventListener("DOMContentLoaded", function () {
-        if (localStorage.getItem('gmk_map_feasibility') === 'open') {
+        if (localStorage.getItem('gmk_map_feasibility_@Model.Id') === 'open' || @(Model.Latitude.HasValue && Model.Longitude.HasValue ? "true" : "false")) {
             toggleMapCollapse(true);
         }
     });

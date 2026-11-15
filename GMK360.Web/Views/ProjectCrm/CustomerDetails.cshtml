@@ -1,0 +1,273 @@
+@model GMK360.Core.Entities.CrmContact
+@{
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+    ViewData["Title"] = $"{Model.FirstName} {Model.LastName} - 360° Müşteri Cari, Senet & Teslim Dosyası";
+    var meta = ViewBag.Meta as GMK360.Web.Controllers.CrmCustomerExtendedMeta ?? new GMK360.Web.Controllers.CrmCustomerExtendedMeta();
+
+    var totalPaid = meta.Installments.Where(i => i.IsPaid).Sum(i => i.Amount);
+    var totalUnpaid = meta.Installments.Where(i => !i.IsPaid).Sum(i => i.Amount);
+    var remainingBalance = meta.ContractPrice > 0 ? (meta.ContractPrice - totalPaid) : totalUnpaid;
+}
+
+<div class="container-fluid py-3">
+    <!-- Üst Başlık -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div class="d-flex align-items-center gap-3">
+            <a href="/ProjectCrm/Index" class="btn btn-outline-secondary rounded-circle" style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <h4 class="fw-bold mb-0">@Model.FirstName @Model.LastName</h4>
+                    <span class="badge bg-primary">@Model.ContactType</span>
+                    @if (!string.IsNullOrEmpty(meta.PurchasedUnitSummary))
+                    {
+                        <span class="badge bg-warning text-dark"><i class="bi bi-building me-1"></i>@meta.PurchasedUnitSummary</span>
+                    }
+                </div>
+                <p class="text-muted small mb-0 mt-1">
+                    <i class="bi bi-telephone me-1"></i>@Model.PhoneNumber
+                    @if (!string.IsNullOrEmpty(meta.IdentityNumber))
+                    {
+                        <span class="ms-2">• <strong>TC:</strong> @meta.IdentityNumber</span>
+                    }
+                    @if (!string.IsNullOrEmpty(meta.Address))
+                    {
+                        <span class="ms-2">• <i class="bi bi-geo-alt text-danger"></i> @meta.Address</span>
+                    }
+                </p>
+            </div>
+        </div>
+        <button class="btn btn-success rounded-pill px-4 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#addInstallmentModal">
+            <i class="bi bi-plus-circle me-1"></i> + Yeni Senet / Taksit / Ara Ödeme Ekle
+        </button>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show shadow-sm border-0">
+            <i class="bi bi-check-circle-fill me-2"></i>@TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- 4 KPI Özeti -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #2563eb !important;">
+                <div class="card-body">
+                    <div class="text-muted small fw-semibold">Toplam Satış Sözleşme Bedeli</div>
+                    <div class="fs-4 fw-bold text-primary">₺@meta.ContractPrice.ToString("N2")</div>
+                    <div class="small text-muted">@(string.IsNullOrEmpty(meta.PurchasedUnitSummary) ? "Bağımsız Bölüm" : meta.PurchasedUnitSummary)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #16a34a !important;">
+                <div class="card-body">
+                    <div class="text-muted small fw-semibold">Tahsil Edilen (Peşinat + Senet)</div>
+                    <div class="fs-4 fw-bold text-success">₺@totalPaid.ToString("N2")</div>
+                    <div class="small text-muted">@meta.Installments.Count(i => i.IsPaid) Ödenen Kalem</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #dc2626 !important;">
+                <div class="card-body">
+                    <div class="text-muted small fw-semibold">Kalan Senet / Taksit Alacağımız</div>
+                    <div class="fs-4 fw-bold text-danger">₺@remainingBalance.ToString("N2")</div>
+                    <div class="small text-muted">@meta.Installments.Count(i => !i.IsPaid) Bekleyen Senet/Taksit</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #f59e0b !important;">
+                <div class="card-body">
+                    <div class="text-muted small fw-semibold">Tapu & Anahtar Teslim Durumu</div>
+                    <div class="fw-bold text-dark">@meta.TitleDeedStatus</div>
+                    <div class="small text-warning-emphasis mt-1"><i class="bi bi-key-fill me-1"></i>@meta.TurnkeyDeliveryStatus</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- SOL: SENET & TAKSİT VADE PLANI VE TAHSİLATLAR -->
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm rounded-4 h-100 overflow-hidden">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="fw-bold mb-0"><i class="bi bi-calendar2-check text-primary me-2"></i>Peşinat, Taksit & Senet Vade Planı</h6>
+                        <p class="text-muted small mb-0">Müşterinin ödediği peşinatlar ve vadesi gelen senet/taksitlerin tahsilat tablosu.</p>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-3">Kalem / Senet</th>
+                                    <th>Vade Tarihi</th>
+                                    <th class="text-end">Tutar</th>
+                                    <th>Durum</th>
+                                    <th class="text-end pe-3">Tahsilat İşlemi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (!meta.Installments.Any())
+                                {
+                                    <tr>
+                                        <td colspan="5" class="text-center py-4 text-muted">
+                                            Henüz taksit veya senet planı oluşturulmamış. Sağ üstteki <strong>"+ Yeni Senet / Taksit Ekle"</strong> butonuyla vade ekleyebilirsiniz.
+                                        </td>
+                                    </tr>
+                                }
+                                @foreach (var inst in meta.Installments.OrderBy(i => i.DueDate).ThenBy(i => i.InstallmentNo))
+                                {
+                                    <tr>
+                                        <td class="ps-3 fw-semibold">@inst.Title</td>
+                                        <td>@inst.DueDate.ToString("dd.MM.yyyy")</td>
+                                        <td class="text-end fw-bold">₺@inst.Amount.ToString("N2")</td>
+                                        <td>
+                                            @if (inst.IsPaid)
+                                            {
+                                                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Tahsil Edildi (@(inst.PaidAt?.ToString("dd.MM.yyyy")))</span>
+                                            }
+                                            else if (inst.DueDate.Date < DateTime.Today)
+                                            {
+                                                <span class="badge bg-danger">Vadesi Geçti!</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-warning text-dark">Bekliyor</span>
+                                            }
+                                        </td>
+                                        <td class="text-end pe-3">
+                                            @if (!inst.IsPaid)
+                                            {
+                                                <form asp-action="MarkInstallmentPaid" method="post" class="d-inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="contactId" value="@Model.Id" />
+                                                    <input type="hidden" name="installmentId" value="@inst.Id" />
+                                                    <input type="hidden" name="paymentMethod" value="Banka EFT / Nakit" />
+                                                    <button type="submit" class="btn btn-sm btn-outline-success rounded-pill px-3 fw-bold">
+                                                        <i class="bi bi-check2 me-1"></i> Tahsil Et
+                                                    </button>
+                                                </form>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted small">@inst.PaymentMethod</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SAĞ: KİMLİK, ADRES, TAPU DEVRİ & ANAHTAR TESLİM TUTANAĞI -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white py-3">
+                    <h6 class="fw-bold mb-0"><i class="bi bi-house-gear text-warning me-2"></i>Kimlik, Tebligat Adresi, Tapu & Anahtar Teslim Tutanağı</h6>
+                </div>
+                <div class="card-body">
+                    <form asp-action="UpdateCustomerDossier" method="post" class="row g-3">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="contactId" value="@Model.Id" />
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Ad *</label>
+                            <input type="text" name="firstName" class="form-control form-control-sm" value="@Model.FirstName" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Soyad</label>
+                            <input type="text" name="lastName" class="form-control form-control-sm" value="@Model.LastName" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">11 Haneli TC Kimlik No</label>
+                            <input type="text" name="identityNumber" maxlength="11" class="form-control form-control-sm" value="@meta.IdentityNumber" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Telefon *</label>
+                            <input type="text" name="phoneNumber" class="form-control form-control-sm" value="@Model.PhoneNumber" required />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold">Açık Tebligat Adresi</label>
+                            <input type="text" name="address" class="form-control form-control-sm" value="@meta.Address" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Tapu Devir Durumu</label>
+                            <select name="titleDeedStatus" class="form-select form-select-sm">
+                                <option value="Kat İrtifakı / Sözleşme Aşamasında" selected="@(meta.TitleDeedStatus == "Kat İrtifakı / Sözleşme Aşamasında")">Kat İrtifakı / Sözleşme Aşamasında</option>
+                                <option value="Noter Satış Vaadi Yapıldı" selected="@(meta.TitleDeedStatus == "Noter Satış Vaadi Yapıldı")">Noter Satış Vaadi Yapıldı</option>
+                                <option value="Kat İrtifakı Tapusu Devredildi" selected="@(meta.TitleDeedStatus == "Kat İrtifakı Tapusu Devredildi")">Kat İrtifakı Tapusu Devredildi</option>
+                                <option value="İskan & Kat Mülkiyeti Tapusu Verildi" selected="@(meta.TitleDeedStatus == "İskan & Kat Mülkiyeti Tapusu Verildi")">İskan & Kat Mülkiyeti Tapusu Verildi</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Anahtar Teslim Durumu</label>
+                            <select name="turnkeyDeliveryStatus" class="form-select form-select-sm">
+                                <option value="İnşaat Devam Ediyor" selected="@(meta.TurnkeyDeliveryStatus == "İnşaat Devam Ediyor")">İnşaat Devam Ediyor</option>
+                                <option value="Eksik İşler (Snag List) Tamamlanıyor" selected="@(meta.TurnkeyDeliveryStatus == "Eksik İşler (Snag List) Tamamlanıyor")">Eksik İşler (Snag List) Tamamlanıyor</option>
+                                <option value="Anahtar Teslim Tutanağı İmzalandı" selected="@(meta.TurnkeyDeliveryStatus == "Anahtar Teslim Tutanağı İmzalandı")">🔑 Anahtar Teslim Tutanağı İmzalandı</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold">Daire Eksik İşler / Özel İmalat Talepleri (Snag List)</label>
+                            <textarea name="snagListNotes" class="form-control form-control-sm" rows="2" placeholder="Örn: Banyo derz dolgu kontrolü, vestiyer kulpları takılacak...">@meta.SnagListNotes</textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold">Genel Sözleşme Notları</label>
+                            <textarea name="generalNotes" class="form-control form-control-sm" rows="2">@meta.GeneralNotes</textarea>
+                        </div>
+                        <div class="col-12 text-end">
+                            <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">
+                                <i class="bi bi-save me-1"></i> Müşteri & Teslim Dosyasını Güncelle
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- YENİ SENET / TAKSİT EKLEME MODALI -->
+<div class="modal fade" id="addInstallmentModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="AddCustomInstallment" method="post" class="modal-content border-0 shadow-lg rounded-4">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="contactId" value="@Model.Id" />
+            <div class="modal-header bg-success text-white border-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-calendar-plus me-2"></i>Yeni Senet, Taksit veya Ara Ödeme Ekle</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Senet / Ödeme Başlığı *</label>
+                    <input type="text" name="title" class="form-control" placeholder="Örn: Tapu Devir Ara Ödemesi veya Ek Senet" required />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Vade Tarihi *</label>
+                    <input type="date" name="dueDate" class="form-control" value="@DateTime.Today.AddMonths(1).ToString("yyyy-MM-dd")" required />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Tutar (₺) *</label>
+                    <input type="number" step="0.01" name="amount" class="form-control fw-bold" required />
+                </div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="isPaid" value="true" id="instPaidSwitch" />
+                    <label class="form-check-label fw-semibold" for="instPaidSwitch">Bu ödeme tahsil edildi olarak işaretle</label>
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold">Vade Planına Ekle</button>
+            </div>
+        </form>
+    </div>
+</div>

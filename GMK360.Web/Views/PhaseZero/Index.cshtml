@@ -1,12 +1,12 @@
 @model IEnumerable<GMK360.Core.Entities.Construction.ProjectLegalDocument>
 @{
-    Layout = null; 
+    Layout = "_ProjectLayout";
     var globalRules = ViewBag.GlobalRules as List<GMK360.Core.Entities.ModuleDocumentRule> ?? new List<GMK360.Core.Entities.ModuleDocumentRule>();
     var renderedDocIds = new HashSet<int>();
 }
-<!DOCTYPE html>
-<html lang="tr">
-<head>
+<!-- Embedded inside _ProjectLayout -->
+<div class="faz0-wrapper">
+<div class="d-none">
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FAZ 0 Yönetim Masası - @ViewData["ProjectName"]</title>
@@ -14,9 +14,9 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    <style>
+</div><style>
         body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; }
-        @@media screen and (min-width: 992px) and (max-width: 1536px) { body { zoom: 0.8; } }
+        /* Zoom rule removed so _ProjectLayout sidebar stays 100% scale */
         .header-bar { background: linear-gradient(135deg, #1e3a8a, #2563eb); color: white; padding: 1rem 2rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .table-card { background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 2rem; overflow: hidden; }
         .section-title { background-color: #f1f5f9; padding: 1rem 1.5rem; border-bottom: 2px solid #e2e8f0; font-weight: 600; color: #334155; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
@@ -28,8 +28,8 @@
         .badge-process { background: #e0f2fe; color: #075985; }
         .badge-danger { background: #fee2e2; color: #991b1b; }
     </style>
-</head>
-<body>
+<!-- end style -->
+<div class="faz0-body">
 
     <div class="header-bar d-flex justify-content-between align-items-center">
         <div>
@@ -37,14 +37,16 @@
             <p class="mb-0 text-white-50 small mt-1">@ViewData["ProjectName"] - Yasal Evrak, İzin ve Sözleşme Takibi</p>
         </div>
         <div>
-            <button class="btn btn-danger btn-sm fw-bold me-2"><i class="bi bi-plus-lg me-1"></i> Özel Evrak Ekle</button>
+            <a href="/ModuleDocumentRule/Index" class="btn btn-light btn-sm fw-bold me-2 text-primary shadow-sm"><i class="bi bi-database-gear me-1"></i> Merkez Havuz Kuralları</a>
+            <button type="button" class="btn btn-outline-light btn-sm fw-bold me-2" onclick="checkTemplateUpdates(@ViewData["ProjectId"])"><i class="bi bi-layers-half me-1"></i> Şablon Farkları</button>
+            <button type="button" class="btn btn-danger btn-sm fw-bold me-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#addCustomDocModal"><i class="bi bi-plus-lg me-1"></i> Özel Evrak Ekle</button>
             <form method="post" action="/PhaseZero/SyncDocs/@ViewData["ProjectId"]" class="d-inline">
                     @Html.AntiForgeryToken()
                 <button type="submit" class="btn btn-warning btn-sm fw-bold me-2 shadow-sm text-dark">
                     <i class="bi bi-arrow-repeat me-1"></i> Havuzdan Senkronize Et
                 </button>
             </form>
-            <a href="/ProjectFinance/Index/@ViewData["ProjectId"]" class="btn btn-light btn-sm fw-bold"><i class="bi bi-arrow-left me-1"></i> Finans Sayfasına Dön</a>
+            <a href="/ConstructionProject/Details/@ViewData["ProjectId"]" class="btn btn-light btn-sm fw-bold shadow-sm"><i class="bi bi-arrow-left me-1"></i> Proje Panosuna Dön</a>
         </div>
     </div>
 
@@ -145,7 +147,7 @@
                         <span><i class="bi bi-folder2-open me-2 text-primary"></i> @group.Key</span>
                         <span class="badge bg-primary rounded-pill">@group.Count() Evrak</span>
                     </div>
-                    <div id="@collapseId" class="collapse">
+                    <div id="@collapseId" class="collapse show">
                         <div class="table-responsive">
                             <table class="table table-hover mb-0">
                                 <thead>
@@ -166,8 +168,8 @@
                                         
                                         var biddableKeywords = new[] { "Firma", "Taşeron", "Ofis", "Mühendis", "Mimar", "Laboratuvar", "OSGB" };
                                         bool isChildOfSomeone = Model.Any(m => globalRules.FirstOrDefault(r => r.SystemLegalDocumentTemplateId == m.SystemTemplateId)?.Prerequisites?.Any(p => p.PrerequisiteTemplateId == doc.SystemTemplateId) == true);
-                                        if (isChildOfSomeone) { continue; }
-                                        bool canRequestQuote = doc.SystemTemplate?.IssuedBy != null && biddableKeywords.Any(k => doc.SystemTemplate.IssuedBy.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0);
+                                        // Tüm evraklar kendi aşama klasöründe görünür kalmalı
+                                        bool canRequestQuote = true;
     var rule = globalRules.FirstOrDefault(r => r.SystemLegalDocumentTemplateId == doc.SystemTemplateId);
                                         bool isOnlyPrereq = globalRules.Any(r => r.Prerequisites != null && r.Prerequisites.Any(p => p.PrerequisiteTemplateId == doc.SystemTemplateId)) && rule == null;
                                         
@@ -215,7 +217,7 @@
                                                 @if(string.IsNullOrEmpty(doc.AssignedUserId)) { <span class="text-danger"><i class="bi bi-person-x"></i> Yok</span> } else { <span><i class="bi bi-person-check text-primary"></i> @doc.AssignedUserId</span> }
                                             </td>
                                             <td class="text-end fw-bold" title="Harç: @(doc.DocumentFee?.ToString("N2") ?? "0,00") | Ek Masraf: @(doc.AdditionalCost?.ToString("N2") ?? "0,00")">
-                                                @if(bestPrice > 0) { <span class="text-success fs-6"><i class="bi bi-check-circle-fill"></i> @bestPrice.ToString("N2")</span> } else { @((doc.DocumentFee.GetValueOrDefault() + doc.AdditionalCost.GetValueOrDefault()).ToString("N2")) } ₺
+                                                @if(bestPrice > 0) { <span class="text-success fs-6"><i class="bi bi-check-circle-fill"></i> @bestPrice.ToString("N2") ₺</span><div class="text-success fw-normal" style="font-size:0.68rem;">En Uygun B2B Teklif</div> } else { <span>@((doc.DocumentFee.GetValueOrDefault() + doc.AdditionalCost.GetValueOrDefault()).ToString("N2")) ₺</span><div class="text-muted fw-normal" style="font-size:0.68rem;"><i class="bi bi-database-check text-primary me-1"></i>GMK360 Merkez Havuz</div> }
                                             </td>
                                             <td class="text-center">
                                                 @if (isDependent && !isReadyToApply) { <span class="badge bg-danger rounded-pill px-3 shadow-sm"><i class="bi bi-lock-fill"></i> Kilitli (Önkoşul)</span> }
@@ -235,7 +237,7 @@
                                                               } else {
                                                                   <form method="post" action="/PhaseZero/RequestQuote/@doc.Id" class="m-0 p-0">
                                                                       <button type="submit" onclick="event.stopPropagation();" class="btn btn-sm btn-warning rounded-pill px-2 shadow-sm text-dark fw-bold" title="Satınalmaya Gönder / Fiyat Araştırması İste" >
-                                                                          <i class="bi bi-cart-plus"></i> Teklif
+                                                                          <i class="bi bi-search me-1"></i> Araştır / Teklif
                                                                       </button>
                                                                   </form>
                                                               }
@@ -446,7 +448,7 @@
                                                 if (childDoc != null)
                                                 {
                                                     bool isChildDone = childDoc.Status == "Alındı" || childDoc.Status == "Tamamlandı";
-                                                    <tr class="collapse child-of-@doc.Id show bg-light" style="border-left: 4px solid @(isChildDone ? "#198754" : "#ffc107");">
+                                                    <tr class="collapse child-of-@doc.Id bg-light" style="border-left: 4px solid @(isChildDone ? "#198754" : "#ffc107");">
                                                         <td class="ps-5 py-2">
                                                             <i class="bi bi-arrow-return-right @(isChildDone ? "text-success" : "text-warning") me-2 ms-3"></i>
                                                             <span class="text-dark fw-bold">@childDoc.DocumentName</span>
@@ -467,7 +469,7 @@
                                                             }
                                                         </td>
                                                         <td class="text-end fw-bold py-2">
-                                                            @((childDoc.DocumentFee.GetValueOrDefault() + childDoc.AdditionalCost.GetValueOrDefault()).ToString("N2")) ₺
+                                                            <span>@((childDoc.DocumentFee.GetValueOrDefault() + childDoc.AdditionalCost.GetValueOrDefault()).ToString("N2")) ₺</span><div class="text-muted fw-normal" style="font-size:0.65rem;"><i class="bi bi-database-check text-primary me-1"></i>GMK360 Merkez Havuz</div>
                                                         </td>
                                                         <td class="text-center py-2">
                                                             @if (isChildDone) {
@@ -479,7 +481,7 @@
                                                             }
                                                         </td>
                                                         <td class="text-end pe-4 py-2">
-                                                            <button class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold shadow-sm" onclick="event.stopPropagation(); openManageModal(@childDoc.Id)">
+                                                            <form method="post" action="/PhaseZero/RequestQuote/@childDoc.Id" class="d-inline me-1"><button type="submit" onclick="event.stopPropagation();" class="btn btn-sm btn-warning rounded-pill px-2 shadow-sm text-dark fw-bold" title="Satınalmaya Gönder / Fiyat Araştırması İste"><i class="bi bi-search me-1"></i> Araştır / Teklif</button></form><button class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold shadow-sm" onclick="event.stopPropagation(); openManageModal(@childDoc.Id)">
                                                                 <i class="bi bi-pencil-square"></i> Yönet
                                                             </button>
                                                         </td>
@@ -853,6 +855,51 @@
         }
     </script>
 
+    <!-- ÖZEL EVRAK EKLE MODAL -->
+    <div class="modal fade" id="addCustomDocModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <form method="post" action="/PhaseZero/AddCustomDoc">
+                    <input type="hidden" name="projectId" value="@ViewData["ProjectId"]" />
+                    <div class="modal-header bg-danger text-white border-0 rounded-top-4">
+                        <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle-fill me-2"></i> Projeye Özel Faz 0 Evrağı / Süreci Ekle</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Aşama / Klasör</label>
+                            <select name="stage" class="form-select">
+                                <option value="1. Aşama: Hazırlık ve Temsil">1. Aşama: Hazırlık ve Temsil</option>
+                                <option value="2. Aşama: Riskli Yapı ve Yıkım">2. Aşama: Riskli Yapı ve Yıkım</option>
+                                <option value="3. Aşama: İmar, Çizim ve Projeler">3. Aşama: İmar, Çizim ve Projeler</option>
+                                <option value="4. Aşama: İnşaat Ruhsatı ve Denetim">4. Aşama: İnşaat Ruhsatı ve Denetim</option>
+                                <option value="5. Aşama: İskan ve Mülkiyet">5. Aşama: İskan ve Mülkiyet</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Evrak / Resmi İşlem Adı</label>
+                            <input type="text" name="documentName" class="form-control" required placeholder="Örn: Trafo Yeri Tahsis Belgesi veya Anıtlar Kurulu İzni" />
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label fw-bold">Tahmini Harç / Bedel (₺)</label>
+                                <input type="number" step="0.01" name="documentFee" class="form-control" placeholder="Boşsa Havuzdan Alır" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-bold">Sorumlu Kişi</label>
+                                <input type="text" name="assignedUserId" class="form-control" placeholder="Örn: Teknik Ofis / Mimar" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 bg-light rounded-bottom-4">
+                        <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                        <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold"><i class="bi bi-check2-circle me-1"></i> Evrağı Ekle</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- SYNC / DIFF MODAL -->
     <div class="modal fade" id="syncModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -907,5 +954,5 @@
 
     
 
-</body>
-</html>
+</div>
+</div>

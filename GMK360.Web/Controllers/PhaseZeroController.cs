@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using GMK360.Data.Contexts;
@@ -7,6 +8,7 @@ using System.Threading.Tasks;
 
 namespace GMK360.Web.Controllers
 {
+    [Authorize]
     public class PhaseZeroController : Controller
     {
         private readonly ApplicationDbContext _context;
@@ -27,6 +29,7 @@ namespace GMK360.Web.Controllers
 
             ViewData["ProjectId"] = projectId;
             ViewData["ProjectName"] = project.Name;
+            ViewBag.Project = project;
 
             var globalRules = await _context.ModuleDocumentRules
                 .Include(r => r.Prerequisites)
@@ -80,13 +83,33 @@ namespace GMK360.Web.Controllers
                 await _context.SaveChangesAsync();
             }
 
+            // GMK360 Merkez Havuz referans harç/hizmet fiyatlarını 0 olan kalemlere besle
+            bool anyPriceSynced = false;
+            foreach (var d in docs)
+            {
+                if ((d.DocumentFee ?? 0) == 0 && (d.AdditionalCost ?? 0) == 0 && (d.EstimatedCost ?? 0) == 0)
+                {
+                    var refPrice = GetCentralPoolDocReferenceFee(d.DocumentName);
+                    if (refPrice > 0)
+                    {
+                        d.DocumentFee = refPrice;
+                        d.EstimatedCost = refPrice;
+                        anyPriceSynced = true;
+                    }
+                }
+            }
+            if (anyPriceSynced)
+            {
+                await _context.SaveChangesAsync();
+            }
+
             // Fetch quote requests for these documents to show status
             var docIds = docs.Select(d => d.Id).ToList();
             var quoteRequests = await _context.B2BQuoteRequests
                 .Include(q => q.Invites).ThenInclude(i => i.NetworkContact)
                 .Where(q => q.SourceModule == "PhaseZeroDocument" && docIds.Contains(q.SourceReferenceId))
                 .ToListAsync();
-            
+
             ViewBag.Quotes = quoteRequests;
 
 
@@ -163,7 +186,89 @@ namespace GMK360.Web.Controllers
             {
                 await _context.SaveChangesAsync();
             }
+
+            // Fiyatı 0 olan evrakları eski proje gerçekleşen fiyatları veya merkez havuz referans fiyatlarıyla besle
+            var project = await _context.ConstructionProjects.FindAsync(projectId);
+            int agencyId = project?.AgencyId ?? 1;
+            var previousAgencyDocs = await _context.ProjectLegalDocuments
+                .Include(d => d.ConstructionProject)
+                .Where(d => d.ConstructionProjectId != projectId
+                    && d.ConstructionProject != null
+                    && d.ConstructionProject.AgencyId == agencyId
+                    && ((d.DocumentFee ?? 0) > 0 || (d.AdditionalCost ?? 0) > 0 || (d.ActualCost ?? 0) > 0))
+                .OrderByDescending(d => d.Id)
+                .ToListAsync();
+
+            var projectDocs = await _context.ProjectLegalDocuments
+                .Where(d => d.ConstructionProjectId == projectId)
+                .ToListAsync();
+
+            bool anyFeeUpdated = false;
+            foreach (var d in projectDocs)
+            {
+                if ((d.DocumentFee ?? 0) == 0 && (d.AdditionalCost ?? 0) == 0 && (d.EstimatedCost ?? 0) == 0)
+                {
+                    var oldDoc = previousAgencyDocs.FirstOrDefault(p =>
+                        (d.SystemTemplateId.HasValue && p.SystemTemplateId == d.SystemTemplateId)
+                        || string.Equals(p.DocumentName, d.DocumentName, System.StringComparison.OrdinalIgnoreCase));
+
+                    if (oldDoc != null)
+                    {
+                        decimal oldFee = (oldDoc.DocumentFee ?? 0) > 0 ? oldDoc.DocumentFee!.Value : (oldDoc.ActualCost ?? oldDoc.EstimatedCost ?? 0);
+                        d.DocumentFee = oldFee;
+                        d.AdditionalCost = oldDoc.AdditionalCost ?? 0;
+                        d.EstimatedCost = oldFee + (oldDoc.AdditionalCost ?? 0);
+                        if (string.IsNullOrWhiteSpace(d.InstitutionContact) && !string.IsNullOrWhiteSpace(oldDoc.InstitutionContact))
+                        {
+                            d.InstitutionContact = oldDoc.InstitutionContact;
+                        }
+                        anyFeeUpdated = true;
+                    }
+                    else
+                    {
+                        var refFee = GetCentralPoolDocReferenceFee(d.DocumentName);
+                        if (refFee > 0)
+                        {
+                            d.DocumentFee = refFee;
+                            d.EstimatedCost = refFee;
+                            anyFeeUpdated = true;
+                        }
+                    }
+                }
+            }
+            if (anyFeeUpdated)
+            {
+                await _context.SaveChangesAsync();
+            }
+
+            TempData["SuccessMessage"] = "Tüm aşama evrakları, önkoşul zinciri ve önceki proje / merkez havuz referans maliyetleri senkronize edildi.";
+            string? returnUrl = Request.Headers["Referer"].ToString();
+            if (!string.IsNullOrEmpty(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
             return RedirectToAction("Index", new { projectId = projectId });
+        }
+
+        private static decimal GetCentralPoolDocReferenceFee(string? docName)
+        {
+            if (string.IsNullOrWhiteSpace(docName)) return 15000m;
+            var n = docName.ToLowerInvariant();
+            if (n.Contains("karot") || n.Contains("riskli yapı")) return 28500m;
+            if (n.Contains("zemin etüd") || n.Contains("geoteknik")) return 45000m;
+            if (n.Contains("mimari proje") || n.Contains("mimari avan")) return 185000m;
+            if (n.Contains("statik proje") || n.Contains("betonarme")) return 140000m;
+            if (n.Contains("mekanik") || n.Contains("elektrik") || n.Contains("tesisat proje")) return 95000m;
+            if (n.Contains("harita") || n.Contains("aplikasyon") || n.Contains("ifraz") || n.Contains("tevhid") || n.Contains("plankote")) return 32000m;
+            if (n.Contains("noter") || n.Contains("kat karşılığı") || n.Contains("vekalet")) return 65000m;
+            if (n.Contains("tapu") || n.Contains("takyidat") || n.Contains("kat irtifak") || n.Contains("şerh")) return 42000m;
+            if (n.Contains("ruhsat") || n.Contains("belediye") || n.Contains("imar durumu")) return 120000m;
+            if (n.Contains("yapı denetim")) return 160000m;
+            if (n.Contains("iski") || n.Contains("tedaş") || n.Contains("igdaş") || n.Contains("ilişik") || n.Contains("abonelik") || n.Contains("altyapı")) return 18500m;
+            if (n.Contains("asbest") || n.Contains("akustik") || n.Contains("ekb") || n.Contains("enerji kimlik")) return 22000m;
+            if (n.Contains("isg") || n.Contains("osgb") || n.Contains("iş güvenliği")) return 24000m;
+            if (n.Contains("iskan") || n.Contains("yapı kullanım") || n.Contains("cins tashihi")) return 110000m;
+            return 18000m;
         }
 
         [HttpGet("PhaseZero/GetDoc/{id}")]
@@ -171,7 +276,7 @@ namespace GMK360.Web.Controllers
         {
             var doc = await _context.ProjectLegalDocuments.FindAsync(id);
             if (doc == null) return NotFound();
-            
+
             return Json(new {
                 id = doc.Id,
                 documentName = doc.DocumentName,
@@ -194,7 +299,7 @@ namespace GMK360.Web.Controllers
             if (doc == null) return NotFound();
 
             // GÜVENLİK NOTU: Burada ileride User.Identity.Role == "Admin" || doc.AssignedUserId == User.Identity.Name kontrolü eklenecek.
-            
+
             doc.Status = status;
             doc.AssignedUserId = assignedUserId;
             doc.InstitutionContact = institutionContact;
@@ -208,7 +313,7 @@ namespace GMK360.Web.Controllers
                 var uploadsFolder = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot", "uploads", "faz0");
                 if (!System.IO.Directory.Exists(uploadsFolder))
                     System.IO.Directory.CreateDirectory(uploadsFolder);
-                
+
                 var uniqueFileName = System.Guid.NewGuid().ToString() + "_" + uploadedFile.FileName;
                 var filePath = System.IO.Path.Combine(uploadsFolder, uniqueFileName);
                 using (var fileStream = new System.IO.FileStream(filePath, System.IO.FileMode.Create))
@@ -231,7 +336,7 @@ namespace GMK360.Web.Controllers
             }
             return RedirectToAction("Index", new { projectId = doc.ConstructionProjectId });
         }
-        
+
         [HttpPost]
         public async Task<IActionResult> AcceptQuote(int documentId, int inviteId, bool isPaidUpfront = false, DateTime? dueDate = null)
         {
@@ -292,9 +397,14 @@ namespace GMK360.Web.Controllers
 
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = isPaidUpfront 
+            TempData["SuccessMessage"] = isPaidUpfront
                 ? $"Teklif kabul edildi! {invite.OfferedPrice:N2} ₺ tutar peşin olarak ödendi, şantiye kara defterine teslimat görevi işlendi."
                 : $"Teklif kabul edildi! {invite.OfferedPrice:N2} ₺ tutar vadeli olarak cari hesaba ve şantiye kara defterine teslimat görevi olarak işlendi.";
+            string? acceptReturnUrl = Request.Headers["Referer"].ToString();
+            if (!string.IsNullOrEmpty(acceptReturnUrl))
+            {
+                return Redirect(acceptReturnUrl);
+            }
             return RedirectToAction(nameof(Index), new { projectId = document.ConstructionProjectId });
         }
 
@@ -308,45 +418,79 @@ namespace GMK360.Web.Controllers
 
             if (doc == null) return NotFound();
 
-            // Sadece daha önce aynı evrak için talep açılmamışsa aç
-            bool exists = await _context.B2BQuoteRequests.AnyAsync(q => q.SourceModule == "PhaseZeroDocument" && q.SourceReferenceId == documentId);
-            
-            if (!exists)
+            var existingQuote = await _context.B2BQuoteRequests
+                .FirstOrDefaultAsync(q => q.SourceModule == "PhaseZeroDocument" && q.SourceReferenceId == documentId);
+
+            if (existingQuote == null)
             {
-                var quoteRequest = new GMK360.Core.Entities.B2B.B2BQuoteRequest
+                existingQuote = new GMK360.Core.Entities.B2B.B2BQuoteRequest
                 {
                     RequesterAgencyId = doc.ConstructionProject.AgencyId,
                     RequesterUserId = "ProjeYöneticisi",
                     SourceModule = "PhaseZeroDocument",
                     SourceReferenceId = doc.Id,
                     Title = doc.ConstructionProject.Name + " - " + doc.DocumentName + " (Fiyat Araştırması)",
-                    Description = "Bu proje (" + doc.ConstructionProject.Name + ") için bu evrak/işlem (" + doc.DocumentName + ") lazım. Fiyat araştırması ve onayını bekliyorum.",
+                    Description = "Bu proje (" + doc.ConstructionProject.Name + ") kapsamında \"" + doc.DocumentName + "\" işi/evrakı için fiyat teklifinizi veya saha keşif randevusu talebinizi bekliyoruz.",
                     Deadline = System.DateTime.Now.AddDays(7),
                     Status = "Draft"
                 };
 
-                _context.B2BQuoteRequests.Add(quoteRequest);
-                
+                _context.B2BQuoteRequests.Add(existingQuote);
+
                 doc.Status = "Fiyat Araştırılıyor"; // Satınalma sürecine girdi
                 doc.AssignedUserId = "Satınalma Departmanı"; // Otomatik satınalmaya atandı
-                
+
                 await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = $"'{doc.DocumentName}' için teklif masası açıldı. Tanıdığınız firmayı/ustayı ekleyip davet linki gönderebilir veya Pazar Yeri'nden davet edebilirsiniz.";
             }
 
-            return RedirectToAction("Index", new { projectId = doc.ConstructionProjectId });
-    
+            return RedirectToAction("Details", "B2BPurchasing", new { id = existingQuote.Id });
+
         }
 
-        
+
+
+        [HttpPost("PhaseZero/AddCustomDoc")]
+        [IgnoreAntiforgeryToken]
+        public async Task<IActionResult> AddCustomDoc(int projectId, string stage, string documentName, decimal? documentFee, string? assignedUserId)
+        {
+            if (projectId <= 0 || string.IsNullOrWhiteSpace(documentName))
+                return RedirectToAction("Index", new { projectId });
+
+            var fee = documentFee ?? GetCentralPoolDocReferenceFee(documentName);
+            var doc = new ProjectLegalDocument
+            {
+                ConstructionProjectId = projectId,
+                DocumentName = documentName.Trim(),
+                Stage = string.IsNullOrWhiteSpace(stage) ? "1. Aşama: Ön Keşif & İmar Bürokrasisi" : stage.Trim(),
+                Status = "Bekliyor",
+                AssignedUserId = assignedUserId,
+                DocumentFee = fee,
+                EstimatedCost = fee,
+                ActualCost = 0,
+                AdditionalCost = 0,
+                IsCustom = true,
+                DisplayOrder = 1
+            };
+            _context.ProjectLegalDocuments.Add(doc);
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"'{doc.DocumentName}' özel evrak/süreç olarak listeye eklendi.";
+            string? addReturnUrl = Request.Headers["Referer"].ToString();
+            if (!string.IsNullOrEmpty(addReturnUrl))
+            {
+                return Redirect(addReturnUrl);
+            }
+            return RedirectToAction("Index", new { projectId });
+        }
 
         [HttpPost("PhaseZero/ConfirmInspectionAppointment")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ConfirmInspectionAppointment(
-            int inviteId, 
-            int documentId, 
-            DateTime? confirmedDate, 
-            DateTime? appointmentDate, 
-            string? appointmentTime, 
+            int inviteId,
+            int documentId,
+            DateTime? confirmedDate,
+            DateTime? appointmentDate,
+            string? appointmentTime,
             string? managerNotes)
         {
             var doc = await _context.ProjectLegalDocuments
@@ -380,9 +524,9 @@ namespace GMK360.Web.Controllers
 
             // Şantiye Kara Defteri'ne (AgendaRecord) KESİN KAYIT aç
             await _supplierSyncService.CreateDiscoveryAgendaRecordAsync(
-                inviteId, 
-                finalDate, 
-                invite.NetworkContact?.ContactPerson, 
+                inviteId,
+                finalDate,
+                invite.NetworkContact?.ContactPerson,
                 notes);
 
             invite.OfferNotes = $"[RANDEVU KESİNLEŞTİ] Tarih: {finalDate:dd.MM.yyyy HH:mm} | Not: {notes}";
@@ -390,6 +534,11 @@ namespace GMK360.Web.Controllers
             await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = $"Saha keşif randevusu ({finalDate:dd.MM.yyyy HH:mm}) teyit edildi ve Şantiye Kara Defteri'ne (Ajandaya) işlendi.";
+            string? confReturnUrl = Request.Headers["Referer"].ToString();
+            if (!string.IsNullOrEmpty(confReturnUrl))
+            {
+                return Redirect(confReturnUrl);
+            }
             return RedirectToAction("Index", new { projectId = doc.ConstructionProjectId });
         }
     }

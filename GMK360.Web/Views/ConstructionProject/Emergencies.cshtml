@@ -1,0 +1,301 @@
+@model GMK360.Web.Controllers.ProjectEmergenciesViewModel
+@{
+    ViewData["Title"] = "Acil Durumlar & Kritik Uyarılar";
+    Layout = "~/Views/Shared/_ProjectLayout.cshtml";
+
+    var totalAlerts =
+        Model.UnsafeIsgAudits.Count +
+        Model.OverdueScheduleTasks.Count +
+        Model.FieldObstaclesAndNeeds.Count +
+        Model.LegalDocumentIssues.Count;
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h3 class="fw-bold text-dark mb-1">
+                <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Acil Durumlar &amp; Kritik Uyarılar
+            </h3>
+            <p class="text-muted small mb-0">
+                <strong>@Model.Project.Name</strong> şantiyesindeki İSG ihlalleri, geciken iş programı kalemleri, saha engelleri, acil malzeme talepleri ve bekleyen evrak riskleri.
+            </p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 px-3 py-2 fs-6">
+                Toplam Açık Uyarı: @totalAlerts
+            </span>
+            <button type="button" class="btn btn-danger rounded-pill fw-bold shadow-sm px-3" data-bs-toggle="modal" data-bs-target="#newEmergencyModal">
+                <i class="bi bi-megaphone-fill me-1"></i> Acil Durum / Engel Bildir
+            </button>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-3 shadow-sm" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>@TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-3 shadow-sm" role="alert">
+            <i class="bi bi-exclamation-octagon-fill me-2"></i>@TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
+        </div>
+    }
+
+    <!-- Özet Kartları -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-4 border-danger">
+                <div class="card-body">
+                    <div class="text-muted small fw-semibold">İSG Uygunsuzluğu</div>
+                    <div class="fs-3 fw-bold text-danger">@Model.UnsafeIsgAudits.Count</div>
+                    <div class="small text-muted">Güvensiz bulunan denetim</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-4 border-warning">
+                <div class="card-body">
+                    <div class="text-muted small fw-semibold">Geciken İş Programı</div>
+                    <div class="fs-3 fw-bold text-warning">@Model.OverdueScheduleTasks.Count</div>
+                    <div class="small text-muted">Planlanan bitişi geçmiş imalat</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-4 border-primary">
+                <div class="card-body">
+                    <div class="text-muted small fw-semibold">Saha Engel / Acil Malzeme</div>
+                    <div class="fs-3 fw-bold text-primary">@Model.FieldObstaclesAndNeeds.Count</div>
+                    <div class="small text-muted">Günlük saha bildirimleri</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-4 border-secondary">
+                <div class="card-body">
+                    <div class="text-muted small fw-semibold">Bekleyen / Sorunlu Evrak</div>
+                    <div class="fs-3 fw-bold text-secondary">@Model.LegalDocumentIssues.Count</div>
+                    <div class="small text-muted">Ruhsat &amp; kurum süreçleri</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- 1. Saha Engelleri ve Acil Malzeme Talepleri -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-dark text-white py-3 px-4 rounded-top-4 d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold"><i class="bi bi-cone-striped text-warning me-2"></i>Saha Engelleri &amp; Acil Malzeme İhtiyaçları</h6>
+                    <span class="badge bg-warning text-dark">@Model.FieldObstaclesAndNeeds.Count</span>
+                </div>
+                <div class="card-body p-0">
+                    @if (!Model.FieldObstaclesAndNeeds.Any())
+                    {
+                        <div class="p-4 text-center text-muted small">
+                            <i class="bi bi-shield-check fs-3 d-block mb-2 text-success"></i>
+                            Bildirilmiş açık saha engeli veya acil malzeme kaydı yok.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var log in Model.FieldObstaclesAndNeeds)
+                            {
+                                <div class="list-group-item px-4 py-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="badge bg-light text-dark border">@log.LogDate.ToString("dd.MM.yyyy HH:mm")</span>
+                                        @if (!log.IsReadByAdmin)
+                                        {
+                                            <span class="badge bg-danger">Yeni Bildirim</span>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(log.ObstaclesAndDelays))
+                                    {
+                                        <div class="small text-danger fw-semibold mb-1">
+                                            <i class="bi bi-x-octagon me-1"></i>Engel / Gecikme: <span class="text-dark fw-normal">@log.ObstaclesAndDelays</span>
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(log.MaterialNeeds))
+                                    {
+                                        <div class="small text-primary fw-semibold">
+                                            <i class="bi bi-box-seam me-1"></i>Acil Malzeme: <span class="text-dark fw-normal">@log.MaterialNeeds</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Geciken İş Programı Kalemleri -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-dark text-white py-3 px-4 rounded-top-4 d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold"><i class="bi bi-clock-history text-danger me-2"></i>Geciken İmalat &amp; İş Programı Uyarıları</h6>
+                    <span class="badge bg-danger">@Model.OverdueScheduleTasks.Count</span>
+                </div>
+                <div class="card-body p-0">
+                    @if (!Model.OverdueScheduleTasks.Any())
+                    {
+                        <div class="p-4 text-center text-muted small">
+                            <i class="bi bi-calendar-check fs-3 d-block mb-2 text-success"></i>
+                            Tarihi geçmiş bekleyen iş programı kalemi bulunmuyor.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0 small">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-4">İmalat / Görev</th>
+                                        <th>Bölüm</th>
+                                        <th>Plan Bitiş</th>
+                                        <th>Durum</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var task in Model.OverdueScheduleTasks)
+                                    {
+                                        <tr>
+                                            <td class="ps-4 fw-semibold">@task.TaskName</td>
+                                            <td>@(task.FloorOrZone ?? task.PartCategory ?? "-")</td>
+                                            <td class="text-danger fw-bold">@task.PlannedEndDate?.ToString("dd.MM.yyyy")</td>
+                                            <td><span class="badge bg-warning text-dark">@task.Status</span></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. İSG Kritik Bulgular -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-danger text-white py-3 px-4 rounded-top-4 d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold"><i class="bi bi-shield-exclamation me-2"></i>İSG Güvensiz Denetim Kayıtları</h6>
+                    <span class="badge bg-light text-danger">@Model.UnsafeIsgAudits.Count</span>
+                </div>
+                <div class="card-body p-0">
+                    @if (!Model.UnsafeIsgAudits.Any())
+                    {
+                        <div class="p-4 text-center text-muted small">
+                            <i class="bi bi-shield-fill-check fs-3 d-block mb-2 text-success"></i>
+                            Güvensiz olarak işaretlenmiş açık İSG denetimi yok.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var audit in Model.UnsafeIsgAudits)
+                            {
+                                <div class="list-group-item px-4 py-3 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="fw-bold text-dark">Denetçi: @audit.AuditorName</div>
+                                        <div class="small text-muted">Tarih: @audit.AuditDate.ToString("dd.MM.yyyy")</div>
+                                    </div>
+                                    <span class="badge bg-danger">Güvensiz Saha</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Bekleyen / Sorunlu Resmi Evraklar -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-secondary text-white py-3 px-4 rounded-top-4 d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold"><i class="bi bi-file-earmark-medical me-2"></i>Bekleyen veya Sorunlu Resmi Evraklar</h6>
+                    <span class="badge bg-light text-dark">@Model.LegalDocumentIssues.Count</span>
+                </div>
+                <div class="card-body p-0">
+                    @if (!Model.LegalDocumentIssues.Any())
+                    {
+                        <div class="p-4 text-center text-muted small">
+                            <i class="bi bi-file-earmark-check fs-3 d-block mb-2 text-success"></i>
+                            Bekleyen veya sorunlu resmi evrak kaydı bulunmuyor.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0 small">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-4">Evrak Adı</th>
+                                        <th>Aşama</th>
+                                        <th>Durum</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var doc in Model.LegalDocumentIssues)
+                                    {
+                                        <tr>
+                                            <td class="ps-4 fw-semibold">
+                                                @doc.DocumentName
+                                                @if (!string.IsNullOrWhiteSpace(doc.IssueNotes))
+                                                {
+                                                    <div class="text-danger small fw-normal">@doc.IssueNotes</div>
+                                                }
+                                            </td>
+                                            <td>@(doc.Stage ?? "-")</td>
+                                            <td><span class="badge bg-warning text-dark">@doc.Status</span></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Acil Durum Bildirim Modalı -->
+<div class="modal fade" id="newEmergencyModal" tabindex="-1" aria-labelledby="newEmergencyModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form action="/ConstructionProject/AddEmergencyLog" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="projectId" value="@Model.Project.Id" />
+                <div class="modal-header bg-danger text-white border-0 rounded-top-4">
+                    <h5 class="modal-title fw-bold" id="newEmergencyModalLabel">
+                        <i class="bi bi-megaphone-fill me-2"></i>Acil Saha Engeli / Malzeme Bildir
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Acil Engel / İş Durdurma / Gecikme Sebebi</label>
+                        <textarea name="obstaclesAndDelays" class="form-control rounded-3" rows="3" placeholder="Örn: Zemin suyu çıkışı tespit edildi, pompa bekleniyor..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Acil Malzeme / Ekipman İhtiyacı</label>
+                        <textarea name="materialNeeds" class="form-control rounded-3" rows="2" placeholder="Örn: 2 adet dalgıç pompa ve 50 m3 C30 beton..."></textarea>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label fw-bold small">Saha / Hava Durumu Notu (Opsiyonel)</label>
+                        <input type="text" name="weatherCondition" class="form-control rounded-3" placeholder="Örn: Yağmurlu / Kritik Saha Uyarısı" />
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0 px-4 pb-4">
+                    <button type="button" class="btn btn-light rounded-pill px-3" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">Kaydet ve Bildir</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

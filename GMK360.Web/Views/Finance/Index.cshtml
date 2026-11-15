@@ -1,47 +1,706 @@
+@using GMK360.Core.DTOs.Construction
+@using GMK360.Core.Entities.Construction
+@using System.Globalization
 @{
     ViewData["Title"] = "Finans & Cari Yönetimi";
     Layout = "_ConstructionLayout";
+
+    var projects = ViewBag.Projects as List<ConstructionProject> ?? new List<ConstructionProject>();
+    var projectNames = ViewBag.ProjectNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+    int? selectedProjectId = ViewBag.SelectedProjectId as int?;
+    string selectedMonthFilter = ViewBag.SelectedMonthFilter as string ?? "";
+    string activeTab = ViewBag.ActiveTab as string ?? "expected";
+
+    decimal usdRate = ViewBag.UsdRate != null ? (decimal)ViewBag.UsdRate : 49.6540m;
+    decimal eurRate = ViewBag.EurRate != null ? (decimal)ViewBag.EurRate : 55.5997m;
+
+    decimal thisMonthExpectedTL = ViewBag.ThisMonthExpectedTL != null ? (decimal)ViewBag.ThisMonthExpectedTL : 0m;
+    int thisMonthExpectedCount = ViewBag.ThisMonthExpectedCount != null ? (int)ViewBag.ThisMonthExpectedCount : 0;
+    decimal nextMonthExpectedTL = ViewBag.NextMonthExpectedTL != null ? (decimal)ViewBag.NextMonthExpectedTL : 0m;
+    int nextMonthExpectedCount = ViewBag.NextMonthExpectedCount != null ? (int)ViewBag.NextMonthExpectedCount : 0;
+    decimal totalExpectedOutflowTL = ViewBag.TotalExpectedOutflowTL != null ? (decimal)ViewBag.TotalExpectedOutflowTL : 0m;
+    int totalExpectedCount = ViewBag.TotalExpectedCount != null ? (int)ViewBag.TotalExpectedCount : 0;
+    decimal totalActualOutflowTL = ViewBag.TotalActualOutflowTL != null ? (decimal)ViewBag.TotalActualOutflowTL : 0m;
+    int totalActualCount = ViewBag.TotalActualCount != null ? (int)ViewBag.TotalActualCount : 0;
+
+    var monthlyBreakdown = ViewBag.MonthlyBreakdown as List<(string Key, string Label, int Count, decimal TotalTL)>
+                           ?? new List<(string Key, string Label, int Count, decimal TotalTL)>();
+
+    var expectedOutflows = ViewBag.ExpectedOutflows as List<ProjectExpectedTransactionDto> ?? new List<ProjectExpectedTransactionDto>();
+    var actualOutflows = ViewBag.ActualOutflows as List<ProjectAccountTransactionDto> ?? new List<ProjectAccountTransactionDto>();
+
+    var today = DateTime.Today;
+    var trCulture = new CultureInfo("tr-TR");
 }
 
-<div class="container-fluid mt-4">
-    <!-- Sayfa Başlığı -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="container-fluid mt-3 pb-4">
+    <!-- 1. Üst Başlık ve Firma İçi Finans/Cari Kısayol Şeridi -->
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
         <div>
-            <h3 class="fw-bold mb-0 text-dark"><i class="bi bi-cash-coin text-success me-2"></i> Finans & Cari Yönetimi</h3>
-            <p class="text-muted mb-0 small">Nakit akışı, cari hesaplar, hakedişler ve şirket giderlerinin genel yönetim merkezi.</p>
+            <h4 class="fw-bold mb-0 text-dark">
+                <i class="bi bi-cash-coin text-success me-2"></i>@(ViewBag.CompanyName ?? "Firma İçi") — Finans, Kasa & Cari Yönetimi
+            </h4>
+            <p class="text-muted mb-0 small">Firmanızın kendi içindeki tüm taşeron/tedarikçi carileri, kasa/banka hareketleri, usta yevmiyeleri, daire satış tahsilatları ve şantiye vadeleri.</p>
         </div>
-    </div>
-
-    <!-- Üst Başlıklar ve Modül Linkleri (Yanyana) -->
-    <div class="card border-0 shadow-sm rounded-4 mb-4">
-        <div class="card-body p-2 d-flex flex-wrap gap-2 align-items-center">
-            <a href="/SupplierCurrentAccount/Index" class="btn btn-outline-success rounded-pill px-3 py-2 fw-semibold d-flex align-items-center gap-2 shadow-sm">
-                <i class="bi bi-shop"></i> Tedarikçi (Açık Hesap)
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <button type="button" class="btn btn-sm btn-success rounded-pill px-3 py-1.5 fw-bold d-flex align-items-center gap-1.5 shadow-sm" data-bs-toggle="modal" data-bs-target="#inHouseFinanceModal">
+                <i class="bi bi-plus-circle-fill"></i> + Firma İçi Ödeme / Fatura / Gider İşle
+            </button>
+            <a href="/AgencyPhonebook/Index" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1.5 fw-bold d-flex align-items-center gap-1.5 shadow-xs">
+                <i class="bi bi-journal-bookmark-fill"></i> 📒 Firma, Taşeron & Adres Rehberi
             </a>
-            <a href="/SubcontractorContract/Index" class="btn btn-outline-success rounded-pill px-3 py-2 fw-semibold d-flex align-items-center gap-2 shadow-sm">
-                <i class="bi bi-file-earmark-ruled"></i> Taşeron Hakedişleri
+            <a href="/SupplierCurrentAccount/Index" class="btn btn-sm btn-outline-success rounded-pill px-3 py-1.5 fw-bold d-flex align-items-center gap-1.5 shadow-xs">
+                <i class="bi bi-wallet2"></i> 📊 Tedarikçi & Taşeron Carileri
             </a>
-            <a href="/Timesheet/PendingAdvances" class="btn btn-outline-danger rounded-pill px-3 py-2 fw-semibold d-flex align-items-center gap-2 shadow-sm">
-                <i class="bi bi-cash-stack"></i> Personel Maaş & Avans
-            </a>
-            <a href="/Finance/Cashflow" class="btn btn-outline-success rounded-pill px-3 py-2 fw-semibold d-flex align-items-center gap-2 shadow-sm">
-                <i class="bi bi-wallet2"></i> Ortak Kasa
-            </a>
-            <a href="/Finance/UpcomingPayments" class="btn btn-outline-warning text-dark rounded-pill px-3 py-2 fw-semibold d-flex align-items-center gap-2 shadow-sm">
-                <i class="bi bi-calendar-event"></i> Vadesi Yaklaşanlar
-            </a>
-            <a href="/ConstructionProjectExpenses/Index" class="btn btn-outline-danger rounded-pill px-3 py-2 fw-semibold d-flex align-items-center gap-2 shadow-sm">
-                <i class="bi bi-receipt"></i> Şirket Genel Giderleri
+            <a href="/Finance/CompanyExpenses" class="btn btn-sm btn-dark text-white rounded-pill px-3.5 py-1.5 fw-bold d-flex align-items-center gap-1.5 shadow-sm">
+                <i class="bi bi-building-gear text-warning"></i> 🏢 Şirket Genel Giderleri (Ofis & Araçlar)
             </a>
         </div>
     </div>
 
-    <!-- Boş Çalışma Alanı (Master Page Alanı) -->
-    <div class="card border-0 shadow-sm rounded-4 p-5 text-center text-muted" style="min-height: 400px; background-color: #fafbfc; border: 2px dashed #cbd5e1 !important;">
-        <div class="my-auto">
-            <i class="bi bi-wallet2 fs-1 text-secondary opacity-50 mb-3 d-block"></i>
-            <h5 class="fw-bold text-secondary">Finans & Cari Çalışma Alanı</h5>
-            <p class="small text-muted mb-0">Yukarıdaki başlıklardan işlem yapmak istediğiniz finans modülünü seçebilirsiniz.</p>
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show py-2 px-3 small rounded-3 shadow-xs mb-3">
+            <i class="bi bi-check-circle-fill me-1"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close py-2" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show py-2 px-3 small rounded-3 shadow-xs mb-3">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close py-2" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- 1.5 360° ERP / SRM / CRM CANLI BİLANÇO KÖPRÜSÜ (Taşeron Carileri, Usta Yevmiyeleri, Filo Giderleri & Satış Gelirleri) -->
+    @{
+        decimal totalSupplierDebt = ViewBag.TotalSupplierDebt != null ? (decimal)ViewBag.TotalSupplierDebt : 0m;
+        int supplierAccCount = ViewBag.SupplierAccountCount != null ? (int)ViewBag.SupplierAccountCount : 0;
+        decimal totalWorkerNetPayable = ViewBag.TotalWorkerNetPayable != null ? (decimal)ViewBag.TotalWorkerNetPayable : 0m;
+        decimal totalWorkerPaid = ViewBag.TotalWorkerPaid != null ? (decimal)ViewBag.TotalWorkerPaid : 0m;
+        decimal totalFleetExpenses = ViewBag.TotalFleetExpenses != null ? (decimal)ViewBag.TotalFleetExpenses : 0m;
+        decimal totalSoldUnitsRevenue = ViewBag.TotalSoldUnitsRevenue != null ? (decimal)ViewBag.TotalSoldUnitsRevenue : 0m;
+    }
+    <div class="row g-2 mb-3">
+        <div class="col-md-3 col-6">
+            <a href="/AgencyPhonebook/Index" class="text-decoration-none">
+                <div class="card border-0 shadow-xs rounded-3 h-100 bg-white" style="border-left: 4px solid #0284c7 !important;">
+                    <div class="card-body p-2.5 px-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small fw-bold" style="font-size: 0.72rem;">SRM • TAŞERON & TEDARİKÇİ CARİ</span>
+                            <span class="badge bg-info-subtle text-info-emphasis rounded-pill" style="font-size: 0.66rem;">@supplierAccCount Firma</span>
+                        </div>
+                        <div class="fw-bold text-dark font-monospace fs-6">₺@totalSupplierDebt.ToString("N2")</div>
+                        <div class="text-muted" style="font-size: 0.68rem;">Açık hesap & hakediş borç bakiyesi →</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3 col-6">
+            <a href="/AgencyWorkers/Index" class="text-decoration-none">
+                <div class="card border-0 shadow-xs rounded-3 h-100 bg-white" style="border-left: 4px solid #f59e0b !important;">
+                    <div class="card-body p-2.5 px-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small fw-bold" style="font-size: 0.72rem;">İK/PDKS • USTA YEVMİYE & AVANS</span>
+                            <span class="badge bg-warning-subtle text-warning-emphasis rounded-pill" style="font-size: 0.66rem;">Ödenen: ₺@totalWorkerPaid.ToString("N0")</span>
+                        </div>
+                        <div class="fw-bold text-warning-emphasis font-monospace fs-6">₺@totalWorkerNetPayable.ToString("N2")</div>
+                        <div class="text-muted" style="font-size: 0.68rem;">Ustaların kalan net yevmiye/mesai alacağı →</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3 col-6">
+            <a href="/CompanyGarage/Index" class="text-decoration-none">
+                <div class="card border-0 shadow-xs rounded-3 h-100 bg-white" style="border-left: 4px solid #dc2626 !important;">
+                    <div class="card-body p-2.5 px-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small fw-bold" style="font-size: 0.72rem;">GARAJ • ARAÇ YAKIT & BAKIM FİŞLERİ</span>
+                            <span class="badge bg-danger-subtle text-danger rounded-pill" style="font-size: 0.66rem;">Filo</span>
+                        </div>
+                        <div class="fw-bold text-danger font-monospace fs-6">₺@totalFleetExpenses.ToString("N2")</div>
+                        <div class="text-muted" style="font-size: 0.68rem;">Şantiye yakıt, bakım & döküm fişleri →</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3 col-6">
+            <a href="/ProjectCrm/SalesPool" class="text-decoration-none">
+                <div class="card border-0 shadow-xs rounded-3 h-100 bg-white" style="border-left: 4px solid #16a34a !important;">
+                    <div class="card-body p-2.5 px-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small fw-bold" style="font-size: 0.72rem;">CRM • DAİRE SATIŞ & TAHSİLAT</span>
+                            <span class="badge bg-success-subtle text-success rounded-pill" style="font-size: 0.66rem;">Gelir</span>
+                        </div>
+                        <div class="fw-bold text-success font-monospace fs-6">₺@totalSoldUnitsRevenue.ToString("N2")</div>
+                        <div class="text-muted" style="font-size: 0.68rem;">Satılan bağımsız bölüm & müşteri carileri →</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- 2. Önünü Görme & Aylık Projeksiyon Özeti (4 Sade Kutu) -->
+    <div class="row g-2 mb-3">
+        <div class="col-md-3 col-6">
+            <a href="/Finance/Index?projectId=@selectedProjectId&monthFilter=this_month&tab=expected" class="text-decoration-none">
+                <div class="card border @(selectedMonthFilter == "this_month" ? "border-danger border-2" : "border-light-subtle") shadow-xs rounded-3 h-100 bg-white">
+                    <div class="card-body p-2.5 px-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small fw-semibold" style="font-size: 0.74rem;">BU AY BEKLENEN ÇIKIŞ</span>
+                            <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill" style="font-size: 0.68rem;">@thisMonthExpectedCount Kalem</span>
+                        </div>
+                        <div class="fw-bold text-danger font-monospace fs-5">@thisMonthExpectedTL.ToString("N2") ₺</div>
+                        <div class="text-muted" style="font-size: 0.70rem;">@today.ToString("MMMM yyyy", trCulture) (ve gecikenler)</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3 col-6">
+            <a href="/Finance/Index?projectId=@selectedProjectId&monthFilter=next_month&tab=expected" class="text-decoration-none">
+                <div class="card border @(selectedMonthFilter == "next_month" ? "border-warning border-2" : "border-light-subtle") shadow-xs rounded-3 h-100 bg-white">
+                    <div class="card-body p-2.5 px-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small fw-semibold" style="font-size: 0.74rem;">GELECEK AY BEKLENEN</span>
+                            <span class="badge bg-warning bg-opacity-15 text-dark rounded-pill" style="font-size: 0.68rem;">@nextMonthExpectedCount Kalem</span>
+                        </div>
+                        <div class="fw-bold text-dark font-monospace fs-5">@nextMonthExpectedTL.ToString("N2") ₺</div>
+                        <div class="text-muted" style="font-size: 0.70rem;">@today.AddMonths(1).ToString("MMMM yyyy", trCulture) vadeli</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3 col-6">
+            <a href="/Finance/Index?projectId=@selectedProjectId&monthFilter=&tab=expected" class="text-decoration-none">
+                <div class="card border @(string.IsNullOrEmpty(selectedMonthFilter) && activeTab == "expected" ? "border-primary border-2" : "border-light-subtle") shadow-xs rounded-3 h-100 bg-white">
+                    <div class="card-body p-2.5 px-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small fw-semibold" style="font-size: 0.74rem;">TOPLAM BEKLENEN ÇIKIŞ</span>
+                            <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill" style="font-size: 0.68rem;">@totalExpectedCount Kalem</span>
+                        </div>
+                        <div class="fw-bold text-primary font-monospace fs-5">@totalExpectedOutflowTL.ToString("N2") ₺</div>
+                        <div class="text-muted" style="font-size: 0.70rem;">Tüm gelecek kira, taşınma & hakediş</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3 col-6">
+            <a href="/Finance/Index?projectId=@selectedProjectId&monthFilter=@selectedMonthFilter&tab=actual" class="text-decoration-none">
+                <div class="card border @(activeTab == "actual" ? "border-success border-2" : "border-light-subtle") shadow-xs rounded-3 h-100 bg-white">
+                    <div class="card-body p-2.5 px-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small fw-semibold" style="font-size: 0.74rem;">GERÇEKLEŞEN (ÖDENEN)</span>
+                            <span class="badge bg-success bg-opacity-10 text-success rounded-pill" style="font-size: 0.68rem;">@totalActualCount İşlem</span>
+                        </div>
+                        <div class="fw-bold text-success font-monospace fs-5">@totalActualOutflowTL.ToString("N2") ₺</div>
+                        <div class="text-muted" style="font-size: 0.70rem;">Hesaplardan çıkan fiili ödemeler</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- 3. Proje Filtresi & Önümüzdeki Aylar Takvim Şeridi -->
+    <div class="card border border-light-subtle shadow-xs rounded-3 mb-3 bg-white">
+        <div class="card-body p-2 px-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <!-- Sol: Proje Seçimi -->
+            <form method="get" action="/Finance/Index" class="d-flex align-items-center gap-2 m-0">
+                <input type="hidden" name="monthFilter" value="@selectedMonthFilter" />
+                <input type="hidden" name="tab" value="@activeTab" />
+                <span class="text-muted small fw-bold"><i class="bi bi-buildings me-1"></i>Proje:</span>
+                <select name="projectId" class="form-select form-select-sm rounded-pill fw-semibold border-secondary-subtle" style="min-width: 210px; font-size: 0.80rem;" onchange="this.form.submit()">
+                    <option value="">Tüm Şantiye & Projeler (@projects.Count)</option>
+                    @foreach (var p in projects)
+                    {
+                        if (selectedProjectId == p.Id)
+                        {
+                            <option value="@p.Id" selected>@p.Name</option>
+                        }
+                        else
+                        {
+                            <option value="@p.Id">@p.Name</option>
+                        }
+                    }
+                </select>
+            </form>
+
+            <!-- Sağ: Aylık Vade Dağılımı Hapları (Önünü Görme) -->
+            <div class="d-flex align-items-center gap-1 flex-wrap" style="max-width: 100%; overflow-x: auto;">
+                <a href="/Finance/Index?projectId=@selectedProjectId&monthFilter=&tab=@activeTab"
+                   class="btn btn-xs rounded-pill px-2.5 py-1 fw-semibold @(string.IsNullOrEmpty(selectedMonthFilter) ? "btn-dark text-white" : "btn-light border text-secondary")"
+                   style="font-size: 0.73rem;">
+                    Tüm Aylar
+                </a>
+                @foreach (var m in monthlyBreakdown.Take(8))
+                {
+                    bool isSelectedM = selectedMonthFilter == m.Key;
+                    <a href="/Finance/Index?projectId=@selectedProjectId&monthFilter=@m.Key&tab=expected"
+                       class="btn btn-xs rounded-pill px-2.5 py-1 fw-semibold @(isSelectedM ? "btn-primary text-white" : "btn-light border text-dark")"
+                       style="font-size: 0.72rem;"
+                       title="@m.Label ayında @m.Count adet beklenen çıkış (@m.TotalTL.ToString("N2") ₺)">
+                        @m.Label <span class="badge @(isSelectedM ? "bg-white text-primary" : "bg-secondary bg-opacity-10 text-dark") rounded-pill ms-1">@m.TotalTL.ToString("N0") ₺</span>
+                    </a>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Ana Liste: Çıkış Beklenenler, Gerçekleşen Çıkışlar & Firma İçi Cariler -->
+    @{
+        var supplierAccountsList = ViewBag.SupplierAccounts as List<GMK360.Core.Entities.Finance.SupplierCurrentAccount> ?? new List<GMK360.Core.Entities.Finance.SupplierCurrentAccount>();
+    }
+    <div class="card border border-light-subtle rounded-3 bg-white shadow-xs overflow-hidden">
+        <ul class="nav nav-tabs px-3 pt-2 bg-light border-bottom" role="tablist" style="font-size: 0.82rem;">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(activeTab != "actual" && activeTab != "cariler" ? "active" : "") fw-bold text-dark"
+                        id="tab-fin-expected-btn"
+                        data-bs-toggle="tab"
+                        data-bs-target="#tab-fin-expected"
+                        type="button"
+                        role="tab">
+                    <i class="bi bi-clock-history text-warning me-1"></i>⏳ Çıkış Beklenenler (Kira, Taşınma, Hakediş & Vadeli Çekler)
+                    <span class="badge bg-warning bg-opacity-15 text-dark rounded-pill ms-1">@expectedOutflows.Count</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(activeTab == "actual" ? "active" : "") fw-bold text-dark"
+                        id="tab-fin-actual-btn"
+                        data-bs-toggle="tab"
+                        data-bs-target="#tab-fin-actual"
+                        type="button"
+                        role="tab">
+                    <i class="bi bi-check-circle-fill text-danger me-1"></i>🔴 Gerçekleşen Çıkışlar (Şantiye, Cari & Kasa Ödemeleri)
+                    <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill ms-1">@actualOutflows.Count</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(activeTab == "cariler" ? "active" : "") fw-bold text-dark"
+                        id="tab-fin-cariler-btn"
+                        data-bs-toggle="tab"
+                        data-bs-target="#tab-fin-cariler"
+                        type="button"
+                        role="tab">
+                    <i class="bi bi-journal-bookmark-fill text-primary me-1"></i>📊 Firma İçi Cari Hesaplar (Taşeron & Tedarikçi Alacak/Verecek)
+                    <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill ms-1">@supplierAccountsList.Count</span>
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <!-- SEKME 1: ÇIKIŞ BEKLENENLER -->
+            <div class="tab-pane fade @(activeTab != "actual" && activeTab != "cariler" ? "show active" : "")" id="tab-fin-expected" role="tabpanel">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" style="font-size: 0.80rem;">
+                        <thead class="table-light text-muted small text-uppercase" style="font-size: 0.70rem; letter-spacing: 0.5px;">
+                            <tr>
+                                <th class="ps-3" style="width: 45px;">SIRA</th>
+                                <th style="width: 155px;">VADE TARİHİ</th>
+                                <th style="min-width: 140px;">PROJE</th>
+                                <th style="min-width: 190px;">KİME (HAK SAHİBİ / TAŞERON)</th>
+                                <th style="min-width: 150px;">NE İÇİN</th>
+                                <th style="width: 90px;">HESAP TÜRÜ</th>
+                                <th style="min-width: 140px;">HANGİ HESAPTAN</th>
+                                <th class="text-end" style="width: 135px;">MİKTAR</th>
+                                <th class="text-center pe-3" style="width: 155px;">İŞLEM</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (expectedOutflows.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="9" class="text-center py-5 text-muted">
+                                        <i class="bi bi-calendar2-check fs-2 d-block mb-2 opacity-50"></i>
+                                        Seçili kriterlere uygun beklenen çıkış kaydı bulunmuyor.
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                int rowNo = 1;
+                                foreach (var e in expectedOutflows)
+                                {
+                                    string sym = e.Currency == "USD" ? "$" : (e.Currency == "EUR" ? "€" : "₺");
+                                    string pName = projectNames.TryGetValue(e.ProjectId, out var nm) ? nm : $"Proje #{e.ProjectId}";
+                                    int daysLeft = (e.Date1.Date - today).Days;
+
+                                    string dispAcc = e.TargetAccountName ?? "-";
+                                    if (dispAcc.Contains(" - ")) dispAcc = dispAcc.Substring(dispAcc.LastIndexOf(" - ") + 3).Trim();
+
+                                    <tr>
+                                        <td class="ps-3 font-monospace text-muted small">@(rowNo++)</td>
+                                        <td class="font-monospace small fw-semibold">
+                                            <div class="text-danger">@e.Date1.ToString("dd.MM.yyyy")</div>
+                                            @if (daysLeft < 0)
+                                            {
+                                                <span class="badge bg-danger text-white rounded-pill" style="font-size: 0.65rem;">@Math.Abs(daysLeft) Gün Gecikti</span>
+                                            }
+                                            else if (daysLeft == 0)
+                                            {
+                                                <span class="badge bg-danger text-white rounded-pill" style="font-size: 0.65rem;">Bugün!</span>
+                                            }
+                                            else if (daysLeft <= 7)
+                                            {
+                                                <span class="badge bg-warning text-dark rounded-pill" style="font-size: 0.65rem;">@daysLeft Gün Kaldı</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted" style="font-size: 0.68rem;">@e.Date1.ToString("MMMM yyyy", trCulture)</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (e.ProjectId > 0)
+                                            {
+                                                <a href="/ConstructionProject/Finance/@e.ProjectId" class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle px-2.5 py-1 rounded-pill text-decoration-none fw-bold" style="font-size: 0.73rem;">
+                                                    <i class="bi bi-building me-1"></i>@pName
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-dark bg-opacity-10 text-dark border px-2.5 py-1 rounded-pill fw-bold" style="font-size: 0.73rem;">
+                                                    <i class="bi bi-buildings me-1"></i>Firma İçi (Genel)
+                                                </span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <strong class="text-dark d-block">@e.PartyName</strong>
+                                            @if (!string.IsNullOrWhiteSpace(e.RecipientIban))
+                                            {
+                                                <span class="font-monospace text-primary" style="font-size: 0.68rem;">
+                                                    <i class="bi bi-credit-card-2-front me-0.5"></i>@e.RecipientIban
+                                                </span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-light text-dark border px-2 py-0.5 rounded-pill small">@e.CategoryOrPurpose</span>
+                                            @if (!string.IsNullOrWhiteSpace(e.Description) && !e.Description.Contains("Malik") && !e.Description.Contains("Kira Ödemesi"))
+                                            {
+                                                <div class="text-muted small text-truncate mt-0.5" style="max-width: 200px; font-size: 0.70rem;" title="@e.Description">@e.Description</div>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (e.AccountType == "Resmi")
+                                            {
+                                                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2 py-0.5 rounded-pill" style="font-size:0.68rem;">Resmi</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary bg-opacity-10 text-secondary border px-2 py-0.5 rounded-pill" style="font-size:0.68rem;">Elden</span>
+                                            }
+                                        </td>
+                                        <td class="text-secondary small fw-medium">@(string.IsNullOrWhiteSpace(dispAcc) ? "Herhangi Bir Kasa" : dispAcc)</td>
+                                        <td class="text-end font-monospace fw-bold fs-6 text-danger text-nowrap">@e.Amount.ToString("N2") @sym</td>
+                                        <td class="text-center pe-3 text-nowrap">
+                                            @if (e.ProjectId > 0)
+                                            {
+                                                <a href="/ConstructionProject/Finance/@e.ProjectId" class="btn btn-xs btn-outline-danger rounded-pill px-2.5 py-1 fw-bold shadow-xs" style="font-size: 0.70rem;">
+                                                    Proje Finansında Öde <i class="bi bi-arrow-right ms-0.5"></i>
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <a href="/SupplierCurrentAccount/Index" class="btn btn-xs btn-outline-primary rounded-pill px-2.5 py-1 fw-bold shadow-xs" style="font-size: 0.70rem;">
+                                                    Firma Carisinde Gör <i class="bi bi-arrow-right ms-0.5"></i>
+                                                </a>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SEKME 2: GERÇEKLEŞEN ÇIKIŞLAR -->
+            <div class="tab-pane fade @(activeTab == "actual" ? "show active" : "")" id="tab-fin-actual" role="tabpanel">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" style="font-size: 0.80rem;">
+                        <thead class="table-light text-muted small text-uppercase" style="font-size: 0.70rem; letter-spacing: 0.5px;">
+                            <tr>
+                                <th class="ps-3" style="width: 45px;">SIRA</th>
+                                <th style="width: 95px;">TARİH</th>
+                                <th style="min-width: 140px;">PROJE / BİRİM</th>
+                                <th style="min-width: 160px;">KİME ÖDENDİ</th>
+                                <th style="width: 80px;">TÜR</th>
+                                <th style="min-width: 130px;">HESAP</th>
+                                <th class="text-end" style="width: 120px;">SAF TUTAR (NET)</th>
+                                <th class="text-center" style="width: 115px;">KDV</th>
+                                <th class="text-end" style="width: 125px;">TOPLAM ÇIKIŞ</th>
+                                <th style="min-width: 130px;">GİDER TÜRÜ</th>
+                                <th class="text-center pe-3" style="width: 110px;">DEKONT / DETAY</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (actualOutflows.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="11" class="text-center py-5 text-muted">
+                                        <i class="bi bi-receipt fs-2 d-block mb-2 opacity-50"></i>
+                                        Henüz gerçekleşen para çıkışı kaydı bulunmuyor.
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                int rowNo = 1;
+                                foreach (var t in actualOutflows)
+                                {
+                                    string sym = t.Currency == "USD" ? "$" : (t.Currency == "EUR" ? "€" : "₺");
+                                    string pName = projectNames.TryGetValue(t.ProjectId, out var nm) ? nm : $"Proje #{t.ProjectId}";
+                                    bool isResmi = (t.AccountKind == "Resmi") || (t.AccountName != null && (t.AccountName.Contains("Resmi") || t.AccountName.Contains("Banka")));
+
+                                    string cleanAcc = t.AccountName ?? "-";
+                                    if (cleanAcc.Contains("(")) cleanAcc = cleanAcc.Substring(0, cleanAcc.IndexOf("(")).Trim();
+
+                                    decimal netVal = t.NetAmount ?? (t.VatRate > 0 ? Math.Round(t.Amount / (1m + ((decimal)t.VatRate / 100m)), 2) : t.Amount);
+                                    decimal vatVal = t.VatAmount ?? (t.Amount - netVal);
+
+                                    <tr>
+                                        <td class="ps-3 font-monospace text-muted small">@(rowNo++)</td>
+                                        <td class="font-monospace small text-muted text-nowrap">@t.TransactionDate.ToString("dd.MM.yyyy")</td>
+                                        <td>
+                                            @if (t.ProjectId > 0)
+                                            {
+                                                <a href="/ConstructionProject/Finance/@t.ProjectId" class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle px-2.5 py-1 rounded-pill text-decoration-none fw-bold" style="font-size: 0.72rem;">
+                                                    <i class="bi bi-building me-1"></i>@pName
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-dark bg-opacity-10 text-dark border px-2.5 py-1 rounded-pill fw-bold" style="font-size: 0.72rem;">
+                                                    <i class="bi bi-buildings me-1"></i>Firma İçi (Genel)
+                                                </span>
+                                            }
+                                        </td>
+                                        <td><strong class="text-dark">@t.PartyName</strong></td>
+                                        <td>
+                                            @if (isResmi)
+                                            {
+                                                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-2 py-0.5 rounded-pill" style="font-size:0.68rem;">Resmi</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary bg-opacity-10 text-secondary border px-2 py-0.5 rounded-pill" style="font-size:0.68rem;">Elden</span>
+                                            }
+                                        </td>
+                                        <td class="text-dark small text-nowrap" title="@t.AccountName">@cleanAcc</td>
+                                        <td class="text-end font-monospace fw-bold text-dark text-nowrap">@netVal.ToString("N2") @sym</td>
+                                        <td class="text-center font-monospace text-nowrap small">
+                                            @if (t.VatRate > 0)
+                                            {
+                                                <span class="text-info fw-semibold">%@t.VatRate</span> <span class="text-muted">(@vatVal.ToString("N2") @sym)</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td class="text-end font-monospace fw-bold text-danger text-nowrap">@t.Amount.ToString("N2") @sym</td>
+                                        <td>
+                                            <span class="badge bg-light text-dark border px-2 py-0.5 rounded-pill small">@t.CategoryOrPurpose</span>
+                                        </td>
+                                        <td class="text-center pe-3 text-nowrap">
+                                            @if (!string.IsNullOrWhiteSpace(t.ReceiptDocumentPath))
+                                            {
+                                                <a href="@t.ReceiptDocumentPath" target="_blank" class="btn btn-xs btn-outline-secondary rounded-pill px-2 py-0.5 me-1" style="font-size: 0.68rem;">
+                                                    <i class="bi bi-file-earmark-pdf text-danger me-0.5"></i>Dekont
+                                                </a>
+                                            }
+                                            @if (t.ProjectId > 0)
+                                            {
+                                                <a href="/ConstructionProject/Finance/@t.ProjectId" class="btn btn-xs btn-light border rounded-pill px-2 py-0.5 text-primary fw-semibold" style="font-size: 0.68rem;" title="Proje Finansına Git">
+                                                    <i class="bi bi-box-arrow-up-right"></i>
+                                                </a>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SEKME 3: FİRMA İÇİ CARİ HESAPLAR (TAŞERON & TEDARİKÇİ ALACAK/VERECEK) -->
+            <div class="tab-pane fade @(activeTab == "cariler" ? "show active" : "")" id="tab-fin-cariler" role="tabpanel">
+                <div class="p-3 bg-light border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <strong class="text-dark small"><i class="bi bi-journal-bookmark-fill text-primary me-1"></i>Firmanızın Taşeron, Tedarikçi & İş Ortağı Cari Bakiyeleri</strong>
+                        <span class="text-muted small ms-2">Tüm cari hesaplar yalnızca kendi firmanız (@(ViewBag.CompanyName ?? "Firma İçi")) bünyesinde tutulur.</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a href="/AgencyPhonebook/Index" class="btn btn-xs btn-outline-primary rounded-pill px-3 py-1 fw-bold" style="font-size: 0.75rem;">
+                            + Rehbere Yeni Firma / Taşeron Ekle
+                        </a>
+                        <button type="button" class="btn btn-xs btn-success rounded-pill px-3 py-1 fw-bold" style="font-size: 0.75rem;" data-bs-toggle="modal" data-bs-target="#inHouseFinanceModal">
+                            💸 Cariye Fatura / Ödeme İşle
+                        </button>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" style="font-size: 0.82rem;">
+                        <thead class="table-light text-muted small text-uppercase" style="font-size: 0.70rem;">
+                            <tr>
+                                <th class="ps-3">FİRMA / TAŞERON ADI</th>
+                                <th>TELEFON & YETKİLİ</th>
+                                <th>IBAN</th>
+                                <th class="text-end">TOPLAM ALIM / HAKEDİŞ</th>
+                                <th class="text-end">ÖDENEN TOPLAM</th>
+                                <th class="text-end">KALAN CARİ BAKİYE</th>
+                                <th class="text-end pe-3">360° CARİ KARTI</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!supplierAccountsList.Any())
+                            {
+                                <tr>
+                                    <td colspan="7" class="text-center py-5 text-muted">
+                                        Henüz firma içi taşeron/tedarikçi cari kaydı bulunmuyor. <a href="/AgencyPhonebook/Index" class="fw-bold">Firma Rehberinden</a> ilk firmanızı ekleyebilirsiniz.
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                foreach (var acc in supplierAccountsList)
+                                {
+                                    decimal billed = acc.Transactions != null ? acc.Transactions.Where(x => x.Type != GMK360.Core.Entities.Finance.SupplierTransactionType.PaymentMade).Sum(x => x.Amount) : 0m;
+                                    decimal paid = acc.Transactions != null ? acc.Transactions.Where(x => x.Type == GMK360.Core.Entities.Finance.SupplierTransactionType.PaymentMade).Sum(x => x.Amount) : 0m;
+                                    <tr>
+                                        <td class="ps-3">
+                                            <a href="/AgencyPhonebook/Details/@acc.PhonebookContactId" class="fw-bold text-dark text-decoration-none">
+                                                @(acc.PhonebookContact?.Name ?? $"Cari #{acc.Id}")
+                                            </a>
+                                            @if (!string.IsNullOrWhiteSpace(acc.PhonebookContact?.Tags))
+                                            {
+                                                <div class="text-muted" style="font-size: 0.70rem;">@acc.PhonebookContact.Tags</div>
+                                            }
+                                        </td>
+                                        <td class="small">
+                                            <div>@(acc.PhonebookContact?.PhoneNumber ?? "-")</div>
+                                            @if (!string.IsNullOrWhiteSpace(acc.PhonebookContact?.AuthorizedPerson))
+                                            {
+                                                <span class="text-muted" style="font-size: 0.70rem;">@acc.PhonebookContact.AuthorizedPerson</span>
+                                            }
+                                        </td>
+                                        <td class="font-monospace small text-primary">@(string.IsNullOrWhiteSpace(acc.PhonebookContact?.Iban) ? "-" : acc.PhonebookContact.Iban)</td>
+                                        <td class="text-end font-monospace fw-semibold">₺@billed.ToString("N2")</td>
+                                        <td class="text-end font-monospace text-success fw-semibold">₺@paid.ToString("N2")</td>
+                                        <td class="text-end font-monospace fw-bold">
+                                            @if (acc.CurrentBalance > 0)
+                                            {
+                                                <span class="text-danger">₺@acc.CurrentBalance.ToString("N2") (Verecek)</span>
+                                            }
+                                            else if (acc.CurrentBalance < 0)
+                                            {
+                                                <span class="text-info">₺@Math.Abs(acc.CurrentBalance).ToString("N2") (Avans/Alacak)</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">₺0,00 (Kapalı)</span>
+                                            }
+                                        </td>
+                                        <td class="text-end pe-3">
+                                            <a href="/AgencyPhonebook/Details/@acc.PhonebookContactId" class="btn btn-xs btn-primary rounded-pill px-3 py-1 fw-bold" style="font-size: 0.72rem;">
+                                                360° Cari Dashboard ➔
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+
+<!-- MODAL: FİRMA İÇİ HIZLI ÖDEME / FATURA / GENEL GİDER GİRİŞİ -->
+<div class="modal fade" id="inHouseFinanceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="AddInHouseFinanceEntry" method="post" class="modal-content rounded-4 border-0 shadow-lg">
+            @Html.AntiForgeryToken()
+            <div class="modal-header bg-dark text-white border-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-wallet2 text-warning me-2"></i>Firma İçi Ödeme, Fatura veya Gider İşle</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">İşlem Türü</label>
+                    <select name="entryType" id="finEntryTypeSelect" class="form-select fw-bold" onchange="toggleSupplierSelect(this.value)">
+                        <option value="supplier_payment">💸 Taşeron / Tedarikçi Carisine Ödeme Çıkışı</option>
+                        <option value="supplier_debt">🧾 Taşeron / Tedarikçi Fatura & Hakediş Alımı (Borç İşle)</option>
+                        <option value="general_expense">🏢 Firma İçi Genel Gider (Ofis, Kira, Vergi, Muhasebe vb.)</option>
+                    </select>
+                </div>
+
+                <div class="mb-3" id="finSupplierSelectGroup">
+                    <label class="form-label small fw-bold">İlgili Firma / Taşeron Cari Hesabı</label>
+                    <select name="supplierAccountId" class="form-select">
+                        <option value="">-- Rehberdeki Cari Hesaplardan Seçiniz --</option>
+                        @foreach (var acc in supplierAccountsList)
+                        {
+                            <option value="@acc.Id">@(acc.PhonebookContact?.Name ?? $"Cari #{acc.Id}") (Bakiye: ₺@acc.CurrentBalance.ToString("N2"))</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">İlgili Şantiye / Proje (Varsa)</label>
+                    <select name="projectId" class="form-select">
+                        <option value="">-- Firma İçi Genel (Projeden Bağımsız) --</option>
+                        @foreach (var p in projects)
+                        {
+                            <option value="@p.Id">@p.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Tutar (₺) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" name="amount" class="form-control fw-bold border-success" required placeholder="Örn: 75000" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Ödeme Yöntemi</label>
+                        <select name="method" class="form-select">
+                            <option value="BankTransfer">🏦 Banka Havale / EFT</option>
+                            <option value="Cash">💵 Firma Nakit Kasa</option>
+                            <option value="Check">🎫 Vadeli Çek / Senet</option>
+                            <option value="CreditCard">💳 Şirket Kredi Kartı</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Çek / Ödeme Vadesi (Varsa)</label>
+                        <input type="date" name="dueDate" class="form-control" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Fatura / Çek / Dekont No</label>
+                        <input type="text" name="referenceNo" class="form-control" placeholder="Örn: FT-2026-104" />
+                    </div>
+                </div>
+
+                <div class="mb-0">
+                    <label class="form-label small fw-bold">Açıklama <span class="text-danger">*</span></label>
+                    <textarea name="description" class="form-control" rows="2" required placeholder="Örn: Demir alımı mahsuben banka ödemesi veya merkez ofis kira gideri..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold">Kaydet ve Firma Finansına İşle</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function toggleSupplierSelect(val) {
+        var grp = document.getElementById('finSupplierSelectGroup');
+        if (!grp) return;
+        grp.style.display = (val === 'general_expense') ? 'none' : 'block';
+    }
+</script>

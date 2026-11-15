@@ -1,4 +1,4 @@
-﻿using GMK360.Core.Entities.Construction;
+using GMK360.Core.Entities.Construction;
 using GMK360.Core.Entities.Finance;
 using GMK360.Core.Entities.Identity;
 using GMK360.Data.Contexts;
@@ -27,11 +27,15 @@ namespace GMK360.Web.Controllers
 
         private async Task<int?> GetUserAgencyIdAsync()
         {
-            if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin")) return 1;
             var user = await _userManager.GetUserAsync(User);
-            if (user == null) return null;
-            var consultant = await _context.AgencyConsultants.FirstOrDefaultAsync(c => c.UserId == user.Id && c.IsActive);
-            return consultant?.AgencyId;
+            if (user != null)
+            {
+                var consultant = await _context.AgencyConsultants.FirstOrDefaultAsync(c => c.UserId == user.Id && c.IsActive);
+                if (consultant != null && consultant.AgencyId > 0)
+                    return consultant.AgencyId;
+            }
+            if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin")) return 1;
+            return null;
         }
 
         // --- ŞANTİYE JURNALİ (SEYİR DEFTERİ) ---

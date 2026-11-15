@@ -1,11 +1,13 @@
 using GMK360.Core.Entities.Construction.Workflows;
 using GMK360.Data.Contexts;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
 
 namespace GMK360.Web.Controllers
 {
+    [Authorize]
     public class DnaTemplateController : Controller
     {
         private readonly ApplicationDbContext _context;

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using GMK360.Data.Contexts;
 using Microsoft.AspNetCore.Identity;
@@ -25,22 +25,35 @@ namespace GMK360.Web.Controllers
 
         private async Task<int?> GetUserAgencyIdAsync()
         {
-            if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin")) 
-                return 1;
-                
             var user = await _userManager.GetUserAsync(User);
-            if (user == null) return null;
-            
-            var consultant = await _context.Set<GMK360.Core.Entities.AgencyConsultant>().FirstOrDefaultAsync(a => a.UserId == user.Id);
-            return consultant?.AgencyId;
+            if (user != null)
+            {
+                var consultant = await _context.Set<GMK360.Core.Entities.AgencyConsultant>()
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(a => a.UserId == user.Id && !a.IsDeleted);
+                if (consultant != null && consultant.AgencyId > 0)
+                    return consultant.AgencyId;
+            }
+
+            var agencyClaim = User.FindFirst("AgencyId")?.Value;
+            if (int.TryParse(agencyClaim, out int parsedAgencyId) && parsedAgencyId > 0)
+                return parsedAgencyId;
+
+            if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin"))
+            {
+                var firstAgency = await _context.Agencies.AsNoTracking().OrderBy(a => a.Id).FirstOrDefaultAsync();
+                return firstAgency?.Id ?? 1;
+            }
+
+            return null;
         }
 
         public async Task<IActionResult> Index(int? id)
         {
             var agencyId = await GetUserAgencyIdAsync();
-            if (agencyId == null && !User.IsInRole("Admin")) return Unauthorized();
+            if (agencyId == null) return Unauthorized();
 
-            // 1. Önce eksik depoları tespit edip oluşturalım (Tüm DB'ye bakarak)
+            // 1. Önce eksik depoları tespit edip oluşturalım
             if (agencyId.HasValue)
             {
                 var allAgencyWarehouses = await _context.Warehouses
@@ -63,12 +76,12 @@ namespace GMK360.Web.Controllers
                     await _context.SaveChangesAsync();
                 }
 
-                // Tüm aktif ve planlanan projeler için şantiye deposu kontrolü (Sadece bitmiş veya iptal olanları es geç)
-                var projects = await _context.ConstructionProjects
-                    .Where(p => p.AgencyId == agencyId.Value && !p.IsDeleted)
+                // Sadece KESİNLEŞMİŞ AKTİF ŞANTİYELER için şantiye deposu açılır (Aday/Teklif projelerine depo açılmaz!)
+                var activeSiteProjects = await _context.ConstructionProjects
+                    .Where(p => p.AgencyId == agencyId.Value && !p.IsDeleted && p.Status == ProjectStatus.Aktif_Santiye)
                     .ToListAsync();
 
-                foreach (var proj in projects)
+                foreach (var proj in activeSiteProjects)
                 {
                     if (!allAgencyWarehouses.Any(w => w.ConstructionProjectId == proj.Id && !w.IsDeleted))
                     {
@@ -86,28 +99,52 @@ namespace GMK360.Web.Controllers
                         await _context.SaveChangesAsync();
                     }
                 }
+                ViewBag.Catalogs = await _context.MaterialCatalogs.Where(c => c.AgencyId == agencyId.Value && !c.IsDeleted).OrderBy(c => c.Name).ToListAsync();
+
+                var staffNames = await _context.AgencyConsultants
+                    .AsNoTracking()
+                    .Include(c => c.User)
+                    .Where(c => c.AgencyId == agencyId.Value && !c.IsDeleted && c.IsActive)
+                    .Select(c => (c.User.FirstName + " " + c.User.LastName) + " (" + c.Role.ToString() + ")")
+                    .ToListAsync();
+                var workerNames = await _context.AgencyWorkers
+                    .AsNoTracking()
+                    .Where(w => w.AgencyId == agencyId.Value && !w.IsDeleted && w.IsActive)
+                    .Select(w => w.FirstName + " " + w.LastName + " (" + w.Profession + ")")
+                    .ToListAsync();
+                ViewBag.CustodyPeople = staffNames.Concat(workerNames).Distinct().OrderBy(x => x).ToList();
             }
 
             // 2. Şimdi listelemek üzere filtreli sorguyu oluşturalım
-            var query = _context.Warehouses.Include(w => w.Items).AsQueryable();
+            var activeProjectIds = await _context.ConstructionProjects
+                .Where(p => (!agencyId.HasValue || p.AgencyId == agencyId.Value) && !p.IsDeleted && p.Status == ProjectStatus.Aktif_Santiye)
+                .Select(p => p.Id)
+                .ToListAsync();
 
-            if (!User.IsInRole("Admin"))
-            {
-                query = query.Where(w => w.AgencyId == agencyId);
-            }
+            var query = _context.Warehouses
+                .Include(w => w.Items)
+                .Where(w => !w.IsDeleted && w.AgencyId == agencyId)
+                .AsQueryable();
 
             if (id.HasValue)
             {
                 query = query.Where(w => w.ConstructionProjectId == id.Value);
-                var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == id.Value);
+                var project = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == id.Value && p.AgencyId == agencyId);
                 if (project != null)
                 {
                     ViewData["ProjectId"] = project.Id;
                     ViewData["ProjectName"] = project.Name;
                 }
             }
+            else
+            {
+                // Ana menüde sadece Merkez Depo (Öz Varlık) + Kesinleşmiş Aktif Şantiyelerin Depoları (veya içinde mal olan depolar) gösterilir
+                query = query.Where(w => w.Type == WarehouseType.Merkez
+                    || (w.ConstructionProjectId.HasValue && activeProjectIds.Contains(w.ConstructionProjectId.Value))
+                    || w.Items.Any(i => i.Quantity > 0));
+            }
 
-            var finalWarehouses = await query.ToListAsync();
+            var finalWarehouses = await query.OrderBy(w => w.Type == WarehouseType.Merkez ? 0 : 1).ThenBy(w => w.Name).ToListAsync();
             return View(finalWarehouses);
         }
     
@@ -366,6 +403,62 @@ namespace GMK360.Web.Controllers
             await _context.SaveChangesAsync();
             return Content($"Migrated {count} items.");
         }
-}
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateItemCustodyAndStatus(int itemId, string currentStatus, string? custodianName, decimal? lostOrConsumedQty, string? notes)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var item = await _context.InventoryItems
+                .Include(i => i.Warehouse)
+                .FirstOrDefaultAsync(i => i.Id == itemId && i.Warehouse.AgencyId == agencyId.Value);
+
+            if (item == null)
+            {
+                TempData["ErrorMessage"] = "Envanter kalemi bulunamadı.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            item.CurrentStatus = string.IsNullOrWhiteSpace(currentStatus) ? "Depoda" : currentStatus;
+            if (custodianName != null)
+            {
+                item.ServiceContact = custodianName.Trim();
+            }
+
+            if (lostOrConsumedQty.HasValue && lostOrConsumedQty.Value > 0 && lostOrConsumedQty.Value <= item.Quantity)
+            {
+                item.Quantity -= lostOrConsumedQty.Value;
+                _context.InventoryTransactions.Add(new InventoryTransaction
+                {
+                    InventoryItemId = item.Id,
+                    Type = TransactionType.Cikis,
+                    Quantity = lostOrConsumedQty.Value,
+                    TransactionDate = System.DateTime.UtcNow,
+                    Description = $"Zayi / Sarf / Fire Düşümü ({currentStatus}): {notes ?? "-"} (Sorumlu: {item.ServiceContact})",
+                    HandledByUserId = _userManager.GetUserId(User) ?? ""
+                });
+            }
+            else
+            {
+                _context.InventoryTransactions.Add(new InventoryTransaction
+                {
+                    InventoryItemId = item.Id,
+                    Type = TransactionType.Giris,
+                    Quantity = 0,
+                    TransactionDate = System.DateTime.UtcNow,
+                    Description = $"Zimmet / Durum Güncellemesi -> Durum: {item.CurrentStatus}, Zimmetli Sorumlu: {(string.IsNullOrEmpty(item.ServiceContact) ? "Depo" : item.ServiceContact)} ({notes ?? ""})",
+                    HandledByUserId = _userManager.GetUserId(User) ?? ""
+                });
+            }
+
+            item.UpdatedAt = System.DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"{item.Name} zimmet ve durum bilgisi ({item.CurrentStatus} - {(string.IsNullOrEmpty(item.ServiceContact) ? "Depoda" : item.ServiceContact)}) güncellendi.";
+            return RedirectToAction(nameof(Index));
+        }
+    }
 }
 

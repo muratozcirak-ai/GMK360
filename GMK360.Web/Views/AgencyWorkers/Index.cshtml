@@ -1,66 +1,200 @@
-﻿@model IEnumerable<GMK360.Core.Entities.Construction.AgencyWorker>
+@model IEnumerable<GMK360.Core.Entities.Construction.AgencyWorker>
 @{
-    ViewData["Title"] = "Mavi Yaka / Şantiye Personeli";
+    Layout = "_ConstructionLayout";
+    ViewData["Title"] = "Mavi Yaka / Şantiye Ustaları & Özlük Havuzu";
+    var metaDict = ViewBag.WorkerMeta as Dictionary<int, GMK360.Web.Controllers.WorkerExtendedHrMeta>
+        ?? new Dictionary<int, GMK360.Web.Controllers.WorkerExtendedHrMeta>();
+    var summaryDict = ViewBag.WorkerSummaries as Dictionary<int, (int WorkDays, int SiteCount, decimal TotalEarned, decimal TotalPaid, decimal NetBalance)>
+        ?? new Dictionary<int, (int WorkDays, int SiteCount, decimal TotalEarned, decimal TotalPaid, decimal NetBalance)>();
 }
 
-<div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0">Mavi Yaka Personel Listesi</h4>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addWorkerModal">
-            <i class="bi bi-person-plus"></i> Yeni Personel/Usta Ekle
-        </button>
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h4 class="fw-bold mb-0"><i class="bi bi-person-workspace text-warning me-2"></i>Mavi Yaka / Şantiye Ustaları, İSG Özlük & Yevmiye Cari Havuzu</h4>
+            <p class="text-muted small mb-0">Şantiyelerde görev yapan usta, kalfa, operatör ve gezici saha ekiplerinin özlük dosyaları, çoklu şantiye puantajları, bayram/mesai 2x yevmiyeleri ve avans bakiyeleri.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="/DailyTimesheets/Index" class="btn btn-outline-success rounded-pill px-3 fw-bold shadow-sm">
+                <i class="bi bi-calendar2-check me-1"></i> Şantiye Günlük Puantaj Gir
+            </a>
+            <button class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#addWorkerModal">
+                <i class="bi bi-person-plus me-1"></i> + Yeni Usta / Saha Personeli Ekle
+            </button>
+        </div>
     </div>
+
+    <!-- Personel & Ekipler Üst Sekme Barı -->
+    <ul class="nav nav-tabs mb-3 border-bottom">
+        <li class="nav-item">
+            <a href="/AgencyStaff/Index" class="nav-link fw-semibold text-secondary">
+                <i class="bi bi-person-badge text-primary me-1"></i>👔 Beyaz Yaka (Merkez & Şefler)
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="/AgencyWorkers/Index" class="nav-link active fw-bold text-dark">
+                <i class="bi bi-person-workspace text-warning me-1"></i>👷 Mavi Yaka (Şantiye Ustaları)
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="/DailyTimesheets/Index" class="nav-link fw-semibold text-secondary">
+                <i class="bi bi-calendar2-check text-success me-1"></i>⏱️ Şantiye Günlük Puantaj
+            </a>
+        </li>
+        <li class="nav-item ms-auto">
+            <a href="/AgencyPhonebook/Index" class="nav-link fw-semibold text-secondary">
+                <i class="bi bi-journal-bookmark-fill text-info me-1"></i>📒 Firma & Taşeron Rehber Arşivi (Finans & Cari)
+            </a>
+        </li>
+    </ul>
 
     @if (TempData["SuccessMessage"] != null)
     {
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            <i class="bi bi-check-circle me-2"></i>@TempData["SuccessMessage"]
+        <div class="alert alert-success alert-dismissible fade show shadow-sm border-0" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>@TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show shadow-sm border-0" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["ErrorMessage"]
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     }
 
-    <div class="card shadow-sm border-0">
+    <!-- Özet KPI Kartları -->
+    @{
+        var totalWorkers = Model.Count();
+        var totalEarnedAll = summaryDict.Values.Sum(x => x.TotalEarned);
+        var totalPaidAll = summaryDict.Values.Sum(x => x.TotalPaid);
+        var totalRemainingAll = totalEarnedAll - totalPaidAll;
+    }
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #f59e0b !important;">
+                <div class="card-body py-2 px-3">
+                    <div class="text-muted small fw-semibold">Toplam Kayıtlı Usta / Saha Ekibi</div>
+                    <div class="fs-4 fw-bold text-dark">@totalWorkers <span class="fs-6 fw-normal text-muted">Kişi</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #3b82f6 !important;">
+                <div class="card-body py-2 px-3">
+                    <div class="text-muted small fw-semibold">Toplam Hak Edilen Yevmiye & Mesai</div>
+                    <div class="fs-4 fw-bold text-primary">₺@totalEarnedAll.ToString("N2")</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #10b981 !important;">
+                <div class="card-body py-2 px-3">
+                    <div class="text-muted small fw-semibold">Bugüne Kadar Ödenen Avans / Maaş</div>
+                    <div class="fs-4 fw-bold text-success">₺@totalPaidAll.ToString("N2")</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #ef4444 !important;">
+                <div class="card-body py-2 px-3">
+                    <div class="text-muted small fw-semibold">Kalan Ödenecek Yevmiye Bakiyesi</div>
+                    <div class="fs-4 fw-bold @(totalRemainingAll > 0 ? "text-danger" : "text-secondary")">₺@totalRemainingAll.ToString("N2")</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover mb-0 align-middle">
                     <thead class="table-light">
                         <tr>
-                            <th class="border-0">Ad Soyad</th>
-                            <th class="border-0">Uzmanlık / Rol</th>
-                            <th class="border-0">Günlük Yevmiye</th>
-                            <th class="border-0">Sistem (PRO) Kaydı</th>
-                            <th class="border-0">İşlemler</th>
+                            <th class="ps-3">Usta Ad Soyad & İletişim</th>
+                            <th>Uzmanlık & Bağlı Ekip</th>
+                            <th>İkametgah / İSG Özlük</th>
+                            <th>Günlük Yevmiye</th>
+                            <th>Çoklu Şantiye Puantaj</th>
+                            <th>Hak Edilen / Ödenen / Kalan Cari</th>
+                            <th class="text-end pe-3">360° Özlük & Yevmiye Kartı</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var worker in Model)
+                        @if (!Model.Any())
                         {
                             <tr>
-                                <td>
+                                <td colspan="7" class="text-center py-5 text-muted">
+                                    <i class="bi bi-person-workspace fs-1 d-block mb-2 text-warning"></i>
+                                    Henüz kayıtlı saha ustası veya mavi yaka personel bulunmuyor. Sağ üstteki <strong>"+ Yeni Usta / Saha Personeli Ekle"</strong> butonuyla ilk ustanızı tanımlayın.
+                                </td>
+                            </tr>
+                        }
+                        @foreach (var worker in Model)
+                        {
+                            var meta = metaDict.ContainsKey(worker.Id) ? metaDict[worker.Id] : new GMK360.Web.Controllers.WorkerExtendedHrMeta();
+                            var sum = summaryDict.ContainsKey(worker.Id) ? summaryDict[worker.Id] : (WorkDays: 0, SiteCount: 0, TotalEarned: 0m, TotalPaid: 0m, NetBalance: 0m);
+                            var fInitial = !string.IsNullOrEmpty(worker.FirstName) ? worker.FirstName.Substring(0, 1).ToUpper() : "U";
+                            var lInitial = !string.IsNullOrEmpty(worker.LastName) ? worker.LastName.Substring(0, 1).ToUpper() : "";
+                            <tr>
+                                <td class="ps-3">
                                     <div class="d-flex align-items-center">
-                                        <div class="avatar bg-primary text-white rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
-                                            @worker.FirstName.Substring(0, 1)@worker.LastName.Substring(0, 1)
+                                        <div class="avatar bg-warning text-dark fw-bold rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                                            @fInitial@lInitial
                                         </div>
                                         <div>
-                                            <h6 class="mb-0">@worker.FullName</h6>
-                                            <small class="text-muted">@worker.PhoneNumber</small>
+                                            <a href="/AgencyWorkers/Details/@worker.Id" class="fw-bold text-dark text-decoration-none">@worker.FullName</a>
+                                            <div class="small text-muted"><i class="bi bi-telephone me-1"></i>@worker.PhoneNumber</div>
+                                            @if (!string.IsNullOrEmpty(meta.IdentityNumber))
+                                            {
+                                                <span class="badge bg-light text-secondary border" style="font-size:0.68rem;">TC: @meta.IdentityNumber</span>
+                                            }
                                         </div>
                                     </div>
                                 </td>
-                                <td><span class="text-dark fw-medium">@worker.Profession</span></td>
-                                <td>@worker.DefaultDailyWage.ToString("C2")</td>
                                 <td>
-                                    @if (worker.UserId != null)
+                                    <span class="badge bg-dark text-warning fw-semibold">@worker.Profession</span>
+                                    @if (!string.IsNullOrEmpty(meta.TeamOrSubcontractorName))
                                     {
-                                        <span class="text-success"><i class="bi bi-check-circle-fill"></i> Ana Sisteme Bağlı</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-warning"><i class="bi bi-exclamation-triangle-fill"></i> Sadece Yerel Kayıt</span>
+                                        <div class="small text-muted mt-1"><i class="bi bi-people me-1"></i>@meta.TeamOrSubcontractorName</div>
                                     }
                                 </td>
                                 <td>
-                                    <button class="btn btn-sm btn-outline-secondary">Düzenle</button>
+                                    @if (!string.IsNullOrEmpty(meta.Address) || !string.IsNullOrEmpty(meta.City))
+                                    {
+                                        <div class="small text-dark"><i class="bi bi-geo-alt-fill text-danger me-1"></i>@(string.IsNullOrEmpty(meta.City) ? meta.Address : $"{meta.District} / {meta.City}")</div>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Adres Eksik</span>
+                                    }
+                                    <div class="mt-1">
+                                        <span class="badge @(meta.Documents.Count >= 3 ? "bg-success-subtle text-success border border-success-subtle" : "bg-secondary-subtle text-secondary border")">
+                                            <i class="bi bi-folder2-open me-1"></i>@meta.Documents.Count / 6 İSG & Özlük Evrakı
+                                        </span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="fw-bold text-dark">₺@worker.DefaultDailyWage.ToString("N2")</span>
+                                    <div class="small text-muted">/ Gün (Bayram 2x: ₺@((worker.DefaultDailyWage * 2).ToString("N0")))</div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle fw-semibold">
+                                        <i class="bi bi-calendar-check me-1"></i>@sum.WorkDays Gün Çalışma
+                                    </span>
+                                    <div class="small text-muted mt-1">
+                                        <i class="bi bi-buildings me-1"></i>@sum.SiteCount Farklı Şantiyede Görev
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="small">Hak Ediş: <strong class="text-primary">₺@sum.TotalEarned.ToString("N2")</strong></div>
+                                    <div class="small">Ödenen: <strong class="text-success">₺@sum.TotalPaid.ToString("N2")</strong></div>
+                                    <div class="small">Kalan: <strong class="@(sum.NetBalance > 0 ? "text-danger" : "text-secondary")">₺@sum.NetBalance.ToString("N2")</strong></div>
+                                </td>
+                                <td class="text-end pe-3">
+                                    <a href="/AgencyWorkers/Details/@worker.Id" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold shadow-sm">
+                                        <i class="bi bi-person-vcard me-1"></i> 360° Özlük, Puantaj & Cari
+                                    </a>
                                 </td>
                             </tr>
                         }
@@ -71,44 +205,100 @@
     </div>
 </div>
 
-<!-- Ekleme Modalı -->
+<!-- Yeni Usta Ekleme Modalı -->
 <div class="modal fade" id="addWorkerModal" tabindex="-1">
-    <div class="modal-dialog">
-        <form asp-action="Create" method="post" class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Yeni Şantiye Personeli Ekle</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <form asp-action="Create" method="post" class="modal-content border-0 shadow-lg rounded-4">
+            @Html.AntiForgeryToken()
+            <div class="modal-header bg-dark text-white border-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-person-plus-fill text-warning me-2"></i>Yeni Şantiye Ustası / Saha Personeli & Özlük Kartı</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <div class="alert alert-info">
-                    <i class="bi bi-info-circle me-2"></i> Eklenen personel aynı zamanda global sisteme davet edilerek PRO ağına dahil edilecektir.
+            <div class="modal-body p-4">
+                <div class="alert alert-info border-0 small mb-3">
+                    <i class="bi bi-info-circle-fill me-2"></i>Buradan tanımladığınız usta ve kalfalar tüm şantiyelerinizin <strong>Günlük Puantaj</strong> listesinde hazır gelir; farklı şantiyelerde çalıştığı günler, fazla mesailer, bayram çift yevmiyeleri (2x) ve aldığı avanslar tek cari kartta toplanır.
                 </div>
                 <div class="row g-3">
-                    <div class="col-6">
-                        <label class="form-label">Ad</label>
-                        <input type="text" name="firstName" class="form-control" required />
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Ad *</label>
+                        <input type="text" name="firstName" class="form-control" placeholder="Örn: Hasan" required />
                     </div>
-                    <div class="col-6">
-                        <label class="form-label">Soyad</label>
-                        <input type="text" name="lastName" class="form-control" required />
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Soyad *</label>
+                        <input type="text" name="lastName" class="form-control" placeholder="Örn: Demir" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">11 Haneli TC Kimlik No</label>
+                        <input type="text" name="identityNumber" maxlength="11" class="form-control" placeholder="İSG ve SGK girişi için" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Cep Telefonu (WhatsApp) *</label>
+                        <input type="text" name="phoneNumber" class="form-control" placeholder="05XX XXX XX XX" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Ustalık / Branş *</label>
+                        <input type="text" name="profession" class="form-control" list="professionList" placeholder="Örn: Kalıp Ustası, Demirci..." required />
+                        <datalist id="professionList">
+                            <option value="Kalıp Ustası"></option>
+                            <option value="Demir Ustası"></option>
+                            <option value="Duvar & Sıva Ustası"></option>
+                            <option value="Seramik & Fayans Ustası"></option>
+                            <option value="Elektrik Ustası"></option>
+                            <option value="Mekanik / Sıhhi Tesisat Ustası"></option>
+                            <option value="Boya & Alçı Ustası"></option>
+                            <option value="Kepçe / Vinç Operatörü"></option>
+                            <option value="Düz İşçi / Saha Personeli"></option>
+                        </datalist>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Günlük Net Yevmiye (₺) *</label>
+                        <input type="number" step="0.01" name="dailyWage" class="form-control" placeholder="Örn: 2000" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Bağlı Olduğu Ekip / Çavuş / Taşeron</label>
+                        <input type="text" name="teamOrSubcontractorName" class="form-control" placeholder="Örn: Merkez Gezici Ekip veya X Kalıp" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Kan Grubu (İSG Kartı İçin)</label>
+                        <select name="bloodGroup" class="form-select">
+                            <option value="">-- Seçiniz --</option>
+                            <option value="A Rh(+)">A Rh(+)</option>
+                            <option value="A Rh(-)">A Rh(-)</option>
+                            <option value="B Rh(+)">B Rh(+)</option>
+                            <option value="B Rh(-)">B Rh(-)</option>
+                            <option value="AB Rh(+)">AB Rh(+)</option>
+                            <option value="AB Rh(-)">AB Rh(-)</option>
+                            <option value="0 Rh(+)">0 Rh(+)</option>
+                            <option value="0 Rh(-)">0 Rh(-)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Acil Durum Yakını Tel</label>
+                        <input type="text" name="emergencyContactPhone" class="form-control" placeholder="05XX XXX XX XX" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">İl</label>
+                        <input type="text" name="city" class="form-control" placeholder="Örn: İstanbul" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">İlçe</label>
+                        <input type="text" name="district" class="form-control" placeholder="Örn: Ataşehir" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">IBAN (Yevmiye / Avans EFT İçin)</label>
+                        <input type="text" name="iban" class="form-control" placeholder="TR00 0000 ..." />
                     </div>
                     <div class="col-12">
-                        <label class="form-label">Telefon Numarası</label>
-                        <input type="text" name="phoneNumber" class="form-control" required />
-                    </div>
-                    <div class="col-6">
-                        <label class="form-label">Uzmanlık (Demirci vb.)</label>
-                        <input type="text" name="profession" class="form-control" required />
-                    </div>
-                    <div class="col-6">
-                        <label class="form-label">Günlük Yevmiye Ücreti</label>
-                        <input type="number" step="0.01" name="dailyWage" class="form-control" required />
+                        <label class="form-label small fw-bold">Açık İkametgah Adresi</label>
+                        <input type="text" name="address" class="form-control" placeholder="Mahalle, Sokak, Bina ve Daire No" />
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">İptal</button>
-                <button type="submit" class="btn btn-primary">Kaydet ve PRO'ya Bağla</button>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">
+                    <i class="bi bi-check2-circle me-1"></i> Ustayı ve Yevmiye Cari Kartını Oluştur
+                </button>
             </div>
         </form>
     </div>

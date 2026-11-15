@@ -1,35 +1,364 @@
-﻿@model GMK360.Core.Entities.Finance.SupplierCurrentAccount
+@model GMK360.Core.Entities.Finance.SupplierCurrentAccount
 @using GMK360.Core.Entities.Finance
 
 @{
     Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
-    ViewData["Title"] = Model.PhonebookContact.Name + " Cari Ekstresi";
+    ViewData["Title"] = Model.PhonebookContact.Name + " Cari Ekstresi & Sipariş Masası";
     var transactions = Model.Transactions.OrderByDescending(t => t.TransactionDate).ToList();
+    var accountContracts = ViewBag.AccountContracts as List<GMK360.Web.Services.SupplierContractPackageDto> ?? new List<GMK360.Web.Services.SupplierContractPackageDto>();
+    var warehouses = ViewBag.Warehouses as List<GMK360.Core.Entities.Construction.Warehouse> ?? new List<GMK360.Core.Entities.Construction.Warehouse>();
+    decimal totalAgreedContract = accountContracts.Sum(c => c.TotalAgreedAmount);
+    decimal totalOrderedContract = accountContracts.Sum(c => c.OrderedTotalAmount);
+    decimal remainingUnorderedCommitment = accountContracts.Sum(c => c.RemainingUnorderedAmount);
 }
 
 <div class="container-fluid mt-4">
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm rounded-3 mb-4" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm rounded-3 mb-4" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
     <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
             <a asp-action="Index" class="btn btn-sm btn-light border mb-2"><i class="bi bi-arrow-left"></i> Carilere Dön</a>
-            <h2 class="fw-bold mb-0">@Model.PhonebookContact.Name <span class="fs-5 text-muted fw-normal">| Cari Ekstre</span></h2>
-            <p class="text-muted">Tedarikçiye ait tüm açık hesap (veresiye), resmi fatura ve banka/kasa ödemeleri.</p>
+            <a href="/B2BPurchasing/Index" class="btn btn-sm btn-outline-primary mb-2 ms-1"><i class="bi bi-cart4"></i> Satın Alma & İhaleler</a>
+            <h2 class="fw-bold mb-0">@Model.PhonebookContact.Name <span class="fs-5 text-muted fw-normal">| Firma Carisi, Birim Fiyatlar & Sipariş Masası</span></h2>
+            <p class="text-muted mb-0">Onaylanan toplu anlaşma taahhüdü, birim fiyatlı malzeme siparişleri, karma ödeme planı (Faturalı / Çek-Senet / Elden) ve cari ekstre.</p>
         </div>
-        <div class="text-end">
-            <h6 class="text-muted mb-1">Güncel Bakiye (Bize Kalan Borç)</h6>
-            <h2 class="fw-bold text-danger mb-0">@Model.CurrentBalance.ToString("N2") ₺</h2>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-dark" data-bs-toggle="modal" data-bs-target="#openAccountModal">
+                <i class="bi bi-pencil-square me-1"></i> Şantiye Veresiye (Açık Hesap) Ekle
+            </button>
+            <button type="button" class="btn btn-success fw-bold" data-bs-toggle="modal" data-bs-target="#paymentModal">
+                <i class="bi bi-wallet2 me-1"></i> Ödeme Çık (Kasa/Banka/Çek)
+            </button>
         </div>
     </div>
 
-    <!-- Action Buttons -->
-    <div class="d-flex gap-2 mb-4">
-        <button type="button" class="btn btn-outline-dark" data-bs-toggle="modal" data-bs-target="#openAccountModal">
-            <i class="bi bi-pencil-square me-1"></i> Şantiye Veresiye (Açık Hesap) Ekle
-        </button>
-        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#paymentModal">
-            <i class="bi bi-wallet2 me-1"></i> Ödeme Çık (Kasa/Banka/Çek)
-        </button>
+    <!-- 4 Finansal & Taahhüt Özeti Kartı -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100" style="border-left: 5px solid #2563eb !important;">
+                <div class="card-body py-3">
+                    <div class="text-muted small fw-bold text-uppercase"><i class="bi bi-file-earmark-check text-primary me-1"></i> Toplam Anlaşma Taahhüdü</div>
+                    <h4 class="fw-bold text-dark mt-1 mb-0">@totalAgreedContract.ToString("N2") ₺</h4>
+                    <small class="text-muted">Onaylanan toplu paket anlaşma tutarı</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100" style="background: #fffbeb; border-left: 5px solid #d97706 !important;">
+                <div class="card-body py-3">
+                    <div class="small fw-bold text-uppercase" style="color:#b45309;"><i class="bi bi-hourglass-split me-1"></i> Beklenen Çıkış (Sipariş Bekleyen)</div>
+                    <h4 class="fw-bold mt-1 mb-0" style="color:#d97706;">@remainingUnorderedCommitment.ToString("N2") ₺</h4>
+                    <small class="text-muted">Tarihi netleşmese de çıkacak beklenen bakiye</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100" style="border-left: 5px solid #059669 !important;">
+                <div class="card-body py-3">
+                    <div class="text-muted small fw-bold text-uppercase"><i class="bi bi-truck text-success me-1"></i> Sipariş Edilen (Çağrılan Malzeme)</div>
+                    <h4 class="fw-bold text-success mt-1 mb-0">@totalOrderedContract.ToString("N2") ₺</h4>
+                    <small class="text-muted">Birim fiyatlarla şantiyeye çağrılan toplam</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100" style="border-left: 5px solid #dc2626 !important;">
+                <div class="card-body py-3">
+                    <div class="text-muted small fw-bold text-uppercase"><i class="bi bi-wallet2 text-danger me-1"></i> Güncel Cari Bakiye (Borcumuz)</div>
+                    <h4 class="fw-bold text-danger mt-1 mb-0">@Model.CurrentBalance.ToString("N2") ₺</h4>
+                    <small class="text-muted">Kesinleşen fatura/siparişten kalan net borç</small>
+                </div>
+            </div>
+        </div>
     </div>
+
+    <!-- ONAYLI ANLAŞMA PAKETLERİ: BİRİM FİYATLARLA SİPARİŞ VER & KARMA ÖDEME PLANI -->
+    @if (accountContracts.Any())
+    {
+        foreach (var contract in accountContracts)
+        {
+            <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden" style="border: 1px solid #cbd5e1 !important;">
+                <div class="card-header py-3 px-4 d-flex justify-content-between align-items-center flex-wrap gap-2" style="background: linear-gradient(135deg, #0f172a, #1e293b); color: white;">
+                    <div>
+                        <span class="badge bg-warning text-dark fw-bold me-2"><i class="bi bi-patch-check-fill me-1"></i> ONAYLI TEDARİK ANLAŞMASI</span>
+                        <strong class="fs-5">@contract.PackageTitle</strong>
+                        @if (!string.IsNullOrEmpty(contract.ProjectName))
+                        {
+                            <span class="badge bg-light text-dark ms-2"><i class="bi bi-building me-1"></i>@contract.ProjectName</span>
+                        }
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="text-end">
+                            <small class="text-light opacity-75 d-block">Anlaşma Toplamı (@(contract.IsVatIncluded ? "KDV Dahil" : "+KDV"))</small>
+                            <span class="fw-bold fs-5 text-warning">@contract.TotalAgreedAmount.ToString("N2") ₺</span>
+                        </div>
+                        <div class="vr bg-secondary"></div>
+                        <div class="text-end">
+                            <small class="text-light opacity-75 d-block">Kalan Beklenen Sipariş</small>
+                            <span class="fw-bold fs-5 text-info">@contract.RemainingUnorderedAmount.ToString("N2") ₺</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body p-4">
+                    <div class="row g-4">
+                        <!-- SOL TARAF: BİRİM FİYATLI KALEMLER & DOĞRUDAN SİPARİŞ VER -->
+                        <div class="col-lg-7">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="fw-bold text-dark mb-0">
+                                    <i class="bi bi-box-seam-fill text-primary me-1"></i> 1. Anlaşılan Birim Fiyatlar & Doğrudan Parti Siparişi Ver
+                                </h6>
+                                <button type="button" class="btn btn-xs btn-outline-primary rounded-pill px-2 py-1 small fw-bold" onclick="fillRemainingOrderQty('@contract.ContractId')">
+                                    <i class="bi bi-check2-all me-1"></i> Tüm Kalan Miktarları Doldur
+                                </button>
+                            </div>
+                            <p class="text-muted small mb-3">
+                                İhtiyacınız olan miktarı girin; kayıtlı <strong>Birim Fiyat</strong> üzerinden bu sipariş için ödemeniz gereken tutar anında hesaplanır, <strong>Stok Kartı</strong> açılır ve cariye işlenir.
+                            </p>
+
+                            <form asp-action="PlaceOrderFromContract" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="SupplierCurrentAccountId" value="@Model.Id" />
+                                <input type="hidden" name="contractId" value="@contract.ContractId" />
+
+                                <div class="table-responsive border rounded-3 mb-3">
+                                    <table class="table table-sm table-hover align-middle mb-0">
+                                        <thead class="table-light small">
+                                            <tr>
+                                                <th class="ps-3">Malzeme Kalemi</th>
+                                                <th class="text-center">Anlaşılan</th>
+                                                <th class="text-center">Sipariş Edilen</th>
+                                                <th class="text-center">Kalan</th>
+                                                <th class="text-end" style="width:125px;">Birim Fiyat (₺)</th>
+                                                <th class="text-end" style="width:130px;">🚚 Şimdi Sipariş</th>
+                                                <th class="text-end pe-3" style="width:125px;">Sipariş Tutarı</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @for (int idx = 0; idx < contract.Items.Count; idx++)
+                                            {
+                                                var cItem = contract.Items[idx];
+                                                <tr>
+                                                    <td class="ps-3 fw-semibold small">
+                                                        @cItem.MaterialName
+                                                        <input type="hidden" name="itemIndices" value="@idx" />
+                                                    </td>
+                                                    <td class="text-center small">@cItem.AgreedQuantity.ToString("N2") <span class="text-muted">@cItem.Unit</span></td>
+                                                    <td class="text-center small text-success fw-bold">@cItem.OrderedQuantity.ToString("N2")</td>
+                                                    <td class="text-center small">
+                                                        <span class="badge @(cItem.RemainingQuantity > 0 ? "bg-warning text-dark" : "bg-success")">
+                                                            @cItem.RemainingQuantity.ToString("N2") @cItem.Unit
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <input type="number" step="0.01" min="0" name="unitPrices"
+                                                               class="form-control form-control-sm text-end fw-bold text-primary contract-unit-price-@contract.ContractId"
+                                                               data-contract="@contract.ContractId"
+                                                               data-idx="@idx"
+                                                               value="@cItem.AgreedUnitPrice.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)"
+                                                               oninput="recalcContractOrder('@contract.ContractId')" />
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <input type="number" step="0.01" min="0" name="orderQuantities"
+                                                               class="form-control form-control-sm text-end fw-bold border-primary contract-order-qty-@contract.ContractId"
+                                                               data-contract="@contract.ContractId"
+                                                               data-idx="@idx"
+                                                               data-remaining="@cItem.RemainingQuantity.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)"
+                                                               placeholder="0"
+                                                               oninput="recalcContractOrder('@contract.ContractId')" />
+                                                    </td>
+                                                    <td class="text-end pe-3 fw-bold small text-dark" id="orderLineTotal_@(contract.ContractId)_@idx">
+                                                        0,00 ₺
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                        <tfoot class="table-light">
+                                            <tr>
+                                                <td colspan="5" class="text-end fw-bold text-dark ps-3">
+                                                    💰 Bu Sipariş İçin Ödemeniz Gereken Tutar:
+                                                </td>
+                                                <td colspan="2" class="text-end pe-3 fw-bold fs-5 text-danger" id="orderGrandTotal_@contract.ContractId">
+                                                    0,00 ₺
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+
+                                <!-- Bu Siparişin Ödeme Kanalı & Depo Seçimi -->
+                                <div class="p-3 rounded-3 bg-light border">
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-md-4">
+                                            <label class="form-label small fw-bold mb-1">Bu Siparişin Ödeme Kanalı</label>
+                                            <select name="paymentChannel" class="form-select form-select-sm fw-semibold">
+                                                <option value="Faturalı (Resmi Banka / Havale)">🏦 Faturalı (Resmi Banka / Havale)</option>
+                                                <option value="Değerli Evrak (Çek / Senet / Ciro)">📜 Değerli Evrak (Çek / Senet / Ciro)</option>
+                                                <option value="Elden / Nakit (Özel Kasa)">💵 Elden / Nakit (Özel Kasa)</option>
+                                                <option value="İş Bitimi / Teslimat Şartlı">🏗️ İş Bitimi / Teslimat Şartlı</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small fw-bold mb-1">Cari & Ödeme Durumu</label>
+                                            <select name="orderSettlementMode" class="form-select form-select-sm fw-semibold">
+                                                <option value="Vadeli">⏱️ Vadeli / Beklenen Ödeme</option>
+                                                <option value="Pesin">✅ Peşin / Çek Verildi (Düş)</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small fw-bold mb-1">Vade / Teslim Tarihi</label>
+                                            <input type="date" name="dueDate" class="form-control form-control-sm" value="@DateTime.Now.AddDays(15).ToString("yyyy-MM-dd")" />
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label small fw-bold mb-1">Çek / Ref No</label>
+                                            <input type="text" name="checkOrRefNo" class="form-control form-control-sm" placeholder="Opsiyonel" />
+                                        </div>
+                                        <div class="col-md-5 mt-2">
+                                            <label class="form-label small fw-bold mb-1">Stok Kartı Açılacak Şantiye Deposu</label>
+                                            <select name="warehouseId" class="form-select form-select-sm">
+                                                <option value="">-- Otomatik Şantiye Deposu Aç / Güncelle --</option>
+                                                @foreach (var wh in warehouses)
+                                                {
+                                                    <option value="@wh.Id">@wh.Name</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4 mt-2">
+                                            <label class="form-label small fw-bold mb-1">Sipariş / Teslimat Notu</label>
+                                            <input type="text" name="orderNotes" class="form-control form-control-sm" placeholder="Örn: 1. Parti temel demiri sevkiyatı" />
+                                        </div>
+                                        <div class="col-md-3 mt-2 text-end">
+                                            <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold py-2 shadow-sm">
+                                                <i class="bi bi-truck me-1"></i> Sipariş Ver & Cariye İşle
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- SAĞ TARAF: ANLAŞMA ŞARTLARI & KARMA ÖDEME PLANI (FATURALI / ÇEK-SENET / ELDEN / İŞ BİTİMİ) -->
+                        <div class="col-lg-5 border-start">
+                            <h6 class="fw-bold text-dark mb-1">
+                                <i class="bi bi-Handshake text-success me-1"></i>🤝 2. Anlaşma Şartları & Karma Ödeme Planı
+                            </h6>
+                            <p class="text-muted small mb-3">
+                                Peşinat, değerli evrak (çek/senet), elden nakit veya iş bitimi şartlı ödeme dilimlerini burada planlayın. Tarihi belli olmayanlar da beklenen çıkış olarak izlenir.
+                            </p>
+
+                            @if (contract.PaymentSlices != null && contract.PaymentSlices.Any())
+                            {
+                                <div class="table-responsive border rounded-3 mb-3">
+                                    <table class="table table-sm align-middle mb-0 small">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th class="ps-2">Dilim / Şart</th>
+                                                <th>Kanal & Evrak</th>
+                                                <th>Vade</th>
+                                                <th class="text-end">Tutar</th>
+                                                <th class="text-center pe-2">Durum</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var sl in contract.PaymentSlices)
+                                            {
+                                                <tr>
+                                                    <td class="ps-2 fw-bold">@sl.Title</td>
+                                                    <td>
+                                                        <span class="badge bg-light text-dark border">@sl.PaymentChannel</span>
+                                                        @if (!string.IsNullOrEmpty(sl.CheckOrReferenceNo))
+                                                        {
+                                                            <small class="d-block text-muted">Ref: @sl.CheckOrReferenceNo</small>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (sl.DueDate.HasValue)
+                                                        {
+                                                            <span class="fw-semibold">@sl.DueDate.Value.ToString("dd.MM.yyyy")</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge bg-warning bg-opacity-25 text-dark">Tarihi Bekleniyor</span>
+                                                        }
+                                                    </td>
+                                                    <td class="text-end fw-bold text-danger">@sl.Amount.ToString("N2") ₺</td>
+                                                    <td class="text-center pe-2">
+                                                        <span class="badge @(sl.Status.Contains("Ödendi") || sl.Status.Contains("Verildi") ? "bg-success" : "bg-secondary")">@sl.Status</span>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+
+                            <form asp-action="SaveContractPaymentSlice" method="post" class="p-3 rounded-3 bg-light border">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="SupplierCurrentAccountId" value="@Model.Id" />
+                                <input type="hidden" name="contractId" value="@contract.ContractId" />
+
+                                <div class="mb-2">
+                                    <label class="form-label small fw-bold mb-1">Genel Anlaşma & Ödeme Özeti Notu</label>
+                                    <textarea name="contractTermsNote" class="form-control form-control-sm" rows="2" placeholder="Örn: Yarısı 60 gün çek ile, %25'i elden nakit, %25'i her parti malzeme indikçe faturalı ödenecek.">@contract.ContractTermsNote</textarea>
+                                </div>
+
+                                <div class="border-top pt-2 mt-2">
+                                    <div class="small fw-bold text-primary mb-2"><i class="bi bi-plus-circle me-1"></i>Ödeme Planına Yeni Dilim Ekle (Opsiyonel)</div>
+                                    <div class="row g-2">
+                                        <div class="col-md-6">
+                                            <input type="text" name="sliceTitle" class="form-control form-control-sm" placeholder="Örn: %30 Peşinat Çeki / İş Bitimi Kalan" />
+                                        </div>
+                                        <div class="col-md-6">
+                                            <select name="paymentChannel" class="form-select form-select-sm">
+                                                <option value="Faturalı (Resmi Banka / Havale)">🏦 Faturalı (Banka / Havale)</option>
+                                                <option value="Değerli Evrak (Çek / Senet / Ciro)">📜 Değerli Evrak (Çek / Senet)</option>
+                                                <option value="Elden / Nakit (Özel Kasa)">💵 Elden / Nakit (Özel Kasa)</option>
+                                                <option value="İş Bitimi / Teslimat Şartlı">🏗️ İş Bitimi / Teslimat Şartlı</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <input type="number" step="0.01" name="sliceAmount" class="form-control form-control-sm text-end fw-bold" placeholder="Tutar (₺)" />
+                                        </div>
+                                        <div class="col-md-4">
+                                            <input type="date" name="dueDate" class="form-control form-control-sm" title="Tarih belli değilse boş bırakabilirsiniz (Beklenen ödemelerde görünür)" />
+                                        </div>
+                                        <div class="col-md-4">
+                                            <input type="text" name="checkOrRefNo" class="form-control form-control-sm" placeholder="Çek / Evrak No" />
+                                        </div>
+                                        <div class="col-md-7">
+                                            <select name="sliceStatus" class="form-select form-select-sm">
+                                                <option value="Bekliyor (Planlandı)">⏳ Bekliyor (Planlandı / Çıkacak Para)</option>
+                                                <option value="Ödendi / Evrak Teslim Edildi">✅ Ödendi / Çek-Evrak Teslim Edildi (Cariden Düş)</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-5">
+                                            <button type="submit" class="btn btn-success btn-sm w-100 fw-bold">
+                                                <i class="bi bi-save me-1"></i> Şartları / Dilimi Kaydet
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
 
     <!-- Filters -->
     <div class="card shadow-sm border-0 mb-4">
@@ -65,7 +394,7 @@
                     <tbody>
                         @foreach (var tx in transactions)
                         {
-                            var rowClass = "";
+                            _ = "";
                             var icon = "";
                             var typeLabel = "";
                             var amountClass = "";
@@ -223,6 +552,42 @@
 
 @section Scripts {
     <script>
+        function recalcContractOrder(contractId) {
+            var qtyInputs = document.querySelectorAll('.contract-order-qty-' + contractId);
+            var priceInputs = document.querySelectorAll('.contract-unit-price-' + contractId);
+            var grandTotal = 0;
+
+            qtyInputs.forEach(function(qInp, i) {
+                var idx = qInp.getAttribute('data-idx');
+                var qty = parseFloat((qInp.value || '0').replace(',', '.')) || 0;
+                var unitPrice = 0;
+                if (priceInputs[i]) {
+                    unitPrice = parseFloat((priceInputs[i].value || '0').replace(',', '.')) || 0;
+                }
+                var lineTotal = qty * unitPrice;
+                grandTotal += lineTotal;
+
+                var lineEl = document.getElementById('orderLineTotal_' + contractId + '_' + idx);
+                if (lineEl) {
+                    lineEl.innerText = lineTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
+                }
+            });
+
+            var grandEl = document.getElementById('orderGrandTotal_' + contractId);
+            if (grandEl) {
+                grandEl.innerText = grandTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
+            }
+        }
+
+        function fillRemainingOrderQty(contractId) {
+            var qtyInputs = document.querySelectorAll('.contract-order-qty-' + contractId);
+            qtyInputs.forEach(function(qInp) {
+                var rem = parseFloat((qInp.getAttribute('data-remaining') || '0').replace(',', '.')) || 0;
+                qInp.value = rem > 0 ? rem : 0;
+            });
+            recalcContractOrder(contractId);
+        }
+
         function filterTx(type) {
             const rows = document.querySelectorAll('.tx-row');
             rows.forEach(row => {

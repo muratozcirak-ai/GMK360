@@ -7,7 +7,751 @@
     var totalPayments = ViewBag.TotalPaymentsThisMonth ?? 0m;
 }
 
-<div class="container-fluid py-4">
+<div class="container-fluid py-2">
+    @{
+        var curUser = ViewBag.CurrentUser as GMK360.Core.Entities.Identity.ApplicationUser;
+        var agencyObj = ViewBag.Agency as GMK360.Core.Entities.Agency;
+        string roleTitle = ViewBag.UserRoleTitle as string ?? "Firma Yöneticisi";
+        bool isManager = ViewBag.IsManagerRole as bool? ?? true;
+        var openMeetings = ViewBag.OpenMeetings as List<GMK360.Core.Entities.Construction.AgendaRecord> ?? new List<GMK360.Core.Entities.Construction.AgendaRecord>();
+        var adayProjeler = ViewBag.TeklifProjeler as List<GMK360.Core.Entities.Construction.ConstructionProject> ?? new List<GMK360.Core.Entities.Construction.ConstructionProject>();
+        var aktifSantiyeler = ViewBag.AktifSantiyeList as List<GMK360.Core.Entities.Construction.ConstructionProject> ?? new List<GMK360.Core.Entities.Construction.ConstructionProject>();
+        string fullName = curUser != null && (!string.IsNullOrWhiteSpace(curUser.FirstName) || !string.IsNullOrWhiteSpace(curUser.LastName))
+            ? $"{curUser.FirstName} {curUser.LastName}".Trim()
+            : (curUser?.DisplayName ?? User.Identity?.Name ?? "Kullanıcı");
+        bool hasPin = curUser != null && curUser.IsTransactionPinSet && !string.IsNullOrWhiteSpace(curUser.TransactionPinHash);
+    }
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show py-2 px-3 small shadow-xs rounded-3 mb-3">
+            <i class="bi bi-check-circle-fill me-1"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close py-2" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show py-2 px-3 small shadow-xs rounded-3 mb-3">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close py-2" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- 1. DIV: KİŞİSEL KİMLİK, ROL & HIZLI BAŞLAT BARI -->
+    <div class="card border-0 shadow-sm rounded-3 mb-3 bg-white">
+        <div class="card-body p-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-3">
+                <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center fw-bold fs-5" style="width: 48px; height: 48px;">
+                    <i class="bi bi-person-vcard"></i>
+                </div>
+                <div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <h5 class="fw-bold text-dark mb-0">@fullName</h5>
+                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle rounded-pill px-2.5 py-1" style="font-size: 0.72rem;">
+                            @roleTitle
+                        </span>
+                        @if (hasPin)
+                        {
+                            <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle rounded-pill px-2 py-1" style="font-size: 0.70rem;">
+                                <i class="bi bi-shield-check me-1"></i>Onay PIN Aktif
+                            </span>
+                        }
+                    </div>
+                    <div class="text-muted small mt-0.5 d-flex align-items-center flex-wrap gap-1">
+                        <span><i class="bi bi-buildings text-primary me-1"></i><strong class="text-dark">@(agencyObj?.CompanyName ?? "Firma Tanımlanmadı")</strong></span>
+                        @if (!string.IsNullOrWhiteSpace(agencyObj?.TaxNumber))
+                        {
+                            <span class="mx-1">•</span><span>Vergi No: <b>@agencyObj.TaxNumber</b></span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(agencyObj?.WhatsAppNumber))
+                        {
+                            <span class="mx-1">•</span><span><i class="bi bi-telephone-fill text-success me-1"></i>@agencyObj.WhatsAppNumber</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(agencyObj?.Address))
+                        {
+                            <span class="mx-1">•</span><span><i class="bi bi-geo-alt-fill text-danger me-1"></i>@agencyObj.Address</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger ms-1" style="cursor:pointer;" data-bs-toggle="modal" data-bs-target="#companyHeadquartersModal">
+                                <i class="bi bi-exclamation-circle me-1"></i>Merkez Bina Adresi & Telefon Eksik (Tıkla Doldur)
+                            </span>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                @if (isManager)
+                {
+                    <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-bold shadow-xs" data-bs-toggle="modal" data-bs-target="#companyHeadquartersModal" title="Firma Merkez Bina Adresi, Telefon, Vergi No ve Logo Ayarları">
+                        <i class="bi bi-building-gear me-1"></i>Firma Künyesi & Adres Düzenle
+                    </button>
+                    <a href="/FinancialStrategy/Index" class="btn btn-dark btn-sm rounded-pill px-3 fw-bold shadow-xs" title="Tüm Şantiyelerin m² Birim Maliyeti, Bölge Satış Rayiçleri, Enflasyon & AI Karar Merkezi">
+                        <i class="bi bi-cpu-fill text-warning me-1"></i>Strateji & Rayiç Masası
+                    </a>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- FİRMA MERKEZ KÜNYESİ, ADRES, TELEFON & HARİTA KONUMU DÜZENLEME MODALI (SADECE TIKLANINCA AÇILIR) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <div class="modal fade" id="companyHeadquartersModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <form method="post" action="/Dashboard/SaveSiteDomainAndIdentity" enctype="multipart/form-data" id="hqSetupForm">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="returnUrl" value="/Dashboard/Construction" />
+                    <input type="hidden" name="hqCity" id="hqCityInput" value="@(ViewBag.HqCity ?? "")" />
+                    <input type="hidden" name="hqDistrict" id="hqDistrictInput" value="@(ViewBag.HqDistrict ?? "")" />
+                    <input type="hidden" name="hqNeighborhood" id="hqNeighborhoodInput" value="@(ViewBag.HqNeighborhood ?? "")" />
+                    <input type="hidden" name="hqNeighborhoodId" id="hqNeighborhoodIdInput" value="0" />
+                    <input type="hidden" name="hqStreet" id="hqStreetInput" value="@(ViewBag.HqStreet ?? "")" />
+
+                    <div class="modal-header border-bottom py-3 text-white" style="background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);">
+                        <div>
+                            <h5 class="modal-title fw-bold mb-0" style="color: #ffffff !important;"><i class="bi bi-building-gear text-warning me-2"></i>Firma Künyesi, Vergi No & Merkez Adres Bilgileri</h5>
+                            <small class="text-white-50">Firmanızın resmi ünvanı, vergi numarası, iletişim telefonu, logosu ve merkez ofis adresi.</small>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4 bg-light">
+                        <div class="hq-wizard-pane" id="hqWizardPane1">
+                        <div class="row g-3">
+                            <!-- 1. BÖLÜM: RESMİ ÜNVAN, 10 HANELİ VERGİ NO & İLETİŞİM -->
+                            <div class="col-md-5">
+                                <label class="form-label fw-bold small text-dark">Firma Resmi Ünvanı <span class="text-danger">*</span></label>
+                                <input type="text" name="companyName" value="@(agencyObj?.CompanyName ?? "")" class="form-control rounded-3 fw-bold" placeholder="Örn: Tepe Yapı İnşaat A.Ş." required />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold small text-dark">10 Haneli Vergi No (VKN)</label>
+                                <input type="text" name="taxNumber" value="@(agencyObj?.TaxNumber ?? "")" maxlength="11" oninput="this.value = this.value.replace(/[^0-9]/g, '')" class="form-control rounded-3 fw-bold font-monospace" placeholder="1234567890" />
+                                <small class="text-muted" style="font-size: 0.68rem;">Sadece rakam (Vergi dairesi VKN'den tanınır)</small>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small text-dark"><i class="bi bi-telephone-fill text-success me-1"></i>Merkez Telefon / WhatsApp <span class="text-danger">*</span></label>
+                                <input type="text" name="whatsAppNumber" value="@(agencyObj?.WhatsAppNumber ?? "")" class="form-control rounded-3 fw-semibold" placeholder="Örn: 0506 040 34 37" required />
+                            </div>
+
+                            <!-- 2. BÖLÜM: KADEMELİ MERKEZ BİNA ADRESİ (VERİTABANINDAN İL -> İLÇE -> MAHALLE -> SOKAK -> BİNA & KAPI NO) -->
+                            <div class="col-12">
+                                <div class="card border-0 shadow-xs rounded-4 p-3 bg-white border border-primary border-opacity-25">
+                                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2 pb-2 border-bottom">
+                                        <span class="fw-bold text-dark small">
+                                            <i class="bi bi-geo-alt-fill text-danger me-1"></i>Merkez Bina / Ofis Adresi (Veritabanından Kademeli Seçim & Harita)
+                                        </span>
+                                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold" onclick="locateHqOnMapFromSelections()">
+                                            <i class="bi bi-crosshair me-1"></i>Seçilen Sokağı Haritada Bul
+                                        </button>
+                                    </div>
+
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-md-3">
+                                            <label class="form-label small fw-bold text-secondary mb-1">1. İl Seçimi</label>
+                                            <select id="hqProvinceSelect" class="form-select form-select-sm rounded-3" onchange="onHqProvinceChange(this)">
+                                                <option value="">-- İl Seçiniz --</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small fw-bold text-secondary mb-1">2. İlçe Seçimi</label>
+                                            <select id="hqDistrictSelect" class="form-select form-select-sm rounded-3" onchange="onHqDistrictChange(this)" disabled>
+                                                <option value="">-- Önce İl Seçin --</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small fw-bold text-secondary mb-1">3. Mahalle Seçimi</label>
+                                            <select id="hqNeighborhoodSelect" class="form-select form-select-sm rounded-3" onchange="onHqNeighborhoodChange(this)" disabled>
+                                                <option value="">-- Önce İlçe Seçin --</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small fw-bold text-secondary mb-1">4. Cadde / Sokak</label>
+                                            <select id="hqStreetSelect" class="form-select form-select-sm rounded-3" onchange="onHqStreetChange(this)" disabled>
+                                                <option value="">-- Önce Mahalle Seçin --</option>
+                                            </select>
+                                            <input type="text" id="hqCustomStreetInput" class="form-control form-control-sm rounded-3 mt-1 d-none" placeholder="Sokak adını yazınız..." oninput="syncHqStreetAndBuildAddress()" />
+                                        </div>
+                                    </div>
+
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-md-5">
+                                            <label class="form-label small fw-bold text-secondary mb-1">5. Bina / Apartman / Plaza Adı</label>
+                                            <input type="text" name="hqBuildingName" id="hqBuildingNameInput" value="@(ViewBag.HqBuildingName ?? "")" class="form-control form-control-sm rounded-3" placeholder="Örn: Yaşar Bey Apartmanı" oninput="buildHqFormattedAddress()" />
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label small fw-bold text-secondary mb-1">6. Dış Kapı No</label>
+                                            <input type="text" name="hqOuterDoorNo" id="hqOuterDoorNoInput" value="@(ViewBag.HqOuterDoorNo ?? "")" class="form-control form-control-sm rounded-3" placeholder="Örn: 16" oninput="buildHqFormattedAddress()" />
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label small fw-bold text-secondary mb-1">7. İç Kapı / Daire</label>
+                                            <input type="text" name="hqInnerDoorNo" id="hqInnerDoorNoInput" value="@(ViewBag.HqInnerDoorNo ?? "")" class="form-control form-control-sm rounded-3" placeholder="Örn: 4" oninput="buildHqFormattedAddress()" />
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small fw-bold text-secondary mb-1">Harita Koordinatı (Enlem / Boylam)</label>
+                                            <div class="input-group input-group-sm">
+                                                <input type="text" name="hqLatitude" id="hqLatInput" value="@(ViewBag.HqLatitude ?? "")" class="form-control rounded-start-3 bg-light font-monospace" placeholder="Enlem" readonly />
+                                                <input type="text" name="hqLongitude" id="hqLngInput" value="@(ViewBag.HqLongitude ?? "")" class="form-control rounded-end-3 bg-light font-monospace" placeholder="Boylam" readonly />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- HARİTADAN MERKEZ BİNA KONUMU SEÇİMİ -->
+                                    <div class="rounded-3 overflow-hidden border mb-2 position-relative">
+                                        <div id="hqMapStatusBanner" class="bg-dark text-white px-3 py-1.5 small d-flex justify-content-between align-items-center">
+                                            <span><i class="bi bi-pin-map-fill text-warning me-1"></i>Harita üzerinde merkez binanızın tam üzerine tıklayarak pini yerleştirin:</span>
+                                            <span id="hqMapGeoBadge" class="badge bg-secondary">Sokak seçildiğinde harita otomatik odaklanır</span>
+                                        </div>
+                                        <div id="hqInlineMap" style="height: 230px; width: 100%; background: #e2e8f0;"></div>
+                                    </div>
+
+                                    <div>
+                                        <label class="form-label small fw-bold text-dark mb-1">Resmi Açık Adres Özeti (Teklif PDF'leri ve Web Sitenizde Görünecek Metin) <span class="text-danger">*</span></label>
+                                        <input type="text" name="address" id="hqFullAddressTextarea" value="@(agencyObj?.Address ?? "")" class="form-control form-control-sm rounded-3 fw-semibold" placeholder="Yukarıdan seçtikçe otomatik oluşur veya doğrudan düzenleyebilirsiniz..." required />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 3. BÖLÜM: YETKİ BELGESİ, LOGO & ÖZEL DOMAİN -->
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small text-dark"><i class="bi bi-award-fill text-warning me-1"></i>Müteahhitlik Yetki Belge No (YAMBİS)</label>
+                                <input type="text" name="authCertificateNo" value="@(agencyObj?.AuthCertificateNo ?? "")" class="form-control form-control-sm rounded-3" placeholder="Örn: YAMBİS-34001234 (Varsa)" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small text-dark"><i class="bi bi-image text-primary me-1"></i>Firma Logosu Yükle (PNG/JPG)</label>
+                                <input type="file" name="logoFile" class="form-control form-control-sm rounded-3" accept="image/*" />
+                                @if (!string.IsNullOrWhiteSpace(agencyObj?.LogoUrl))
+                                {
+                                    <div class="mt-1 d-flex align-items-center gap-2">
+                                        <img src="@agencyObj.LogoUrl" alt="Logo" class="rounded border bg-white p-1" style="height: 28px; object-fit: contain;" />
+                                        <span class="badge bg-success-subtle text-success border border-success" style="font-size: 0.65rem;">Kayıtlı Logo Mevcut</span>
+                                    </div>
+                                }
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small text-dark"><i class="bi bi-globe2 text-info me-1"></i>Özel Domain (Varsa)</label>
+                                <input type="text" name="customDomain" value="@(agencyObj?.CustomDomain ?? "")" class="form-control form-control-sm rounded-3" placeholder="Örn: www.tepeyapi.com" />
+                                <small class="text-muted" style="font-size: 0.68rem;">Alt alan adınız: <b>@(agencyObj?.Subdomain ?? "firmaniz").gmk360.com</b></small>
+                            </div>
+                        </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-white border-top py-3 d-flex justify-content-end align-items-center gap-2">
+                        <button type="button" class="btn btn-light border rounded-pill px-4 fw-semibold" data-bs-dismiss="modal">Vazgeç</button>
+                        <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
+                            <i class="bi bi-check2-circle me-1"></i>Firma Künyesi & Adresi Kaydet
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        var hqMapInstance = null;
+        var hqMapMarker = null;
+
+        document.addEventListener('DOMContentLoaded', function () {
+            var modalEl = document.getElementById('companyHeadquartersModal');
+            if (!modalEl) return;
+
+            modalEl.addEventListener('shown.bs.modal', function () {
+                initHqLocationDropdownsAndMap();
+            });
+        });
+
+        async function initHqLocationDropdownsAndMap() {
+            var provSel = document.getElementById('hqProvinceSelect');
+            if (provSel && provSel.options.length <= 1) {
+                try {
+                    var res = await fetch('/api/Location/Cities');
+                    if (res.ok) {
+                        var list = await res.json();
+                        var savedCity = (document.getElementById('hqCityInput')?.value || '').toLocaleUpperCase('tr-TR');
+                        list.forEach(function (item) {
+                            var opt = document.createElement('option');
+                            opt.value = item.id;
+                            opt.textContent = item.name;
+                            if (savedCity && item.name.toLocaleUpperCase('tr-TR') === savedCity) {
+                                opt.selected = true;
+                            }
+                            provSel.appendChild(opt);
+                        });
+                        if (provSel.value) {
+                            await onHqProvinceChange(provSel, true);
+                        }
+                    }
+                } catch (e) { console.warn(e); }
+            }
+
+            if (!hqMapInstance) {
+                var initLat = parseFloat(document.getElementById('hqLatInput')?.value || '') || 40.9923;
+                var initLng = parseFloat(document.getElementById('hqLngInput')?.value || '') || 29.1244;
+                var hasSavedCoord = !isNaN(parseFloat(document.getElementById('hqLatInput')?.value || ''));
+
+                hqMapInstance = L.map('hqInlineMap').setView([initLat, initLng], hasSavedCoord ? 18 : 11);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; OpenStreetMap'
+                }).addTo(hqMapInstance);
+
+                if (hasSavedCoord) {
+                    placeHqMarker(initLat, initLng);
+                }
+
+                hqMapInstance.on('click', function (ev) {
+                    placeHqMarker(ev.latlng.lat, ev.latlng.lng);
+                });
+            } else {
+                setTimeout(function () { hqMapInstance.invalidateSize(); }, 150);
+            }
+        }
+
+        function placeHqMarker(lat, lng) {
+            if (!hqMapInstance) return;
+            if (hqMapMarker) {
+                hqMapMarker.setLatLng([lat, lng]);
+            } else {
+                hqMapMarker = L.marker([lat, lng], { draggable: true }).addTo(hqMapInstance);
+                hqMapMarker.on('dragend', function (e) {
+                    var pos = e.target.getLatLng();
+                    document.getElementById('hqLatInput').value = pos.lat.toFixed(6);
+                    document.getElementById('hqLngInput').value = pos.lng.toFixed(6);
+                });
+            }
+            document.getElementById('hqLatInput').value = lat.toFixed(6);
+            document.getElementById('hqLngInput').value = lng.toFixed(6);
+            var badge = document.getElementById('hqMapGeoBadge');
+            if (badge) {
+                badge.className = 'badge bg-success';
+                badge.textContent = 'Merkez Konumu Seçildi (' + lat.toFixed(5) + ', ' + lng.toFixed(5) + ')';
+            }
+        }
+
+        async function onHqProvinceChange(sel, isRestore) {
+            var distSel = document.getElementById('hqDistrictSelect');
+            var neighSel = document.getElementById('hqNeighborhoodSelect');
+            var strSel = document.getElementById('hqStreetSelect');
+            var cityName = sel.options[sel.selectedIndex]?.text || '';
+            document.getElementById('hqCityInput').value = sel.value ? cityName : '';
+
+            distSel.innerHTML = '<option value="">-- İlçe Seçiniz --</option>';
+            neighSel.innerHTML = '<option value="">-- Önce İlçe Seçin --</option>';
+            strSel.innerHTML = '<option value="">-- Önce Mahalle Seçin --</option>';
+            distSel.disabled = !sel.value;
+            neighSel.disabled = true;
+            strSel.disabled = true;
+
+            if (!sel.value) return;
+            var res = await fetch('/api/Location/districts/' + sel.value);
+            if (res.ok) {
+                var list = await res.json();
+                var savedDist = (document.getElementById('hqDistrictInput')?.value || '').toLocaleUpperCase('tr-TR');
+                list.forEach(function (d) {
+                    var opt = document.createElement('option');
+                    opt.value = d.id;
+                    opt.textContent = d.name;
+                    if (isRestore && savedDist && d.name.toLocaleUpperCase('tr-TR') === savedDist) opt.selected = true;
+                    distSel.appendChild(opt);
+                });
+                if (isRestore && distSel.value) await onHqDistrictChange(distSel, true);
+            }
+            if (!isRestore) buildHqFormattedAddress();
+        }
+
+        async function onHqDistrictChange(sel, isRestore) {
+            var neighSel = document.getElementById('hqNeighborhoodSelect');
+            var strSel = document.getElementById('hqStreetSelect');
+            var distName = sel.options[sel.selectedIndex]?.text || '';
+            document.getElementById('hqDistrictInput').value = sel.value ? distName : '';
+
+            neighSel.innerHTML = '<option value="">-- Mahalle Seçiniz --</option>';
+            strSel.innerHTML = '<option value="">-- Önce Mahalle Seçin --</option>';
+            neighSel.disabled = !sel.value;
+            strSel.disabled = true;
+
+            if (!sel.value) return;
+            var res = await fetch('/api/Location/neighborhoods/' + sel.value);
+            if (res.ok) {
+                var list = await res.json();
+                var savedNeigh = (document.getElementById('hqNeighborhoodInput')?.value || '').toLocaleUpperCase('tr-TR');
+                list.forEach(function (n) {
+                    var opt = document.createElement('option');
+                    opt.value = n.id;
+                    opt.textContent = n.name;
+                    if (isRestore && savedNeigh && n.name.toLocaleUpperCase('tr-TR') === savedNeigh) opt.selected = true;
+                    neighSel.appendChild(opt);
+                });
+                if (isRestore && neighSel.value) await onHqNeighborhoodChange(neighSel, true);
+            }
+            if (!isRestore) buildHqFormattedAddress();
+        }
+
+        async function onHqNeighborhoodChange(sel, isRestore) {
+            var strSel = document.getElementById('hqStreetSelect');
+            var neighName = sel.options[sel.selectedIndex]?.text || '';
+            document.getElementById('hqNeighborhoodInput').value = sel.value ? neighName : '';
+            document.getElementById('hqNeighborhoodIdInput').value = sel.value || '0';
+
+            strSel.innerHTML = '<option value="">-- Sokak Seçiniz --</option>';
+            strSel.disabled = !sel.value;
+
+            if (!sel.value) return;
+            var res = await fetch('/api/Location/streets/' + sel.value);
+            if (res.ok) {
+                var list = await res.json();
+                var savedStr = (document.getElementById('hqStreetInput')?.value || '').toLocaleUpperCase('tr-TR');
+                list.forEach(function (s) {
+                    var opt = document.createElement('option');
+                    opt.value = s.name;
+                    opt.textContent = s.name;
+                    if (isRestore && savedStr && s.name.toLocaleUpperCase('tr-TR') === savedStr) opt.selected = true;
+                    strSel.appendChild(opt);
+                });
+                var customOpt = document.createElement('option');
+                customOpt.value = '__CUSTOM__';
+                customOpt.textContent = '+ Listede Yok (Elle Sokak Yaz)';
+                strSel.appendChild(customOpt);
+            }
+            if (!isRestore) {
+                buildHqFormattedAddress();
+                locateHqOnMapFromSelections();
+            }
+        }
+
+        function onHqStreetChange(sel) {
+            var customInp = document.getElementById('hqCustomStreetInput');
+            if (sel.value === '__CUSTOM__') {
+                customInp.classList.remove('d-none');
+                customInp.focus();
+                document.getElementById('hqStreetInput').value = customInp.value.trim();
+            } else {
+                customInp.classList.add('d-none');
+                document.getElementById('hqStreetInput').value = sel.value || '';
+            }
+            buildHqFormattedAddress();
+            locateHqOnMapFromSelections();
+        }
+
+        function syncHqStreetAndBuildAddress() {
+            var customInp = document.getElementById('hqCustomStreetInput');
+            document.getElementById('hqStreetInput').value = customInp.value.trim();
+            buildHqFormattedAddress();
+        }
+
+        function buildHqFormattedAddress() {
+            var city = document.getElementById('hqCityInput')?.value || '';
+            var dist = document.getElementById('hqDistrictInput')?.value || '';
+            var neigh = document.getElementById('hqNeighborhoodInput')?.value || '';
+            var street = document.getElementById('hqStreetInput')?.value || '';
+            var bld = document.getElementById('hqBuildingNameInput')?.value.trim() || '';
+            var door = document.getElementById('hqOuterDoorNoInput')?.value.trim() || '';
+            var inner = document.getElementById('hqInnerDoorNoInput')?.value.trim() || '';
+
+            var parts = [];
+            if (neigh) parts.push(neigh);
+            if (street) parts.push(street);
+            if (bld) parts.push(bld);
+            if (door) parts.push('No:' + door + (inner ? '/' + inner : ''));
+            if (dist || city) parts.push((dist + ' / ' + city).replace(/^ \/ | \/ $/g, ''));
+
+            if (parts.length > 0) {
+                document.getElementById('hqFullAddressTextarea').value = parts.join(' ');
+            }
+        }
+
+        async function locateHqOnMapFromSelections() {
+            var city = document.getElementById('hqCityInput')?.value || '';
+            var dist = document.getElementById('hqDistrictInput')?.value || '';
+            var neigh = (document.getElementById('hqNeighborhoodInput')?.value || '').replace(/[()]/g, ' ').replace(/MAHALLESİ|MAH\./gi, '').trim();
+            var streetRaw = (document.getElementById('hqStreetInput')?.value || '').replace(/[()]/g, ' ').trim();
+            var street = streetRaw.replace(/SOKAĞI|SOKAK|SOK\.|SK\./gi, 'Sokak').replace(/CADDESİ|CADDE|CAD\.|CD\./gi, 'Caddesi').replace(/\s+/g, ' ').trim();
+            var door = document.getElementById('hqOuterDoorNoInput')?.value.trim() || '';
+
+            if (!city && !dist) return;
+            var q = [street, door ? ('No ' + door) : '', neigh ? (neigh + ' Mahallesi') : '', dist, city, 'Türkiye'].filter(Boolean).join(', ');
+            var badge = document.getElementById('hqMapGeoBadge');
+            if (badge) {
+                badge.className = 'badge bg-warning text-dark';
+                badge.textContent = 'Sokak aranıyor: ' + q + '...';
+            }
+
+            try {
+                var arcUrl = 'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=1&countryCode=TUR&SingleLine=' + encodeURIComponent(q);
+                var res = await fetch(arcUrl);
+                if (res.ok) {
+                    var data = await res.json();
+                    if (data.candidates && data.candidates.length > 0) {
+                        var loc = data.candidates[0].location;
+                        if (hqMapInstance) {
+                            hqMapInstance.setView([loc.y, loc.x], street ? 18 : 15);
+                            placeHqMarker(loc.y, loc.x);
+                        }
+                        return;
+                    }
+                }
+                var nomUrl = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tr&q=' + encodeURIComponent([street, neigh, dist, city].filter(Boolean).join(', '));
+                var nomRes = await fetch(nomUrl);
+                if (nomRes.ok) {
+                    var nomData = await nomRes.json();
+                    if (nomData && nomData.length > 0) {
+                        var nLat = parseFloat(nomData[0].lat);
+                        var nLon = parseFloat(nomData[0].lon);
+                        if (hqMapInstance) {
+                            hqMapInstance.setView([nLat, nLon], street ? 18 : 15);
+                            placeHqMarker(nLat, nLon);
+                        }
+                        return;
+                    }
+                }
+            } catch (e) { console.warn(e); }
+        }
+    </script>
+
+    <div class="row g-3">
+        <!-- SOL KOLON (2 ANA DIV: GÜNDEM/TOPLANTILAR + ROLÜME GÖRE PROJELER) -->
+        <div class="col-lg-8 d-flex flex-column gap-3">
+
+            <!-- 2. DIV: BUGÜNKÜ GÜNDEMİM & AÇIK KONULAR (TOPLANTI / SAHA VUKUAT MASASI) -->
+            <div class="card border-0 shadow-sm rounded-3 bg-white">
+                <div class="card-header bg-white border-bottom py-2.5 px-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="fw-bold text-dark mb-0">
+                            <i class="bi bi-calendar2-check text-warning me-1.5"></i>Gündemim & Açık Konular (Toplantı / Saha Masası)
+                        </h6>
+                        <small class="text-muted" style="font-size: 0.74rem;">Bugünkü görüşmeler ve şantiyede açık kalan saha konuları</small>
+                    </div>
+                    <a href="/Agenda/Meetings" class="btn btn-outline-secondary btn-sm rounded-pill py-0.5 px-2.5" style="font-size: 0.74rem;">Tüm Konular</a>
+                </div>
+                <div class="card-body p-3">
+                    @if (openMeetings.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle table-sm mb-0" style="font-size: 0.82rem;">
+                                <thead class="table-light text-muted">
+                                    <tr>
+                                        <th>Konu / Başlık</th>
+                                        <th>Proje / Şantiye</th>
+                                        <th>Muhatap</th>
+                                        <th>Tarih</th>
+                                        <th class="text-end">İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var m in openMeetings)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold text-dark">@m.Title</td>
+                                            <td>
+                                                @if (m.Project != null)
+                                                {
+                                                    <span class="badge bg-light text-dark border">@m.Project.Name</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted small">Şirket İçi / Genel</span>
+                                                }
+                                            </td>
+                                            <td class="text-muted small">@(m.Phonebook?.Name ?? "-")</td>
+                                            <td class="text-muted small">@m.EventDate.ToString("dd.MM.yyyy HH:mm")</td>
+                                            <td class="text-end">
+                                                <a href="/Agenda/MeetingRoom/@m.Id" class="btn btn-primary btn-sm rounded-pill py-0.5 px-2.5 fw-bold" style="font-size: 0.74rem;">
+                                                    Masaya Gir ➔
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4 bg-light rounded-3 text-muted small">
+                            <i class="bi bi-journal-check fs-4 d-block mb-1 opacity-50"></i>
+                            Şu an açık bir toplantı veya saha konusu bulunmuyor.
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- 3. DIV: ROLÜME GÖRE PROJELER & GÖREVLER ÖZETİ -->
+            <div class="card border-0 shadow-sm rounded-3 bg-white">
+                <div class="card-header bg-white border-bottom py-2.5 px-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="fw-bold text-dark mb-0">
+                            <i class="bi bi-buildings text-primary me-1.5"></i>@(isManager ? "Projeler & Şantiye Özeti (Yönetici Görünümü)" : "Sorumlu Olduğum Şantiye & Saha İşlemleri")
+                        </h6>
+                        <small class="text-muted" style="font-size: 0.74rem;">
+                            @(isManager ? "Aday projeler, aktif şantiyeler ve bekleyen onaylar" : "Günlük saha raporu, puantaj ve aktif şantiye geçişleri")
+                        </small>
+                    </div>
+                    <a href="/ConstructionProject/Index" class="btn btn-outline-primary btn-sm rounded-pill py-0.5 px-2.5" style="font-size: 0.74rem;">Tüm Projeler</a>
+                </div>
+                <div class="card-body p-3">
+                    <!-- SADE SAYAÇ SATIRI (SIFIR SAHTE VERİ) -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-4">
+                            <div class="p-2.5 rounded-3 bg-light border text-center">
+                                <div class="text-muted small" style="font-size: 0.72rem;">Aday / Teklif Projeler</div>
+                                <div class="fw-bold fs-5 text-warning">@adayProjeler.Count</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-2.5 rounded-3 bg-light border text-center">
+                                <div class="text-muted small" style="font-size: 0.72rem;">Aktif Şantiyeler</div>
+                                <div class="fw-bold fs-5 text-primary">@activeProjects</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-2.5 rounded-3 bg-light border text-center">
+                                <div class="text-muted small" style="font-size: 0.72rem;">@(isManager ? "Bu Ay Onaylı Hakediş" : "Geciken İş Kalemi")</div>
+                                <div class="fw-bold fs-5 text-dark">@(isManager ? $"₺ {totalPayments:N0}" : $"{delayedPhases}")</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (!isManager)
+                    {
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            <a href="/DailyTimesheets/Index" class="btn btn-outline-dark btn-sm rounded-pill px-3">
+                                <i class="bi bi-people me-1"></i>Günlük Puantaj Gir
+                            </a>
+                            <a href="/SiteDiary" class="btn btn-outline-dark btn-sm rounded-pill px-3">
+                                <i class="bi bi-journal-text me-1"></i>Şantiye Günlüğü
+                            </a>
+                        </div>
+                    }
+
+                    @if (adayProjeler.Any() || aktifSantiyeler.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle table-sm mb-0" style="font-size: 0.82rem;">
+                                <thead class="table-light text-muted">
+                                    <tr>
+                                        <th>Proje / Yapı Adı</th>
+                                        <th>Aşama</th>
+                                        <th>Konum / Adres</th>
+                                        <th class="text-end">Geçiş</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var p in adayProjeler)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold text-dark">@p.Name</td>
+                                            <td><span class="badge bg-warning bg-opacity-15 text-dark border border-warning rounded-pill">Aday / Teklif</span></td>
+                                            <td class="text-muted small">@(string.IsNullOrWhiteSpace(p.Address) ? "-" : p.Address)</td>
+                                            <td class="text-end">
+                                                <a href="/ConstructionProject/Workspace/@p.Id" class="btn btn-outline-warning text-dark btn-sm rounded-pill py-0.5 px-2.5 fw-bold" style="font-size: 0.74rem;">
+                                                    Aday Masası ➔
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                    @foreach (var s in aktifSantiyeler)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold text-dark">@s.Name</td>
+                                            <td><span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle rounded-pill">Aktif Şantiye</span></td>
+                                            <td class="text-muted small">@(string.IsNullOrWhiteSpace(s.Address) ? "-" : s.Address)</td>
+                                            <td class="text-end">
+                                                <a href="/ConstructionProject/Details/@s.Id" class="btn btn-outline-primary btn-sm rounded-pill py-0.5 px-2.5 fw-bold" style="font-size: 0.74rem;">
+                                                    Şantiyeye Gir ➔
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4 bg-light rounded-3 text-muted small">
+                            <i class="bi bi-building-add fs-4 d-block mb-1 opacity-50"></i>
+                            Henüz kayıtlı aday proje veya aktif şantiye bulunmuyor.
+                        </div>
+                    }
+                </div>
+            </div>
+
+        </div>
+
+        <!-- SAĞ KOLON (4. DIV: KİŞİSEL PROFİLİM, ONAY PIN & ŞİFRE YENİLEME) -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm rounded-3 bg-white h-100">
+                <div class="card-header bg-white border-bottom py-2.5 px-3">
+                    <h6 class="fw-bold text-dark mb-0">
+                        <i class="bi bi-shield-lock text-primary me-1.5"></i>Profilim, Onay PIN & Güvenlik
+                    </h6>
+                    <small class="text-muted" style="font-size: 0.74rem;">Kişisel iletişim, 4 haneli işlem onay PIN'i ve şifre ayarları</small>
+                </div>
+                <div class="card-body p-3">
+                    <!-- KİŞİSEL BİLGİ & ONAY PIN FORMU -->
+                    <form asp-action="UpdatePersonalProfileAndPin" asp-controller="Dashboard" method="post" class="mb-3 pb-3 border-bottom">
+                        @Html.AntiForgeryToken()
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted mb-1" style="font-size: 0.74rem;">Ad</label>
+                                <input type="text" name="firstName" value="@curUser?.FirstName" class="form-control form-control-sm rounded-2" required />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted mb-1" style="font-size: 0.74rem;">Soyad</label>
+                                <input type="text" name="lastName" value="@curUser?.LastName" class="form-control form-control-sm rounded-2" />
+                            </div>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold text-muted mb-1" style="font-size: 0.74rem;">Cep Telefonu (WhatsApp & Bildirim)</label>
+                            <input type="tel" name="phoneNumber" value="@curUser?.PhoneNumber" class="form-control form-control-sm rounded-2" placeholder="05XX XXX XX XX" />
+                        </div>
+
+                        <div class="mb-2.5 p-2 rounded-2 bg-light border">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label small fw-bold text-dark mb-0" style="font-size: 0.75rem;">
+                                    <i class="bi bi-key-fill text-warning me-1"></i>İşlem Onay PIN Kodu (4 Hane)
+                                </label>
+                                @if (hasPin)
+                                {
+                                    <span class="badge bg-success rounded-pill" style="font-size: 0.65rem;">Tanımlı</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary rounded-pill" style="font-size: 0.65rem;">Tanımsız</span>
+                                }
+                            </div>
+                            <input type="password" name="approvalPin" maxlength="6" inputmode="numeric" class="form-control form-control-sm rounded-2" placeholder="@(hasPin ? "•••• (Değiştirmek için yeni PIN yazın)" : "Örn: 1453 (Hakediş & Teklif onayı için)")" />
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-sm rounded-pill w-100 fw-bold">
+                            <i class="bi bi-check2-circle me-1"></i>Bilgileri & Onay PIN'ini Kaydet
+                        </button>
+                    </form>
+
+                    <!-- ŞİFRE YENİLEME FORMU -->
+                    <form asp-action="ChangePersonalPassword" asp-controller="Dashboard" method="post">
+                        @Html.AntiForgeryToken()
+                        <div class="fw-bold small text-dark mb-2" style="font-size: 0.78rem;">
+                            <i class="bi bi-lock text-secondary me-1"></i>Giriş Şifresini Yenile
+                        </div>
+                        <div class="mb-2">
+                            <input type="password" name="currentPassword" class="form-control form-control-sm rounded-2" placeholder="Mevcut Şifreniz" required />
+                        </div>
+                        <div class="mb-2.5">
+                            <input type="password" name="newPassword" class="form-control form-control-sm rounded-2" placeholder="Yeni Şifreniz (En az 8 karakter)" required />
+                        </div>
+                        <button type="submit" class="btn btn-outline-dark btn-sm rounded-pill w-100 fw-bold">
+                            <i class="bi bi-arrow-repeat me-1"></i>Şifremi Güncelle
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container-fluid py-4 d-none">
     <!-- FİRMA BAŞLIĞI -->
     @{
         var agency = ViewBag.Agency as GMK360.Core.Entities.Agency;

@@ -1,8 +1,12 @@
-﻿@model IEnumerable<GMK360.Core.Entities.Construction.ConstructionProject>
+@model IEnumerable<GMK360.Core.Entities.Construction.ConstructionProject>
 @{
     ViewData["Title"] = "Kurumsal Web Sitem (CMS)";
     Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
     var agencyName = ViewBag.AgencyName?.ToString() ?? "Firmam";
+    var agency = ViewBag.Agency as GMK360.Core.Entities.Agency;
+    var subdomain = !string.IsNullOrWhiteSpace(agency?.Subdomain) ? agency.Subdomain : "firmaniz";
+    var customDomain = agency?.CustomDomain ?? "";
+    var primaryColor = !string.IsNullOrWhiteSpace(agency?.ThemePrimaryColor) ? agency.ThemePrimaryColor : "#1e3a8a";
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -10,8 +14,54 @@
         <h2 class="fw-bold mb-1 text-dark"><i class="bi bi-globe2 text-primary me-2"></i>Kurumsal Web Sitem (CMS)</h2>
         <p class="text-muted mb-0"><b>@agencyName</b> kurumsal web sitenizin içeriklerini, domain ayarlarını ve vitrin projelerinizi buradan yönetin.</p>
     </div>
-    <a href="#" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold hover-scale" onclick="alert('Demo: Web siteniz yakında yayına girecek!')">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Dashboard/ThemeSettings" class="btn btn-outline-primary rounded-pill px-4 shadow-sm fw-bold">
+            <i class="bi bi-palette2 me-1"></i> DNS, Özel Domain & Tema Stüdyosu
+        </a>
+        <a href="/AgencyStore/Index?subdomain=@subdomain" target="_blank" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold hover-scale" style="display:none;">
         <i class="bi bi-box-arrow-up-right me-2"></i> Canlı Siteyi Görüntüle
+        </a>
+        <a href="/AgencyStore/Index?subdomain=@subdomain" target="_blank" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold hover-scale">
+            <i class="bi bi-box-arrow-up-right me-2"></i> Canlı Web Vitrini Önizle (@(subdomain).gmk360.com)
+        </a>
+    </div>
+</div>
+
+<!-- CANLI DOMAIN & DNS YÖNLENDİRME KARTI -->
+<div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden" style="background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%); color: #fff;">
+    <div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <div class="rounded-4 p-3 bg-white bg-opacity-10 border border-white border-opacity-25 text-warning fs-3">
+                <i class="bi bi-globe-americas"></i>
+            </div>
+            <div>
+                <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                    <span class="badge bg-success text-white rounded-pill px-3 py-1"><i class="bi bi-shield-check me-1"></i>GMK360 Domain Yönlendirme Aktif</span>
+                    <span class="badge bg-warning text-dark rounded-pill px-3 py-1">Alt Alan Adı: <strong>@(subdomain).gmk360.com</strong></span>
+                    @if (!string.IsNullOrWhiteSpace(customDomain))
+                    {
+                        <span class="badge bg-info text-dark rounded-pill px-3 py-1"><i class="bi bi-link-45deg me-1"></i>Özel Domain: <strong>@customDomain</strong></span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-light bg-opacity-25 text-white rounded-pill px-3 py-1">Özel Domain: <em>Henüz bağlanmadı (Örn: www.firmaniz.com)</em></span>
+                    }
+                </div>
+                <div class="small text-white-50">
+                    Kendi domaininizi (<code>www.firmaniz.com</code>) GMK360 sistemine bağlamak için DNS yönetim panelinizden <strong>CNAME</strong> kaydını <code>vitrin.gmk360.com</code> adresine yönlendirmeniz yeterlidir. Seçtiğiniz vitrin projeleri ve kurumsal siteniz otomatik olarak kendi alan adınızda yayınlanır.
+                </div>
+            </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button type="button" class="btn btn-warning fw-bold rounded-pill px-4 shadow-sm text-dark" data-bs-toggle="modal" data-bs-target="#seoModal">
+                <i class="bi bi-hdd-network me-1"></i> Domain & DNS Bağla
+            </button>
+            <a href="/Dashboard/ThemeSettings" class="btn btn-outline-light fw-bold rounded-pill px-3">
+                <i class="bi bi-sliders me-1"></i> Renk, Logo & Font Stüdyosu
+            </a>
+        </div>
+    </div>
+    <a class="d-none">
     </a>
 </div>
 
@@ -75,7 +125,7 @@
                 </div>
                 <h5 class="fw-bold text-dark">Kadro (Ekibimiz)</h5>
                 <p class="text-muted small mb-4">Mimar, mühendis ve yöneticilerinizi sitede sergileyin.</p>
-                <button class="btn btn-light w-100 rounded-pill fw-bold text-info shadow-sm" onclick="alert('Personel vitrini yakında!')">Ekibi Yönet</button>
+                <a href="/AgencyStaff/Index" class="btn btn-light w-100 rounded-pill fw-bold text-info shadow-sm">Ekibi Yönet (Merkez Personel)</a>
             </div>
         </div>
     </div>
@@ -158,9 +208,32 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4 bg-light">
-                <form>
+                <form method="post" action="/Dashboard/SaveSiteDomainAndIdentity" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-8">
+                            <label class="fw-bold form-label">Firma Resmi Ünvanı</label>
+                            <input type="text" name="companyName" value="@(agency?.CompanyName ?? "")" class="form-control rounded-3 fw-bold" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="fw-bold form-label">Vergi Dairesi / Vergi No</label>
+                            <input type="text" name="taxNumber" value="@(agency?.TaxNumber ?? "")" class="form-control rounded-3" placeholder="Örn: Kadıköy VD - 1234567890" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="fw-bold form-label">Müteahhitlik Yetki Belge No (YAMBİS)</label>
+                            <input type="text" name="authCertificateNo" value="@(agency?.AuthCertificateNo ?? "")" class="form-control rounded-3" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="fw-bold form-label">Firma Logosu Yükle</label>
+                            <input type="file" name="logoFile" class="form-control rounded-3" accept="image/*" />
+                        </div>
+                        <div class="col-12">
+                            <label class="fw-bold form-label">Merkez Bina / Ofis Açık Adresi</label>
+                            <textarea name="address" class="form-control rounded-3" rows="2" placeholder="Merkez ofis açık adresiniz...">@(agency?.Address ?? "")</textarea>
+                        </div>
+                    </div>
                     <div class="mb-4 text-center">
-                        <img src="/images/placeholder-logo.png" class="rounded-3 shadow-sm bg-white p-2 mb-3" style="width: 150px; height: 150px; object-fit: contain;">
+                        <img src="@(!string.IsNullOrWhiteSpace(agency?.LogoUrl) ? agency.LogoUrl : "/images/placeholder-logo.png")" class="rounded-3 shadow-sm bg-white p-2 mb-3" style="width: 150px; height: 150px; object-fit: contain;">
                         <div>
                             <button type="button" class="btn btn-sm btn-outline-primary rounded-pill"><i class="bi bi-upload me-1"></i> Yeni Logo Yükle</button>
                         </div>
@@ -176,7 +249,7 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="fw-bold form-label">WhatsApp İletişim</label>
-                            <input type="text" class="form-control rounded-3" placeholder="+90 5XX XXX XX XX" />
+                            <input type="text" name="whatsAppNumber" value="@(agency?.WhatsAppNumber ?? "")" class="form-control rounded-3" placeholder="+90 5XX XXX XX XX" />
                         </div>
                         <div class="col-md-6">
                             <label class="fw-bold form-label">E-Posta</label>
@@ -187,7 +260,7 @@
             </div>
             <div class="modal-footer border-0">
                 <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Kapat</button>
-                <button type="button" class="btn btn-primary rounded-pill px-4" data-bs-dismiss="modal" onclick="alert('Kurumsal kimlik güncellendi!')">Kaydet</button>
+                <button type="button" class="btn btn-primary rounded-pill px-4" onclick="this.closest('.modal-content').querySelector('form').submit()">Kaydet</button>
             </div>
         </div>
     </div>
@@ -202,12 +275,41 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4 bg-light">
-                <form>
+                <form method="post" action="/Dashboard/SaveSiteDomainAndIdentity" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-8">
+                            <label class="fw-bold form-label">Firma Resmi Ünvanı</label>
+                            <input type="text" name="companyName" value="@(agency?.CompanyName ?? "")" class="form-control rounded-3 fw-bold" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="fw-bold form-label">Vergi Dairesi / Vergi No</label>
+                            <input type="text" name="taxNumber" value="@(agency?.TaxNumber ?? "")" class="form-control rounded-3" placeholder="Örn: Kadıköy VD - 1234567890" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="fw-bold form-label">Müteahhitlik Yetki Belge No (YAMBİS)</label>
+                            <input type="text" name="authCertificateNo" value="@(agency?.AuthCertificateNo ?? "")" class="form-control rounded-3" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="fw-bold form-label">Firma Logosu Yükle</label>
+                            <input type="file" name="logoFile" class="form-control rounded-3" accept="image/*" />
+                        </div>
+                        <div class="col-12">
+                            <label class="fw-bold form-label">Merkez Bina / Ofis Açık Adresi</label>
+                            <textarea name="address" class="form-control rounded-3" rows="2" placeholder="Merkez ofis açık adresiniz...">@(agency?.Address ?? "")</textarea>
+                        </div>
+                    </div>
                     <div class="mb-3">
                         <label class="fw-bold form-label">Özel Alan Adı (Domain)</label>
                         <div class="input-group mb-2 shadow-sm rounded-3 overflow-hidden">
                             <span class="input-group-text bg-white border-secondary">www.</span>
-                            <input type="text" class="form-control border-secondary" placeholder="dengehaninsaat.com" />
+                            <input type="text" name="customDomain" value="@customDomain" class="form-control border-secondary" placeholder="www.dengehaninsaat.com" />
+                        </div>
+                        <small class="text-muted d-block mb-3"><i class="bi bi-info-circle me-1"></i>Alan adınızı bağlamak için DNS ayarlarından CNAME kaydını <code>vitrin.gmk360.com</code> adresine yönlendirmeniz yeterlidir.</small>
+                        <label class="fw-bold form-label">Ücretsiz GMK360 Alt Alan Adı (Subdomain)</label>
+                        <div class="input-group mb-2 shadow-sm rounded-3 overflow-hidden">
+                            <input type="text" name="subdomain" value="@subdomain" class="form-control border-secondary" placeholder="dengehaninsaat" />
+                            <span class="input-group-text bg-white border-secondary fw-bold text-primary">.gmk360.com</span>
                         </div>
                         <small class="text-muted"><i class="bi bi-info-circle me-1"></i>Alan adınızı bağlamak için DNS ayarlarından A kaydını sistemimize yönlendirmelisiniz.</small>
                     </div>
@@ -224,7 +326,7 @@
             </div>
             <div class="modal-footer border-0">
                 <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Kapat</button>
-                <button type="button" class="btn btn-warning fw-bold rounded-pill px-4" data-bs-dismiss="modal" onclick="alert('SEO ayarları kaydedildi!')">Kaydet</button>
+                <button type="button" class="btn btn-warning fw-bold rounded-pill px-4" onclick="this.closest('.modal-content').querySelector('form').submit()">Domain & SEO Kaydet</button>
             </div>
         </div>
     </div>

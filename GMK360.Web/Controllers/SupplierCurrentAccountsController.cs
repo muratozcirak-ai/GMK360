@@ -25,16 +25,17 @@ namespace GMK360.Web.Controllers
 
         private async Task<int?> GetUserAgencyIdAsync()
         {
+            var user = await _userManager.GetUserAsync(User);
+            if (user != null)
+            {
+                var consultant = await _context.AgencyConsultants
+                    .FirstOrDefaultAsync(c => c.UserId == user.Id && c.IsActive);
+                if (consultant != null && consultant.AgencyId > 0)
+                    return consultant.AgencyId;
+            }
             if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin")) 
                 return 1;
-                
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null) return null;
-
-            var consultant = await _context.AgencyConsultants
-                .FirstOrDefaultAsync(c => c.UserId == user.Id && c.IsActive);
-                
-            return consultant?.AgencyId;
+            return null;
         }
 
         // GET: /SupplierCurrentAccounts/Index
@@ -66,8 +67,8 @@ namespace GMK360.Web.Controllers
 
             if (account == null) return NotFound();
 
-            // Sadece bu view'da kolay gösterim için transaction ve ödemeleri birleþtirebiliriz
-            // ya da view içinde ayrý ayrý sekmelerde veya birleþik tabloda gösterebiliriz.
+            // Sadece bu view'da kolay gÃ¶sterim iÃ§in transaction ve Ã¶demeleri birleÅŸtirebiliriz
+            // ya da view iÃ§inde ayrÄ± ayrÄ± sekmelerde veya birleÅŸik tabloda gÃ¶sterebiliriz.
 
             return View(account);
         }
@@ -86,7 +87,7 @@ namespace GMK360.Web.Controllers
 
             var userId = _userManager.GetUserId(User) ?? "";
 
-            // 1. Ödeme Kaydýný Oluþtur
+            // 1. Ã–deme KaydÄ±nÄ± OluÅŸtur
             var payment = new SupplierPayment
             {
                 SupplierCurrentAccountId = account.Id,
@@ -100,7 +101,7 @@ namespace GMK360.Web.Controllers
                 HandledByUserId = userId
             };
 
-            // Eðer çek ise, status pending olabilir ama basitlik adýna þimdilik completed/pending ayrýmýný UI'a býrakalým
+            // EÄŸer Ã§ek ise, status pending olabilir ama basitlik adÄ±na ÅŸimdilik completed/pending ayrÄ±mÄ±nÄ± UI'a bÄ±rakalÄ±m
             if (method == PaymentMethod.Check && dueDate.HasValue && dueDate.Value > DateTime.UtcNow)
             {
                 payment.Status = PaymentStatus.Pending;
@@ -108,17 +109,17 @@ namespace GMK360.Web.Controllers
 
             _context.SupplierPayments.Add(payment);
 
-            // 2. Bakiyeyi Düþ (Ödeme yaptýk, borcumuz azaldý)
+            // 2. Bakiyeyi DÃ¼ÅŸ (Ã–deme yaptÄ±k, borcumuz azaldÄ±)
             account.CurrentBalance -= amount;
 
-            // 3. Transaction Tablosuna Yaz (Ekstre için)
+            // 3. Transaction Tablosuna Yaz (Ekstre iÃ§in)
             var transaction = new SupplierAccountTransaction
             {
                 SupplierCurrentAccountId = account.Id,
                 Amount = amount,
                 Type = SupplierTransactionType.PaymentMade,
                 TransactionDate = paymentDate,
-                Description = $"{method} ile ödeme yapýldý. {(string.IsNullOrEmpty(checkNumber) ? "" : "Çek No: " + checkNumber)}",
+                Description = $"{method} ile Ã¶deme yapÄ±ldÄ±. {(string.IsNullOrEmpty(checkNumber) ? "" : "Ã‡ek No: " + checkNumber)}",
                 BalanceAfterTransaction = account.CurrentBalance,
                 CreatedByUserId = userId
             };
@@ -127,7 +128,7 @@ namespace GMK360.Web.Controllers
 
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Ödeme baþarýyla kaydedildi ve bakiye güncellendi.";
+            TempData["SuccessMessage"] = "Ã–deme baÅŸarÄ±yla kaydedildi ve bakiye gÃ¼ncellendi.";
             return RedirectToAction(nameof(Details), new { id = accountId });
         }
     }

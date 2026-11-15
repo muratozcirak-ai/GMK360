@@ -16,9 +16,15 @@ namespace GMK360.Web.Models
         [Display(Name = "Firma / İşletme Adı")]
         public string CompanyName { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "Yetkili kişi adı soyadı zorunludur.")]
-        [Display(Name = "Yetkili Adı Soyadı")]
-        public string FullName { get; set; } = string.Empty;
+        [Required(ErrorMessage = "Yetkili kişi adı zorunludur.")]
+        [Display(Name = "Yetkili Adı")]
+        public string FirstName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Yetkili kişi soyadı zorunludur.")]
+        [Display(Name = "Yetkili Soyadı")]
+        public string LastName { get; set; } = string.Empty;
+
+        public string? FullName { get; set; }
 
         [Required(ErrorMessage = "Telefon numarası zorunludur.")]
         [Display(Name = "Telefon Numarası")]
@@ -39,5 +45,14 @@ namespace GMK360.Web.Models
         [Display(Name = "Şifre Tekrar")]
         [Compare("Password", ErrorMessage = "Şifreler eşleşmiyor.")]
         public string ConfirmPassword { get; set; } = string.Empty;
+
+        [Display(Name = "Vergi Dairesi / Vergi No")]
+        public string? TaxNumber { get; set; }
+
+        [Display(Name = "Müteahhitlik Yetki Belge No (YAMBİS)")]
+        public string? AuthCertificateNo { get; set; }
+
+        [Display(Name = "Merkez Bina / Ofis Açık Adresi")]
+        public string? Address { get; set; }
     }
 }

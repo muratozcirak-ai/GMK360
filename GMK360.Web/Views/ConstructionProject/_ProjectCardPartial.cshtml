@@ -13,54 +13,38 @@
         : (!string.IsNullOrEmpty(Model.CurrentStateImageUrl) ? Model.CurrentStateImageUrl : "/img/default-project.jpg");
 
     var statusText = Model.Status switch {
-
         ProjectStatus.On_Gorusme_Talep => "Ön Görüşme / Aday",
-
-        ProjectStatus.Projelendirme_Teklif => "Teklif / Planlama",
-
+        ProjectStatus.Projelendirme_Teklif => "Teklif / Aday",
+        ProjectStatus.Anlasma_Yapildi => "Anlaşma Yapıldı (Planlama)",
         ProjectStatus.Aktif_Santiye => "Aktif Şantiye",
-
         ProjectStatus.Satista_Topraktan => "Satışta (Topraktan)",
-
-        ProjectStatus.Tamamlandi_Teslim => "Tamamlandı",
-
+        ProjectStatus.Tamamlandi_Teslim => "Tamamlandı / Teslim",
+        ProjectStatus.Anlasma_Olmayan_Iptal => "Anlaşma Olmadı",
         _ => "Bilinmiyor"
-
     };
-
     
-
     var statusColor = Model.Status switch {
-
         ProjectStatus.On_Gorusme_Talep => "bg-warning text-dark",
-
-        ProjectStatus.Projelendirme_Teklif => "bg-secondary",
-
+        ProjectStatus.Projelendirme_Teklif => "bg-warning text-dark",
+        ProjectStatus.Anlasma_Yapildi => "bg-info text-dark fw-bold",
         ProjectStatus.Aktif_Santiye => "bg-primary",
-
-        ProjectStatus.Satista_Topraktan => "bg-warning text-dark",
-
+        ProjectStatus.Satista_Topraktan => "bg-success",
         ProjectStatus.Tamamlandi_Teslim => "bg-success",
-
+        ProjectStatus.Anlasma_Olmayan_Iptal => "bg-danger",
         _ => "bg-dark"
-
     };
-
-
 
     bool isAday = Model.Status == ProjectStatus.On_Gorusme_Talep || Model.Status == ProjectStatus.Projelendirme_Teklif;
-
-
+    bool isAnlasma = Model.Status == ProjectStatus.Anlasma_Yapildi;
+    string cardTargetUrl = isAday ? $"/ConstructionProject/Workspace/{Model.Id}"
+        : isAnlasma ? $"/ConstructionProject/Workspace/{Model.Id}"
+        : $"/ConstructionProject/Details/{Model.Id}";
 
     // İlerleme simülasyonu (gerçek veriye bağlanabilir)
-
     int progress = Model.Status == ProjectStatus.Tamamlandi_Teslim ? 100 : (Model.Status == ProjectStatus.Aktif_Santiye ? 45 : 0);
-
 }
 
-
-
-<div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden" style="transition: transform 0.2s; cursor:pointer;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'" onclick="window.location.href='@(isAday ? $"/ConstructionProject/Feasibility/{Model.Id}" : $"/ConstructionProject/Workspace/{Model.Id}")'">
+<div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden" style="transition: transform 0.2s; cursor:pointer;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'" onclick="if(window.openGmkProjectWindow){window.openGmkProjectWindow('@cardTargetUrl', @Model.Id);}else{window.open('@cardTargetUrl', '_blank');}">
 
     
 
@@ -72,6 +56,14 @@
 
         <div class="position-absolute top-0 start-0 w-100 h-100 bg-dark bg-opacity-25"></div>
 
+        <div class="position-absolute top-0 start-0 p-2 d-flex gap-1" style="z-index: 5;">
+            <button type="button" class="btn btn-dark btn-sm bg-opacity-75 border-0 rounded-pill px-2 py-0.5 shadow-sm text-white fw-bold" style="font-size: 0.68rem;" onclick="event.stopPropagation(); window.open('@cardTargetUrl', 'gmk_proj_win_@Model.Id', 'width=1480,height=920,left=60,top=40,resizable=yes,scrollbars=yes');" title="Projeyi Ayrı Pencerede Yan Yana Aç">
+                <i class="bi bi-window-stack text-warning me-1"></i>Yeni Pencere
+            </button>
+            <a href="@cardTargetUrl" target="_blank" onclick="event.stopPropagation();" class="btn btn-light btn-sm bg-opacity-75 border-0 rounded-pill px-2 py-0.5 shadow-sm text-dark fw-bold" style="font-size: 0.68rem;" title="Projeyi Yeni Sekmede Aç">
+                <i class="bi bi-box-arrow-up-right text-primary"></i>
+            </a>
+        </div>
         <div class="position-absolute top-0 end-0 p-2">
 
             <span class="badge @statusColor shadow-sm rounded-pill px-3 py-2"><i class="bi bi-circle-fill small me-1"></i> @statusText</span>
@@ -152,7 +144,7 @@
 
             <button class="btn btn-warning btn-sm rounded-pill w-100 fw-bold mb-2 shadow-sm text-dark" onclick="event.stopPropagation(); alert('Bu binanın (Dijital İkiz) davet linki yöneticiye SMS olarak gönderilecek. Bina yönetimi modülü aktif olduğunda devreye girecektir.');"><i class="bi bi-person-plus-fill me-1"></i> 👑 Bina Yöneticisini Davet Et</button>
 
-            <a href="/ConstructionProject/Workspace/@Model.Id" onclick="event.stopPropagation();" class="btn btn-outline-primary btn-sm rounded-pill w-100 fw-bold">Şantiye Masası <i class="bi bi-archive"></i></a>
+            <a href="/ConstructionProject/Workspace/@Model.Id" target="_blank" onclick="event.stopPropagation(); if(window.openGmkProjectWindow){window.openGmkProjectWindow(this.href, @Model.Id); return false;}" class="btn btn-outline-primary btn-sm rounded-pill w-100 fw-bold">Şantiye Masası <i class="bi bi-box-arrow-up-right ms-1"></i></a>
 
         }
 
@@ -163,39 +155,31 @@
             <div class="d-flex gap-1 flex-wrap">
 
                 @if (isAday)
-
                 {
-
-                    <a href="/ConstructionProject/Feasibility/@Model.Id" onclick="event.stopPropagation();" class="btn btn-warning btn-sm rounded-pill fw-bold text-dark px-3 shadow-xs" title="2. Adım: Hızlı Arsa Ön Etüdü, TKGM Harita ve Simülatör">
-
-                        <i class="bi bi-rulers me-1"></i> Hızlı Ön Etüt
-
+                    <a href="/ConstructionProject/Workspace/@Model.Id" target="_blank" onclick="event.stopPropagation(); if(window.openGmkProjectWindow){window.openGmkProjectWindow(this.href, @Model.Id); return false;}" class="btn btn-primary btn-sm rounded-pill flex-fill fw-bold shadow-xs" title="1. Adım: Proje Künyesi & Saha Keşfi (Yeni Pencerede Açılır)">
+                        <i class="bi bi-card-heading me-1"></i> Proje Künyesi
                     </a>
-
-                    <a href="/ConstructionProject/Workspace/@Model.Id" onclick="event.stopPropagation();" class="btn btn-outline-primary btn-sm rounded-pill flex-fill fw-bold" title="Proje Künyesi">
-
-                        Künye <i class="bi bi-arrow-right"></i>
-
+                    <a href="/ConstructionProject/Feasibility/@Model.Id" target="_blank" onclick="event.stopPropagation(); if(window.openGmkProjectWindow){window.openGmkProjectWindow(this.href, @Model.Id); return false;}" class="btn btn-outline-warning btn-sm rounded-pill fw-bold text-dark px-2 shadow-xs" title="2. Adım: Hızlı Arsa Ön Etüdü (Yeni Pencerede Açılır)">
+                        <i class="bi bi-rulers me-1"></i> Ön Etüt
                     </a>
-
                 }
-
-                else
-
+                else if (isAnlasma)
                 {
-
-                    <a href="/ConstructionProject/Analysis/@Model.Id" onclick="event.stopPropagation();" class="btn btn-outline-success btn-sm rounded-pill fw-bold px-2 shadow-xs" title="İmar Durumu ve Ön Keşif Raporu">
-
-                        <i class="bi bi-graph-up-arrow me-1"></i> İmar
-
+                    <a href="/Metraj/ProjectDNA/@Model.Id" target="_blank" onclick="event.stopPropagation(); if(window.openGmkProjectWindow){window.openGmkProjectWindow(this.href, @Model.Id); return false;}" class="btn btn-outline-success btn-sm rounded-pill fw-bold px-2 shadow-xs" title="Proje DNA & Metraj Hesabı (Yeni Pencerede Açılır)">
+                        <i class="fas fa-dna me-1"></i> DNA
                     </a>
-
-                    <a href="/ConstructionProject/Workspace/@Model.Id" onclick="event.stopPropagation();" class="btn btn-primary btn-sm rounded-pill flex-fill fw-bold">
-
-                        Şantiye Masası <i class="bi bi-arrow-right"></i>
-
+                    <a href="/Metraj/BuildingWorkflow/@Model.Id" target="_blank" onclick="event.stopPropagation(); if(window.openGmkProjectWindow){window.openGmkProjectWindow(this.href, @Model.Id); return false;}" class="btn btn-primary btn-sm rounded-pill flex-fill fw-bold" style="background-color: #6f42c1; border-color: #6f42c1;" title="Mühendislik, Ekip & Malzeme Planlama Masası (Yeni Pencerede Açılır)">
+                        Planlama Masası <i class="bi bi-arrow-right"></i>
                     </a>
-
+                }
+                else
+                {
+                    <a href="/ConstructionProject/Workspace/@Model.Id" target="_blank" onclick="event.stopPropagation(); if(window.openGmkProjectWindow){window.openGmkProjectWindow(this.href, @Model.Id); return false;}" class="btn btn-outline-secondary btn-sm rounded-pill fw-bold px-2 shadow-xs" title="Proje Künyesi & Ortaklar (Yeni Pencerede Açılır)">
+                        <i class="bi bi-card-heading me-1"></i> Künye
+                    </a>
+                    <a href="/ConstructionProject/Details/@Model.Id" target="_blank" onclick="event.stopPropagation(); if(window.openGmkProjectWindow){window.openGmkProjectWindow(this.href, @Model.Id); return false;}" class="btn btn-primary btn-sm rounded-pill flex-fill fw-bold" title="Şantiye Panosu (Yeni Pencerede Açılır)">
+                        Şantiye Panosu <i class="bi bi-arrow-right"></i>
+                    </a>
                 }
 
                 <a href="/Agenda/Index?projectId=@Model.Id" target="_blank" onclick="event.stopPropagation();" class="btn btn-outline-warning text-dark btn-sm rounded-pill px-3 fw-bold" title="Bu Şantiyenin Kara Defteri / Randevuları"><i class="bi bi-journal-bookmark-fill text-warning"></i></a>

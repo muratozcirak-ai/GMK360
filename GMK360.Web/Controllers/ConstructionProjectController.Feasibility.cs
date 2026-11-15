@@ -61,7 +61,24 @@ namespace GMK360.Web.Controllers
                 .OrderByDescending(p => p.CreatedAt)
                 .FirstOrDefaultAsync();
             ViewBag.LastProjectName = lastProject?.Name ?? "Önceki Referans Proje";
-            ViewBag.MinistryUnitCost = 21500m; // 2026 ÇŞB III-B Grubu Yapı Yaklaşık Birim Fiyatı (₺/m²)
+            decimal baselineGovCost = 18500m;
+            decimal baselineFirmCost = 25000m;
+            try
+            {
+                var strategyFile = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot", "uploads", "strategy", $"strategy_baseline_{agencyId.Value}.json");
+                if (System.IO.File.Exists(strategyFile))
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(await System.IO.File.ReadAllTextAsync(strategyFile));
+                    if (doc.RootElement.TryGetProperty("GovUnitCostPerSqm", out var gEl) && gEl.TryGetDecimal(out var gVal) && gVal > 0)
+                        baselineGovCost = gVal;
+                    if (doc.RootElement.TryGetProperty("FirmUnitCostPerSqm", out var fEl) && fEl.TryGetDecimal(out var fVal) && fVal > 0)
+                        baselineFirmCost = fVal;
+                }
+            }
+            catch { }
+            ViewBag.MinistryUnitCost = baselineGovCost;
+            ViewBag.MinistryCostPerM2 = (double)baselineGovCost;
+            ViewBag.DefaultFirmUnitCostPerSqm = baselineFirmCost;
             ViewBag.LastExcavationCostPerM3 = 280m; // 280 ₺/m³ hafriyat kazı ve nakliye
             ViewBag.LastRoughConstructionCostPerM2 = 9800m; // 9.800 ₺/m² kaba inşaat
             if (project.Latitude.HasValue && project.Longitude.HasValue)
@@ -854,20 +871,161 @@ namespace GMK360.Web.Controllers
                 .Where(b => b.ConstructionProjectId == id)
                 .ToListAsync();
             ViewBag.Blocks = blocks;
-            // 3. 1. Aşama Bürokrasi Evrakları
-            var initialDocs = await _context.ProjectLegalDocuments
-                .Include(d => d.SystemTemplate)
-                .Where(d => d.ConstructionProjectId == id && (d.Stage == "Ön Keşif" || d.Stage == "1. Aşama" || string.IsNullOrEmpty(d.Stage)))
-                .ToListAsync();
-            ViewBag.InitialDocs = initialDocs;
-            ViewBag.TotalInitialFee = initialDocs.Sum(d => (d.DocumentFee ?? 0) + (d.AdditionalCost ?? 0));
-            ViewBag.CompletedInitialCount = initialDocs.Count(d => d.Status == "Tamamlandı");
-            var stageRules = await _context.ModuleDocumentRules
+            // 3. Tüm Aşamalar: Evrak, Bürokrasi ve Resmi Süreç Masası (Önkoşul Zinciri + Eski Proje / Havuz Fiyatları)
+            var allRules = await _context.ModuleDocumentRules
+                .Include(r => r.SystemLegalDocumentTemplate)
                 .Include(r => r.Prerequisites)
-                .ThenInclude(p => p.PrerequisiteTemplate)
-                .Where(r => r.TargetModule == "Construction" && (r.Stage == "Ön Keşif" || r.Stage == "1. Aşama" || string.IsNullOrEmpty(r.Stage)))
+                    .ThenInclude(p => p.PrerequisiteTemplate)
+                .Where(r => r.TargetModule == "Construction")
+                .OrderBy(r => r.DisplayOrder)
                 .ToListAsync();
-            ViewBag.StageRules = stageRules;
+
+            var allDocs = await _context.ProjectLegalDocuments
+                .Include(d => d.SystemTemplate)
+                .Where(d => d.ConstructionProjectId == id)
+                .OrderBy(d => d.DisplayOrder)
+                .ToListAsync();
+
+            // Eksik evrak veya önkoşul evraklarını otomatik senkronize et
+            var existingTmplIds = allDocs.Where(d => d.SystemTemplateId != null).Select(d => d.SystemTemplateId!.Value).ToHashSet();
+            bool anyDocAdded = false;
+            foreach (var rule in allRules)
+            {
+                if (rule.SystemLegalDocumentTemplate != null && !existingTmplIds.Contains(rule.SystemLegalDocumentTemplateId))
+                {
+                    var newDoc = new ProjectLegalDocument
+                    {
+                        ConstructionProjectId = project.Id,
+                        SystemTemplateId = rule.SystemLegalDocumentTemplateId,
+                        DocumentName = rule.SystemLegalDocumentTemplate.Name,
+                        Stage = rule.Stage,
+                        Status = "Bekliyor",
+                        DisplayOrder = rule.DisplayOrder,
+                        EstimatedCost = 0,
+                        ActualCost = 0,
+                        DocumentFee = 0,
+                        AdditionalCost = 0
+                    };
+                    _context.ProjectLegalDocuments.Add(newDoc);
+                    allDocs.Add(newDoc);
+                    existingTmplIds.Add(rule.SystemLegalDocumentTemplateId);
+                    anyDocAdded = true;
+                }
+
+                if (rule.Prerequisites != null)
+                {
+                    int subOrder = 1;
+                    foreach (var pre in rule.Prerequisites)
+                    {
+                        if (pre.PrerequisiteTemplate != null && !existingTmplIds.Contains(pre.PrerequisiteTemplateId))
+                        {
+                            var childDoc = new ProjectLegalDocument
+                            {
+                                ConstructionProjectId = project.Id,
+                                SystemTemplateId = pre.PrerequisiteTemplateId,
+                                DocumentName = pre.PrerequisiteTemplate.Name,
+                                Stage = rule.Stage,
+                                DisplayOrder = rule.DisplayOrder * 10 + subOrder++,
+                                Status = "Bekliyor",
+                                EstimatedCost = 0,
+                                ActualCost = 0,
+                                DocumentFee = 0,
+                                AdditionalCost = 0
+                            };
+                            _context.ProjectLegalDocuments.Add(childDoc);
+                            allDocs.Add(childDoc);
+                            existingTmplIds.Add(pre.PrerequisiteTemplateId);
+                            anyDocAdded = true;
+                        }
+                    }
+                }
+            }
+            if (anyDocAdded)
+            {
+                await _context.SaveChangesAsync();
+            }
+
+            // Eski projelerde gerçekleşen fiyatları veya merkez havuz referans fiyatlarını çek
+            var previousAgencyDocs = await _context.ProjectLegalDocuments
+                .Include(d => d.ConstructionProject)
+                .Where(d => d.ConstructionProjectId != project.Id
+                    && d.ConstructionProject != null
+                    && d.ConstructionProject.AgencyId == agencyId.Value
+                    && ((d.DocumentFee ?? 0) > 0 || (d.AdditionalCost ?? 0) > 0 || (d.ActualCost ?? 0) > 0))
+                .OrderByDescending(d => d.Id)
+                .ToListAsync();
+
+            var realizedDocIds = new HashSet<int>();
+            bool anyPriceUpdated = false;
+            foreach (var d in allDocs)
+            {
+                var oldDoc = previousAgencyDocs.FirstOrDefault(p =>
+                    (d.SystemTemplateId.HasValue && p.SystemTemplateId == d.SystemTemplateId)
+                    || string.Equals(p.DocumentName, d.DocumentName, StringComparison.OrdinalIgnoreCase));
+
+                if (oldDoc != null)
+                {
+                    realizedDocIds.Add(d.Id);
+                }
+
+                if ((d.DocumentFee ?? 0) == 0 && (d.AdditionalCost ?? 0) == 0 && (d.EstimatedCost ?? 0) == 0)
+                {
+                    if (oldDoc != null)
+                    {
+                        decimal oldFee = (oldDoc.DocumentFee ?? 0) > 0 ? oldDoc.DocumentFee!.Value : (oldDoc.ActualCost ?? oldDoc.EstimatedCost ?? 0);
+                        d.DocumentFee = oldFee;
+                        d.AdditionalCost = oldDoc.AdditionalCost ?? 0;
+                        d.EstimatedCost = oldFee + (oldDoc.AdditionalCost ?? 0);
+                        if (string.IsNullOrWhiteSpace(d.InstitutionContact) && !string.IsNullOrWhiteSpace(oldDoc.InstitutionContact))
+                        {
+                            d.InstitutionContact = oldDoc.InstitutionContact;
+                        }
+                        anyPriceUpdated = true;
+                    }
+                    else
+                    {
+                        var n = (d.DocumentName ?? "").ToLowerInvariant();
+                        decimal refPrice = 18000m;
+                        if (n.Contains("karot") || n.Contains("riskli yapı")) refPrice = 28500m;
+                        else if (n.Contains("zemin etüd") || n.Contains("geoteknik")) refPrice = 45000m;
+                        else if (n.Contains("mimari proje") || n.Contains("mimari avan")) refPrice = 185000m;
+                        else if (n.Contains("statik proje") || n.Contains("betonarme")) refPrice = 140000m;
+                        else if (n.Contains("mekanik") || n.Contains("elektrik") || n.Contains("tesisat proje")) refPrice = 95000m;
+                        else if (n.Contains("harita") || n.Contains("aplikasyon") || n.Contains("ifraz") || n.Contains("tevhid") || n.Contains("plankote")) refPrice = 32000m;
+                        else if (n.Contains("noter") || n.Contains("kat karşılığı") || n.Contains("vekalet")) refPrice = 65000m;
+                        else if (n.Contains("tapu") || n.Contains("takyidat") || n.Contains("kat irtifak") || n.Contains("şerh")) refPrice = 42000m;
+                        else if (n.Contains("ruhsat") || n.Contains("belediye") || n.Contains("imar durumu")) refPrice = 120000m;
+                        else if (n.Contains("yapı denetim")) refPrice = 160000m;
+                        else if (n.Contains("iski") || n.Contains("tedaş") || n.Contains("igdaş") || n.Contains("ilişik") || n.Contains("abonelik") || n.Contains("altyapı")) refPrice = 18500m;
+                        else if (n.Contains("asbest") || n.Contains("akustik") || n.Contains("ekb") || n.Contains("enerji kimlik")) refPrice = 22000m;
+                        else if (n.Contains("isg") || n.Contains("osgb") || n.Contains("iş güvenliği")) refPrice = 24000m;
+                        else if (n.Contains("iskan") || n.Contains("yapı kullanım") || n.Contains("cins tashihi")) refPrice = 110000m;
+
+                        d.DocumentFee = refPrice;
+                        d.EstimatedCost = refPrice;
+                        anyPriceUpdated = true;
+                    }
+                }
+            }
+            if (anyPriceUpdated)
+            {
+                await _context.SaveChangesAsync();
+            }
+
+            var docIds = allDocs.Select(d => d.Id).ToList();
+            var quoteRequests = await _context.B2BQuoteRequests
+                .Include(q => q.Invites).ThenInclude(i => i.NetworkContact)
+                .Where(q => q.SourceModule == "PhaseZeroDocument" && docIds.Contains(q.SourceReferenceId))
+                .ToListAsync();
+
+            ViewBag.Quotes = quoteRequests;
+            ViewBag.RealizedDocIds = realizedDocIds;
+            ViewBag.InitialDocs = allDocs;
+            ViewBag.TotalOfficialFee = allDocs.Sum(d => d.DocumentFee ?? 0);
+            ViewBag.TotalAdditionalFee = allDocs.Sum(d => d.AdditionalCost ?? 0);
+            ViewBag.TotalInitialFee = allDocs.Sum(d => (d.DocumentFee ?? 0) + (d.AdditionalCost ?? 0));
+            ViewBag.CompletedInitialCount = allDocs.Count(d => d.Status == "Tamamlandı" || d.Status == "Alındı");
+            ViewBag.StageRules = allRules;
             if (project.CityId.HasValue)
             {
                 var city = await _context.Cities.FirstOrDefaultAsync(c => c.Id == project.CityId.Value);
@@ -1523,7 +1681,13 @@ namespace GMK360.Web.Controllers
             int? plannedNewShops,
             int? ownerGivenShops,
             string? proposalSummaryText,
-            string? contractShieldClauses)
+            string? contractShieldClauses,
+            string? outerWallType,
+            string? facadeInsulation,
+            string? roofMaterial,
+            string? innerWallType,
+            string? plumbingType,
+            string? foundationInsulation)
         {
             var agencyId = await GetUserAgencyIdAsync();
             if (agencyId == null) return Unauthorized();
@@ -1550,10 +1714,22 @@ namespace GMK360.Web.Controllers
             if (proposalSummaryText != null) project.PublicDescription = proposalSummaryText.Trim();
             if (contractShieldClauses != null) rentPolicy.ContractShieldClauses = contractShieldClauses.Trim();
 
+            // Ön DNA (Mühendislik Statik Yük & Mimari Ön Kararları) Kaydı
+            if (!string.IsNullOrWhiteSpace(outerWallType)) project.OuterWallType = outerWallType.Trim();
+            if (!string.IsNullOrWhiteSpace(facadeInsulation)) project.FacadeInsulation = facadeInsulation.Trim();
+            if (!string.IsNullOrWhiteSpace(roofMaterial))
+            {
+                project.RoofMaterial = roofMaterial.Trim();
+                project.RoofType = roofMaterial.Contains("Düz") || roofMaterial.Contains("Teras") ? "Düz_Teras" : "Kiremit";
+            }
+            if (!string.IsNullOrWhiteSpace(innerWallType)) project.InnerWallType = innerWallType.Trim();
+            if (!string.IsNullOrWhiteSpace(plumbingType)) project.PlumbingType = plumbingType.Trim();
+            if (!string.IsNullOrWhiteSpace(foundationInsulation)) project.FoundationInsulation = foundationInsulation.Trim();
+
             project.RentPolicyJson = System.Text.Json.JsonSerializer.Serialize(rentPolicy);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Resmi teklif parametreleri, paylaşım oranları ve sözleşme şartname maddeleri başarıyla kaydedildi.";
+            TempData["SuccessMessage"] = "Resmi teklif parametreleri, Ön DNA (statik/mimari mühendislik kararları) ve sözleşme şartname maddeleri başarıyla kaydedildi.";
             return RedirectToAction(nameof(Proposal), new { id = projectId });
         }
         // GET: /ConstructionProject/Finance/5

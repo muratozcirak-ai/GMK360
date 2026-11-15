@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -139,15 +139,15 @@ namespace GMK360.Web.Controllers
                 Type = SupplierTransactionType.PurchaseInvoice, 
                 Amount = net,
                 BalanceAfterTransaction = currentAccount.CurrentBalance,
-                Description = $"{nextNo}. Hakediş: {contract.Title}",
+                Description = $"{nextNo}. Hakediş ({contract.Title}) - Brüt: ₺{claimAmount:N2}, Kesinti: ₺{deductionAmount:N2} ({deductionReason})",
                 CreatedByUserId = _userManager.GetUserId(User) ?? ""
             };
             
             _context.SupplierAccountTransactions.Add(transaction);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = $"{nextNo}. Hakediş başarıyla eklendi.";
-            return RedirectToAction("Index");
+            TempData["SuccessMessage"] = $"{nextNo}. Hakediş (Brüt: ₺{claimAmount:N2}, Kesinti: ₺{deductionAmount:N2}, Net: ₺{net:N2}) onaylandı ve taşeron cari hesabına işlendi.";
+            return RedirectToAction(nameof(Details), new { id = contractId });
         }
 
         public async Task<IActionResult> Index()

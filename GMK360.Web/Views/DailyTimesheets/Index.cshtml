@@ -1,31 +1,64 @@
-﻿@model IEnumerable<GMK360.Core.Entities.Construction.DailyTimesheet>
+@model IEnumerable<GMK360.Core.Entities.Construction.DailyTimesheet>
 @{
-    ViewData["Title"] = "Şantiye Günlük Puantaj & Giderler";
+    Layout = "_ConstructionLayout";
+    ViewData["Title"] = "Şantiye Günlük Puantaj, Bayram (2x) & Mesai Cetveli";
+    var otherSiteRecords = ViewBag.OtherSiteRecords as List<GMK360.Core.Entities.Construction.DailyTimesheet>
+        ?? new List<GMK360.Core.Entities.Construction.DailyTimesheet>();
 }
 
-<div class="container-fluid py-4">
-    <div class="row mb-4">
-        <div class="col-md-8">
-            <h4 class="mb-0">Günlük Puantaj ve Saha Giderleri (Elden Ödemeler)</h4>
-            <p class="text-muted">Proje bazlı personel yoklaması ve belge bekleyen şantiye giderlerini buradan takip edebilirsiniz.</p>
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h4 class="fw-bold mb-0"><i class="bi bi-calendar2-check text-success me-2"></i>Şantiye Günlük Puantaj, Bayram (2x Çift Yevmiye) & Mesai Cetveli</h4>
+            <p class="text-muted small mb-0">Şantiye veya merkez bazlı günlük usta yoklaması, fazla mesai saati, bayram çift yevmiye (2x) ve günlük avans/saha gideri girişi.</p>
         </div>
+        <a href="/AgencyWorkers/Index" class="btn btn-outline-primary rounded-pill px-3 fw-bold shadow-sm">
+            <i class="bi bi-person-workspace me-1"></i> Usta Özlük & Yevmiye Carileri
+        </a>
     </div>
 
-    <div class="card shadow-sm border-0 mb-4">
-        <div class="card-body bg-light">
+    <!-- Personel & Ekipler Üst Sekme Barı -->
+    <ul class="nav nav-tabs mb-3 border-bottom">
+        <li class="nav-item">
+            <a href="/AgencyStaff/Index" class="nav-link fw-semibold text-secondary">
+                <i class="bi bi-person-badge text-primary me-1"></i>👔 Beyaz Yaka (Merkez & Şefler)
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="/AgencyWorkers/Index" class="nav-link fw-semibold text-secondary">
+                <i class="bi bi-person-workspace text-warning me-1"></i>👷 Mavi Yaka (Şantiye Ustaları)
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="/DailyTimesheets/Index" class="nav-link active fw-bold text-dark">
+                <i class="bi bi-calendar2-check text-success me-1"></i>⏱️ Şantiye Günlük Puantaj
+            </a>
+        </li>
+        <li class="nav-item ms-auto">
+            <a href="/AgencyPhonebook/Index" class="nav-link fw-semibold text-secondary">
+                <i class="bi bi-journal-bookmark-fill text-info me-1"></i>📒 Firma & Taşeron Rehber Arşivi
+            </a>
+        </li>
+    </ul>
+
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+        <div class="card-body bg-light rounded-4">
             <form method="get" class="row g-3 align-items-end">
                 <div class="col-md-5">
-                    <label class="form-label fw-bold">Proje Seçin</label>
-                    <select name="projectId" class="form-select" asp-items="ViewBag.Projects" required>
-                        <option value="">-- Proje Seçiniz --</option>
+                    <label class="form-label small fw-bold">Şantiye / Proje Seçin (Boş bırakılırsa Merkez / Genel Saha)</label>
+                    <select name="projectId" class="form-select" asp-items="ViewBag.Projects">
+                        <option value="">-- Merkez / Genel Saha Puantajı --</option>
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label fw-bold">Puantaj Tarihi</label>
+                    <label class="form-label small fw-bold">Puantaj Tarihi</label>
                     <input type="date" name="workDate" class="form-control" value="@ViewBag.CurrentDate" required />
                 </div>
                 <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search"></i> Getir</button>
+                    <button type="submit" class="btn btn-primary w-100 fw-bold"><i class="bi bi-search me-1"></i> Cetveli Getir</button>
+                </div>
+                <div class="col-md-2 text-end">
+                    <a href="/AgencyWorkers/Index" class="btn btn-outline-dark w-100 fw-semibold">+ Yeni Usta Tanımla</a>
                 </div>
             </form>
         </div>
@@ -33,49 +66,87 @@
 
     @if (TempData["SuccessMessage"] != null)
     {
-        <div class="alert alert-success"><i class="bi bi-check-circle"></i> @TempData["SuccessMessage"]</div>
+        <div class="alert alert-success alert-dismissible fade show shadow-sm border-0">
+            <i class="bi bi-check-circle-fill me-2"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show shadow-sm border-0">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
     }
 
-    @if (ViewBag.CurrentProjectId != null && Model != null)
+    @if (Model != null && Model.Any())
     {
         <form asp-action="SaveTimesheets" method="post">
+            @Html.AntiForgeryToken()
             <input type="hidden" name="projectId" value="@ViewBag.CurrentProjectId" />
             <input type="hidden" name="workDate" value="@ViewBag.CurrentDate" />
-            
-            <div class="card shadow-sm border-0">
+
+            <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover table-bordered mb-0 align-middle">
                             <thead class="table-dark">
                                 <tr>
-                                    <th>Ad Soyad (Uzmanlık)</th>
-                                    <th width="150">Yoklama Durumu</th>
-                                    <th width="200">Bağlı Olduğu Faz (Aşama)</th>
-                                    <th width="200">Belge Bekleyen Saha Gideri (TL)</th>
-                                    <th>Gider Açıklaması (Örn: Beton Mesaisi)</th>
+                                    <th>Usta Ad Soyad & Günlük Yevmiye</th>
+                                    <th width="230">Yoklama & Bayram (2x) Çarpanı</th>
+                                    <th width="120">Fazla Mesai (Saat)</th>
+                                    <th width="140">Verilen Avans (₺)</th>
+                                    <th width="170">İmalat Fazı</th>
+                                    <th width="140">Saha Gideri (₺)</th>
+                                    <th>Yapılan İş / Gider Açıklaması</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @{ var index = 0; }
                                 @foreach (var item in Model)
                                 {
+                                    var otherSite = otherSiteRecords.FirstOrDefault(o => o.AgencyWorkerId == item.AgencyWorkerId && o.AttendanceStatus != "Gelmedi");
                                     <tr>
                                         <td>
                                             <input type="hidden" name="workerIds[@index]" value="@item.AgencyWorkerId" />
-                                            <strong>@item.AgencyWorker?.FullName</strong> <br/>
-                                            <small class="text-muted">@item.AgencyWorker?.Profession</small>
+                                            <a href="/AgencyWorkers/Details/@item.AgencyWorkerId" class="fw-bold text-dark text-decoration-none">
+                                                @item.AgencyWorker?.FullName
+                                            </a>
+                                            <div class="small text-muted">
+                                                @item.AgencyWorker?.Profession • Yevmiye: <strong>₺@(item.AgencyWorker?.DefaultDailyWage.ToString("N0"))</strong>
+                                            </div>
+                                            @if (otherSite != null)
+                                            {
+                                                <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle mt-1">
+                                                    <i class="bi bi-arrow-left-right me-1"></i>Aynı gün @(otherSite.ConstructionProject?.Name ?? "Merkez") kaydı: @otherSite.AttendanceStatus
+                                                </span>
+                                            }
                                         </td>
                                         <td>
-                                            <select name="attendance[@index]" class="form-select form-select-sm">
-                                                <option value="Tam Gün" selected="@(item.AttendanceStatus == "Tam Gün")">Tam Gün</option>
-                                                <option value="Yarım Gün" selected="@(item.AttendanceStatus == "Yarım Gün")">Yarım Gün</option>
-                                                <option value="Gelmedi" selected="@(item.AttendanceStatus == "Gelmedi")">Gelmedi</option>
-                                                <option value="İzinli" selected="@(item.AttendanceStatus == "İzinli")">İzinli</option>
+                                            <select name="attendance[@index]" class="form-select form-select-sm fw-semibold">
+                                                <option value="Tam Gün" selected="@(item.AttendanceStatus == "Tam Gün")">✅ Tam Gün (1x Normal)</option>
+                                                <option value="Bayram / Resmi Tatil (2x Çift Yevmiye)" selected="@(item.AttendanceStatus == "Bayram / Resmi Tatil (2x Çift Yevmiye)")">🌟 Bayram / Tatil (2x Çift Yevmiye)</option>
+                                                <option value="Fazla Mesaili (1.5x)" selected="@(item.AttendanceStatus == "Fazla Mesaili (1.5x)")">⏱️ Fazla Mesaili (1.5x)</option>
+                                                <option value="Yarım Gün" selected="@(item.AttendanceStatus == "Yarım Gün")">🌓 Yarım Gün (0.5x)</option>
+                                                <option value="Ücretli İzin" selected="@(item.AttendanceStatus == "Ücretli İzin")">🏖️ Ücretli İzin (1x)</option>
+                                                <option value="Gelmedi" selected="@(item.AttendanceStatus == "Gelmedi")">❌ Gelmedi (0 ₺)</option>
                                             </select>
                                         </td>
                                         <td>
+                                            <div class="input-group input-group-sm">
+                                                <input type="number" step="0.5" name="overtimeHours[@index]" class="form-control" value="@item.OvertimeHours.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" />
+                                                <span class="input-group-text">sa</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text">₺</span>
+                                                <input type="number" step="0.01" name="advancePayments[@index]" class="form-control" value="@item.AdvancePayment.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" />
+                                            </div>
+                                        </td>
+                                        <td>
                                             <select name="selectedPhases[@index]" class="form-select form-select-sm">
-                                                <option value="">-- Faz Bağımsız --</option>
+                                                <option value="">-- Genel Saha --</option>
                                                 @foreach (var phase in ViewBag.Phases ?? new List<string>())
                                                 {
                                                     <option value="@phase" selected="@(item.PhaseName == phase)">@phase</option>
@@ -85,11 +156,11 @@
                                         <td>
                                             <div class="input-group input-group-sm">
                                                 <span class="input-group-text">₺</span>
-                                                <input type="number" step="0.01" name="pendingFieldExpenses[@index]" class="form-control" value="@item.PendingFieldExpense.ToString("0.##")" />
+                                                <input type="number" step="0.01" name="pendingFieldExpenses[@index]" class="form-control" value="@item.PendingFieldExpense.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" />
                                             </div>
                                         </td>
                                         <td>
-                                            <input type="text" name="fieldExpenseDesc[@index]" class="form-control form-control-sm" value="@item.FieldExpenseDescription" placeholder="Örn: Yağmur öncesi acil beton..." />
+                                            <input type="text" name="fieldExpenseDesc[@index]" class="form-control form-control-sm" value="@item.FieldExpenseDescription" placeholder="Örn: 3. Kat beton dökümü mesaisi..." />
                                         </td>
                                     </tr>
                                     index++;
@@ -98,12 +169,26 @@
                         </table>
                     </div>
                 </div>
-                <div class="card-footer bg-white text-end">
-                    <button type="submit" class="btn btn-success px-4">
-                        <i class="bi bi-save"></i> Puantaj ve Masrafları Kaydet
+                <div class="card-footer bg-white d-flex justify-content-between align-items-center py-3">
+                    <span class="small text-muted">
+                        <i class="bi bi-info-circle me-1"></i>Kaydettiğinizde her ustanın 1x / 0.5x / 1.5x / 2x (Bayram) yevmiyesi ve aldığı avans otomatik olarak <strong>360° Usta Cari Kartına</strong> işlenir.
+                    </span>
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold shadow-sm">
+                        <i class="bi bi-save me-1"></i> Puantaj, Mesai ve Avansları Kaydet
                     </button>
                 </div>
             </div>
         </form>
+    }
+    else
+    {
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-person-workspace fs-1 text-warning d-block mb-2"></i>
+                <h5 class="fw-bold">Henüz Kayıtlı Saha Ustası / Mavi Yaka Personel Yok</h5>
+                <p class="text-muted small mb-3">Günlük puantaj ve yevmiye takibi başlatmak için önce Mavi Yaka sekmesinden ustalarınızı tanımlayın.</p>
+                <a href="/AgencyWorkers/Index" class="btn btn-primary rounded-pill px-4 fw-bold">+ Usta / Saha Personeli Ekle</a>
+            </div>
+        </div>
     }
 </div>

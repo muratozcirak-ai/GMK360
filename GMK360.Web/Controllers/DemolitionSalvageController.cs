@@ -28,11 +28,15 @@ namespace GMK360.Web.Controllers
 
         private async Task<int?> GetUserAgencyIdAsync()
         {
-            if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin")) return 1;
             var user = await _userManager.GetUserAsync(User);
-            if (user == null) return null;
-            var consultant = await _context.Set<GMK360.Core.Entities.AgencyConsultant>().FirstOrDefaultAsync(a => a.UserId == user.Id);
-            return consultant?.AgencyId ?? 1;
+            if (user != null)
+            {
+                var consultant = await _context.Set<GMK360.Core.Entities.AgencyConsultant>().FirstOrDefaultAsync(a => a.UserId == user.Id);
+                if (consultant != null && consultant.AgencyId > 0)
+                    return consultant.AgencyId;
+            }
+            if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin")) return 1;
+            return 1;
         }
 
         // GET: /DemolitionSalvage/Index

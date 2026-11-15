@@ -324,7 +324,32 @@ namespace GMK360.Web.Controllers
 
 
 
-            return View(projects);
+                if (!projects.Any(p => p.Status == ProjectStatus.Anlasma_Yapildi))
+                {
+                    var demoAnlasma = new ConstructionProject
+                    {
+                        Name = "Çamlıca Konakları (Planlama Evresi)",
+                        Address = "İstanbul / Üsküdar - Çamlıca Mah.",
+                        Description = "Maliklerle anlaşma sağlandı; Faz 0 resmi izinler, DWG okuma ve Proje DNA hazırlık aşamasında.",
+                        OuterWallType = "Ytong",
+                        RoofType = "Kiremit",
+                        Ada = "1453",
+                        Parsel = "12",
+                        TotalLandArea = 1850,
+                        EskiToplamMetrekare = 4200,
+                        EskiKatSayisi = 8,
+                        EskiDaireSayisi = 24,
+                        Status = ProjectStatus.Anlasma_Yapildi,
+                        AgencyId = agencyId.Value,
+                        StartDate = DateTime.Now.AddMonths(1),
+                        CreatedAt = DateTime.Now,
+                        FacadeInsulation = "Dış_Mantolama"
+                    };
+                    _context.ConstructionProjects.Add(demoAnlasma);
+                    await _context.SaveChangesAsync();
+                    projects.Insert(0, demoAnlasma);
+                }
+                return View(projects);
 
 
 
@@ -626,7 +651,8 @@ namespace GMK360.Web.Controllers
 
 
 
-            return RedirectToAction("Create", new { id = project.Id });
+            TempData["SuccessMessage"] = $"'{project.Name}' projesi oluşturuldu. İlk adım olarak Proje Künyesi ve saha keşif bilgilerini doldurabilirsiniz.";
+            return RedirectToAction("Workspace", new { id = project.Id });
 
         }
 
@@ -10326,27 +10352,41 @@ namespace GMK360.Web.Controllers
         }
 
         [HttpPost]
-
-        public async Task<IActionResult> ChangeProjectStatus(int id, string newStatus)
-
+        public async Task<IActionResult> ChangeProjectStatus(int id, string newStatus, string? returnUrl = null)
         {
-
             var project = await _context.ConstructionProjects.FindAsync(id);
-
             if (project != null && Enum.TryParse(typeof(GMK360.Core.Entities.Construction.ProjectStatus), newStatus, out var statusObj))
-
             {
-
-                project.Status = (GMK360.Core.Entities.Construction.ProjectStatus)statusObj;
-
+                var parsedStatus = (GMK360.Core.Entities.Construction.ProjectStatus)statusObj;
+                project.Status = parsedStatus;
                 await _context.SaveChangesAsync();
 
-                TempData["SuccessMessage"] = "Şantiye başarıyla başlatıldı ve bloklar oluşturuldu.";
+                TempData["SuccessMessage"] = parsedStatus switch
+                {
+                    GMK360.Core.Entities.Construction.ProjectStatus.Anlasma_Yapildi => "🤝 Proje 'Anlaşma Yapılanlar (Mühendislik, DNA, Malzeme & Ekip Planlama Masası)' evresine geçirildi.",
+                    GMK360.Core.Entities.Construction.ProjectStatus.Aktif_Santiye => "🏗️ Aktif Şantiye (Saha Operasyon Masası) başlatıldı.",
+                    GMK360.Core.Entities.Construction.ProjectStatus.Projelendirme_Teklif or GMK360.Core.Entities.Construction.ProjectStatus.On_Gorusme_Talep => "🔍 Proje 'Aday Proje (Etüd & Teklif Masası)' evresine alındı.",
+                    GMK360.Core.Entities.Construction.ProjectStatus.Satista_Topraktan => "🏷️ Proje 'Satışa Çıkanlar (Topraktan / Pazarlama)' evresine alındı.",
+                    GMK360.Core.Entities.Construction.ProjectStatus.Tamamlandi_Teslim => "✅ Proje 'Tamamlanan / Teslim & Pazarlama' evresine alındı.",
+                    _ => "Proje evresi güncellendi."
+                };
 
+                if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+                {
+                    return Redirect(returnUrl);
+                }
+
+                if (parsedStatus == GMK360.Core.Entities.Construction.ProjectStatus.Anlasma_Yapildi)
+                {
+                    return RedirectToAction("Workspace", new { id = id });
+                }
+                if (parsedStatus == GMK360.Core.Entities.Construction.ProjectStatus.Projelendirme_Teklif ||
+                    parsedStatus == GMK360.Core.Entities.Construction.ProjectStatus.On_Gorusme_Talep)
+                {
+                    return RedirectToAction("Feasibility", new { id = id });
+                }
             }
-
             return RedirectToAction("Details", new { id = id });
-
         }
 
         [HttpGet]
@@ -10946,10 +10986,9 @@ namespace GMK360.Web.Controllers
             {
 
                 _context.ConstructionBudgetItems.AddRange(newItems);
-
                 await _context.SaveChangesAsync();
-
             }
+            await GMK360.Web.Helpers.PhaseCentralPoolHelper.EnsurePhaseItemsPricedFromPoolAsync(_context, projectId);
 
 
 

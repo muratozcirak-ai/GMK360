@@ -6,12 +6,14 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using GMK360.Core.Entities;
 using GMK360.Data.Contexts;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace GMK360.Web.Controllers
 {
     // Yalnzca geici veri aktarm iindir.
+    [Authorize(Roles = "Admin,SuperAdmin")]
     public class SeedController : Controller
     {
         private readonly ApplicationDbContext _context;

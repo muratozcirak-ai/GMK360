@@ -78,6 +78,10 @@ namespace GMK360.Web.Controllers
             }
 
             ViewBag.ProjectInfo = projectInfo;
+            if (invite.NetworkContact != null && !string.IsNullOrEmpty(invite.NetworkContact.CompanyName))
+            {
+                ViewBag.B2bCompany = await _context.B2bCompanies.FirstOrDefaultAsync(c => c.Name == invite.NetworkContact.CompanyName);
+            }
             return View(invite);
         }
 
@@ -151,6 +155,15 @@ namespace GMK360.Web.Controllers
                 if (doc != null) doc.Status = "Teklif Geldi";
             }
 
+            var invContact = await _context.B2BNetworkContacts.FirstOrDefaultAsync(nc => nc.Id == invite.NetworkContactId);
+            if (invContact != null)
+            {
+                var b2bComp = await _context.B2bCompanies.FirstOrDefaultAsync(c => c.Name == invContact.CompanyName);
+                if (b2bComp != null && (b2bComp.InvitationStatus == GMK360.Core.Entities.B2b.B2bInvitationStatus.Shadow || b2bComp.InvitationStatus == GMK360.Core.Entities.B2b.B2bInvitationStatus.Invited))
+                {
+                    b2bComp.InvitationStatus = GMK360.Core.Entities.B2b.B2bInvitationStatus.Active;
+                }
+            }
             await _context.SaveChangesAsync();
             TempData["SuccessMessage"] = "Teklifiniz ve ödeme koşullarınız başarıyla iletildi. Yetkili değerlendirdikten sonra onay durumunda cari hesabınız ve şantiye takviminiz oluşturulacaktır.";
             return RedirectToAction("Invite", new { token = invite.AccessToken });
@@ -195,9 +208,44 @@ namespace GMK360.Web.Controllers
                 if (doc != null) doc.Status = "Keşif İstendi";
             }
 
+            var invContact2 = await _context.B2BNetworkContacts.FirstOrDefaultAsync(nc => nc.Id == invite.NetworkContactId);
+            if (invContact2 != null)
+            {
+                var b2bComp2 = await _context.B2bCompanies.FirstOrDefaultAsync(c => c.Name == invContact2.CompanyName);
+                if (b2bComp2 != null && (b2bComp2.InvitationStatus == GMK360.Core.Entities.B2b.B2bInvitationStatus.Shadow || b2bComp2.InvitationStatus == GMK360.Core.Entities.B2b.B2bInvitationStatus.Invited))
+                {
+                    b2bComp2.InvitationStatus = GMK360.Core.Entities.B2b.B2bInvitationStatus.Active;
+                }
+            }
             await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = "🎉 Saha keşif ve inceleme talebiniz şantiyeye başarıyla iletildi! Şantiye yetkilisi randevuyu teyit etmek için sizinle iletişime geçecektir.";
+            return RedirectToAction("Invite", new { token = invite.AccessToken });
+        }
+
+        [HttpPost("B2BPartnerPortal/ActivateAccount")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ActivateAccount(int inviteId)
+        {
+            var invite = await _context.B2BQuoteInvites
+                .Include(i => i.NetworkContact)
+                .Include(i => i.QuoteRequest).ThenInclude(qr => qr.RequesterAgency)
+                .FirstOrDefaultAsync(i => i.Id == inviteId);
+            if (invite == null) return NotFound();
+
+            if (invite.NetworkContact != null)
+            {
+                var b2bComp = await _context.B2bCompanies.FirstOrDefaultAsync(c => c.Name == invite.NetworkContact.CompanyName);
+                if (b2bComp != null)
+                {
+                    b2bComp.InvitationStatus = GMK360.Core.Entities.B2b.B2bInvitationStatus.Active;
+                    b2bComp.IsVerified = true;
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            var refAgency = invite.QuoteRequest?.RequesterAgency?.CompanyName ?? "Ana Firma";
+            TempData["SuccessMessage"] = $"🎉 Kurumsal hesabınız aktifleştirildi! Artık GMK360 ekosisteminde aktif üyesiniz ve sizi davet eden {refAgency} firmasına Kazan-Kazan referans puanı tanımlandı.";
             return RedirectToAction("Invite", new { token = invite.AccessToken });
         }
     }

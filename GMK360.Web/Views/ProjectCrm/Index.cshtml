@@ -1,64 +1,181 @@
-﻿@model IEnumerable<GMK360.Core.Entities.CrmContact>
+@model IEnumerable<GMK360.Core.Entities.CrmContact>
 @{
     Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
-    ViewData["Title"] = "Müşteri & Potansiyel Alıcı Takibi (CRM)";
+    ViewData["Title"] = "Müşteri, Daire Satış Sözleşmeleri & Senet/Taksit Takibi (CRM)";
+    var metaDict = ViewBag.CrmMeta as Dictionary<int, GMK360.Web.Controllers.CrmCustomerExtendedMeta>
+        ?? new Dictionary<int, GMK360.Web.Controllers.CrmCustomerExtendedMeta>();
+    var allUnits = ViewBag.AllUnits as List<GMK360.Core.Entities.BuildingUnit>
+        ?? new List<GMK360.Core.Entities.BuildingUnit>();
 }
 
-<div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0"><i class="bi bi-people"></i> Müşteri & Ziyaretçi CRM</h4>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCrmModal">
-            <i class="bi bi-person-plus"></i> Yeni Kayıt Ekle
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h4 class="mb-1 fw-bold text-dark"><i class="bi bi-people-fill text-primary me-2"></i>Müşteri, Daire Satış Sözleşmeleri & Taksit/Senet Havuzu</h4>
+            <p class="text-muted small mb-0">Bizden daire satın alan maliklerin peşinat, senet/taksit vadeleri, tapu/anahtar teslim tutanakları ve potansiyel alıcı arşivi.</p>
+        </div>
+        <button class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#addCrmModal">
+            <i class="bi bi-person-plus me-1"></i> + Yeni Alıcı / Daire Satış Sözleşmesi Ekle
         </button>
     </div>
-    <p class="text-muted">Bizden daire satın alan veya şantiyemizi/ofisimizi ziyaret edip daire bakan potansiyel müşterilerinizi buradan takip edebilirsiniz.</p>
+
+    <!-- Üst Sekme Barı -->
+    <ul class="nav nav-tabs mb-3 border-bottom">
+        <li class="nav-item">
+            <a href="/ProjectCrm/SalesPool" class="nav-link fw-semibold text-secondary">
+                <i class="bi bi-building-check text-warning me-1"></i>🏢 Satış & Kiralama Havuzu (Daireler & Dükkanlar)
+                @if (ViewBag.AvailableUnitCount != null)
+                {
+                    <span class="badge bg-warning text-dark rounded-pill ms-1">@ViewBag.AvailableUnitCount</span>
+                }
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="/ProjectCrm/Index" class="nav-link active fw-bold text-dark">
+                <i class="bi bi-people-fill text-primary me-1"></i>👥 Alıcı & Müşteri Cari / Senet Takibi
+                <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill ms-1">@(Model?.Count() ?? 0)</span>
+            </a>
+        </li>
+    </ul>
 
     @if (TempData["SuccessMessage"] != null)
     {
-        <div class="alert alert-success alert-dismissible fade show">
-            <i class="bi bi-check-circle me-2"></i>@TempData["SuccessMessage"]
+        <div class="alert alert-success alert-dismissible fade show shadow-sm border-0">
+            <i class="bi bi-check-circle-fill me-2"></i>@TempData["SuccessMessage"]
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     }
 
-    <div class="card shadow-sm border-0">
+    <!-- Özet KPI Kartları -->
+    @{
+        var totalContractVolume = metaDict.Values.Sum(m => m.ContractPrice);
+        var totalCollectedVolume = metaDict.Values.Sum(m => m.Installments.Where(i => i.IsPaid).Sum(i => i.Amount));
+        var totalRemainingReceivable = totalContractVolume - totalCollectedVolume;
+    }
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #3b82f6 !important;">
+                <div class="card-body py-2 px-3">
+                    <div class="text-muted small fw-semibold">Toplam Müşteri / Alıcı Kaydı</div>
+                    <div class="fs-4 fw-bold text-dark">@Model.Count() <span class="fs-6 fw-normal text-muted">Kişi</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #0284c7 !important;">
+                <div class="card-body py-2 px-3">
+                    <div class="text-muted small fw-semibold">Toplam Sözleşme / Satış Hacmi</div>
+                    <div class="fs-4 fw-bold text-primary">₺@totalContractVolume.ToString("N2")</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #16a34a !important;">
+                <div class="card-body py-2 px-3">
+                    <div class="text-muted small fw-semibold">Tahsil Edilen Peşinat & Taksitler</div>
+                    <div class="fs-4 fw-bold text-success">₺@totalCollectedVolume.ToString("N2")</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #f59e0b !important;">
+                <div class="card-body py-2 px-3">
+                    <div class="text-muted small fw-semibold">Kalan Senet / Taksit Alacağımız</div>
+                    <div class="fs-4 fw-bold text-warning-emphasis">₺@totalRemainingReceivable.ToString("N2")</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover mb-0 align-middle">
                     <thead class="table-light">
                         <tr>
-                            <th>Müşteri Adı Soyadı</th>
-                            <th>Telefon</th>
-                            <th>Durum (Kategori)</th>
-                            <th>Görüşme Notları</th>
-                            <th>Kayıt Tarihi</th>
+                            <th class="ps-3">Müşteri Adı Soyadı & Kimlik</th>
+                            <th>Durum & İlgili Bağımsız Bölüm</th>
+                            <th>Sözleşme / Tahsil Edilen / Kalan Senet</th>
+                            <th>Tapu & Anahtar Teslim Durumu</th>
+                            <th class="text-end pe-3">360° Müşteri Cari & Senet Kartı</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach(var item in Model)
+                        @foreach (var item in Model)
                         {
+                            var meta = metaDict.ContainsKey(item.Id) ? metaDict[item.Id] : new GMK360.Web.Controllers.CrmCustomerExtendedMeta();
+                            var paidAmt = meta.Installments.Where(i => i.IsPaid).Sum(i => i.Amount);
+                            var remAmt = meta.ContractPrice - paidAmt;
+                            var initial = !string.IsNullOrEmpty(item.FirstName) ? item.FirstName.Substring(0, 1).ToUpper() : "M";
                             <tr>
-                                <td>
+                                <td class="ps-3">
                                     <div class="d-flex align-items-center">
-                                        <div class="avatar bg-info text-white rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
-                                            @item.FirstName.Substring(0,1)
+                                        <div class="avatar bg-primary text-white fw-bold rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                                            @initial
                                         </div>
-                                        <h6 class="mb-0">@item.FirstName @item.LastName</h6>
+                                        <div>
+                                            <a href="/ProjectCrm/CustomerDetails/@item.Id" class="fw-bold text-dark text-decoration-none">@item.FirstName @item.LastName</a>
+                                            <div class="small text-muted"><i class="bi bi-telephone me-1"></i>@item.PhoneNumber</div>
+                                            @if (!string.IsNullOrEmpty(meta.IdentityNumber))
+                                            {
+                                                <span class="badge bg-light text-secondary border" style="font-size:0.68rem;">TC: @meta.IdentityNumber</span>
+                                            }
+                                        </div>
                                     </div>
                                 </td>
-                                <td>@item.PhoneNumber</td>
                                 <td>
-                                    @if(item.ContactType == "Potansiyel Alici") { <span class="badge bg-warning text-dark">Potansiyel Alıcı (Gezdi/Almadı)</span> }
-                                    else if(item.ContactType == "Daire Sahibi") { <span class="badge bg-success">Daire Sahibi (Satış Yapıldı)</span> }
-                                    else { <span class="badge bg-secondary">@item.ContactType</span> }
+                                    @if (item.ContactType == "Daire Sahibi")
+                                    {
+                                        <span class="badge bg-success">🏠 Daire Sahibi (Satış Yapıldı)</span>
+                                    }
+                                    else if (item.ContactType == "Opsiyonlu")
+                                    {
+                                        <span class="badge bg-warning text-dark">🔒 Kapora Alındı (Opsiyonlu)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-info-subtle text-info-emphasis border">🔍 Potansiyel Alıcı / Ziyaretçi</span>
+                                    }
+                                    @if (!string.IsNullOrEmpty(meta.PurchasedUnitSummary))
+                                    {
+                                        <div class="small fw-semibold text-dark mt-1"><i class="bi bi-building me-1 text-primary"></i>@meta.PurchasedUnitSummary</div>
+                                    }
+                                    else if (!string.IsNullOrEmpty(meta.GeneralNotes))
+                                    {
+                                        <div class="small text-muted mt-1">@meta.GeneralNotes</div>
+                                    }
                                 </td>
-                                <td><small class="text-muted">@item.Notes</small></td>
-                                <td>@item.CreatedAt.ToShortDateString()</td>
+                                <td>
+                                    @if (meta.ContractPrice > 0)
+                                    {
+                                        <div class="small">Satış Bedeli: <strong class="text-primary">₺@meta.ContractPrice.ToString("N2")</strong></div>
+                                        <div class="small">Tahsil Edilen: <strong class="text-success">₺@paidAmt.ToString("N2")</strong></div>
+                                        <div class="small">Kalan Senet: <strong class="text-danger">₺@remAmt.ToString("N2")</strong></div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">Teklif / Görüşme Aşamasında</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark border d-inline-block mb-1">@meta.TitleDeedStatus</span>
+                                    <div class="small text-muted">@meta.TurnkeyDeliveryStatus</div>
+                                </td>
+                                <td class="text-end pe-3">
+                                    <a href="/ProjectCrm/CustomerDetails/@item.Id" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold shadow-sm">
+                                        <i class="bi bi-folder2-open me-1"></i> 360° Cari, Senet & Teslim
+                                    </a>
+                                </td>
                             </tr>
                         }
-                        @if(!Model.Any())
+                        @if (!Model.Any())
                         {
-                            <tr><td colspan="5" class="text-center py-4 text-muted">Henüz hiç CRM müşteri kaydınız bulunmuyor.</td></tr>
+                            <tr>
+                                <td colspan="5" class="text-center py-5 text-muted">
+                                    <i class="bi bi-people fs-1 d-block mb-2 text-secondary"></i>
+                                    Henüz kayıtlı alıcı veya ziyaretçi bulunmuyor. Sağ üstteki <strong>"+ Yeni Alıcı / Daire Satış Sözleşmesi Ekle"</strong> butonuyla ilk müşterinizi kaydedebilirsiniz.
+                                </td>
+                            </tr>
                         }
                     </tbody>
                 </table>
@@ -67,43 +184,77 @@
     </div>
 </div>
 
+<!-- Yeni Müşteri & Satış Sözleşmesi Modalı -->
 <div class="modal fade" id="addCrmModal" tabindex="-1">
-    <div class="modal-dialog">
-        <form asp-action="Create" method="post" class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Yeni Müşteri/Ziyaretçi Kaydı</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <form asp-action="Create" method="post" class="modal-content border-0 shadow-lg rounded-4">
+            @Html.AntiForgeryToken()
+            <div class="modal-header bg-dark text-white border-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-person-plus-fill text-warning me-2"></i>Yeni Alıcı, Daire Satış Sözleşmesi & Senet Planı</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body row g-3">
-                <div class="col-6">
-                    <label class="form-label">Ad</label>
-                    <input type="text" name="FirstName" class="form-control" required />
-                </div>
-                <div class="col-6">
-                    <label class="form-label">Soyad</label>
-                    <input type="text" name="LastName" class="form-control" />
-                </div>
-                <div class="col-12">
-                    <label class="form-label">Telefon Numarası</label>
-                    <input type="text" name="PhoneNumber" class="form-control" />
-                </div>
-                <div class="col-12">
-                    <label class="form-label">Müşteri Durumu</label>
-                    <select name="ContactType" class="form-select" required>
-                        <option value="Potansiyel Alici">Potansiyel Alıcı (Şantiyeyi/Projeyi Gezdi)</option>
-                        <option value="Daire Sahibi">Daire Sahibi (Satış Tamamlandı)</option>
-                        <option value="Yatirimci">Yatırımcı (Fırsat Bekliyor)</option>
-                        <option value="Diger">Diğer</option>
-                    </select>
-                </div>
-                <div class="col-12">
-                    <label class="form-label">Görüşme Notları / Talepleri</label>
-                    <textarea name="Notes" class="form-control" rows="3" placeholder="Örn: 3+1 güney cephe bakıyor, 1 ay sonra dönüş yapılacak..."></textarea>
+            <div class="modal-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Ad *</label>
+                        <input type="text" name="FirstName" class="form-control" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Soyad *</label>
+                        <input type="text" name="LastName" class="form-control" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">11 Haneli TC Kimlik No</label>
+                        <input type="text" name="IdentityNumber" maxlength="11" class="form-control" placeholder="Tapu ve sözleşme için" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Cep Telefonu *</label>
+                        <input type="text" name="PhoneNumber" class="form-control" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Müşteri Statüsü *</label>
+                        <select name="ContactType" class="form-select fw-semibold" required>
+                            <option value="Daire Sahibi">🏠 Daire Sahibi (Satış Tamamlandı)</option>
+                            <option value="Opsiyonlu">🔒 Kapora Alındı (Opsiyonlu)</option>
+                            <option value="Potansiyel Alici">🔍 Potansiyel Alıcı (Şantiyeyi Gezdi)</option>
+                            <option value="Yatirimci">💼 Yatırımcı (Fırsat Bekliyor)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">İlgili Daire / Bağımsız Bölüm</label>
+                        <select name="BuildingUnitId" class="form-select">
+                            <option value="">-- Daire Seçiniz (Opsiyonel) --</option>
+                            @foreach (var u in allUnits)
+                            {
+                                <option value="@u.Id">@u.Building?.ConstructionProject?.Name - @u.Building?.BlockName Kat:@u.FloorLevel No:@u.DoorNumber (@(u.SalesStatus ?? "Müsait"))</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold text-primary">Satış Sözleşme Bedeli (₺)</label>
+                        <input type="number" step="0.01" name="ContractPrice" class="form-control" value="0" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold text-success">Alınan Peşinat / Kapora (₺)</label>
+                        <input type="number" step="0.01" name="DownPayment" class="form-control" value="0" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Kalan Taksit / Senet Sayısı (Ay)</label>
+                        <input type="number" min="0" max="120" name="InstallmentCount" class="form-control" value="0" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Açık Tebligat Adresi</label>
+                        <input type="text" name="Address" class="form-control" placeholder="Mahalle, Sokak, No, İlçe/İl" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Görüşme / Sözleşme Notları</label>
+                        <input type="text" name="Notes" class="form-control" placeholder="Örn: 3+1 güney cephe, mutfak dolabı özel seçim..." />
+                    </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">İptal</button>
-                <button type="submit" class="btn btn-primary">Kaydet</button>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">Kaydet ve 360° Müşteri Dosyasını Aç</button>
             </div>
         </form>
     </div>

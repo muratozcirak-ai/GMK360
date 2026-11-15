@@ -19,16 +19,18 @@ namespace GMK360.Web.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
 
         
-                        private async Task<int?> GetUserAgencyIdAsync()
+        private async Task<int?> GetUserAgencyIdAsync()
         {
+            var user = await _userManager.GetUserAsync(User);
+            if (user != null)
+            {
+                var consultant = await _context.Set<GMK360.Core.Entities.AgencyConsultant>().FirstOrDefaultAsync(a => a.UserId == user.Id);
+                if (consultant != null && consultant.AgencyId > 0)
+                    return consultant.AgencyId;
+            }
             if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin")) 
                 return 1;
-                
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null) return null;
-            
-            var consultant = await _context.Set<GMK360.Core.Entities.AgencyConsultant>().FirstOrDefaultAsync(a => a.UserId == user.Id);
-            return consultant?.AgencyId;
+            return null;
         }
 
         public InventoryReceiptsController(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
@@ -113,7 +115,7 @@ namespace GMK360.Web.Controllers
                 await _context.SaveChangesAsync();
             }
 
-            TempData["SuccessMessage"] = "Ýrsaliye taslaðý baþarýyla oluþturuldu. Stoða iþlemek için onaylamanýz gerekmektedir.";
+            TempData["SuccessMessage"] = "Ä°rsaliye taslaÄŸÄ± baÅŸarÄ±yla oluÅŸturuldu. StoÄŸa iÅŸlemek iÃ§in onaylamanÄ±z gerekmektedir.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -128,7 +130,7 @@ namespace GMK360.Web.Controllers
             if (receipt == null) return NotFound();
             if (receipt.Status == "Approved")
             {
-                TempData["ErrorMessage"] = "Bu irsaliye zaten onaylanmýþ ve stoða iþlenmiþ.";
+                TempData["ErrorMessage"] = "Bu irsaliye zaten onaylanmÄ±ÅŸ ve stoÄŸa iÅŸlenmiÅŸ.";
                 return RedirectToAction(nameof(Index));
             }
 
@@ -165,7 +167,7 @@ namespace GMK360.Web.Controllers
                     Type = TransactionType.Giris,
                     Quantity = item.Quantity,
                     TransactionDate = DateTime.UtcNow,
-                    Description = $"Ýrsaliye Kabul: {receipt.DocumentNumber} - {receipt.SupplierName}",
+                    Description = $"Ä°rsaliye Kabul: {receipt.DocumentNumber} - {receipt.SupplierName}",
                     HandledByUserId = _userManager.GetUserId(User) ?? ""
                 });
             }
@@ -173,7 +175,7 @@ namespace GMK360.Web.Controllers
             receipt.Status = "Approved";
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Ýrsaliye baþarýyla onaylandý ve malzemeler ilgili depo/þantiye stoðuna EKLENDÝ.";
+            TempData["SuccessMessage"] = "Ä°rsaliye baÅŸarÄ±yla onaylandÄ± ve malzemeler ilgili depo/ÅŸantiye stoÄŸuna EKLENDÄ°.";
             return RedirectToAction(nameof(Index));
         }
     }

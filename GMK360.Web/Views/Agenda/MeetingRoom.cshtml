@@ -82,14 +82,19 @@
             <div class="d-flex align-items-center gap-1 flex-wrap">
                 @if (!isDone)
                 {
-                    <button type="button" class="btn btn-outline-warning text-dark border-warning rounded-pill px-2 px-md-3 py-1 fw-bold shadow-xs btn-sm d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#nextSessionModal" style="font-size: 0.80rem;">
-                        <i class="bi bi-calendar-plus"></i>
-                        <span class="d-none d-sm-inline">Devam Oturumu Planla</span>
+                    <button type="button" class="btn btn-outline-primary rounded-pill px-2 px-md-3 py-1 fw-bold shadow-xs btn-sm d-flex align-items-center gap-1" onclick="focusOrSpawnNewTopicRow()" style="font-size: 0.80rem;" title="Bu toplantıya bağlı yeni bir alt konu veya yazışma satırı aç">
+                        <i class="bi bi-plus-circle-fill"></i>
+                        <span>+ Yeni Konu / Madde Aç</span>
                     </button>
 
-                    <button type="button" class="btn btn-success rounded-pill px-3 py-1 fw-bold shadow-xs btn-sm d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#concludeModal" style="font-size: 0.80rem;">
+                    <button type="button" class="btn btn-outline-warning text-dark border-warning rounded-pill px-2 px-md-3 py-1 fw-bold shadow-xs btn-sm d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#nextSessionModal" style="font-size: 0.80rem;">
+                        <i class="bi bi-calendar-plus"></i>
+                        <span class="d-none d-sm-inline">Ertele / Devam Tarihi</span>
+                    </button>
+
+                    <button type="button" class="btn btn-success rounded-pill px-3 py-1 fw-bold shadow-xs btn-sm d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#concludeModal" style="font-size: 0.80rem;" title="Tıklanmadan başlık açık kalır; karara bağlandığı an aktif ekrandan düşer ve arşive kaldırılır">
                         <i class="bi bi-check2-circle"></i>
-                        <span>Sonlandır & Mühürle</span>
+                        <span>Toplantı Bitti / Karara Bağla</span>
                     </button>
                 }
                 else
@@ -595,8 +600,14 @@
 
                     <div class="row g-2 mb-2">
                         <div class="col-7">
-                            <label class="form-label small fw-bold text-dark mb-1">Sonraki Oturum Tarihi <span class="text-danger">*</span></label>
-                            <input type="date" name="nextSessionDate" class="form-control form-control-sm fw-bold" value="@DateTime.Now.AddDays(3).ToString("yyyy-MM-dd")" required />
+
+                            <label class="form-label small fw-bold text-dark mb-1">Yeni Tarih <span class="text-danger">*</span></label>
+                            <input type="date" name="nextSessionDate" id="inpRoomRescheduleDate" class="form-control form-control-sm fw-bold" value="@DateTime.Now.AddDays(1).ToString("yyyy-MM-dd")" required />
+                            <div class="d-flex gap-1 mt-1 flex-wrap">
+                                <button type="button" class="btn btn-xs btn-outline-dark rounded-pill px-2 py-0" style="font-size: 0.68rem;" onclick="shiftRoomDate(1)">🌅 Yarına (+1 Gün)</button>
+                                <button type="button" class="btn btn-xs btn-outline-dark rounded-pill px-2 py-0" style="font-size: 0.68rem;" onclick="shiftRoomDate(2)">📅 +2 Gün</button>
+                                <button type="button" class="btn btn-xs btn-outline-dark rounded-pill px-2 py-0" style="font-size: 0.68rem;" onclick="shiftRoomDate(7)">🗓️ Haftaya (+7)</button>
+                            </div>
                         </div>
                         <div class="col-5">
                             <label class="form-label small fw-bold text-dark mb-1">Başlama Saati <span class="text-danger">*</span></label>
@@ -610,9 +621,12 @@
                     </div>
 
                     <div class="form-check p-2.5 rounded-2 bg-light border mt-2">
-                        <input class="form-check-input ms-0 me-2" type="checkbox" name="createNewSession" value="true" id="chkCreateNewRoomSession" checked>
+                        <input class="form-check-input ms-0 me-2" type="checkbox" name="createNewSession" value="true" id="chkCreateNewRoomSession">
                         <label class="form-check-label small fw-bold text-dark" for="chkCreateNewRoomSession">
-                            Bu oturumu kapat ve takvime <b>"2. Devam Oturumu"</b> olarak yeni seans bağla
+                            Mevcut oturumu kapatıp <b>"2. Devam Oturumu"</b> olarak ayrı kayıt aç <small class="text-muted fw-normal">(Sadece ertelemek için boş bırakın)</small>
+                        </label>
+                        <label class="form-check-label small fw-bold text-dark" for="chkCreateNewRoomSession">
+
                         </label>
                     </div>
                 </div>
@@ -621,6 +635,64 @@
                     <button type="button" class="btn btn-light rounded-pill px-3 btn-sm border" data-bs-dismiss="modal">Vazgeç</button>
                     <button type="submit" class="btn btn-warning rounded-pill px-4 fw-bold shadow-xs btn-sm">
                         <i class="bi bi-check2-circle me-1"></i>Ajandaya Kaydet & Devam Et
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: TOPLANTI BİTTİ / KARARA BAĞLA & ARŞİVE KALDIR -->
+<div class="modal fade" id="concludeModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-3">
+            <form asp-action="ConcludeMeeting" asp-controller="Agenda" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="recordId" value="@Model.Id" />
+                <input type="hidden" name="returnToList" value="true" />
+
+                <div class="modal-header border-bottom py-2 bg-success text-white">
+                    <h6 class="modal-title fw-bold mb-0" style="font-size: 0.88rem;">
+                        <i class="bi bi-check2-circle me-1"></i>Toplantı Bitti / Karara Bağla & Arşive Kaldır
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body p-3">
+                    <div class="alert alert-success py-2 px-2.5 small rounded-2 mb-2" style="font-size: 0.74rem;">
+                        <i class="bi bi-archive-fill me-1"></i><strong>Arşiv Kuralı:</strong> Tıklanmadan başlık açık kalır. Karara bağladığınız anda <b>aktif ekrandan düşer</b> ve tüm alt konuları/belgeleriyle birlikte <b>Arşivde</b> saklanır.
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small text-muted fw-bold mb-1">Konu / İş Başlığı</label>
+                        <input type="text" class="form-control form-control-sm bg-light fw-bold" value="@Model.Title" readonly />
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-dark mb-1">Görüşme Sonucu / Alınan Nihai Karar <span class="text-danger">*</span></label>
+                        <textarea name="finalSummary" class="form-control form-control-sm" rows="3" placeholder="Örn: Ortakla görüşüldü ve teklif onaylandı / Firmaya gidildi, sözleşme şartlarında mutabık kalındı..." required></textarea>
+                    </div>
+
+                    <div class="p-2 rounded-2 bg-light border mb-1">
+                        <label class="form-label small fw-bold text-dark mb-1" style="font-size: 0.74rem;">
+                            <i class="bi bi-paperclip text-success me-1"></i>Sonuç Evrakı / Alındı Belgesi Ekle <small class="text-muted fw-normal">(İsteğe Bağlı)</small>
+                        </label>
+                        <input type="file" name="resultFile" class="form-control form-control-sm mb-1.5" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+                               onchange="handleRoomResultFileSubject(this)" />
+                        <label class="form-label small fw-bold text-dark mb-0.5" style="font-size: 0.73rem;">
+                            Yüklenen Sonuç Belgesinin Konusu / Adı <span class="text-danger" id="reqStarRoomResultDoc" style="display:none;">*</span>
+                        </label>
+                        <input type="text" name="resultDocTitle" id="inpRoomResultDocTitle" class="form-control form-control-sm fw-semibold" placeholder="Dosya adı yerine belgenin konusunu yazın (Örn: İmzalı Tutanak / Alındı Fişi)" />
+                        <small id="lblRoomResultDocHint" class="d-block mt-1 text-muted" style="font-size: 0.68rem;">
+                            Belge yüklerseniz orijinal dosya adı yerine buraya yazdığınız konu adıyla arşivlenir.
+                        </small>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-top py-2 d-flex justify-content-between bg-light">
+                    <button type="button" class="btn btn-light rounded-pill px-3 btn-sm border" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold shadow-xs btn-sm">
+                        <i class="bi bi-check2-all me-1"></i>Karara Bağla & Arşive Kaldır
                     </button>
                 </div>
             </form>
@@ -781,6 +853,12 @@
                         <i class="bi bi-briefcase-fill me-1"></i>3. Şirket İçi, Taşeron & İK Personel Evrakları
                     </small>
                     <div class="d-flex flex-wrap gap-1">
+                        <button type="button" class="btn btn-xs btn-outline-danger rounded-pill px-2.5 py-1 fw-bold doc-preset-btn" style="font-size: 0.72rem;" onclick="selectDocNamingPreset('Resmi Kurum / Maliye / Belediye Yazısı', 'resmi_kurum', this)">
+                            🏛️ Resmi Kurum / Maliye Yazısı
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline-dark rounded-pill px-2.5 py-1 fw-bold doc-preset-btn" style="font-size: 0.72rem;" onclick="selectDocNamingPreset('Ortaklık / Kişisel İş Planı Belgesi', 'ortak_is_plani', this)">
+                            📌 Ortaklık / İş Planı Belgesi
+                        </button>
                         <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill px-2.5 py-1 fw-bold doc-preset-btn" style="font-size: 0.72rem;" onclick="selectDocNamingPreset('Personel Adayı CV & Yeterlilik Belgesi', 'ik_personel', this)">
                             👤 Personel CV / Evrakı
                         </button>
@@ -858,6 +936,77 @@
 <script>
     var currentMeetingRecordId = @Model.Id;
     var saveDebounceTimers = {};
+
+    function focusOrSpawnNewTopicRow() {
+        var tbody = document.getElementById('matrixGridBody');
+        if (!tbody) return;
+        var allRows = tbody.querySelectorAll('tr.grid-row');
+        var lastRow = allRows.length > 0 ? allRows[allRows.length - 1] : null;
+        if (lastRow) {
+            var noteEl = lastRow.querySelector('.row-note');
+            if (noteEl && !noteEl.value.trim()) {
+                noteEl.focus();
+                noteEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+        }
+        if (typeof spawnNewRow === 'function') {
+            spawnNewRow('Biz');
+            var updatedRows = tbody.querySelectorAll('tr.grid-row');
+            var newLast = updatedRows[updatedRows.length - 1];
+            if (newLast) {
+                var newNote = newLast.querySelector('.row-note');
+                if (newNote) {
+                    newNote.focus();
+                    newNote.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        }
+    }
+
+    function handleRoomResultFileSubject(fileInput) {
+        var titleInp = document.getElementById('inpRoomResultDocTitle');
+        var hintEl = document.getElementById('lblRoomResultDocHint');
+        var starEl = document.getElementById('reqStarRoomResultDoc');
+        if (!titleInp) return;
+
+        if (!fileInput.files || fileInput.files.length === 0) {
+            titleInp.required = false;
+            if (starEl) starEl.style.display = 'none';
+            return;
+        }
+
+        titleInp.required = true;
+        if (starEl) starEl.style.display = 'inline';
+
+        var rawFileName = fileInput.files[0].name || '';
+        var lastDot = rawFileName.lastIndexOf('.');
+        var baseName = lastDot > 0 ? rawFileName.substring(0, lastDot) : rawFileName;
+        var s = baseName.trim().toLowerCase();
+        var isGeneric = s.length < 3 ||
+            /^(img|dsc|dscn|scan|image|photo|resim|belge|document|ekran|screenshot|whatsapp|wa|video|vid)[_\-\s0-9]/.test(s) ||
+            /^[0-9_\-\s()]+$/.test(s);
+
+        if (isGeneric) {
+            titleInp.value = '';
+            titleInp.classList.add('border-danger');
+            if (hintEl) {
+                hintEl.className = 'd-block mt-1 text-danger fw-bold';
+                hintEl.innerHTML = '⚠️ Seçilen dosyanın adı rastgele görünüyor (' + rawFileName + '). Lütfen belgenin konusunu yazın!';
+            }
+            setTimeout(function () { titleInp.focus(); }, 100);
+        } else {
+            if (!titleInp.value.trim()) {
+                titleInp.value = baseName.replace(/[_-]+/g, ' ').trim();
+            }
+            titleInp.classList.remove('border-danger');
+            titleInp.classList.add('border-success');
+            if (hintEl) {
+                hintEl.className = 'd-block mt-1 text-success fw-semibold';
+                hintEl.innerHTML = '✅ Dosya adı konu olarak aktarıldı; isterseniz düzenleyebilirsiniz.';
+            }
+        }
+    }
 
     function autoResize(textarea) {
         textarea.style.height = 'auto';
@@ -1802,6 +1951,16 @@
         .catch(function(err) {
             console.error('Kamera görseli yükleme hatası:', err);
         });
+    }
+
+    function shiftRoomDate(daysToAdd) {
+        var d = new Date();
+        d.setDate(d.getDate() + daysToAdd);
+        var yyyy = d.getFullYear();
+        var mm = String(d.getMonth() + 1).padStart(2, '0');
+        var dd = String(d.getDate()).padStart(2, '0');
+        var el = document.getElementById('inpRoomRescheduleDate');
+        if (el) el.value = yyyy + '-' + mm + '-' + dd;
     }
 
     function openEditParticipantModal(id, name, phone, role) {

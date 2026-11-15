@@ -25,16 +25,17 @@ namespace GMK360.Web.Controllers
 
         private async Task<int?> GetUserAgencyIdAsync()
         {
+            var user = await _userManager.GetUserAsync(User);
+            if (user != null)
+            {
+                var consultant = await _context.AgencyConsultants
+                    .FirstOrDefaultAsync(c => c.UserId == user.Id && c.IsActive);
+                if (consultant != null && consultant.AgencyId > 0)
+                    return consultant.AgencyId;
+            }
             if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin")) 
                 return 1;
-                
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null) return null;
-
-            var consultant = await _context.AgencyConsultants
-                .FirstOrDefaultAsync(c => c.UserId == user.Id && c.IsActive);
-                
-            return consultant?.AgencyId;
+            return null;
         }
 
         public async Task<IActionResult> Index()
@@ -80,9 +81,9 @@ namespace GMK360.Web.Controllers
             if (account == null) return NotFound();
 
             if (isDebtToUs)
-                account.CurrentBalance += amount; // Müþteriye mal verdik/veresiye yazdýk, borcu arttý
+                account.CurrentBalance += amount; // MÃ¼ÅŸteriye mal verdik/veresiye yazdÄ±k, borcu arttÄ±
             else
-                account.CurrentBalance -= amount; // Müþteri ödeme yaptý, borcu azaldý
+                account.CurrentBalance -= amount; // MÃ¼ÅŸteri Ã¶deme yaptÄ±, borcu azaldÄ±
 
             var transaction = new CustomerAccountTransaction
             {
@@ -98,7 +99,7 @@ namespace GMK360.Web.Controllers
             _context.CustomerAccountTransactions.Add(transaction);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Kayýt (Veresiye/Tahsilat) deftere baþarýyla iþlendi.";
+            TempData["SuccessMessage"] = "KayÄ±t (Veresiye/Tahsilat) deftere baÅŸarÄ±yla iÅŸlendi.";
             return RedirectToAction(nameof(Details), new { id = accountId });
         }
     }

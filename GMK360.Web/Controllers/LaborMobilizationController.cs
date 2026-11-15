@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Linq;
 using GMK360.Data.Contexts;
 
 namespace GMK360.Web.Controllers
 {
+    [Authorize]
     public class LaborMobilizationController : Controller
     {
         private readonly ApplicationDbContext _context;
@@ -15,17 +17,17 @@ namespace GMK360.Web.Controllers
 
         public IActionResult Index()
         {
-            // Veritabanındaki Proje DNA Profili / Malzeme Reçetesi başlıklarını dinamik çeker
+            // VeritabanÄ±ndaki Proje DNA Profili / Malzeme ReÃ§etesi baÅŸlÄ±klarÄ±nÄ± dinamik Ã§eker
             var realCategories = _context.MaterialRecipes
                                          .Select(m => m.WorkItemName)
                                          .Distinct()
                                          .ToList();
 
-            // Eğer henüz reçete yoksa boş dönmesin diye dummy 1-2 şey ekleyebiliriz ama 
-            // ustamızın istediği gibi sistemden gelenler gösterilecek.
+            // EÄŸer henÃ¼z reÃ§ete yoksa boÅŸ dÃ¶nmesin diye dummy 1-2 ÅŸey ekleyebiliriz ama 
+            // ustamÄ±zÄ±n istediÄŸi gibi sistemden gelenler gÃ¶sterilecek.
             if (!realCategories.Any())
             {
-                realCategories.Add("DNA Profilinden Bekleniyor (Fayans, Kalıp vs.)");
+                realCategories.Add("DNA Profilinden Bekleniyor (Fayans, KalÄ±p vs.)");
             }
 
             ViewBag.Categories = realCategories;

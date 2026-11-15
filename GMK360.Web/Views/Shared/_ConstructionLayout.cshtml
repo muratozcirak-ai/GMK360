@@ -1,25 +1,22 @@
 @using Microsoft.AspNetCore.Identity
-
 @using GMK360.Core.Entities.Identity
-
 @using Microsoft.EntityFrameworkCore
-
+@using GMK360.Web.Helpers
 @inject UserManager<ApplicationUser> UserManager
-
 @inject GMK360.Data.Contexts.ApplicationDbContext DbContext
 
 @{
-
     var currentUser = await UserManager.GetUserAsync(User);
-
     var currentConsultant = currentUser != null ? await DbContext.AgencyConsultants.Include(c => c.Agency).FirstOrDefaultAsync(c => c.UserId == currentUser.Id && c.IsActive) : null;
-
     var currentAgency = currentConsultant?.Agency ?? (ViewBag.Agency as GMK360.Core.Entities.Agency);
-
     var currentCompanyName = currentAgency?.CompanyName ?? "Şantiye & İnşaat ERP";
-
     var hasLogo = !string.IsNullOrEmpty(currentAgency?.LogoUrl) && !currentAgency.LogoUrl.Contains("default-logo");
 
+    bool isRealBoss = currentConsultant == null || currentConsultant.Role == GMK360.Core.Entities.AgencyRole.Owner || currentConsultant.Role == GMK360.Core.Entities.AgencyRole.Manager || User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
+    var previewCookie = isRealBoss ? Context.Request.Cookies["gmk360_role_preview"] : null;
+    var effectivePerms = StaffPermissionHelper.GetEffectivePermissions(currentConsultant?.Role, currentUser?.ActiveModules, previewCookie);
+    bool isPreviewActive = !string.IsNullOrWhiteSpace(previewCookie) && !previewCookie.Equals("owner", StringComparison.OrdinalIgnoreCase);
+    string currentUrl = Context.Request.Path + Context.Request.QueryString;
 }
 
 <!DOCTYPE html>
@@ -151,6 +148,58 @@
                     <div class="text-muted" style="font-size: 0.68rem;"><i class="bi bi-clock-history me-1"></i> Giriş: @DateTime.Now.ToString("HH:mm") | <span id="liveClock" class="fw-bold">@DateTime.Now.ToString("HH:mm:ss")</span></div>
                 </div>
 
+                <!-- BU SAYFA NE İŞE YARAR? (BAĞLAMSAL SAYFA REHBERİ) -->
+                <button type="button" class="btn btn-warning text-dark px-2.5 py-1 rounded-pill d-flex align-items-center gap-1 btn-sm shadow-xs fw-bold" onclick="window.openGmkContextualPageGuide && window.openGmkContextualPageGuide(true)" style="font-size: 0.75rem;" title="Bu Ekranın Amacı ve Kullanım Rehberi">
+                    <i class="bi bi-lightbulb-fill text-danger"></i>
+                    <span class="d-none d-sm-inline">Bu Sayfa Ne İşe Yarar?</span>
+                </button>
+
+                <!-- KALICI GÖRSEL KULLANIM KILAVUZU & REHBER BUTONU -->
+                <button type="button" class="btn btn-primary px-2.5 py-1 rounded-pill d-flex align-items-center gap-1 btn-sm shadow-xs fw-bold" data-bs-toggle="modal" data-bs-target="#gmkVisualGuideModal" style="font-size: 0.75rem; background: linear-gradient(135deg, #1e3a8a, #0284c7); border: none;" title="Görselli Adım Adım Sistem Kullanım Kılavuzu">
+                    <i class="bi bi-journal-richtext text-warning"></i>
+                    <span class="d-none d-sm-inline">Görsel Kılavuz</span>
+                </button>
+                <div class="d-none">
+                </div>
+
+                @if (isRealBoss)
+                {
+                    <div class="dropdown">
+                        <button class="btn @(isPreviewActive ? "btn-warning text-dark fw-bold border-warning" : "btn-light border text-dark fw-semibold") px-2.5 py-1 rounded-pill dropdown-toggle d-flex align-items-center gap-1 btn-sm shadow-xs" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="font-size: 0.75rem;" title="Rol & Ekran Yetkisi Ön İzleme Simülatörü">
+                            <i class="bi bi-eye-fill @(isPreviewActive ? "text-danger" : "text-primary")"></i>
+                            <span class="d-none d-md-inline">
+                                @(previewCookie == "engineer" ? "Teknik Ofis Görünümü" : previewCookie == "formen" ? "Şantiye Şefi Görünümü" : "Rol & Yetki Testi")
+                            </span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 mt-2" style="border-radius: 12px; min-width: 310px; font-size: 0.80rem;">
+                            <li class="px-3 py-1.5 border-bottom bg-light rounded-top-3 text-muted fw-bold small">
+                                👁️ ŞİRKET İÇİ ROL ÖN İZLEME (CANLI FİLTRE)
+                            </li>
+                            <li>
+                                <a class="dropdown-item py-1.5 @(!isPreviewActive ? "fw-bold bg-primary bg-opacity-10" : "")" href="/AgencyStaff/SwitchRolePreview?mode=owner&returnUrl=@Uri.EscapeDataString(currentUrl)">
+                                    👑 Firma Sahibi / Genel Müdür (Tam Yetki)
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item py-1.5 @(previewCookie == "engineer" ? "fw-bold bg-primary bg-opacity-10" : "")" href="/AgencyStaff/SwitchRolePreview?mode=engineer&returnUrl=@Uri.EscapeDataString(currentUrl)">
+                                    📐 Teknik Ofis / Mühendis (Finans & Web Gizli)
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item py-1.5 @(previewCookie == "formen" ? "fw-bold bg-warning bg-opacity-25" : "")" href="/AgencyStaff/SwitchRolePreview?mode=formen&returnUrl=@Uri.EscapeDataString(currentUrl)">
+                                    👷 Şantiye Şefi / Saha Formeni (Sadece Saha)
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider my-1"></li>
+                            <li>
+                                <a class="dropdown-item py-1.5 fw-bold text-primary" href="/AgencyStaff/Index">
+                                    <i class="bi bi-sliders me-2"></i>Personel Menü & Ekran Yetkilerini Yönet ➔
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                }
+
                 @if (User.Identity.IsAuthenticated)
                 {
                     <div class="dropdown">
@@ -182,6 +231,22 @@
 
     <!-- ANA İÇERİK (SİDEBAR + CONTENT) -->
     <main class="flex-grow-1" style="margin-top: 48px;">
+        @if (isPreviewActive)
+        {
+            <div class="bg-warning text-dark py-1 px-3 border-bottom border-dark border-opacity-25 d-flex justify-content-between align-items-center flex-wrap gap-2 shadow-xs" style="font-size: 0.78rem;">
+                <div>
+                    <i class="bi bi-eye-fill text-danger me-1"></i>
+                    <strong>ROL ÖN İZLEME AKTİF:</strong> Şu an sistemi
+                    <span class="badge bg-dark text-white rounded-pill px-2 py-0.5">
+                        @(previewCookie == "engineer" ? "📐 2. Rol: Teknik Ofis / Mühendis (2. Evre DNA & Satın Alma - Ana Kasa Gizli)" : "👷 3. Rol: Saha Sorumlusu / Formen (Sadece 3. Evre Şantiye & PWA - Sıfır Finans)")
+                    </span>
+                    gözüyle inceliyorsunuz.
+                </div>
+                <a href="/AgencyStaff/SwitchRolePreview?mode=owner&returnUrl=@Uri.EscapeDataString(currentUrl)" class="btn btn-dark btn-sm rounded-pill py-0 px-3 fw-bold" style="font-size: 0.72rem;">
+                    👑 Patron (Tam Yetki) Görünümüne Dön
+                </a>
+            </div>
+        }
 @{
     bool hideSidebar = ViewData["HideSidebar"] as bool? ?? false;
 }
@@ -219,13 +284,15 @@
 
                         var curAct = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
 
-                        bool isOzetActive = curCtrl == "Dashboard" && curAct == "Construction";
+                        bool isOzetActive = (curCtrl == "Dashboard" && curAct == "Construction") || curCtrl == "FinancialStrategy";
 
                         bool isToplantiActive = curCtrl == "Agenda" && (curAct == "Meetings" || curAct == "MeetingRoom" || curAct == "Create");
 
                         bool isProjelerActive = curCtrl == "ConstructionProject" && (curAct == "Index" || curAct == "Details");
 
-                        bool isFinansActive = curCtrl == "Finance" || curCtrl == "SupplierCurrentAccount" || curCtrl == "SubcontractorContract" || curCtrl == "ConstructionProjectExpenses";
+                        bool isFinansActive = curCtrl == "Finance" || curCtrl == "ConstructionProjectExpenses";
+
+                        bool isSatinAlmaActive = curCtrl == "B2BPurchasing" || curCtrl == "SubcontractorContract" || curCtrl == "SupplierCurrentAccount" || curCtrl == "AgencyPhonebook" || curCtrl == "B2BPartnerPortal";
 
                         bool isHakSahipleriActive = curCtrl == "ConstructionProject" && curAct == "Stakeholders";
 
@@ -237,105 +304,129 @@
 
                         bool isStratejiActive = curCtrl == "FinancialStrategy";
 
-                        bool isPersonelActive = curCtrl == "AgencyStaff" || curCtrl == "AgencyWorkers" || curCtrl == "AgencyPhonebook";
+                        bool isPersonelActive = curCtrl == "AgencyStaff" || curCtrl == "AgencyWorkers" || curCtrl == "DailyTimesheets";
 
                         bool isDemirbasActive = curCtrl == "Inventory";
+                        bool isWebSiteActive = curCtrl == "Dashboard" && (curAct == "SiteYonetimi" || curAct == "ThemeSettings");
 
                     }
 
                     <a href="/Dashboard/Construction" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-2 d-flex align-items-center @(isOzetActive ? "active shadow-sm" : "text-dark")" style="@(isOzetActive ? "background-color: #0d6efd; color: white;" : "")">
-
-                        <i class="bi bi-speedometer2 @(isOzetActive ? "text-white" : "text-primary") fs-6 me-2"></i>
-
-                        <span class="@(isOzetActive ? "fw-bold" : "fw-semibold")">Şirket Özeti</span>
-
+                        <i class="bi bi-person-vcard @(isOzetActive ? "text-white" : "text-primary") fs-6 me-2"></i>
+                        <span class="@(isOzetActive ? "fw-bold" : "fw-semibold")">Özetim & Profilim</span>
                     </a>
 
                     <a href="/Agenda/Meetings" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-3 d-flex align-items-center @(isToplantiActive ? "active shadow-sm" : "text-dark")" style="@(isToplantiActive ? "background-color: #0d6efd; color: white;" : "")">
-
                         <i class="bi bi-people-fill @(isToplantiActive ? "text-white" : "text-warning") fs-6 me-2"></i>
-
                         <span class="@(isToplantiActive ? "fw-bold" : "fw-semibold")">Toplantı & Karar Masası</span>
-
                     </a>
 
-                    <a href="/ConstructionProject/Index" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-3 d-flex align-items-center @(isProjelerActive ? "active shadow-sm" : "text-dark")" style="@(isProjelerActive ? "background-color: #0d6efd; color: white;" : "")">
+                    @if (effectivePerms.Contains(StaffPermissionHelper.PermCandidate) || effectivePerms.Contains(StaffPermissionHelper.PermDna) || effectivePerms.Contains(StaffPermissionHelper.PermSite))
+                    {
+                        <a href="/ConstructionProject/Index" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-3 d-flex align-items-center @(isProjelerActive ? "active shadow-sm" : "text-dark")" style="@(isProjelerActive ? "background-color: #0d6efd; color: white;" : "")">
+                            <i class="bi bi-buildings @(isProjelerActive ? "text-white" : "text-primary") fs-6 me-2"></i>
+                            <span class="@(isProjelerActive ? "fw-bold" : "fw-semibold")">Şantiye & Projeler</span>
+                        </a>
+                    }
 
-                        <i class="bi bi-buildings @(isProjelerActive ? "text-white" : "text-primary") fs-6 me-2"></i>
+                    @if (effectivePerms.Contains(StaffPermissionHelper.PermFinance))
+                    {
+                        <a href="/Finance/Index" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-3 d-flex align-items-center @(isFinansActive ? "active shadow-sm" : "text-dark")" style="@(isFinansActive ? "background-color: #0d6efd; color: white;" : "")">
+                            <i class="bi bi-cash-coin @(isFinansActive ? "text-white" : "text-success") fs-6 me-2"></i>
+                            <span class="@(isFinansActive ? "fw-bold" : "fw-semibold")">Finans & Cari</span>
+                        </a>
+                    }
 
-                        <span class="@(isProjelerActive ? "fw-bold" : "fw-semibold")">Şantiye & Projeler</span>
+                    @if (effectivePerms.Contains(StaffPermissionHelper.PermPurchasing))
+                    {
+                        <a href="/B2BPurchasing/Index" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-3 d-flex align-items-center @(isSatinAlmaActive ? "active shadow-sm" : "text-dark")" style="@(isSatinAlmaActive ? "background-color: #0d6efd; color: white;" : "")">
+                            <i class="bi bi-cart-check-fill @(isSatinAlmaActive ? "text-white" : "text-primary") fs-6 me-2"></i>
+                            <span class="@(isSatinAlmaActive ? "fw-bold" : "fw-semibold")">Satın Alma & Taşeron</span>
+                        </a>
+                    }
 
-                    </a>
-
-                    <a href="/Finance/Index" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-3 d-flex align-items-center @(isFinansActive ? "active shadow-sm" : "text-dark")" style="@(isFinansActive ? "background-color: #0d6efd; color: white;" : "")">
-
-                        <i class="bi bi-cash-coin @(isFinansActive ? "text-white" : "text-success") fs-6 me-2"></i>
-
-                        <span class="@(isFinansActive ? "fw-bold" : "fw-semibold")">Finans & Cari</span>
-
-                    </a>
-
-                    <a href="/ConstructionProject/Stakeholders" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-3 d-flex align-items-center @(isHakSahipleriActive ? "active shadow-sm" : "text-dark")" style="@(isHakSahipleriActive ? "background-color: #0d6efd; color: white;" : "")">
-
+                    <a href="/ConstructionProject/Stakeholders" class="d-none list-group-item list-group-item-action border-0 py-2 px-3 rounded-3 align-items-center @(isHakSahipleriActive ? "active shadow-sm" : "text-dark")" style="@(isHakSahipleriActive ? "background-color: #0d6efd; color: white;" : "")">
                         <i class="bi bi-people-fill @(isHakSahipleriActive ? "text-white" : "text-success") fs-6 me-2"></i>
-
                         <span class="@(isHakSahipleriActive ? "fw-bold" : "fw-semibold")">Hak Sahipleri</span>
-
                     </a>
 
-                    <a href="/DocumentArchive/Index?context=construction" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-2 d-flex align-items-center @(isEvrakActive ? "active shadow-sm" : "text-dark")" style="@(isEvrakActive ? "background-color: #0d6efd; color: white;" : "")">
+                    @if (effectivePerms.Contains(StaffPermissionHelper.PermArchive))
+                    {
+                        <a href="/DocumentArchive/Index?context=construction" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-2 d-flex align-items-center @(isEvrakActive ? "active shadow-sm" : "text-dark")" style="@(isEvrakActive ? "background-color: #0d6efd; color: white;" : "")">
+                            <i class="bi bi-folder-fill @(isEvrakActive ? "text-white" : "text-warning") fs-6 me-2"></i>
+                            <span class="@(isEvrakActive ? "fw-bold" : "fw-semibold")">Evrak & Dosya Arşivi</span>
+                        </a>
+                    }
 
-                        <i class="bi bi-folder-fill @(isEvrakActive ? "text-white" : "text-warning") fs-6 me-2"></i>
-
-                        <span class="@(isEvrakActive ? "fw-bold" : "fw-semibold")">Evrak & Dosya Arşivi</span>
-
-                    </a>
-
+                    <!-- Şirket Garajı & Araçlar (Zimmet & Yakıt Fişi İçin Sabit Açık) -->
                     <a href="/CompanyGarage/Index" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-2 d-flex align-items-center @(isGarajActive ? "active shadow-sm" : "text-dark")" style="@(isGarajActive ? "background-color: #0d6efd; color: white;" : "")">
-
                         <i class="bi bi-truck @(isGarajActive ? "text-white" : "text-warning") fs-6 me-2"></i>
-
                         <span class="@(isGarajActive ? "fw-bold" : "fw-semibold")">Şirket Garajı & Araçlar</span>
-
                     </a>
 
-                    <a href="/ProjectCrm/Index" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-2 d-flex align-items-center @(isCrmActive ? "active shadow-sm" : "text-dark")" style="@(isCrmActive ? "background-color: #0d6efd; color: white;" : "")">
+                    @if (effectivePerms.Contains(StaffPermissionHelper.PermCrm))
+                    {
+                        <a href="/ProjectCrm/SalesPool" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-2 d-flex align-items-center @(isCrmActive ? "active shadow-sm" : "text-dark")" style="@(isCrmActive ? "background-color: #0d6efd; color: white;" : "")">
+                            <i class="bi bi-telephone-inbound @(isCrmActive ? "text-white" : "text-warning") fs-6 me-2"></i>
+                            <span class="@(isCrmActive ? "fw-bold" : "fw-semibold")">Satış & Daire Portföyü</span>
+                        </a>
+                    }
 
-                        <i class="bi bi-telephone-inbound @(isCrmActive ? "text-white" : "text-warning") fs-6 me-2"></i>
-
-                        <span class="@(isCrmActive ? "fw-bold" : "fw-semibold")">CRM & Operasyon</span>
-
-                    </a>
-
-                    <a href="/FinancialStrategy/Index" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-2 d-flex align-items-center @(isStratejiActive ? "active shadow-sm" : "text-dark")" style="@(isStratejiActive ? "background-color: #0d6efd; color: white;" : "")">
-
+                    <a href="/FinancialStrategy/Index" class="d-none list-group-item list-group-item-action border-0 py-2 px-3 rounded-2 align-items-center @(isStratejiActive ? "active shadow-sm" : "text-dark")" style="@(isStratejiActive ? "background-color: #0d6efd; color: white;" : "")">
                         <i class="bi bi-briefcase @(isStratejiActive ? "text-white" : "text-secondary") fs-6 me-2"></i>
-
                         <span class="@(isStratejiActive ? "fw-bold" : "fw-semibold")">Kurumsal & Strateji</span>
-
                     </a>
 
-                    <a href="/AgencyStaff/Index" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-2 d-flex align-items-center @(isPersonelActive ? "active shadow-sm" : "text-dark")" style="@(isPersonelActive ? "background-color: #0d6efd; color: white;" : "")">
+                    @if (effectivePerms.Contains(StaffPermissionHelper.PermStaff))
+                    {
+                        <a href="/AgencyStaff/Index" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-2 d-flex align-items-center @(isPersonelActive ? "active shadow-sm" : "text-dark")" style="@(isPersonelActive ? "background-color: #0d6efd; color: white;" : "")">
+                            <i class="bi bi-people @(isPersonelActive ? "text-white" : "text-info") fs-6 me-2"></i>
+                            <span class="@(isPersonelActive ? "fw-bold" : "fw-semibold")">Personel & Ekipler</span>
+                        </a>
+                    }
+                    else if (effectivePerms.Contains(StaffPermissionHelper.PermSite))
+                    {
+                        <!-- Formen / Saha Sorumlusu için Maaşsız Kör Puantaj Kısayolu -->
+                        <a href="/DailyTimesheets/Index" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-2 d-flex align-items-center @(curCtrl == "DailyTimesheets" ? "active shadow-sm" : "text-dark")" style="@(curCtrl == "DailyTimesheets" ? "background-color: #0d6efd; color: white;" : "")">
+                            <i class="bi bi-calendar2-check @(curCtrl == "DailyTimesheets" ? "text-white" : "text-success") fs-6 me-2"></i>
+                            <span class="@(curCtrl == "DailyTimesheets" ? "fw-bold" : "fw-semibold")">Günlük Saha Puantajı</span>
+                        </a>
+                    }
 
-                        <i class="bi bi-people @(isPersonelActive ? "text-white" : "text-info") fs-6 me-2"></i>
+                    @if (effectivePerms.Contains(StaffPermissionHelper.PermInventory))
+                    {
+                        <a href="/Inventory/Index" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-2 d-flex align-items-center @(isDemirbasActive ? "active shadow-sm" : "text-dark")" style="@(isDemirbasActive ? "background-color: #0d6efd; color: white;" : "")">
+                            <i class="bi bi-tools @(isDemirbasActive ? "text-white" : "text-secondary") fs-6 me-2"></i>
+                            <span class="@(isDemirbasActive ? "fw-bold" : "fw-semibold")">Demirbaş & Depo</span>
+                        </a>
+                    }
 
-                        <span class="@(isPersonelActive ? "fw-bold" : "fw-semibold")">Personel & Ekipler</span>
+                    @if (effectivePerms.Contains(StaffPermissionHelper.PermWebsite))
+                    {
+                        <a href="/Dashboard/SiteYonetimi" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-2 d-flex align-items-center @(isWebSiteActive ? "active shadow-sm" : "text-dark")" style="@(isWebSiteActive ? "background-color: #0d6efd; color: white;" : "")">
+                            <i class="bi bi-globe2 @(isWebSiteActive ? "text-white" : "text-primary") fs-6 me-2"></i>
+                            <span class="@(isWebSiteActive ? "fw-bold" : "fw-semibold")">Kurumsal Web & Domain</span>
+                        </a>
+                    }
 
+                    <a href="javascript:void(0)" data-bs-toggle="modal" data-bs-target="#gmkVisualGuideModal" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-2 d-flex align-items-center mt-1 bg-primary bg-opacity-10 text-primary fw-bold">
+                        <i class="bi bi-journal-richtext text-primary fs-6 me-2"></i>
+                        <span>Görsel Kullanım Kılavuzu</span>
                     </a>
 
-                    <a href="/Inventory/Index" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-2 d-flex align-items-center @(isDemirbasActive ? "active shadow-sm" : "text-dark")" style="@(isDemirbasActive ? "background-color: #0d6efd; color: white;" : "")">
-
-                        <i class="bi bi-tools @(isDemirbasActive ? "text-white" : "text-secondary") fs-6 me-2"></i>
-
-                        <span class="@(isDemirbasActive ? "fw-bold" : "fw-semibold")">Demirbaş Yönetimi</span>
-
-                    </a>
+                    @if (!effectivePerms.Contains(StaffPermissionHelper.PermFinance))
+                    {
+                        <a href="/MobileTask/Index" class="list-group-item list-group-item-action border-0 py-2 px-3 rounded-2 d-flex align-items-center mt-1 bg-danger bg-opacity-10 text-danger fw-bold">
+                            <i class="bi bi-phone-fill text-danger fs-6 me-2"></i>
+                            <span>Saha Görev PWA (Mobil)</span>
+                        </a>
+                    }
 
                 </div>
 
                 <!-- 2. MEVCUT ÇALIŞAN TÜM ESKİ MENÜ (HİÇBİR LİNK SİLİNMEDEN AYNEN KORUNUYOR) -->
 
-                <div class="card-header bg-light text-muted fw-bold py-2 px-3 border-bottom d-flex justify-content-between align-items-center" style="font-size: 0.8rem;">
+                <div class="card-header bg-light text-muted fw-bold py-2 px-3 border-bottom d-none justify-content-between align-items-center" style="font-size: 0.8rem;">
 
                     <span><i class="bi bi-archive me-1"></i> MEVCUT ÇALIŞAN LİNKLER</span>
 
@@ -343,7 +434,7 @@
 
                 </div>
 
-                <div class="card-body p-0">
+                <div class="card-body p-0 d-none">
 
                     <div class="accordion accordion-flush" id="sidebarAccordion">
 
@@ -635,6 +726,7 @@
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
 
+    @await Html.PartialAsync("_VisualUserGuideModalPartial")
     @await RenderSectionAsync("Scripts", required: false)
 
 <script>

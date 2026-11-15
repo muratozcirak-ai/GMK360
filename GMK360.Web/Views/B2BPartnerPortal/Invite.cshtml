@@ -61,7 +61,20 @@
             <i class="bi bi-shield-exclamation fs-3 text-warning me-3"></i>
             <div>
                 <h6 class="fw-bold mb-1">Hoş Geldiniz @(Model.NetworkContact?.ContactPerson ?? Model.NetworkContact?.CompanyName)! GMK360 altyapısında sizin için hazırlanan paneledesiniz.</h6>
-                <span class="small">@(Model.QuoteRequest?.RequesterAgency?.CompanyName ?? "Ana Firma") tarafından size özel oluşturulan bu hesabın geçici şifresi <strong>(Gç-8472)</strong> 3 gün içinde kilitlenecektir. Sisteme kesintisiz erişim ve cari takibiniz için lütfen kendi şifrenizi belirleyin. <a href="#" class="alert-link">Şifremi Şimdi Değiştir</a></span>
+                <span class="small">@(Model.QuoteRequest?.RequesterAgency?.CompanyName ?? "Ana Firma") tarafından size özel oluşturulan bu hesabın geçici şifresi <strong>(Gç-8472)</strong> ile giriş yaptınız. Sisteme kalıcı dahil olmak ve cari hesabınızı ücretsiz yönetmek için:</span>
+                @{ var b2bComp = ViewBag.B2bCompany as GMK360.Core.Entities.B2b.B2bCompany; }
+                @if (b2bComp != null && (b2bComp.InvitationStatus == GMK360.Core.Entities.B2b.B2bInvitationStatus.Active || b2bComp.InvitationStatus == GMK360.Core.Entities.B2b.B2bInvitationStatus.Pro))
+                {
+                    <span class="badge bg-success ms-2 px-3 py-2"><i class="bi bi-check-circle-fill me-1"></i> Kurumsal Hesabınız Aktif (Referans: @(Model.QuoteRequest?.RequesterAgency?.CompanyName ?? "Ana Firma"))</span>
+                }
+                else
+                {
+                    <form method="post" action="/B2BPartnerPortal/ActivateAccount" class="d-inline ms-2">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="inviteId" value="@Model.Id" />
+                        <button type="submit" class="btn btn-sm btn-dark fw-bold rounded-pill px-3"><i class="bi bi-person-check-fill text-warning me-1"></i> Hesabımı Aktifleştir & Sisteme Dahil Ol (Ücretsiz)</button>
+                    </form>
+                }
             </div>
         </div>
 
@@ -80,7 +93,13 @@
                                 <span class="badge bg-success rounded-pill mb-2"><i class="bi bi-check"></i> Teklifiniz İletildi</span>
                             }
                             <h4 class="fw-bold text-dark mb-0">@(Model.QuoteRequest?.RequesterAgency?.CompanyName ?? "Ana Firma")</h4>
-                            <p class="text-muted mb-0">@(Model.QuoteRequest?.Title)</p>
+                            <p class="text-muted mb-1 fw-semibold">@(Model.QuoteRequest?.Title)</p>
+                            @if (!string.IsNullOrWhiteSpace(Model.QuoteRequest?.Description))
+                            {
+                                <div class="mt-2 p-2 px-3 rounded-3 bg-primary bg-opacity-10 border border-primary border-opacity-25 text-dark small">
+                                    <strong><i class="bi bi-card-text text-primary me-1"></i> İşin İçeriği & Beklenti:</strong> @Model.QuoteRequest.Description
+                                </div>
+                            }
                         </div>
                         <div class="bg-light rounded p-3 text-center border">
                             <i class="bi bi-building fs-1 text-primary"></i>
@@ -315,7 +334,7 @@
                                     if (!inputs || inputs.length === 0) return;
                                     var grandTotal = 0;
                                     inputs.forEach(function(inp) {
-                                        var qty = parseFloat(inp.getAttribute('data-qty')) || 0;
+                                        var qty = parseFloat((inp.getAttribute('data-qty') || '0').replace(',', '.')) || 0;
                                         var unitPrice = parseFloat(inp.value) || 0;
                                         var subtotal = qty * unitPrice;
                                         grandTotal += subtotal;

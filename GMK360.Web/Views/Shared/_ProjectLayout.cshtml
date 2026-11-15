@@ -1,27 +1,56 @@
 @using Microsoft.AspNetCore.Identity
-
-
-
+@using Microsoft.EntityFrameworkCore
 @using GMK360.Core.Entities.Identity
-
-
-
+@using GMK360.Core.Entities.Construction
+@using GMK360.Web.Helpers
 @inject UserManager<ApplicationUser> UserManager
-
-
+@inject GMK360.Data.Contexts.ApplicationDbContext DbContext
 
 @{
+    var currentUser = await UserManager.GetUserAsync(User);
+    var currentConsultant = currentUser != null ? await DbContext.AgencyConsultants.AsNoTracking().FirstOrDefaultAsync(c => c.UserId == currentUser.Id && c.IsActive) : null;
+    bool isRealBoss = currentConsultant == null || currentConsultant.Role == GMK360.Core.Entities.AgencyRole.Owner || currentConsultant.Role == GMK360.Core.Entities.AgencyRole.Manager || User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
+    var previewCookie = isRealBoss ? Context.Request.Cookies["gmk360_role_preview"] : null;
+    var effectivePerms = StaffPermissionHelper.GetEffectivePermissions(currentConsultant?.Role, currentUser?.ActiveModules, previewCookie);
+    bool isPreviewActive = !string.IsNullOrWhiteSpace(previewCookie) && !previewCookie.Equals("owner", StringComparison.OrdinalIgnoreCase);
+    string currentUrl = Context.Request.Path + Context.Request.QueryString;
 
+    object? rawPid = ViewData["ProjectId"] ?? ViewContext.RouteData.Values["id"] ?? Context.Request.Query["projectId"].FirstOrDefault();
+    int parsedPid = 0;
+    if (rawPid != null) int.TryParse(rawPid.ToString(), out parsedPid);
 
+    var pStatus = ViewData["ProjectStatus"] as ProjectStatus?;
+    if (parsedPid > 0 && (!pStatus.HasValue || ViewData["ProjectName"] == null))
+    {
+        var dbProj = DbContext.ConstructionProjects.AsNoTracking()
+            .Where(x => x.Id == parsedPid)
+            .Select(x => new { x.Status, x.Name })
+            .FirstOrDefault();
+        if (dbProj != null)
+        {
+            if (!pStatus.HasValue) pStatus = dbProj.Status;
+            if (ViewData["ProjectName"] == null) ViewData["ProjectName"] = dbProj.Name;
+            if (ViewData["ProjectId"] == null) ViewData["ProjectId"] = parsedPid;
+        }
+    }
 
-    var pStatus = ViewData["ProjectStatus"] as GMK360.Core.Entities.Construction.ProjectStatus?;
+    bool isFormenOnlyMode = !effectivePerms.Contains(StaffPermissionHelper.PermFinance) && !effectivePerms.Contains(StaffPermissionHelper.PermDna) && !effectivePerms.Contains(StaffPermissionHelper.PermCandidate);
+    bool isAdayMode = !isFormenOnlyMode && pStatus.HasValue && (pStatus.Value == ProjectStatus.On_Gorusme_Talep || pStatus.Value == ProjectStatus.Projelendirme_Teklif);
+    bool isAnlasmaMode = !isFormenOnlyMode && pStatus.HasValue && pStatus.Value == ProjectStatus.Anlasma_Yapildi;
+    bool isSatisMode = !isFormenOnlyMode && pStatus.HasValue && (pStatus.Value == ProjectStatus.Satista_Topraktan || pStatus.Value == ProjectStatus.Tamamlandi_Teslim);
+    bool isAktifSantiyeMode = !isAdayMode && !isAnlasmaMode && !isSatisMode;
 
+    string stageBadgeText = isAdayMode ? "1. EVRE: ADAY / TEKLİF"
+        : isAnlasmaMode ? "2. EVRE: ANLAŞMA YAPILDI (PLANLAMA)"
+        : isSatisMode ? (pStatus == ProjectStatus.Satista_Topraktan ? "4. EVRE: SATIŞTA (TOPRAKTAN)" : "4. EVRE: BİTEN / TESLİM")
+        : "3. EVRE: AKTİF ŞANTİYE";
 
+    string stageBadgeClass = isAdayMode ? "bg-warning text-dark border border-warning"
+        : isAnlasmaMode ? "text-white"
+        : isSatisMode ? "bg-success text-white"
+        : "bg-primary text-white";
 
-    bool isAdayMode = pStatus.HasValue && (pStatus.Value == GMK360.Core.Entities.Construction.ProjectStatus.On_Gorusme_Talep || pStatus.Value == GMK360.Core.Entities.Construction.ProjectStatus.Projelendirme_Teklif);
-
-
-
+    string stageBadgeStyle = isAnlasmaMode ? "background-color: #6f42c1;" : "";
 }
 
 
@@ -135,19 +164,72 @@
                 
 
                 @if(ViewData["ProjectName"] != null)
-
                 {
-
                     <span class="text-muted mx-2">|</span>
-
-                    <i class="@(isAdayMode ? "bi bi-search" : "bi bi-building-check") fs-6 @(isAdayMode ? "text-warning" : "text-primary") me-1"></i>
-
-                    <span class="fw-bold text-truncate text-uppercase text-dark" style="font-size: 0.85rem; max-width: 450px;">
-
-                        @ViewData["ProjectName"] <span class="badge @(isAdayMode ? "bg-warning text-dark" : "bg-primary text-white") ms-1 px-2 py-0 rounded-pill" style="font-size: 0.68rem;">@(isAdayMode ? "ADAY / TEKLİF" : "ŞANTİYE")</span>
-
+                    <i class="@(isAdayMode ? "bi bi-search text-warning" : isAnlasmaMode ? "bi bi-handshake" : isSatisMode ? "bi bi-cash-coin text-success" : "bi bi-building-check text-primary") fs-6 me-1" style="@(isAnlasmaMode ? "color: #6f42c1;" : "")"></i>
+                    <span class="fw-bold text-truncate text-uppercase text-dark d-flex align-items-center gap-1" style="font-size: 0.85rem; max-width: 620px;">
+                        <span class="text-truncate">@ViewData["ProjectName"]</span>
+                        @if (parsedPid > 0)
+                        {
+                            <div class="dropdown d-inline-block ms-1">
+                                <button class="badge @stageBadgeClass px-2.5 py-1 rounded-pill dropdown-toggle border-0 shadow-xs" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="font-size: 0.70rem; cursor: pointer; @stageBadgeStyle" title="Proje Evresini / Masasını Değiştir">
+                                    @stageBadgeText
+                                </button>
+                                <ul class="dropdown-menu shadow border-0 mt-1" style="border-radius: 12px; font-size: 0.80rem; min-width: 260px;">
+                                    <li class="px-3 py-1.5 border-bottom text-muted fw-bold small">PROJE EVRESİNİ DEĞİŞTİR</li>
+                                    <li>
+                                        <form asp-controller="ConstructionProject" asp-action="ChangeProjectStatus" method="post" class="m-0">
+                                            <input type="hidden" name="id" value="@parsedPid" />
+                                            <input type="hidden" name="newStatus" value="Projelendirme_Teklif" />
+                                            <button type="submit" class="dropdown-item py-1.5 @(isAdayMode ? "fw-bold bg-warning bg-opacity-10" : "")">
+                                                <i class="bi bi-search text-warning me-2"></i>1. Aday Proje (Etüd & Teklif)
+                                            </button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form asp-controller="ConstructionProject" asp-action="ChangeProjectStatus" method="post" class="m-0">
+                                            <input type="hidden" name="id" value="@parsedPid" />
+                                            <input type="hidden" name="newStatus" value="Anlasma_Yapildi" />
+                                            <button type="submit" class="dropdown-item py-1.5 @(isAnlasmaMode ? "fw-bold bg-primary bg-opacity-10" : "")">
+                                                <i class="bi bi-diagram-3-fill me-2" style="color: #6f42c1;"></i>2. Anlaşma Yapıldı (DNA & Planlama)
+                                            </button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form asp-controller="ConstructionProject" asp-action="ChangeProjectStatus" method="post" class="m-0">
+                                            <input type="hidden" name="id" value="@parsedPid" />
+                                            <input type="hidden" name="newStatus" value="Aktif_Santiye" />
+                                            <button type="submit" class="dropdown-item py-1.5 @(isAktifSantiyeMode ? "fw-bold bg-primary bg-opacity-10" : "")">
+                                                <i class="bi bi-cone-striped text-primary me-2"></i>3. Aktif Şantiye (Saha Operasyon)
+                                            </button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form asp-controller="ConstructionProject" asp-action="ChangeProjectStatus" method="post" class="m-0">
+                                            <input type="hidden" name="id" value="@parsedPid" />
+                                            <input type="hidden" name="newStatus" value="Satista_Topraktan" />
+                                            <button type="submit" class="dropdown-item py-1.5 @(pStatus == ProjectStatus.Satista_Topraktan ? "fw-bold bg-success bg-opacity-10" : "")">
+                                                <i class="bi bi-cash-coin text-success me-2"></i>4. Satışa Çıkanlar (Topraktan / Pazarlama)
+                                            </button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form asp-controller="ConstructionProject" asp-action="ChangeProjectStatus" method="post" class="m-0">
+                                            <input type="hidden" name="id" value="@parsedPid" />
+                                            <input type="hidden" name="newStatus" value="Tamamlandi_Teslim" />
+                                            <button type="submit" class="dropdown-item py-1.5 @(pStatus == ProjectStatus.Tamamlandi_Teslim ? "fw-bold bg-success bg-opacity-10" : "")">
+                                                <i class="bi bi-check-circle-fill text-success me-2"></i>5. Biten / Teslim Dönemi
+                                            </button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        }
+                        else
+                        {
+                            <span class="badge @stageBadgeClass ms-1 px-2 py-0 rounded-pill" style="font-size: 0.68rem; @stageBadgeStyle">@stageBadgeText</span>
+                        }
                     </span>
-
                 }
 
             </div>
@@ -155,9 +237,73 @@
             
 
             <!-- SAĞ: PROFİL MENÜSÜ -->
-
             <div class="d-flex gap-2 align-items-center">
-
+                <!-- KALICI GÖRSEL KULLANIM KILAVUZU & REHBER BUTONU -->
+                <button type="button" class="btn btn-primary px-2.5 py-1 rounded-pill d-flex align-items-center gap-1 btn-sm shadow-xs fw-bold" data-bs-toggle="modal" data-bs-target="#gmkVisualGuideModal" style="font-size: 0.75rem; background: linear-gradient(135deg, #1e3a8a, #0284c7); border: none;" title="Görselli Adım Adım Sistem Kullanım Kılavuzu">
+                    <i class="bi bi-journal-richtext text-warning"></i>
+                    <span class="d-none d-sm-inline">Görsel Kılavuz</span>
+                </button>
+                @if (isRealBoss)
+                {
+                    <div class="dropdown">
+                        <button class="btn @(isPreviewActive ? "btn-warning text-dark fw-bold border-warning" : "btn-light border text-dark fw-semibold") px-2.5 py-1 rounded-pill dropdown-toggle d-flex align-items-center gap-1 btn-sm shadow-xs" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="font-size: 0.75rem;" title="Patron Rol & Gölge Ön İzleme Simülatörü">
+                            <i class="bi bi-eye-fill @(isPreviewActive ? "text-danger" : "text-primary")"></i>
+                            <span class="d-none d-md-inline">
+                                @(previewCookie == "engineer" ? "2. Rol: Teknik Ofis" : previewCookie == "formen" ? "3. Rol: Formen (Sıfır ₺)" : "Rol & Gölge Testi")
+                            </span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 mt-2" style="border-radius: 12px; min-width: 310px; font-size: 0.80rem;">
+                            <li class="px-3 py-1.5 border-bottom bg-light rounded-top-3 text-muted fw-bold small">
+                                👁️ ŞİRKET İÇİ 3 ROL ÖN İZLEME (CANLI FİLTRE)
+                            </li>
+                            <li>
+                                <a class="dropdown-item py-1.5 @(!isPreviewActive ? "fw-bold bg-primary bg-opacity-10" : "")" href="/AgencyStaff/SwitchRolePreview?mode=owner&returnUrl=@Uri.EscapeDataString(currentUrl)">
+                                    👑 1. Rol: Patron / Sağ Kol (Tam Yetki)
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item py-1.5 @(previewCookie == "engineer" ? "fw-bold bg-primary bg-opacity-10" : "")" href="/AgencyStaff/SwitchRolePreview?mode=engineer&returnUrl=@Uri.EscapeDataString(currentUrl)">
+                                    📐 2. Rol: Teknik Ofis / Mühendis (Kasa & Satış Gizli)
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item py-1.5 @(previewCookie == "formen" ? "fw-bold bg-warning bg-opacity-25" : "")" href="/AgencyStaff/SwitchRolePreview?mode=formen&returnUrl=@Uri.EscapeDataString(currentUrl)">
+                                    👷 3. Rol: Saha Sorumlusu / Formen (Sıfır Finans)
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider my-1"></li>
+                            <li class="px-3 py-1 text-muted fw-bold small">
+                                👻 4. ROL: GÖLGE & DIŞ İŞ ORTAĞI ANA SAYFALARI
+                            </li>
+                            <li>
+                                <a class="dropdown-item py-1.5" href="/Tedarikci/Index" target="_blank">
+                                    <i class="bi bi-shop text-warning me-2"></i>Tedarikçi / Beton Santrali (Açık Hesap & Rehber)
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item py-1.5" href="/Taseron/Index" target="_blank">
+                                    <i class="bi bi-bricks text-primary me-2"></i>Taşeron & Ekip Başı (Puantaj & Hakediş Masası)
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item py-1.5" href="/PartnerPortal/Index" target="_blank">
+                                    <i class="bi bi-wallet2 text-success me-2"></i>Gölge Cari Hesap & Sözleşme Portalı
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item py-1.5" href="/MobileTask/Index" target="_blank">
+                                    <i class="bi bi-phone-fill text-danger me-2"></i>Formen / Usta Mobil Görev PWA
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider my-1"></li>
+                            <li>
+                                <a class="dropdown-item py-1.5 fw-bold text-primary" href="/AgencyStaff/Index">
+                                    <i class="bi bi-sliders me-2"></i>Personel "Sen Bunu Gör" Yetkilerini Yönet ➔
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                }
                 @if (User.Identity.IsAuthenticated)
 
                 {
@@ -225,8 +371,23 @@
 
 
     <!-- ANA İÇERİK (SİDEBAR + CONTENT) -->
-
     <main class="flex-grow-1" style="margin-top: 48px;">
+        @if (isPreviewActive)
+        {
+            <div class="bg-warning text-dark py-1 px-3 border-bottom border-dark border-opacity-25 d-flex justify-content-between align-items-center flex-wrap gap-2 shadow-xs" style="font-size: 0.78rem;">
+                <div>
+                    <i class="bi bi-eye-fill text-danger me-1"></i>
+                    <strong>ROL ÖN İZLEME AKTİF:</strong> Şu an bu projeyi
+                    <span class="badge bg-dark text-white rounded-pill px-2 py-0.5">
+                        @(previewCookie == "engineer" ? "📐 2. Rol: Teknik Ofis / Mühendis (Hazırlık & DNA - Ana Kasa Gizli)" : "👷 3. Rol: Saha Sorumlusu / Formen (Sadece 3. Evre Şantiye & PWA - Sıfır Finans)")
+                    </span>
+                    gözüyle inceliyorsunuz.
+                </div>
+                <a href="/AgencyStaff/SwitchRolePreview?mode=owner&returnUrl=@Uri.EscapeDataString(currentUrl)" class="btn btn-dark btn-sm rounded-pill py-0 px-3 fw-bold" style="font-size: 0.72rem;">
+                    👑 Patron (Tam Yetki) Görünümüne Dön
+                </a>
+            </div>
+        }
 
 
 
@@ -307,504 +468,586 @@
 
 
                         <div class="list-group list-group-flush" style="font-size: 0.82rem;">
-
-
+                            @{
+                                var currentAction = ViewContext.RouteData.Values["Action"]?.ToString();
+                                var currentController = ViewContext.RouteData.Values["Controller"]?.ToString();
+                                var pId = ViewData["ProjectId"] ?? parsedPid;
+                                bool isEngPageOpen = currentController == "PhaseZero" || currentAction == "DrawingArchive" || currentAction == "ProjectDNA" || currentAction == "DnaWizard" || currentAction == "Analysis" || currentAction == "Feasibility" || currentAction == "Proposal";
+                            }
 
                             @if (isAdayMode)
-
                             {
-
-                                var currentAction = ViewContext.RouteData.Values["Action"]?.ToString();
-
-                                var currentController = ViewContext.RouteData.Values["Controller"]?.ToString();
-
-                                var pId = ViewData["ProjectId"];
-
-
-
+                                <!-- ========================================================= -->
+                                <!-- 1. EVRE: ADAY PROJE MASASI (MEVCUT YAPI - %100 KORUNDU)   -->
+                                <!-- ========================================================= -->
                                 <div class="p-2 d-flex flex-column gap-1">
-
                                     <!-- 1. Görüşmeler ve Toplantılar (Merkeze bağlı) -->
-
                                     <a href="/ConstructionProject/Meetings/@pId" 
-
                                        class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Meetings" || currentAction == "MeetingRoom" ? "btn-warning text-dark border-warning" : "btn-light border text-dark")"
-
                                        style="font-size: 0.80rem; @(currentAction == "Meetings" || currentAction == "MeetingRoom" ? "background: #ffc107;" : "")">
-
                                         <span class="d-flex align-items-center text-truncate">
-
                                             <i class="bi bi-people-fill me-2 fs-6 text-warning"></i>
-
                                             <span class="text-truncate">Görüşmeler & Toplantılar</span>
-
                                         </span>
-
                                         <i class="bi bi-chevron-right small text-muted opacity-50"></i>
-
                                     </a>
-
-
 
                                     <!-- 2. Künye -->
-
                                     <a href="/ConstructionProject/Workspace/@pId" 
-
                                        class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Workspace" ? "btn-primary text-white" : "btn-light border text-dark")"
-
                                        style="font-size: 0.80rem; @(currentAction == "Workspace" ? "background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);" : "")">
-
                                         <span class="d-flex align-items-center text-truncate">
-
                                             <i class="bi bi-card-heading me-2 fs-6 @(currentAction == "Workspace" ? "text-white" : "text-primary")"></i>
-
                                             <span class="text-truncate">Proje Künyesi</span>
-
                                         </span>
-
                                         <i class="bi bi-chevron-right small @(currentAction == "Workspace" ? "text-white opacity-75" : "text-muted opacity-50")"></i>
-
                                     </a>
-
-
 
                                     <!-- 3. Hızlı Ön Etüd -->
-
                                     <a href="/ConstructionProject/Feasibility/@pId" 
-
                                        class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Feasibility" ? "btn-warning text-dark border-warning" : "btn-light border text-dark")"
-
                                        style="font-size: 0.80rem; @(currentAction == "Feasibility" ? "background: #ffc107;" : "")">
-
                                         <span class="d-flex align-items-center text-truncate">
-
                                             <i class="bi bi-rulers me-2 fs-6 text-warning"></i>
-
                                             <span class="text-truncate">Hızlı Ön Etüd</span>
-
                                         </span>
-
                                         <i class="bi bi-chevron-right small text-muted opacity-50"></i>
-
                                     </a>
-
-
 
                                     <!-- 4. Detaylı İnceleme -->
-
                                     <a href="/ConstructionProject/Analysis/@pId" 
-
                                        class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Analysis" ? "btn-primary text-white" : "btn-light border text-dark")"
-
                                        style="font-size: 0.80rem; @(currentAction == "Analysis" ? "background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);" : "")">
-
                                         <span class="d-flex align-items-center text-truncate">
-
                                             <i class="bi bi-clipboard2-data me-2 fs-6 @(currentAction == "Analysis" ? "text-white" : "text-success")"></i>
-
                                             <span class="text-truncate">Detaylı İnceleme</span>
-
                                         </span>
-
                                         <i class="bi bi-chevron-right small @(currentAction == "Analysis" ? "text-white opacity-75" : "text-muted opacity-50")"></i>
-
                                     </a>
-
-
 
                                     <!-- 5. Teklif Hazırlama -->
-
                                     <a href="/ConstructionProject/Proposal/@pId" 
-
                                        class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Proposal" ? "btn-primary text-white" : "btn-light border text-dark")"
-
                                        style="font-size: 0.80rem; @(currentAction == "Proposal" ? "background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);" : "")">
-
                                         <span class="d-flex align-items-center text-truncate">
-
                                             <i class="bi bi-file-earmark-spreadsheet me-2 fs-6 @(currentAction == "Proposal" ? "text-white" : "text-info")"></i>
-
                                             <span class="text-truncate">Teklif Hazırlama</span>
-
                                         </span>
-
                                         <i class="bi bi-chevron-right small @(currentAction == "Proposal" ? "text-white opacity-75" : "text-muted opacity-50")"></i>
-
                                     </a>
-
-
 
                                     <!-- 6. Proje Finansı -->
-
                                     <a href="/ConstructionProject/Finance/@pId" 
-
                                        class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Finance" ? "btn-primary text-white" : "btn-light border text-dark")"
-
                                        style="font-size: 0.80rem; @(currentAction == "Finance" ? "background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);" : "")">
-
                                         <span class="d-flex align-items-center text-truncate">
-
                                             <i class="bi bi-cash-coin me-2 fs-6 @(currentAction == "Finance" ? "text-white" : "text-warning")"></i>
-
                                             <span class="text-truncate">Proje Finansı</span>
-
                                         </span>
-
                                         <i class="bi bi-chevron-right small @(currentAction == "Finance" ? "text-white opacity-75" : "text-muted opacity-50")"></i>
-
                                     </a>
-
-
 
                                     <!-- 7. Dosya Arşivi -->
-
                                     <a href="/ConstructionProject/Archive/@pId" 
-
                                        class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Archive" ? "btn-primary text-white" : "btn-light border text-dark")"
-
                                        style="font-size: 0.80rem; @(currentAction == "Archive" ? "background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);" : "")">
-
                                         <span class="d-flex align-items-center text-truncate">
-
                                             <i class="bi bi-folder2-open me-2 fs-6 @(currentAction == "Archive" ? "text-white" : "text-primary")"></i>
-
                                             <span class="text-truncate">Dosya Arşivi</span>
-
                                         </span>
-
                                         <i class="bi bi-chevron-right small @(currentAction == "Archive" ? "text-white opacity-75" : "text-muted opacity-50")"></i>
-
                                     </a>
-
-
 
                                     <hr class="text-muted mx-1 my-1">
 
-
+                                    <!-- 2. EVREYE GEÇİŞ BUTONU -->
+                                    <form asp-controller="ConstructionProject" asp-action="ChangeProjectStatus" method="post" class="m-0">
+                                        <input type="hidden" name="id" value="@pId" />
+                                        <input type="hidden" name="newStatus" value="Anlasma_Yapildi" />
+                                        <button type="submit" class="btn w-100 rounded-pill fw-bold shadow-xs text-white py-1.5 px-2 mb-1" style="background-color: #6f42c1; font-size: 0.76rem;" title="Maliklerle anlaşma sağlandıysa Mühendislik, DNA ve Ekip/Malzeme Planlama Masasına geçirin">
+                                            🤝 Anlaşma Sağlandı (Planlamaya Geç) ➔
+                                        </button>
+                                    </form>
 
                                     <a href="/ConstructionProject/Index" class="btn btn-outline-danger w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-center align-items-center py-1.5" style="font-size: 0.78rem;">
-
                                         <i class="bi bi-arrow-left-circle-fill me-1.5 fs-6"></i> Tüm Projelere Dön
-
                                     </a>
-
                                 </div>
-
-
 
                                 <!-- ADAY PROJE BİLGİLENDİRMESİ -->
-
                                 <div class="p-2 text-center">
-
                                     <span class="badge bg-warning bg-opacity-10 text-dark border border-warning px-2 py-1 rounded-pill fw-bold small w-100 text-wrap mb-1" style="font-size: 0.70rem;">
-
-                                        <i class="bi bi-search me-1 text-warning"></i> Aday Proje Masası
-
+                                        <i class="bi bi-search me-1 text-warning"></i> 1. Evre: Aday Proje Masası
                                     </span>
-
                                     <p class="text-muted mb-0" style="font-size: 0.72rem; line-height: 1.25;">
-
                                         Ön Görüşme, Etüd & Teklif Aşaması
-
                                     </p>
-
                                 </div>
-
                             }
-
-
-
-                            else
-
-
-
+                            else if (isAnlasmaMode)
                             {
-
-
-
-                                <!-- KAÇIŞ VE YENİ MASAYA GEÇİŞ BUTONLARI (AKTİF ŞANTİYE) -->
-
-
-
-                                <div class="p-2">
-
-
-
-                                    <a href="/ConstructionProject/Workspace/@ViewData["ProjectId"]" class="btn btn-primary w-100 rounded-pill fw-bold shadow-sm d-flex justify-content-center align-items-center py-1.5 mb-1" style="background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);">
-
-
-
-                                        <i class="bi bi-card-heading me-1.5 fs-6"></i> Proje Künyesi
-
-
-
-                                    </a>
-
-
-
-                                    <a href="/ConstructionProject/Index" class="btn btn-outline-danger w-100 rounded-pill fw-bold shadow-sm d-flex justify-content-center align-items-center">
-
-
-
-                                        <i class="bi bi-arrow-left-circle-fill me-1.5 fs-6"></i> Tüm Projelere Dön
-
-
-
-                                    </a>
-
-
-
+                                <!-- ========================================================= -->
+                                <!-- 2. EVRE: ANLAŞMA YAPILANLAR (MÜHENDİSLİK, DNA & PLANLAMA) -->
+                                <!-- ========================================================= -->
+                                <div class="p-2 pb-1 text-center border-bottom bg-light">
+                                    <span class="badge text-white px-2.5 py-1 rounded-pill fw-bold small w-100 text-wrap mb-1" style="background-color: #6f42c1; font-size: 0.71rem;">
+                                        <i class="bi bi-diagram-3-fill me-1"></i> 2. Evre: Anlaşma & Hazırlık Masası
+                                    </span>
+                                    <div class="text-muted" style="font-size: 0.70rem; line-height: 1.2;">
+                                        Şantiye Öncesi Mühendislik, DNA Metraj, Malzeme & Ekip Planlama
+                                    </div>
                                 </div>
 
+                                <div class="p-2 d-flex flex-column gap-1">
+                                    <!-- 1. Künye & Ortaklık -->
+                                    <a href="/ConstructionProject/Workspace/@pId"
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Workspace" ? "btn-primary text-white" : "btn-light border text-dark")"
+                                       style="font-size: 0.79rem;">
+                                        <span class="d-flex align-items-center text-truncate">
+                                            <i class="bi bi-card-heading me-2 fs-6 @(currentAction == "Workspace" ? "text-white" : "text-primary")"></i>
+                                            <span class="text-truncate">1. Künye & Ortaklar</span>
+                                        </span>
+                                        <i class="bi bi-chevron-right small opacity-50"></i>
+                                    </a>
 
+                                    <!-- 2. Faz 0: Resmi Evrak & Ruhsat -->
+                                    <a href="/PhaseZero/Index/@pId"
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentController == "PhaseZero" ? "btn-danger text-white" : "btn-light border text-dark")"
+                                       style="font-size: 0.79rem;">
+                                        <span class="d-flex align-items-center text-truncate">
+                                            <i class="bi bi-file-earmark-lock-fill me-2 fs-6 @(currentController == "PhaseZero" ? "text-white" : "text-danger")"></i>
+                                            <span class="text-truncate">2. Faz 0: Resmi Evrak & Ruhsat</span>
+                                        </span>
+                                        <i class="bi bi-chevron-right small opacity-50"></i>
+                                    </a>
+
+                                    <!-- 3. Kanat 1: Çizim Arşivi & Kabul -->
+                                    <a href="/Metraj/DrawingArchive?projectId=@pId"
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "DrawingArchive" ? "btn-primary text-white" : "btn-light border text-dark")"
+                                       style="font-size: 0.79rem;">
+                                        <span class="d-flex align-items-center text-truncate">
+                                            <i class="bi bi-folder2-open me-2 fs-6 @(currentAction == "DrawingArchive" ? "text-white" : "text-primary")"></i>
+                                            <span class="text-truncate">3. DWG Yükle & Metraj Oku</span>
+                                        </span>
+                                        <i class="bi bi-chevron-right small opacity-50"></i>
+                                    </a>
+
+                                    <!-- 4. Kanat 2: Proje DNA (Metraj & Reçete) -->
+                                    <a href="/Metraj/ProjectDNA/@pId"
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "ProjectDNA" || currentAction == "DnaWizard" ? "btn-success text-white" : "btn-light border text-dark")"
+                                       style="font-size: 0.79rem;">
+                                        <span class="d-flex align-items-center text-truncate">
+                                            <i class="fas fa-dna me-2 fs-6 @(currentAction == "ProjectDNA" || currentAction == "DnaWizard" ? "text-white" : "text-success")"></i>
+                                            <span class="text-truncate">4. Proje DNA & Paket Seçimi</span>
+                                        </span>
+                                        <i class="bi bi-chevron-right small opacity-50"></i>
+                                    </a>
+
+                                    <!-- 5. İş Akışı, Ekip Tasarımı & Malzeme Tedarik -->
+                                    <a href="/Metraj/BuildingWorkflow/@pId"
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "BuildingWorkflow" ? "btn-warning text-dark border-warning" : "btn-light border text-dark")"
+                                       style="font-size: 0.79rem;">
+                                        <span class="d-flex align-items-center text-truncate">
+                                            <i class="fas fa-network-wired me-2 fs-6 text-warning"></i>
+                                            <span class="text-truncate">5. İş Akışı & Tedarik Planı</span>
+                                        </span>
+                                        <i class="bi bi-chevron-right small opacity-50"></i>
+                                    </a>
+
+                                    <!-- 6. Operasyon & İş Programı (Takvim) -->
+                                    <a href="/PhaseTwo/OperationBoard/@pId"
+                                       class="d-none btn w-100 rounded-pill fw-bold shadow-xs justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "OperationBoard" ? "btn-primary text-white" : "btn-light border text-dark")"
+                                       style="font-size: 0.79rem;">
+                                        <span class="d-flex align-items-center text-truncate">
+                                            <i class="fas fa-calendar-alt me-2 fs-6 @(currentAction == "OperationBoard" ? "text-white" : "text-info")"></i>
+                                            <span class="text-truncate">6. İş Programı & Takvim</span>
+                                        </span>
+                                        <i class="bi bi-chevron-right small opacity-50"></i>
+                                    </a>
+
+                                    <!-- 7. Hazırlık Bütçesi & Ortak Finans (Sadece Finans Yetkisi Olanlar Görebilir) -->
+                                    @if (effectivePerms.Contains(StaffPermissionHelper.PermFinance))
+                                    {
+                                        <a href="/ProjectFinance/Index/@pId"
+                                           class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentController == "ProjectFinance" ? "btn-success text-white" : "btn-light border text-dark")"
+                                           style="font-size: 0.79rem;">
+                                            <span class="d-flex align-items-center text-truncate">
+                                                <i class="bi bi-wallet2 me-2 fs-6 @(currentController == "ProjectFinance" ? "text-white" : "text-success")"></i>
+                                                <span class="text-truncate">6. Hazırlık Bütçesi & Finans</span>
+                                            </span>
+                                            <i class="bi bi-chevron-right small opacity-50"></i>
+                                        </a>
+                                    }
+
+                                    <!-- 8. Bloklar, Malikler & Topraktan Satış Hazırlığı -->
+                                    <a href="/ConstructionProject/Details/@pId"
+                                       class="d-none btn w-100 rounded-pill fw-bold shadow-xs justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Details" ? "btn-primary text-white" : "btn-light border text-dark")"
+                                       style="font-size: 0.79rem;">
+                                        <span class="d-flex align-items-center text-truncate">
+                                            <i class="bi bi-building-add me-2 fs-6 @(currentAction == "Details" ? "text-white" : "text-warning")"></i>
+                                            <span class="text-truncate">8. Bloklar & Topraktan Satış</span>
+                                        </span>
+                                        <i class="bi bi-chevron-right small opacity-50"></i>
+                                    </a>
+
+                                    <hr class="text-muted mx-1 my-1">
+
+                                    <!-- 3. EVREYE (AKTİF ŞANTİYE) GEÇİŞ BUTONU -->
+                                    <form asp-controller="ConstructionProject" asp-action="ChangeProjectStatus" method="post" class="m-0">
+                                        <input type="hidden" name="id" value="@pId" />
+                                        <input type="hidden" name="newStatus" value="Aktif_Santiye" />
+                                        <button type="submit" class="btn btn-success w-100 rounded-pill fw-bold shadow-xs text-white py-1.5 px-2 mb-1" style="font-size: 0.76rem;" title="Ruhsat ve ekip/malzeme planlaması tamamlandıysa Aktif Şantiyeyi ve Şantiye Deposunu başlatın">
+                                            🏗️ Çivi Çakma Sırası Geldi (Şantiyeyi Başlat) ➔
+                                        </button>
+                                    </form>
+
+                                    <a href="/ConstructionProject/Index" class="btn btn-outline-danger w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-center align-items-center py-1.5" style="font-size: 0.78rem;">
+                                        <i class="bi bi-arrow-left-circle-fill me-1.5 fs-6"></i> Tüm Projelere Dön
+                                    </a>
+                                </div>
+
+                                <!-- DİĞER TÜM LİNKLER (SIFIR KAYIP GARANTİSİ) -->
+                                <div class="border-top">
+                                    <button class="d-none btn btn-light w-100 text-start py-2 px-3 small fw-bold text-secondary justify-content-between align-items-center rounded-0" type="button" data-bs-toggle="collapse" data-bs-target="#anlasmaExtraLinks" aria-expanded="false">
+                                        <span><i class="bi bi-grid-fill me-1.5 text-primary"></i>Diğer Modüller & Arşiv</span>
+                                        <i class="bi bi-chevron-down small"></i>
+                                    </button>
+                                    <div class="collapse" id="anlasmaExtraLinks">
+                                        <a href="/ConstructionProject/Feasibility/@pId" class="list-group-item list-group-item-action py-1.5 small"><i class="bi bi-rulers me-1.5 text-warning"></i>Hızlı Ön Etüd (Aday Arşivi)</a>
+                                        <a href="/ConstructionProject/Analysis/@pId" class="list-group-item list-group-item-action py-1.5 small"><i class="bi bi-graph-up-arrow me-1.5 text-success"></i>1. Aşama: İmar & Röntgen</a>
+                                        <a href="/ConstructionProject/Proposal/@pId" class="list-group-item list-group-item-action py-1.5 small"><i class="bi bi-file-earmark-spreadsheet me-1.5 text-info"></i>Teklif & Sözleşme Şartnamesi</a>
+                                        <a href="/ConstructionProject/Meetings/@pId" class="list-group-item list-group-item-action py-1.5 small"><i class="bi bi-people-fill me-1.5 text-warning"></i>Görüşmeler & Toplantılar</a>
+                                        <a href="/SiteDiary" class="list-group-item list-group-item-action py-1.5 small"><i class="fas fa-memory me-1.5 text-primary"></i>Yönetim Hafızası (Günlük)</a>
+                                        <a href="/LaborMobilization" class="list-group-item list-group-item-action py-1.5 small"><i class="fas fa-campground me-1.5 text-danger"></i>İş Gücü & Mobilizasyon</a>
+                                        <a href="/PhaseTwo/IsgChecklist/@pId" class="list-group-item list-group-item-action py-1.5 small"><i class="fas fa-hard-hat me-1.5 text-danger"></i>İSG Günlük Kontrol</a>
+                                        <a href="/ConstructionProject/Equipment/@pId" class="list-group-item list-group-item-action py-1.5 small"><i class="fas fa-truck-monster me-1.5 text-info"></i>Makine Parkı & Kiralık Vinç</a>
+                                        <a href="/DailyTimesheets/ProjectTimesheet/@pId" class="list-group-item list-group-item-action py-1.5 small"><i class="bi bi-people-fill me-1.5 text-secondary"></i>Şantiye Puantajı</a>
+                                        <a href="/Inventory/Index/@pId" class="list-group-item list-group-item-action py-1.5 small"><i class="bi bi-boxes me-1.5 text-secondary"></i>Şantiye Deposu</a>
+                                        <a href="/ConstructionProject/Emergencies/@pId" class="list-group-item list-group-item-action py-1.5 small"><i class="bi bi-exclamation-triangle-fill me-1.5 text-warning"></i>Acil Durum / Bildirimler</a>
+                                        <a href="/ConstructionProject/Details/@pId#collapseFaz0" class="list-group-item list-group-item-action py-1.5 small"><i class="bi bi-folder-fill me-1.5 text-warning"></i>Evrak Yönetimi</a>
+                                        <a href="javascript:void(0)" onclick="openSantiyeLocationModal(@pId)" class="list-group-item list-group-item-action py-1.5 small text-danger fw-bold"><i class="bi bi-geo-alt-fill me-1.5 text-danger"></i>📍 Şantiye Konumu & Lojistik</a>
+                                    </div>
+                                </div>
+                            }
+                            else if (isSatisMode)
+                            {
+                                <!-- ========================================================= -->
+                                <!-- 4. EVRE: SATIŞ, PAZARLAMA & TESLİM MASASI                 -->
+                                <!-- ========================================================= -->
+                                <div class="p-2 pb-1 text-center border-bottom bg-light">
+                                    <span class="badge bg-success text-white px-2.5 py-1 rounded-pill fw-bold small w-100 text-wrap mb-1" style="font-size: 0.71rem;">
+                                        <i class="bi bi-cash-coin me-1"></i> @(pStatus == ProjectStatus.Satista_Topraktan ? "4. Evre: Topraktan Satış Masası" : "4. Evre: Biten & Teslim Masası")
+                                    </span>
+                                    <div class="text-muted" style="font-size: 0.70rem; line-height: 1.2;">
+                                        Daire Pazarlama, Müşteri Teslimi & Kesin Hesap Dönemi
+                                    </div>
+                                </div>
+
+                                <div class="p-2 d-flex flex-column gap-1">
+                                    <a href="/ConstructionProject/Details/@pId"
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Details" ? "btn-success text-white" : "btn-light border text-dark")"
+                                       style="font-size: 0.79rem;">
+                                        <span class="d-flex align-items-center text-truncate">
+                                            <i class="bi bi-building-check me-2 fs-6 @(currentAction == "Details" ? "text-white" : "text-success")"></i>
+                                            <span class="text-truncate">1. Bloklar, Daireler & Teslim</span>
+                                        </span>
+                                        <i class="bi bi-chevron-right small opacity-50"></i>
+                                    </a>
+
+                                    <a href="/ProjectCrm/SalesPool"
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentController == "ProjectCrm" ? "btn-primary text-white" : "btn-light border text-dark")"
+                                       style="font-size: 0.79rem;">
+                                        <span class="d-flex align-items-center text-truncate">
+                                            <i class="bi bi-tags-fill me-2 fs-6 @(currentController == "ProjectCrm" ? "text-white" : "text-primary")"></i>
+                                            <span class="text-truncate">2. Satış & Daire Portföyü</span>
+                                        </span>
+                                        <i class="bi bi-chevron-right small opacity-50"></i>
+                                    </a>
+
+                                    <a href="/ProjectFinance/Index/@pId"
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentController == "ProjectFinance" ? "btn-primary text-white" : "btn-light border text-dark")"
+                                       style="font-size: 0.79rem;">
+                                        <span class="d-flex align-items-center text-truncate">
+                                            <i class="bi bi-wallet2 me-2 fs-6 @(currentController == "ProjectFinance" ? "text-white" : "text-success")"></i>
+                                            <span class="text-truncate">3. Kesin Hesap & Finans</span>
+                                        </span>
+                                        <i class="bi bi-chevron-right small opacity-50"></i>
+                                    </a>
+
+                                    <a href="/PhaseZero/Index/@pId"
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentController == "PhaseZero" ? "btn-danger text-white" : "btn-light border text-dark")"
+                                       style="font-size: 0.79rem;">
+                                        <span class="d-flex align-items-center text-truncate">
+                                            <i class="bi bi-file-earmark-check-fill me-2 fs-6 @(currentController == "PhaseZero" ? "text-white" : "text-danger")"></i>
+                                            <span class="text-truncate">4. İskân, Tapu & Resmi Evrak</span>
+                                        </span>
+                                        <i class="bi bi-chevron-right small opacity-50"></i>
+                                    </a>
+
+                                    <a href="/ConstructionProject/Workspace/@pId"
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Workspace" ? "btn-primary text-white" : "btn-light border text-dark")"
+                                       style="font-size: 0.79rem;">
+                                        <span class="d-flex align-items-center text-truncate">
+                                            <i class="bi bi-card-heading me-2 fs-6 @(currentAction == "Workspace" ? "text-white" : "text-primary")"></i>
+                                            <span class="text-truncate">5. Proje Künyesi & Ortaklar</span>
+                                        </span>
+                                        <i class="bi bi-chevron-right small opacity-50"></i>
+                                    </a>
+
+                                    <hr class="text-muted mx-1 my-1">
+
+                                    <a href="/ConstructionProject/Index" class="btn btn-outline-danger w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-center align-items-center py-1.5" style="font-size: 0.78rem;">
+                                        <i class="bi bi-arrow-left-circle-fill me-1.5 fs-6"></i> Tüm Projelere Dön
+                                    </a>
+                                </div>
+
+                                <!-- TÜM ŞANTİYE & MÜHENDİSLİK ARŞİVİ -->
+                                <div class="border-top">
+                                    <button class="btn btn-light w-100 text-start py-2 px-3 small fw-bold text-secondary d-flex justify-content-between align-items-center rounded-0" type="button" data-bs-toggle="collapse" data-bs-target="#satisExtraLinks" aria-expanded="false">
+                                        <span><i class="bi bi-archive-fill me-1.5 text-primary"></i>Şantiye & Mühendislik Arşivi</span>
+                                        <i class="bi bi-chevron-down small"></i>
+                                    </button>
+                                    <div class="collapse" id="satisExtraLinks">
+                                        <a href="/Metraj/DrawingArchive?projectId=@pId" class="list-group-item list-group-item-action py-1.5 small"><i class="bi bi-folder2-open me-1.5 text-primary"></i>Kanat 1: Çizim Arşivi & Kabul</a>
+                                        <a href="/Metraj/ProjectDNA/@pId" class="list-group-item list-group-item-action py-1.5 small"><i class="fas fa-dna me-1.5 text-success"></i>Kanat 2: Proje DNA (Hesaplama)</a>
+                                        <a href="/Metraj/BuildingWorkflow/@pId" class="list-group-item list-group-item-action py-1.5 small"><i class="fas fa-network-wired me-1.5 text-warning"></i>Şantiye İş Akışı & Tedarik Masası</a>
+                                        <a href="/PhaseTwo/OperationBoard/@pId" class="list-group-item list-group-item-action py-1.5 small"><i class="fas fa-calendar-alt me-1.5 text-warning"></i>Operasyon Planı (Takvim)</a>
+                                        <a href="/SiteDiary" class="list-group-item list-group-item-action py-1.5 small"><i class="fas fa-memory me-1.5 text-primary"></i>Yönetim Hafızası (Günlük)</a>
+                                        <a href="/DailyTimesheets/ProjectTimesheet/@pId" class="list-group-item list-group-item-action py-1.5 small"><i class="bi bi-people-fill me-1.5 text-secondary"></i>Şantiye Puantajı</a>
+                                        <a href="/Inventory/Index/@pId" class="list-group-item list-group-item-action py-1.5 small"><i class="bi bi-boxes me-1.5 text-secondary"></i>Şantiye Deposu</a>
+                                        <a href="/ConstructionProject/Equipment/@pId" class="list-group-item list-group-item-action py-1.5 small"><i class="fas fa-truck-monster me-1.5 text-info"></i>Makine Parkı & Kiralık Vinç</a>
+                                        <a href="/ConstructionProject/Analysis/@pId" class="list-group-item list-group-item-action py-1.5 small"><i class="bi bi-graph-up-arrow me-1.5 text-success"></i>1. Aşama: İmar & Fizibilite</a>
+                                        <a href="javascript:void(0)" onclick="openSantiyeLocationModal(@pId)" class="list-group-item list-group-item-action py-1.5 small text-danger fw-bold"><i class="bi bi-geo-alt-fill me-1.5 text-danger"></i>📍 Şantiye Konumu & Lojistik</a>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <!-- ========================================================= -->
+                                <!-- 3. EVRE: AKTİF ŞANTİYE — SAHA OPERASYON MASASI            -->
+                                <!-- ========================================================= -->
+                                <div class="p-2 pb-1 text-center border-bottom bg-light">
+                                    <span class="badge bg-primary text-white px-2.5 py-1 rounded-pill fw-bold small w-100 text-wrap mb-1" style="font-size: 0.71rem;">
+                                        <i class="bi bi-cone-striped me-1"></i> 3. Evre: Aktif Şantiye Masası
+                                    </span>
+                                    <div class="text-muted" style="font-size: 0.70rem; line-height: 1.2;">
+                                        Saha İmalat Otopilotu, Kara Defter, Puantaj & Hakediş
+                                    </div>
+                                </div>
+
+                                <div class="p-2 d-flex flex-column gap-1">
+                                    <!-- 1. Şantiye Panosu & Bloklar -->
+                                    <a href="/ConstructionProject/Details/@pId"
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "Details" ? "btn-primary text-white" : "btn-light border text-dark")"
+                                       style="font-size: 0.79rem;">
+                                        <span class="d-flex align-items-center text-truncate">
+                                            <i class="bi bi-bar-chart-fill me-2 fs-6 @(currentAction == "Details" ? "text-white" : "text-primary")"></i>
+                                            <span class="text-truncate">1. Şantiye Panosu (Özet)</span>
+                                        </span>
+                                        <i class="bi bi-chevron-right small opacity-50"></i>
+                                    </a>
+
+                                    <!-- 2. İş Akışı & Saha Otopilotu -->
+                                    <a href="/Metraj/BuildingWorkflow/@pId"
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "BuildingWorkflow" ? "btn-warning text-dark border-warning" : "btn-light border text-dark")"
+                                       style="font-size: 0.79rem;">
+                                        <span class="d-flex align-items-center text-truncate">
+                                            <i class="fas fa-network-wired me-2 fs-6 text-warning"></i>
+                                            <span class="text-truncate">2. İş Akışı & Saha Otopilotu</span>
+                                        </span>
+                                        <i class="bi bi-chevron-right small opacity-50"></i>
+                                    </a>
+
+                                    <!-- 3. Şantiye Defteri ("Nereden Çıktı?" & Ajanda) -->
+                                    <a href="/Metraj/SiteAgenda/@pId"
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "SiteAgenda" || currentController == "SiteDiary" ? "btn-danger text-white" : "btn-light border text-dark")"
+                                       style="font-size: 0.79rem;">
+                                        <span class="d-flex align-items-center text-truncate">
+                                            <i class="bi bi-journal-check me-2 fs-6 @(currentAction == "SiteAgenda" || currentController == "SiteDiary" ? "text-white" : "text-danger")"></i>
+                                            <span class="text-truncate">3. Şantiye Defteri (Kara Defter)</span>
+                                        </span>
+                                        <i class="bi bi-chevron-right small opacity-50"></i>
+                                    </a>
+
+                                    <!-- 4. Günlük Puantaj & Ekipler -->
+                                    <a href="/DailyTimesheets/ProjectTimesheet/@pId"
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentAction == "ProjectTimesheet" ? "btn-primary text-white" : "btn-light border text-dark")"
+                                       style="font-size: 0.79rem;">
+                                        <span class="d-flex align-items-center text-truncate">
+                                            <i class="bi bi-people-fill me-2 fs-6 @(currentAction == "ProjectTimesheet" ? "text-white" : "text-secondary")"></i>
+                                            <span class="text-truncate">4. Günlük Puantaj & Ekipler</span>
+                                        </span>
+                                        <i class="bi bi-chevron-right small opacity-50"></i>
+                                    </a>
+
+                                    <!-- 5. Şantiye Deposu & Vinç/Makine -->
+                                    <a href="/Inventory/Index/@pId"
+                                       class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentController == "Inventory" || currentAction == "Equipment" ? "btn-primary text-white" : "btn-light border text-dark")"
+                                       style="font-size: 0.79rem;">
+                                        <span class="d-flex align-items-center text-truncate">
+                                            <i class="bi bi-boxes me-2 fs-6 @(currentController == "Inventory" || currentAction == "Equipment" ? "text-white" : "text-info")"></i>
+                                            <span class="text-truncate">5. Şantiye Deposu & Vinç</span>
+                                        </span>
+                                        <i class="bi bi-chevron-right small opacity-50"></i>
+                                    </a>
+
+                                    <!-- 6. Maliyet & Hakediş (veya Formen PWA) -->
+                                    @if (effectivePerms.Contains(StaffPermissionHelper.PermFinance))
+                                    {
+                                        <a href="/ProjectFinance/Index/@pId"
+                                           class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start @(currentController == "ProjectFinance" ? "btn-success text-white" : "btn-light border text-dark")"
+                                           style="font-size: 0.79rem;">
+                                            <span class="d-flex align-items-center text-truncate">
+                                                <i class="bi bi-wallet2 me-2 fs-6 @(currentController == "ProjectFinance" ? "text-white" : "text-success")"></i>
+                                                <span class="text-truncate">6. Şantiye Maliyet & Hakediş</span>
+                                            </span>
+                                            <i class="bi bi-chevron-right small opacity-50"></i>
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <a href="/MobileTask/Index"
+                                           class="btn w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-between align-items-center py-1.5 px-3 text-start btn-light border text-primary"
+                                           style="font-size: 0.79rem;">
+                                            <span class="d-flex align-items-center text-truncate">
+                                                <i class="bi bi-phone-fill me-2 fs-6 text-primary"></i>
+                                                <span class="text-truncate">6. Saha Görev & Fotoğraf PWA</span>
+                                            </span>
+                                            <i class="bi bi-chevron-right small opacity-50"></i>
+                                        </a>
+                                    }
+
+                                    <hr class="text-muted mx-1 my-1">
+
+                                    <!-- 4. EVREYE (SATIŞ & TESLİM) GEÇİŞ BUTONU -->
+                                    <form asp-controller="ConstructionProject" asp-action="ChangeProjectStatus" method="post" class="m-0">
+                                        <input type="hidden" name="id" value="@pId" />
+                                        <input type="hidden" name="newStatus" value="Satista_Topraktan" />
+                                        <button type="submit" class="btn btn-success w-100 rounded-pill fw-bold shadow-xs text-white py-1.5 px-2 mb-1" style="font-size: 0.76rem;" title="Şantiyede satış veya teslim aşamasına geçin">
+                                            🏢 Satış & Teslim Evresine Geç ➔
+                                        </button>
+                                    </form>
+
+                                    <a href="/ConstructionProject/Index" class="btn btn-outline-danger w-100 rounded-pill fw-bold shadow-xs d-flex justify-content-center align-items-center py-1.5" style="font-size: 0.78rem;">
+                                        <i class="bi bi-arrow-left-circle-fill me-1.5 fs-6"></i> Tüm Projelere Dön
+                                    </a>
+                                </div>
+
+                                <!-- EK SAHA & MÜHENDİSLİK ARŞİVİ (SIFIR KAYIP GARANTİSİ - KAPALI ÇEKMECE) -->
+                                <div class="border-top">
+                                    <button class="btn btn-light w-100 text-start py-2 px-3 small fw-bold text-secondary d-flex justify-content-between align-items-center rounded-0" type="button" data-bs-toggle="collapse" data-bs-target="#santiyeExtraDrawer" aria-expanded="@(isEngPageOpen ? "true" : "false")">
+                                        <span><i class="bi bi-grid-fill me-1.5 text-primary"></i>Planlama, DNA & Ek Araçlar</span>
+                                        <i class="bi bi-chevron-down small"></i>
+                                    </button>
+                                    <div class="collapse @(isEngPageOpen ? "show" : "")" id="santiyeExtraDrawer">
+                                <div class="p-2 pb-1 d-none">
+                                    <a href="/ConstructionProject/Workspace/@pId" class="btn btn-primary w-100 rounded-pill fw-bold shadow-sm d-flex justify-content-center align-items-center py-1.5 mb-1" style="background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%); font-size: 0.80rem;">
+                                        <i class="bi bi-card-heading me-1.5 fs-6"></i> Proje Künyesi
+                                    </a>
+                                    <a href="/ConstructionProject/Index" class="btn btn-outline-danger w-100 rounded-pill fw-bold shadow-sm d-flex justify-content-center align-items-center py-1" style="font-size: 0.78rem;">
+                                        <i class="bi bi-arrow-left-circle-fill me-1.5 fs-6"></i> Tüm Projelere Dön
+                                    </a>
+                                </div>
 
                                 <hr class="text-muted mx-3 my-1">
 
+                                <div class="px-3 mb-1 mt-1 text-primary small fw-bold text-uppercase" style="font-size: 0.70rem;">
+                                    <i class="bi bi-cone-striped me-1"></i>Aktif Saha Operasyonu
+                                </div>
 
-
-                                <!-- AKTİF ŞANTİYE MENÜSÜ -->
-
-
-
-                                <a href="/ConstructionProject/Details/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Details" ? "active fw-bold" : "")">
-
-
-
-                                    <i class="bi bi-bar-chart-fill me-1.5 fs-6 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Details" ? "text-white" : "text-primary")"></i> Şantiye Panosu
-
-
-
+                                <a href="/ConstructionProject/Details/@pId" class="list-group-item list-group-item-action py-2 @(currentAction == "Details" ? "active fw-bold" : "")">
+                                    <i class="bi bi-bar-chart-fill me-1.5 fs-6 @(currentAction == "Details" ? "text-white" : "text-primary")"></i> Şantiye Panosu
                                 </a>
 
-
-
-                                <a href="/ConstructionProject/Analysis/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Analysis" ? "active fw-bold bg-success text-white border-success" : "")">
-
-
-
-                                    <i class="bi bi-graph-up-arrow me-1.5 fs-6 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Analysis" ? "text-white" : "text-success")"></i> 1. Aşama: İmar & Fizibilite
-
-
-
-                                </a>
-
-
-
-                                <a href="/ProjectFinance/Index/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "ProjectFinance" ? "active fw-bold" : "")">
-
-
-
-                                    <i class="bi bi-wallet2 me-1.5 fs-6 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "ProjectFinance" ? "text-white" : "text-success")"></i> Maliyet ve Finans
-
-
-
-                                </a>
-
-
-
-                                <a href="/PhaseZero/Index/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "PhaseZero" ? "active fw-bold bg-danger text-white border-danger" : "text-danger fw-bold")">
-
-
-
-                                    <i class="bi bi-file-earmark-lock-fill me-1.5 fs-6 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "PhaseZero" ? "text-white" : "text-danger")"></i> Faz 0: Resmi Evrak
-
-
-
-                                </a>
-
-
-
-                                <a href="/ConstructionProject/Emergencies/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 position-relative @(ViewContext.RouteData.Values["Action"]?.ToString() == "Emergencies" ? "active fw-bold bg-warning text-dark border-warning" : "text-dark")">
-
-
-
-                                    <i class="bi bi-exclamation-triangle-fill me-1.5 fs-6 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Emergencies" ? "text-dark" : "text-warning")"></i> Acil Durum / Bildirimler
-
-
-
-                                    <span class="position-absolute top-50 end-0 translate-middle-y me-3 badge bg-danger rounded-pill shadow-sm" style="animation: pulse 1.5s infinite;">2 Yeni</span>
-
-
-
-                                </a>
-
-
-
-                                <hr class="text-muted mx-3 my-1">
-
-
-
-                                <div class="px-3 mb-1 mt-2 text-muted small fw-bold text-uppercase">ERP Operasyon Merkezi</div>
-
-
-
-                                <a href="/Metraj/DrawingArchive?projectId=@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "DrawingArchive" ? "active fw-bold bg-primary text-white border-primary" : "")">
-
-
-
-                                    <i class="bi bi-folder2-open me-1.5 fs-6 text-primary"></i> Kanat 1: Çizim Arşivi & Kabul
-
-
-
-                                </a>
-
-
-
-                                <a href="/Metraj/ProjectDNA/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "ProjectDNA" ? "active fw-bold" : "")">
-
-
-
-                                    <i class="fas fa-dna me-1.5 fs-6 text-success"></i> Kanat 2: Proje DNA (Hesaplama)
-
-
-
-                                </a>
-
-
-
-                                <a href="/Metraj/BuildingWorkflow/@ViewData["ProjectId"]" target="_blank" rel="noopener noreferrer" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "BuildingWorkflow" ? "active fw-bold text-white bg-primary border-primary" : "")">
-
-
-
+                                <a href="/Metraj/BuildingWorkflow/@pId" class="list-group-item list-group-item-action py-2 @(currentAction == "BuildingWorkflow" ? "active fw-bold text-white bg-primary border-primary" : "")">
                                     <i class="fas fa-network-wired me-1.5 fs-6 text-warning"></i> Şantiye İş Akışı & Tedarik Masası
-
-
-
-                                    <i class="fas fa-external-link-alt small ms-auto opacity-75"></i>
-
-
-
                                 </a>
 
-
-
-                                <a href="/PhaseTwo/OperationBoard/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "OperationBoard" ? "active fw-bold" : "")">
-
-
-
+                                <a href="/PhaseTwo/OperationBoard/@pId" class="list-group-item list-group-item-action py-2 @(currentAction == "OperationBoard" ? "active fw-bold" : "")">
                                     <i class="fas fa-calendar-alt me-1.5 fs-6 text-warning"></i> Operasyon Planı (Takvim)
-
-
-
                                 </a>
 
-
-
-                                <a href="/SiteDiary" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "SiteDiary" ? "active fw-bold" : "")">
-
-
-
+                                <a href="/SiteDiary" class="list-group-item list-group-item-action py-2 @(currentController == "SiteDiary" ? "active fw-bold" : "")">
                                     <i class="fas fa-memory me-1.5 fs-6 text-primary"></i> Yönetim Hafızası (Günlük)
-
-
-
                                 </a>
 
+                                <a href="/DailyTimesheets/ProjectTimesheet/@pId" class="list-group-item list-group-item-action py-2 @(currentAction == "ProjectTimesheet" ? "active fw-bold" : "")">
+                                    <i class="bi bi-people-fill me-1.5 fs-6 @(currentAction == "ProjectTimesheet" ? "text-white" : "text-secondary")"></i> Şantiye Puantajı
+                                </a>
 
-
-                                <a href="/LaborMobilization" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Controller"]?.ToString() == "LaborMobilization" ? "active fw-bold" : "")">
-
-
-
+                                <a href="/LaborMobilization" class="list-group-item list-group-item-action py-2 @(currentController == "LaborMobilization" ? "active fw-bold" : "")">
                                     <i class="fas fa-campground me-1.5 fs-6 text-danger"></i> İş Gücü & Mobilizasyon
-
-
-
                                 </a>
 
-
-
-                                <a href="/PhaseTwo/IsgChecklist/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "IsgChecklist" ? "active fw-bold" : "")">
-
-
-
+                                <a href="/PhaseTwo/IsgChecklist/@pId" class="list-group-item list-group-item-action py-2 @(currentAction == "IsgChecklist" ? "active fw-bold" : "")">
                                     <i class="fas fa-hard-hat me-1.5 fs-6 text-danger"></i> İSG Günlük Kontrol
-
-
-
                                 </a>
 
-
-
-                                <a href="/ConstructionProject/Equipment/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "Equipment" ? "active fw-bold" : "")">
-
-
-
+                                <a href="/ConstructionProject/Equipment/@pId" class="list-group-item list-group-item-action py-2 @(currentAction == "Equipment" ? "active fw-bold" : "")">
                                     <i class="fas fa-truck-monster me-1.5 fs-6 text-info"></i> Makine Parkı & Kiralık Vinç
-
-
-
                                 </a>
 
-
-
-                                <a href="/DailyTimesheets/ProjectTimesheet/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 @(ViewContext.RouteData.Values["Action"]?.ToString() == "ProjectTimesheet" ? "active fw-bold" : "text-muted")">
-
-
-
-                                    <i class="bi bi-people-fill me-1.5 fs-6 @(ViewContext.RouteData.Values["Action"]?.ToString() == "ProjectTimesheet" ? "text-white" : "text-secondary")"></i> Şantiye Puantajı
-
-
-
+                                <a href="/Inventory/Index/@pId" class="list-group-item list-group-item-action py-2 @(currentController == "Inventory" ? "active fw-bold" : "")">
+                                    <i class="bi bi-boxes me-1.5 fs-6 text-secondary"></i> Şantiye Deposu (İrsaliye)
                                 </a>
 
+                                @if (effectivePerms.Contains(StaffPermissionHelper.PermFinance))
+                                {
+                                    <a href="/ProjectFinance/Index/@pId" class="list-group-item list-group-item-action py-2 @(currentController == "ProjectFinance" ? "active fw-bold" : "")">
+                                        <i class="bi bi-wallet2 me-1.5 fs-6 @(currentController == "ProjectFinance" ? "text-white" : "text-success")"></i> Maliyet ve Finans
+                                    </a>
+                                }
+                                else
+                                {
+                                    <a href="/MobileTask/Index" class="list-group-item list-group-item-action py-2 text-primary fw-bold bg-primary bg-opacity-10">
+                                        <i class="bi bi-phone-fill me-1.5 fs-6 text-primary"></i> 📱 Saha Görev & Fotoğraf PWA
+                                    </a>
+                                }
 
-
-                                <a href="/Inventory/Index/@ViewData["ProjectId"]" class="list-group-item list-group-item-action py-2 text-muted" title="Yakında">
-
-
-
-                                    <i class="bi bi-boxes me-1.5 fs-6 text-secondary"></i> Şantiye Deposu
-
-
-
+                                <a href="/ConstructionProject/Emergencies/@pId" class="list-group-item list-group-item-action py-2 position-relative @(currentAction == "Emergencies" ? "active fw-bold bg-warning text-dark border-warning" : "text-dark")">
+                                    <i class="bi bi-exclamation-triangle-fill me-1.5 fs-6 @(currentAction == "Emergencies" ? "text-dark" : "text-warning")"></i> Acil Durum / Bildirimler
+                                    <span class="position-absolute top-50 end-0 translate-middle-y me-3 badge bg-danger rounded-pill shadow-sm" style="animation: pulse 1.5s infinite;">2 Yeni</span>
                                 </a>
 
-
-
-                                <a href="/ConstructionProject/Details/@ViewData["ProjectId"]#collapseFaz0" class="list-group-item list-group-item-action py-2">
-
-
-
-                                    <i class="bi bi-folder-fill me-1.5 fs-6 text-warning"></i> Evrak Yönetimi
-
-
-
-                                </a>
-
-
+                                @if (effectivePerms.Contains(StaffPermissionHelper.PermDna) || effectivePerms.Contains(StaffPermissionHelper.PermFinance))
+                                {
+                                    <!-- MÜHENDİSLİK, DNA, RESMİ EVRAK & PLANLAMA KISAYOLLARI (HİÇBİR LİNK KAYBOLMAZ) -->
+                                    <div class="border-top mt-1">
+                                        <button class="btn btn-light w-100 text-start py-2 px-3 small fw-bold text-dark d-flex justify-content-between align-items-center rounded-0" type="button" data-bs-toggle="collapse" data-bs-target="#santiyeEngLinks" aria-expanded="@(isEngPageOpen ? "true" : "false")">
+                                            <span><i class="fas fa-dna me-1.5 text-success"></i>Mühendislik, DNA & Evrak</span>
+                                            <i class="bi @(isEngPageOpen ? "bi-chevron-up" : "bi-chevron-down") small"></i>
+                                        </button>
+                                        <div class="collapse @(isEngPageOpen ? "show" : "")" id="santiyeEngLinks">
+                                            <a href="/PhaseZero/Index/@pId" class="list-group-item list-group-item-action py-2 @(currentController == "PhaseZero" ? "active fw-bold bg-danger text-white border-danger" : "text-danger fw-bold")">
+                                                <i class="bi bi-file-earmark-lock-fill me-1.5 fs-6 @(currentController == "PhaseZero" ? "text-white" : "text-danger")"></i> Faz 0: Resmi Evrak
+                                            </a>
+                                            <a href="/Metraj/DrawingArchive?projectId=@pId" class="list-group-item list-group-item-action py-2 @(currentAction == "DrawingArchive" ? "active fw-bold bg-primary text-white border-primary" : "")">
+                                                <i class="bi bi-folder2-open me-1.5 fs-6 text-primary"></i> Kanat 1: Çizim Arşivi & Kabul
+                                            </a>
+                                            <a href="/Metraj/ProjectDNA/@pId" class="list-group-item list-group-item-action py-2 @(currentAction == "ProjectDNA" ? "active fw-bold" : "")">
+                                                <i class="fas fa-dna me-1.5 fs-6 text-success"></i> Kanat 2: Proje DNA (Hesaplama)
+                                            </a>
+                                            <a href="/ConstructionProject/Analysis/@pId" class="list-group-item list-group-item-action py-2 @(currentAction == "Analysis" ? "active fw-bold bg-success text-white border-success" : "")">
+                                                <i class="bi bi-graph-up-arrow me-1.5 fs-6 @(currentAction == "Analysis" ? "text-white" : "text-success")"></i> 1. Aşama: İmar & Fizibilite
+                                            </a>
+                                            <a href="/ConstructionProject/Details/@pId#collapseFaz0" class="list-group-item list-group-item-action py-2">
+                                                <i class="bi bi-folder-fill me-1.5 fs-6 text-warning"></i> Evrak Yönetimi
+                                            </a>
+                                        </div>
+                                    </div>
+                                }
 
                                 <!-- ŞANTİYE KONUMU & LOJİSTİK BUTONU -->
-
-
-
-                                <a href="javascript:void(0)" onclick="openSantiyeLocationModal(@(ViewData["ProjectId"] ?? 0))" class="list-group-item list-group-item-action py-2 text-danger fw-bold bg-danger bg-opacity-10 border-start border-4 border-danger" title="Lojistik, Yol Tarifi ve Tedarikçiye Konum Paylaş">
-
-
-
+                                <a href="javascript:void(0)" onclick="openSantiyeLocationModal(@pId)" class="list-group-item list-group-item-action py-2 text-danger fw-bold bg-danger bg-opacity-10 border-start border-4 border-danger" title="Lojistik, Yol Tarifi ve Tedarikçiye Konum Paylaş">
                                     <i class="bi bi-geo-alt-fill me-1.5 fs-6 text-danger"></i> 📍 Şantiye Konumu & Lojistik
-
-
-
                                 </a>
 
-
-
-                                <div class="list-group-item bg-light fw-bold mt-4 text-uppercase text-center text-muted" style="font-size: 0.75rem;">
-
-
-
-                                    SADECE BU PROJEYİ GÖRÜYORSUNUZ
-
-
-
+                                <div class="list-group-item bg-light fw-bold mt-2 text-uppercase text-center text-muted" style="font-size: 0.72rem;">
+                                    3. EVRE: AKTİF ŞANTİYE MODU
+                                    </div>
                                 </div>
-
-
-
+                                </div>
                             }
-
-
 
                         </div>
 
@@ -1222,6 +1465,7 @@
 
     </script>
 
+    @await Html.PartialAsync("_VisualUserGuideModalPartial")
 </body>
 
 

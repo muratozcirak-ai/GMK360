@@ -1,14 +1,19 @@
 @model GMK360.Core.Entities.Agency
 @{
-    Layout = null; // Kendi ozel ofis tasariimi
-    var color = string.IsNullOrEmpty(Model.ThemePrimaryColor) ? "#1e3a8a" : Model.ThemePrimaryColor;
+    Layout = null;
+    var color = string.IsNullOrWhiteSpace(Model.ThemePrimaryColor) ? "#1e3a8a" : Model.ThemePrimaryColor;
+    var showcaseProjects = ViewBag.ShowcaseProjects as List<GMK360.Core.Entities.Construction.ConstructionProject> ?? new List<GMK360.Core.Entities.Construction.ConstructionProject>();
+    bool hasAddress = !string.IsNullOrWhiteSpace(Model.Address);
+    bool hasPhone = !string.IsNullOrWhiteSpace(Model.WhatsAppNumber);
+    bool hasTax = !string.IsNullOrWhiteSpace(Model.TaxNumber);
+    bool hasCert = !string.IsNullOrWhiteSpace(Model.AuthCertificateNo);
 }
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@Model.CompanyName - GMK360</title>
+    <title>@Model.CompanyName - Kurumsal Web Sitesi</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
@@ -23,77 +28,223 @@
 </head>
 <body class="bg-light">
 
+    @if (!hasAddress || !hasPhone || !hasTax)
+    {
+        <div class="bg-warning bg-opacity-25 border-bottom border-warning py-2 px-3 text-center small text-dark">
+            <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+            <strong>Yönetici Önizleme Uyarısı:</strong>
+            Merkez Künyenizde eksik alanlar var (
+            @if (!hasAddress) { <span class="badge bg-danger me-1">Merkez Bina Adresi Eksik</span> }
+            @if (!hasPhone) { <span class="badge bg-danger me-1">Merkez Telefon/WhatsApp Eksik</span> }
+            @if (!hasTax) { <span class="badge bg-warning text-dark me-1">Vergi No Eksik</span> }
+            ).
+            <a href="/Dashboard/Construction" class="fw-bold text-primary ms-2">Özetim & Profilim ➔ 1. Merkez Bina & Künye</a> adımından doldurduğunuzda bu sitede ve tüm Teklif PDF'lerinde otomatik görünür.
+        </div>
+    }
+
+    <!-- Üst Kurumsal Bilgi Bandı -->
+    <div class="bg-dark text-white-50 py-1.5 small border-bottom border-secondary border-opacity-25">
+        <div class="container d-flex justify-content-between align-items-center flex-wrap gap-2 py-1">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <span>
+                    <i class="bi bi-geo-alt-fill text-warning me-1"></i>
+                    @(hasAddress ? Model.Address : "Merkez Bina Adresi Henüz Girilmedi")
+                </span>
+                @if (hasCert)
+                {
+                    <span class="badge bg-secondary bg-opacity-50 text-white">
+                        <i class="bi bi-patch-check-fill text-warning me-1"></i>Yetki Belge No: @Model.AuthCertificateNo
+                    </span>
+                }
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <span>
+                    <i class="bi bi-telephone-fill text-success me-1"></i>
+                    @(hasPhone ? Model.WhatsAppNumber : "Telefon Girilmedi")
+                </span>
+            </div>
+        </div>
+    </div>
+
     <!-- Header -->
     <header class="bg-white shadow-sm sticky-top">
         <div class="container d-flex justify-content-between align-items-center py-3">
             <div class="d-flex align-items-center">
-                @if(!string.IsNullOrEmpty(Model.LogoUrl)) {
-                    <img src="@Model.LogoUrl" alt="Logo" height="40" class="me-3" />
-                } else {
-                    <div class="bg-agency text-white fw-bold rounded px-3 py-2 me-3 fs-5">@(Model.CompanyName.Substring(0,1))</div>
+                @if (!string.IsNullOrWhiteSpace(Model.LogoUrl))
+                {
+                    <img src="@Model.LogoUrl" alt="Logo" height="44" class="me-3 rounded" style="object-fit:contain;" />
                 }
-                <h4 class="mb-0 fw-bold text-dark">@Model.CompanyName</h4>
+                else
+                {
+                    <div class="bg-agency text-white fw-bold rounded-3 px-3 py-2 me-3 fs-5">
+                        @(!string.IsNullOrWhiteSpace(Model.CompanyName) ? Model.CompanyName.Substring(0, 1) : "F")
+                    </div>
+                }
+                <div>
+                    <h4 class="mb-0 fw-bold text-dark">@Model.CompanyName</h4>
+                    <small class="text-muted">İnşaat, Kentsel Dönüşüm & Gayrimenkul Geliştirme</small>
+                </div>
             </div>
-            <div>
-                <a href="tel:@Model.WhatsAppNumber" class="btn btn-outline-success rounded-pill fw-bold">
-                    <i class="bi bi-whatsapp"></i> Bize Ula��n
-                </a>
+            <div class="d-flex align-items-center gap-2">
+                @if (hasPhone)
+                {
+                    <a href="tel:@Model.WhatsAppNumber" class="btn btn-outline-success rounded-pill fw-bold px-3">
+                        <i class="bi bi-whatsapp me-1"></i> @Model.WhatsAppNumber
+                    </a>
+                }
+                else
+                {
+                    <a href="/Dashboard/Construction" class="btn btn-outline-danger btn-sm rounded-pill fw-bold">
+                        <i class="bi bi-telephone-plus me-1"></i> Merkez Telefon Ekle
+                    </a>
+                }
             </div>
         </div>
     </header>
 
     <!-- Hero / Banner -->
-    <section class="bg-agency py-5 text-center text-white" style="@(!string.IsNullOrEmpty(Model.BannerUrl) ? $"background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('{Model.BannerUrl}') center/cover;" : "")">
+    <section class="bg-agency py-5 text-center text-white" style="@(!string.IsNullOrWhiteSpace(Model.BannerUrl) ? $"background: linear-gradient(rgba(15,23,42,0.75), rgba(15,23,42,0.75)), url('{Model.BannerUrl}') center/cover;" : "background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);")">
         <div class="container py-5">
-            <h1 class="display-4 fw-bold mb-3">S�cak Yuvan�z� Bulal�m</h1>
-            <p class="lead mb-4">G�venilir ve h�zl� gayrimenkul ��z�mleri.</p>
-            <div class="row justify-content-center">
-                <div class="col-md-6">
-                    <div class="input-group input-group-lg shadow-sm">
-                        <input type="text" class="form-control border-0" placeholder="�lan No, B�lge veya Kelime Aray�n...">
-                        <button class="btn btn-warning fw-bold px-4"><i class="bi bi-search"></i> Ara</button>
-                    </div>
+            <span class="badge bg-warning text-dark rounded-pill px-3 py-1 fw-bold mb-3">
+                <i class="bi bi-building-check me-1"></i>Güvenilir Mühendislik & Kentsel Dönüşüm
+            </span>
+            <h1 class="display-5 fw-bold mb-3">Geleceği Sağlam Temeller Üzerine İnşa Ediyoruz</h1>
+            <p class="lead mb-4 text-white-50 mx-auto" style="max-width: 720px;">
+                @Model.CompanyName güvencesiyle deprem yönetmeliğine tam uyumlu kentsel dönüşüm, kat karşılığı inşaat ve modern yaşam projeleri.
+            </p>
+        </div>
+    </section>
+
+    <!-- Vitrin Projelerimiz -->
+    <section class="py-5 bg-white">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-end mb-4 flex-wrap gap-2">
+                <div>
+                    <h3 class="fw-bold mb-1 text-dark"><i class="bi bi-buildings-fill text-agency me-2"></i>Projelerimiz & Referanslarımız</h3>
+                    <p class="text-muted mb-0">Devam eden şantiyelerimiz, satışta olan projelerimiz ve tamamladığımız referans yapılar</p>
                 </div>
+            </div>
+
+            <div class="row g-4">
+                @if (showcaseProjects.Any())
+                {
+                    foreach (var p in showcaseProjects)
+                    {
+                        <div class="col-lg-4 col-md-6">
+                            <div class="card border-0 shadow-sm rounded-4 h-100 overflow-hidden">
+                                <img src="@(!string.IsNullOrWhiteSpace(p.CoverImageUrl) ? p.CoverImageUrl : "/images/placeholder-building.jpg")" class="card-img-top bg-light" style="height: 210px; object-fit: cover;" alt="@p.Name" />
+                                <div class="card-body p-4">
+                                    <span class="badge bg-primary-subtle text-primary rounded-pill mb-2">@(string.IsNullOrWhiteSpace(p.Address) ? "Kurumsal Proje" : p.Address)</span>
+                                    <h5 class="fw-bold text-dark mb-2">@p.Name</h5>
+                                    <p class="text-muted small mb-0">
+                                        @(string.IsNullOrWhiteSpace(p.Description) ? "Modern mimari ve yüksek deprem güvenliği standartlarıyla inşa edilen projemiz." : p.Description)
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="col-12">
+                        <div class="alert alert-light border rounded-4 p-4 text-center">
+                            <i class="bi bi-buildings fs-2 text-muted d-block mb-2"></i>
+                            <h6 class="fw-bold text-dark">Henüz Web Vitrininde Yayınlanan Proje Seçilmedi</h6>
+                            <p class="text-muted small mb-0">
+                                Yönetim panelinizdeki <a href="/Dashboard/SiteYonetimi" class="fw-bold">Web Sitesi & Domain</a> sayfasından istediğiniz projeyi <b>"Web Sitemde Yayında"</b> olarak işaretlediğinizde burada otomatik sergilenir.
+                            </p>
+                        </div>
+                    </div>
+                }
             </div>
         </div>
     </section>
 
-    <!-- Danismanlar (Ornek) -->
+    <!-- Kadromuz & Ekibimiz -->
     <section class="container py-5">
-        <h3 class="fw-bold mb-4 text-center">Ekibimiz</h3>
-        <div class="row g-4">
-            @if(Model.AgencyConsultants != null && Model.AgencyConsultants.Any())
+        <h3 class="fw-bold mb-1 text-center text-dark">Teknik & Yönetim Kadromuz</h3>
+        <p class="text-muted text-center mb-4">Merkez Personel havuzunda tanımladığınız mimar, mühendis ve yöneticileriniz</p>
+        <div class="row g-4 justify-content-center">
+            @if (Model.AgencyConsultants != null && Model.AgencyConsultants.Any())
             {
-                foreach(var c in Model.AgencyConsultants)
+                foreach (var c in Model.AgencyConsultants.Where(x => !x.IsDeleted && x.User != null))
                 {
-                    <div class="col-md-3">
-                        <div class="card border-0 shadow-sm text-center p-3 h-100">
-                            <img src="@(string.IsNullOrEmpty(c.User.ProfileImageUrl) ? "/images/default-avatar.png" : c.User.ProfileImageUrl)" class="rounded-circle mx-auto mb-3" width="80" height="80" style="object-fit:cover;">
-                            <h6 class="fw-bold mb-1">@(c.User.FirstName + " " + c.User.LastName)</h6>
-                            <span class="badge bg-light text-dark mb-2">@c.Role.ToString()</span>
-                            <small class="text-muted"><i class="bi bi-telephone"></i> @c.User.PhoneNumber</small>
+                    <div class="col-md-3 col-sm-6">
+                        <div class="card border-0 shadow-sm text-center p-4 rounded-4 h-100">
+                            <img src="@(string.IsNullOrWhiteSpace(c.User.ProfileImageUrl) ? "/images/default-avatar.png" : c.User.ProfileImageUrl)" class="rounded-circle mx-auto mb-3 border p-1" width="80" height="80" style="object-fit:cover;">
+                            <h6 class="fw-bold mb-1 text-dark">@(c.User.FirstName + " " + c.User.LastName)</h6>
+                            @{
+                                var roleLabel = c.Role switch {
+                                    GMK360.Core.Entities.AgencyRole.Owner => "Firma Sahibi / Yönetim Kurulu",
+                                    GMK360.Core.Entities.AgencyRole.Manager => "Genel Koordinatör / Yönetici",
+                                    GMK360.Core.Entities.AgencyRole.SiteManager => "Şantiye Şefi",
+                                    GMK360.Core.Entities.AgencyRole.Architect => "Proje Mimarı",
+                                    GMK360.Core.Entities.AgencyRole.Engineer => "İnşaat Mühendisi",
+                                    GMK360.Core.Entities.AgencyRole.Accountant => "Muhasebe & Finans",
+                                    GMK360.Core.Entities.AgencyRole.Purchasing => "Satın Alma & Tedarik",
+                                    GMK360.Core.Entities.AgencyRole.PublicRelations => "Hak Sahibi İlişkileri",
+                                    GMK360.Core.Entities.AgencyRole.Secretary => "Ofis Yönetimi",
+                                    GMK360.Core.Entities.AgencyRole.Driver => "Ulaşım & Lojistik",
+                                    _ => "Proje Uzmanı"
+                                };
+                            }
+                            <span class="badge bg-primary-subtle text-primary rounded-pill mb-2">@roleLabel</span>
+                            @if (!string.IsNullOrWhiteSpace(c.User.PhoneNumber))
+                            {
+                                <small class="text-muted d-block"><i class="bi bi-telephone me-1"></i>@c.User.PhoneNumber</small>
+                            }
                         </div>
                     </div>
                 }
-            } else {
-                <div class="col-12 text-center text-muted">Hen�z dan��man eklenmedi.</div>
+            }
+            else
+            {
+                <div class="col-12 text-center text-muted">
+                    Henüz merkez personel tanımlanmadı. <a href="/AgencyStaff/Index" class="fw-bold">Merkez Personel</a> ekranından eklediğiniz ekip üyeleri burada listelenir.
+                </div>
             }
         </div>
     </section>
 
-    <!-- �lanlar (Mockup) -->
-    <section class="bg-white py-5">
+    <!-- Merkez Bina & İletişim Footer -->
+    <footer class="bg-dark text-white pt-5 pb-4">
         <div class="container">
-            <h3 class="fw-bold mb-4 text-center">�ne ��kan �lanlar�m�z</h3>
-            <div class="text-center text-muted py-5">
-                <i class="bi bi-house-door display-1 text-agency opacity-25"></i>
-                <p class="mt-3">�lanlar yak�nda eklenecek...</p>
+            <div class="row g-4 pb-4 border-bottom border-secondary border-opacity-25">
+                <div class="col-md-5">
+                    <h5 class="fw-bold text-white mb-2">@Model.CompanyName</h5>
+                    <p class="text-white-50 small mb-2">
+                        Kentsel dönüşüm, kat karşılığı proje geliştirme ve anahtar teslim müteahhitlik hizmetleri.
+                    </p>
+                    @if (hasTax)
+                    {
+                        <div class="small text-white-50"><i class="bi bi-receipt me-1"></i>Vergi Dairesi / No: <strong class="text-white">@Model.TaxNumber</strong></div>
+                    }
+                    @if (hasCert)
+                    {
+                        <div class="small text-white-50"><i class="bi bi-award me-1"></i>Müteahhitlik Yetki Belge No: <strong class="text-white">@Model.AuthCertificateNo</strong></div>
+                    }
+                </div>
+                <div class="col-md-4">
+                    <h6 class="fw-bold text-warning mb-2"><i class="bi bi-geo-alt-fill me-1"></i>Merkez Bina & Ofis Adresimiz</h6>
+                    <p class="text-white-50 small mb-0">
+                        @(hasAddress ? Model.Address : "Merkez ofis adresi henüz tanımlanmadı.")
+                    </p>
+                </div>
+                <div class="col-md-3">
+                    <h6 class="fw-bold text-warning mb-2"><i class="bi bi-telephone-fill me-1"></i>Merkez İletişim</h6>
+                    <p class="text-white small mb-1 fw-bold">
+                        @(hasPhone ? Model.WhatsAppNumber : "Telefon tanımlanmadı")
+                    </p>
+                    @if (!string.IsNullOrWhiteSpace(Model.CustomDomain))
+                    {
+                        <small class="text-white-50 d-block"><i class="bi bi-globe me-1"></i>@Model.CustomDomain</small>
+                    }
+                </div>
+            </div>
+            <div class="pt-3 text-center text-white-50 small">
+                &copy; @System.DateTime.Now.Year <strong>@Model.CompanyName</strong>. Kurumsal Altyapı: <b>GMK360</b>
             </div>
         </div>
-    </section>
-
-    <footer class="bg-dark text-white py-4 text-center">
-        <small>&copy; @System.DateTime.Now.Year @Model.CompanyName. Altyap�: <b>GMK360</b> Kurumsal ��z�mleri</small>
     </footer>
 
 </body>

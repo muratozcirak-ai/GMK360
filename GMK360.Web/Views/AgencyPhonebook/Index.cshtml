@@ -1,4 +1,4 @@
-﻿@model IEnumerable<GMK360.Core.Entities.Construction.AgencyPhonebook>
+@model IEnumerable<GMK360.Core.Entities.Construction.AgencyPhonebook>
 
 @{
     ViewData["Title"] = "Firma & Usta Rehberi";
@@ -6,8 +6,45 @@
     int activeFilter = ViewBag.ActiveFilter != null ? Convert.ToInt32(ViewBag.ActiveFilter) : 0;
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="fw-bold"><i class="bi bi-book text-primary me-2"></i> Firma & Usta Rehberi</h2>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h4 class="fw-bold mb-0"><i class="bi bi-journal-bookmark-fill text-primary me-2"></i>Firma, Taşeron & Tedarikçi Rehberi (Firma İçi SRM)</h4>
+        <p class="text-muted small mb-0">Firmanızın çalıştığı veya arşivlediği taşeronlar, malzeme tedarikçileri, ekipler ve 360° cari hafızası.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/SupplierCurrentAccount/Index" class="btn btn-outline-success rounded-pill px-3 fw-bold shadow-xs">
+            <i class="bi bi-wallet2 me-1"></i> 📊 Firma İçi Cariler
+        </a>
+        <button class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#addContactModal">
+            <i class="bi bi-person-plus-fill me-1"></i> + Yeni Firma / Taşeron Ekle
+        </button>
+    </div>
+</div>
+
+<!-- Satın Alma & Taşeron Üst Sekme Barı -->
+<ul class="nav nav-tabs mb-3 border-bottom">
+    <li class="nav-item">
+        <a href="/B2BPurchasing/Index" class="nav-link fw-semibold text-secondary">
+            <i class="bi bi-cart4 text-primary me-1"></i>🛒 Satın Alma, Teklif & Siparişler
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="/SubcontractorContract/Index" class="nav-link fw-semibold text-secondary">
+            <i class="bi bi-file-earmark-ruled text-success me-1"></i>🤝 Taşeron Sözleşmeleri & Hakedişler
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="/AgencyPhonebook/Index" class="nav-link active fw-bold text-dark">
+            <i class="bi bi-journal-bookmark-fill text-info me-1"></i>📒 Firma, Taşeron & Tedarikçi Rehberi
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="/SupplierCurrentAccount/Index" class="nav-link fw-semibold text-secondary">
+            <i class="bi bi-wallet2 text-danger me-1"></i>📊 Tedarikçi & Taşeron Carileri
+        </a>
+    </li>
+</ul>
+<div class="d-none">
     <div class="d-flex gap-2">
         <a href="/B2B" class="btn btn-outline-primary rounded-pill px-4 shadow-sm">
             <i class="bi bi-globe me-2"></i> B2B Pazar Yerinden Bul
@@ -48,17 +85,24 @@
     </a>
 </div>
 
+@{
+    var accountsByContact = ViewBag.AccountsByContactId as Dictionary<int, GMK360.Core.Entities.Finance.SupplierCurrentAccount>
+                            ?? new Dictionary<int, GMK360.Core.Entities.Finance.SupplierCurrentAccount>();
+    var contractsByContact = ViewBag.ContractsByContactId as Dictionary<int, List<GMK360.Core.Entities.Finance.SubcontractorContract>>
+                             ?? new Dictionary<int, List<GMK360.Core.Entities.Finance.SubcontractorContract>>();
+}
+
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th class="ps-4">Kişi / Firma Adı</th>
+                        <th class="ps-4">Kişi / Firma Adı & Arşiv Durumu</th>
                         <th>Kategori / Branş</th>
-                        <th>İletişim & Yetkili</th>
-                        <th>Lokasyon</th>
-                        <th class="text-end pe-4">İşlemler</th>
+                        <th>İletişim & Lokasyon</th>
+                        <th>Çalışılan İşler, Ödenen & Alacak/Verecek</th>
+                        <th class="text-end pe-4">360° Firma Dashboardu</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -66,19 +110,50 @@
                     {
                         <tr>
                             <td colspan="5" class="text-center py-5 text-muted">
-                                Rehberinizde henüz kayıt yok. Sağ üstten yeni firma ekleyebilirsiniz.
+                                Rehber arşivinizde henüz kayıt yok. Sağ üstten çalıştığınız veya ileride çalışabileceğiniz firma/ekipleri ekleyebilirsiniz.
                             </td>
                         </tr>
                     }
                     @foreach (var item in Model)
                     {
+                        var acc = item.Id > 0 && accountsByContact.ContainsKey(item.Id) ? accountsByContact[item.Id] : null;
+                        var firmContracts = item.Id > 0 && contractsByContact.ContainsKey(item.Id) ? contractsByContact[item.Id] : new List<GMK360.Core.Entities.Finance.SubcontractorContract>();
+
+                        decimal totalPaid = acc?.Transactions != null
+                            ? acc.Transactions.Where(t => t.Type == GMK360.Core.Entities.Finance.SupplierTransactionType.PaymentMade).Sum(t => t.Amount)
+                            : 0m;
+                        decimal totalBilled = acc?.Transactions != null
+                            ? acc.Transactions.Where(t => t.Type != GMK360.Core.Entities.Finance.SupplierTransactionType.PaymentMade).Sum(t => t.Amount)
+                            : 0m;
+                        decimal balance = acc?.CurrentBalance ?? 0m;
+                        bool hasHistory = firmContracts.Any() || (acc?.Transactions != null && acc.Transactions.Any());
+                        bool isActiveNow = firmContracts.Any(c => c.IsActive) || balance != 0;
+
                         <tr>
                             <td class="ps-4">
-                                <div class="fw-bold fs-6">@item.Name</div>
+                                <div class="d-flex align-items-center gap-1.5 flex-wrap">
+                                    <a href="@Url.Action("Details", "AgencyPhonebook", new { id = item.Id })" class="fw-bold fs-6 text-dark text-decoration-none">
+                                        @item.Name
+                                    </a>
+                                    @if (isActiveNow)
+                                    {
+                                        <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle rounded-pill" style="font-size: 0.65rem;">🟢 Aktif Çalışıyoruz</span>
+                                    }
+                                    else if (hasHistory)
+                                    {
+                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle rounded-pill" style="font-size: 0.65rem;">📁 Geçmişte Çalıştık</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-light text-secondary border rounded-pill" style="font-size: 0.65rem;">🔍 Rehber Arşivi (Aday)</span>
+                                    }
+                                </div>
                                 @if(!string.IsNullOrEmpty(item.TaxNumber)) {
                                     <div class="small text-muted"><i class="bi bi-receipt me-1"></i>VN: @item.TaxNumber</div>
                                 }
-                                <div class="small text-muted">@item.Notes</div>
+                                @if(!string.IsNullOrEmpty(item.Notes)) {
+                                    <div class="small text-muted text-truncate" style="max-width: 280px;" title="@item.Notes">@item.Notes</div>
+                                }
                             </td>
                             <td>
                                 @if(item.ContactType == 1) { <span class="badge bg-info text-dark me-1"><i class="bi bi-tools"></i> Usta</span> }
@@ -101,31 +176,45 @@
                                 }
                             </td>
                             <td>
-                                <div class="fw-bold"><i class="bi bi-telephone me-1"></i>@item.PhoneNumber</div>
+                                <div class="fw-bold small"><i class="bi bi-telephone me-1 text-primary"></i>@item.PhoneNumber</div>
                                 @if(!string.IsNullOrEmpty(item.AuthorizedPerson)) {
                                     <div class="small text-muted"><i class="bi bi-person me-1"></i>@item.AuthorizedPerson @(!string.IsNullOrEmpty(item.AuthorizedPersonRole) ? $"({item.AuthorizedPersonRole})" : "")</div>
                                 }
-                                @if(!string.IsNullOrEmpty(item.Email)) {
-                                    <div class="small text-muted"><i class="bi bi-envelope me-1"></i>@item.Email</div>
+                                @if(!string.IsNullOrEmpty(item.City) || !string.IsNullOrEmpty(item.District))
+                                {
+                                    <div class="small text-dark"><i class="bi bi-geo-alt-fill text-danger me-1"></i>@(item.District), @(item.City)</div>
                                 }
                             </td>
                             <td>
-                                @if(!string.IsNullOrEmpty(item.City) || !string.IsNullOrEmpty(item.District))
+                                @if (hasHistory || balance != 0)
                                 {
-                                    <span class="text-dark"><i class="bi bi-geo-alt-fill text-danger me-1"></i>@(item.District), @(item.City)</span>
+                                    <div class="small">
+                                        <span class="text-muted">Ödenen:</span> <strong class="text-success">₺@totalPaid.ToString("N2")</strong>
+                                        <span class="text-muted ms-2">| Kalan:</span>
+                                        <strong class="@(balance > 0 ? "text-danger" : "text-dark")">₺@balance.ToString("N2")</strong>
+                                    </div>
+                                    <div class="text-muted" style="font-size: 0.72rem;">
+                                        <i class="bi bi-buildings me-1"></i>@firmContracts.Count Sözleşme / Toplam İş: ₺@totalBilled.ToString("N2")
+                                    </div>
                                 }
-                                else { <span class="text-muted small">Belirtilmedi</span> }
+                                else
+                                {
+                                    <span class="text-muted small">Henüz ödeme / sözleşme yok (Rehberde hazır)</span>
+                                }
                             </td>
                             <td class="text-end pe-4">
-                                <a href="@Url.Action("Details", "AgencyPhonebook", new { id = item.Id })" class="btn btn-sm btn-outline-primary rounded-pill me-1" title="Kurumsal Detaylar (Şubeler/Kişiler)">
-                                    <i class="bi bi-building-gear"></i> Detaylar
+                                <a href="@Url.Action("Details", "AgencyPhonebook", new { id = item.Id })" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold me-1 shadow-xs" title="360° Firma Dashboardu, Alacak-Verecek & Çalışılan İşler">
+                                    <i class="bi bi-bar-chart-line-fill me-1"></i> Firma Dashboardu & Cari
                                 </a>
-                                <form asp-action="Delete" method="post" class="d-inline" onsubmit="return confirm('Silmek istediğinize emin misiniz?');">
-                                    <input type="hidden" name="id" value="@item.Id" />
-                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill" title="Sil">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </form>
+                                @if (item.Id > 0)
+                                {
+                                    <form asp-action="Delete" method="post" class="d-inline" onsubmit="return confirm('Silmek istediğinize emin misiniz?');">
+                                        <input type="hidden" name="id" value="@item.Id" />
+                                        <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill" title="Sil">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                }
                             </td>
                         </tr>
                     }

@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using GMK360.Data.Contexts;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
@@ -6,6 +7,7 @@ using System.Threading.Tasks;
 
 namespace GMK360.Web.Controllers
 {
+    [Authorize]
     public class ProjectMatrixController : Controller
     {
         private readonly ApplicationDbContext _context;

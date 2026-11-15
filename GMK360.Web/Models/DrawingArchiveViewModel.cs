@@ -19,6 +19,11 @@ namespace GMK360.Web.Models
         // Toptan İhale & Satın Alma Masası (Master BOM)
         public List<MasterBomItemDto> MasterBomItems { get; set; } = new List<MasterBomItemDto>();
 
+        // DWG / DXF Gerçek Okuma Durumu ve Mühendislik Analiz Raporları
+        public bool HasReadDrawings { get; set; }
+        public List<DocumentArchive> ReadDrawings { get; set; } = new List<DocumentArchive>();
+        public List<CadAnalysisSummaryDto> CadAnalysisResults { get; set; } = new List<CadAnalysisSummaryDto>();
+
         // Şantiye Saha Karar & Donanım Tercihleri
         public FieldDecisionsDto Decisions { get; set; } = new FieldDecisionsDto();
 
@@ -27,6 +32,32 @@ namespace GMK360.Web.Models
         public int FloorsWithPlanCount { get; set; }
         public int FloorsMissingPlanCount => Math.Max(0, TotalFloorsCount - FloorsWithPlanCount);
         public double PlanCompletionPercentage => TotalFloorsCount > 0 ? Math.Round((double)FloorsWithPlanCount / TotalFloorsCount * 100, 1) : 0;
+    }
+
+    public class CadAnalysisSummaryDto
+    {
+        public int DocumentId { get; set; }
+        public string FileName { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Discipline { get; set; } = "Mimari";
+        public string CadVersion { get; set; } = "AutoCAD DWG/DXF";
+        public long FileSizeBytes { get; set; }
+        public int LayerCount { get; set; }
+        public List<string> TopLayers { get; set; } = new List<string>();
+        public int TotalEntities { get; set; }
+        public int LineAndPolylineCount { get; set; }
+        public int BlockInsertCount { get; set; }
+        public int TextCount { get; set; }
+        public int DoorCount { get; set; }
+        public int WindowCount { get; set; }
+        public int ColumnCount { get; set; }
+        public int MepSymbolCount { get; set; }
+        public double TotalWallLengthMeters { get; set; }
+        public double DetectedFloorAreaM2 { get; set; }
+        public List<string> DetectedRooms { get; set; } = new List<string>();
+        public List<string> DetectedBlocks { get; set; } = new List<string>();
+        public List<string> DetectedStructuralNotes { get; set; } = new List<string>();
+        public DateTime ReadAt { get; set; } = DateTime.Now;
     }
 
     public class FloorPlanMatrixItem

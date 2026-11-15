@@ -1,20 +1,490 @@
-﻿@model IEnumerable<GMK360.Core.Entities.Construction.ConstructionProject>
+@model IEnumerable<GMK360.Core.Entities.Construction.ConstructionProject>
 @{
-    ViewData["Title"] = "Finansal Strateji ve Karar Destek";
+    ViewData["Title"] = "Patron Strateji, Rayiç Hafızası & AI Karar Merkezi";
     Layout = "_ConstructionLayout";
+
+    var baseline = ViewBag.Baseline as GMK360.Web.Controllers.StrategyBaselineDto ?? new GMK360.Web.Controllers.StrategyBaselineDto();
+    var rows = ViewBag.StrategyRows as List<GMK360.Web.Controllers.ProjectStrategyRowDto> ?? new List<GMK360.Web.Controllers.ProjectStrategyRowDto>();
+    var unitOptions = ViewBag.UnitOptions as List<GMK360.Web.Controllers.StrategySalesUnitOptionDto> ?? new List<GMK360.Web.Controllers.StrategySalesUnitOptionDto>();
+
+    var aiReportedRows = rows.Where(r => r.HasAiReport).ToList();
+    decimal avgRayicSqm = rows.Any() ? Math.Round(rows.Average(r => r.PricePerSqmRayic)) : 72000m;
+    decimal avgFirmCostSqm = rows.Any() ? Math.Round(rows.Average(r => r.FirmUnitCostPerSqm)) : baseline.FirmUnitCostPerSqm;
+    decimal firstFlatPrice = rows.Any() ? rows.First().FlatSalePrice : 8500000m;
 }
 
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card border-0 shadow-sm rounded-4 bg-primary text-white overflow-hidden position-relative">
-            <div class="position-absolute top-0 end-0 opacity-25 p-4">
-                <i class="bi bi-graph-up-arrow" style="font-size: 8rem;"></i>
+<div class="container-fluid py-2">
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show py-2 px-3 small shadow-xs rounded-3 mb-3">
+            <i class="bi bi-check-circle-fill me-1"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close py-2" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- ÜST BAŞLIK & PATRON PROFİLİNE DÖNÜŞ BARI -->
+    <div class="card border-0 shadow-sm rounded-3 mb-3 text-white overflow-hidden" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+        <div class="card-body p-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-3">
+                <a href="/Dashboard/Construction" class="btn btn-outline-light btn-sm rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;" title="Özetim & Profilime Dön">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <h5 class="fw-bold mb-0 text-white">
+                            <i class="bi bi-cpu-fill text-warning me-1"></i>Patron Strateji, Bölge Rayiç Hafızası & AI Karar Merkezi
+                        </h5>
+                        <span class="badge bg-warning text-dark fw-bold rounded-pill px-2.5 py-1" style="font-size: 0.70rem;">
+                            <i class="bi bi-link-45deg me-1"></i>Hızlı Ön Etüd & Satış Portföyü Ortak Masası
+                        </span>
+                    </div>
+                    <small class="text-white-50 d-block mt-0.5" style="font-size: 0.78rem;">
+                        Tüm şantiyelerin bina m² birim maliyeti, piyasa daire satış rayiçleri, devlet enflasyon beklentileri ve AI ajan karar simülatörü
+                    </small>
+                </div>
             </div>
-            <div class="card-body p-4 position-relative z-index-1">
-                <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <a href="/ProjectCrm/SalesPool" class="btn btn-outline-light btn-sm rounded-pill px-3 fw-bold" style="font-size: 0.76rem;">
+                    <i class="bi bi-buildings me-1"></i>Satış & Daire Portföyü
+                </a>
+                <a href="/Dashboard/Construction" class="btn btn-warning btn-sm rounded-pill px-3 fw-bold text-dark" style="font-size: 0.76rem;">
+                    <i class="bi bi-person-vcard me-1"></i>Özetim & Profilime Dön
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1. BÖLÜM: ŞİRKET BAZ KRİTERLERİ, DEVLET / FİRMA m² BİRİM MALİYETİ & ENFLASYON TERAZİSİ -->
+    <div class="card border-0 shadow-sm rounded-3 mb-3 bg-white">
+        <div class="card-header bg-white border-bottom py-2.5 px-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <h6 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                    <i class="bi bi-sliders2-vertical text-primary"></i>
+                    <span>1. Şirket Baz Kriterleri, m² Birim Maliyet & Devlet Enflasyon Beklentileri</span>
+                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle rounded-pill px-2 py-0.5" style="font-size: 0.68rem;">
+                        Yeni Aday Projelerin Hızlı Ön Etüd Zemini
+                    </span>
+                </h6>
+                <small class="text-muted" style="font-size: 0.73rem;">
+                    Burada belirlediğiniz <b>Devlet m² Maliyeti</b> ve <b>Firmamızın Etkin m² Birimi</b>, tüm aday projelerin <b>Hızlı Ön Etüd</b> sayfasına varsayılan baz değer olarak aktarılır.
+                </small>
+            </div>
+            <span class="text-muted small" style="font-size: 0.72rem;">
+                <i class="bi bi-clock-history me-1"></i>Son Güncelleme: <b>@baseline.UpdatedAt.ToString("dd.MM.yyyy HH:mm")</b>
+            </span>
+        </div>
+        <div class="card-body p-3">
+            <form asp-action="SaveBaseline" asp-controller="FinancialStrategy" method="post">
+                @Html.AntiForgeryToken()
+                <div class="row g-2 align-items-end">
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <div class="p-2.5 rounded-3 bg-light border h-100">
+                            <label class="form-label fw-bold text-muted mb-1" style="font-size: 0.72rem;">
+                                <i class="bi bi-bank2 text-success me-1"></i>Devlet Birim Maliyet (ÇŞİDB)
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" name="govUnitCostPerSqm" id="inpGovCost" class="form-control fw-bold text-dark" value="@baseline.GovUnitCostPerSqm.ToString("0")" step="500" oninput="runStrategyAiAgent()" />
+                                <span class="input-group-text text-muted">₺/m²</span>
+                            </div>
+                            <small class="text-muted d-block mt-1" style="font-size: 0.64rem;">Resmi tebliğ m² maliyeti</small>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <div class="p-2.5 rounded-3 bg-success bg-opacity-10 border border-success border-opacity-25 h-100">
+                            <label class="form-label fw-bold text-dark mb-1" style="font-size: 0.72rem;">
+                                <i class="bi bi-hammer text-success me-1"></i>Firmamızın Üretim Birimi
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" name="firmUnitCostPerSqm" id="inpFirmCost" class="form-control fw-bold text-success border-success" value="@baseline.FirmUnitCostPerSqm.ToString("0")" step="500" oninput="runStrategyAiAgent()" />
+                                <span class="input-group-text text-success fw-bold">₺/m²</span>
+                            </div>
+                            <small class="text-success d-block mt-1 fw-semibold" style="font-size: 0.64rem;">Şantiye etkin m² maliyetimiz</small>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <div class="p-2.5 rounded-3 bg-light border h-100">
+                            <label class="form-label fw-bold text-muted mb-1" style="font-size: 0.72rem;">
+                                <i class="bi bi-percent text-info me-1"></i>TCMB Politika / Mevduat Faizi
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" name="tcmbPolicyRate" id="inpTcmbRate" class="form-control fw-bold text-dark" value="@baseline.TcmbPolicyRate.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" step="0.5" oninput="runStrategyAiAgent()" />
+                                <span class="input-group-text text-muted">% Yıllık</span>
+                            </div>
+                            <small class="text-muted d-block mt-1" style="font-size: 0.64rem;">Alternatif nakit getiri kıyası</small>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <div class="p-2.5 rounded-3 bg-light border h-100">
+                            <label class="form-label fw-bold text-muted mb-1" style="font-size: 0.72rem;">
+                                <i class="bi bi-graph-up-arrow text-danger me-1"></i>OVP Enflasyon Beklentisi
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" name="expectedInflationRate" id="inpInflationRate" class="form-control fw-bold text-danger" value="@baseline.ExpectedInflationRate.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" step="0.5" oninput="runStrategyAiAgent()" />
+                                <span class="input-group-text text-muted">% Yıllık</span>
+                            </div>
+                            <small class="text-muted d-block mt-1" style="font-size: 0.64rem;">Devlet yıl sonu enflasyon tahmini</small>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <div class="p-2.5 rounded-3 bg-light border h-100">
+                            <label class="form-label fw-bold text-muted mb-1" style="font-size: 0.72rem;">
+                                <i class="bi bi-person-workspace text-warning me-1"></i>İşçilik / Malzeme Artışı
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" name="expectedLaborIncreaseRate" id="inpLaborRate" class="form-control fw-bold text-dark" value="@baseline.ExpectedLaborIncreaseRate.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" step="0.5" oninput="runStrategyAiAgent()" />
+                                <span class="input-group-text text-muted">% Yıllık</span>
+                            </div>
+                            <small class="text-muted d-block mt-1" style="font-size: 0.64rem;">Şantiye taşeron/beton/demir artışı</small>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <input type="hidden" name="targetMinProfitMarginPercent" value="@baseline.TargetMinProfitMarginPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" />
+                        <div class="p-2 rounded-3 bg-light border h-100 d-flex flex-column justify-content-between">
+                            <div class="form-check mb-1">
+                                <input class="form-check-input" type="checkbox" name="syncAllCandidateProjects" value="true" id="chkSyncCandidates" checked />
+                                <label class="form-check-label small fw-semibold text-dark" for="chkSyncCandidates" style="font-size: 0.68rem;">
+                                    Aday projelerin Ön Etüd birimini de eşitle
+                                </label>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold rounded-2 shadow-xs">
+                                <i class="bi bi-floppy2-fill me-1"></i>Baz Kriterleri Kaydet
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 2. BÖLÜM: TÜM ŞANTİYELERİN & ADAY PROJELERİN m² MALİYET / BÖLGE DAİRE RAYİCİ / CİRO ÖZETİ (HIZLI ÖN ETÜD ORTAK TABLOSU) -->
+    <div class="card border-0 shadow-sm rounded-3 mb-3 bg-white">
+        <div class="card-header bg-white border-bottom py-2.5 px-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <h6 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                    <i class="bi bi-buildings-fill text-success"></i>
+                    <span>2. Şantiyeler & Aday Projeler: Bina m² Birim Maliyeti, Piyasa Daire Rayici ve Karlılık Özeti</span>
+                    <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle rounded-pill px-2 py-0.5" style="font-size: 0.68rem;">
+                        @rows.Count Proje Kayıtlı
+                    </span>
+                </h6>
+                <small class="text-muted" style="font-size: 0.73rem;">
+                    Projelerin <b>Hızlı Ön Etüd</b> masasında girilen kat, daire, malik oranı, satış rayici ve firma birim maliyetlerinin canlı karşılaştırması
+                </small>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-light text-dark border px-2.5 py-1.5" style="font-size: 0.74rem;">
+                    Ortalama Bölge Satış Rayici: <b class="text-primary">~@avgRayicSqm.ToString("N0") ₺/m²</b>
+                </span>
+                <span class="badge bg-light text-dark border px-2.5 py-1.5" style="font-size: 0.74rem;">
+                    Ortalama Üretim Maliyetimiz: <b class="text-success">@avgFirmCostSqm.ToString("N0") ₺/m²</b>
+                </span>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            @if (rows.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" style="font-size: 0.80rem;">
+                        <thead class="table-light text-secondary">
+                            <tr>
+                                <th class="ps-3">Proje & Bölge / Mahalle</th>
+                                <th class="text-center">Aşama</th>
+                                <th class="text-center">İnşaat Alanı</th>
+                                <th class="text-center">Üretim & Paylaşım</th>
+                                <th class="text-center">Devlet / Firma m² Birimi</th>
+                                <th class="text-end">Daire Fiyatı & m² Rayiç</th>
+                                <th class="text-end">Tahmini Ciro</th>
+                                <th class="text-end">Toplam Maliyet</th>
+                                <th class="text-end">Net Proje Kârı</th>
+                                <th class="text-end pe-3">Hızlı Ön Etüd</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in rows)
+                            {
+                                bool isProfitable = r.EstimatedNetProfit >= 0;
+                                <tr>
+                                    <td class="ps-3">
+                                        <div class="fw-bold text-dark">@r.ProjectName</div>
+                                        <div class="text-muted" style="font-size: 0.71rem;">
+                                            <i class="bi bi-geo-alt-fill text-danger me-1"></i>@r.LocationFull
+                                            <span class="ms-1">(@r.LandAreaSqm.ToString("N1") m² Arsa)</span>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        @if (r.Status == GMK360.Core.Entities.Construction.ProjectStatus.Aktif_Santiye)
+                                        {
+                                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle rounded-pill">@r.StatusText</span>
+                                        }
+                                        else if (r.Status == GMK360.Core.Entities.Construction.ProjectStatus.Tamamlandi_Teslim)
+                                        {
+                                            <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle rounded-pill">@r.StatusText</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning bg-opacity-15 text-dark border border-warning rounded-pill">@r.StatusText</span>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="fw-bold text-dark">@r.TotalConstSqm.ToString("N0") m²</div>
+                                        <small class="text-muted" style="font-size: 0.68rem;">@r.TotalCostFloors Kat (@r.TotalFloors İzin + @r.BasementFloors Bodrum + Z/Ç)</small>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="fw-bold text-success">
+                                            ⭐ Bize: @r.ContractorUnits Daire @(r.ContractorShops > 0 ? $"+ {r.ContractorShops} Dükkan" : "")
+                                        </div>
+                                        <small class="text-muted" style="font-size: 0.68rem;">
+                                            Toplam @r.TotalUnits Daire (~@r.UnitAvgSqm m²) | Malik: %@r.OwnerSharePercent.ToString("0")
+                                        </small>
+                                    </td>
+                                    <td class="text-center">
+                                        <div>
+                                            <span class="badge bg-light text-muted border" style="font-size: 0.68rem;">Devlet: @r.GovUnitCostPerSqm.ToString("N0") ₺</span>
+                                        </div>
+                                        <div class="mt-1">
+                                            <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle fw-bold" style="font-size: 0.73rem;">
+                                                Firma: @r.FirmUnitCostPerSqm.ToString("N0") ₺/m²
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="fw-bold text-dark">@r.FlatSalePrice.ToString("N0") ₺</div>
+                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle fw-bold" style="font-size: 0.70rem;">
+                                            ~@r.PricePerSqmRayic.ToString("N0") ₺/m² Rayiç
+                                        </span>
+                                    </td>
+                                    <td class="text-end fw-bold text-primary">
+                                        @r.EstimatedRevenue.ToString("N0") ₺
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="fw-bold text-danger">@r.EstimatedCost.ToString("N0") ₺</div>
+                                        @if (r.IncludeRentInFeasibility && r.RentRelocationTotal > 0)
+                                        {
+                                            <small class="text-muted d-block" style="font-size: 0.66rem;">(Kira Yükü: +@r.RentRelocationTotal.ToString("N0") ₺)</small>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="fw-bold @(isProfitable ? "text-success" : "text-danger")">
+                                            @r.EstimatedNetProfit.ToString("N0") ₺
+                                        </div>
+                                        <small class="badge @(isProfitable ? "bg-success" : "bg-danger") text-white" style="font-size: 0.65rem;">
+                                            @(isProfitable ? $"%{r.ProfitMarginPercent:N1} Kâr" : "Zarar Riski")
+                                        </small>
+                                    </td>
+                                    <td class="text-end pe-3">
+                                        <div class="d-flex justify-content-end gap-1">
+                                            <button type="button" class="btn btn-outline-dark btn-sm rounded-pill py-0.5 px-2" style="font-size: 0.72rem;"
+                                                    onclick="loadProjectIntoSimulator('@Html.Raw(r.ProjectName.Replace("'", "\\'"))', @r.FlatSalePrice.ToString("0", System.Globalization.CultureInfo.InvariantCulture), @r.PricePerSqmRayic.ToString("0", System.Globalization.CultureInfo.InvariantCulture), @r.FirmUnitCostPerSqm.ToString("0", System.Globalization.CultureInfo.InvariantCulture), @r.OwnerSharePercent.ToString("0", System.Globalization.CultureInfo.InvariantCulture))"
+                                                    title="Bu projeyi sağdaki AI Karar Ajanına yükle">
+                                                <i class="bi bi-robot text-warning"></i> Simüle Et
+                                            </button>
+                                            <a href="/ConstructionProject/Feasibility/@r.ProjectId" class="btn btn-primary btn-sm rounded-pill py-0.5 px-2.5 fw-bold" style="font-size: 0.72rem;">
+                                                Ön Etüd ➔
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-4 text-muted small">
+                    Henüz kayıtlı aday proje veya aktif şantiye bulunmuyor.
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- 3. & 4. BÖLÜM: SOLDA GEMİNİ AI BÖLGE RAYİÇ HAFIZASI | SAĞDA CANLI AI STRATEJİ & KARAR AJANI -->
+    <div class="row g-3">
+        <!-- SOL KOLON: HIZLI ÖN ETÜD'DEN GELEN GEMİNİ AI BÖLGE & MAHALLE DEĞERLENDİRMELERİ -->
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm rounded-3 bg-white h-100">
+                <div class="card-header bg-white border-bottom py-2.5 px-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <div>
-                        <h2 class="fw-bold mb-1"><i class="bi bi-lightbulb-fill text-warning me-2"></i> Finansal Strateji & Karar Destek Kokpiti</h2>
-                        <p class="mb-0 fs-5 text-white-50">Ön Fizibilite, Maliyet Genetiği ve TCMB Verileriyle Kur/Enflasyon Koruması</p>
+                        <h6 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                            <i class="bi bi-stars text-primary"></i>
+                            <span>3. Bölge & Mahalle Rayiç Hafızası (Hızlı Ön Etüd AI Raporları)</span>
+                            <span class="badge bg-info bg-opacity-10 text-info border border-info rounded-pill px-2 py-0.5" style="font-size: 0.68rem;">
+                                Gemini AI Ortak Hafıza
+                            </span>
+                        </h6>
+                        <small class="text-muted" style="font-size: 0.73rem;">
+                            Aday projelerin Hızlı Ön Etüd sayfasında üretilen mahalle rayiç, kira endeksi ve kentsel dönüşüm strateji raporları
+                        </small>
+                    </div>
+                </div>
+                <div class="card-body p-3">
+                    @if (aiReportedRows.Any())
+                    {
+                        <div class="accordion" id="accAiReports">
+                            @for (int i = 0; i < aiReportedRows.Count; i++)
+                            {
+                                var item = aiReportedRows[i];
+                                string collapseId = $"aiRepCollapse_{item.ProjectId}";
+                                <div class="accordion-item border rounded-3 mb-2 overflow-hidden">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button @(i == 0 ? "" : "collapsed") py-2.5 px-3 bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId">
+                                            <div class="d-flex justify-content-between align-items-center w-100 me-2 flex-wrap gap-1">
+                                                <div>
+                                                    <span class="fw-bold text-dark small">
+                                                        <i class="bi bi-geo-alt-fill text-danger me-1"></i>@item.LocationFull
+                                                    </span>
+                                                    <span class="badge bg-white text-dark border ms-2" style="font-size: 0.70rem;">@item.ProjectName</span>
+                                                </div>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle" style="font-size: 0.70rem;">
+                                                        ~@item.PricePerSqmRayic.ToString("N0") ₺/m² Rayiç
+                                                    </span>
+                                                    @if (item.AiUpdatedAt.HasValue)
+                                                    {
+                                                        <small class="text-muted" style="font-size: 0.68rem;">@item.AiUpdatedAt.Value.ToString("dd.MM.yyyy")</small>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </button>
+                                    </h2>
+                                    <div id="@collapseId" class="accordion-collapse collapse @(i == 0 ? "show" : "")" data-bs-parent="#accAiReports">
+                                        <div class="accordion-body p-3 bg-white" style="font-size: 0.82rem; line-height: 1.6; max-height: 360px; overflow-y: auto;">
+                                            <div class="strategy-ai-report-content">@Html.Raw(item.AiReport)</div>
+                                            <div class="mt-2 pt-2 border-top d-flex justify-content-between align-items-center">
+                                                <small class="text-muted"><i class="bi bi-check-circle-fill text-success me-1"></i>Hızlı Ön Etüd ile senkronize</small>
+                                                <a href="/ConstructionProject/Feasibility/@item.ProjectId" class="btn btn-outline-primary btn-sm rounded-pill py-0.5 px-2.5" style="font-size: 0.72rem;">
+                                                    Proje Ön Etüdünde Aç ➔
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4 px-3 bg-light rounded-3 border">
+                            <i class="bi bi-stars text-primary fs-3 d-block mb-1"></i>
+                            <div class="fw-bold text-dark small">Henüz Kayıtlı Mahalle AI Raporu Yok</div>
+                            <p class="text-muted small mb-2" style="font-size: 0.75rem;">
+                                Herhangi bir projenin <b>Hızlı Ön Etüd</b> sayfasında <b>"Yapay Zeka Bölge Analizini Başlat"</b> butonuna tıkladığınızda üretilen mahalle rayiç raporu otomatik olarak burada arşivlenir.
+                            </p>
+                            @if (rows.Any())
+                            {
+                                <a href="/ConstructionProject/Feasibility/@rows.First().ProjectId" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold">
+                                    <i class="bi bi-magic me-1"></i>@rows.First().ProjectName İçin Hızlı Ön Etüde Git
+                                </a>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- SAĞ KOLON: CANLI AI KARAR AJANI (SATAYIM MI, BEKLETEYİM Mİ & YENİ ADAY PROJE STRATEJİ ÖNERİSİ) -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm rounded-3 bg-white h-100">
+                <div class="card-header border-bottom py-2.5 px-3 text-white" style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%);">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="fw-bold mb-0 text-white d-flex align-items-center gap-1.5">
+                                <i class="bi bi-robot text-warning"></i>
+                                <span>4. AI Strateji & Karar Ajanı (Canlı Simülatör)</span>
+                            </h6>
+                            <small class="text-white-50" style="font-size: 0.72rem;">
+                                Piyasa rayici, m² inşaat maliyeti ve TCMB/Enflasyon verisiyle anlık karar desteği
+                            </small>
+                        </div>
+                        <span class="badge bg-warning text-dark fw-bold rounded-pill" style="font-size: 0.68rem;">Canlı Hesap</span>
+                    </div>
+                </div>
+                <div class="card-body p-3">
+                    <!-- Proje veya Satış Havuzu Dairesi Seçimi -->
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-dark mb-1" style="font-size: 0.74rem;">
+                            <i class="bi bi-building-check text-primary me-1"></i>Hızlı Ön Etüd veya Satış Havuzundan Daire Seçin:
+                        </label>
+                        <select id="selStrategyUnit" class="form-select form-select-sm rounded-2 fw-semibold" onchange="onSelectStrategyUnit(this)">
+                            @foreach (var opt in unitOptions)
+                            {
+                                <option value="@opt.Price.ToString("0", System.Globalization.CultureInfo.InvariantCulture)"
+                                        data-rayic="@opt.PricePerSqm.ToString("0", System.Globalization.CultureInfo.InvariantCulture)"
+                                        data-firmcost="@opt.FirmCostPerSqm.ToString("0", System.Globalization.CultureInfo.InvariantCulture)">
+                                    @opt.Label
+                                </option>
+                            }
+                            <option value="10000000" data-rayic="83000" data-firmcost="@baseline.FirmUnitCostPerSqm.ToString("0", System.Globalization.CultureInfo.InvariantCulture)">
+                                Manuel Değer Girişi (Özel Senaryo)
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-muted mb-1" style="font-size: 0.72rem;">Dairenin Bugünkü Satış Rayici (₺)</label>
+                            <input type="number" id="simFlatValue" class="form-control form-control-sm fw-bold text-dark" value="@firstFlatPrice.ToString("0", System.Globalization.CultureInfo.InvariantCulture)" step="250000" oninput="runStrategyAiAgent()" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-muted mb-1" style="font-size: 0.72rem;">Karar / Değerlendirme Vadesi</label>
+                            <select id="simHorizonMonths" class="form-select form-select-sm fw-bold text-dark" onchange="runStrategyAiAgent()">
+                                <option value="3">3 Ay Sonra</option>
+                                <option value="6" selected>6 Ay Sonra</option>
+                                <option value="12">12 Ay (1 Yıl) Sonra</option>
+                                <option value="18">18 Ay (Şantiye Teslim) Sonra</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Karşılaştırma Kartları -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <div class="p-2.5 rounded-3 bg-success bg-opacity-10 border border-success border-opacity-25 h-100">
+                                <div class="fw-bold text-success small mb-1" style="font-size: 0.73rem;">
+                                    <i class="bi bi-cash-stack me-1"></i>Bugün Sat & Nakde/Faize Koy
+                                </div>
+                                <div class="fs-5 fw-bold text-dark" id="resSellNowFutureVal">0 ₺</div>
+                                <small class="text-muted d-block" style="font-size: 0.66rem;" id="resSellNowNote">TCMB Faizi ile vade sonu</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-2.5 rounded-3 bg-primary bg-opacity-10 border border-primary border-opacity-25 h-100">
+                                <div class="fw-bold text-primary small mb-1" style="font-size: 0.73rem;">
+                                    <i class="bi bi-house-up-fill me-1"></i>Beklet & Maliyet Endeksiyle Sat
+                                </div>
+                                <div class="fs-5 fw-bold text-dark" id="resHoldFutureVal">0 ₺</div>
+                                <small class="text-muted d-block" style="font-size: 0.66rem;" id="resHoldNote">Enflasyon & inşaat artışıyla</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- m² Satış Rayici / m² İnşaat Maliyeti Çarpanı -->
+                    <div class="p-2.5 rounded-3 bg-light border mb-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted d-block" style="font-size: 0.68rem;">Bölge Satış Rayici vs. Üretim Maliyetimiz</small>
+                            <span class="fw-bold text-dark small" id="resRayicVsCostText">~72.034 ₺/m² Rayiç / 25.000 ₺/m² Maliyet</span>
+                        </div>
+                        <span class="badge bg-dark text-warning px-2.5 py-1.5 fw-bold" style="font-size: 0.75rem;" id="resCostMultiplierBadge">
+                            2,88x Çarpan
+                        </span>
+                    </div>
+
+                    <!-- YAPAY ZEKA STRATEJİ AJANI ÖNERİ KUTUSU -->
+                    <div class="p-3 rounded-3 border border-warning bg-warning bg-opacity-10">
+                        <div class="d-flex align-items-center justify-content-between mb-1.5">
+                            <span class="fw-bold text-dark small">
+                                <i class="bi bi-cpu-fill text-warning me-1"></i>AI Strateji Ajanı Önerisi:
+                            </span>
+                            <span class="badge bg-dark text-white px-2.5 py-1 fw-bold" style="font-size: 0.70rem;" id="resAiDecisionBadge">ANALİZ EDİLİYOR</span>
+                        </div>
+                        <div class="text-dark small" style="font-size: 0.78rem; line-height: 1.5;" id="resAiStrategyAdviceText">
+                            Hesaplanıyor...
+                        </div>
                     </div>
                 </div>
             </div>
@@ -22,142 +492,108 @@
     </div>
 </div>
 
-<div class="row g-4 mb-4">
-    <!-- Makro Ekonomik Kokpit -->
-    <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-4 border-info">
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="fw-bold text-muted mb-0">TCMB Politika Faizi</h6>
-                    <span class="badge bg-info bg-opacity-10 text-info p-2 rounded-3"><i class="bi bi-bank"></i> TCMB API</span>
-                </div>
-                <h2 class="fw-bold text-dark mb-1">%50.00</h2>
-                <small class="text-muted"><i class="bi bi-arrow-up-right text-success"></i> Alternatif Getiri Kıyası İçin</small>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-4 border-danger">
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="fw-bold text-muted mb-0">Beklenen Yıl Sonu Enflasyon</h6>
-                    <span class="badge bg-danger bg-opacity-10 text-danger p-2 rounded-3"><i class="bi bi-graph-up"></i> TCMB OVP</span>
-                </div>
-                <h2 class="fw-bold text-dark mb-1">%41.50</h2>
-                <small class="text-muted"><i class="bi bi-exclamation-triangle text-warning"></i> Gelecek Maliyet Etkisi</small>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-4 border-warning">
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="fw-bold text-muted mb-0">Asgari Ücret Zam Beklentisi</h6>
-                    <span class="badge bg-warning bg-opacity-10 text-warning p-2 rounded-3"><i class="bi bi-person-workspace"></i> İşçilik</span>
-                </div>
-                <h2 class="fw-bold text-dark mb-1">%35.00</h2>
-                <small class="text-muted"><i class="bi bi-hammer text-secondary"></i> Taşeron ve Personel Maliyeti</small>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm rounded-4 h-100 bg-dark text-white">
-            <div class="card-body p-4 text-center d-flex flex-column justify-content-center">
-                <h6 class="fw-bold text-white-50 mb-2">Sistem Projeksiyonu</h6>
-                <h3 class="fw-bold text-warning mb-1"><i class="bi bi-bullseye"></i> Hedef Birim Maliyet</h3>
-                <h4 class="fw-bold">14.500 ₺ / m²</h4>
-            </div>
-        </div>
-    </div>
-</div>
+@section Scripts {
+<script>
+    var currentSimRayicSqm = @(rows.Any() ? rows.First().PricePerSqmRayic.ToString("0", System.Globalization.CultureInfo.InvariantCulture) : "72034");
 
-<div class="row g-4">
-    <!-- Proje Maliyet Genetiği Arşivi -->
-    <div class="col-lg-8">
-        <div class="card border-0 shadow-sm rounded-4 h-100">
-            <div class="card-header bg-white border-bottom p-4">
-                <h5 class="fw-bold text-dark mb-0"><i class="bi bi-archive-fill text-primary me-2"></i> Proje Maliyet Genetiği (Arşiv)</h5>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="ps-4">Proje Adı</th>
-                                <th>m²</th>
-                                <th>Malzeme Gideri</th>
-                                <th>İşçilik Gideri</th>
-                                <th>Toplam Maliyet</th>
-                                <th class="text-end pe-4">Teslim Kuru (USD)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- Mock Data -->
-                            <tr>
-                                <td class="ps-4 fw-bold">Beyaz Konak Evleri</td>
-                                <td>2.450</td>
-                                <td class="text-danger">12.500.000 ₺</td>
-                                <td class="text-info">8.200.000 ₺</td>
-                                <td class="fw-bold">20.700.000 ₺</td>
-                                <td class="text-end pe-4 text-muted">28,50 ₺</td>
-                            </tr>
-                            <tr>
-                                <td class="ps-4 fw-bold">Güneşli Vadi Villaları</td>
-                                <td>1.800</td>
-                                <td class="text-danger">18.200.000 ₺</td>
-                                <td class="text-info">6.100.000 ₺</td>
-                                <td class="fw-bold">24.300.000 ₺</td>
-                                <td class="text-end pe-4 text-muted">32,10 ₺</td>
-                            </tr>
-                            <tr>
-                                <td colspan="6" class="text-center py-3 text-muted">
-                                    <small><i class="bi bi-info-circle"></i> Teslim edilen projelerin kesinleşmiş verileridir. Gelecek projelerin Ön Fizibilitesi bu arşivdeki malzeme/işçilik kırılımlarına göre Dolar ve Enflasyon bazlı hesaplanır.</small>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
+    function onSelectStrategyUnit(sel) {
+        if (!sel || sel.selectedIndex < 0) return;
+        var opt = sel.options[sel.selectedIndex];
+        var price = parseFloat(opt.value) || 8500000;
+        var rayic = parseFloat(opt.getAttribute('data-rayic')) || 72034;
+        currentSimRayicSqm = rayic;
+        var inp = document.getElementById('simFlatValue');
+        if (inp) inp.value = price;
+        runStrategyAiAgent();
+    }
 
-    <!-- Satayım mı, Bekleteyim mi Asistanı -->
-    <div class="col-lg-4">
-        <div class="card border-0 shadow-sm rounded-4 h-100 bg-light">
-            <div class="card-header bg-white border-bottom p-4">
-                <h5 class="fw-bold text-dark mb-0"><i class="bi bi-robot text-success me-2"></i> Satayım mı, Bekleteyim mi?</h5>
-            </div>
-            <div class="card-body p-4">
-                <p class="text-muted small mb-4">Elinizdeki stok dairenin fırsat maliyeti analizini yapmak için güncel değerini girin.</p>
-                
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Dairenin Bugünkü Değeri (₺)</label>
-                    <input type="text" class="form-control border-secondary" value="10.000.000" disabled>
-                </div>
-                <div class="mb-4">
-                    <label class="form-label fw-bold">Karar Vadesi</label>
-                    <select class="form-select border-secondary" disabled>
-                        <option>6 Ay Sonra</option>
-                    </select>
-                </div>
+    function loadProjectIntoSimulator(projName, flatPrice, rayicSqm, firmCostSqm, ownerShare) {
+        currentSimRayicSqm = rayicSqm || 72034;
+        var inpFlat = document.getElementById('simFlatValue');
+        if (inpFlat) inpFlat.value = flatPrice;
+        var inpFirm = document.getElementById('inpFirmCost');
+        if (inpFirm && firmCostSqm > 0) inpFirm.value = firmCostSqm;
+        runStrategyAiAgent();
+        var card = document.getElementById('simFlatValue');
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
 
-                <div class="p-3 bg-white rounded-3 border border-success mb-3 shadow-sm">
-                    <h6 class="fw-bold text-success mb-2"><i class="bi bi-check-circle-fill me-1"></i> Satar ve Faize/Arsaya Koyarsan:</h6>
-                    <h4 class="fw-bold mb-0">12.500.000 ₺</h4>
-                    <small class="text-muted">(TCMB Faiz Beklentisi ile)</small>
-                </div>
+    function runStrategyAiAgent() {
+        var flatVal = parseFloat(document.getElementById('simFlatValue')?.value) || 8500000;
+        var months = parseInt(document.getElementById('simHorizonMonths')?.value) || 6;
 
-                <div class="p-3 bg-white rounded-3 border border-danger mb-4 shadow-sm">
-                    <h6 class="fw-bold text-danger mb-2"><i class="bi bi-house-door-fill me-1"></i> Bekletir ve Sonra Satarsan:</h6>
-                    <h4 class="fw-bold mb-0">14.150.000 ₺</h4>
-                    <small class="text-muted">(OVP Enflasyon/Maliyet Endeksi ile)</small>
-                </div>
+        var tcmbAnnual = parseFloat(document.getElementById('inpTcmbRate')?.value) || 50;
+        var infAnnual = parseFloat(document.getElementById('inpInflationRate')?.value) || 41.5;
+        var laborAnnual = parseFloat(document.getElementById('inpLaborRate')?.value) || 35;
+        var firmCostSqm = parseFloat(document.getElementById('inpFirmCost')?.value) || 25000;
+        var govCostSqm = parseFloat(document.getElementById('inpGovCost')?.value) || 18500;
 
-                <button class="btn btn-dark w-100 fw-bold py-2" disabled>Yapay Zeka Kararı: BEKLET</button>
-            </div>
-        </div>
-    </div>
-</div>
+        var yearFraction = months / 12.0;
+
+        // 1. Bugün Sat & TCMB Faizi / Şantiye Nakit Akışında Değerlendir
+        var sellNowFuture = Math.round(flatVal * (1 + (tcmbAnnual / 100.0) * yearFraction));
+
+        // 2. Beklet & Konut/İnşaat Maliyet Endeksiyle Sat (Enflasyon ve işçilik/malzeme artış ortalaması)
+        var effectiveRealEstateGrowthAnnual = (infAnnual * 0.65) + (laborAnnual * 0.35);
+        var holdFuture = Math.round(flatVal * (1 + (effectiveRealEstateGrowthAnnual / 100.0) * yearFraction));
+
+        var elSell = document.getElementById('resSellNowFutureVal');
+        if (elSell) elSell.innerText = sellNowFuture.toLocaleString('tr-TR') + ' ₺';
+        var elSellNote = document.getElementById('resSellNowNote');
+        if (elSellNote) elSellNote.innerText = '%' + tcmbAnnual + ' yıllık getiri ile ' + months + ' ay sonunda';
+
+        var elHold = document.getElementById('resHoldFutureVal');
+        if (elHold) elHold.innerText = holdFuture.toLocaleString('tr-TR') + ' ₺';
+        var elHoldNote = document.getElementById('resHoldNote');
+        if (elHoldNote) elHoldNote.innerText = '~%' + effectiveRealEstateGrowthAnnual.toFixed(1) + ' maliyet/konut artışıyla ' + months + ' ay sonunda';
+
+        // Çarpan (Rayiç m² / Firma Üretim m²)
+        var estRayicSqm = currentSimRayicSqm > 0 ? currentSimRayicSqm : Math.round(flatVal / 118.0);
+        var multiplier = firmCostSqm > 0 ? (estRayicSqm / firmCostSqm) : 0;
+
+        var elRayicText = document.getElementById('resRayicVsCostText');
+        if (elRayicText) {
+            elRayicText.innerText = '~' + estRayicSqm.toLocaleString('tr-TR') + ' ₺/m² Satış Rayici vs ' + firmCostSqm.toLocaleString('tr-TR') + ' ₺/m² Üretim';
+        }
+        var elMult = document.getElementById('resCostMultiplierBadge');
+        if (elMult) {
+            elMult.innerText = multiplier.toFixed(2).replace('.', ',') + 'x Çarpan';
+        }
+
+        // Yeni Aday Projede Güvenli Malik Payı Tavanı Hesabı
+        // İnşaat süresince maliyet artış tamponu sonrası başabaş noktası:
+        var safeMaxOwnerShare = multiplier >= 3.0 ? 55 : (multiplier >= 2.5 ? 50 : (multiplier >= 2.0 ? 42 : 35));
+
+        var badge = document.getElementById('resAiDecisionBadge');
+        var advice = document.getElementById('resAiStrategyAdviceText');
+
+        var diff = sellNowFuture - holdFuture;
+        if (diff > 0) {
+            if (badge) {
+                badge.className = 'badge bg-success text-white px-2.5 py-1 fw-bold';
+                badge.innerText = 'ÖNERİ: NAKDE DÖN / ŞANTİYEYİ FONLA';
+            }
+            if (advice) {
+                advice.innerHTML =
+                    '<b>1. Satış / Stok Kararı:</b> ' + months + ' aylık vadede bugün satıp nakdi şantiye malzeme bağlantısında veya mevduatta değerlendirmek, daireyi bekletmeye göre <b>+' + diff.toLocaleString('tr-TR') + ' ₺</b> avantaj sağlıyor. Demir/beton bağlantısını bugünden peşin yapmak enflasyon artışından (%' + infAnnual + ') korur.<br/>' +
+                    '<b>2. Yeni Aday Proje Kriteri:</b> Bölge satış rayici (<b>~' + estRayicSqm.toLocaleString('tr-TR') + ' ₺/m²</b>), üretim maliyetimizin (<b>' + firmCostSqm.toLocaleString('tr-TR') + ' ₺/m²</b>) <b>' + multiplier.toFixed(2).replace('.', ',') + ' katı</b>. Bu bölgede yeni aday projeye girerken arsa sahiplerine (maliklere) en fazla <b>%' + safeMaxOwnerShare + '</b> pay verilmesi güvenli kâr marjını korur.';
+            }
+        } else {
+            var holdAdv = Math.abs(diff);
+            if (badge) {
+                badge.className = 'badge bg-primary text-white px-2.5 py-1 fw-bold';
+                badge.innerText = 'ÖNERİ: ELDE TUT / ŞEREFİYELİ SAT';
+            }
+            if (advice) {
+                advice.innerHTML =
+                    '<b>1. Satış / Stok Kararı:</b> İnşaat maliyet ve konut endeksi beklentisi nedeniyle ' + months + ' ay bekletip satmak <b>+' + holdAdv.toLocaleString('tr-TR') + ' ₺</b> daha yüksek getiri üretiyor. Acil hakediş ödemesi yoksa daireyi kaba inşaat sonrasında şerefiyeli satmak daha kârlı.<br/>' +
+                    '<b>2. Yeni Aday Proje Kriteri:</b> Bölge satış rayici (<b>~' + estRayicSqm.toLocaleString('tr-TR') + ' ₺/m²</b>) / Firma birim maliyetimiz (<b>' + firmCostSqm.toLocaleString('tr-TR') + ' ₺/m²</b>) çarpanı <b>' + multiplier.toFixed(2).replace('.', ',') + 'x</b> seviyesinde. Yeni aday projede malik payı tavanı <b>%' + safeMaxOwnerShare + '</b> olarak baz alınmalıdır.';
+            }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        runStrategyAiAgent();
+    });
+</script>
+}

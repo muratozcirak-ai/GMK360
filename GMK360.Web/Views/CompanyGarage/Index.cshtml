@@ -1,38 +1,61 @@
 @model IEnumerable<GMK360.Core.Entities.Logistics.CompanyVehicle>
+@using GMK360.Web.Controllers
+@using GMK360.Core.Entities.Construction
 @{
-    Layout = "_Layout";
-    ViewData["Title"] = "Araç Parkı & Ağır Makine Filosu";
+    Layout = "_ConstructionLayout";
+    ViewData["Title"] = "Şirket Garajı, Özmal & Kiralık Makineler";
     var activeProjects = ViewBag.ActiveProjects as IEnumerable<dynamic>;
+    var projectList = ViewBag.ProjectList as List<ConstructionProject> ?? new List<ConstructionProject>();
+    var rentalLogs = ViewBag.RentalMachineryLogs as List<RentalMachineryLogItem> ?? new List<RentalMachineryLogItem>();
+    string reqTab = Context.Request.Query["tab"].ToString();
+    bool showRentalTab = string.Equals(reqTab, "rental", StringComparison.OrdinalIgnoreCase);
+
     var totalVehicles = Model.Count();
     var activeOnDuty = Model.Count(v => v.Assignments?.Any(a => a.ReturnDate == null) == true || v.Tasks?.Any(t => t.Status == "Yolda / Görevde") == true);
     var totalFleetExpense = Model.Sum(v => v.Expenses?.Sum(e => e.Amount) ?? 0);
+    var totalRentalExpense = rentalLogs.Sum(r => r.TotalAmount);
+    var grandTotalVehicleAndRentalCost = totalFleetExpense + totalRentalExpense;
+
+    // Makine Türü Bazlı Kiralama Gruplaması (Yatırım & Satın Alma Farkındalığı)
+    var rentalByCategory = rentalLogs
+        .GroupBy(r => r.MachineCategory)
+        .Select(g => new
+        {
+            Category = g.Key,
+            Count = g.Count(),
+            ProjectCount = g.Select(x => x.ProjectName).Distinct().Count(),
+            TotalHours = g.Where(x => x.DurationType == "Saat").Sum(x => x.DurationValue),
+            TotalDays = g.Where(x => x.DurationType == "Gün").Sum(x => x.DurationValue),
+            TotalTrips = g.Where(x => x.DurationType == "Sefer").Sum(x => x.DurationValue),
+            TotalAmount = g.Sum(x => x.TotalAmount)
+        })
+        .OrderByDescending(g => g.TotalAmount)
+        .ToList();
 }
 
-<div class="container-fluid py-4">
+<div class="container-fluid py-3">
     <!-- Üst Başlık & Aksiyon Çubuğu -->
-    <div class="row mb-4 align-items-center">
-        <div class="col-lg-6 mb-3 mb-lg-0">
-            <h3 class="fw-bold text-dark mb-1">
-                <i class="bi bi-truck-flatbed text-primary me-2"></i> Araç Parkı & Ağır Makine Filosu
-            </h3>
-            <p class="text-muted mb-0">
-                Damperli Kamyonlar, Yıkım Ekskavatörleri, Beko Loder, Şantiye Araçları, Ruhsat & Poliçe Evrakları, Döküm Seferleri ve Masraflar
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div>
+            <h4 class="fw-bold text-dark mb-0">
+                <i class="bi bi-truck-flatbed text-primary me-2"></i>Şirket Garajı, Özmal & Kiralık İş Makineleri
+            </h4>
+            <p class="text-muted small mb-0">
+                Şirketin kendi araç/makine filosu ile şantiyelerde günlük/saatlik kiralanan vinç, JCB, forklift ve kamyon giderlerinin tek merkezden takibi.
             </p>
         </div>
-        <div class="col-lg-6 text-lg-end d-flex flex-wrap justify-content-lg-end gap-2">
-            <form asp-action="AddSampleFleet" asp-controller="CompanyGarage" method="post" class="d-inline">
-                <button type="submit" class="btn btn-outline-warning text-dark fw-bold rounded-pill px-3 shadow-sm" title="Demo için ruhsatı, kaskosu, döküm fişleri ve görevleriyle hazır 5 araç ekler">
-                    <i class="bi bi-magic me-1"></i> + Örnek Yıkım Filosu Yükle
-                </button>
-            </form>
-            <a href="/CompanyGarage/AllExpenses" class="btn btn-outline-danger fw-bold rounded-pill px-3 shadow-sm">
-                <i class="bi bi-receipt me-1"></i> Tüm Masraflar / Fişler
+        <div class="d-flex flex-wrap gap-2">
+            <a href="/CompanyGarage/AllExpenses" class="btn btn-sm btn-outline-danger fw-bold rounded-pill px-3 py-1.5 shadow-xs">
+                <i class="bi bi-receipt me-1"></i> Özmal Masraf Fişleri
             </a>
-            <a href="/CompanyGarage/AllTasks" class="btn btn-outline-primary fw-bold rounded-pill px-3 shadow-sm">
+            <a href="/CompanyGarage/AllTasks" class="btn btn-sm btn-outline-secondary fw-bold rounded-pill px-3 py-1.5 shadow-xs">
                 <i class="bi bi-list-task me-1"></i> Sefer & Görevler
             </a>
-            <button class="btn btn-primary fw-bold rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#addVehicleModal">
-                <i class="bi bi-plus-lg me-1"></i> Yeni Araç / Makine Ekle
+            <button class="btn btn-sm btn-warning text-dark fw-bold rounded-pill px-3 py-1.5 shadow-sm" data-bs-toggle="modal" data-bs-target="#addRentalMachineModal">
+                <i class="bi bi-stopwatch-fill me-1"></i> + Günlük / Saatlik Kiralık Makine İşle (Vinç, JCB, Forklift)
+            </button>
+            <button class="btn btn-sm btn-primary fw-bold rounded-pill px-3 py-1.5 shadow-sm" data-bs-toggle="modal" data-bs-target="#addVehicleModal">
+                <i class="bi bi-plus-lg me-1"></i> + Yeni Özmal Araç Ekle
             </button>
         </div>
     </div>
@@ -40,448 +63,386 @@
     <!-- Başarı Mesajı Bildirimi -->
     @if (TempData["SuccessMessage"] != null)
     {
-        <div class="alert alert-success alert-dismissible fade show rounded-4 shadow-sm border-0 mb-4" role="alert">
+        <div class="alert alert-success alert-dismissible fade show rounded-3 shadow-xs border-0 mb-3 py-2" role="alert">
             <div class="d-flex align-items-center">
-                <i class="bi bi-check-circle-fill fs-4 me-3 text-success"></i>
-                <div class="fw-bold">@TempData["SuccessMessage"]</div>
+                <i class="bi bi-check-circle-fill fs-5 me-2 text-success"></i>
+                <div class="fw-bold small">@TempData["SuccessMessage"]</div>
             </div>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     }
 
-    <!-- Üst Özet Kartları -->
-    <div class="row g-3 mb-4">
-        <div class="col-md-4">
-            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                <div class="d-flex align-items-center">
-                    <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 me-3">
-                        <i class="bi bi-truck fs-3"></i>
-                    </div>
-                    <div>
-                        <span class="text-muted small fw-bold text-uppercase">Toplam Araç & Makine</span>
-                        <h3 class="fw-bold mb-0 text-dark">@totalVehicles <span class="fs-6 text-muted fw-normal">Adet</span></h3>
-                    </div>
+    <!-- Üst 4 Net Özet Kutusu (Özmal + Kiralık Farkındalık) -->
+    <div class="row g-2 mb-3">
+        <div class="col-md-3 col-6">
+            <div class="card border border-light-subtle shadow-xs rounded-3 p-2.5 px-3 bg-white h-100">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="text-muted small fw-bold" style="font-size: 0.73rem;">ŞİRKET ÖZMAL FİLOSU</span>
+                    <span class="badge bg-success bg-opacity-10 text-success rounded-pill" style="font-size: 0.68rem;">@activeOnDuty Aktif Sahada</span>
                 </div>
+                <div class="fw-bold fs-5 text-dark">@totalVehicles <span class="fs-6 text-muted fw-normal">Araç / Makine</span></div>
+                <div class="text-muted" style="font-size: 0.70rem;">Ruhsatlı şirket araçları & iş makineleri</div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                <div class="d-flex align-items-center">
-                    <div class="bg-success bg-opacity-10 text-success rounded-circle p-3 me-3">
-                        <i class="bi bi-geo-alt-fill fs-3"></i>
-                    </div>
-                    <div>
-                        <span class="text-muted small fw-bold text-uppercase">Sahada / Seferde</span>
-                        <h3 class="fw-bold mb-0 text-success">@activeOnDuty <span class="fs-6 text-muted fw-normal">Araç Aktif</span></h3>
-                    </div>
+        <div class="col-md-3 col-6">
+            <div class="card border border-light-subtle shadow-xs rounded-3 p-2.5 px-3 bg-white h-100">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="text-muted small fw-bold" style="font-size: 0.73rem;">ÖZMAL BAKIM & YAKIT GİDERİ</span>
+                    <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill" style="font-size: 0.68rem;">Özmal</span>
                 </div>
+                <div class="fw-bold fs-5 text-danger font-monospace">@totalFleetExpense.ToString("N2") ₺</div>
+                <div class="text-muted" style="font-size: 0.70rem;">Yakıt, sanayi bakım, sigorta & muayene</div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                <div class="d-flex align-items-center">
-                    <div class="bg-danger bg-opacity-10 text-danger rounded-circle p-3 me-3">
-                        <i class="bi bi-cash-stack fs-3"></i>
-                    </div>
-                    <div>
-                        <span class="text-muted small fw-bold text-uppercase">Toplam Filo Masrafı</span>
-                        <h3 class="fw-bold mb-0 text-danger">@totalFleetExpense.ToString("N2") ₺</h3>
-                    </div>
+        <div class="col-md-3 col-6">
+            <div class="card border border-warning shadow-xs rounded-3 p-2.5 px-3 bg-warning bg-opacity-10 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="text-dark small fw-bold" style="font-size: 0.73rem;">DIŞARIDAN KİRALIK MAKİNELER</span>
+                    <span class="badge bg-warning text-dark rounded-pill" style="font-size: 0.68rem;">@rentalLogs.Count Kiralama</span>
                 </div>
+                <div class="fw-bold fs-5 text-dark font-monospace">@totalRentalExpense.ToString("N2") ₺</div>
+                <div class="text-secondary" style="font-size: 0.70rem;">Günlük/Saatlik Vinç, JCB, Forklift, Kamyon</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card border border-light-subtle shadow-xs rounded-3 p-2.5 px-3 bg-white h-100">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="text-muted small fw-bold" style="font-size: 0.73rem;">TOPLAM ARAÇ & MAKİNE YÜKÜ</span>
+                    <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill" style="font-size: 0.68rem;">Tüm Şantiyeler</span>
+                </div>
+                <div class="fw-bold fs-5 text-primary font-monospace">@grandTotalVehicleAndRentalCost.ToString("N2") ₺</div>
+                <div class="text-muted" style="font-size: 0.70rem;">Özmal gideri + dış kiralama toplamı</div>
             </div>
         </div>
     </div>
 
-    <!-- Araç Kartları Listesi -->
-    <div class="row g-4">
-        @if(!Model.Any())
-        {
-            <div class="col-12">
-                <div class="card border-0 shadow-sm rounded-4 text-center p-5 bg-white">
-                    <div class="mb-3">
-                        <i class="bi bi-truck-flatbed text-primary" style="font-size: 4rem;"></i>
+    <!-- 2 Ana Sekme: Özmal Araç Parkı vs Dışarıdan Kiralanan Makineler (Farkındalık) -->
+    <ul class="nav nav-tabs mb-3 border-bottom" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(!showRentalTab ? "active" : "") fw-bold text-dark"
+                    id="tab-own-fleet-btn"
+                    data-bs-toggle="tab"
+                    data-bs-target="#tab-own-fleet"
+                    type="button"
+                    role="tab">
+                <i class="bi bi-truck text-primary me-1"></i>🚛 Şirket Özmal Araç & Makine Parkı
+                <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill ms-1">@totalVehicles</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(showRentalTab ? "active" : "") fw-bold text-dark"
+                    id="tab-rental-machines-btn"
+                    data-bs-toggle="tab"
+                    data-bs-target="#tab-rental-machines"
+                    type="button"
+                    role="tab">
+                <i class="bi bi-cone-striped text-warning me-1"></i>🏗️ Günlük / Saatlik Kiralanan Makineler (Vinç, JCB, Forklift Analizi)
+                <span class="badge bg-warning text-dark rounded-pill ms-1">@rentalLogs.Count</span>
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <!-- SEKME 1: ŞİRKET ÖZMAL ARAÇ & MAKİNE PARKI -->
+        <div class="tab-pane fade @(!showRentalTab ? "show active" : "")" id="tab-own-fleet" role="tabpanel">
+            @if(!Model.Any())
+            {
+                <div class="card border border-light-subtle shadow-xs rounded-4 text-center p-5 bg-white">
+                    <div class="mb-2">
+                        <i class="bi bi-truck-flatbed text-primary" style="font-size: 3rem;"></i>
                     </div>
-                    <h4 class="fw-bold text-dark">Araç Parkınızda Henüz Kayıtlı Araç Yok</h4>
-                    <p class="text-muted mx-auto" style="max-width: 620px;">
-                        Yıkım ve hafriyat projeleriniz için damperli kamyonlarınızı, paletli ekskavatörlerinizi, ruhsat ve sigorta poliçelerini kaydedebilir, döküm sahası seferlerini tek ekrandan yönetebilirsiniz.
+                    <h5 class="fw-bold text-dark">Şirket Özmal Araç Parkında Henüz Kayıtlı Araç Yok</h5>
+                    <p class="text-muted small mx-auto mb-3" style="max-width: 560px;">
+                        Şirketinize ait binek araçları, kamyonları ve iş makinelerini ruhsat/poliçe bilgileriyle ekleyebilir; dışarıdan günlük/saatlik kiraladığınız vinç, JCB ve forkliftleri ise yan sekmeden takip edebilirsiniz.
                     </p>
-                    <div class="d-flex flex-wrap justify-content-center gap-3 mt-3">
-                        <form asp-action="AddSampleFleet" asp-controller="CompanyGarage" method="post" class="d-inline">
-                            <button type="submit" class="btn btn-warning btn-lg fw-bold rounded-pill px-4 shadow-sm text-dark">
-                                <i class="bi bi-magic me-2"></i> Tek Tıkla Örnek Yıkım Filosunu Yükle (5 Araç)
-                            </button>
-                        </form>
-                        <button class="btn btn-primary btn-lg fw-bold rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#addVehicleModal">
-                            <i class="bi bi-plus-circle me-2"></i> Sıfırdan Yeni Araç Ekle
+                    <div>
+                        <button class="btn btn-primary fw-bold rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#addVehicleModal">
+                            <i class="bi bi-plus-circle me-1"></i> + İlk Özmal Aracı / Makineyi Ekle
                         </button>
                     </div>
                 </div>
-            </div>
-        }
-
-        @foreach(var vehicle in Model)
-        {
-            var activeAssignment = vehicle.Assignments?.OrderByDescending(a => a.AssignmentDate).FirstOrDefault(a => a.ReturnDate == null);
-            var statusColor = activeAssignment != null ? "warning" : "success";
-            var statusText = activeAssignment != null ? "Sahada / Görevde" : "Garajda (Boşta)";
-            var totalExpense = vehicle.Expenses?.Sum(e => e.Amount) ?? 0;
-            var activeTasks = vehicle.Tasks?.Where(t => t.Status != "Tamamlandı").OrderBy(t => t.TaskDate).ToList();
-
-            var type = vehicle.VehicleType ?? "";
-            bool isHeavyMachine = type.Contains("Ekskavatör") || type.Contains("Kırıcı") || type.Contains("Makas") || type.Contains("Kepçe") || type.Contains("Loder") || type.Contains("Dozer") || type.Contains("Vinç");
-            bool isTruck = type.Contains("Kamyon") || type.Contains("Damper");
-            bool isTanker = type.Contains("Tanker") || type.Contains("Arazöz");
-
-            string vehicleIcon = "bi bi-truck";
-            string badgeCategory = "Hafriyat / Nakliye";
-            string iconClass = "bg-primary bg-opacity-10 text-primary";
-
-            if (isHeavyMachine)
-            {
-                vehicleIcon = "bi bi-cone-striped";
-                badgeCategory = "Ağır İş Makinesi";
-                iconClass = "bg-warning bg-opacity-25 text-dark";
-            }
-            else if (isTruck)
-            {
-                vehicleIcon = "bi bi-truck";
-                badgeCategory = "Damperli Kamyon";
-                iconClass = "bg-danger bg-opacity-10 text-danger";
-            }
-            else if (isTanker)
-            {
-                vehicleIcon = "bi bi-droplet-half";
-                badgeCategory = "Toz Bastırma / Arazöz";
-                iconClass = "bg-info bg-opacity-10 text-info";
-            }
-            else if (type.Contains("Pikap"))
-            {
-                vehicleIcon = "bi bi-truck-flatbed";
-                badgeCategory = "Şantiye Pikabı";
-                iconClass = "bg-secondary bg-opacity-10 text-secondary";
             }
             else
             {
-                vehicleIcon = "bi bi-car-front-fill";
-                badgeCategory = "Saha / Binek";
-                iconClass = "bg-success bg-opacity-10 text-success";
-            }
+                <div class="card border border-light-subtle shadow-xs rounded-3 bg-white overflow-hidden">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" style="font-size: 0.82rem;">
+                            <thead class="table-light text-muted small text-uppercase" style="font-size: 0.70rem; letter-spacing: 0.4px;">
+                                <tr>
+                                    <th class="ps-3" style="min-width: 190px;">PLAKA & ARAÇ / MAKİNE</th>
+                                    <th style="min-width: 120px;">DURUM</th>
+                                    <th style="min-width: 165px;">ŞANTİYE & SORUMLU</th>
+                                    <th style="min-width: 130px;">KM / SAYAÇ</th>
+                                    <th style="min-width: 165px;">RUHSAT, POLİÇE & VİZE</th>
+                                    <th style="min-width: 140px;">BUGÜNKÜ SEFER / GÖREV</th>
+                                    <th class="text-end" style="min-width: 120px;">TOPLAM MASRAF</th>
+                                    <th class="text-end pe-3" style="min-width: 270px;">HIZLI İŞLEMLER</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach(var vehicle in Model)
+                                {
+                                    var activeAssignment = vehicle.Assignments?.OrderByDescending(a => a.AssignmentDate).FirstOrDefault(a => a.ReturnDate == null);
+                                    var statusColor = activeAssignment != null ? "warning text-dark" : "success text-white";
+                                    var statusText = activeAssignment != null ? "Sahada / Görevde" : "Garajda (Boşta)";
+                                    var totalExpense = vehicle.Expenses?.Sum(e => e.Amount) ?? 0;
+                                    var activeTasks = vehicle.Tasks?.Where(t => t.Status != "Tamamlandı").OrderBy(t => t.TaskDate).ToList();
 
-            <div class="col-xl-4 col-lg-6">
-                <div class="card border-0 shadow-sm rounded-4 h-100 transition-all bg-white">
-                    <div class="card-body p-4">
-                        <!-- Üst Kısım: Araç Başlığı & Durum -->
-                        <div class="d-flex justify-content-between align-items-start mb-3">
-                            <div class="d-flex align-items-center">
-                                <div class="@iconClass rounded-circle p-3 me-3 d-flex align-items-center justify-content-center" style="width: 58px; height: 58px;">
-                                    <i class="@vehicleIcon fs-3"></i>
-                                </div>
-                                <div>
-                                    <h4 class="fw-bold mb-0 text-dark">@vehicle.PlateNumber</h4>
-                                    <div class="text-muted small fw-semibold">@vehicle.BrandModel</div>
-                                    <span class="badge bg-light text-dark border mt-1">@badgeCategory</span>
-                                </div>
-                            </div>
-                            <span class="badge bg-@statusColor text-@((statusColor == "warning") ? "dark" : "white") rounded-pill px-3 py-2 fw-bold">@statusText</span>
-                        </div>
+                                    var type = vehicle.VehicleType ?? "";
+                                    bool isHeavyMachine = type.Contains("Ekskavatör") || type.Contains("Kırıcı") || type.Contains("Makas") || type.Contains("Kepçe") || type.Contains("Loder") || type.Contains("Dozer") || type.Contains("Vinç");
+                                    bool isTruck = type.Contains("Kamyon") || type.Contains("Damper");
+                                    bool isTanker = type.Contains("Tanker") || type.Contains("Arazöz");
 
-                        <!-- Sabit Şantiye ve Operatör Bilgisi -->
-                        <div class="p-2 mb-2 bg-light rounded-3 small">
-                            <div class="d-flex justify-content-between mb-1">
-                                <span class="text-muted"><i class="bi bi-person-fill text-secondary me-1"></i> Sorumlu:</span>
-                                <span class="fw-bold text-dark">@(activeAssignment?.AssignedToName ?? "Atanmadı (Serbest)")</span>
-                            </div>
-                            <div class="d-flex justify-content-between">
-                                <span class="text-muted"><i class="bi bi-building text-secondary me-1"></i> Şantiye / Görev:</span>
-                                <span class="fw-bold text-primary">
-                                    @if(activeAssignment != null && activeAssignment.ProjectId.HasValue)
+                                    string vehicleIcon = "bi bi-truck";
+                                    string badgeCategory = "Hafriyat / Nakliye";
+                                    string iconClass = "bg-primary bg-opacity-10 text-primary";
+
+                                    if (isHeavyMachine)
                                     {
-                                        var pName = ((IEnumerable<dynamic>)ViewBag.Projects)?.FirstOrDefault(p => p.Id == activeAssignment.ProjectId.Value)?.Name;
-                                        @(pName ?? "Sabit Şantiye")
+                                        vehicleIcon = "bi bi-cone-striped";
+                                        badgeCategory = "Ağır İş Makinesi";
+                                        iconClass = "bg-warning bg-opacity-25 text-dark";
+                                    }
+                                    else if (isTruck)
+                                    {
+                                        vehicleIcon = "bi bi-truck";
+                                        badgeCategory = "Damperli Kamyon";
+                                        iconClass = "bg-danger bg-opacity-10 text-danger";
+                                    }
+                                    else if (isTanker)
+                                    {
+                                        vehicleIcon = "bi bi-droplet-half";
+                                        badgeCategory = "Arazöz / Tanker";
+                                        iconClass = "bg-info bg-opacity-10 text-info";
+                                    }
+                                    else if (type.Contains("Pikap"))
+                                    {
+                                        vehicleIcon = "bi bi-truck-flatbed";
+                                        badgeCategory = "Şantiye Pikabı";
+                                        iconClass = "bg-secondary bg-opacity-10 text-secondary";
                                     }
                                     else
                                     {
-                                        <span>Merkez / Garaj</span>
+                                        vehicleIcon = "bi bi-car-front-fill";
+                                        badgeCategory = "Saha / Binek";
+                                        iconClass = "bg-success bg-opacity-10 text-success";
                                     }
-                                </span>
-                            </div>
-                        </div>
 
-                        <!-- Ruhsat & Poliçe / Muayene Rozetleri -->
-                        <div class="p-2 mb-3 bg-light bg-opacity-75 rounded-3 small border">
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <span class="text-muted"><i class="bi bi-card-text text-primary me-1"></i> Ruhsat No:</span>
-                                <span class="fw-bold text-dark font-monospace">@(vehicle.RegistrationSerialNo ?? "Belirtilmedi")</span>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <span class="text-muted"><i class="bi bi-shield-check text-success me-1"></i> Poliçe:</span>
-                                @if(vehicle.InsuranceExpiryDate.HasValue)
-                                {
-                                    var days = (vehicle.InsuranceExpiryDate.Value.Date - DateTime.Today).TotalDays;
-                                    var color = days <= 0 ? "danger" : (days <= 30 ? "warning text-dark" : "success");
-                                    <span class="badge bg-@color" title="@vehicle.InsuranceCompany - No: @vehicle.InsurancePolicyNo">
-                                        @(days <= 0 ? "Süresi Bitti!" : $"{days:0} Gün Kaldı")
-                                    </span>
-                                }
-                                else
-                                {
-                                    <span class="text-muted fst-italic">Poliçe Yok</span>
-                                }
-                            </div>
-                            @if(vehicle.InspectionExpiryDate.HasValue)
-                            {
-                                var inspDays = (vehicle.InspectionExpiryDate.Value.Date - DateTime.Today).TotalDays;
-                                var inspColor = inspDays <= 0 ? "danger" : (inspDays <= 30 ? "warning text-dark" : "info text-dark");
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <span class="text-muted"><i class="bi bi-calendar-check text-info me-1"></i> Muayene (Vize):</span>
-                                    <span class="badge bg-@inspColor">
-                                        @(inspDays <= 0 ? "Muayene Bitti!" : $"{vehicle.InspectionExpiryDate.Value:dd.MM.yyyy}")
-                                    </span>
-                                </div>
-                            }
-                        </div>
+                                    string assignedProjName = "Merkez / Garaj";
+                                    if (activeAssignment != null && activeAssignment.ProjectId.HasValue)
+                                    {
+                                        var pName = ((IEnumerable<dynamic>)ViewBag.Projects)?.FirstOrDefault(p => p.Id == activeAssignment.ProjectId.Value)?.Name;
+                                        assignedProjName = pName ?? "Sabit Şantiye";
+                                    }
 
-                        <!-- Metrikler: KM ve İş Makinası Çalışma Saati -->
-                        <div class="row g-2 mb-3">
-                            @if(isHeavyMachine || vehicle.CurrentWorkingHours > 0)
-                            {
-                                <div class="col-6">
-                                    <div class="border rounded-3 p-2 text-center bg-warning bg-opacity-10 border-warning">
-                                        <div class="text-muted small" style="font-size: 0.75rem;"><i class="bi bi-clock-history me-1"></i> ÇALIŞMA SAATİ</div>
-                                        <div class="fw-bold fs-5 text-dark">@vehicle.CurrentWorkingHours.ToString("N1") <span class="fs-6 fw-normal">Saat</span></div>
-                                    </div>
-                                </div>
-                                <div class="col-6">
-                                    <div class="border rounded-3 p-2 text-center bg-light">
-                                        <div class="text-muted small" style="font-size: 0.75rem;"><i class="bi bi-speedometer2 me-1"></i> KİLOMETRE</div>
-                                        <div class="fw-bold fs-5 text-secondary">@vehicle.CurrentKm.ToString("N0") <span class="fs-6 fw-normal">KM</span></div>
-                                    </div>
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="col-12">
-                                    <div class="border rounded-3 p-2 text-center bg-light">
-                                        <div class="text-muted small" style="font-size: 0.75rem;"><i class="bi bi-speedometer2 me-1"></i> GÜNCEL KİLOMETRE</div>
-                                        <div class="fw-bold fs-4 text-dark">@vehicle.CurrentKm.ToString("N0") <span class="fs-6 fw-normal">KM</span></div>
-                                    </div>
-                                </div>
-                            }
-                        </div>
+                                    <tr>
+                                        <!-- 1. Plaka & Marka/Kategori -->
+                                        <td class="ps-3 py-2.5">
+                                            <div class="d-flex align-items-center gap-2.5">
+                                                <div class="@iconClass rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width: 38px; height: 38px;">
+                                                    <i class="@vehicleIcon fs-5"></i>
+                                                </div>
+                                                <div>
+                                                    <div class="fw-bold text-dark font-monospace fs-6 lh-1">@vehicle.PlateNumber</div>
+                                                    <div class="text-muted small mt-0.5">@vehicle.BrandModel <span class="badge bg-light text-secondary border ms-1" style="font-size: 0.65rem;">@badgeCategory</span></div>
+                                                </div>
+                                            </div>
+                                        </td>
 
-                        <!-- Masraf Özeti Çubuğu -->
-                        <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-danger bg-opacity-10 rounded-3">
-                            <span class="text-danger fw-bold small"><i class="bi bi-cash-coin me-1"></i> Toplam Araç Masrafı:</span>
-                            <a href="/CompanyGarage/VehicleExpenses/@vehicle.Id" class="text-danger fw-bold text-decoration-none">
-                                @totalExpense.ToString("N2") ₺ <i class="bi bi-arrow-right-short"></i>
-                            </a>
-                        </div>
+                                        <!-- 2. Durum -->
+                                        <td>
+                                            <span class="badge bg-@statusColor rounded-pill px-2.5 py-1 fw-bold" style="font-size: 0.72rem;">@statusText</span>
+                                        </td>
 
-                        <!-- Kamyon ve İş Makinesi Özel Durum & Hızlı Aksiyon Kutusu -->
-                        @if (isTruck)
-                        {
-                            var todayTrips = vehicle.Tasks?.Where(t => t.TaskDate.Date == DateTime.Today && t.TaskCategory == "Döküm Seferi").ToList();
-                            var todayCount = todayTrips?.Count ?? 0;
-                            var todayTon = todayTrips?.Sum(t => t.Tonnage ?? 0) ?? 0;
+                                        <!-- 3. Şantiye & Sorumlu -->
+                                        <td>
+                                            <div class="fw-bold text-primary small"><i class="bi bi-building me-1"></i>@assignedProjName</div>
+                                            <div class="text-muted small"><i class="bi bi-person me-1"></i>@(activeAssignment?.AssignedToName ?? "Atanmadı")</div>
+                                        </td>
 
-                            <div class="p-2 mb-3 bg-primary bg-opacity-10 border border-primary border-opacity-25 rounded-3 d-flex justify-content-between align-items-center">
-                                <div>
-                                    <div class="text-primary small fw-bold"><i class="bi bi-truck-flatbed me-1"></i> BUGÜNKÜ DÖKÜM SEFERİ</div>
-                                    <div class="fw-bold text-dark">
-                                        <span class="fs-5 text-primary">@todayCount</span> Sefer 
-                                        @if(todayTon > 0)
-                                        {
-                                            <span class="text-muted fw-normal" style="font-size:0.85rem;">(@todayTon.ToString("N1") Ton)</span>
-                                        }
-                                    </div>
-                                </div>
-                                <button class="btn btn-sm btn-primary fw-bold rounded-pill px-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#dumpTripModal-@vehicle.Id">
-                                    <i class="bi bi-plus-lg me-1"></i> Sefer Ekle
-                                </button>
-                            </div>
-                        }
-                        else if (isHeavyMachine)
-                        {
-                            var todayLogs = vehicle.Tasks?.Where(t => t.TaskDate.Date == DateTime.Today && t.TaskCategory == "Makine Puantajı").ToList();
-                            var todayHours = todayLogs?.Sum(t => t.WorkingHours ?? 0) ?? 0;
-                            var todayFuel = todayLogs?.Sum(t => t.FuelLiters ?? 0) ?? 0;
+                                        <!-- 4. KM / Sayaç -->
+                                        <td class="font-monospace">
+                                            @if (isHeavyMachine || vehicle.CurrentWorkingHours > 0)
+                                            {
+                                                <div class="fw-bold text-dark"><i class="bi bi-clock-history text-warning me-1"></i>@vehicle.CurrentWorkingHours.ToString("N1") Saat</div>
+                                            }
+                                            <div class="text-secondary small"><i class="bi bi-speedometer2 me-1"></i>@vehicle.CurrentKm.ToString("N0") KM</div>
+                                        </td>
 
-                            <div class="p-2 mb-3 bg-warning bg-opacity-10 border border-warning border-opacity-25 rounded-3 d-flex justify-content-between align-items-center">
-                                <div>
-                                    <div class="text-dark small fw-bold"><i class="bi bi-clock-history me-1"></i> GÜNLÜK PUANTAJ & SAAT</div>
-                                    <div class="fw-bold text-dark">
-                                        <span class="fs-5 text-dark">@todayHours.ToString("N1")</span> Saat
-                                        @if(todayFuel > 0)
-                                        {
-                                            <span class="text-muted fw-normal" style="font-size:0.85rem;">(@todayFuel.ToString("N0") Lt Mazot)</span>
-                                        }
-                                    </div>
-                                </div>
-                                <button class="btn btn-sm btn-warning text-dark fw-bold rounded-pill px-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#machineryLogModal-@vehicle.Id">
-                                    <i class="bi bi-plus-lg me-1"></i> Puantaj İşle
-                                </button>
-                            </div>
-                        }
-
-                        <!-- Aksiyon Butonları -->
-                        <div class="d-flex gap-2 mb-2">
-                            <button class="btn btn-sm btn-light flex-fill fw-bold border text-secondary rounded-pill" data-bs-toggle="modal" data-bs-target="#assignModal-@vehicle.Id">
-                                <i class="bi bi-person-badge me-1"></i> Tahsis Et
-                            </button>
-                            <button class="btn btn-sm btn-outline-dark flex-fill fw-bold rounded-pill" data-bs-toggle="modal" data-bs-target="#docModal-@vehicle.Id">
-                                <i class="bi bi-file-earmark-pdf me-1"></i> 📑 Ruhsat & Poliçe
-                            </button>
-                        </div>
-                        <div class="d-flex gap-2 mb-3">
-                            @if (isTruck)
-                            {
-                                <button class="btn btn-sm btn-outline-primary flex-fill fw-bold rounded-pill" data-bs-toggle="modal" data-bs-target="#dumpTripModal-@vehicle.Id">
-                                    <i class="bi bi-truck me-1"></i> +1 Döküm Seferi
-                                </button>
-                            }
-                            else if (isHeavyMachine)
-                            {
-                                <button class="btn btn-sm btn-outline-warning text-dark flex-fill fw-bold rounded-pill" data-bs-toggle="modal" data-bs-target="#machineryLogModal-@vehicle.Id">
-                                    <i class="bi bi-stopwatch me-1"></i> Saat & Puantaj
-                                </button>
-                            }
-                            else
-                            {
-                                <button class="btn btn-sm btn-outline-primary flex-fill fw-bold rounded-pill" data-bs-toggle="modal" data-bs-target="#taskModal-@vehicle.Id">
-                                    <i class="bi bi-pin-map-fill me-1"></i> Görev Yaz
-                                </button>
-                            }
-                            <button class="btn btn-sm btn-outline-danger flex-fill fw-bold rounded-pill" data-bs-toggle="modal" data-bs-target="#expenseModal-@vehicle.Id">
-                                <i class="bi bi-receipt me-1"></i> Fiş / Masraf
-                            </button>
-                        </div>
-
-                        <hr class="text-muted opacity-25">
-
-                        <!-- Bekleyen Görevler & Döküm Seferleri -->
-                        <h6 class="fw-bold text-dark mb-2"><i class="bi bi-list-task me-2 text-info"></i> Aktif Görev & Seferler</h6>
-                        @if(activeTasks != null && activeTasks.Any())
-                        {
-                            <ul class="list-group list-group-flush rounded-3 border">
-                                @foreach(var task in activeTasks)
-                                {
-                                    <li class="list-group-item bg-light p-3">
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div>
-                                                <small class="text-muted d-block"><i class="bi bi-person me-1"></i> Şoför/Operatör: <b>@task.DriverName</b></small>
-                                                @if(task.DestinationProjectId.HasValue) {
-                                                    var pName = ((IEnumerable<dynamic>)ViewBag.Projects)?.FirstOrDefault(p => p.Id == task.DestinationProjectId.Value)?.Name;
-                                                    <span class="badge bg-primary mb-1"><i class="bi bi-building"></i> Şantiye: @pName</span><br/>
-                                                } else {
-                                                    <span class="badge bg-secondary mb-1"><i class="bi bi-building"></i> Şirket Merkez</span><br/>
+                                        <!-- 5. Ruhsat, Poliçe & Muayene -->
+                                        <td>
+                                            <div class="small text-muted">Ruhsat: <strong class="text-dark font-monospace">@(vehicle.RegistrationSerialNo ?? "-")</strong></div>
+                                            <div class="d-flex flex-wrap gap-1 mt-0.5">
+                                                @if (vehicle.InsuranceExpiryDate.HasValue)
+                                                {
+                                                    var days = (vehicle.InsuranceExpiryDate.Value.Date - DateTime.Today).TotalDays;
+                                                    var color = days <= 0 ? "danger" : (days <= 30 ? "warning text-dark" : "success");
+                                                    <span class="badge bg-@color" style="font-size: 0.65rem;" title="Sigorta: @vehicle.InsuranceCompany">
+                                                        Poliçe: @(days <= 0 ? "Bitti!" : $"{days:0}g")
+                                                    </span>
                                                 }
-                                                <span class="fw-bold text-dark d-block">@task.TaskDescription</span>
-                                                <div class="d-flex flex-wrap gap-1 align-items-center mt-1">
-                                                    <small class="text-danger fw-semibold">Tarih: @task.TaskDate.ToString("dd.MM.yyyy") @(!string.IsNullOrEmpty(task.StartTime) ? $"({task.StartTime} - {task.EndTime})" : "")</small>
-                                                    @if (!string.IsNullOrEmpty(task.TicketPhotoPath))
+                                                else
+                                                {
+                                                    <span class="badge bg-light text-muted border" style="font-size: 0.65rem;">Poliçe Yok</span>
+                                                }
+                                                @if (vehicle.InspectionExpiryDate.HasValue)
+                                                {
+                                                    var inspDays = (vehicle.InspectionExpiryDate.Value.Date - DateTime.Today).TotalDays;
+                                                    var inspColor = inspDays <= 0 ? "danger" : (inspDays <= 30 ? "warning text-dark" : "info text-dark");
+                                                    <span class="badge bg-@inspColor" style="font-size: 0.65rem;">
+                                                        Vize: @(inspDays <= 0 ? "Bitti!" : vehicle.InspectionExpiryDate.Value.ToString("dd.MM.yy"))
+                                                    </span>
+                                                }
+                                            </div>
+                                        </td>
+
+                                        <!-- 6. Bugünkü Sefer / Görev -->
+                                        <td>
+                                            @if (isTruck)
+                                            {
+                                                var todayTrips = vehicle.Tasks?.Where(t => t.TaskDate.Date == DateTime.Today && t.TaskCategory == "Döküm Seferi").ToList();
+                                                var todayCount = todayTrips?.Count ?? 0;
+                                                var todayTon = todayTrips?.Sum(t => t.Tonnage ?? 0) ?? 0;
+                                                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle rounded-pill px-2 py-1">
+                                                    Bugün: <strong>@todayCount Sefer</strong> @(todayTon > 0 ? $"({todayTon:N1}t)" : "")
+                                                </span>
+                                            }
+                                            else if (isHeavyMachine)
+                                            {
+                                                var todayLogs = vehicle.Tasks?.Where(t => t.TaskDate.Date == DateTime.Today && t.TaskCategory == "Makine Puantajı").ToList();
+                                                var todayHours = todayLogs?.Sum(t => t.WorkingHours ?? 0) ?? 0;
+                                                <span class="badge bg-warning bg-opacity-15 text-dark border border-warning rounded-pill px-2 py-1">
+                                                    Bugün: <strong>@todayHours.ToString("N1") Saat</strong>
+                                                </span>
+                                            }
+                                            @if (activeTasks != null && activeTasks.Any())
+                                            {
+                                                <button type="button" class="btn btn-xs btn-outline-info rounded-pill px-2 py-0.5 ms-1 fw-bold" style="font-size: 0.68rem;"
+                                                        data-bs-toggle="collapse" data-bs-target="#vehTasks-@vehicle.Id">
+                                                    @activeTasks.Count Aktif Görev <i class="bi bi-chevron-down"></i>
+                                                </button>
+                                            }
+                                            else if (!isTruck && !isHeavyMachine)
+                                            {
+                                                <span class="text-muted small">Görev Yok</span>
+                                            }
+                                        </td>
+
+                                        <!-- 7. Toplam Masraf -->
+                                        <td class="text-end font-monospace">
+                                            <a href="/CompanyGarage/VehicleExpenses/@vehicle.Id" class="fw-bold text-danger text-decoration-none">
+                                                @totalExpense.ToString("N2") ₺ <i class="bi bi-arrow-right-short"></i>
+                                            </a>
+                                        </td>
+
+                                        <!-- 8. Hızlı İşlemler -->
+                                        <td class="text-end pe-3 text-nowrap">
+                                            <div class="d-inline-flex gap-1 flex-wrap justify-content-end">
+                                                <button class="btn btn-xs btn-light border text-dark rounded-pill px-2 py-1 fw-semibold" style="font-size: 0.72rem;"
+                                                        data-bs-toggle="modal" data-bs-target="#assignModal-@vehicle.Id" title="Sorumlu & Şantiye Tahsis Et">
+                                                    <i class="bi bi-person-badge text-primary"></i> Tahsis
+                                                </button>
+                                                <button class="btn btn-xs btn-light border text-dark rounded-pill px-2 py-1 fw-semibold" style="font-size: 0.72rem;"
+                                                        data-bs-toggle="modal" data-bs-target="#docModal-@vehicle.Id" title="Ruhsat, Sigorta Poliçesi & Muayene">
+                                                    <i class="bi bi-file-earmark-text text-secondary"></i> Ruhsat/Poliçe
+                                                </button>
+                                                @if (isTruck)
+                                                {
+                                                    <button class="btn btn-xs btn-outline-primary rounded-pill px-2 py-1 fw-bold" style="font-size: 0.72rem;"
+                                                            data-bs-toggle="modal" data-bs-target="#dumpTripModal-@vehicle.Id">
+                                                        <i class="bi bi-plus-lg"></i> Sefer
+                                                    </button>
+                                                }
+                                                else if (isHeavyMachine)
+                                                {
+                                                    <button class="btn btn-xs btn-outline-warning text-dark rounded-pill px-2 py-1 fw-bold" style="font-size: 0.72rem;"
+                                                            data-bs-toggle="modal" data-bs-target="#machineryLogModal-@vehicle.Id">
+                                                        <i class="bi bi-stopwatch"></i> Puantaj
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button class="btn btn-xs btn-outline-primary rounded-pill px-2 py-1 fw-bold" style="font-size: 0.72rem;"
+                                                            data-bs-toggle="modal" data-bs-target="#taskModal-@vehicle.Id">
+                                                        <i class="bi bi-pin-map"></i> Görev
+                                                    </button>
+                                                }
+                                                <button class="btn btn-xs btn-outline-danger rounded-pill px-2 py-1 fw-bold" style="font-size: 0.72rem;"
+                                                        data-bs-toggle="modal" data-bs-target="#expenseModal-@vehicle.Id">
+                                                    <i class="bi bi-receipt"></i> +Fiş/Masraf
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+
+                                    @if (activeTasks != null && activeTasks.Any())
+                                    {
+                                        <tr class="collapse bg-light" id="vehTasks-@vehicle.Id">
+                                            <td colspan="8" class="p-2 px-4">
+                                                <div class="d-flex flex-column gap-1">
+                                                    @foreach (var task in activeTasks)
                                                     {
-                                                        <a href="@task.TicketPhotoPath" target="_blank" class="badge bg-dark text-white text-decoration-none">
-                                                            <i class="bi bi-file-earmark-image me-1"></i> Fiş/Sayaç Görseli
-                                                        </a>
+                                                        <div class="d-flex justify-content-between align-items-center bg-white border rounded-3 p-2 small">
+                                                            <div>
+                                                                <span class="badge bg-info text-dark me-2">@task.DriverName</span>
+                                                                <strong>@task.TaskDescription</strong>
+                                                                <span class="text-muted ms-2">(@task.TaskDate.ToString("dd.MM.yyyy"))</span>
+                                                            </div>
+                                                            <div class="d-flex gap-1">
+                                                                <button type="button" class="btn btn-xs btn-success rounded-pill px-2 py-0.5 fw-bold" data-bs-toggle="modal" data-bs-target="#completeTaskModal-@task.Id">
+                                                                    <i class="bi bi-check-lg"></i> Tamamla
+                                                                </button>
+                                                            </div>
+                                                        </div>
                                                     }
                                                 </div>
-                                            </div>
-                                            
-                                            <div class="d-flex gap-1">
-                                                <button type="button" class="btn btn-sm btn-primary rounded-circle shadow-sm" title="Görevi Başlat / Devral" data-bs-toggle="modal" data-bs-target="#startTaskModal-@task.Id">
-                                                    <i class="bi bi-play-fill"></i>
-                                                </button>
-                                                <button type="button" class="btn btn-sm btn-success rounded-circle shadow-sm" title="Görevi Tamamla" data-bs-toggle="modal" data-bs-target="#completeTaskModal-@task.Id">
-                                                    <i class="bi bi-check-lg"></i>
-                                                </button>
-                                            </div>
-
-                                            <!-- Görevi Üstlen / Başlat Modalı -->
-                                            <div class="modal fade" id="startTaskModal-@task.Id" tabindex="-1">
-                                                <div class="modal-dialog modal-sm modal-dialog-centered">
-                                                    <div class="modal-content border-0 shadow rounded-4">
-                                                        <div class="modal-header border-0 bg-primary text-white">
-                                                            <h6 class="modal-title fw-bold"><i class="bi bi-play-circle me-1"></i> Görevi Başlat / Devral</h6>
-                                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                                                        </div>
-                                                        <form asp-action="StartTask" asp-controller="CompanyGarage" method="post">
-                                                            <div class="modal-body">
-                                                                <input type="hidden" name="taskId" value="@task.Id" />
-                                                                <p class="small text-muted mb-3">Bu görevi üstlenmek için başlangıç KM'sini girin.</p>
-                                                                
-                                                                <div class="mb-3">
-                                                                    <label class="form-label fw-bold">Görevli Araç</label>
-                                                                    <select name="vehicleId" class="form-select">
-                                                                        @foreach(var v in Model) {
-                                                                            if(v.Id == vehicle.Id) {
-                                                                                <option value="@v.Id" selected>@v.PlateNumber</option>
-                                                                            } else {
-                                                                                <option value="@v.Id">@v.PlateNumber</option>
-                                                                            }
-                                                                        }
-                                                                    </select>
-                                                                </div>
-                                                                <div class="mb-3">
-                                                                    <label class="form-label fw-bold">Şoför / Operatör</label>
-                                                                    <input type="text" name="driverName" class="form-control" value="@task.DriverName" required />
-                                                                </div>
-                                                                <div class="mb-3">
-                                                                    <label class="form-label fw-bold">Başlangıç KM</label>
-                                                                    <input type="number" name="startKm" class="form-control" value="@vehicle.CurrentKm" required />
-                                                                </div>
-                                                            </div>
-                                                            <div class="modal-footer border-0 pt-0">
-                                                                <button type="submit" class="btn btn-primary w-100 fw-bold rounded-pill">Görevi Başlat</button>
-                                                            </div>
-                                                        </form>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- Görev Tamamlama Modalı (KM ve Saat Girişi) -->
-                                            <div class="modal fade" id="completeTaskModal-@task.Id" tabindex="-1">
-                                                <div class="modal-dialog modal-sm modal-dialog-centered">
-                                                    <div class="modal-content border-0 shadow rounded-4">
-                                                        <div class="modal-header bg-light border-0">
-                                                            <h6 class="modal-title fw-bold text-dark">Görevi / Seferi Tamamla</h6>
-                                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                                        </div>
-                                                        <form asp-action="UpdateTaskStatus" asp-controller="CompanyGarage" method="post">
-                                                            <div class="modal-body text-start">
-                                                                <input type="hidden" name="taskId" value="@task.Id" />
-                                                                <input type="hidden" name="status" value="Tamamlandı" />
-                                                                <p class="small text-muted mb-3">Aracın dönüş kilometresini veya harcanan iş makinası çalışma saatini girin.</p>
-                                                                <div class="mb-3">
-                                                                    <label class="form-label small fw-bold text-dark">Bitiş KM (Görev Sonu)</label>
-                                                                    <input type="number" name="endKm" class="form-control" placeholder="Örn: 15450" />
-                                                                    <small class="text-muted" style="font-size:0.7rem;">(Başlangıç: @(task.StartKm ?? 0) KM)</small>
-                                                                </div>
-                                                                <div class="mb-3">
-                                                                    <label class="form-label small fw-bold text-dark">Harcanan Çalışma Saati</label>
-                                                                    <input type="number" step="0.5" name="workingHours" class="form-control" placeholder="Örn: 8.5" />
-                                                                </div>
-                                                            </div>
-                                                            <div class="modal-footer border-0 p-2">
-                                                                <button type="submit" class="btn btn-success w-100 fw-bold rounded-pill">Görevi Bitir</button>
-                                                            </div>
-                                                        </form>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </li>
+                                            </td>
+                                        </tr>
+                                    }
                                 }
-                            </ul>
-                        }
-                        else
-                        {
-                            <div class="bg-light rounded-3 p-3 text-center border">
-                                <p class="text-muted mb-0 small fst-italic">Araca atanmış aktif rota veya döküm seferi yok.</p>
-                            </div>
-                        }
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-            </div>
+            }
+
+            @foreach(var vehicle in Model)
+            {
+                var activeAssignment = vehicle.Assignments?.OrderByDescending(a => a.AssignmentDate).FirstOrDefault(a => a.ReturnDate == null);
+                var activeTasks = vehicle.Tasks?.Where(t => t.Status != "Tamamlandı").OrderBy(t => t.TaskDate).ToList();
+                if (activeTasks != null)
+                {
+                    foreach (var task in activeTasks)
+                    {
+                        <div class="modal fade" id="completeTaskModal-@task.Id" tabindex="-1">
+                            <div class="modal-dialog modal-sm modal-dialog-centered">
+                                <div class="modal-content border-0 shadow rounded-4">
+                                    <div class="modal-header bg-light border-0">
+                                        <h6 class="modal-title fw-bold text-dark">Görevi / Seferi Tamamla</h6>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <form asp-action="UpdateTaskStatus" asp-controller="CompanyGarage" method="post">
+                                        <div class="modal-body text-start">
+                                            <input type="hidden" name="taskId" value="@task.Id" />
+                                            <input type="hidden" name="status" value="Tamamlandı" />
+                                            <div class="mb-3">
+                                                <label class="form-label small fw-bold text-dark">Bitiş KM (Görev Sonu)</label>
+                                                <input type="number" name="endKm" class="form-control" placeholder="Örn: 15450" />
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label small fw-bold text-dark">Harcanan Çalışma Saati</label>
+                                                <input type="number" step="0.5" name="workingHours" class="form-control" placeholder="Örn: 8.5" />
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer border-0 p-2">
+                                            <button type="submit" class="btn btn-success w-100 fw-bold rounded-pill">Görevi Bitir</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
 
             <!-- RUHSAT, POLİÇE & MUAYENE EVRAKLARI MODAL -->
             <div class="modal fade" id="docModal-@vehicle.Id" tabindex="-1">
@@ -960,8 +921,222 @@
                 </div>
             </div>
         }
+        </div>
+
+        <!-- SEKME 2: DIŞARIDAN KİRALANAN İŞ MAKİNELERİ & FARKINDALIK ANALİZİ (VİNÇ, JCB, FORKLİFT, KAMYON) -->
+        <div class="tab-pane fade @(showRentalTab ? "show active" : "")" id="tab-rental-machines" role="tabpanel">
+            <!-- Farkındalık & Satın Alma / Yatırım Kıyaslama Başlığı -->
+            <div class="card border border-warning shadow-xs rounded-3 mb-3 bg-warning bg-opacity-10">
+                <div class="card-body p-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <h6 class="fw-bold text-dark mb-1">
+                            <i class="bi bi-lightbulb-fill text-warning me-1"></i>Kiralık Makine Maliyet & Yatırım Farkındalık Analizi
+                        </h6>
+                        <p class="text-secondary small mb-0">
+                            Tüm şantiyelerde günlük/saatlik kiralanan <strong>Mobil Vinç, JCB (Kepçe), Forklift, Manlift ve Kamyon</strong> harcamaları burada toplanır. Hangi makineye toplam kaç saat ve kaç TL kira ödendiğini görerek <em>"Kiralama yerine şirkete özmal satın alma (vergi/amortisman + operatör avantajı)"</em> kararını kolayca verebilirsiniz.
+                        </p>
+                    </div>
+                    <button class="btn btn-sm btn-dark fw-bold rounded-pill px-3 py-1.5 shadow-sm" data-bs-toggle="modal" data-bs-target="#addRentalMachineModal">
+                        <i class="bi bi-plus-lg text-warning me-1"></i> + Kiralık Makine / Araç Gideri Ekle
+                    </button>
+                </div>
+            </div>
+
+            <!-- Makine Türüne Göre Kümülatif Harcama Kartları -->
+            @if (rentalByCategory.Any())
+            {
+                <div class="row g-2 mb-3">
+                    @foreach (var cat in rentalByCategory)
+                    {
+                        <div class="col-md-3 col-6">
+                            <div class="card border border-light-subtle shadow-xs rounded-3 bg-white h-100">
+                                <div class="card-body p-2.5 px-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="fw-bold text-dark small">@cat.Category</span>
+                                        <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill" style="font-size: 0.68rem;">@cat.ProjectCount Şantiye</span>
+                                    </div>
+                                    <div class="fw-bold text-danger font-monospace fs-5">@cat.TotalAmount.ToString("N2") ₺</div>
+                                    <div class="text-muted mt-1" style="font-size: 0.72rem;">
+                                        Toplam:
+                                        @if (cat.TotalHours > 0) { <strong class="text-dark">@cat.TotalHours.ToString("N1") Saat</strong> }
+                                        @if (cat.TotalDays > 0) { <strong class="text-dark ms-1">@cat.TotalDays.ToString("N0") Gün</strong> }
+                                        @if (cat.TotalTrips > 0) { <strong class="text-dark ms-1">@cat.TotalTrips.ToString("N0") Sefer</strong> }
+                                        <span class="ms-1">(@cat.Count işlem)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            <!-- Şantiye Bazlı Kiralık Makine & Araç Kayıtları Tablosu -->
+            <div class="card border border-light-subtle shadow-xs rounded-3 bg-white overflow-hidden">
+                <div class="card-header bg-light py-2 px-3 border-bottom d-flex justify-content-between align-items-center">
+                    <span class="fw-bold text-dark small"><i class="bi bi-table me-1 text-primary"></i>Tüm Şantiyeler Günlük / Saatlik Kiralık Makine ve Araç Gider Listesi</span>
+                    <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill font-monospace">Toplam Kira: @totalRentalExpense.ToString("N2") ₺</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" style="font-size: 0.82rem;">
+                        <thead class="table-light text-muted small text-uppercase" style="font-size: 0.70rem;">
+                            <tr>
+                                <th class="ps-3" style="width: 100px;">TARİH</th>
+                                <th style="min-width: 140px;">ŞANTİYE / PROJE</th>
+                                <th style="min-width: 160px;">MAKİNE / ARAÇ TÜRÜ</th>
+                                <th style="min-width: 150px;">FİRMA / OPERATÖR</th>
+                                <th class="text-center" style="width: 120px;">ÇALIŞMA SÜRESİ</th>
+                                <th class="text-end" style="width: 120px;">BİRİM ÜCRET</th>
+                                <th class="text-end" style="width: 135px;">TOPLAM TUTAR</th>
+                                <th>YAPILAN İŞ / AÇIKLAMA</th>
+                                <th class="text-center pe-3" style="width: 100px;">FİŞ / İŞLEM</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!rentalLogs.Any())
+                            {
+                                <tr>
+                                    <td colspan="9" class="text-center py-5 text-muted">
+                                        <i class="bi bi-cone-striped fs-2 d-block mb-2 text-warning"></i>
+                                        Henüz günlük veya saatlik kiralık makine (Vinç, JCB, Forklift, Kamyon) gideri girilmedi.<br />
+                                        Yukarıdaki <strong>[+ Kiralık Makine / Araç Gideri Ekle]</strong> butonuyla şantiyelerdeki dış kiralamaları kaydedebilirsiniz.
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                foreach (var r in rentalLogs.OrderByDescending(x => x.RentalDate).ThenByDescending(x => x.CreatedAt))
+                                {
+                                    <tr>
+                                        <td class="ps-3 font-monospace small text-muted">@r.RentalDate.ToString("dd.MM.yyyy")</td>
+                                        <td>
+                                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle rounded-pill px-2.5 py-1">
+                                                <i class="bi bi-building me-1"></i>@r.ProjectName
+                                            </span>
+                                        </td>
+                                        <td><strong class="text-dark">@r.MachineCategory</strong></td>
+                                        <td class="text-secondary small">@r.SupplierOrOperator</td>
+                                        <td class="text-center">
+                                            <span class="badge bg-warning bg-opacity-15 text-dark border border-warning rounded-pill px-2.5 py-1 font-monospace">
+                                                @r.DurationValue.ToString("N1") @r.DurationType
+                                            </span>
+                                        </td>
+                                        <td class="text-end font-monospace text-muted small">@(r.UnitRate > 0 ? r.UnitRate.ToString("N2") + " ₺" : "-")</td>
+                                        <td class="text-end font-monospace fw-bold text-danger fs-6">@r.TotalAmount.ToString("N2") ₺</td>
+                                        <td class="text-muted small">@(string.IsNullOrWhiteSpace(r.WorkDescription) ? "-" : r.WorkDescription)</td>
+                                        <td class="text-center pe-3 text-nowrap">
+                                            @if (!string.IsNullOrWhiteSpace(r.ReceiptPhotoPath))
+                                            {
+                                                <a href="@r.ReceiptPhotoPath" target="_blank" class="btn btn-xs btn-outline-secondary rounded-pill px-2 py-0.5 me-1" style="font-size: 0.70rem;">
+                                                    <i class="bi bi-file-earmark-image"></i> Fiş
+                                                </a>
+                                            }
+                                            <form asp-action="DeleteRentalMachineryLog" asp-controller="CompanyGarage" method="post" class="d-inline" onsubmit="return confirm('Bu kiralık makine kaydını silmek istediğinize emin misiniz?');">
+                                                <input type="hidden" name="id" value="@r.Id" />
+                                                <button type="submit" class="btn btn-xs btn-light border text-danger rounded-pill px-2 py-0.5" title="Sil">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+
+<!-- GÜNLÜK / SAATLİK KİRALIK MAKİNE & ARAÇ GİDERİ EKLE MODAL -->
+<div class="modal fade" id="addRentalMachineModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-warning text-dark border-0">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-cone-striped me-2"></i>Günlük / Saatlik Kiralık Makine & Araç İşle
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="AddRentalMachineryLog" asp-controller="CompanyGarage" method="post" enctype="multipart/form-data">
+                <div class="modal-body p-4 row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Hangi Şantiye / Proje? <span class="text-danger">*</span></label>
+                        <select name="projectId" class="form-select fw-semibold">
+                            <option value="">Şirket Genel / Merkez</option>
+                            @foreach (var p in projectList)
+                            {
+                                <option value="@p.Id">@p.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Kiralanan Makine / Araç Türü <span class="text-danger">*</span></label>
+                        <select name="machineCategory" class="form-select fw-bold">
+                            <option value="Mobil Vinç (Saatlik/Günlük)">🏗️ Mobil Vinç / Hiab</option>
+                            <option value="JCB / Beko Loder (Kepçe)">🚜 JCB / Beko Loder (Kepçe)</option>
+                            <option value="Forklift / Manlift"> Forklift / Sepetli Platform</option>
+                            <option value="Kiralık Hafriyat Kamyonu">🚛 Kiralık Damperli Kamyon</option>
+                            <option value="Ekskavatör / Mini Kepçe">🚜 Ekskavatör / Bobcat</option>
+                            <option value="Diğer Kiralık Ekipman">⚙️ Diğer Kiralık Araç / Makine</option>
+                        </select>
+                    </div>
+                    <div class="col-md-7">
+                        <label class="form-label fw-bold small">Kiralanan Firma / Operatör Adı</label>
+                        <input type="text" name="supplierOrOperator" class="form-control" placeholder="Örn: Özkan Vinç / Hasan Usta" />
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold small">Kiralama Tarihi <span class="text-danger">*</span></label>
+                        <input type="date" name="rentalDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Süre Birimi</label>
+                        <select name="durationType" id="rentalDurationType" class="form-select" onchange="calcRentalTotal()">
+                            <option value="Saat">Saatlik</option>
+                            <option value="Gün">Günlük</option>
+                            <option value="Sefer">Seferlik</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Kaç Saat / Gün? <span class="text-danger">*</span></label>
+                        <input type="number" step="0.5" name="durationValue" id="rentalDurationVal" class="form-control fw-bold" value="1" required oninput="calcRentalTotal()" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Birim Ücret (₺)</label>
+                        <input type="number" step="0.01" name="unitRate" id="rentalUnitRate" class="form-control" placeholder="Örn: 2500" oninput="calcRentalTotal()" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold small text-danger">Toplam Ödenen / Fatura Tutarı (₺) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" name="totalAmount" id="rentalTotalAmount" class="form-control fw-bold text-danger fs-5" required placeholder="Örn: 10000" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold small">Şantiyede Yapılan İş / Açıklama</label>
+                        <input type="text" name="workDescription" class="form-control" placeholder="Örn: 3. kat demir ve paletlerin vinçle kata çıkarılması" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold small">Fiş / Fatura Fotoğrafı (Opsiyonel)</label>
+                        <input type="file" name="receiptPhoto" class="form-control" accept="image/*,.pdf" />
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="submit" class="btn btn-dark fw-bold rounded-pill w-100 py-2">
+                        <i class="bi bi-check-circle text-warning me-1"></i> Kiralık Makine Giderini Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function calcRentalTotal() {
+        var dur = parseFloat(document.getElementById('rentalDurationVal')?.value || 0);
+        var rate = parseFloat(document.getElementById('rentalUnitRate')?.value || 0);
+        if (dur > 0 && rate > 0) {
+            document.getElementById('rentalTotalAmount').value = (dur * rate).toFixed(2);
+        }
+    }
+</script>
 
 <!-- YENİ ARAÇ / İŞ MAKİNESİ EKLE MODAL -->
 <div class="modal fade" id="addVehicleModal" tabindex="-1">

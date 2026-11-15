@@ -9,15 +9,15 @@
     ViewData["ProjectStatus"] = Model.Status;
     Layout = "_ProjectLayout";
 
-    string cityName = ViewBag.CityName as string ?? "İstanbul";
-    string distName = ViewBag.DistrictName as string ?? "Kadıköy";
-    string neighName = ViewBag.NeighborhoodName as string ?? "Merdivenköy";
+    string cityName = ViewBag.CityName as string ?? "İl Seçilmedi";
+    string distName = ViewBag.DistrictName as string ?? "İlçe Seçilmedi";
+    string neighName = ViewBag.NeighborhoodName as string ?? "";
 
     var stakeholders = ViewBag.Stakeholders as List<ProjectStakeholder> ?? new List<ProjectStakeholder>();
     int landownerCount = stakeholders.Count;
-    int oldUnits = Model.EskiDaireSayisi ?? 10;
+    int oldUnits = Model.EskiDaireSayisi ?? 0;
     int oldShops = Model.EskiDukkanSayisi ?? 0;
-    double landArea = Model.TotalLandArea ?? 850;
+    double landArea = Model.TotalLandArea ?? 0;
     var rentPolicy = ViewBag.RentPolicy as GMK360.Core.DTOs.Construction.ProjectRentPolicyDto ?? Model.RentAndRontgenPolicy;
     decimal ownerShare = rentPolicy.OwnerSharePercent > 0 ? rentPolicy.OwnerSharePercent : 50m;
     decimal contractorShare = 100m - ownerShare;
@@ -213,6 +213,82 @@
                 </div>
             </div>
 
+            <!-- 1.25 ALT BÖLÜM: ÖN DNA — MÜHENDİSE (STATİK YÜK & MİMARİ ÇİZİM) VE ŞARTNAMEYE GİDECEK ÖN KARARLAR -->
+            @{
+                var curOuterWall = !string.IsNullOrWhiteSpace(Model.OuterWallType) ? Model.OuterWallType : "Ytong";
+                var curFacadeIns = !string.IsNullOrWhiteSpace(Model.FacadeInsulation) ? Model.FacadeInsulation : "Dış_Mantolama";
+                var curRoofMat = !string.IsNullOrWhiteSpace(Model.RoofMaterial) ? Model.RoofMaterial : "Düz_Teras";
+                var curInnerWall = !string.IsNullOrWhiteSpace(Model.InnerWallType) ? Model.InnerWallType : "Ytong";
+                var curPlumbing = !string.IsNullOrWhiteSpace(Model.PlumbingType) ? Model.PlumbingType : "Yerden_Isitma";
+                var curFoundIns = !string.IsNullOrWhiteSpace(Model.FoundationInsulation) ? Model.FoundationInsulation : "Membran";
+            }
+            <div class="p-2.5 px-3 mb-3 rounded-3 border border-info border-opacity-50" style="background: linear-gradient(135deg, #f0f9ff 0%, #f8fafc 100%);">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-info text-dark fw-bold px-2 py-1 rounded-pill" style="font-size: 0.72rem;">
+                            <i class="fas fa-dna me-1"></i>ÖN DNA (STATİK & MİMARİ ÖN BİLGİ)
+                        </span>
+                        <span class="fw-bold text-dark small" style="font-size: 0.82rem;">
+                            Mühendise Çizim Öncesi Verilecek Statik Yük (Duvar / Yalıtım / Çatı) ve Teknik Şartname Kararları
+                        </span>
+                    </div>
+                    <span class="text-muted small" style="font-size: 0.72rem;">
+                        <i class="bi bi-arrow-right-circle text-info me-1"></i>Anlaşma sağlandığında <b>Kanat 1 (Çizim)</b> ve <b>Kanat 2 (Proje DNA)</b> ekranlarına otomatik aktarılır.
+                    </span>
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold small text-dark mb-1" style="font-size: 0.74rem;">1. Dış Duvar (Statik Zati Yük)</label>
+                        <select name="outerWallType" id="inputOuterWall" class="form-select form-select-sm fw-semibold border-info border-opacity-50">
+                            <option value="Ytong" selected="@(curOuterWall == "Ytong" ? "selected" : null)">Ytong / Gazbeton (Hafif Statik Yük)</option>
+                            <option value="Bims" selected="@(curOuterWall == "Bims" ? "selected" : null)">Bims Blok (Orta Statik Yük)</option>
+                            <option value="Tugla" selected="@(curOuterWall == "Tugla" ? "selected" : null)">İzotuğla / Kırmızı Tuğla (Ağır Yük)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold small text-dark mb-1" style="font-size: 0.74rem;">2. Cephe & Yalıtım Kurgusu</label>
+                        <select name="facadeInsulation" id="inputFacadeIns" class="form-select form-select-sm fw-semibold border-info border-opacity-50">
+                            <option value="Dış_Mantolama" selected="@(curFacadeIns == "Dış_Mantolama" ? "selected" : null)">Dıştan Mantolama (Taşyünü / EPS)</option>
+                            <option value="ÇiftTuğla_Arası_Köpük" selected="@(curFacadeIns == "ÇiftTuğla_Arası_Köpük" ? "selected" : null)">İki Duvar Arası Yalıtım (Sandviç Duvar)</option>
+                            <option value="Kompozit_Giydirme" selected="@(curFacadeIns == "Kompozit_Giydirme" ? "selected" : null)">Kompozit / Giydirme Cephe + Taşyünü</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold small text-dark mb-1" style="font-size: 0.74rem;">3. Çatı Sistemi (Son Kat Statik)</label>
+                        <select name="roofMaterial" id="inputRoofMat" class="form-select form-select-sm fw-semibold border-info border-opacity-50">
+                            <option value="Düz_Teras" selected="@(curRoofMat == "Düz_Teras" ? "selected" : null)">Düz Teras Çatı (Betonarme + Yalıtım)</option>
+                            <option value="Ahşap_Kiremit" selected="@(curRoofMat == "Ahşap_Kiremit" ? "selected" : null)">Ahşap Oturtma Kırma Çatı (Kiremit)</option>
+                            <option value="Çelik_SandviçPanel" selected="@(curRoofMat == "Çelik_SandviçPanel" ? "selected" : null)">Çelik Konstrüksiyon (Kenet / Panel)</option>
+                            <option value="OSB_Şingıl" selected="@(curRoofMat == "OSB_Şingıl" ? "selected" : null)">OSB + Şıngıl / Membran Kırma Çatı</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold small text-dark mb-1" style="font-size: 0.74rem;">4. İç Bölme Duvarlar</label>
+                        <select name="innerWallType" id="inputInnerWall" class="form-select form-select-sm fw-semibold border-info border-opacity-50">
+                            <option value="Ytong" selected="@(curInnerWall == "Ytong" ? "selected" : null)">10-15 cm Ytong / Gazbeton</option>
+                            <option value="Tugla" selected="@(curInnerWall == "Tugla" ? "selected" : null)">8.5-13.5 cm Yatay Delikli Tuğla</option>
+                            <option value="Alcipan" selected="@(curInnerWall == "Alcipan" ? "selected" : null)">Çift Kat Alçıpan + Taşyünü (Hafif)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold small text-dark mb-1" style="font-size: 0.74rem;">5. Isıtma & Döşeme Şap Yükü</label>
+                        <select name="plumbingType" id="inputPlumbing" class="form-select form-select-sm fw-semibold border-info border-opacity-50">
+                            <option value="Yerden_Isitma" selected="@(curPlumbing == "Yerden_Isitma" ? "selected" : null)">Yerden Isıtma + Gömme Rezervuar</option>
+                            <option value="Gomme" selected="@(curPlumbing == "Gomme" ? "selected" : null)">Kombi / Petek + Gömme Rezervuar</option>
+                            <option value="Standart" selected="@(curPlumbing == "Standart" ? "selected" : null)">Standart Radyatör + Klasik Tesisat</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold small text-dark mb-1" style="font-size: 0.74rem;">6. Temel & Perde Su Yalıtımı</label>
+                        <select name="foundationInsulation" id="inputFoundIns" class="form-select form-select-sm fw-semibold border-info border-opacity-50">
+                            <option value="Membran" selected="@(curFoundIns == "Membran" ? "selected" : null)">Çift Kat Membran + XPS Bohçalama</option>
+                            <option value="XPS_Köpük" selected="@(curFoundIns == "XPS_Köpük" ? "selected" : null)">PVC / TPO Membran + XPS Koruma</option>
+                            <option value="Sürme_Zift" selected="@(curFoundIns == "Sürme_Zift" ? "selected" : null)">Kristalize Sürme İzolasyon + drenaj</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
             <!-- 1.3 ALT BÖLÜM: RESMİ TEKLİF METNİ VE SÖZLEŞME KALKANI MADDELERİ -->
             <div class="row g-2 mb-3">
                 <div class="col-lg-6">
@@ -236,7 +312,10 @@
                 </div>
                 <div class="d-flex gap-2 flex-wrap">
                     <button type="submit" class="btn btn-outline-primary rounded-pill px-3 py-1 fw-bold btn-sm shadow-xs" style="font-size: 0.78rem;">
-                        <i class="bi bi-save me-1"></i>Teklif Parametrelerini Kaydet
+                        <i class="bi bi-save me-1"></i>Teklif & Ön DNA'yı Kaydet
+                    </button>
+                    <button type="button" class="btn btn-info rounded-pill px-3 py-1 fw-bold btn-sm shadow-xs text-dark" style="font-size: 0.78rem;" onclick="printEngineerPreDnaBrief()">
+                        <i class="fas fa-dna me-1"></i>Mühendise Statik & Mimari Ön Bilgi Föyü Yazdır
                     </button>
                     <a href="/ConstructionProject/ExportFeasibilityPdf?projectId=@Model.Id" target="_blank" class="btn btn-outline-dark rounded-pill px-3 py-1 fw-bold btn-sm shadow-xs" style="font-size: 0.78rem;">
                         <i class="bi bi-bar-chart-steps me-1"></i>Fizibilite & İmar PDF İndir
@@ -272,10 +351,16 @@
         var malikDukkan = document.getElementById('inputMalikDukkan').value;
         var summary = document.getElementById('inputProposalSummary').value.replace(/\n/g, '<br/>');
         var shields = document.getElementById('inputShieldClauses').value.replace(/\n/g, '<br/>');
+        var outerWallTxt = document.getElementById('inputOuterWall').selectedOptions[0].text;
+        var facadeInsTxt = document.getElementById('inputFacadeIns').selectedOptions[0].text;
+        var roofMatTxt = document.getElementById('inputRoofMat').selectedOptions[0].text;
+        var innerWallTxt = document.getElementById('inputInnerWall').selectedOptions[0].text;
+        var plumbingTxt = document.getElementById('inputPlumbing').selectedOptions[0].text;
+        var foundInsTxt = document.getElementById('inputFoundIns').selectedOptions[0].text;
 
         var w = window.open('', '_blank', 'width=900,height=800');
-        var html = '<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"><title>Resmi Teklif Mektubu - @Model.Name</title>' +
-            '<style>body{font-family:Arial,sans-serif;color:#1e293b;padding:32px;line-height:1.5;} .hdr{border-bottom:2px solid #0f172a;padding-bottom:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;} .box{border:1px solid #cbd5e1;border-radius:8px;padding:14px;margin-bottom:16px;background:#f8fafc;} table{width:100%;border-collapse:collapse;margin-bottom:16px;} th,td{border:1px solid #cbd5e1;padding:8px 10px;text-align:left;font-size:13px;} th{background:#f1f5f9;} h2,h3{margin:0 0 8px 0;color:#0f172a;} .shield{border-left:4px solid #16a34a;background:#f0fdf4;padding:12px;border-radius:6px;font-size:13px;}</style></head><body>' +
+        var html = '<!DOCTYPE html><' + 'html lang="tr"><' + 'head><meta charset="utf-8"><title>Resmi Teklif Mektubu - ' + @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Name ?? "")) + '</title>' +
+            '<style>body{font-family:Arial,sans-serif;color:#1e293b;padding:32px;line-height:1.5;} .hdr{border-bottom:2px solid #0f172a;padding-bottom:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;} .box{border:1px solid #cbd5e1;border-radius:8px;padding:14px;margin-bottom:16px;background:#f8fafc;} table{width:100%;border-collapse:collapse;margin-bottom:16px;} th,td{border:1px solid #cbd5e1;padding:8px 10px;text-align:left;font-size:13px;} th{background:#f1f5f9;} h2,h3{margin:0 0 8px 0;color:#0f172a;} .shield{border-left:4px solid #16a34a;background:#f0fdf4;padding:12px;border-radius:6px;font-size:13px;}</style><' + '/head><' + 'body>' +
             '<div class="hdr"><div><h2>@(Model.Agency?.CompanyName ?? "GMK360 İNŞAAT & GAYRİMENKUL GELİŞTİRME")</h2><div>Kentsel Dönüşüm & Kat Karşılığı Resmi Teklif Mektubu</div></div><div style="text-align:right;font-size:13px;"><b>Tarih:</b> ' + new Date().toLocaleDateString('tr-TR') + '<br/><b>Proje:</b> @Model.Name<br/><b>Konum:</b> @cityName / @distName (@neighName Mah. @Model.Ada Ada / @Model.Parsel Parsel)</div></div>' +
             '<div class="box"><h3>1. Teklif Ön Yazısı & Teknik Taahhüt Özeti</h3><div style="font-size:13.5px;">' + summary + '</div></div>' +
             '<h3>2. Paylaşım, Kira ve Teslim Taahhüt Tablosu</h3>' +
@@ -284,9 +369,45 @@
             '<tr><td><b>Planlanan Yeni Daire</b></td><td>' + yeniDaire + ' Daire</td><td><b>Planlanan Yeni Dükkan</b></td><td>' + yeniDukkan + ' Dükkan (Malik Payı: ' + malikDukkan + ')</td></tr>' +
             '<tr><td><b>Aylık Kira Desteği (Daire)</b></td><td>' + kira + ' ₺ / Ay</td><td><b>Taşınma Yardımı (Daire)</b></td><td>' + tasinma + ' ₺</td></tr>' +
             '<tr><td><b>İnşaat Teslim Süresi</b></td><td>' + teslimAy + ' Ay (Ruhsat/Tahliye Sonrası)</td><td><b>Banka Teminat Mektubu</b></td><td>%' + teminat + '</td></tr></table>' +
-            '<div class="shield"><h3>3. Teknik Şartname & Sözleşme Güvence (Kalkan) Maddeleri</h3><div>' + shields + '</div></div>' +
+            '<h3>3. Ön DNA — Yapısal Malzeme & Teknik Şartname Standartları</h3>' +
+            '<table><tr><th>Yapı Elemanı</th><th>Seçilen Teknik Sistem</th><th>Yapı Elemanı</th><th>Seçilen Teknik Sistem</th></tr>' +
+            '<tr><td><b>Dış Duvar Sistemi</b></td><td>' + outerWallTxt + '</td><td><b>Cephe & Isı Yalıtımı</b></td><td>' + facadeInsTxt + '</td></tr>' +
+            '<tr><td><b>Çatı Sistemi</b></td><td>' + roofMatTxt + '</td><td><b>İç Bölme Duvarlar</b></td><td>' + innerWallTxt + '</td></tr>' +
+            '<tr><td><b>Isıtma & Sıhhi Tesisat</b></td><td>' + plumbingTxt + '</td><td><b>Temel & Bodrum Yalıtımı</b></td><td>' + foundInsTxt + '</td></tr></table>' +
+            '<div class="shield"><h3>4. Teknik Şartname & Sözleşme Güvence (Kalkan) Maddeleri</h3><div>' + shields + '</div></div>' +
             '<div style="margin-top:36px;display:flex;justify-content:space-between;font-size:13px;"><div><b>Yüklenici Firma Yetkilisi</b><br/><br/>İmza / Kaşe</div><div><b>Apartman / Site Yönetimi (Malikler Temsilcisi)</b><br/><br/>İmza</div></div>' +
-            '</body></html>';
+            '<' + '/body><' + '/html>';
+        w.document.write(html);
+        w.document.close();
+        w.focus();
+        setTimeout(function() { w.print(); }, 300);
+    }
+
+    function printEngineerPreDnaBrief() {
+        var outerWallTxt = document.getElementById('inputOuterWall').selectedOptions[0].text;
+        var facadeInsTxt = document.getElementById('inputFacadeIns').selectedOptions[0].text;
+        var roofMatTxt = document.getElementById('inputRoofMat').selectedOptions[0].text;
+        var innerWallTxt = document.getElementById('inputInnerWall').selectedOptions[0].text;
+        var plumbingTxt = document.getElementById('inputPlumbing').selectedOptions[0].text;
+        var foundInsTxt = document.getElementById('inputFoundIns').selectedOptions[0].text;
+        var yeniDaire = document.getElementById('inputYeniDaire').value;
+        var yeniDukkan = document.getElementById('inputYeniDukkan').value;
+
+        var w = window.open('', '_blank', 'width=900,height=780');
+        var html = '<!DOCTYPE html><' + 'html lang="tr"><' + 'head><meta charset="utf-8"><title>Mühendislik Ön DNA Föyü - ' + @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Name ?? "")) + '</title>' +
+            '<style>body{font-family:Arial,sans-serif;color:#0f172a;padding:32px;line-height:1.5;} .hdr{border-bottom:3px solid #0284c7;padding-bottom:12px;margin-bottom:20px;display:flex;justify-content:space-between;} table{width:100%;border-collapse:collapse;margin-bottom:18px;} th,td{border:1px solid #cbd5e1;padding:10px;text-align:left;font-size:13.5px;} th{background:#e0f2fe;color:#0369a1;} .note{background:#f8fafc;border-left:4px solid #0284c7;padding:12px;font-size:13px;}</style><' + '/head><' + 'body>' +
+            '<div class="hdr"><div><h2 style="margin:0;color:#0369a1;">MİMARİ & STATİK MÜHENDİSLİK ÖN DNA BİLGİ FÖYÜ</h2><div>Statik Zati Yük (Duvar/Çatı/Şap) ve Mimari Detay Kabulleri</div></div><div style="text-align:right;font-size:13px;"><b>Tarih:</b> ' + new Date().toLocaleDateString('tr-TR') + '<br/><b>Proje:</b> @Model.Name<br/><b>Ada/Parsel:</b> @Model.Ada / @Model.Parsel (@cityName - @distName)</div></div>' +
+            '<table><tr><th>Statik / Mimari Kriter</th><th>Yüklenici Ön DNA Kararı</th><th>Mühendislik Hesap Notu</th></tr>' +
+            '<tr><td><b>1. Dış Duvar Malzemesi</b></td><td><b>' + outerWallTxt + '</b></td><td>Statik kiriş çizgisel duvar yükleri ve cephe kesit kalınlığı bu seçime göre alınacaktır.</td></tr>' +
+            '<tr><td><b>2. Cephe & Isı Yalıtımı</b></td><td><b>' + facadeInsTxt + '</b></td><td>Mimari dış aks kaçıklığı, denizlik/söve detayı ve TS 825 ısı hesabı bu kurguya göre çizilecektir.</td></tr>' +
+            '<tr><td><b>3. Çatı Sistemi</b></td><td><b>' + roofMatTxt + '</b></td><td>Son kat tavan döşemesi zati/kar yükü ve parapet/saçak detayı bu sisteme göre modellenmelidir.</td></tr>' +
+            '<tr><td><b>4. İç Bölme Duvarlar</b></td><td><b>' + innerWallTxt + '</b></td><td>Döşeme yayılı hareketli/zati duvar yükleri bu malzemeye göre statik modele girilecektir.</td></tr>' +
+            '<tr><td><b>5. Isıtma & Döşeme Şapı</b></td><td><b>' + plumbingTxt + '</b></td><td>Kat yüksekliği net kotu ve döşeme kaplama/şap kalınlığı yükü bu seçime göre hesaplanacaktır.</td></tr>' +
+            '<tr><td><b>6. Temel & Perde Yalıtımı</b></td><td><b>' + foundInsTxt + '</b></td><td>Radye temel grobeton/koruma betonu ve bodrum perde kesit detayında uygulanacaktır.</td></tr>' +
+            '<tr><td><b>7. Hedef Bağımsız Bölüm</b></td><td><b>' + yeniDaire + ' Daire + ' + yeniDukkan + ' Dükkan</b></td><td>Mimari avan yerleşim ve otopark/sığınak hesabı baz adedi.</td></tr></table>' +
+            '<div class="note"><b>Önemli Not:</b> Bu föy, mimari avan/uygulama projesi ve statik betonarme hesaplarına başlanmadan önce yüklenici firma tarafından belirlenen <b>Ön DNA</b> kararlarını içerir. Statik zati yüklerin (duvar, şap, çatı) gereksiz emniyet katsayılarıyla demir/beton metrajını şişirmemesi için yukarıdaki malzeme birim ağırlıkları esas alınmalıdır.</div>' +
+            '<div style="margin-top:40px;display:flex;justify-content:space-between;font-size:13px;"><div><b>Yüklenici / Proje Müdürü</b><br/><br/>İmza</div><div><b>Mimar / Statik Proje Mühendisi</b><br/><br/>İmza</div></div>' +
+            '<' + '/body><' + '/html>';
         w.document.write(html);
         w.document.close();
         w.focus();

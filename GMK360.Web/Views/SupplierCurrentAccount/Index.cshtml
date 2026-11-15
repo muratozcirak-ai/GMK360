@@ -6,7 +6,35 @@
 }
 
 <div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="fw-bold text-dark mb-0"><i class="bi bi-wallet2 text-danger me-2"></i>Firma İçi Tedarikçi & Taşeron Carileri (SRM)</h4>
+            <p class="text-muted small mb-0">Firmanızın tedarikçi ve taşeron açık hesap bakiyeleri, faturalar ve vadesi yaklaşan ödemeler</p>
+        </div>
+    </div>
+    <ul class="nav nav-tabs mb-3 border-bottom">
+        <li class="nav-item">
+            <a href="/B2BPurchasing/Index" class="nav-link fw-semibold text-secondary">
+                <i class="bi bi-cart4 text-primary me-1"></i>🛒 Satın Alma, Teklif & Siparişler
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="/SubcontractorContract/Index" class="nav-link fw-semibold text-secondary">
+                <i class="bi bi-file-earmark-ruled text-success me-1"></i>🤝 Taşeron Sözleşmeleri & Hakedişler
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="/AgencyPhonebook/Index" class="nav-link fw-semibold text-secondary">
+                <i class="bi bi-journal-bookmark-fill text-info me-1"></i>📒 Firma, Taşeron & Tedarikçi Rehberi
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="/SupplierCurrentAccount/Index" class="nav-link active fw-bold text-dark">
+                <i class="bi bi-wallet2 text-danger me-1"></i>📊 Tedarikçi & Taşeron Carileri
+            </a>
+        </li>
+    </ul>
+    <div class="d-none justify-content-between align-items-center mb-4">
         <div>
             <h2 class="fw-bold mb-0">Tedarikçi / Taşeron Cari Hesapları</h2>
             <p class="text-muted mb-0">Tüm açık hesap, ödeme ve fatura işlemlerini buradan takip edebilirsiniz.</p>
@@ -56,6 +84,10 @@
         }
     }
 
+    @{
+        var allContracts = ViewBag.SupplierContracts as List<GMK360.Web.Services.SupplierContractPackageDto> ?? new List<GMK360.Web.Services.SupplierContractPackageDto>();
+    }
+
     <div class="card shadow-sm border-0 rounded-4">
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -64,13 +96,17 @@
                         <tr>
                             <th class="ps-4 py-3">Firma/Kişi Adı</th>
                             <th class="py-3">Telefon</th>
-                            <th class="py-3">Güncel Bakiye (Borcumuz)</th>
+                            <th class="py-3">Anlaşma Taahhüdü (Beklenen Çıkış)</th>
+                            <th class="py-3">Kesinleşen Cari Bakiye (Borcumuz)</th>
                             <th class="text-end pe-4 py-3">İşlemler</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var item in Model)
                         {
+                            var accContracts = allContracts.Where(c => c.SupplierCurrentAccountId == item.Id || c.PhonebookContactId == item.PhonebookContactId).ToList();
+                            decimal totalAgreed = accContracts.Sum(c => c.TotalAgreedAmount);
+                            decimal remainingCommitment = accContracts.Sum(c => c.RemainingUnorderedAmount);
                             <tr>
                                 <td class="ps-4">
                                     <div class="d-flex align-items-center">
@@ -80,10 +116,29 @@
                                         <div>
                                             <h6 class="mb-0 fw-bold">@(item.PhonebookContact?.Name ?? "Bilinmeyen Tedarikçi")</h6>
                                             <small class="text-muted">@(item.PhonebookContact?.Tags ?? "Tedarikçi/Taşeron")</small>
+                                            @if (accContracts.Any())
+                                            {
+                                                <div class="mt-1">
+                                                    <span class="badge bg-info bg-opacity-10 text-primary border border-info">
+                                                        <i class="bi bi-file-earmark-check me-1"></i>@accContracts.Count Aktif Paket Anlaşması (@accContracts.Sum(c => c.Items.Count) Kalem Birim Fiyatlı)
+                                                    </span>
+                                                </div>
+                                            }
                                         </div>
                                     </div>
                                 </td>
                                 <td>@(item.PhonebookContact?.PhoneNumber ?? "-")</td>
+                                <td>
+                                    @if (totalAgreed > 0)
+                                    {
+                                        <div class="fw-bold text-dark">@totalAgreed.ToString("N2") ₺ <span class="badge bg-warning text-dark ms-1">Toplu Anlaşma</span></div>
+                                        <small class="text-muted">Beklenen (Sipariş Edilmemiş): <strong class="text-warning" style="color:#d97706 !important;">@remainingCommitment.ToString("N2") ₺</strong></small>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">—</span>
+                                    }
+                                </td>
                                 <td>
                                     @if(item.CurrentBalance > 0)
                                     {
@@ -97,6 +152,12 @@
                                             @Math.Abs(item.CurrentBalance).ToString("N2") ₺ Avans/Alacak
                                         </span>
                                     }
+                                    else if (totalAgreed > 0)
+                                    {
+                                        <span class="badge bg-warning bg-opacity-15 text-dark border border-warning px-3 py-2">
+                                            0,00 ₺ (Sipariş Bekliyor)
+                                        </span>
+                                    }
                                     else
                                     {
                                         <span class="badge bg-secondary bg-opacity-10 text-secondary fs-6 px-3 py-2">
@@ -105,8 +166,8 @@
                                     }
                                 </td>
                                 <td class="text-end pe-4">
-                                    <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary rounded-pill px-3">
-                                        <i class="bi bi-file-earmark-text me-1"></i> Ekstre Gör
+                                    <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold shadow-xs">
+                                        <i class="bi bi-cart-check me-1"></i> @(accContracts.Any() ? "Anlaşma, Sipariş & Cari" : "Ekstre Gör")
                                     </a>
                                 </td>
                             </tr>
@@ -115,7 +176,7 @@
                         @if (!Model.Any())
                         {
                             <tr>
-                                <td colspan="4" class="text-center py-5 text-muted">
+                                <td colspan="5" class="text-center py-5 text-muted">
                                     <i class="bi bi-journal-x fs-1 d-block mb-3"></i>
                                     Kayıtlı cari hesap bulunamadı. Lütfen önce Rehberden bir firmayı Tedarikçi olarak ekleyin.
                                 </td>

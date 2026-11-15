@@ -30,7 +30,7 @@ namespace GMK360.Data.Seeds
             if (employeeUser == null)
             {
                 employeeUser = new ApplicationUser { UserName = "beyazyaka@gmk360.com", Email = "beyazyaka@gmk360.com", FirstName = "Ayşe", LastName = "Beyazyaka", EmailConfirmed = true };
-                await userManager.CreateAsync(employeeUser, "123456");
+                await userManager.CreateAsync(employeeUser, "Test1234*");
                 await userManager.AddToRoleAsync(employeeUser, "CompanyEmployee");
             }
 
@@ -38,7 +38,7 @@ namespace GMK360.Data.Seeds
             if (adminUser == null)
             {
                 adminUser = new ApplicationUser { UserName = "admin@gmk360.com", Email = "admin@gmk360.com", FirstName = "Sistem", LastName = "Y�neticisi", EmailConfirmed = true };
-                await userManager.CreateAsync(adminUser, "123456");
+                await userManager.CreateAsync(adminUser, "Test1234*");
                 await userManager.AddToRoleAsync(adminUser, "Admin");
             }
 
@@ -46,7 +46,7 @@ namespace GMK360.Data.Seeds
             if (customerUser == null)
             {
                 customerUser = new ApplicationUser { UserName = "musteri@gmk360.com", Email = "musteri@gmk360.com", FirstName = "Ahmet", LastName = "M��teri", EmailConfirmed = true };
-                await userManager.CreateAsync(customerUser, "123456");
+                await userManager.CreateAsync(customerUser, "Test1234*");
                 await userManager.AddToRoleAsync(customerUser, "Customer");
             }
 

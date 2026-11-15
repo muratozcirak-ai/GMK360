@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using GMK360.Data.Contexts;
@@ -9,7 +9,7 @@ namespace DbCheck
 {
     class Program
     {
-        static void Main(string[] args)
+        public static void RunDbCheck(string[] args)
         {
             var builder = new ConfigurationBuilder().SetBasePath(Directory.GetCurrentDirectory()).AddJsonFile("appsettings.json");
             var config = builder.Build();

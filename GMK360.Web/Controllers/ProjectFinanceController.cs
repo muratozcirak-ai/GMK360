@@ -23,6 +23,11 @@ namespace GMK360.Web.Controllers
         [HttpGet("ProjectFinance")]
         public async Task<IActionResult> Index(int? projectId = null)
         {
+            if (!await GMK360.Web.Helpers.StaffPermissionHelper.HasUserPermissionAsync(_context, User, Request, GMK360.Web.Helpers.StaffPermissionHelper.PermFinance))
+            {
+                return RedirectToAction("AccessDenied", "Account");
+            }
+
             if (!projectId.HasValue)
             {
                 return RedirectToAction("Index", "FinancialStrategy");

@@ -1,0 +1,662 @@
+@model GMK360.Core.Entities.Construction.AgencyPhonebook
+@using GMK360.Core.Entities.Finance
+@using GMK360.Core.Entities.Construction
+@{
+    ViewData["Title"] = Model.Name + " - 360° Firma Hafızası & Cari Dashboard";
+    Layout = "~/Views/Shared/_ConstructionLayout.cshtml";
+
+    var account = ViewBag.Account as SupplierCurrentAccount;
+    var contracts = ViewBag.Contracts as List<SubcontractorContract> ?? new List<SubcontractorContract>();
+    var workers = ViewBag.Workers as List<AgencyWorker> ?? new List<AgencyWorker>();
+    var projects = ViewBag.Projects as List<ConstructionProject> ?? new List<ConstructionProject>();
+
+    var transactions = account?.Transactions?.OrderByDescending(t => t.TransactionDate).ToList() ?? new List<SupplierAccountTransaction>();
+    var payments = account?.Payments?.OrderByDescending(p => p.PaymentDate).ToList() ?? new List<SupplierPayment>();
+
+    decimal totalWorkAndPurchases = transactions
+        .Where(t => t.Type != SupplierTransactionType.PaymentMade)
+        .Sum(t => t.Amount);
+
+    decimal totalPaidSoFar = transactions
+        .Where(t => t.Type == SupplierTransactionType.PaymentMade)
+        .Sum(t => t.Amount);
+
+    decimal currentBalance = account?.CurrentBalance ?? 0m;
+
+    var workedProjectNames = contracts
+        .Where(c => c.Project != null)
+        .Select(c => c.Project.Name)
+        .Union(transactions.Where(t => t.Project != null).Select(t => t.Project.Name))
+        .Distinct()
+        .ToList();
+
+    bool hasEverWorked = contracts.Any() || transactions.Any();
+    bool isActivelyWorking = contracts.Any(c => c.IsActive) || currentBalance != 0;
+
+    string categoryBadge = Model.ContactType switch
+    {
+        1 => "👷 Usta / Mavi Yaka Ekibi",
+        2 => "🧱 Taşeron Firma",
+        3 => "🚚 Malzeme Tedarikçisi / Beton Santrali",
+        4 => "📐 Mimar & Mühendislik Ofisi",
+        5 => "🚜 İş Makinesi & Ekipman Kiralama",
+        6 => "🏛️ Kurum / Belediye",
+        7 => "🏠 Müşteri / Kat Maliki",
+        8 => "🔬 Yapı Denetim / Test Laboratuvarı / OSGB",
+        _ => "🏢 İş Ortağı Firma"
+    };
+}
+
+<div class="container-fluid py-3">
+    <!-- ÜST BAŞLIK VE FİRMA KİMLİĞİ -->
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+        <div>
+            <a href="/AgencyPhonebook/Index" class="text-decoration-none small fw-bold mb-1 d-inline-block">
+                <i class="bi bi-arrow-left me-1"></i> Firma, Taşeron & Tedarikçi Rehberine Dön
+            </a>
+            <div class="d-flex align-items-center flex-wrap gap-2">
+                <h4 class="fw-bold mb-0 text-dark">@Model.Name</h4>
+                <span class="badge bg-dark rounded-pill px-2.5 py-1" style="font-size: 0.74rem;">@categoryBadge</span>
+                @if (isActivelyWorking)
+                {
+                    <span class="badge bg-success rounded-pill px-2.5 py-1" style="font-size: 0.74rem;">🟢 Aktif Çalışıyoruz</span>
+                }
+                else if (hasEverWorked)
+                {
+                    <span class="badge bg-primary rounded-pill px-2.5 py-1" style="font-size: 0.74rem;">📁 Geçmişte Çalıştık (Arşiv Hafızası)</span>
+                }
+                else
+                {
+                    <span class="badge bg-secondary bg-opacity-25 text-dark border rounded-pill px-2.5 py-1" style="font-size: 0.74rem;">🔍 Rehber Arşivi (Henüz Çalışılmadı / Aday Firma)</span>
+                }
+            </div>
+            <p class="text-muted small mb-0 mt-1">
+                <i class="bi bi-telephone-fill text-primary me-1"></i><strong>@Model.PhoneNumber</strong>
+                @if (!string.IsNullOrWhiteSpace(Model.AuthorizedPerson))
+                {
+                    <span class="ms-2">| <i class="bi bi-person-badge me-1"></i>Yetkili: <strong>@Model.AuthorizedPerson</strong> @(!string.IsNullOrWhiteSpace(Model.AuthorizedPersonRole) ? $"({Model.AuthorizedPersonRole})" : "")</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(Model.City) || !string.IsNullOrWhiteSpace(Model.District))
+                {
+                    <span class="ms-2">| <i class="bi bi-geo-alt-fill text-danger me-1"></i>@Model.District / @Model.City</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(Model.TaxNumber))
+                {
+                    <span class="ms-2">| <i class="bi bi-receipt me-1"></i>VKN: @Model.TaxNumber @(!string.IsNullOrWhiteSpace(Model.TaxOffice) ? $"({Model.TaxOffice})" : "")</span>
+                }
+            </p>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3 fw-bold shadow-xs" data-bs-toggle="modal" data-bs-target="#addDebtModal">
+                <i class="bi bi-plus-circle me-1"></i> + İş / Fatura / Veresiye Alım İşle
+            </button>
+            <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#addPaymentModal">
+                <i class="bi bi-cash-coin me-1"></i> 💸 Ödeme Çık (Kasa / Banka / Çek)
+            </button>
+            <a href="/SubcontractorContract/Create" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold shadow-xs">
+                <i class="bi bi-file-earmark-ruled me-1"></i> 🤝 Yeni Sözleşme Bağla
+            </a>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show py-2 px-3 small rounded-3 shadow-xs mb-3">
+            <i class="bi bi-check-circle-fill me-1"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close py-2" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- 360° FİRMA KARNESİ: ŞİMDİYE KADAR NE İŞ YAPTIK, NE ÖDEDİK, ALACAK/VERECEK NEDİR? -->
+    <div class="row g-2.5 mb-3">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-xs rounded-4 h-100 border-start border-4 border-primary bg-white">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted fw-bold" style="font-size: 0.72rem;">TOPLAM YAPILAN İŞ / ALIM HACMİ</span>
+                        <i class="bi bi-briefcase-fill text-primary"></i>
+                    </div>
+                    <div class="fs-5 fw-bold text-dark font-monospace">₺@totalWorkAndPurchases.ToString("N2")</div>
+                    <div class="text-muted" style="font-size: 0.72rem;">
+                        Kesilen faturalar, hakedişler ve açık hesap alımlar toplamı
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-xs rounded-4 h-100 border-start border-4 border-success bg-white">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted fw-bold" style="font-size: 0.72rem;">ŞİMDİYE KADAR ÖDEDİĞİMİZ TOPLAM</span>
+                        <i class="bi bi-check2-all text-success"></i>
+                    </div>
+                    <div class="fs-5 fw-bold text-success font-monospace">₺@totalPaidSoFar.ToString("N2")</div>
+                    <div class="text-muted" style="font-size: 0.72rem;">
+                        Banka havalesi, nakit kasa ve çek ile yapılan tüm ödemeler
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-xs rounded-4 h-100 border-start border-4 @(currentBalance > 0 ? "border-danger" : currentBalance < 0 ? "border-info" : "border-secondary") bg-white">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted fw-bold" style="font-size: 0.72rem;">GÜNCEL ALACAK / VERECEK BAKİYESİ</span>
+                        <i class="bi bi-scale @(currentBalance > 0 ? "text-danger" : "text-info")"></i>
+                    </div>
+                    @if (currentBalance > 0)
+                    {
+                        <div class="fs-5 fw-bold text-danger font-monospace">₺@currentBalance.ToString("N2") <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill" style="font-size: 0.65rem;">Verecek (Borcumuz)</span></div>
+                        <div class="text-muted" style="font-size: 0.72rem;">Bu firmaya ödenmeyi bekleyen kalan bakiye</div>
+                    }
+                    else if (currentBalance < 0)
+                    {
+                        <div class="fs-5 fw-bold text-info font-monospace">₺@Math.Abs(currentBalance).ToString("N2") <span class="badge bg-info bg-opacity-10 text-dark rounded-pill" style="font-size: 0.65rem;">Alacak (Avans Fazlası)</span></div>
+                        <div class="text-muted" style="font-size: 0.72rem;">Firmaya işten fazla ödenmiş avans/alacak bakiyemiz</div>
+                    }
+                    else
+                    {
+                        <div class="fs-5 fw-bold text-secondary font-monospace">₺0,00 <span class="badge bg-light text-secondary border rounded-pill" style="font-size: 0.65rem;">Hesap Kapalı</span></div>
+                        <div class="text-muted" style="font-size: 0.72rem;">Açık alacak veya verecek bulunmuyor</div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-xs rounded-4 h-100 border-start border-4 border-warning bg-white">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted fw-bold" style="font-size: 0.72rem;">ÇALIŞILAN ŞANTİYE & SÖZLEŞME</span>
+                        <i class="bi bi-buildings-fill text-warning"></i>
+                    </div>
+                    <div class="fs-5 fw-bold text-dark">
+                        @workedProjectNames.Count Proje <span class="text-muted fw-normal fs-6">/ @contracts.Count Sözleşme</span>
+                    </div>
+                    <div class="text-muted text-truncate" style="font-size: 0.72rem;" title="@string.Join(", ", workedProjectNames)">
+                        @(workedProjectNames.Any() ? string.Join(", ", workedProjectNames) : "Henüz bir şantiye projesiyle eşleşmedi")
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4 SEKMELİ 360° FİRMA KURUMSAL HAFIZA PANELİ -->
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-header bg-white border-bottom pt-3 pb-0">
+            <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                <li class="nav-item">
+                    <a class="nav-link active fw-bold text-primary" data-bs-toggle="tab" href="#tabLedger" role="tab">
+                        <i class="bi bi-wallet2 me-1"></i> 1. Alacak - Verecek (Cari Ekstre) & Ödemeler (@transactions.Count)
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link fw-bold text-dark" data-bs-toggle="tab" href="#tabProjects" role="tab">
+                        <i class="bi bi-buildings me-1 text-success"></i> 2. Hangi İşlerde Çalıştık? (Sözleşmeler & Hakedişler) (@contracts.Count)
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link fw-bold text-dark" data-bs-toggle="tab" href="#tabBranches" role="tab">
+                        <i class="bi bi-people-fill me-1 text-warning"></i> 3. Şubeler, Yetkililer & Saha Ustaları (@(Model.Branches.Count + Model.Contacts.Count + workers.Count))
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link fw-bold text-dark" data-bs-toggle="tab" href="#tabProfile" role="tab">
+                        <i class="bi bi-journal-text me-1 text-info"></i> 4. Firma Künyesi, Adres, IBAN & Hafıza Notu
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="card-body p-4">
+            <div class="tab-content">
+
+                <!-- 1. SEKME: ALACAK - VERECEK CARİ EKSTRE VE ÖDEMELER -->
+                <div class="tab-pane fade show active" id="tabLedger" role="tabpanel">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                        <div>
+                            <h6 class="fw-bold mb-0 text-dark">Bu Firmayla Yapılan Tüm Finansal Hareketler (Alacak, Verecek & Ödemeler)</h6>
+                            <small class="text-muted">Fatura, hakediş, şantiye veresiye alımları ve kasadan/bankadan yapılan ödemelerin kronolojik dökümü.</small>
+                        </div>
+                        @if (account != null)
+                        {
+                            <a href="/SupplierCurrentAccount/Details/@account.Id" class="btn btn-xs btn-outline-secondary rounded-pill px-3 py-1 fw-bold" style="font-size: 0.75rem;">
+                                <i class="bi bi-printer me-1"></i>Tam Ekran Cari Ekstre Görünümü
+                            </a>
+                        }
+                    </div>
+
+                    @if (transactions.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle border mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3">Tarih</th>
+                                        <th>İşlem Türü</th>
+                                        <th>İlgili Şantiye / Proje</th>
+                                        <th>Açıklama & Evrak No</th>
+                                        <th class="text-end">Verecek (Alım/Hakediş)</th>
+                                        <th class="text-end">Ödenen (Çıkış)</th>
+                                        <th class="text-end pe-3">Kalan Bakiye</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var tx in transactions)
+                                    {
+                                        bool isPayment = tx.Type == SupplierTransactionType.PaymentMade;
+                                        <tr>
+                                            <td class="ps-3 small">@tx.TransactionDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                            <td>
+                                                @if (isPayment)
+                                                {
+                                                    <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle rounded-pill">💸 Yapılan Ödeme</span>
+                                                }
+                                                else if (tx.Type == SupplierTransactionType.OpenAccountPurchase)
+                                                {
+                                                    <span class="badge bg-warning bg-opacity-15 text-dark border border-warning-subtle rounded-pill">📝 Açık Hesap / Veresiye</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle rounded-pill">🧾 Fatura / Hakediş</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (tx.Project != null)
+                                                {
+                                                    <span class="badge bg-light text-dark border"><i class="bi bi-geo-alt-fill text-danger me-1"></i>@tx.Project.Name</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted small">Merkez / Genel</span>
+                                                }
+                                            </td>
+                                            <td class="small">
+                                                @tx.Description
+                                                @if (!string.IsNullOrWhiteSpace(tx.DocumentReference))
+                                                {
+                                                    <span class="badge bg-light text-dark border ms-1">Belge: @tx.DocumentReference</span>
+                                                }
+                                            </td>
+                                            <td class="text-end fw-bold text-danger">
+                                                @(!isPayment ? $"₺{tx.Amount:N2}" : "-")
+                                            </td>
+                                            <td class="text-end fw-bold text-success">
+                                                @(isPayment ? $"₺{tx.Amount:N2}" : "-")
+                                            </td>
+                                            <td class="text-end pe-3 fw-bold @(tx.BalanceAfterTransaction > 0 ? "text-danger" : "text-dark")">
+                                                ₺@tx.BalanceAfterTransaction.ToString("N2")
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-light border text-center py-4 text-muted">
+                            <i class="bi bi-inbox fs-3 d-block mb-2 text-secondary"></i>
+                            <strong>Bu firmayla henüz finansal bir işlem (fatura, hakediş veya ödeme) yapılmadı.</strong>
+                            <p class="small mb-2">Firma rehber arşivinizde kayıtlıdır. Sağ üstteki butonlardan hemen ilk alım/fatura veya ödeme kaydını girebilirsiniz.</p>
+                        </div>
+                    }
+                </div>
+
+                <!-- 2. SEKME: HANGİ İŞLERDE & ŞANTİYELERDE ÇALIŞTIK? (SÖZLEŞMELER VE HAKEDİŞLER) -->
+                <div class="tab-pane fade" id="tabProjects" role="tabpanel">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                        <div>
+                            <h6 class="fw-bold mb-0 text-dark">Bu Firmayla İmzalanan Sözleşmeler ve Yapılan İşler</h6>
+                            <small class="text-muted">Geçmişte veya bugün hangi şantiyede hangi işi yaptı, sözleşme bedeli ve onaylanan hakedişleri.</small>
+                        </div>
+                        <a href="/SubcontractorContract/Create" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold">
+                            <i class="bi bi-plus-lg me-1"></i> + Bu Firmaya Yeni İş / Sözleşme Bağla
+                        </a>
+                    </div>
+
+                    @if (contracts.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle border mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3">Şantiye / Proje</th>
+                                        <th>İşin Adı / Sözleşme Başlığı</th>
+                                        <th>Tarih</th>
+                                        <th class="text-end">Sözleşme Bedeli</th>
+                                        <th class="text-end">Onaylı Hakediş Toplamı</th>
+                                        <th class="text-end">Kalan Sözleşme Bakiyesi</th>
+                                        <th class="text-end pe-3">Detay</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var c in contracts)
+                                    {
+                                        decimal totalClaimed = c.Hakedisler != null ? c.Hakedisler.Sum(h => h.ClaimAmount - h.DeductionAmount) : 0m;
+                                        decimal remainingContract = c.TotalAmount - totalClaimed;
+                                        <tr>
+                                            <td class="ps-3 fw-bold text-primary">
+                                                <i class="bi bi-buildings me-1"></i>@(c.Project?.Name ?? "Genel Şantiye")
+                                            </td>
+                                            <td>
+                                                <div class="fw-bold text-dark">@c.Title</div>
+                                                <div class="text-muted small">Hakediş Sayısı: @(c.Hakedisler?.Count ?? 0)</div>
+                                            </td>
+                                            <td class="small text-muted">@c.ContractDate.ToString("dd.MM.yyyy")</td>
+                                            <td class="text-end fw-bold">₺@c.TotalAmount.ToString("N2")</td>
+                                            <td class="text-end fw-bold text-success">₺@totalClaimed.ToString("N2")</td>
+                                            <td class="text-end fw-bold text-danger">₺@remainingContract.ToString("N2")</td>
+                                            <td class="text-end pe-3">
+                                                <a href="/SubcontractorContract/Details/@c.Id" class="btn btn-xs btn-outline-primary rounded-pill px-3 py-1 fw-bold" style="font-size: 0.74rem;">
+                                                    Hakediş & Sözleşme ➔
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-light border text-center py-4 text-muted">
+                            <i class="bi bi-journal-bookmark fs-3 d-block mb-2 text-secondary"></i>
+                            <strong>Bu firmayla henüz kayıtlı bir taşeron sözleşmesi bulunmuyor.</strong>
+                            <p class="small mb-0">Hiç çalışmadığınız aday firmaları da burada arşivleyebilir, teklif aldığınızda veya anlaştığınızda tek tıkla sözleşmeye bağlayabilirsiniz.</p>
+                        </div>
+                    }
+                </div>
+
+                <!-- 3. SEKME: ŞUBELER, YETKİLİ KİŞİLER VE SAHA USTALARI -->
+                <div class="tab-pane fade" id="tabBranches" role="tabpanel">
+                    <div class="row g-4">
+                        <!-- Şubeler / Depolar / Santraller -->
+                        <div class="col-md-6">
+                            <div class="card border rounded-4 p-3 bg-light h-100">
+                                <h6 class="fw-bold text-dark mb-2"><i class="bi bi-geo-alt-fill text-danger me-1"></i>Firmanın Şubeleri, Depoları & Santralleri</h6>
+                                <form asp-action="AddBranch" method="post" class="row g-2 mb-3 pb-3 border-bottom">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="contactId" value="@Model.Id" />
+                                    <div class="col-md-5">
+                                        <input type="text" name="branchName" class="form-control form-control-sm" placeholder="Şube Adı (Örn: Tuzla Santral)" required />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <input type="text" name="district" class="form-control form-control-sm" placeholder="İlçe / Bölge" />
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button type="submit" class="btn btn-sm btn-primary w-100 fw-bold">+ Şube Ekle</button>
+                                    </div>
+                                    <div class="col-12">
+                                        <input type="text" name="address" class="form-control form-control-sm" placeholder="Şube / Depo Açık Adresi" />
+                                    </div>
+                                </form>
+
+                                @if (Model.Branches != null && Model.Branches.Any())
+                                {
+                                    <div class="list-group list-group-flush rounded-3 border">
+                                        @foreach (var br in Model.Branches)
+                                        {
+                                            <div class="list-group-item py-2 px-3 small">
+                                                <div class="fw-bold text-dark">@br.BranchName <span class="text-muted fw-normal">(@br.District @br.City)</span></div>
+                                                <div class="text-muted" style="font-size: 0.72rem;">@br.Address</div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="text-muted small text-center py-2">Kayıtlı alt şube veya depo bulunmuyor.</div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- İrtibat Kişileri & Ustalar -->
+                        <div class="col-md-6">
+                            <div class="card border rounded-4 p-3 bg-light h-100">
+                                <h6 class="fw-bold text-dark mb-2"><i class="bi bi-person-lines-fill text-primary me-1"></i>Firma İrtibat Kişileri & Saha Ekibi</h6>
+                                <form asp-action="AddContactPerson" method="post" class="row g-2 mb-3 pb-3 border-bottom">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="contactId" value="@Model.Id" />
+                                    <div class="col-md-4">
+                                        <input type="text" name="fullName" class="form-control form-control-sm" placeholder="Ad Soyad" required />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <input type="text" name="departmentOrRole" class="form-control form-control-sm" placeholder="Görevi (Muhasebe/Şef)" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="input-group input-group-sm">
+                                            <input type="text" name="phoneNumber" class="form-control" placeholder="05XX..." />
+                                            <button type="submit" class="btn btn-primary fw-bold">+</button>
+                                        </div>
+                                    </div>
+                                </form>
+
+                                @if (Model.Contacts != null && Model.Contacts.Any())
+                                {
+                                    <div class="list-group list-group-flush rounded-3 border mb-2">
+                                        @foreach (var cp in Model.Contacts)
+                                        {
+                                            <div class="list-group-item py-2 px-3 small d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <strong>@cp.FullName</strong>
+                                                    @if (!string.IsNullOrWhiteSpace(cp.DepartmentOrRole))
+                                                    {
+                                                        <span class="badge bg-light text-dark border ms-1">@cp.DepartmentOrRole</span>
+                                                    }
+                                                </div>
+                                                <span class="fw-semibold text-primary"><i class="bi bi-telephone me-1"></i>@cp.PhoneNumber</span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="text-muted small text-center py-2">Ek irtibat kişisi eklenmemiş.</div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. SEKME: KURUMSAL KÜNYE, ADRES, VERGİ, IBAN VE GEÇMİŞ TECRÜBE NOTU -->
+                <div class="tab-pane fade" id="tabProfile" role="tabpanel">
+                    <form asp-action="UpdateContact" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <div class="row g-3">
+                            <div class="col-md-5">
+                                <label class="form-label small fw-bold">Firma / Ekip Adı <span class="text-danger">*</span></label>
+                                <input type="text" name="name" class="form-control form-control-sm rounded-3" value="@Model.Name" required />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Kategori</label>
+                                <select name="contactType" class="form-select form-select-sm rounded-3">
+                                    <option value="1" selected="@(Model.ContactType == 1 ? "selected" : null)">Usta / Mavi Yaka</option>
+                                    <option value="2" selected="@(Model.ContactType == 2 ? "selected" : null)">Taşeron Firma</option>
+                                    <option value="3" selected="@(Model.ContactType == 3 ? "selected" : null)">Malzeme Tedarikçisi</option>
+                                    <option value="4" selected="@(Model.ContactType == 4 ? "selected" : null)">Mimar & Mühendis (Teknik)</option>
+                                    <option value="5" selected="@(Model.ContactType == 5 ? "selected" : null)">Makine & Ekipman Kiralama</option>
+                                    <option value="6" selected="@(Model.ContactType == 6 ? "selected" : null)">Kurum / Belediye</option>
+                                    <option value="7" selected="@(Model.ContactType == 7 ? "selected" : null)">Müşteri / Kat Maliki</option>
+                                    <option value="8" selected="@(Model.ContactType == 8 ? "selected" : null)">Test Laboratuvarı / OSGB</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Branş / Uzmanlık Etiketleri</label>
+                                <input type="text" name="tags" class="form-control form-control-sm rounded-3" value="@Model.Tags" placeholder="Örn: Kalıp, Demir, Hazır Beton, Karot" />
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Ana Telefon</label>
+                                <input type="text" name="phoneNumber" class="form-control form-control-sm rounded-3" value="@Model.PhoneNumber" required />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Sabit Hat / İkinci Tel</label>
+                                <input type="text" name="landlinePhone" class="form-control form-control-sm rounded-3" value="@Model.LandlinePhone" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Yetkili Kişi Adı Soyadı</label>
+                                <input type="text" name="authorizedPerson" class="form-control form-control-sm rounded-3" value="@Model.AuthorizedPerson" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Yetkili Unvanı</label>
+                                <input type="text" name="authorizedPersonRole" class="form-control form-control-sm rounded-3" value="@Model.AuthorizedPersonRole" />
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Vergi Dairesi</label>
+                                <input type="text" name="taxOffice" class="form-control form-control-sm rounded-3" value="@Model.TaxOffice" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Vergi Numarası (VKN/TCKN)</label>
+                                <input type="text" name="taxNumber" class="form-control form-control-sm rounded-3" value="@Model.TaxNumber" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Banka IBAN Numarası</label>
+                                <input type="text" name="iban" class="form-control form-control-sm rounded-3" value="@Model.Iban" placeholder="TR..." />
+                            </div>
+
+                            <div class="col-md-2">
+                                <label class="form-label small fw-bold">İl</label>
+                                <input type="text" name="city" class="form-control form-control-sm rounded-3" value="@Model.City" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small fw-bold">İlçe</label>
+                                <input type="text" name="district" class="form-control form-control-sm rounded-3" value="@Model.District" />
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label small fw-bold">Merkez Açık Adresi</label>
+                                <input type="text" name="address" class="form-control form-control-sm rounded-3" value="@Model.Address" />
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label small fw-bold text-primary">
+                                    <i class="bi bi-journal-bookmark-fill me-1"></i>Kurumsal Hafıza & Geçmiş Çalışma Notları (İşçilik Kalitesi, Fiyat Politikası, Referans Notu)
+                                </label>
+                                <textarea name="notes" class="form-control form-control-sm rounded-3" rows="3" placeholder="Örn: 2024'te Kadıköy şantiyesinde kalıp işini yaptı, işçiliği temizdir. Veya: Henüz çalışmadık ama fiyat teklifleri uygun, bir sonraki projede değerlendirilecek.">@Model.Notes</textarea>
+                            </div>
+
+                            <div class="col-12 text-end">
+                                <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
+                                    <i class="bi bi-save me-1"></i>Firma Künyesini ve Hafıza Notlarını Güncelle
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL 1: İŞ / FATURA / VERESİYE ALIM EKLE (VERECEK) -->
+<div class="modal fade" id="addDebtModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form asp-action="AddQuickLedgerEntry" method="post" class="modal-content rounded-4 border-0 shadow">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="contactId" value="@Model.Id" />
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold"><i class="bi bi-receipt text-danger me-2"></i>İş, Fatura veya Veresiye Alım İşle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">İşlem Türü</label>
+                    <select name="entryKind" class="form-select">
+                        <option value="invoice">🧾 Resmi Fatura / Hakediş Alımı</option>
+                        <option value="open">📝 Şantiye Açık Hesap / Veresiye Alım</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">İlgili Şantiye / Proje (Varsa)</label>
+                    <select name="projectId" class="form-select">
+                        <option value="">-- Genel Merkez / Projeden Bağımsız --</option>
+                        @foreach (var p in projects)
+                        {
+                            <option value="@p.Id">@p.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Tutar (₺) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.01" name="amount" class="form-control fw-bold" required placeholder="Örn: 125000" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Fatura / İrsaliye No (İsteğe Bağlı)</label>
+                    <input type="text" name="referenceNo" class="form-control" placeholder="Örn: FT-2026-0041" />
+                </div>
+                <div class="mb-0">
+                    <label class="form-label small fw-bold">Açıklama <span class="text-danger">*</span></label>
+                    <textarea name="description" class="form-control" rows="2" required placeholder="Örn: C30 Hazır Beton dökümü veya 1. Kat kalıp işçiliği..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">Cariye Borç (Verecek) Olarak İşle</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL 2: ÖDEME ÇIK (KASA / BANKA / ÇEK) -->
+<div class="modal fade" id="addPaymentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form asp-action="AddQuickLedgerEntry" method="post" class="modal-content rounded-4 border-0 shadow">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="contactId" value="@Model.Id" />
+            <input type="hidden" name="entryKind" value="payment" />
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-cash-coin me-2"></i>Firmaya Ödeme Çık (Kasa / Banka / Çek)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">İlgili Şantiye / Proje (Varsa)</label>
+                    <select name="projectId" class="form-select">
+                        <option value="">-- Genel Merkez / Cariye Mahsuben --</option>
+                        @foreach (var p in projects)
+                        {
+                            <option value="@p.Id">@p.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Ödeme Yöntemi</label>
+                    <select name="paymentMethod" class="form-select">
+                        <option value="BankTransfer">🏦 Banka Havalesi / EFT</option>
+                        <option value="Cash">💵 Merkez Kasa (Nakit)</option>
+                        <option value="Check">🎫 Vadeli Çek / Senet</option>
+                        <option value="CreditCard">💳 Şirket Kredi Kartı</option>
+                    </select>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Ödenen Tutar (₺) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" name="amount" class="form-control fw-bold border-success" required placeholder="Örn: 50000" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Çek / Senet Vadesi (Varsa)</label>
+                        <input type="date" name="dueDate" class="form-control" />
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Dekont / Çek Seri No</label>
+                    <input type="text" name="referenceNo" class="form-control" placeholder="Örn: Çek No 849201" />
+                </div>
+                <div class="mb-0">
+                    <label class="form-label small fw-bold">Ödeme Açıklaması <span class="text-danger">*</span></label>
+                    <textarea name="description" class="form-control" rows="2" required placeholder="Örn: 1. Hakediş mahsuben banka ödemesi..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold">Ödemeyi Kaydet ve Bakiyeden Düş</button>
+            </div>
+        </form>
+    </div>
+</div>

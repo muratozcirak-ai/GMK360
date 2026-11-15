@@ -445,5 +445,133 @@ namespace GMK360.Web.Services
             await _context.SaveChangesAsync();
             return agendaRecord;
         }
+
+        // =================================================================================
+        // TEDARİKÇİ ANLAŞMA (ÇERÇEVE SÖZLEŞME), BİRİM FİYAT HAVUZU & KARMA ÖDEME PLANI
+        // =================================================================================
+
+        public async Task<SupplierCurrentAccount> EnsureSupplierCurrentAccountOnlyAsync(int agencyId, int phonebookContactId)
+        {
+            var account = await _context.SupplierCurrentAccounts
+                .Include(a => a.Transactions)
+                .Include(a => a.Payments)
+                .FirstOrDefaultAsync(a => a.AgencyId == agencyId && a.PhonebookContactId == phonebookContactId);
+
+            if (account == null)
+            {
+                account = new SupplierCurrentAccount
+                {
+                    AgencyId = agencyId,
+                    PhonebookContactId = phonebookContactId,
+                    CurrentBalance = 0
+                };
+                _context.SupplierCurrentAccounts.Add(account);
+                await _context.SaveChangesAsync();
+            }
+            return account;
+        }
+
+        private string GetSupplierContractsFilePath(int agencyId)
+        {
+            var folder = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot", "uploads", $"Agency_{agencyId}");
+            if (!System.IO.Directory.Exists(folder)) System.IO.Directory.CreateDirectory(folder);
+            return System.IO.Path.Combine(folder, "supplier_contracts.json");
+        }
+
+        public System.Collections.Generic.List<SupplierContractPackageDto> LoadAgencySupplierContracts(int agencyId)
+        {
+            try
+            {
+                var path = GetSupplierContractsFilePath(agencyId);
+                if (System.IO.File.Exists(path))
+                {
+                    var json = System.IO.File.ReadAllText(path, System.Text.Encoding.UTF8);
+                    var list = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<SupplierContractPackageDto>>(json);
+                    if (list != null) return list;
+                }
+            }
+            catch { }
+            return new System.Collections.Generic.List<SupplierContractPackageDto>();
+        }
+
+        public void SaveAgencySupplierContracts(int agencyId, System.Collections.Generic.List<SupplierContractPackageDto> list)
+        {
+            try
+            {
+                var path = GetSupplierContractsFilePath(agencyId);
+                var json = System.Text.Json.JsonSerializer.Serialize(list, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                System.IO.File.WriteAllText(path, json, System.Text.Encoding.UTF8);
+            }
+            catch { }
+        }
+    }
+
+    public class SupplierContractPackageDto
+    {
+        public string ContractId { get; set; } = Guid.NewGuid().ToString("N").Substring(0, 8);
+        public int AgencyId { get; set; }
+        public int SupplierCurrentAccountId { get; set; }
+        public int PhonebookContactId { get; set; }
+        public string SupplierName { get; set; } = "";
+        public int? ProjectId { get; set; }
+        public string ProjectName { get; set; } = "";
+        public int? QuoteRequestId { get; set; }
+        public int? InviteId { get; set; }
+        public string Title { get; set; } = "";
+        public string PackageTitle
+        {
+            get => !string.IsNullOrEmpty(_packageTitle) ? _packageTitle : Title;
+            set { _packageTitle = value; Title = value; }
+        }
+        private string _packageTitle = "";
+        public decimal TotalAgreedAmount { get; set; }
+        public decimal OrderedTotalAmount { get; set; }
+        public decimal RemainingExpectedAmount => Math.Max(0, TotalAgreedAmount - OrderedTotalAmount);
+        public decimal RemainingUnorderedAmount => Math.Max(0, TotalAgreedAmount - OrderedTotalAmount);
+        public bool IsVatIncluded { get; set; }
+        public string ContractTermsNote { get; set; } = "";
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime ApprovedAt { get; set; } = DateTime.UtcNow;
+        public System.Collections.Generic.List<SupplierContractItemDto> Items { get; set; } = new System.Collections.Generic.List<SupplierContractItemDto>();
+        public System.Collections.Generic.List<SupplierPaymentSliceDto> PaymentSlices { get; set; } = new System.Collections.Generic.List<SupplierPaymentSliceDto>();
+    }
+
+    public class SupplierContractItemDto
+    {
+        public int ItemIndex { get; set; }
+        public int MaterialCatalogId { get; set; }
+        public string MaterialName { get; set; } = "";
+        public string Unit { get; set; } = "Adet";
+        public decimal AgreedQuantity { get; set; }
+        public decimal OrderedQuantity { get; set; }
+        public decimal RemainingQuantity => Math.Max(0, AgreedQuantity - OrderedQuantity);
+        public decimal AgreedUnitPrice { get; set; }
+        public decimal RowTotal => Math.Round(AgreedQuantity * AgreedUnitPrice, 2);
+    }
+
+    public class SupplierPaymentSliceDto
+    {
+        public string SliceId { get; set; } = Guid.NewGuid().ToString("N").Substring(0, 8);
+        public string Title { get; set; } = "Anlaşma Ödeme Dilimi";
+        public string Channel { get; set; } = "Faturalı (Banka/Havale)";
+        public string PaymentChannel
+        {
+            get => !string.IsNullOrEmpty(_paymentChannel) ? _paymentChannel : Channel;
+            set { _paymentChannel = value; Channel = value; }
+        }
+        private string _paymentChannel = "Faturalı (Banka/Havale)";
+        public decimal Amount { get; set; }
+        public DateTime? DueDate { get; set; }
+        public string DocumentRef { get; set; } = "";
+        public string CheckOrReferenceNo
+        {
+            get => !string.IsNullOrEmpty(_checkRef) ? _checkRef : DocumentRef;
+            set { _checkRef = value; DocumentRef = value; }
+        }
+        private string _checkRef = "";
+        public string BankName { get; set; } = "";
+        public string Notes { get; set; } = "";
+        public string Status { get; set; } = "Bekliyor (Planlandı)";
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

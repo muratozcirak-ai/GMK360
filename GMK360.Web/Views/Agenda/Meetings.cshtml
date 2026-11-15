@@ -5,7 +5,9 @@
 
     var projects = ViewBag.Projects as List<GMK360.Core.Entities.Construction.ConstructionProject> ?? new List<GMK360.Core.Entities.Construction.ConstructionProject>();
     int? selectedProjectId = ViewBag.SelectedProjectId as int?;
-    byte? selectedStatusId = ViewBag.SelectedStatusId as byte?;
+    byte selectedStatusId = (ViewBag.SelectedStatusId as byte?) ?? GMK360.Core.Entities.Construction.AgendaConstants.StatusPlanlandi;
+    byte? selectedRecordTypeId = ViewBag.SelectedRecordTypeId as byte?;
+    var phonebooks = ViewBag.Phonebook as List<GMK360.Core.Entities.Construction.AgencyPhonebook> ?? new List<GMK360.Core.Entities.Construction.AgencyPhonebook>();
 
     var allList = Model?.ToList() ?? new List<GMK360.Core.Entities.Construction.AgendaRecord>();
     var today = DateTime.Today;
@@ -16,9 +18,12 @@
         .ThenBy(x => x.EventDate)
         .ToList();
 
-    int todayCount = allList.Count(x => x.EventDate.Date == today && x.StatusId != GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi);
-    int upcomingCount = allList.Count(x => x.EventDate.Date > today && x.StatusId != GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi);
-    int completedCount = allList.Count(x => x.StatusId == GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi);
+    int overdueCount = (ViewBag.OverdueCount as int?) ?? allList.Count(x => x.EventDate.Date < today && x.StatusId != GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi);
+    int todayCount = (ViewBag.TodayCount as int?) ?? allList.Count(x => x.EventDate.Date == today && x.StatusId != GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi);
+    int upcomingCount = (ViewBag.UpcomingCount as int?) ?? allList.Count(x => x.EventDate.Date > today && x.StatusId != GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi);
+    int completedCount = (ViewBag.CompletedCount as int?) ?? allList.Count(x => x.StatusId == GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi);
+    int activeTotalCount = (ViewBag.ActiveTotalCount as int?) ?? (overdueCount + todayCount + upcomingCount);
+    bool isArchiveView = selectedStatusId == GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi;
 }
 
 <div class="container-fluid py-2 px-2 px-md-3">
@@ -30,8 +35,14 @@
                 <i class="bi bi-people-fill text-warning fs-5"></i>
             </span>
             <div>
-                <h5 class="fw-bold text-dark mb-0 fs-6 fs-md-5">Toplantı & Karar Masası</h5>
+                <h5 class="fw-bold text-dark mb-0 fs-6 fs-md-5">Toplantı, Şirket İçi Yazışma & Dijital Evrak Çantası</h5>
                 <div class="d-flex align-items-center gap-1 mt-1 flex-wrap" style="font-size: 0.72rem;">
+                    @if (overdueCount > 0)
+                    {
+                        <span class="badge bg-danger text-white px-2 py-0 rounded-pill">
+                            ⚠️ Gidilemedi / Bekleyen: <b>@overdueCount</b>
+                        </span>
+                    }
                     <span class="badge @(todayCount > 0 ? "bg-danger text-white" : "bg-light text-muted border") px-2 py-0 rounded-pill">
                         🔴 Bugün: <b>@todayCount</b>
                     </span>
@@ -39,17 +50,25 @@
                         🟡 Planlı: <b>@upcomingCount</b>
                     </span>
                     <span class="badge bg-success bg-opacity-15 text-success border border-success px-2 py-0 rounded-pill">
-                        🟢 Karara Bağlanan: <b>@completedCount</b>
+                        🗄️ Arşivde (Karara Bağlanan): <b>@completedCount</b>
                     </span>
                 </div>
             </div>
         </div>
 
-        <div class="d-flex align-items-center gap-2">
-            <a href="/Agenda/Create" class="btn btn-warning text-dark border border-warning rounded-pill px-3 py-1 fw-bold shadow-xs btn-sm d-flex align-items-center gap-1" style="font-size: 0.82rem;">
+        <div class="d-flex align-items-center gap-1.5 flex-wrap">
+            <button type="button" class="btn btn-outline-dark rounded-pill px-2.5 py-1 fw-bold shadow-xs btn-sm d-flex align-items-center gap-1" style="font-size: 0.78rem;" onclick="openQuickAgendaModal(4)">
+                <i class="bi bi-chat-left-text-fill text-primary"></i>
+                <span>+ Şirket İçi Yazışma / İş Planım</span>
+            </button>
+            <button type="button" class="btn btn-outline-danger rounded-pill px-2.5 py-1 fw-bold shadow-xs btn-sm d-flex align-items-center gap-1" style="font-size: 0.78rem;" onclick="openQuickAgendaModal(5)">
+                <i class="bi bi-briefcase-fill"></i>
+                <span>+ Dış Firma / Kurum Ziyareti (Çanta)</span>
+            </button>
+            <button type="button" class="btn btn-warning text-dark border border-warning rounded-pill px-3 py-1 fw-bold shadow-xs btn-sm d-flex align-items-center gap-1" style="font-size: 0.80rem;" onclick="openQuickAgendaModal(1)">
                 <i class="bi bi-plus-circle-fill"></i>
-                <span>+ Yeni Toplantı Başlat</span>
-            </a>
+                <span>+ Yeni Toplantı / Başlık Aç</span>
+            </button>
         </div>
     </div>
 
@@ -60,6 +79,30 @@
             <button type="button" class="btn-close py-2" data-bs-dismiss="alert" aria-label="Kapat"></button>
         </div>
     }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-3 shadow-xs py-2 px-3 mb-2 small" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close py-2" data-bs-dismiss="alert" aria-label="Kapat"></button>
+        </div>
+    }
+
+    <!-- AÇIK BAŞLIKLAR VS ARŞİV HIZLI GEÇİŞ SEKMELERİ -->
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+        <div class="d-flex gap-1.5 flex-wrap">
+            <a href="/Agenda/Meetings?statusId=@GMK360.Core.Entities.Construction.AgendaConstants.StatusPlanlandi@(selectedProjectId.HasValue ? $"&projectId={selectedProjectId}" : "")@(selectedRecordTypeId.HasValue ? $"&recordTypeId={selectedRecordTypeId}" : "")"
+               class="btn btn-sm rounded-pill px-3 py-1 fw-bold @(selectedStatusId == GMK360.Core.Entities.Construction.AgendaConstants.StatusPlanlandi ? "btn-primary shadow-xs" : "btn-light border text-dark")" style="font-size: 0.78rem;">
+                <i class="bi bi-broadcast me-1"></i>Açık Başlıklar & Devam Edenler (@activeTotalCount)
+            </a>
+            <a href="/Agenda/Meetings?statusId=@GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi@(selectedProjectId.HasValue ? $"&projectId={selectedProjectId}" : "")@(selectedRecordTypeId.HasValue ? $"&recordTypeId={selectedRecordTypeId}" : "")"
+               class="btn btn-sm rounded-pill px-3 py-1 fw-bold @(isArchiveView ? "btn-success text-white shadow-xs" : "btn-light border text-dark")" style="font-size: 0.78rem;">
+                <i class="bi bi-archive-fill me-1"></i>Arşiv / Karara Bağlananlar (@completedCount)
+            </a>
+        </div>
+        <small class="text-muted" style="font-size: 0.73rem;">
+            <i class="bi bi-info-circle text-primary me-1"></i><strong>Kural:</strong> Konular <b>"Toplantı Bitti / Karara Bağla"</b> denilene kadar açık başlık olarak kalır; karara bağlandığı an aktif ekrandan düşer ve <b>Arşivde</b> saklanır.
+        </small>
+    </div>
 
     <!-- TEK VE KİBAR DİV: FİLTRE + MASTER AJANDA ÇİZELGESİ -->
     <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden mb-3">
@@ -67,11 +110,24 @@
         <!-- FİLTRE ŞERİDİ (TEK SATIR KOMPAKT) -->
         <div class="card-header bg-light bg-opacity-75 py-2 px-3 border-bottom">
             <form method="get" action="/Agenda/Meetings" class="row g-2 align-items-center">
-                <div class="col-md-5 col-12">
+                <div class="col-md-4 col-12">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-tag text-primary"></i></span>
+                        <select name="recordTypeId" class="form-select border-start-0 fw-semibold" onchange="this.form.submit()" style="font-size: 0.80rem;">
+                            <option value="">Tüm Kayıt Türleri (Toplantı, İç Yazışma & Ziyaret)</option>
+                            <option value="4" selected="@(selectedRecordTypeId == 4)">💬 Şirket İçi Yazışma / Ortak & İş Planım</option>
+                            <option value="5" selected="@(selectedRecordTypeId == 5)">🎒 Dış Firma Ziyareti / Resmi Kurum & Maliye</option>
+                            <option value="1" selected="@(selectedRecordTypeId == 1)">🤝 Arsa Sahibi / Temsilci / Müşteri Toplantısı</option>
+                            <option value="2" selected="@(selectedRecordTypeId == 2)">🛠️ Taşeron / Teknik & Saha Konusu</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="col-md-4 col-12">
                     <div class="input-group input-group-sm">
                         <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-buildings text-primary"></i></span>
                         <select name="projectId" class="form-select border-start-0 fw-semibold" onchange="this.form.submit()" style="font-size: 0.80rem;">
-                            <option value="">Tüm Projeler & Şantiyeler (@projects.Count)</option>
+                            <option value="">Tüm Projeler & Kişisel Ajandam (@projects.Count Proje)</option>
                             @foreach (var p in projects)
                             {
                                 <option value="@p.Id" selected="@(selectedProjectId == p.Id)">@p.Name</option>
@@ -80,22 +136,22 @@
                     </div>
                 </div>
 
-                <div class="col-md-5 col-8">
+                <div class="col-md-3 col-8">
                     <div class="input-group input-group-sm">
                         <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-funnel text-warning"></i></span>
                         <select name="statusId" class="form-select border-start-0" onchange="this.form.submit()" style="font-size: 0.80rem;">
-                            <option value="">Tüm Durumlar (Canlı, Planlı & Tamamlanan)</option>
-                            <option value="@GMK360.Core.Entities.Construction.AgendaConstants.StatusPlanlandi" selected="@(selectedStatusId == GMK360.Core.Entities.Construction.AgendaConstants.StatusPlanlandi)">Devam Eden / Planlananlar</option>
-                            <option value="@GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi" selected="@(selectedStatusId == GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi)">Karara Bağlananlar</option>
+                            <option value="@GMK360.Core.Entities.Construction.AgendaConstants.StatusPlanlandi" selected="@(selectedStatusId == GMK360.Core.Entities.Construction.AgendaConstants.StatusPlanlandi)">🟢 Açık Başlıklar (Aktif Ekran)</option>
+                            <option value="@GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi" selected="@(selectedStatusId == GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi)">🗄️ Arşiv (Karara Bağlananlar)</option>
+                            <option value="99" selected="@(selectedStatusId == 99)">📋 Tümünü Birlikte Göster</option>
                         </select>
                     </div>
                 </div>
 
-                <div class="col-md-2 col-4 text-end">
-                    @if (selectedProjectId.HasValue || selectedStatusId.HasValue)
+                <div class="col-md-1 col-4 text-end">
+                    @if (selectedProjectId.HasValue || selectedRecordTypeId.HasValue || selectedStatusId != GMK360.Core.Entities.Construction.AgendaConstants.StatusPlanlandi)
                     {
                         <a href="/Agenda/Meetings" class="btn btn-outline-secondary btn-sm rounded-pill px-2 py-0 text-nowrap" style="font-size: 0.72rem;">
-                            <i class="bi bi-x-circle me-1"></i>Temizle
+                            <i class="bi bi-x-circle me-1"></i>Sıfırla
                         </a>
                     }
                 </div>
@@ -105,12 +161,20 @@
         @if (!sortedList.Any())
         {
             <div class="p-4 text-center text-muted">
-                <i class="bi bi-calendar-check fs-2 d-block mb-1 text-muted"></i>
-                <span class="small fw-semibold">Kayıtlı toplantı bulunmuyor.</span>
-                <div class="mt-2">
-                    <a href="/Agenda/Create" class="btn btn-primary rounded-pill px-3 py-1 btn-sm fw-bold">
-                        <i class="bi bi-plus-circle me-1"></i>İlk Toplantıyı Başlat
-                    </a>
+                <i class="bi @(isArchiveView ? "bi-archive" : "bi-calendar-check") fs-2 d-block mb-1 text-muted"></i>
+                <span class="small fw-semibold">
+                    @(isArchiveView ? "Henüz karara bağlanıp arşive kaldırılmış bir toplantı veya yazışma bulunmuyor." : "Şu an açık bir toplantı, şirket içi yazışma veya dış görüşme başlığı bulunmuyor.")
+                </span>
+                <div class="mt-2 d-flex justify-content-center gap-2 flex-wrap">
+                    <button type="button" class="btn btn-outline-dark rounded-pill px-3 py-1 btn-sm fw-bold" onclick="openQuickAgendaModal(4)">
+                        <i class="bi bi-chat-left-text me-1"></i>+ Şirket İçi Yazışma / İş Planı Aç
+                    </button>
+                    <button type="button" class="btn btn-outline-danger rounded-pill px-3 py-1 btn-sm fw-bold" onclick="openQuickAgendaModal(5)">
+                        <i class="bi bi-briefcase me-1"></i>+ Dış Firma / Kurum Ziyareti Hazırla
+                    </button>
+                    <button type="button" class="btn btn-primary rounded-pill px-3 py-1 btn-sm fw-bold" onclick="openQuickAgendaModal(1)">
+                        <i class="bi bi-plus-circle me-1"></i>+ Yeni Toplantı Başlat
+                    </button>
                 </div>
             </div>
         }
@@ -120,26 +184,37 @@
             <div class="table-responsive d-none d-md-block">
                 <table class="table table-hover align-middle mb-0" style="font-size: 0.82rem;">
                     <thead class="table-light text-secondary border-bottom">
-                        <tr style="font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.3px;">
-                            <th class="py-2 ps-3" style="width: 140px;">Tarih / Sıra</th>
-                            <th class="py-2" style="width: 180px;">Şantiye (Proje)</th>
-                            <th class="py-2" style="width: 200px;">Muhatap (Kiminle?)</th>
-                            <th class="py-2">Gündem / Müzakere Konusu</th>
-                            <th class="py-2 text-center" style="width: 80px;">Konular</th>
-                            <th class="py-2 text-center" style="width: 130px;">Durum</th>
-                            <th class="py-2 text-end pe-3" style="width: 240px;">İşlemler</th>
+                        <tr style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.3px;">
+                            <th class="py-2 ps-3" style="width: 155px;">Tarih & Saat</th>
+                            <th class="py-2" style="width: 195px;">Tür & Kapsam</th>
+                            <th class="py-2" style="width: 175px;">Muhatap / Kurum</th>
+                            <th class="py-2">Konu, İş Planı & Sonuç Notu</th>
+                            <th class="py-2 text-center" style="width: 135px;">Durum</th>
+                            <th class="py-2 text-end pe-3" style="width: 280px;">İşlemler</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var m in sortedList)
                         {
-                            bool isToday = m.EventDate.Date == today && m.StatusId != GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi;
                             bool isDone = m.StatusId == GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi;
+                            bool isToday = m.EventDate.Date == today && !isDone;
+                            bool isOverdue = m.EventDate.Date < today && !isDone;
                             var pToken = m.Participants?.FirstOrDefault(p => !string.IsNullOrEmpty(p.AccessToken))?.AccessToken;
                             var guestUrl = !string.IsNullOrEmpty(pToken) ? $"{Context.Request.Scheme}://{Context.Request.Host}/Agenda/Guest?token={pToken}" : "";
 
                             string rowClass = isToday ? "table-warning bg-warning bg-opacity-10 border-start border-4 border-danger" :
+                                              isOverdue ? "border-start border-4 border-warning bg-warning bg-opacity-10" :
                                               isDone ? "table-light text-muted opacity-75" : "";
+
+                            string typeBadgeHtml = m.RecordTypeId == 5
+                                ? "<span class='badge bg-danger bg-opacity-10 text-danger border border-danger-subtle px-2 py-0.5 rounded-pill fw-bold' style='font-size:0.70rem;'>🏛️ Resmi Kurum / Maliye</span>"
+                                : m.RecordTypeId == 4
+                                ? "<span class='badge bg-dark bg-opacity-10 text-dark border border-secondary-subtle px-2 py-0.5 rounded-pill fw-bold' style='font-size:0.70rem;'>📌 İş Planım / Ortak</span>"
+                                : m.RecordTypeId == 2
+                                ? "<span class='badge bg-info bg-opacity-10 text-dark border border-info px-2 py-0.5 rounded-pill fw-bold' style='font-size:0.70rem;'>🛠️ Taşeron / Teknik</span>"
+                                : m.RecordTypeId == 3
+                                ? "<span class='badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-0.5 rounded-pill fw-bold' style='font-size:0.70rem;'>🚨 Saha / Vukuat</span>"
+                                : "<span class='badge bg-primary bg-opacity-10 text-primary border border-primary-subtle px-2 py-0.5 rounded-pill fw-bold' style='font-size:0.70rem;'>🤝 Toplantı / Malik</span>";
 
                             <tr class="@rowClass">
                                 <!-- TARİH / SAAT -->
@@ -150,31 +225,37 @@
                                             <span class="spinner-grow spinner-grow-sm text-danger" style="width: 8px; height: 8px;"></span>
                                             <span>BUGÜN @m.EventDate.ToString("HH:mm")</span>
                                         </div>
-                                        <small class="text-danger fw-semibold" style="font-size: 0.68rem;">Sıradaki Oturum</small>
+                                        <small class="text-danger fw-semibold" style="font-size: 0.68rem;">Bugünkü Plan</small>
+                                    }
+                                    else if (isOverdue)
+                                    {
+                                        <div class="fw-bold text-danger">@m.EventDate.ToString("dd.MM.yyyy") — @m.EventDate.ToString("HH:mm")</div>
+                                        <span class="badge bg-danger text-white rounded-pill px-2 py-0" style="font-size: 0.64rem;">⚠️ Gidilemedi / Bekliyor</span>
                                     }
                                     else if (m.EventDate.Date == today.AddDays(1) && !isDone)
                                     {
                                         <div class="fw-bold text-dark">YARIN @m.EventDate.ToString("HH:mm")</div>
-                                        <small class="text-muted" style="font-size: 0.68rem;">@m.EventDate.ToString("dd MMMM")</small>
+                                        <small class="text-muted" style="font-size: 0.68rem;">@m.EventDate.ToString("dd.MM.yyyy")</small>
                                     }
                                     else
                                     {
-                                        <div class="fw-bold text-dark">@m.EventDate.ToString("dd MMM yyyy")</div>
+                                        <div class="fw-bold text-dark">@m.EventDate.ToString("dd.MM.yyyy")</div>
                                         <small class="text-muted" style="font-size: 0.68rem;"><i class="bi bi-clock me-1"></i>@m.EventDate.ToString("dddd, HH:mm")</small>
                                     }
                                 </td>
 
-                                <!-- ŞANTİYE / PROJE -->
+                                <!-- TÜR & PROJE -->
                                 <td>
-                                    <span class="badge bg-light text-primary border border-primary border-opacity-50 px-2 py-1 rounded-pill fw-bold text-truncate d-inline-block" style="max-width: 170px;" title="@(m.Project?.Name ?? "Bağımsız")">
-                                        <i class="bi bi-building me-1"></i>@(m.Project?.Name ?? "Bağımsız Proje")
-                                    </span>
+                                    <div class="mb-0.5">@Html.Raw(typeBadgeHtml)</div>
+                                    <div class="text-truncate small text-muted fw-semibold" style="max-width: 185px; font-size: 0.72rem;" title="@(m.Project?.Name ?? "Kişisel / Şirket Genel")">
+                                        <i class="bi @(m.Project != null ? "bi-building text-primary" : "bi-person-workspace text-secondary") me-1"></i>@(m.Project?.Name ?? "Kişisel / Şirket Genel")
+                                    </div>
                                 </td>
 
                                 <!-- MUHATAP -->
                                 <td>
-                                    <div class="fw-bold text-dark text-truncate" style="max-width: 190px;" title="@(m.Phonebook?.Name ?? "Belirtilmedi")">
-                                        <i class="bi bi-person text-secondary me-1"></i>@(m.Phonebook?.Name ?? "Belirtilmedi")
+                                    <div class="fw-bold text-dark text-truncate" style="max-width: 170px;" title="@(m.Phonebook?.Name ?? (m.RecordTypeId == 5 ? "Resmi Kurum / Daire" : "Kişisel Plan / İç Görüşme"))">
+                                        <i class="bi @(m.RecordTypeId == 5 ? "bi-bank text-danger" : "bi-person text-secondary") me-1"></i>@(m.Phonebook?.Name ?? (m.RecordTypeId == 5 ? "Resmi Kurum / Daire" : "Kişisel Plan"))
                                     </div>
                                     @if (!string.IsNullOrWhiteSpace(m.Phonebook?.PhoneNumber))
                                     {
@@ -182,20 +263,21 @@
                                     }
                                 </td>
 
-                                <!-- GÜNDEM BAŞLIĞI -->
+                                <!-- GÜNDEM BAŞLIĞI & NOTLAR -->
                                 <td>
-                                    <div class="fw-bold text-dark text-truncate" style="max-width: 320px;" title="@m.Title">@m.Title</div>
+                                    <a href="/Agenda/MeetingRoom/@m.Id" class="fw-bold text-dark text-decoration-none d-block text-truncate" style="max-width: 360px;" title="@m.Title">
+                                        @m.Title
+                                    </a>
                                     @if (!string.IsNullOrWhiteSpace(m.Notes))
                                     {
-                                        <small class="text-secondary d-block text-truncate" style="max-width: 320px; font-size: 0.70rem;" title="@m.Notes">@m.Notes</small>
+                                        <small class="text-secondary d-block text-truncate" style="max-width: 360px; font-size: 0.71rem;" title="@m.Notes">@m.Notes</small>
                                     }
-                                </td>
-
-                                <!-- KONU SAYISI -->
-                                <td class="text-center">
-                                    <span class="badge bg-light text-dark border px-2 py-0 rounded-pill small">
-                                        <b>@(m.Items?.Count ?? 0)</b>
-                                    </span>
+                                    @if ((m.Items?.Count ?? 0) > 0)
+                                    {
+                                        <span class="badge bg-light text-secondary border px-1.5 py-0 rounded-pill" style="font-size: 0.65rem;">
+                                            <i class="bi bi-paperclip me-0.5"></i>@(m.Items?.Count ?? 0) Not / Evrak Satırı
+                                        </span>
+                                    }
                                 </td>
 
                                 <!-- DURUM -->
@@ -203,13 +285,19 @@
                                     @if (isToday)
                                     {
                                         <span class="badge bg-danger text-white px-2 py-1 rounded-pill fw-bold small">
-                                            🔴 Canlı / Sırada
+                                            🔴 Bugün Sırada
+                                        </span>
+                                    }
+                                    else if (isOverdue)
+                                    {
+                                        <span class="badge bg-warning text-dark border border-danger px-2 py-1 rounded-pill fw-bold small">
+                                            ⏳ Bekliyor (Ertele)
                                         </span>
                                     }
                                     else if (isDone)
                                     {
                                         <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 rounded-pill small fw-bold">
-                                            <i class="bi bi-check2-all me-1"></i>Karara Bağlandı
+                                            <i class="bi bi-check2-all me-1"></i>Sonuçlandı
                                         </span>
                                     }
                                     else
@@ -223,20 +311,30 @@
                                 <!-- AKSİYONLAR -->
                                 <td class="text-end pe-3">
                                     <div class="d-flex align-items-center justify-content-end gap-1">
-                                        <a href="/Agenda/MeetingRoom/@m.Id" class="btn btn-sm btn-primary rounded-pill px-3 py-1 fw-bold shadow-xs text-nowrap" style="font-size: 0.78rem;">
+                                        @if (!isDone)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-outline-warning text-dark border-warning rounded-pill px-2 py-0.5 fw-bold shadow-2xs text-nowrap" style="font-size: 0.73rem;"
+                                                    onclick="openRescheduleModal(@m.Id, '@Html.Raw((m.Title ?? "").Replace("'", "\\'"))', '@m.EventDate.ToString("yyyy-MM-dd")', '@m.EventDate.ToString("HH:mm")')"
+                                                    title="Gidilemediyse veya başka iş çıktıysa yeni tarihe ertele">
+                                                <i class="bi bi-calendar-plus me-0.5"></i>Ertele
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-2 py-0.5 fw-bold shadow-2xs text-nowrap" style="font-size: 0.73rem;"
+                                                    onclick="openQuickConcludeModal(@m.Id, '@Html.Raw((m.Title ?? "").Replace("'", "\\'"))')"
+                                                    title="Toplantıyı / yazışmayı karara bağla, aktif ekrandan düşürüp arşive kaldır">
+                                                <i class="bi bi-check2-circle me-0.5"></i>Toplantı Bitti / Karara Bağla
+                                            </button>
+                                        }
+
+                                        <a href="/Agenda/MeetingRoom/@m.Id" class="btn btn-sm btn-primary rounded-pill px-2.5 py-1 fw-bold shadow-xs text-nowrap" style="font-size: 0.75rem;" title="Alt konu açmak, evrak yüklemek veya yazışmak için masayı aç">
                                             <span>Masaya Gir ➔</span>
                                         </a>
 
                                         @if (!string.IsNullOrWhiteSpace(m.Phonebook?.PhoneNumber))
                                         {
-                                            <button type="button" class="btn btn-sm btn-outline-success rounded-circle p-1 d-flex align-items-center justify-content-center" style="width: 28px; height: 28px;" onclick="sendWhatsAppReminder('@m.Phonebook.PhoneNumber', '@m.Phonebook.Name', '@(m.Project?.Name ?? "GMK360")', '@m.Title', '@m.EventDate.ToString("dd.MM.yyyy HH:mm")', '@guestUrl')" title="WhatsApp ile Hatırlat">
-                                                <i class="bi bi-whatsapp"></i>
+                                            <button type="button" class="btn btn-sm btn-outline-success rounded-circle p-1 d-flex align-items-center justify-content-center" style="width: 26px; height: 26px;" onclick="sendWhatsAppReminder('@m.Phonebook.PhoneNumber', '@Html.Raw((m.Phonebook.Name ?? "").Replace("'", "\\'"))', '@Html.Raw((m.Project?.Name ?? "GMK360").Replace("'", "\\'"))', '@Html.Raw((m.Title ?? "").Replace("'", "\\'"))', '@m.EventDate.ToString("dd.MM.yyyy HH:mm")', '@guestUrl')" title="Karşı tarafa WhatsApp'tan Canlı Gündem & Evrak Çantası Bağlantısı Gönder">
+                                                <i class="bi bi-whatsapp" style="font-size: 0.75rem;"></i>
                                             </button>
                                         }
-
-                                        <button type="button" class="btn btn-sm btn-outline-secondary rounded-circle p-1 d-flex align-items-center justify-content-center" style="width: 28px; height: 28px;" onclick="openRescheduleModal(@m.Id, '@m.Title', '@m.EventDate.ToString("yyyy-MM-ddTHH:mm")')" title="Sonraki Devam Oturumunu Belirle">
-                                            <i class="bi bi-calendar-plus"></i>
-                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -250,45 +348,42 @@
                 <div class="d-flex flex-column gap-2">
                     @foreach (var m in sortedList)
                     {
-                        bool isToday = m.EventDate.Date == today && m.StatusId != GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi;
                         bool isDone = m.StatusId == GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi;
+                        bool isToday = m.EventDate.Date == today && !isDone;
+                        bool isOverdue = m.EventDate.Date < today && !isDone;
                         var pToken = m.Participants?.FirstOrDefault(p => !string.IsNullOrEmpty(p.AccessToken))?.AccessToken;
                         var guestUrl = !string.IsNullOrEmpty(pToken) ? $"{Context.Request.Scheme}://{Context.Request.Host}/Agenda/Guest?token={pToken}" : "";
 
-                        <div class="card border rounded-3 p-3 shadow-xs bg-white border-start border-4 @(isToday ? "border-danger bg-warning bg-opacity-10" : isDone ? "border-success opacity-75" : "border-warning")">
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <span class="badge @(isToday ? "bg-danger text-white" : isDone ? "bg-success text-white" : "bg-warning text-dark") px-2 py-0 rounded-pill small fw-bold">
-                                    @(isToday ? "🔴 BUGÜN " + m.EventDate.ToString("HH:mm") : m.EventDate.ToString("dd MMM HH:mm"))
+                        <div class="card border rounded-3 p-3 shadow-xs bg-white border-start border-4 @(isToday || isOverdue ? "border-danger bg-warning bg-opacity-10" : isDone ? "border-success opacity-75" : "border-warning")">
+                            <div class="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-1">
+                                <span class="badge @(isToday ? "bg-danger text-white" : isOverdue ? "bg-danger text-white" : isDone ? "bg-success text-white" : "bg-warning text-dark") px-2 py-0 rounded-pill small fw-bold">
+                                    @(isToday ? "🔴 BUGÜN " + m.EventDate.ToString("HH:mm") : isOverdue ? "⚠️ GECİKTİ: " + m.EventDate.ToString("dd.MM HH:mm") : m.EventDate.ToString("dd.MM.yyyy HH:mm"))
                                 </span>
                                 <span class="badge bg-light text-primary border border-primary px-2 py-0 rounded-pill small text-truncate" style="max-width: 140px;">
-                                    @(m.Project?.Name ?? "Bağımsız")
+                                    @(m.Project?.Name ?? "Kişisel / Genel")
                                 </span>
                             </div>
 
                             <h6 class="fw-bold text-dark mb-1 fs-6">@m.Title</h6>
 
-                            @if (m.Phonebook != null)
+                            @if (!string.IsNullOrWhiteSpace(m.Notes))
                             {
-                                <div class="small text-muted mb-2">
-                                    <i class="bi bi-person me-1"></i>Muhatap: <b class="text-dark">@m.Phonebook.Name</b>
-                                </div>
+                                <div class="small text-secondary mb-1 text-truncate">@m.Notes</div>
                             }
 
-                            <div class="d-flex align-items-center gap-1 mt-2 pt-2 border-top">
-                                <a href="/Agenda/MeetingRoom/@m.Id" class="btn btn-sm btn-primary rounded-pill px-3 py-1 fw-bold flex-fill" style="font-size: 0.80rem;">
-                                    <span>Müzakere Masasına Gir ➔</span>
-                                </a>
-
-                                @if (!string.IsNullOrWhiteSpace(m.Phonebook?.PhoneNumber))
+                            <div class="d-flex align-items-center gap-1 mt-2 pt-2 border-top flex-wrap">
+                                @if (!isDone)
                                 {
-                                    <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-2 py-1" onclick="sendWhatsAppReminder('@m.Phonebook.PhoneNumber', '@m.Phonebook.Name', '@(m.Project?.Name ?? "GMK360")', '@m.Title', '@m.EventDate.ToString("dd.MM.yyyy HH:mm")', '@guestUrl')" title="WhatsApp">
-                                        <i class="bi bi-whatsapp"></i>
+                                    <button type="button" class="btn btn-sm btn-outline-warning text-dark border-warning rounded-pill px-2.5 py-1 fw-bold" style="font-size: 0.75rem;" onclick="openRescheduleModal(@m.Id, '@Html.Raw((m.Title ?? "").Replace("'", "\\'"))', '@m.EventDate.ToString("yyyy-MM-dd")', '@m.EventDate.ToString("HH:mm")')">
+                                        <i class="bi bi-calendar-plus me-1"></i>Ertele
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-2.5 py-1 fw-bold" style="font-size: 0.75rem;" onclick="openQuickConcludeModal(@m.Id, '@Html.Raw((m.Title ?? "").Replace("'", "\\'"))')">
+                                        <i class="bi bi-check2-circle me-1"></i>Karara Bağla
                                     </button>
                                 }
-
-                                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-1" onclick="openRescheduleModal(@m.Id, '@m.Title', '@m.EventDate.ToString("yyyy-MM-ddTHH:mm")')" title="Devam Oturumu">
-                                    <i class="bi bi-calendar-plus"></i>
-                                </button>
+                                <a href="/Agenda/MeetingRoom/@m.Id" class="btn btn-sm btn-primary rounded-pill px-3 py-1 fw-bold flex-fill" style="font-size: 0.78rem;">
+                                    <span>Masaya Gir ➔</span>
+                                </a>
                             </div>
                         </div>
                     }
@@ -300,41 +395,219 @@
 
 </div>
 
-<!-- MODAL: SONRAKİ DEVAM OTURUMUNU BELİRLE -->
+<!-- MODAL 1: HIZLI TOPLANTI / ŞİRKET İÇİ YAZIŞMA / DIŞ ZİYARET EVRAK ÇANTASI AÇ -->
+<div class="modal fade" id="quickAgendaModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <form asp-action="QuickCreateAgendaRecord" asp-controller="Agenda" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="recordTypeId" id="inpQuickAgendaType" value="4" />
+
+                <div class="modal-header border-bottom py-2.5 bg-light">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-warning text-dark rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 34px; height: 34px;">
+                            <i class="bi bi-calendar-plus-fill fs-6"></i>
+                        </span>
+                        <div>
+                            <h6 class="modal-title fw-bold text-dark mb-0" id="lblQuickAgendaModalTitle">Yeni Toplantı, Şirket İçi Yazışma veya Dış Görüşme Çantası Aç</h6>
+                            <small class="text-muted" style="font-size: 0.74rem;">Siz <b>"Toplantı Bitti / Karara Bağla"</b> diyene kadar aktif ekranda açık başlık olarak kalır; karara bağlandığı an arşive kaldırılır.</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body p-3">
+                    <!-- KULLANICI DOSTU KISA REHBER KUTUSU -->
+                    <div class="p-2.5 rounded-3 mb-3 border border-primary border-opacity-25" style="background: #f0f7ff; font-size: 0.76rem;">
+                        <div class="fw-bold text-primary mb-1"><i class="bi bi-lightbulb-fill text-warning me-1"></i>Bu Pencereyi Hangi Amaçlarla Kullanabilirsiniz?</div>
+                        <div class="text-dark">
+                            • <strong>🎒 Dış Firma / Kurum Ziyareti (Dijital Çanta):</strong> Başka bir firmaya veya kuruma giderken anlatacağınız konu başlıklarını ve gerekli belgeleri buraya yükleyin; hem çantanızda/telefonunuzda hazır olur hem de hiçbir konuyu unutmazsınız.<br />
+                            • <strong>💬 Şirket İçi Yazışma & Toplantı:</strong> Ortağınızla, ekibinizle veya arsa sahipleriyle konu açıp içinde alt başlıklar ve belgeler paylaşın. Karara bağlandığında aktif ekrandan düşer ama <strong>Arşivde</strong> hep saklanır.
+                        </div>
+                    </div>
+
+                    <!-- 1. KAYIT NİTELİĞİ SEÇİMİ (TEK TIK) -->
+                    <label class="form-label small fw-bold text-muted mb-1" style="font-size: 0.74rem;">1. Kullanım Amacını / Türünü Seçin</label>
+                    <div class="row g-1.5 mb-3">
+                        <div class="col-md-3 col-6">
+                            <button type="button" class="btn btn-sm w-100 rounded-3 py-1.5 px-2 fw-bold text-start border agenda-type-btn" id="btnType4" onclick="selectQuickAgendaType(4)" style="font-size: 0.75rem;">
+                                💬 Şirket İçi Yazışma<br><small class="fw-normal text-muted" style="font-size: 0.66rem;">Ortak, personel & iş planım</small>
+                            </button>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <button type="button" class="btn btn-sm w-100 rounded-3 py-1.5 px-2 fw-bold text-start border agenda-type-btn" id="btnType5" onclick="selectQuickAgendaType(5)" style="font-size: 0.75rem;">
+                                🎒 Dış Firma / Kurum<br><small class="fw-normal text-muted" style="font-size: 0.66rem;">Ziyaret başlıkları & çanta</small>
+                            </button>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <button type="button" class="btn btn-sm w-100 rounded-3 py-1.5 px-2 fw-bold text-start border agenda-type-btn" id="btnType1" onclick="selectQuickAgendaType(1)" style="font-size: 0.75rem;">
+                                🤝 Arsa Sahibi / Malik<br><small class="fw-normal text-muted" style="font-size: 0.66rem;">Bina & sözleşme toplantısı</small>
+                            </button>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <button type="button" class="btn btn-sm w-100 rounded-3 py-1.5 px-2 fw-bold text-start border agenda-type-btn" id="btnType2" onclick="selectQuickAgendaType(2)" style="font-size: 0.75rem;">
+                                🛠️ Şantiye / Taşeron<br><small class="fw-normal text-muted" style="font-size: 0.66rem;">Usta, imalat & saha konusu</small>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row g-2">
+                        <!-- KONU / BAŞLIK -->
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-dark mb-1" style="font-size: 0.76rem;">Ana Başlık (Görüşme / Yazışma Konusu) <span class="text-danger">*</span></label>
+                            <input type="text" name="title" id="inpQuickAgendaTitle" class="form-control form-control-sm rounded-3 fw-bold" placeholder="Örn: Yarın ortakla arsa payını görüş / Belediye imar ziyareti" required />
+                        </div>
+
+                        <!-- TARİH VE SAAT AYRI İKİ INPUT (ALTIN KURAL 8) -->
+                        <div class="col-md-3 col-7">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label small fw-bold text-dark mb-0" style="font-size: 0.76rem;">Tarih <span class="text-danger">*</span></label>
+                                <div class="d-flex gap-1">
+                                    <span class="badge bg-light text-primary border" style="cursor:pointer; font-size:0.62rem;" onclick="setQuickCreateDate(0)">Bugün</span>
+                                    <span class="badge bg-light text-primary border" style="cursor:pointer; font-size:0.62rem;" onclick="setQuickCreateDate(1)">Yarın</span>
+                                </div>
+                            </div>
+                            <input type="date" name="eventDate" id="inpQuickAgendaDate" class="form-control form-control-sm rounded-3 fw-bold" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                        </div>
+
+                        <div class="col-md-3 col-5">
+                            <label class="form-label small fw-bold text-dark mb-1" style="font-size: 0.76rem;">Saat <span class="text-danger">*</span></label>
+                            <input type="time" name="eventTime" id="inpQuickAgendaTime" class="form-control form-control-sm rounded-3 fw-bold" value="10:30" required />
+                        </div>
+
+                        <!-- İLGİLİ PROJE VE MUHATAP (OPSİYONEL) -->
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted mb-1" style="font-size: 0.75rem;">İlgili Proje / Şantiye <small>(İsteğe Bağlı)</small></label>
+                            <select name="projectId" class="form-select form-select-sm rounded-3">
+                                <option value="">-- Kişisel Ajandam / Şirket Genel (Projesiz) --</option>
+                                @foreach (var p in projects)
+                                {
+                                    <option value="@p.Id" selected="@(selectedProjectId == p.Id)">@p.Name</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted mb-1" style="font-size: 0.75rem;">İlgili Kişi / Firma / Muhatap <small>(İsteğe Bağlı)</small></label>
+                            <select name="phonebookId" class="form-select form-select-sm rounded-3">
+                                <option value="">-- Kişi Seçmeden Aç (İç Yazışma / Kurum Ziyareti) --</option>
+                                @foreach (var pb in phonebooks)
+                                {
+                                    <option value="@pb.Id">@pb.Name @(!string.IsNullOrWhiteSpace(pb.Tags) ? $"[{pb.Tags}]" : "")</option>
+                                }
+                            </select>
+                        </div>
+
+                        <!-- KONU BAZLI EVRAK EKLEME (DİJİTAL EVRAK ÇANTASI & TEDBİRLİ İSİMLENDİRME) -->
+                        <div class="col-12">
+                            <div class="p-2.5 rounded-3 bg-light border">
+                                <div class="row g-2 align-items-center">
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-dark mb-0.5" style="font-size: 0.74rem;">
+                                            <i class="bi bi-paperclip text-danger me-1"></i>Görüşmede Yanınızda Olacak Belge / Dosya Ekle <small class="text-muted fw-normal">(Varsa)</small>
+                                        </label>
+                                        <input type="file" name="initialFile" id="inpQuickInitialFile" class="form-control form-control-sm rounded-2" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+                                               onchange="handleAgendaFileSubject(this, 'inpQuickDocTitle', 'lblQuickDocSubjectHint')" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-dark mb-0.5" style="font-size: 0.74rem;">
+                                            Yüklenen Belgenin Konusu / Adı <span class="text-danger" id="reqStarQuickDoc" style="display:none;">*</span>
+                                        </label>
+                                        <input type="text" name="initialDocTitle" id="inpQuickDocTitle" class="form-control form-control-sm rounded-2 fw-semibold" placeholder="Dosya adı yerine belgenin konusunu yazın (Örn: İmar Durum Yazısı)" />
+                                    </div>
+                                </div>
+                                <small id="lblQuickDocSubjectHint" class="d-block mt-1 text-muted" style="font-size: 0.70rem;">
+                                    <i class="bi bi-shield-check text-primary me-1"></i><strong>Arşiv Tedbiri:</strong> Telefondan veya bilgisayardan yüklenen dosyalar <code>IMG_1234</code> gibi rastgele isimlerde olabildiği için sistem belgeyi yazdığınız <strong>Konu Adıyla</strong> kaydeder.
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- ÖN NOT / ANLATILACAK KONU BAŞLIKLARI -->
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-dark mb-1" style="font-size: 0.75rem;">Görüşmede Anlatılacak Konu Başlıkları / Yazışma Notu</label>
+                            <textarea name="notes" class="form-control form-control-sm rounded-3" rows="2" placeholder="Örn: 1) Arsa payı oranları netleştirilecek, 2) Yanımıza aldığımız teklif dosyası sunulacak..."></textarea>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check p-2 px-3 rounded-3 bg-warning bg-opacity-10 border border-warning-subtle">
+                                <input class="form-check-input" type="checkbox" name="openImmediately" value="true" id="chkQuickOpenRoom">
+                                <label class="form-check-label small fw-bold text-dark" for="chkQuickOpenRoom" style="font-size: 0.76rem;">
+                                    Kaydettikten sonra doğrudan <b>Müzakere & Evrak Çantası Masasını</b> aç <small class="text-muted fw-normal">(İçeride yeni alt konular ve ek belgeler açabilirsiniz)</small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-top py-2 bg-light d-flex justify-content-between">
+                    <button type="button" class="btn btn-light border rounded-pill px-3 btn-sm" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-warning text-dark fw-bold rounded-pill px-4 shadow-xs btn-sm">
+                        <i class="bi bi-check2-circle me-1"></i>Başlığı Aç & Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL 2: ERTELE / YENİ TARİHE AL VEYA DEVAM OTURUMU PLANLA (ALTIN KURAL 8: TARİH VE SAAT AYRI) -->
 <div class="modal fade" id="rescheduleModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg rounded-4">
             <form asp-action="ScheduleNextSession" asp-controller="Agenda" method="post">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="recordId" id="modalRescheduleRecordId" value="" />
+                <input type="hidden" name="returnToList" value="true" />
 
                 <div class="modal-header border-bottom py-2 bg-warning text-dark">
                     <h6 class="modal-title fw-bold mb-0" style="font-size: 0.90rem;">
-                        <i class="bi bi-calendar-plus me-1"></i>Sonraki Devam Oturumunu Belirle
+                        <i class="bi bi-calendar-plus me-1"></i>İşi / Görüşmeyi Ertele veya Yeni Tarih Belirle
                     </h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
 
                 <div class="modal-body p-3">
                     <div class="mb-2">
-                        <label class="form-label small text-muted fw-bold mb-1">Mevcut Oturum</label>
+                        <label class="form-label small text-muted fw-bold mb-1">Kayıt / İş Başlığı</label>
                         <input type="text" class="form-control form-control-sm bg-light rounded-3 fw-bold" id="modalRescheduleTitle" readonly />
                     </div>
 
+                    <!-- TEK TIK ERTELEME PİLLERİ -->
                     <div class="mb-2">
-                        <label class="form-label small fw-bold text-dark mb-1">Yeni Oturum Tarihi ve Saati <span class="text-danger">*</span></label>
-                        <input type="datetime-local" name="nextSessionDate" id="modalRescheduleDate" class="form-control form-control-sm rounded-3 fw-bold" required />
+                        <small class="text-muted fw-bold d-block mb-1" style="font-size: 0.72rem;">Hızlı Ertele:</small>
+                        <div class="d-flex gap-1 flex-wrap">
+                            <button type="button" class="btn btn-xs btn-outline-dark rounded-pill px-2.5 py-0.5 fw-bold" style="font-size: 0.72rem;" onclick="shiftRescheduleDate(1)">
+                                🌅 Yarına Ertele (+1 Gün)
+                            </button>
+                            <button type="button" class="btn btn-xs btn-outline-dark rounded-pill px-2.5 py-0.5 fw-bold" style="font-size: 0.72rem;" onclick="shiftRescheduleDate(2)">
+                                📅 2 Gün Sonraya
+                            </button>
+                            <button type="button" class="btn btn-xs btn-outline-dark rounded-pill px-2.5 py-0.5 fw-bold" style="font-size: 0.72rem;" onclick="shiftRescheduleDate(7)">
+                                🗓️ Haftaya Ertele (+7 Gün)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-2">
+                        <div class="col-7">
+                            <label class="form-label small fw-bold text-dark mb-1">Yeni Tarih <span class="text-danger">*</span></label>
+                            <input type="date" name="nextSessionDate" id="modalRescheduleDate" class="form-control form-control-sm rounded-3 fw-bold" required />
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label small fw-bold text-dark mb-1">Saat <span class="text-danger">*</span></label>
+                            <input type="time" name="nextSessionTime" id="modalRescheduleTime" class="form-control form-control-sm rounded-3 fw-bold" value="11:00" required />
+                        </div>
                     </div>
 
                     <div class="mb-2">
-                        <label class="form-label small fw-bold text-dark mb-1">Devam Notu / Kararlaştırılan Hazırlık</label>
-                        <textarea name="nextSessionNote" class="form-control form-control-sm rounded-3" rows="2" placeholder="Örn: 2. Oturumda mimari kat planlarının kesinleşmesi müzakere edilecek..."></textarea>
+                        <label class="form-label small fw-bold text-dark mb-1">Erteleme Sebebi / Hatırlatma Notu</label>
+                        <textarea name="nextSessionNote" class="form-control form-control-sm rounded-3" rows="2" placeholder="Örn: Başka iş çıktı gidilemedi, bu tarihte gidilecek..."></textarea>
                     </div>
 
                     <div class="form-check p-2 rounded-3 bg-light border">
-                        <input class="form-check-input ms-0 me-2" type="checkbox" name="createNewSession" value="true" id="chkCreateNewSession" checked>
-                        <label class="form-check-label small fw-bold text-dark" for="chkCreateNewSession" style="font-size: 0.78rem;">
-                            Mevcut oturumu tamamla ve <b>"2. Devam Oturumu"</b> olarak yeni seans aç
+                        <input class="form-check-input ms-0 me-2" type="checkbox" name="createNewSession" value="true" id="chkCreateNewSession">
+                        <label class="form-check-label small fw-bold text-dark" for="chkCreateNewSession" style="font-size: 0.75rem;">
+                            Mevcut oturumu kapatıp <b>"2. Devam Oturumu"</b> olarak ayrı kayıt aç <small class="text-muted fw-normal">(Sadece ertelemek için boş bırakın)</small>
                         </label>
                     </div>
                 </div>
@@ -342,7 +615,65 @@
                 <div class="modal-footer border-top py-2 d-flex justify-content-between">
                     <button type="button" class="btn btn-light rounded-pill px-3 btn-sm" data-bs-dismiss="modal">Vazgeç</button>
                     <button type="submit" class="btn btn-warning rounded-pill px-4 fw-bold shadow-xs btn-sm">
-                        <i class="bi bi-check2-circle me-1"></i>Ajandaya Kaydet & Devam Et
+                        <i class="bi bi-check2-circle me-1"></i>Yeni Tarihi Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL 3: TOPLANTI BİTTİ / KARARA BAĞLA & ARŞİVE KALDIR -->
+<div class="modal fade" id="quickConcludeModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <form asp-action="ConcludeMeeting" asp-controller="Agenda" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="recordId" id="modalConcludeRecordId" value="" />
+                <input type="hidden" name="returnToList" value="true" />
+
+                <div class="modal-header border-bottom py-2 bg-success text-white">
+                    <h6 class="modal-title fw-bold mb-0" style="font-size: 0.90rem;">
+                        <i class="bi bi-check2-circle me-1"></i>Toplantı Bitti / Karara Bağla & Arşive Kaldır
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body p-3">
+                    <div class="alert alert-success py-2 px-3 small rounded-3 mb-2" style="font-size: 0.74rem;">
+                        <i class="bi bi-archive-fill me-1"></i><strong>Arşiv Kuralı:</strong> Bu başlığı karara bağladığınız anda <b>aktif ekrandan düşer</b> (gündeminizi kalabalıklaştırmaz) ve tüm belgeleriyle birlikte <b>Arşivde</b> saklanır.
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small text-muted fw-bold mb-1">Konu / İş Başlığı</label>
+                        <input type="text" class="form-control form-control-sm bg-light rounded-3 fw-bold" id="modalConcludeTitle" readonly />
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-dark mb-1">Görüşme Sonucu / Alınan Nihai Karar <span class="text-danger">*</span></label>
+                        <textarea name="finalSummary" class="form-control form-control-sm rounded-3" rows="3" placeholder="Örn: Ortakla görüşüldü, teklif onaylandı / Firmaya gidildi, sözleşme şartlarında mutabık kalındı..." required></textarea>
+                    </div>
+
+                    <div class="p-2 rounded-3 bg-light border mb-1">
+                        <label class="form-label small fw-bold text-dark mb-1" style="font-size: 0.74rem;">
+                            <i class="bi bi-paperclip text-success me-1"></i>Sonuç Evrakı / Alındı Belgesi Ekle <small class="text-muted fw-normal">(İsteğe Bağlı)</small>
+                        </label>
+                        <input type="file" name="resultFile" class="form-control form-control-sm rounded-2 mb-1.5" accept="image/*,.pdf,.doc,.docx"
+                               onchange="handleAgendaFileSubject(this, 'inpQuickConcludeDocTitle', 'lblQuickConcludeDocHint', 'reqStarConcludeDoc')" />
+                        <label class="form-label small fw-bold text-dark mb-0.5" style="font-size: 0.73rem;">
+                            Yüklenen Sonuç Belgesinin Konusu / Adı <span class="text-danger" id="reqStarConcludeDoc" style="display:none;">*</span>
+                        </label>
+                        <input type="text" name="resultDocTitle" id="inpQuickConcludeDocTitle" class="form-control form-control-sm rounded-2 fw-semibold" placeholder="Örn: İmzalı Toplantı Tutanağı / Vergi Dairesi Alındı Fişi" />
+                        <small id="lblQuickConcludeDocHint" class="d-block mt-1 text-muted" style="font-size: 0.68rem;">
+                            Belge yüklerseniz orijinal dosya adı yerine buraya yazdığınız konu adıyla arşivlenir.
+                        </small>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-top py-2 d-flex justify-content-between">
+                    <button type="button" class="btn btn-light rounded-pill px-3 btn-sm" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold shadow-xs btn-sm">
+                        <i class="bi bi-check2-all me-1"></i>Karara Bağla & Arşive Kaldır
                     </button>
                 </div>
             </form>
@@ -351,16 +682,130 @@
 </div>
 
 <script>
-    // Sonraki Oturum Modalını Aç
-    function openRescheduleModal(recordId, title, currentDatetime) {
+    function isGenericFileNameJS(nameWithoutExt) {
+        if (!nameWithoutExt) return true;
+        var s = nameWithoutExt.trim().toLowerCase();
+        if (s.length < 3) return true;
+        if (/^(img|dsc|dscn|scan|image|photo|resim|belge|document|ekran|screenshot|whatsapp|wa|video|vid)[_\-\s0-9]/.test(s)) return true;
+        if (/^[0-9_\-\s()]+$/.test(s)) return true;
+        return false;
+    }
+
+    function handleAgendaFileSubject(fileInput, titleInputId, hintId, starId) {
+        var titleInp = document.getElementById(titleInputId);
+        var hintEl = document.getElementById(hintId);
+        var starEl = document.getElementById(starId || 'reqStarQuickDoc');
+        if (!titleInp) return;
+
+        if (!fileInput.files || fileInput.files.length === 0) {
+            titleInp.required = false;
+            if (starEl) starEl.style.display = 'none';
+            return;
+        }
+
+        titleInp.required = true;
+        if (starEl) starEl.style.display = 'inline';
+
+        var rawFileName = fileInput.files[0].name || '';
+        var lastDot = rawFileName.lastIndexOf('.');
+        var baseName = lastDot > 0 ? rawFileName.substring(0, lastDot) : rawFileName;
+
+        if (isGenericFileNameJS(baseName)) {
+            titleInp.value = '';
+            titleInp.classList.add('border-danger');
+            if (hintEl) {
+                hintEl.className = 'd-block mt-1 text-danger fw-bold';
+                hintEl.innerHTML = '⚠️ Seçilen dosyanın adı rastgele görünüyor (' + rawFileName + '). Lütfen arşivde kolay bulunması için belgenin konusunu yazın!';
+            }
+            setTimeout(function () { titleInp.focus(); }, 100);
+        } else {
+            if (!titleInp.value.trim()) {
+                titleInp.value = baseName.replace(/[_-]+/g, ' ').trim();
+            }
+            titleInp.classList.remove('border-danger');
+            titleInp.classList.add('border-success');
+            if (hintEl) {
+                hintEl.className = 'd-block mt-1 text-success fw-semibold';
+                hintEl.innerHTML = '✅ Dosya adı anlamlı görünüyor ve konu olarak aktarıldı; isterseniz düzenleyebilirsiniz.';
+            }
+        }
+    }
+
+    function openQuickAgendaModal(typeId) {
+        selectQuickAgendaType(typeId || 4);
+        var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('quickAgendaModal'));
+        modal.show();
+        setTimeout(function() {
+            var inp = document.getElementById('inpQuickAgendaTitle');
+            if (inp) inp.focus();
+        }, 250);
+    }
+
+    function selectQuickAgendaType(typeId) {
+        document.getElementById('inpQuickAgendaType').value = typeId;
+        document.querySelectorAll('.agenda-type-btn').forEach(function(b) {
+            b.className = 'btn btn-sm w-100 rounded-3 py-1.5 px-2 fw-bold text-start border agenda-type-btn bg-white text-dark';
+        });
+        var activeBtn = document.getElementById('btnType' + typeId);
+        if (activeBtn) {
+            activeBtn.className = 'btn btn-sm w-100 rounded-3 py-1.5 px-2 fw-bold text-start border border-dark agenda-type-btn bg-warning bg-opacity-25 text-dark shadow-xs';
+        }
+        var titleInp = document.getElementById('inpQuickAgendaTitle');
+        var chkRoom = document.getElementById('chkQuickOpenRoom');
+        if (titleInp) {
+            if (typeId === 4) {
+                titleInp.placeholder = 'Örn: Ortakla arsa payı ve ödeme planı şirket içi yazışması...';
+                if (chkRoom) chkRoom.checked = false;
+            } else if (typeId === 5) {
+                titleInp.placeholder = 'Örn: X Firması Ziyareti / Belediye İmar Müdürlüğü Görüşmesi...';
+                if (chkRoom) chkRoom.checked = true;
+            } else if (typeId === 1) {
+                titleInp.placeholder = 'Örn: Bina Temsilcisi ve Maliklerle Sözleşme Toplantısı...';
+                if (chkRoom) chkRoom.checked = true;
+            } else {
+                titleInp.placeholder = 'Örn: Kaba İnşaat Kalıp / Demir Ekibi Saha Kararları...';
+                if (chkRoom) chkRoom.checked = true;
+            }
+        }
+    }
+
+    function setQuickCreateDate(addDays) {
+        var d = new Date();
+        d.setDate(d.getDate() + addDays);
+        var yyyy = d.getFullYear();
+        var mm = String(d.getMonth() + 1).padStart(2, '0');
+        var dd = String(d.getDate()).padStart(2, '0');
+        document.getElementById('inpQuickAgendaDate').value = yyyy + '-' + mm + '-' + dd;
+    }
+
+    function openRescheduleModal(recordId, title, currentDateStr, currentTimeStr) {
         document.getElementById('modalRescheduleRecordId').value = recordId;
         document.getElementById('modalRescheduleTitle').value = title;
-        document.getElementById('modalRescheduleDate').value = currentDatetime;
-        var modal = new bootstrap.Modal(document.getElementById('rescheduleModal'));
+        document.getElementById('modalRescheduleDate').value = currentDateStr || '';
+        document.getElementById('modalRescheduleTime').value = currentTimeStr || '11:00';
+        var chk = document.getElementById('chkCreateNewSession');
+        if (chk) chk.checked = false;
+        var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('rescheduleModal'));
         modal.show();
     }
 
-    // WhatsApp Otomatik Hatırlatıcı Gönder
+    function shiftRescheduleDate(daysToAdd) {
+        var d = new Date();
+        d.setDate(d.getDate() + daysToAdd);
+        var yyyy = d.getFullYear();
+        var mm = String(d.getMonth() + 1).padStart(2, '0');
+        var dd = String(d.getDate()).padStart(2, '0');
+        document.getElementById('modalRescheduleDate').value = yyyy + '-' + mm + '-' + dd;
+    }
+
+    function openQuickConcludeModal(recordId, title) {
+        document.getElementById('modalConcludeRecordId').value = recordId;
+        document.getElementById('modalConcludeTitle').value = title;
+        var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('quickConcludeModal'));
+        modal.show();
+    }
+
+    // WhatsApp Otomatik Hatırlatıcı & Canlı Evrak Çantası Gönder
     function sendWhatsAppReminder(phone, clientName, projectName, meetingTitle, dateStr, guestUrl) {
         if (!phone) {
             alert('Muhatabın telefon numarası bulunamadı.');
@@ -371,11 +816,11 @@
         else if (!cleanPhone.startsWith('90')) cleanPhone = '90' + cleanPhone;
 
         var msg = 'Sayın ' + (clientName || 'Yetkili') + ',\n\n' +
-                  '🏢 *' + projectName + '* projemiz kapsamında;\n' +
-                  '📋 *' + meetingTitle + '* müzakere oturumumuz *' + dateStr + '* tarihinde gerçekleştirilecektir.\n\n';
+                  '🏢 *' + projectName + '* kapsamında;\n' +
+                  '📋 *' + meetingTitle + '* görüşmemiz *' + dateStr + '* tarihinde gerçekleştirilecektir.\n\n';
 
         if (guestUrl) {
-            msg += '📱 Toplantı gündem maddelerini incelemek ve canlı notları takip etmek için katılım bağlantınız:\n' + guestUrl + '\n\n';
+            msg += '📱 Görüşülecek konu başlıklarını ve yüklenen belgeleri (üye olmadan) canlı incelemek için bağlantınız:\n' + guestUrl + '\n\n';
         }
 
         msg += 'Görüşmek üzere, iyi çalışmalar dileriz.';

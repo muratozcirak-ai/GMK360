@@ -140,10 +140,32 @@ namespace GMK360.Web.Controllers
             }
 
             var userId = user.Id;
+            ViewBag.CurrentUser = user;
             var consultant = await _context.AgencyConsultants.Include(c => c.Agency).FirstOrDefaultAsync(c => c.UserId == userId && c.IsActive);
-            if (consultant == null) return View();
+            var previewCookie = Request.Cookies["gmk360_role_preview"];
+            var effectivePerms = GMK360.Web.Helpers.StaffPermissionHelper.GetEffectivePermissions(consultant?.Role, user.ActiveModules, previewCookie);
+            bool hasStrategyPerm = effectivePerms.Contains(GMK360.Web.Helpers.StaffPermissionHelper.PermStrategy);
 
+            if (consultant == null)
+            {
+                var fallbackAgency = await _context.Agencies.FirstOrDefaultAsync();
+                ViewBag.Agency = fallbackAgency;
+                ViewBag.UserRoleTitle = previewCookie == "engineer" ? "2. Rol: Teknik Ofis / Mühendis (Ön İzleme)" :
+                                        previewCookie == "formen" ? "3. Rol: Saha Sorumlusu / Formen (Ön İzleme)" : "1. Rol: Patron / Firma Sahibi";
+                ViewBag.IsManagerRole = hasStrategyPerm;
+                return View();
+            }
             var agency = consultant.Agency;
+            ViewBag.Agency = agency;
+            ViewBag.UserAgencyRole = consultant.Role;
+            bool isManagerRole = hasStrategyPerm;
+            ViewBag.IsManagerRole = isManagerRole;
+            ViewBag.UserRoleTitle = previewCookie == "engineer" ? "2. Rol: Teknik Ofis / Mühendis (Ön İzleme)" :
+                                    previewCookie == "formen" ? "3. Rol: Saha Sorumlusu / Formen (Ön İzleme)" :
+                                    GMK360.Web.Helpers.StaffPermissionHelper.GetFriendlyRoleBadge(consultant.Role);
+
+
+            agency = consultant.Agency;
             ViewBag.Agency = agency;
 
             // Dynamic Counts
@@ -159,11 +181,23 @@ namespace GMK360.Web.Controllers
             ViewBag.DelayedPhases = delayedPhases;
             ViewBag.TotalPaymentsThisMonth = totalPaymentsThisMonth;
             var teklifProjeler = await _context.ConstructionProjects
-                .Where(p => p.AgencyId == agency.Id && p.Status == GMK360.Core.Entities.Construction.ProjectStatus.Projelendirme_Teklif && !p.IsDeleted)
+                .Where(p => p.AgencyId == agency.Id && (p.Status == GMK360.Core.Entities.Construction.ProjectStatus.On_Gorusme_Talep || p.Status == GMK360.Core.Entities.Construction.ProjectStatus.Projelendirme_Teklif) && !p.IsDeleted)
                 .OrderByDescending(p => p.CreatedAt)
                 .Take(5)
                 .ToListAsync();
             ViewBag.TeklifProjeler = teklifProjeler;
+            ViewBag.AktifSantiyeList = await _context.ConstructionProjects
+                .Where(p => p.AgencyId == agency.Id && p.Status == GMK360.Core.Entities.Construction.ProjectStatus.Aktif_Santiye && !p.IsDeleted)
+                .OrderByDescending(p => p.CreatedAt)
+                .Take(8)
+                .ToListAsync();
+            ViewBag.OpenMeetings = await _context.AgendaRecords
+                .Include(a => a.Project)
+                .Include(a => a.Phonebook)
+                .Where(a => a.AgencyId == agency.Id && !a.IsDeleted && (a.StatusId != GMK360.Core.Entities.Construction.AgendaConstants.StatusTamamlandi || a.EventDate.Date == DateTime.Today))
+                .OrderByDescending(a => a.EventDate)
+                .Take(8)
+                .ToListAsync();
             
             // Yaklaşan Ödemeler (Gelecek 15 Gün içinde vadesi dolan Çek ve Kredi Kartı ödemeleri)
             var in15Days = DateTime.UtcNow.AddDays(15);
@@ -179,6 +213,84 @@ namespace GMK360.Web.Controllers
                 .ToListAsync();
             
             ViewBag.UpcomingPayments = upcomingPayments;
+            ViewBag.StaffCount = await _context.AgencyConsultants.CountAsync(c => c.AgencyId == agency.Id && c.IsActive);
+            ViewBag.WorkerCount = await _context.AgencyWorkers.CountAsync(w => w.AgencyId == agency.Id && !w.IsDeleted);
+            ViewBag.VehicleCount = await _context.CompanyVehicles.CountAsync(v => v.AgencyId == agency.Id && !v.IsDeleted);
+            ViewBag.InventoryCount = await _context.InventoryItems.CountAsync(i => !i.IsDeleted && i.Warehouse != null && i.Warehouse.AgencyId == agency.Id);
+            ViewBag.BankCount = await _context.Set<GMK360.Core.Entities.Finance.SupplierCurrentAccount>().CountAsync(b => !b.IsDeleted && b.AgencyId == agency.Id);
+            try
+            {
+                var hqMetaPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot", "uploads", $"Agency_{agency.Id}", "branding", "hq_meta.json");
+                if (System.IO.File.Exists(hqMetaPath))
+                {
+                    var hqDict = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, string>>(await System.IO.File.ReadAllTextAsync(hqMetaPath));
+                    if (hqDict != null)
+                    {
+                        ViewBag.HqCity = hqDict.GetValueOrDefault("City", "");
+                        ViewBag.HqDistrict = hqDict.GetValueOrDefault("District", "");
+                        ViewBag.HqNeighborhood = hqDict.GetValueOrDefault("Neighborhood", "");
+                        ViewBag.HqStreet = hqDict.GetValueOrDefault("Street", "");
+                        ViewBag.HqBuildingName = hqDict.GetValueOrDefault("BuildingName", "");
+                        ViewBag.HqOuterDoorNo = hqDict.GetValueOrDefault("OuterDoorNo", "");
+                        ViewBag.HqInnerDoorNo = hqDict.GetValueOrDefault("InnerDoorNo", "");
+                        ViewBag.HqLatitude = hqDict.GetValueOrDefault("Latitude", "");
+                        ViewBag.HqLongitude = hqDict.GetValueOrDefault("Longitude", "");
+                    }
+                }
+            }
+            catch { }
+            return View();
+        }
+
+        [HttpPost]
+        [IgnoreAntiforgeryToken]
+        public async Task<IActionResult> UpdatePersonalProfileAndPin(string firstName, string lastName, string phoneNumber, string? approvalPin)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Challenge();
+            if (!string.IsNullOrWhiteSpace(firstName)) user.FirstName = firstName.Trim();
+            user.LastName = lastName?.Trim() ?? "";
+            user.DisplayName = $"{user.FirstName} {user.LastName}".Trim();
+            if (!string.IsNullOrWhiteSpace(phoneNumber)) user.PhoneNumber = phoneNumber.Trim();
+            if (!string.IsNullOrWhiteSpace(approvalPin))
+            {
+                var cleanPin = new string(approvalPin.Where(char.IsDigit).ToArray());
+                if (cleanPin.Length >= 4 && cleanPin.Length <= 6)
+                {
+                    user.TransactionPinHash = cleanPin;
+                    user.IsTransactionPinSet = true;
+                }
+            }
+            await _userManager.UpdateAsync(user);
+            TempData["SuccessMessage"] = "Profil bilgileriniz ve işlem onay PIN ayarınız kaydedildi.";
+            return RedirectToAction(nameof(Construction));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ChangePersonalPassword(string currentPassword, string newPassword)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Challenge();
+            if (string.IsNullOrWhiteSpace(currentPassword) || string.IsNullOrWhiteSpace(newPassword))
+            {
+                TempData["ErrorMessage"] = "Mevcut şifre ve yeni şifre alanları zorunludur.";
+                return RedirectToAction(nameof(Construction));
+            }
+            var res = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+            if (res.Succeeded)
+            {
+                await _signInManager.RefreshSignInAsync(user);
+                TempData["SuccessMessage"] = "Şifreniz başarıyla güncellendi.";
+            }
+            else
+            {
+                TempData["ErrorMessage"] = "Şifre güncellenemedi: " + string.Join(", ", res.Errors.Select(e => e.Description));
+            }
+            return RedirectToAction(nameof(Construction));
+        }
+
+        private IActionResult UnusedPlaceholder() {
 
             return View();
         }
@@ -191,7 +303,7 @@ namespace GMK360.Web.Controllers
             return View();
         }
 
-        [Authorize(Roles = "Corporate,Admin")]
+        [Authorize(Roles = "InsaatFirmasi,Corporate,Admin")]
         public async Task<IActionResult> ThemeSettings()
         {
             var user = await _userManager.Users
@@ -223,7 +335,7 @@ namespace GMK360.Web.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Corporate,Admin")]
+        [Authorize(Roles = "InsaatFirmasi,Corporate,Admin")]
         public async Task<IActionResult> ThemeSettings(ThemeSettingsViewModel model)
         {
             if (!ModelState.IsValid)
@@ -381,7 +493,7 @@ namespace GMK360.Web.Controllers
 
         public IActionResult Mesajlar() => View();
 
-        [Authorize(Roles = "Corporate,Admin")]
+        [Authorize(Roles = "InsaatFirmasi,Corporate,Admin")]
         public IActionResult Ekibim() => View();
 
         [Authorize(Roles = "Corporate,Consultant,Admin")]
@@ -422,7 +534,107 @@ namespace GMK360.Web.Controllers
                 .ToListAsync();
 
             ViewBag.AgencyName = agency?.CompanyName ?? "Firmam";
+            ViewBag.Agency = agency;
             return View(projects);
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "InsaatFirmasi,Corporate,Admin")]
+        [IgnoreAntiforgeryToken] public async Task<IActionResult> SaveSiteDomainAndIdentity(string? subdomain, string? customDomain, string? companyName, string? taxNumber, string? authCertificateNo, string? whatsAppNumber, string? address, string? logoUrl, string? bannerUrl, string? themePrimaryColor, string? themeAccentColor, Microsoft.AspNetCore.Http.IFormFile? logoFile, string? returnUrl, string? hqCity, string? hqDistrict, string? hqNeighborhood, int? hqNeighborhoodId, string? hqStreet, string? hqBuildingName, string? hqOuterDoorNo, string? hqInnerDoorNo, string? hqLatitude, string? hqLongitude)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+            var consultant = await _context.AgencyConsultants.FirstOrDefaultAsync(c => c.UserId == user.Id);
+            var agency = consultant != null
+                ? await _context.Agencies.FirstOrDefaultAsync(a => a.Id == consultant.AgencyId)
+                : await _context.Agencies.FirstOrDefaultAsync();
+            if (agency != null)
+            {
+                if (!string.IsNullOrWhiteSpace(subdomain)) agency.Subdomain = subdomain.Trim().ToLowerInvariant();
+                if (customDomain != null) agency.CustomDomain = customDomain.Trim().ToLowerInvariant();
+                if (!string.IsNullOrWhiteSpace(companyName)) agency.CompanyName = companyName.Trim();
+                if (taxNumber != null) agency.TaxNumber = taxNumber.Trim();
+                if (authCertificateNo != null) agency.AuthCertificateNo = authCertificateNo.Trim();
+                if (whatsAppNumber != null) agency.WhatsAppNumber = whatsAppNumber.Trim();
+                if (address != null) agency.Address = address.Trim();
+                if (hqNeighborhoodId.HasValue && hqNeighborhoodId.Value > 0 && !string.IsNullOrWhiteSpace(hqStreet))
+                {
+                    var cleanStr = hqStreet.Trim();
+                    bool streetExists = await _context.Streets.AnyAsync(s => s.NeighborhoodId == hqNeighborhoodId.Value && s.Name.ToLower() == cleanStr.ToLower());
+                    if (!streetExists)
+                    {
+                        _context.Streets.Add(new GMK360.Core.Entities.Street
+                        {
+                            NeighborhoodId = hqNeighborhoodId.Value,
+                            Name = cleanStr
+                        });
+                    }
+                }
+                if (string.IsNullOrWhiteSpace(agency.Address) && (!string.IsNullOrWhiteSpace(hqCity) || !string.IsNullOrWhiteSpace(hqStreet) || !string.IsNullOrWhiteSpace(hqBuildingName)))
+                {
+                    var parts = new System.Collections.Generic.List<string>();
+                    if (!string.IsNullOrWhiteSpace(hqNeighborhood)) parts.Add(hqNeighborhood.Trim());
+                    if (!string.IsNullOrWhiteSpace(hqStreet)) parts.Add(hqStreet.Trim());
+                    if (!string.IsNullOrWhiteSpace(hqBuildingName)) parts.Add(hqBuildingName.Trim());
+                    if (!string.IsNullOrWhiteSpace(hqOuterDoorNo)) parts.Add($"No:{hqOuterDoorNo.Trim()}" + (!string.IsNullOrWhiteSpace(hqInnerDoorNo) ? $"/{hqInnerDoorNo.Trim()}" : ""));
+                    if (!string.IsNullOrWhiteSpace(hqDistrict) || !string.IsNullOrWhiteSpace(hqCity)) parts.Add($"{hqDistrict?.Trim()} / {hqCity?.Trim()}".Trim(' ', '/'));
+                    agency.Address = string.Join(" ", parts);
+                }
+                if (hqCity != null || hqDistrict != null || hqStreet != null || hqBuildingName != null || hqLatitude != null)
+                {
+                    try
+                    {
+                        var folder = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot", "uploads", $"Agency_{agency.Id}", "branding");
+                        System.IO.Directory.CreateDirectory(folder);
+                        var metaDict = new System.Collections.Generic.Dictionary<string, string>
+                        {
+                            ["City"] = hqCity?.Trim() ?? "",
+                            ["District"] = hqDistrict?.Trim() ?? "",
+                            ["Neighborhood"] = hqNeighborhood?.Trim() ?? "",
+                            ["Street"] = hqStreet?.Trim() ?? "",
+                            ["BuildingName"] = hqBuildingName?.Trim() ?? "",
+                            ["OuterDoorNo"] = hqOuterDoorNo?.Trim() ?? "",
+                            ["InnerDoorNo"] = hqInnerDoorNo?.Trim() ?? "",
+                            ["Latitude"] = hqLatitude?.Trim() ?? "",
+                            ["Longitude"] = hqLongitude?.Trim() ?? ""
+                        };
+                        var metaJson = System.Text.Json.JsonSerializer.Serialize(metaDict, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                        await System.IO.File.WriteAllTextAsync(System.IO.Path.Combine(folder, "hq_meta.json"), metaJson);
+                    }
+                    catch { }
+                }
+                if (logoUrl != null && logoFile == null) agency.LogoUrl = logoUrl.Trim();
+                if (bannerUrl != null) agency.BannerUrl = bannerUrl.Trim();
+                if (!string.IsNullOrWhiteSpace(themePrimaryColor)) agency.ThemePrimaryColor = themePrimaryColor.Trim();
+                if (!string.IsNullOrWhiteSpace(themeAccentColor)) agency.ThemeAccentColor = themeAccentColor.Trim();
+
+                if (logoFile != null && logoFile.Length > 0)
+                {
+                    var ext = System.IO.Path.GetExtension(logoFile.FileName).ToLowerInvariant();
+                    var allowed = new[] { ".png", ".jpg", ".jpeg", ".webp", ".svg", ".bmp", ".gif" };
+                    if (allowed.Contains(ext))
+                    {
+                        var folder = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot", "uploads", $"Agency_{agency.Id}", "branding");
+                        System.IO.Directory.CreateDirectory(folder);
+                        var fileName = $"company_logo_{System.DateTime.Now:yyyyMMdd_HHmmss}{ext}";
+                        var fullPath = System.IO.Path.Combine(folder, fileName);
+                        using (var stream = new System.IO.FileStream(fullPath, System.IO.FileMode.Create))
+                        {
+                            await logoFile.CopyToAsync(stream);
+                        }
+                        agency.LogoUrl = $"/uploads/Agency_{agency.Id}/branding/{fileName}";
+                    }
+                }
+
+                _context.Agencies.Update(agency);
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = "Firma merkez künyesi, açık adresi, telefon/vergi bilgileri ve kurumsal kimlik ayarlarınız başarıyla kaydedildi.";
+            }
+            if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction(nameof(SiteYonetimi));
         }
 
         [HttpPost]

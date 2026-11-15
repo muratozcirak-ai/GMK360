@@ -294,6 +294,17 @@ app.UseAuthorization();
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILogger<Program>>();
+    var dbContext = services.GetRequiredService<GMK360.Data.Contexts.ApplicationDbContext>();
+    try
+    {
+        dbContext.Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "Otomatik migration sırasında uyarı (manuel yüklenmiş DB ise normaldir).");
+    }
+
     try
     {
         await GMK360.Data.Seeds.RoleAndUserSeeder.SeedRolesAndAdminAsync(services);
@@ -307,13 +318,12 @@ using (var scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Roller ve Admin hesabÃ„Â± oluÃ…Å¸turulurken bir hata meydana geldi.");
+        logger.LogError(ex, "Roller ve Admin hesabı oluşturulurken bir hata meydana geldi.");
     }
 }
 
 
-// SEO Dostu YÃƒÂ¶nlendirmeler (Slug tabanlÃ„Â±)
+// SEO Dostu Yönlendirmeler (Slug tabanlı)
 
 app.MapDynamicControllerRoute<GMK360.Web.Routing.SeoRouteTransformer>(
     "{city}/{district}/{seoSlug}");
@@ -332,12 +342,6 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
-
-using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<GMK360.Data.Contexts.ApplicationDbContext>();
-    try { dbContext.Database.Migrate(); } catch { }
-}
 app.Run();
 
 

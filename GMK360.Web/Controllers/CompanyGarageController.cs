@@ -1,4 +1,7 @@
 using GMK360.Core.Entities.Logistics;
+using GMK360.Core.Entities.Construction;
+using System.Collections.Generic;
+using System.Text.Json;
 using GMK360.Core.Entities.Identity;
 using GMK360.Data.Contexts;
 using Microsoft.AspNetCore.Authorization;
@@ -125,19 +128,33 @@ namespace GMK360.Web.Controllers
 
         private async Task<int?> GetUserAgencyIdAsync()
         {
-            if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin")) return 1;
             var user = await _userManager.GetUserAsync(User);
-            if (user == null) return null;
-            var consultant = await _context.AgencyConsultants.FirstOrDefaultAsync(c => c.UserId == user.Id && c.IsActive);
-            return consultant?.AgencyId;
+            if (user != null)
+            {
+                var consultant = await _context.AgencyConsultants
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(c => c.UserId == user.Id && !c.IsDeleted && c.IsActive);
+                if (consultant != null && consultant.AgencyId > 0)
+                    return consultant.AgencyId;
+            }
+            var agencyClaim = User.FindFirst("AgencyId")?.Value;
+            if (int.TryParse(agencyClaim, out int parsedAgencyId) && parsedAgencyId > 0)
+                return parsedAgencyId;
+            if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin"))
+            {
+                var firstProjAgency = await _context.ConstructionProjects.Where(p => !p.IsDeleted && p.AgencyId > 0).Select(p => (int?)p.AgencyId).FirstOrDefaultAsync();
+                return firstProjAgency ?? 1;
+            }
+            var fallbackProjAgency = await _context.ConstructionProjects.Where(p => !p.IsDeleted && p.AgencyId > 0).Select(p => (int?)p.AgencyId).FirstOrDefaultAsync();
+            return fallbackProjAgency ?? 1;
         }
 
         [HttpGet]
         public async Task<IActionResult> Index()
         {
-            ViewBag.Projects = await _context.ConstructionProjects.Where(p => !p.IsDeleted).Select(p => new { p.Id, p.Name }).ToListAsync();
             var agencyId = await GetUserAgencyIdAsync();
             if (agencyId == null) return Unauthorized();
+            ViewBag.Projects = await _context.ConstructionProjects.Where(p => p.AgencyId == agencyId.Value && !p.IsDeleted).Select(p => new { p.Id, p.Name }).ToListAsync();
 
             var vehicles = await _context.CompanyVehicles
                 .Include(v => v.Assignments)
@@ -151,6 +168,12 @@ namespace GMK360.Web.Controllers
                 .Select(p => new { p.Id, p.Name })
                 .ToListAsync();
 
+            var projList = await _context.ConstructionProjects
+                .Where(p => p.AgencyId == agencyId.Value && !p.IsDeleted)
+                .OrderByDescending(p => p.Id)
+                .ToListAsync();
+            ViewBag.ProjectList = projList;
+            ViewBag.RentalMachineryLogs = await LoadRentalMachineryLogsAsync(agencyId.Value);
             return View(vehicles);
         }
 
@@ -757,5 +780,131 @@ namespace GMK360.Web.Controllers
             TempData["SuccessMessage"] = $"🚜 {vehicle.PlateNumber} için {netHours:N1} saatlik çalışma puantajı başarıyla işlendi! (Güncel Sayaç: {vehicle.CurrentWorkingHours:N1} Saat)";
             return RedirectToAction(nameof(Index));
         }
+
+        private string GetRentalMachineryFilePath(int agencyId)
+        {
+            var dir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "garage");
+            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            return Path.Combine(dir, $"rental_machinery_{agencyId}.json");
+        }
+
+        public async Task<List<RentalMachineryLogItem>> LoadRentalMachineryLogsAsync(int agencyId)
+        {
+            var path = GetRentalMachineryFilePath(agencyId);
+            if (!System.IO.File.Exists(path)) return new List<RentalMachineryLogItem>();
+            try
+            {
+                var json = await System.IO.File.ReadAllTextAsync(path);
+                return JsonSerializer.Deserialize<List<RentalMachineryLogItem>>(json) ?? new List<RentalMachineryLogItem>();
+            }
+            catch
+            {
+                return new List<RentalMachineryLogItem>();
+            }
+        }
+
+        private async Task SaveRentalMachineryLogsAsync(int agencyId, List<RentalMachineryLogItem> list)
+        {
+            var path = GetRentalMachineryFilePath(agencyId);
+            var json = JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
+            await System.IO.File.WriteAllTextAsync(path, json);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> AddRentalMachineryLog(
+            int? projectId,
+            string machineCategory,
+            string? supplierOrOperator,
+            string rentalDate,
+            string durationType,
+            decimal durationValue,
+            decimal unitRate,
+            decimal totalAmount,
+            string? workDescription,
+            IFormFile? receiptPhoto)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            string projName = "Şirket Genel / Merkez";
+            if (projectId.HasValue && projectId.Value > 0)
+            {
+                var proj = await _context.ConstructionProjects.FirstOrDefaultAsync(p => p.Id == projectId.Value);
+                if (proj != null) projName = proj.Name;
+            }
+
+            decimal finalTotal = totalAmount > 0 ? totalAmount : Math.Round(durationValue * unitRate, 2);
+            DateTime parsedDate = DateTime.Today;
+            if (!string.IsNullOrWhiteSpace(rentalDate) && DateTime.TryParse(rentalDate, out var d))
+                parsedDate = d.Date;
+
+            string? docPath = null;
+            if (receiptPhoto != null && receiptPhoto.Length > 0)
+            {
+                var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "garage");
+                Directory.CreateDirectory(uploadsFolder);
+                var fileName = $"kiralik_{Guid.NewGuid():N}{Path.GetExtension(receiptPhoto.FileName)}";
+                var filePath = Path.Combine(uploadsFolder, fileName);
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await receiptPhoto.CopyToAsync(stream);
+                }
+                docPath = "/uploads/garage/" + fileName;
+            }
+
+            var logs = await LoadRentalMachineryLogsAsync(agencyId.Value);
+            logs.Add(new RentalMachineryLogItem
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                AgencyId = agencyId.Value,
+                ProjectId = projectId,
+                ProjectName = projName,
+                MachineCategory = string.IsNullOrWhiteSpace(machineCategory) ? "Mobil Vinç" : machineCategory.Trim(),
+                SupplierOrOperator = supplierOrOperator?.Trim() ?? "-",
+                RentalDate = parsedDate,
+                DurationType = string.IsNullOrWhiteSpace(durationType) ? "Saat" : durationType.Trim(),
+                DurationValue = durationValue > 0 ? durationValue : 1,
+                UnitRate = unitRate,
+                TotalAmount = finalTotal,
+                WorkDescription = workDescription?.Trim() ?? "",
+                ReceiptPhotoPath = docPath,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await SaveRentalMachineryLogsAsync(agencyId.Value, logs);
+            TempData["SuccessMessage"] = $"🏗️ Dışarıdan kiralanan '{machineCategory}' ({durationValue} {durationType} - {finalTotal:N2} ₺) kaydı işlendi ve kiralık makine analizine eklendi.";
+            return RedirectToAction(nameof(Index), new { tab = "rental" });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> DeleteRentalMachineryLog(string id)
+        {
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId == null) return Unauthorized();
+
+            var logs = await LoadRentalMachineryLogsAsync(agencyId.Value);
+            logs.RemoveAll(x => x.Id == id);
+            await SaveRentalMachineryLogsAsync(agencyId.Value, logs);
+            TempData["SuccessMessage"] = "Kiralık makine/araç kaydı silindi.";
+            return RedirectToAction(nameof(Index), new { tab = "rental" });
+        }
+    }
+
+    public class RentalMachineryLogItem
+    {
+        public string Id { get; set; } = string.Empty;
+        public int AgencyId { get; set; }
+        public int? ProjectId { get; set; }
+        public string ProjectName { get; set; } = string.Empty;
+        public string MachineCategory { get; set; } = string.Empty;
+        public string SupplierOrOperator { get; set; } = string.Empty;
+        public DateTime RentalDate { get; set; }
+        public string DurationType { get; set; } = "Saat";
+        public decimal DurationValue { get; set; }
+        public decimal UnitRate { get; set; }
+        public decimal TotalAmount { get; set; }
+        public string WorkDescription { get; set; } = string.Empty;
+        public string? ReceiptPhotoPath { get; set; }
+        public DateTime CreatedAt { get; set; }
     }
 }

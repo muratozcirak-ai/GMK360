@@ -1,0 +1,517 @@
+@model GMK360.Core.Entities.Construction.AgencyWorker
+@{
+    Layout = "_ConstructionLayout";
+    ViewData["Title"] = $"{Model.FullName} - 360° Usta Özlük, Puantaj & Yevmiye Kartı";
+    var meta = ViewBag.Meta as GMK360.Web.Controllers.WorkerExtendedHrMeta ?? new GMK360.Web.Controllers.WorkerExtendedHrMeta();
+    var timesheets = ViewBag.Timesheets as List<GMK360.Core.Entities.Construction.DailyTimesheet> ?? new List<GMK360.Core.Entities.Construction.DailyTimesheet>();
+    var projects = ViewBag.Projects as List<GMK360.Core.Entities.Construction.ConstructionProject> ?? new List<GMK360.Core.Entities.Construction.ConstructionProject>();
+
+    var totalWorkDays = timesheets.Count(t => t.AttendanceStatus != "Gelmedi" && t.AttendanceStatus != "Avans / Ödeme");
+    var holidayWorkDays = timesheets.Count(t => t.AttendanceStatus.Contains("Bayram"));
+    var totalOvertimeHours = timesheets.Sum(t => t.OvertimeHours);
+    var totalEarned = timesheets.Sum(t => t.EarnedWage);
+    var totalPaid = timesheets.Sum(t => t.AdvancePayment);
+    var netBalance = totalEarned - totalPaid;
+
+    var siteGroups = timesheets
+        .GroupBy(t => t.ConstructionProject != null ? t.ConstructionProject.Name : "Merkez / Genel Saha")
+        .Select(g => new
+        {
+            SiteName = g.Key,
+            Days = g.Count(x => x.AttendanceStatus != "Gelmedi" && x.AttendanceStatus != "Avans / Ödeme"),
+            Overtime = g.Sum(x => x.OvertimeHours),
+            Earned = g.Sum(x => x.EarnedWage),
+            Paid = g.Sum(x => x.AdvancePayment)
+        })
+        .ToList();
+
+    var requiredDocs = new[]
+    {
+        ("Kimlik Fotokopisi", "Nüfus cüzdanı / yeni kimlik kartı ön-arka kopyası"),
+        ("Ağır ve Tehlikeli İşler Sağlık Raporu", "Şantiyede çalışmaya elverişli olduğuna dair hekim raporu"),
+        ("MYK Mesleki Yeterlilik Belgesi", "Kalıp, demir, iskele veya ilgili branş MYK sertifikası"),
+        ("Yüksekte Çalışma & İSG Eğitimi", "Temel İSG eğitimi ve KKD (Baret/Kemer) zimmet tutanağı"),
+        ("İkametgah & Adli Sicil Kaydı", "e-Devlet barkodlu yerleşim yeri ve sabıka kaydı"),
+        ("İş / Yevmiye Sözleşmesi", "Günlük ücret, mesai ve şantiye kuralları sözleşmesi")
+    };
+}
+
+<div class="container-fluid py-3">
+    <!-- Üst Başlık -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div class="d-flex align-items-center gap-3">
+            <a href="/AgencyWorkers/Index" class="btn btn-outline-secondary rounded-circle" style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <h4 class="fw-bold mb-0">@Model.FullName</h4>
+                    <span class="badge bg-dark text-warning">@Model.Profession</span>
+                    @if (!string.IsNullOrEmpty(meta.BloodGroup))
+                    {
+                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Kan: @meta.BloodGroup</span>
+                    }
+                    @if (!string.IsNullOrEmpty(meta.TeamOrSubcontractorName))
+                    {
+                        <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle"><i class="bi bi-people me-1"></i>@meta.TeamOrSubcontractorName</span>
+                    }
+                </div>
+                <p class="text-muted small mb-0 mt-1">
+                    <i class="bi bi-telephone me-1"></i>@Model.PhoneNumber
+                    @if (!string.IsNullOrEmpty(meta.IdentityNumber))
+                    {
+                        <span class="ms-2">• <strong>TC:</strong> @meta.IdentityNumber</span>
+                    }
+                    @if (!string.IsNullOrEmpty(meta.City) || !string.IsNullOrEmpty(meta.Address))
+                    {
+                        <span class="ms-2">• <i class="bi bi-geo-alt text-danger"></i> @(string.IsNullOrEmpty(meta.City) ? meta.Address : $"{meta.District} / {meta.City}")</span>
+                    }
+                </p>
+            </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-success rounded-pill px-3 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#addTimesheetModal">
+                <i class="bi bi-calendar-plus me-1"></i> + Günlük Puantaj / Bayram (2x) / Mesai İşle
+            </button>
+            <button class="btn btn-warning text-dark rounded-pill px-3 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#addAdvanceModal">
+                <i class="bi bi-cash-Stack me-1"></i> + Avans / Yevmiye Ödemesi Çık
+            </button>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show shadow-sm border-0">
+            <i class="bi bi-check-circle-fill me-2"></i>@TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- 4 KPI Kartı -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #f59e0b !important;">
+                <div class="card-body">
+                    <div class="text-muted small fw-semibold">Günlük Yevmiye & Bayram Çarpanı</div>
+                    <div class="fs-4 fw-bold text-dark">₺@Model.DefaultDailyWage.ToString("N2") <span class="fs-6 fw-normal text-muted">/ gün</span></div>
+                    <div class="small text-warning-emphasis mt-1">
+                        <i class="bi bi-stars me-1"></i>Bayram Çift Yevmiye (2x): <strong>₺@((Model.DefaultDailyWage * 2).ToString("N2"))</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #3b82f6 !important;">
+                <div class="card-body">
+                    <div class="text-muted small fw-semibold">Toplam Hak Edilen Yevmiye & Mesai</div>
+                    <div class="fs-4 fw-bold text-primary">₺@totalEarned.ToString("N2")</div>
+                    <div class="small text-muted mt-1">
+                        @totalWorkDays İş Günü • @holidayWorkDays Bayram Günü • @totalOvertimeHours Saat Mesai
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #10b981 !important;">
+                <div class="card-body">
+                    <div class="text-muted small fw-semibold">Ödenen Toplam Avans & Yevmiye</div>
+                    <div class="fs-4 fw-bold text-success">₺@totalPaid.ToString("N2")</div>
+                    <div class="small text-muted mt-1">
+                        @(string.IsNullOrEmpty(meta.Iban) ? "Elden / Makbuz Karşılığı" : $"IBAN: {meta.Iban}")
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #ef4444 !important;">
+                <div class="card-body">
+                    <div class="text-muted small fw-semibold">Ustanın Kalan Net Alacağı (Cari)</div>
+                    <div class="fs-4 fw-bold @(netBalance > 0 ? "text-danger" : "text-secondary")">₺@netBalance.ToString("N2")</div>
+                    <div class="small text-muted mt-1">
+                        @(netBalance > 0 ? "Ödeme Bekleyen Hakediş" : (netBalance < 0 ? "Fazla Avans (Mahsup Edilecek)" : "Hesap Kapalı (0 ₺)"))
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sekmeler -->
+    <ul class="nav nav-tabs mb-3" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active fw-bold" data-bs-toggle="tab" data-bs-target="#tab-puantaj" type="button">
+                <i class="bi bi-calendar2-range text-primary me-1"></i>📊 Çoklu Şantiye Puantaj, Bayram (2x) & Cari Ekstre
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#tab-isg" type="button">
+                <i class="bi bi-folder-check text-warning me-1"></i>📂 İSG & Özlük Evrakları (@meta.Documents.Count / 6)
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#tab-kimlik" type="button">
+                <i class="bi bi-geo-alt-fill text-danger me-1"></i>🏠 Kimlik, İkametgah Adresi, IBAN & Ekip Künyesi
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <!-- SEKME 1: ÇOKLU ŞANTİYE PUANTAJ & CARİ EKSTRE -->
+        <div class="tab-pane fade show active" id="tab-puantaj">
+            <div class="row g-3 mb-4">
+                <div class="col-lg-5">
+                    <div class="card border-0 shadow-sm h-100 rounded-4">
+                        <div class="card-header bg-white border-0 pt-3 pb-0">
+                            <h6 class="fw-bold mb-0"><i class="bi bi-buildings text-info me-2"></i>Şantiye Bazlı Çalışma & Maliyet Dağılımı</h6>
+                            <p class="text-muted small mb-2">Gezici ustanın hangi şantiyede kaç gün çalıştığı ve o şantiyeye yüklediği işçilik maliyeti.</p>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0 align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-3">Şantiye / Proje Adı</th>
+                                            <th>Gün</th>
+                                            <th>Mesai</th>
+                                            <th>Hak Ediş</th>
+                                            <th class="pe-3">Ödenen</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (!siteGroups.Any())
+                                        {
+                                            <tr>
+                                                <td colspan="5" class="text-center text-muted py-4 small">Henüz şantiye puantaj kaydı girilmemiş.</td>
+                                            </tr>
+                                        }
+                                        @foreach (var sg in siteGroups)
+                                        {
+                                            <tr>
+                                                <td class="ps-3 fw-semibold">@sg.SiteName</td>
+                                                <td><span class="badge bg-info-subtle text-info-emphasis">@sg.Days Gün</span></td>
+                                                <td>@sg.Overtime Saat</td>
+                                                <td class="fw-bold text-primary">₺@sg.Earned.ToString("N2")</td>
+                                                <td class="pe-3 fw-bold text-success">₺@sg.Paid.ToString("N2")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-7">
+                    <div class="card border-0 shadow-sm h-100 rounded-4">
+                        <div class="card-header bg-white border-0 pt-3 pb-2 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="fw-bold mb-0"><i class="bi bi-journal-text text-primary me-2"></i>Usta Puantaj, Mesai & Avans Hareketleri Ekstresi</h6>
+                                <p class="text-muted small mb-0">Tarih sırasına göre tüm yevmiyeler, bayram 2x çalışmaları ve ödenen avanslar.</p>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0 align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-3">Tarih</th>
+                                            <th>Şantiye</th>
+                                            <th>Yoklama / İşlem</th>
+                                            <th>Mesai</th>
+                                            <th>Hak Edilen (+)</th>
+                                            <th>Ödenen Avans (-)</th>
+                                            <th class="pe-3">Açıklama</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (!timesheets.Any())
+                                        {
+                                            <tr>
+                                                <td colspan="7" class="text-center text-muted py-4">
+                                                    Henüz puantaj veya avans hareketi bulunmuyor. Üstteki <strong>"+ Günlük Puantaj / Bayram (2x)"</strong> butonuyla ilk kaydı ekleyebilirsiniz.
+                                                </td>
+                                            </tr>
+                                        }
+                                        @foreach (var t in timesheets)
+                                        {
+                                            <tr>
+                                                <td class="ps-3 fw-semibold">@t.WorkDate.ToString("dd.MM.yyyy")</td>
+                                                <td>
+                                                    <span class="badge bg-light text-dark border">
+                                                        @(t.ConstructionProject != null ? t.ConstructionProject.Name : "Merkez / Genel")
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    @if (t.AttendanceStatus.Contains("Bayram"))
+                                                    {
+                                                        <span class="badge bg-warning text-dark fw-bold"><i class="bi bi-stars me-1"></i>@t.AttendanceStatus</span>
+                                                    }
+                                                    else if (t.AttendanceStatus == "Avans / Ödeme")
+                                                    {
+                                                        <span class="badge bg-success-subtle text-success border border-success-subtle">💵 Avans / Ödeme</span>
+                                                    }
+                                                    else if (t.AttendanceStatus == "Gelmedi")
+                                                    {
+                                                        <span class="badge bg-danger-subtle text-danger">Gelmedi</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-primary-subtle text-primary">@t.AttendanceStatus</span>
+                                                    }
+                                                </td>
+                                                <td>@(t.OvertimeHours > 0 ? $"{t.OvertimeHours} Saat" : "-")</td>
+                                                <td class="fw-bold text-primary">@(t.EarnedWage > 0 ? $"₺{t.EarnedWage:N2}" : "-")</td>
+                                                <td class="fw-bold text-success">@(t.AdvancePayment > 0 ? $"₺{t.AdvancePayment:N2}" : "-")</td>
+                                                <td class="pe-3 small text-muted">@(t.Notes ?? t.FieldExpenseDescription ?? "-")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SEKME 2: İSG & ÖZLÜK EVRAKLARI -->
+        <div class="tab-pane fade" id="tab-isg">
+            <div class="row g-3">
+                @foreach (var doc in requiredDocs)
+                {
+                    var existing = meta.Documents.FirstOrDefault(d => d.DocType == doc.Item1);
+                    <div class="col-md-6">
+                        <div class="card border-0 shadow-sm rounded-4 h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <h6 class="fw-bold mb-1">@doc.Item1</h6>
+                                        <p class="text-muted small mb-0">@doc.Item2</p>
+                                    </div>
+                                    @if (existing != null)
+                                    {
+                                        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Dosyada Mevcut</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-circle me-1"></i>Eksik Belge</span>
+                                    }
+                                </div>
+                                @if (existing != null)
+                                {
+                                    <div class="bg-light rounded-3 p-2 mb-2 small d-flex justify-content-between align-items-center">
+                                        <span><i class="bi bi-clock me-1"></i>Yüklendi: @existing.UploadedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm") (@existing.Notes)</span>
+                                        @if (!string.IsNullOrEmpty(existing.FilePath))
+                                        {
+                                            <a href="@existing.FilePath" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2">Dosyayı Gör</a>
+                                        }
+                                    </div>
+                                }
+                                <form asp-action="UploadWorkerDocument" method="post" enctype="multipart/form-data" class="row g-2 align-items-center mt-2">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="workerId" value="@Model.Id" />
+                                    <input type="hidden" name="docType" value="@doc.Item1" />
+                                    <div class="col-sm-5">
+                                        <input type="file" name="file" class="form-control form-control-sm" />
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <input type="text" name="docNotes" class="form-control form-control-sm" placeholder="Geçerlilik / Not..." value="@(existing?.Notes)" />
+                                    </div>
+                                    <div class="col-sm-3">
+                                        <button type="submit" class="btn btn-sm btn-outline-dark w-100 fw-semibold">
+                                            <i class="bi bi-upload me-1"></i> Kaydet
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- SEKME 3: KİMLİK, İKAMETGAH ADRESİ, IBAN & EKİP KÜNYESİ -->
+        <div class="tab-pane fade" id="tab-kimlik">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-4">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-person-vcard text-primary me-2"></i>Usta Özlük, İkametgah Adresi, IBAN ve Yevmiye Ayarları</h6>
+                    <form asp-action="UpdateWorkerDetails" method="post" class="row g-3">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Ad *</label>
+                            <input type="text" name="firstName" class="form-control" value="@Model.FirstName" required />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Soyad *</label>
+                            <input type="text" name="lastName" class="form-control" value="@Model.LastName" required />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">11 Haneli TC Kimlik No</label>
+                            <input type="text" name="identityNumber" maxlength="11" class="form-control" value="@meta.IdentityNumber" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Cep Telefonu *</label>
+                            <input type="text" name="phoneNumber" class="form-control" value="@Model.PhoneNumber" required />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Ustalık / Branş *</label>
+                            <input type="text" name="profession" class="form-control" value="@Model.Profession" required />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Günlük Net Yevmiye (₺) *</label>
+                            <input type="number" step="0.01" name="dailyWage" class="form-control" value="@Model.DefaultDailyWage.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" required />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Bağlı Olduğu Ekip / Çavuş</label>
+                            <input type="text" name="teamOrSubcontractorName" class="form-control" value="@meta.TeamOrSubcontractorName" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Kan Grubu</label>
+                            <input type="text" name="bloodGroup" class="form-control" value="@meta.BloodGroup" placeholder="Örn: A Rh(+)" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">İl</label>
+                            <input type="text" name="city" class="form-control" value="@meta.City" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">İlçe</label>
+                            <input type="text" name="district" class="form-control" value="@meta.District" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">IBAN Numarası</label>
+                            <input type="text" name="iban" class="form-control" value="@meta.Iban" placeholder="TR00 0000 ..." />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Açık İkametgah Adresi</label>
+                            <input type="text" name="address" class="form-control" value="@meta.Address" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Acil Durumda Aranacak Yakını</label>
+                            <input type="text" name="emergencyContactName" class="form-control" value="@meta.EmergencyContactName" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Acil Durum Telefonu</label>
+                            <input type="text" name="emergencyContactPhone" class="form-control" value="@meta.EmergencyContactPhone" />
+                        </div>
+                        <div class="col-12 d-flex justify-content-between align-items-center pt-2">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="isActive" value="true" checked="@Model.IsActive" id="workerActiveSwitch" />
+                                <label class="form-check-label fw-semibold" for="workerActiveSwitch">Aktif Çalışan Usta (Puantaj Listelerinde Görünsün)</label>
+                            </div>
+                            <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">
+                                <i class="bi bi-save me-1"></i> Bilgileri Güncelle
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL 1: GÜNLÜK PUANTAJ / BAYRAM (2X) / MESAİ EKLE -->
+<div class="modal fade" id="addTimesheetModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="AddWorkerTimesheetOrAdvance" method="post" class="modal-content border-0 shadow-lg rounded-4">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="workerId" value="@Model.Id" />
+            <div class="modal-header bg-success text-white border-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-calendar-plus me-2"></i>Günlük Puantaj, Bayram (2x) veya Mesai İşle</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Çalışma Tarihi *</label>
+                        <input type="date" name="workDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Görev Yaptığı Şantiye</label>
+                        <select name="constructionProjectId" class="form-select">
+                            <option value="">-- Merkez / Genel Saha --</option>
+                            @foreach (var p in projects)
+                            {
+                                <option value="@p.Id">@p.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">Yoklama & Çarpan Durumu *</label>
+                        <select name="attendanceStatus" class="form-select fw-semibold">
+                            <option value="Tam Gün">✅ Tam Gün (1x Normal Yevmiye: ₺@Model.DefaultDailyWage.ToString("N0"))</option>
+                            <option value="Bayram / Resmi Tatil (2x Çift Yevmiye)">🌟 Bayram / Resmi Tatil Çalışması (2x Çift Yevmiye: ₺@((Model.DefaultDailyWage * 2).ToString("N0")))</option>
+                            <option value="Fazla Mesaili (1.5x)">⏱️ Fazla Mesaili Gün (1.5x Saatlik Mesai Eklenir)</option>
+                            <option value="Yarım Gün">🌓 Yarım Gün (0.5x Yevmiye: ₺@((Model.DefaultDailyWage * 0.5m).ToString("N0")))</option>
+                            <option value="Ücretli İzin">🏖️ Ücretli İzin (1x Yevmiye)</option>
+                            <option value="Gelmedi">❌ Gelmedi / Devamsız (0 ₺)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Fazla Mesai Saati (Varsa)</label>
+                        <input type="number" step="0.5" name="overtimeHours" class="form-control" value="0" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Aynı Gün Verilen Avans (₺)</label>
+                        <input type="number" step="0.01" name="advancePayment" class="form-control" value="0" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">Yapılan İş / Kat / Açıklama</label>
+                        <input type="text" name="notes" class="form-control" placeholder="Örn: B Blok 3. Kat tabliye kalıbı ve akşam beton dökümü..." />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold">Puantajı ve Hakedişi Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL 2: AVANS / YEVMİYE ÖDEMESİ ÇIK -->
+<div class="modal fade" id="addAdvanceModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="AddWorkerTimesheetOrAdvance" method="post" class="modal-content border-0 shadow-lg rounded-4">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="workerId" value="@Model.Id" />
+            <input type="hidden" name="attendanceStatus" value="Avans / Ödeme" />
+            <div class="modal-header bg-warning text-dark border-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-cash-coin me-2"></i>Ustaya Avans / Yevmiye Ödemesi Çık</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="alert alert-warning border-0 small mb-3">
+                    Ustanın mevcut kalan net alacağı: <strong>₺@netBalance.ToString("N2")</strong>. Yapacağınız ödeme ustanın cari bakiyesinden otomatik düşülür.
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Ödeme Tarihi *</label>
+                        <input type="date" name="workDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">İlgili Şantiye (Opsiyonel)</label>
+                        <select name="constructionProjectId" class="form-select">
+                            <option value="">-- Merkez Kasa / Genel --</option>
+                            @foreach (var p in projects)
+                            {
+                                <option value="@p.Id">@p.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">Ödenen Avans / Yevmiye Tutarı (₺) *</label>
+                        <input type="number" step="0.01" name="advancePayment" class="form-control form-control-lg fw-bold" placeholder="Örn: 5000" required />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">Ödeme Açıklaması (Elden / EFT / Haftalık Mahsup)</label>
+                        <input type="text" name="notes" class="form-control" placeholder="Örn: Haftalık yevmiye mahsubu - Banka EFT" required />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-warning text-dark rounded-pill px-4 fw-bold">Ödemeyi Usta Carisine İşle</button>
+            </div>
+        </form>
+    </div>
+</div>

@@ -70,7 +70,7 @@ namespace GMK360.Web.Controllers
                     LastName = "Özçırak",
                     EmailConfirmed = true,
                     PhoneNumberConfirmed = true,
-                    IsEDevletVerified = true,
+                    IsEDevletVerified = true, HasMapConsent = true,
                     UserType = UserType.Corporate
                 };
                 await _userManager.CreateAsync(user, "Gmk360!Super");
@@ -270,7 +270,7 @@ namespace GMK360.Web.Controllers
         [HttpGet]
         public IActionResult Register([FromQuery(Name = "ref")] string? referralCode, [FromQuery(Name = "token")] string? shadowToken)
         {
-            var model = new RegisterViewModel();
+            if (string.IsNullOrEmpty(shadowToken)) return RedirectToAction("QuickRegister"); var model = new RegisterViewModel();
             if (!string.IsNullOrEmpty(referralCode))
             {
                 model.ReferralCode = referralCode;
@@ -539,7 +539,7 @@ namespace GMK360.Web.Controllers
         [AllowAnonymous]
         public IActionResult QuickRegister(string? role)
         {
-            if (User.Identity.IsAuthenticated)
+            if (false && User.Identity.IsAuthenticated)
             {
                 return RedirectToAction("Index", "Dashboard");
             }
@@ -576,9 +576,9 @@ namespace GMK360.Web.Controllers
             }
 
             // İsim ayrıştırma
-            string fullName = model.FullName?.Trim() ?? "Yetkili";
-            string firstName = fullName;
-            string lastName = "-";
+            string fullName = !string.IsNullOrWhiteSpace(model.FullName) ? model.FullName.Trim() : $"{model.FirstName} {model.LastName}".Trim();
+            string firstName = !string.IsNullOrWhiteSpace(model.FirstName) ? model.FirstName.Trim() : fullName;
+            string lastName = !string.IsNullOrWhiteSpace(model.LastName) ? model.LastName.Trim() : "-";
             int lastSpaceIndex = fullName.LastIndexOf(' ');
             if (lastSpaceIndex > 0)
             {
@@ -641,7 +641,7 @@ namespace GMK360.Web.Controllers
                 ActiveModules = activeModules,
                 EmailConfirmed = true,
                 PhoneNumberConfirmed = true,
-                IsEDevletVerified = true
+                IsEDevletVerified = true, HasMapConsent = true
             };
 
             var createResult = await _userManager.CreateAsync(user, model.Password);
@@ -679,13 +679,13 @@ namespace GMK360.Web.Controllers
             var agency = new Agency
             {
                 CompanyName = model.CompanyName.Trim(),
-                TaxNumber = "1111111111",
+                TaxNumber = !string.IsNullOrWhiteSpace(model.TaxNumber) ? model.TaxNumber.Trim() : "",
                 Subdomain = subdomain,
                 ThemePrimaryColor = "#0f172a",
                 ThemeSecondaryColor = "#ffffff",
-                Address = "Merkez",
+                Address = !string.IsNullOrWhiteSpace(model.Address) ? model.Address.Trim() : "",
                 WhatsAppNumber = cleanPhone,
-                AuthCertificateNo = "MUAF",
+                AuthCertificateNo = !string.IsNullOrWhiteSpace(model.AuthCertificateNo) ? model.AuthCertificateNo.Trim() : "",
                 IsMinistryVerified = false,
                 LogoUrl = "/uploads/agencies/default-logo.png",
                 PackageLimit = 100,
@@ -727,7 +727,7 @@ namespace GMK360.Web.Controllers
                 {
                     CompanyName = model.CompanyName.Trim(),
                     Subdomain = subdomain,
-                    TaxNumber = "1111111111",
+                    TaxNumber = !string.IsNullOrWhiteSpace(model.TaxNumber) ? model.TaxNumber.Trim() : "",
                     ContactPhone = cleanPhone,
                     ContactEmail = cleanEmail
                 };
@@ -760,7 +760,7 @@ namespace GMK360.Web.Controllers
                     {
                         return RedirectToAction("Index", "DemolitionSalvage");
                     }
-                    return RedirectToAction("Index", "ConstructionProject");
+                    return RedirectToAction("Construction", "Dashboard");
             }
         }
 
@@ -1014,7 +1014,7 @@ namespace GMK360.Web.Controllers
                 LastName = model.LastName, // Yetkili soyadı
                 TcIdentityNo = model.TcIdentityNo,
                 BirthYear = model.BirthYear,
-                IsEDevletVerified = true,
+                IsEDevletVerified = true, HasMapConsent = true,
                 ActiveModules = "construction",
                 DisplayName = displayName,
                 ProfileSlug = await GenerateUniqueProfileSlugAsync(displayName),
@@ -1053,7 +1053,7 @@ namespace GMK360.Web.Controllers
                     ThemeSecondaryColor = "#ffffff",
                     Address = !string.IsNullOrEmpty(model.TaxOffice) ? $"{model.TaxOffice} V.D." : "Merkez",
                     WhatsAppNumber = model.PhoneNumber ?? "-",
-                    AuthCertificateNo = "MUAF",
+                    AuthCertificateNo = !string.IsNullOrWhiteSpace(model.AuthCertificateNo) ? model.AuthCertificateNo.Trim() : "",
                     IsMinistryVerified = false,
                     LogoUrl = "/uploads/agencies/default-logo.png",
                     PackageLimit = 100,

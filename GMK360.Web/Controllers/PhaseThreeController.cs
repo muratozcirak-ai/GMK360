@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using GMK360.Data.Contexts;
 using GMK360.Core.Entities.Construction;
@@ -8,6 +9,7 @@ using System.Collections.Generic;
 
 namespace GMK360.Web.Controllers
 {
+    [Authorize]
     public class PhaseThreeController : Controller
     {
         private readonly ApplicationDbContext _context;
@@ -25,6 +27,8 @@ namespace GMK360.Web.Controllers
 
             ViewData["ProjectId"] = project.Id;
             ViewData["ProjectName"] = project.Name;
+            ViewBag.Project = project;
+            await GMK360.Web.Helpers.PhaseCentralPoolHelper.EnsurePhaseItemsPricedFromPoolAsync(_context, projectId, BudgetPhaseCategory.KabaInsaatKarkas);
             ViewData["BypassedPhases"] = project.BypassedPhases;
             ViewBag.LinkedDocs = await _context.ProjectLegalDocuments.Where(d => d.ConstructionProjectId == projectId && d.LinkedPhaseCategory == GMK360.Core.Entities.Construction.BudgetPhaseCategory.KabaInsaatKarkas).ToListAsync();
             ViewBag.PhaseId = (int)GMK360.Core.Entities.Construction.BudgetPhaseCategory.KabaInsaatKarkas;
@@ -136,6 +140,15 @@ namespace GMK360.Web.Controllers
             
             await _context.SaveChangesAsync();
             return RedirectToAction("Index", new { projectId = item.ConstructionProjectId });
+        }
+
+        [HttpPost("PhaseThree/RequestQuote/{id}")]
+        [IgnoreAntiforgeryToken]
+        public async Task<IActionResult> RequestQuote(int id)
+        {
+            var pId = await GMK360.Web.Helpers.PhaseCentralPoolHelper.RequestQuoteForBudgetItemAsync(_context, id, "PhaseThreeBudget");
+            if (pId == null) return NotFound();
+            return RedirectToAction("Index", new { projectId = pId.Value });
         }
 
         [HttpPost("PhaseThree/DeleteItem/{id}")]

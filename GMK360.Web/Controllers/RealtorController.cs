@@ -51,11 +51,19 @@ namespace GMK360.Web.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SaveShowing(
-            DateTime appointmentDate, string clientName, string clientPhone,
-            string propertyTitle, string location, string feedback, bool interestedInRenovation)
+            DateTime? appointmentDate, string clientName, string clientPhone,
+            string propertyTitle, string location, string feedback, bool interestedInRenovation,
+            string? appointmentDatePart = null, string? appointmentTimePart = null)
         {
+            DateTime finalAppointmentDate = appointmentDate ?? DateTime.Now;
+            if (!string.IsNullOrWhiteSpace(appointmentDatePart) && DateTime.TryParse(appointmentDatePart, out var parsedDate))
+            {
+                TimeSpan.TryParse(appointmentTimePart, out var parsedTime);
+                finalAppointmentDate = parsedDate.Date.Add(parsedTime);
+            }
+
             await _realtorService.AddShowingAppointmentAsync(
-                appointmentDate, clientName, clientPhone,
+                finalAppointmentDate, clientName, clientPhone,
                 propertyTitle, location, feedback, interestedInRenovation);
 
             TempData["SuccessMessage"] = "Yer gösterme randevusu ve müşteri notları işlendi.";

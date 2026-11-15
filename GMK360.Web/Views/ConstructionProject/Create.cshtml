@@ -819,7 +819,26 @@ window.onerror = function(message, source, lineno, colno, error) {
                         });
                     };
                     
-                    tryGeocode(query, 16);
+                    var cleanN = (neighName && !neighName.includes('Seçin') && !neighName.includes('Yükleniyor') && !neighName.includes('Önce')) ? neighName.replace(/\bMAHALLESİ\b/gi, '').replace(/\bMAHALLESI\b/gi, '').replace(/\bMAH\.?\b/gi, '').trim() : '';
+                    var cleanS = (streetName && !streetName.includes('Seçin') && !streetName.includes('Yükleniyor') && !streetName.includes('Önce')) ? streetName.replace(/\bSK\.?\b/gi, 'Sokağı').replace(/\bSOK\.?\b/gi, 'Sokağı').replace(/\bSOKAK\b/gi, 'Sokağı').replace(/\bCD\.?\b/gi, 'Caddesi').replace(/\bCAD\.?\b/gi, 'Caddesi').replace(/\bCADDE\b/gi, 'Caddesi').replace(/\bBLV\.?\b/gi, 'Bulvarı').trim() : '';
+                    if (cleanS && !/(sokağı|sokak|caddesi|cadde|bulvarı|bulvar|yolu|çıkmazı|meydanı)/i.test(cleanS)) { cleanS += ' Sokağı'; }
+                    var doorNoEl = document.getElementById('fullAddress');
+                    var doorNo = doorNoEl && doorNoEl.value ? doorNoEl.value.trim() : '';
+                    var arcLine = [cleanS ? (cleanS + (doorNo ? ' No:' + doorNo : '')) : '', cleanN ? (cleanN + ' Mahallesi') : '', (distName && !distName.includes('Seçin')) ? distName : '', cityName, 'Türkiye'].filter(Boolean).join(', ');
+                    var zoomTarget = cleanS ? 18 : (cleanN ? 16 : 14);
+                    fetch('https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=3&countryCode=TUR&SingleLine=' + encodeURIComponent(arcLine))
+                        .then(function(r) { return r.json(); })
+                        .then(function(arcData) {
+                            if (arcData && arcData.candidates && arcData.candidates.length > 0 && arcData.candidates[0].score >= 75) {
+                                var loc = arcData.candidates[0].location;
+                                map.setView([loc.y, loc.x], zoomTarget);
+                                marker.setLatLng([loc.y, loc.x]);
+                            } else {
+                                var normQuery = [cleanS, cleanN, (distName && !distName.includes('Seçin')) ? distName : '', cityName, 'Türkiye'].filter(Boolean).join(', ');
+                                tryGeocode(normQuery || query, zoomTarget);
+                            }
+                        })
+                        .catch(function() { tryGeocode(query, zoomTarget); });
                 }
             }, 500);
         }

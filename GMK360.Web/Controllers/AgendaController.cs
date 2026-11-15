@@ -425,11 +425,17 @@ namespace GMK360.Web.Controllers
 
         [ValidateAntiForgeryToken]
 
-        public async Task<IActionResult> Create(AgendaRecord record, IFormFile imageFile, List<string> itemTopicTitle, List<string> itemPresentationText, List<int> selectedParticipants)
+        public async Task<IActionResult> Create(AgendaRecord record, IFormFile imageFile, List<string> itemTopicTitle, List<string> itemPresentationText, List<int> selectedParticipants, string? eventDatePart = null, string? eventTimePart = null)
 
         {
 
             var agencyId = await GetCurrentAgencyIdAsync();
+
+            if (!string.IsNullOrWhiteSpace(eventDatePart) && DateTime.TryParse(eventDatePart, out var parsedEventDate))
+            {
+                TimeSpan.TryParse(eventTimePart, out var parsedEventTime);
+                record.EventDate = parsedEventDate.Date.Add(parsedEventTime);
+            }
 
             record.AgencyId = agencyId;
 
@@ -1278,65 +1284,199 @@ namespace GMK360.Web.Controllers
 
         [HttpGet]
 
-        public async Task<IActionResult> Meetings(int? projectId, byte? statusId)
-
+        private static bool IsGenericRawFileName(string? rawName)
         {
+            if (string.IsNullOrWhiteSpace(rawName)) return true;
+            var lower = rawName.Trim().ToLowerInvariant();
+            return lower.StartsWith("img_") || lower.StartsWith("img-") ||
+                   lower.StartsWith("dsc_") || lower.StartsWith("dscn") ||
+                   lower.Contains("whatsapp") || lower.StartsWith("scan") ||
+                   lower.StartsWith("screenshot") || lower.StartsWith("ekran") ||
+                   lower.StartsWith("image") || lower.StartsWith("photo") ||
+                   lower.StartsWith("belge") || lower.StartsWith("document") ||
+                   lower.All(c => char.IsDigit(c) || c == '_' || c == '-' || c == ' ');
+        }
 
+        public async Task<IActionResult> Meetings(int? projectId, byte? statusId, byte? recordTypeId = null)
+        {
             var agencyId = await GetCurrentAgencyIdAsync();
-
-            var query = _context.AgendaRecords
-
+            var baseQuery = _context.AgendaRecords
                 .Include(a => a.Project)
-
                 .Include(a => a.Phonebook)
-
                 .Include(a => a.Items)
-
                 .Include(a => a.Participants)
-
                 .Where(a => a.AgencyId == agencyId && !a.IsDeleted);
 
-
-
             if (projectId.HasValue)
+                baseQuery = baseQuery.Where(a => a.ProjectId == projectId.Value);
 
-                query = query.Where(a => a.ProjectId == projectId.Value);
+            if (recordTypeId.HasValue)
+                baseQuery = baseQuery.Where(a => a.RecordTypeId == recordTypeId.Value);
 
+            var allMatching = await baseQuery.OrderByDescending(a => a.EventDate).ToListAsync();
+            var today = DateTime.Today;
 
+            ViewBag.OverdueCount = allMatching.Count(x => x.EventDate.Date < today && x.StatusId != AgendaConstants.StatusTamamlandi);
+            ViewBag.TodayCount = allMatching.Count(x => x.EventDate.Date == today && x.StatusId != AgendaConstants.StatusTamamlandi);
+            ViewBag.UpcomingCount = allMatching.Count(x => x.EventDate.Date > today && x.StatusId != AgendaConstants.StatusTamamlandi);
+            ViewBag.CompletedCount = allMatching.Count(x => x.StatusId == AgendaConstants.StatusTamamlandi);
+            ViewBag.ActiveTotalCount = allMatching.Count(x => x.StatusId != AgendaConstants.StatusTamamlandi);
 
-            if (statusId.HasValue)
-
-                query = query.Where(a => a.StatusId == statusId.Value);
-
-
-
-            var records = await query.OrderByDescending(a => a.EventDate).ToListAsync();
-
-
+            // Varsayılan olarak SADECE Açık / Devam Eden Başlıkları göster (Karara bağlananlar aktif ekrandan düşer, Arşiv sekmesinde durur)
+            byte effectiveStatus = statusId ?? AgendaConstants.StatusPlanlandi;
+            var records = effectiveStatus == 99
+                ? allMatching
+                : effectiveStatus == AgendaConstants.StatusTamamlandi
+                    ? allMatching.Where(a => a.StatusId == AgendaConstants.StatusTamamlandi).ToList()
+                    : allMatching.Where(a => a.StatusId != AgendaConstants.StatusTamamlandi).ToList();
 
             ViewBag.Projects = await _context.ConstructionProjects
-
                 .Where(p => p.AgencyId == agencyId && !p.IsDeleted)
-
                 .OrderBy(p => p.Name)
-
                 .ToListAsync();
 
-
-
             ViewBag.SelectedProjectId = projectId;
-
-            ViewBag.SelectedStatusId = statusId;
-
-
+            ViewBag.SelectedStatusId = effectiveStatus;
+            ViewBag.SelectedRecordTypeId = recordTypeId;
+            ViewBag.Phonebook = await _context.AgencyPhonebooks.Where(p => p.AgencyId == agencyId && !p.IsDeleted).OrderBy(p => p.Name).ToListAsync();
 
             return View(records);
-
         }
 
 
 
         [HttpGet]
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> QuickCreateAgendaRecord(
+            string title,
+            string eventDate,
+            string? eventTime,
+            byte recordTypeId = 4,
+            int? projectId = null,
+            int? phonebookId = null,
+            string? notes = null,
+            IFormFile? initialFile = null,
+            string? initialDocTitle = null,
+            bool openImmediately = true)
+        {
+            var agencyId = await GetCurrentAgencyIdAsync();
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                TempData["ErrorMessage"] = "Konu / iş başlığı zorunludur.";
+                return RedirectToAction(nameof(Meetings));
+            }
+
+            DateTime parsedEventDate = DateTime.Today.AddHours(10);
+            if (!string.IsNullOrWhiteSpace(eventDate) && DateTime.TryParse(eventDate, out var d))
+            {
+                if (!string.IsNullOrWhiteSpace(eventTime) && TimeSpan.TryParse(eventTime, out var t))
+                {
+                    parsedEventDate = d.Date.Add(t);
+                }
+                else
+                {
+                    parsedEventDate = d.Date.AddHours(10);
+                }
+            }
+
+            var record = new AgendaRecord
+            {
+                AgencyId = agencyId,
+                Title = title.Trim(),
+                Notes = notes?.Trim() ?? "",
+                EventDate = parsedEventDate,
+                RecordTypeId = recordTypeId,
+                StatusId = AgendaConstants.StatusPlanlandi,
+                ProjectId = (projectId.HasValue && projectId.Value > 0) ? projectId.Value : null,
+                PhonebookId = (phonebookId.HasValue && phonebookId.Value > 0) ? phonebookId.Value : null,
+                ImageUrl = "",
+                CreatedAt = DateTime.Now,
+                IsDeleted = false,
+                Items = new System.Collections.Generic.List<AgendaItem>(),
+                Participants = new System.Collections.Generic.List<AgendaParticipant>()
+            };
+
+            if (record.PhonebookId.HasValue)
+            {
+                var pb = await _context.AgencyPhonebooks.FirstOrDefaultAsync(p => p.Id == record.PhonebookId.Value && p.AgencyId == agencyId);
+                record.Participants.Add(new AgendaParticipant
+                {
+                    PhonebookId = record.PhonebookId.Value,
+                    UserId = pb?.LinkedUserId,
+                    AccessToken = Guid.NewGuid().ToString("N")
+                });
+            }
+
+            _context.AgendaRecords.Add(record);
+            await _context.SaveChangesAsync();
+
+            bool hasInitialNote = !string.IsNullOrWhiteSpace(notes);
+            bool hasInitialFile = initialFile != null && initialFile.Length > 0;
+
+            if (hasInitialNote || hasInitialFile)
+            {
+                var firstItem = new AgendaItem
+                {
+                    AgendaRecordId = record.Id,
+                    TopicTitle = "Biz",
+                    PresentationText = hasInitialNote ? notes!.Trim() : (!string.IsNullOrWhiteSpace(initialDocTitle) ? initialDocTitle.Trim() : "Evrak / Resmi Yazı Eklendi"),
+                    LiveMeetingNotes = "",
+                    ImageUrl = "",
+                    OrderNo = 1
+                };
+                _context.AgendaItems.Add(firstItem);
+                await _context.SaveChangesAsync();
+
+                if (hasInitialFile && initialFile != null)
+                {
+                    string uploadsFolder = Path.Combine(_hostEnvironment.WebRootPath, "uploads", "agenda");
+                    Directory.CreateDirectory(uploadsFolder);
+                    string safeExt = Path.GetExtension(initialFile.FileName).ToLowerInvariant();
+                    string uniqueFileName = Guid.NewGuid().ToString("N") + "_" + Path.GetFileName(initialFile.FileName);
+                    string filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                    using (var fileStream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await initialFile.CopyToAsync(fileStream);
+                    }
+
+                    string rawInitialName = Path.GetFileNameWithoutExtension(initialFile.FileName);
+                    string cleanDocName = !string.IsNullOrWhiteSpace(initialDocTitle)
+                        ? initialDocTitle.Trim()
+                        : (!IsGenericRawFileName(rawInitialName) ? rawInitialName : $"{record.Title} - Görüşme Belgesi");
+
+                    var doc = new DocumentArchive
+                    {
+                        AgencyId = agencyId,
+                        ProjectId = record.ProjectId,
+                        SourceModule = "AgendaItem",
+                        SourceRecordId = firstItem.Id,
+                        Title = cleanDocName,
+                        FileName = cleanDocName + safeExt,
+                        FileExtension = safeExt,
+                        DocumentUrl = "/uploads/agenda/" + uniqueFileName,
+                        Category = "Alınan Belge",
+                        UploadDate = DateTime.Now,
+                        Status = "Tamamlandı",
+                        CreatedAt = DateTime.Now,
+                        IsDeleted = false
+                    };
+                    _context.DocumentArchives.Add(doc);
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            if (openImmediately)
+            {
+                TempData["SuccessMessage"] = $"'{record.Title}' kaydı açıldı. Evrak ekleyebilir veya görüşme/iş notlarınızı yazabilirsiniz.";
+                return RedirectToAction(nameof(MeetingRoom), new { id = record.Id });
+            }
+
+            TempData["SuccessMessage"] = $"'{record.Title}' ({parsedEventDate:dd.MM.yyyy HH:mm}) ajandanıza ve karar masasına eklendi.";
+            return RedirectToAction(nameof(Meetings));
+        }
 
         public async Task<IActionResult> MeetingRoom(int id)
 
@@ -1498,39 +1638,97 @@ namespace GMK360.Web.Controllers
 
 
         [HttpPost]
-
         [ValidateAntiForgeryToken]
-
-        public async Task<IActionResult> ConcludeMeeting(int recordId, string? finalSummary)
-
+        public async Task<IActionResult> ConcludeMeeting(int recordId, string? finalSummary, IFormFile? resultFile = null, string? resultDocTitle = null, bool returnToList = false)
         {
-
             var agencyId = await GetCurrentAgencyIdAsync();
-
-            var record = await _context.AgendaRecords.FirstOrDefaultAsync(r => r.Id == recordId && r.AgencyId == agencyId && !r.IsDeleted);
-
+            var record = await _context.AgendaRecords.Include(r => r.Items).FirstOrDefaultAsync(r => r.Id == recordId && r.AgencyId == agencyId && !r.IsDeleted);
             if (record == null) return NotFound();
 
-
-
             record.StatusId = AgendaConstants.StatusTamamlandi;
-
             if (!string.IsNullOrWhiteSpace(finalSummary))
-
             {
+                record.Notes = (record.Notes ?? "") + "\n\n📋 [SONUÇ & ALINAN KARAR - " + DateTime.Now.ToString("dd.MM.yyyy HH:mm") + "]\n" + finalSummary.Trim();
+            }
+            if (!string.IsNullOrWhiteSpace(finalSummary) || (resultFile != null && resultFile.Length > 0))
+            {
+                int nextOrder = (record.Items != null && record.Items.Any() ? record.Items.Max(i => i.OrderNo) : 0) + 1;
+                var resultItem = new AgendaItem
+                {
+                    AgendaRecordId = record.Id,
+                    TopicTitle = "Biz",
+                    PresentationText = !string.IsNullOrWhiteSpace(finalSummary) ? $"✅ [SONUÇ / KARAR]: {finalSummary.Trim()}" : "✅ [SONUÇ EVRAKI EKLENDİ]",
+                    LiveMeetingNotes = "",
+                    ImageUrl = "",
+                    OrderNo = nextOrder
+                };
+                _context.AgendaItems.Add(resultItem);
+                await _context.SaveChangesAsync();
 
-                record.Notes = (record.Notes ?? "") + "\n\n📋 [TOPLANTI SONUÇ BİLDİRGESİ & ALINAN NİHAİ KARARLAR - " + DateTime.Now.ToString("dd.MM.yyyy HH:mm") + "]\n" + finalSummary.Trim();
+                if (resultFile != null && resultFile.Length > 0)
+                {
+                    string uploadsFolder = Path.Combine(_hostEnvironment.WebRootPath, "uploads", "agenda");
+                    Directory.CreateDirectory(uploadsFolder);
+                    string safeExt = Path.GetExtension(resultFile.FileName).ToLowerInvariant();
+                    string uniqueFileName = Guid.NewGuid().ToString("N") + "_" + Path.GetFileName(resultFile.FileName);
+                    string filePath = Path.Combine(uploadsFolder, uniqueFileName);
+                    using (var fileStream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await resultFile.CopyToAsync(fileStream);
+                    }
+                    string rawResultName = Path.GetFileNameWithoutExtension(resultFile.FileName);
+                    string cleanResultTitle = !string.IsNullOrWhiteSpace(resultDocTitle)
+                        ? resultDocTitle.Trim()
+                        : (!IsGenericRawFileName(rawResultName) ? rawResultName : $"{record.Title} - Karar & Sonuç Belgesi");
 
+                    var doc = new DocumentArchive
+                    {
+                        AgencyId = agencyId,
+                        ProjectId = record.ProjectId,
+                        SourceModule = "AgendaItem",
+                        SourceRecordId = resultItem.Id,
+                        Title = cleanResultTitle,
+                        FileName = cleanResultTitle + safeExt,
+                        FileExtension = safeExt,
+                        DocumentUrl = "/uploads/agenda/" + uniqueFileName,
+                        Category = "Toplantı & Karar Tutanakları",
+                        UploadDate = DateTime.Now,
+                        Year = DateTime.Now.Year,
+                        Status = "Tamamlandı",
+                        CreatedAt = DateTime.Now,
+                        IsDeleted = false
+                    };
+                    _context.DocumentArchives.Add(doc);
+                }
+                else if (!string.IsNullOrWhiteSpace(finalSummary))
+                {
+                    var summaryDoc = new DocumentArchive
+                    {
+                        AgencyId = agencyId,
+                        ProjectId = record.ProjectId,
+                        SourceModule = "AgendaDecision",
+                        SourceRecordId = record.Id,
+                        Title = $"{record.Title} - Karar Özeti ({DateTime.Now:dd.MM.yyyy})",
+                        FileName = $"{record.Title}.txt",
+                        FileExtension = ".txt",
+                        DocumentUrl = $"/Agenda/MeetingRoom/{record.Id}",
+                        Category = "Toplantı & Karar Tutanakları",
+                        UploadDate = DateTime.Now,
+                        Year = DateTime.Now.Year,
+                        Status = "Karara Bağlandı",
+                        CreatedAt = DateTime.Now,
+                        IsDeleted = false
+                    };
+                    _context.DocumentArchives.Add(summaryDoc);
+                }
             }
 
             await _context.SaveChangesAsync();
 
-
-
-            TempData["SuccessMessage"] = "Toplantı başarıyla sonuçlandırıldı ve alınan kararlar deftere işlendi.";
+            TempData["SuccessMessage"] = $"'{record.Title}' karara bağlandı; aktif ekrandan düşürülüp tüm belgeleriyle Arşive kaldırıldı.";
+            if (returnToList) return RedirectToAction(nameof(Meetings));
 
             return RedirectToAction(nameof(MeetingRoom), new { id = recordId });
-
         }
 
 
@@ -1545,7 +1743,7 @@ namespace GMK360.Web.Controllers
 
             var agencyId = await GetCurrentAgencyIdAsync();
 
-            var record = await _context.AgendaRecords.FirstOrDefaultAsync(r => r.Id == recordId && r.AgencyId == agencyId && !r.IsDeleted);
+            var record = await _context.AgendaRecords.Include(r => r.Items).FirstOrDefaultAsync(r => r.Id == recordId && r.AgencyId == agencyId && !r.IsDeleted);
 
             if (record == null) return NotFound();
 
@@ -1569,7 +1767,7 @@ namespace GMK360.Web.Controllers
 
         [ValidateAntiForgeryToken]
 
-        public async Task<IActionResult> ScheduleNextSession(int recordId, string nextSessionDate, string? nextSessionTime, string? nextSessionNote, bool createNewSession = false)
+        public async Task<IActionResult> ScheduleNextSession(int recordId, string nextSessionDate, string? nextSessionTime, string? nextSessionNote, bool createNewSession = false, bool returnToList = false)
 
         {
 
@@ -1683,6 +1881,7 @@ namespace GMK360.Web.Controllers
 
 
                 TempData["SuccessMessage"] = $"Devam oturumu başarıyla planlandı: {targetSessionDate:dd.MM.yyyy HH:mm}";
+                if (returnToList) return RedirectToAction(nameof(Meetings));
 
                 return RedirectToAction(nameof(MeetingRoom), new { id = newRecord.Id });
 
@@ -1708,7 +1907,8 @@ namespace GMK360.Web.Controllers
 
 
 
-                TempData["SuccessMessage"] = $"Toplantı tarihi {targetSessionDate:dd.MM.yyyy HH:mm} olarak güncellendi.";
+                TempData["SuccessMessage"] = $"Kayıt tarihi {targetSessionDate:dd.MM.yyyy HH:mm} olarak ertelendi / güncellendi.";
+                if (returnToList) return RedirectToAction(nameof(Meetings));
 
                 return RedirectToAction(nameof(MeetingRoom), new { id = record.Id });
 
@@ -1900,7 +2100,7 @@ namespace GMK360.Web.Controllers
         public async Task<IActionResult> UploadTopicDocument(int topicId, int recordId, IFormFile file)
         {
             var agencyId = await GetCurrentAgencyIdAsync();
-            var record = await _context.AgendaRecords.FirstOrDefaultAsync(r => r.Id == recordId && r.AgencyId == agencyId && !r.IsDeleted);
+            var record = await _context.AgendaRecords.Include(r => r.Items).FirstOrDefaultAsync(r => r.Id == recordId && r.AgencyId == agencyId && !r.IsDeleted);
             if (record == null) return NotFound();
 
             if (file != null && file.Length > 0)
@@ -2091,7 +2291,7 @@ namespace GMK360.Web.Controllers
             await _context.SaveChangesAsync();
 
             bool isVid = safeExt == ".mp4" || safeExt == ".mov" || safeExt == ".webm" || safeExt == ".avi" || safeExt == ".mkv";
-            if (true)
+            if (customDoc.Id >= 0)
             {
                 return Json(new
                 {

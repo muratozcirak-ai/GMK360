@@ -46,18 +46,25 @@ namespace GMK360.Web.Controllers
 
         // 2. Yeni Toplantı Oluştur (Ajanda)
         [HttpPost]
-        public async Task<IActionResult> CreateMeeting(int buildingId, DateTime meetingDate, string agendaTitle)
+        public async Task<IActionResult> CreateMeeting(int buildingId, DateTime? meetingDate, string agendaTitle, string? meetingDatePart = null, string? meetingTimePart = null)
         {
             var userId = GetUserId();
             var building = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == buildingId && b.ManagerUserId == userId);
             
             if (building == null) return Unauthorized();
 
+            DateTime finalMeetingDate = meetingDate ?? DateTime.Now;
+            if (!string.IsNullOrWhiteSpace(meetingDatePart) && DateTime.TryParse(meetingDatePart, out var parsedDate))
+            {
+                TimeSpan.TryParse(meetingTimePart, out var parsedTime);
+                finalMeetingDate = parsedDate.Date.Add(parsedTime);
+            }
+
             var meeting = new SystemMeeting
             {
                 ContextType = "Building",
                 ContextId = buildingId,
-                MeetingDate = meetingDate,
+                MeetingDate = finalMeetingDate,
                 AgendaTitle = agendaTitle,
                 IsConcluded = false,
                 CreatedAt = DateTime.Now

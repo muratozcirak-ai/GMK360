@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using GMK360.Data.Contexts;
@@ -8,6 +9,7 @@ using System.Collections.Generic;
 
 namespace GMK360.Web.Controllers
 {
+    [Authorize]
     public class PhaseTwoController : Controller
     {
         private readonly ApplicationDbContext _context;
@@ -25,6 +27,8 @@ namespace GMK360.Web.Controllers
 
             ViewData["ProjectId"] = project.Id;
             ViewData["ProjectName"] = project.Name;
+            ViewBag.Project = project;
+            await GMK360.Web.Helpers.PhaseCentralPoolHelper.EnsurePhaseItemsPricedFromPoolAsync(_context, projectId, BudgetPhaseCategory.TemelVeAltYapi);
             ViewData["BypassedPhases"] = project.BypassedPhases;
             ViewBag.LinkedDocs = await _context.ProjectLegalDocuments.Where(d => d.ConstructionProjectId == projectId && d.LinkedPhaseCategory == GMK360.Core.Entities.Construction.BudgetPhaseCategory.TemelVeAltYapi).ToListAsync();
             ViewBag.PhaseId = (int)GMK360.Core.Entities.Construction.BudgetPhaseCategory.TemelVeAltYapi;
@@ -138,6 +142,15 @@ namespace GMK360.Web.Controllers
             return RedirectToAction("Index", new { projectId = item.ConstructionProjectId });
         }
 
+        [HttpPost("PhaseTwo/RequestQuote/{id}")]
+        [IgnoreAntiforgeryToken]
+        public async Task<IActionResult> RequestQuote(int id)
+        {
+            var pId = await GMK360.Web.Helpers.PhaseCentralPoolHelper.RequestQuoteForBudgetItemAsync(_context, id, "PhaseTwoBudget");
+            if (pId == null) return NotFound();
+            return RedirectToAction("Index", new { projectId = pId.Value });
+        }
+
         [HttpPost("PhaseTwo/DeleteItem/{id}")]
         public async Task<IActionResult> DeleteItem(int id)
         {
@@ -158,6 +171,8 @@ namespace GMK360.Web.Controllers
             
             ViewData["ProjectId"] = projectId;
             ViewData["ProjectName"] = project.Name;
+            ViewBag.Project = project;
+            await GMK360.Web.Helpers.PhaseCentralPoolHelper.EnsurePhaseItemsPricedFromPoolAsync(_context, projectId, BudgetPhaseCategory.TemelVeAltYapi);
             
             // Read actual tasks to pass to View if generated
             var tasks = await _context.ProjectScheduleTasks
@@ -288,6 +303,8 @@ namespace GMK360.Web.Controllers
             
             ViewData["ProjectId"] = projectId;
             ViewData["ProjectName"] = project.Name;
+            ViewBag.Project = project;
+            await GMK360.Web.Helpers.PhaseCentralPoolHelper.EnsurePhaseItemsPricedFromPoolAsync(_context, projectId, BudgetPhaseCategory.TemelVeAltYapi);
             
             var isgQuestions = await _context.MasterIsgQuestions.Where(q => true).ToListAsync();
             
