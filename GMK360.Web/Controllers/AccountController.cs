@@ -55,6 +55,12 @@ namespace GMK360.Web.Controllers
         [HttpGet]
         public async Task<IActionResult> QuickSuperAdminLogin(string returnUrl = null)
         {
+            var env = HttpContext.RequestServices.GetService<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>();
+            if (env == null || !Microsoft.Extensions.Hosting.HostEnvironmentEnvExtensions.IsDevelopment(env))
+            {
+                return NotFound();
+            }
+
             // Öncelik Murat Özçırak hesabında (Bayraktar İnşaat #3 & Projeler)
             var user = await _userManager.FindByEmailAsync("muratozcirak@hotmail.com")
                 ?? await _userManager.FindByNameAsync("muratozcirak@hotmail.com")

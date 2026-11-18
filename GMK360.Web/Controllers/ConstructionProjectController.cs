@@ -324,31 +324,6 @@ namespace GMK360.Web.Controllers
 
 
 
-                if (!projects.Any(p => p.Status == ProjectStatus.Anlasma_Yapildi))
-                {
-                    var demoAnlasma = new ConstructionProject
-                    {
-                        Name = "Çamlıca Konakları (Planlama Evresi)",
-                        Address = "İstanbul / Üsküdar - Çamlıca Mah.",
-                        Description = "Maliklerle anlaşma sağlandı; Faz 0 resmi izinler, DWG okuma ve Proje DNA hazırlık aşamasında.",
-                        OuterWallType = "Ytong",
-                        RoofType = "Kiremit",
-                        Ada = "1453",
-                        Parsel = "12",
-                        TotalLandArea = 1850,
-                        EskiToplamMetrekare = 4200,
-                        EskiKatSayisi = 8,
-                        EskiDaireSayisi = 24,
-                        Status = ProjectStatus.Anlasma_Yapildi,
-                        AgencyId = agencyId.Value,
-                        StartDate = DateTime.Now.AddMonths(1),
-                        CreatedAt = DateTime.Now,
-                        FacadeInsulation = "Dış_Mantolama"
-                    };
-                    _context.ConstructionProjects.Add(demoAnlasma);
-                    await _context.SaveChangesAsync();
-                    projects.Insert(0, demoAnlasma);
-                }
                 return View(projects);
 
 
