@@ -11,6 +11,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using GMK360.Web.Services.BackgroundTasks;
 using GMK360.Web;
+using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -55,12 +56,23 @@ builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options => {
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
-// Alt Domain (Subdomain) SSO iÃƒÂ§in Cookie AyarlarÃ„Â±
+// IIS / Plesk restart sonrası oturumun ve "Beni Hatırla" çerezinin düşmemesi için kalıcı DataProtection anahtarı
+var dpKeysPath = Path.Combine(builder.Environment.ContentRootPath, "App_Data", "DataProtectionKeys");
+Directory.CreateDirectory(dpKeysPath);
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dpKeysPath))
+    .SetApplicationName("GMK360");
+
+// Alt Domain (Subdomain) SSO için Cookie Ayarları
 builder.Services.ConfigureApplicationCookie(options =>
 {
-    // DEV: Localhost'ta giriÃ…Å¸ yapabilmek iÃƒÂ§in Cookie.Domain sadece canlÃ„Â± (Production) ortamda set edilmelidir.
+    // DEV: Localhost'ta giriş yapabilmek için Cookie.Domain sadece canlı (Production) ortamda set edilmelidir.
     // options.Cookie.Domain = ".gmk360.com"; // Ana ve alt domainlerde ortak oturum
     options.Cookie.Name = "GMK360.AuthCookie";
+    options.ExpireTimeSpan = TimeSpan.FromDays(30);
+    options.SlidingExpiration = true;
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
 });
 
 var authBuilder = builder.Services.AddAuthentication();

@@ -122,7 +122,7 @@ namespace GMK360.Web.Controllers
             
             if (string.IsNullOrEmpty(model.Email) && string.IsNullOrEmpty(model.PhoneNumber))
             {
-                ModelState.AddModelError(string.Empty, "LÃ¼tfen E-Posta adresinizi veya Telefon numaranÄ±zÄ± giriniz.");
+                ModelState.AddModelError(string.Empty, "Lütfen E-Posta adresinizi veya Telefon numaranızı giriniz.");
                 return View(model);
             }
 
@@ -150,7 +150,7 @@ namespace GMK360.Web.Controllers
                         
                         if (!hasAccess && !await _userManager.IsInRoleAsync(user, "Admin"))
                         {
-                            ModelState.AddModelError(string.Empty, "Bu kurumsal panele giriÅŸ yetkiniz bulunmuyor.");
+                            ModelState.AddModelError(string.Empty, "Bu kurumsal panele giriş yetkiniz bulunmuyor.");
                             return View(model);
                         }
                     }
@@ -227,18 +227,18 @@ namespace GMK360.Web.Controllers
                     
                     if (result.IsNotAllowed)
                     {
-                        ModelState.AddModelError(string.Empty, "HesabÄ±nÄ±z henÃ¼z doÄŸrulanmamÄ±ÅŸ. LÃ¼tfen e-posta adresinize gÃ¶nderilen linke tÄ±klayarak hesabÄ±nÄ±zÄ± aktifleÅŸtirin.");
+                        ModelState.AddModelError(string.Empty, "Hesabınız henüz doğrulanmamış. Lütfen e-posta adresinize gönderilen linke tıklayarak hesabınızı aktifleştirin.");
                         return View(model);
                     }
                     
                     if (result.IsLockedOut)
                     {
-                        ModelState.AddModelError(string.Empty, "Ã‡ok fazla hatalÄ± deneme yaptÄ±nÄ±z. HesabÄ±nÄ±z gÃ¼venlik amacÄ±yla 15 dakika kilitlenmiÅŸtir.");
+                        ModelState.AddModelError(string.Empty, "Çok fazla hatalı deneme yaptınız. Hesabınız güvenlik amacıyla 15 dakika kilitlenmiştir.");
                         return View(model);
                     }
                 }
 
-                ModelState.AddModelError(string.Empty, "GeÃ§ersiz giriÅŸ denemesi. Bilgiler hatalÄ±.");
+                ModelState.AddModelError(string.Empty, "Geçersiz giriş denemesi. E-posta veya şifre hatalı.");
             }
             return View(model);
         }
