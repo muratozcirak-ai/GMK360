@@ -23,9 +23,29 @@ namespace GMK360.Web.Controllers
             _buildingManagementService = buildingManagementService;
         }
 
-        private string GetUserId()
+        private string? GetUserId()
         {
             return User.FindFirstValue(ClaimTypes.NameIdentifier);
+        }
+
+        private bool IsAdminOrSuperAdmin()
+        {
+            return User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
+        }
+
+        private bool CanAccessBuilding(Building? building, string? userId)
+        {
+            if (building == null) return false;
+            if (IsAdminOrSuperAdmin()) return true;
+            return !string.IsNullOrEmpty(userId) &&
+                   (building.ManagerUserId == userId || building.CreatedByUserId == userId);
+        }
+
+        private async Task<Building?> GetManagedBuildingAsync(int buildingId)
+        {
+            var userId = GetUserId();
+            var building = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == buildingId);
+            return CanAccessBuilding(building, userId) ? building : null;
         }
 
         // 1. Yönettiğim Binalar & Genel Kumanda Merkezi
@@ -298,11 +318,13 @@ namespace GMK360.Web.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateBuilding(string name, string address)
         {
+            var userId = GetUserId();
             var building = new Building
             {
                 Name = name,
                 Address = address,
-                ManagerUserId = GetUserId(),
+                ManagerUserId = userId,
+                CreatedByUserId = userId,
                 CreatedAt = DateTime.Now,
                 OnboardingStep = 1 // Adım 1: Bina oluşturuldu
             };
@@ -317,13 +339,16 @@ namespace GMK360.Web.Controllers
         public async Task<IActionResult> Onboarding(int? id)
         {
             var userId = GetUserId();
-            Building building = null;
+            Building? building = null;
 
             if (id.HasValue)
             {
                 building = await _context.Buildings
                     .Include(b => b.Units)
-                    .FirstOrDefaultAsync(b => b.Id == id && b.ManagerUserId == userId);
+                    .FirstOrDefaultAsync(b => b.Id == id);
+
+                if (building != null && !CanAccessBuilding(building, userId))
+                    return Forbid();
             }
 
             // Eğer id yoksa veya bulunamadıysa yeni bina onboarding başlatılır (Step 0)
@@ -343,6 +368,7 @@ namespace GMK360.Web.Controllers
                 DistrictId = buildingData.DistrictId,
                 NeighborhoodId = buildingData.NeighborhoodId,
                 ManagerUserId = userId,
+                CreatedByUserId = userId,
                 CreatedAt = DateTime.Now,
                 OnboardingStep = 1
             };
@@ -357,10 +383,8 @@ namespace GMK360.Web.Controllers
         [HttpPost]
         public async Task<IActionResult> SaveOnboardingStep2(int buildingId, [FromBody] List<BuildingUnit> units)
         {
-            var userId = GetUserId();
-            var building = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == buildingId && b.ManagerUserId == userId);
-            
-            if (building == null) return Json(new { success = false, message = "Bina bulunamadı." });
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Json(new { success = false, message = "Bina bulunamadı veya yetkiniz yok." });
 
             foreach (var unit in units)
             {
@@ -380,10 +404,8 @@ namespace GMK360.Web.Controllers
         [HttpPost]
         public async Task<IActionResult> SaveOnboardingStep3(int buildingId, [FromBody] List<BuildingExpense> expenses)
         {
-            var userId = GetUserId();
-            var building = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == buildingId && b.ManagerUserId == userId);
-            
-            if (building == null) return Json(new { success = false, message = "Bina bulunamadı." });
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Json(new { success = false, message = "Bina bulunamadı veya yetkiniz yok." });
 
             foreach (var expense in expenses)
             {
@@ -482,6 +504,9 @@ namespace GMK360.Web.Controllers
                 .Include(b => b.Units)
                 .FirstOrDefaultAsync(b => b.Id == meeting.ContextId);
 
+            if (!CanAccessBuilding(building, GetUserId()))
+                return Forbid();
+
             ViewBag.Building = building;
             return View(meeting);
         }
@@ -558,6 +583,7 @@ namespace GMK360.Web.Controllers
                 .FirstOrDefaultAsync(b => b.Id == buildingId);
 
             if (building == null) return NotFound();
+            if (!CanAccessBuilding(building, GetUserId())) return Forbid();
 
             ViewBag.ReportYear = reportYear;
             return View(building);
@@ -565,31 +591,88 @@ namespace GMK360.Web.Controllers
 
         // 3.5 Islak İmzalı Defter Sayfası Arşivleme
         [HttpPost]
-        public async Task<IActionResult> UploadMeetingScan(int meetingId)
+        public async Task<IActionResult> UploadMeetingScan(int meetingId, Microsoft.AspNetCore.Http.IFormFile? scanFile)
         {
-            TempData["SuccessMessage"] = "Noter onaylı ve ıslak imzalı karar sayfası başarıyla dijital arşive yüklendi.";
-            var meeting = await _context.SystemMeetings.FindAsync(meetingId);
-            return RedirectToAction(nameof(Detail), new { id = meeting?.ContextId ?? 0 });
+            var meeting = await _context.SystemMeetings.FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building");
+            if (meeting == null) return NotFound();
+
+            var building = await GetManagedBuildingAsync(meeting.ContextId);
+            if (building == null) return Forbid();
+
+            if (scanFile == null || scanFile.Length == 0)
+            {
+                TempData["ErrorMessage"] = "Lütfen yüklenecek PDF veya görsel dosyasını seçiniz.";
+                return RedirectToAction(nameof(Detail), new { id = building.Id });
+            }
+
+            var ext = System.IO.Path.GetExtension(scanFile.FileName)?.ToLowerInvariant();
+            var allowedExts = new[] { ".pdf", ".jpg", ".jpeg", ".png", ".webp" };
+            if (string.IsNullOrEmpty(ext) || !allowedExts.Contains(ext))
+            {
+                TempData["ErrorMessage"] = "Yalnızca PDF veya görsel (JPG, PNG, WEBP) dosyaları yüklenebilir.";
+                return RedirectToAction(nameof(Detail), new { id = building.Id });
+            }
+
+            var env = HttpContext.RequestServices.GetService(typeof(Microsoft.AspNetCore.Hosting.IWebHostEnvironment)) as Microsoft.AspNetCore.Hosting.IWebHostEnvironment;
+            var webRoot = env?.WebRootPath ?? System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot");
+            var folder = System.IO.Path.Combine(webRoot, "uploads", "buildings", building.Id.ToString(), "decisions");
+            System.IO.Directory.CreateDirectory(folder);
+
+            var uniqueName = $"karar_{meeting.Id}_{Guid.NewGuid():N}{ext}";
+            var fullPath = System.IO.Path.Combine(folder, uniqueName);
+            using (var stream = new System.IO.FileStream(fullPath, System.IO.FileMode.Create))
+            {
+                await scanFile.CopyToAsync(stream);
+            }
+
+            _context.DocumentArchives.Add(new DocumentArchive
+            {
+                BuildingId = building.Id,
+                Title = $"Islak İmzalı Karar - {meeting.AgendaTitle}",
+                FileName = scanFile.FileName,
+                FileExtension = ext,
+                Category = "KararDefteri",
+                SourceModule = "BuildingManager",
+                SourceRecordId = meeting.Id,
+                DocumentUrl = $"/uploads/buildings/{building.Id}/decisions/{uniqueName}",
+                Status = "Tamamlandı",
+                UploadDate = DateTime.Now,
+                Year = meeting.MeetingDate.Year,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Noter onaylı ve ıslak imzalı karar sayfası dijital arşive kaydedildi.";
+            return RedirectToAction(nameof(Detail), new { id = building.Id });
         }
 
         // 4. Daire / Bölüm Ekle
         [HttpPost]
-        public async Task<IActionResult> AddUnit(int buildingId, string unitNumber, string ownerName, string ownerPhone, string tenantName, string tenantPhone, bool isEmpty)
+        public async Task<IActionResult> AddUnit(int buildingId, string unitNumber, string? ownerName, string? ownerPhone, string? tenantName, string? tenantPhone, bool isEmpty, string? category = "Daire", string? ownerEmail = null, string? tenantEmail = null)
         {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
             var unit = new BuildingUnit
             {
                 BuildingId = buildingId,
+                DoorNumber = unitNumber,
                 UnitNumber = unitNumber,
+                Category = string.IsNullOrWhiteSpace(category) ? "Daire" : category.Trim(),
                 OwnerName = ownerName,
                 OwnerPhone = ownerPhone,
+                OwnerEmail = ownerEmail,
                 TenantName = tenantName,
                 TenantPhone = tenantPhone,
+                TenantEmail = tenantEmail,
                 IsEmpty = isEmpty
             };
 
             _context.BuildingUnits.Add(unit);
+            building.TotalUnits += 1;
             await _context.SaveChangesAsync();
 
+            TempData["SuccessMessage"] = $"'{unitNumber}' bağımsız bölümü eklendi.";
             return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
 
@@ -597,7 +680,15 @@ namespace GMK360.Web.Controllers
         [HttpPost]
         public async Task<IActionResult> AddExpense(int buildingId, string description, decimal totalAmount, string payerType)
         {
-            // Gideri oluştur
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            if (totalAmount <= 0)
+            {
+                TempData["ErrorMessage"] = "Gider tutarı sıfırdan büyük olmalıdır.";
+                return RedirectToAction(nameof(Detail), new { id = buildingId });
+            }
+
             var expense = new BuildingExpense
             {
                 BuildingId = buildingId,
@@ -610,12 +701,14 @@ namespace GMK360.Web.Controllers
             _context.BuildingExpenses.Add(expense);
             await _context.SaveChangesAsync(); // ID almak için
 
-            // Binadaki tüm dairelere eşit paylaştır (Boş dairelerin durumu PayerType'a göre yönetilebilir ama şimdilik standart)
-            var units = await _context.BuildingUnits.Where(u => u.BuildingId == buildingId).ToListAsync();
+            // OrtakAlan kayitlari haric tum bagimsiz bolumlere paylastir
+            var units = await _context.BuildingUnits
+                .Where(u => u.BuildingId == buildingId && u.Category != "OrtakAlan_Blok" && (u.Category == null || !u.Category.StartsWith("OrtakAlan")))
+                .ToListAsync();
             
             if (units.Any())
             {
-                decimal amountPerUnit = totalAmount / units.Count;
+                decimal amountPerUnit = Math.Round(totalAmount / units.Count, 2);
 
                 foreach (var unit in units)
                 {
@@ -631,6 +724,7 @@ namespace GMK360.Web.Controllers
                 await _context.SaveChangesAsync();
             }
 
+            TempData["SuccessMessage"] = "Gider işlendi ve bağımsız bölümlere dağıtıldı.";
             return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
 
@@ -638,6 +732,15 @@ namespace GMK360.Web.Controllers
         [HttpPost]
         public async Task<IActionResult> MarkDebtAsPaid(int debtId, string paidBy)
         {
+            var existingDebt = await _context.UnitDebts
+                .Include(d => d.BuildingUnit)
+                    .ThenInclude(u => u.Building)
+                .FirstOrDefaultAsync(d => d.Id == debtId);
+
+            if (existingDebt == null) return NotFound();
+            if (!CanAccessBuilding(existingDebt.BuildingUnit?.Building, GetUserId()))
+                return Forbid();
+
             var debt = await _buildingManagementService.MarkDebtAsPaidAsync(debtId, paidBy);
             
             if (debt != null)
@@ -654,11 +757,18 @@ namespace GMK360.Web.Controllers
         public async Task<IActionResult> Sakinler(int? buildingId)
         {
             var userId = GetUserId();
-            var query = _context.BuildingUnits.Include(u => u.Building).Where(u => u.Building.ManagerUserId == userId);
+            bool isAdmin = IsAdminOrSuperAdmin();
+            var buildingsQuery = _context.Buildings.AsQueryable();
+            if (!isAdmin) buildingsQuery = buildingsQuery.Where(b => b.ManagerUserId == userId || b.CreatedByUserId == userId);
+
+            var query = _context.BuildingUnits
+                .Include(u => u.Building)
+                .Where(u => u.Category != "OrtakAlan_Blok" && (u.Category == null || !u.Category.StartsWith("OrtakAlan")));
+            if (!isAdmin) query = query.Where(u => u.Building.ManagerUserId == userId || u.Building.CreatedByUserId == userId);
             if (buildingId.HasValue) query = query.Where(u => u.BuildingId == buildingId.Value);
             
             var units = await query.ToListAsync();
-            ViewBag.Buildings = await _context.Buildings.Where(b => b.ManagerUserId == userId).ToListAsync();
+            ViewBag.Buildings = await buildingsQuery.ToListAsync();
             ViewBag.SelectedBuildingId = buildingId;
             return View(units);
         }
@@ -667,15 +777,20 @@ namespace GMK360.Web.Controllers
         public async Task<IActionResult> Aidatlar(int? buildingId)
         {
             var userId = GetUserId();
+            bool isAdmin = IsAdminOrSuperAdmin();
+            var buildingsQuery = _context.Buildings.AsQueryable();
+            if (!isAdmin) buildingsQuery = buildingsQuery.Where(b => b.ManagerUserId == userId || b.CreatedByUserId == userId);
+
             var query = _context.UnitDebts
                 .Include(d => d.BuildingUnit).ThenInclude(u => u.Building)
                 .Include(d => d.BuildingExpense)
-                .Where(d => d.BuildingUnit.Building.ManagerUserId == userId);
+                .AsQueryable();
+            if (!isAdmin) query = query.Where(d => d.BuildingUnit.Building.ManagerUserId == userId || d.BuildingUnit.Building.CreatedByUserId == userId);
                 
             if (buildingId.HasValue) query = query.Where(d => d.BuildingUnit.BuildingId == buildingId.Value);
             
             var debts = await query.OrderByDescending(d => d.Id).ToListAsync();
-            ViewBag.Buildings = await _context.Buildings.Where(b => b.ManagerUserId == userId).ToListAsync();
+            ViewBag.Buildings = await buildingsQuery.ToListAsync();
             ViewBag.SelectedBuildingId = buildingId;
             return View(debts);
         }
@@ -684,12 +799,17 @@ namespace GMK360.Web.Controllers
         public async Task<IActionResult> Giderler(int? buildingId)
         {
             var userId = GetUserId();
-            var query = _context.BuildingExpenses.Include(e => e.Building).Where(e => e.Building.ManagerUserId == userId);
+            bool isAdmin = IsAdminOrSuperAdmin();
+            var buildingsQuery = _context.Buildings.AsQueryable();
+            if (!isAdmin) buildingsQuery = buildingsQuery.Where(b => b.ManagerUserId == userId || b.CreatedByUserId == userId);
+
+            var query = _context.BuildingExpenses.Include(e => e.Building).AsQueryable();
+            if (!isAdmin) query = query.Where(e => e.Building.ManagerUserId == userId || e.Building.CreatedByUserId == userId);
             
             if (buildingId.HasValue) query = query.Where(e => e.BuildingId == buildingId.Value);
             
             var expenses = await query.OrderByDescending(e => e.Date).ToListAsync();
-            ViewBag.Buildings = await _context.Buildings.Where(b => b.ManagerUserId == userId).ToListAsync();
+            ViewBag.Buildings = await buildingsQuery.ToListAsync();
             ViewBag.SelectedBuildingId = buildingId;
             return View(expenses);
         }
@@ -697,9 +817,8 @@ namespace GMK360.Web.Controllers
         // 7. İç Talepler (Ticket) Yönetimi
         public async Task<IActionResult> TicketManagement(int buildingId)
         {
-            var userId = GetUserId();
-            var building = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == buildingId && b.ManagerUserId == userId);
-            if (building == null) return Unauthorized();
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
 
             var tickets = await _context.SupportTickets
                 .Include(t => t.CreatorUser)
@@ -716,9 +835,14 @@ namespace GMK360.Web.Controllers
         {
             var userId = GetUserId();
             var ticket = await _context.SupportTickets.FirstOrDefaultAsync(t => t.Id == ticketId);
+            if (ticket == null) return NotFound();
 
-            if (ticket == null || ticket.AssignedToUserId != userId)
-                return Unauthorized();
+            var building = ticket.ContextId.HasValue
+                ? await _context.Buildings.FirstOrDefaultAsync(b => b.Id == ticket.ContextId.Value)
+                : null;
+
+            if (!IsAdminOrSuperAdmin() && ticket.AssignedToUserId != userId && !CanAccessBuilding(building, userId))
+                return Forbid();
 
             ticket.Status = status;
             ticket.UpdatedAt = DateTime.Now;

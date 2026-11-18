@@ -84,6 +84,7 @@ namespace GMK360.Web.Controllers.Api
         }
 
         // POST: api/ComplexApi/Create
+        [Authorize]
         [HttpPost("Create")]
         public async Task<IActionResult> Create([FromBody] ComplexCreateDto dto)
         {
@@ -110,6 +111,8 @@ namespace GMK360.Web.Controllers.Api
             int totalFloors = dto.FloorDetails != null ? dto.FloorDetails.Count : (dto.TotalFloors ?? 1);
             int totalUnits = 0;
 
+            var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
             var building = new Building
             {
                 Name = dto.Name,
@@ -124,6 +127,8 @@ namespace GMK360.Web.Controllers.Api
                 BlockName = dto.Blocks != null && dto.Blocks.Any() ? dto.Blocks.First().Name : null,
                 Latitude = dto.Latitude ?? 0,
                 Longitude = dto.Longitude ?? 0,
+                CreatedByUserId = currentUserId,
+                ManagerUserId = currentUserId,
                 CreatedAt = System.DateTime.Now,
                 OnboardingStep = 2 // Bina yaratıldı, daireler ekleniyor
             };
@@ -220,11 +225,20 @@ namespace GMK360.Web.Controllers.Api
             return Ok(result);
         }
 
+        [Authorize]
         [HttpPost("AddBlockToComplex")]
         public async Task<IActionResult> AddBlockToComplex([FromBody] AddBlockDto dto)
         {
             var complex = await _context.Buildings.FindAsync(dto.ComplexId);
             if (complex == null) return NotFound("Bina/Site bulunamadı.");
+
+            var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            bool isAdmin = User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
+            if (!isAdmin && (complex.CreatedByUserId != null || complex.ManagerUserId != null) &&
+                complex.CreatedByUserId != currentUserId && complex.ManagerUserId != currentUserId)
+            {
+                return Forbid();
+            }
 
             if (!complex.HasBlocks)
             {
@@ -245,6 +259,7 @@ namespace GMK360.Web.Controllers.Api
         }
     
         // --- YENİ: Sokağımı Bulamadım (On-the-fly Street Creation + Ticket) ---
+        [Authorize]
         [HttpPost("CreateUnapprovedStreet")]
         public async Task<IActionResult> CreateUnapprovedStreet([FromBody] CreateStreetRequest request)
         {
@@ -279,6 +294,7 @@ namespace GMK360.Web.Controllers.Api
         }
 
         // --- YENİ: Bina Bilgisi Hatalı (Typo Reporting + Ticket) ---
+        [Authorize]
         [HttpPost("ReportBuildingTypo")]
         public async Task<IActionResult> ReportBuildingTypo([FromBody] ReportBuildingRequest request)
         {

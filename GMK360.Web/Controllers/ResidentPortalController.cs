@@ -1,5 +1,7 @@
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using GMK360.Core.Interfaces;
@@ -9,29 +11,48 @@ using GMK360.Data.Contexts;
 
 namespace GMK360.Web.Controllers
 {
+    [Authorize]
     public class ResidentPortalController : Controller
     {
         private readonly ApplicationDbContext _context;
-        // In a real scenario, use UserManager to check if user is ShadowAccount
 
         public ResidentPortalController(ApplicationDbContext context)
         {
             _context = context;
         }
 
+        private async Task<(GMK360.Core.Entities.Identity.ApplicationUser? User, string? Email)> GetCurrentResidentAsync()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var email = User.Identity?.Name;
+            GMK360.Core.Entities.Identity.ApplicationUser? user = null;
+
+            if (!string.IsNullOrEmpty(userId))
+                user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+
+            if (user == null && !string.IsNullOrEmpty(email))
+                user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+            return (user, user?.Email ?? email);
+        }
+
+        private IQueryable<BuildingUnit> GetUserUnitsQuery(string? userId, string? userEmail)
+        {
+            return _context.BuildingUnits
+                .Include(u => u.Building)
+                .Where(u =>
+                    (!string.IsNullOrEmpty(userEmail) && (u.TenantEmail == userEmail || u.OwnerEmail == userEmail)) ||
+                    (!string.IsNullOrEmpty(userId) && (u.TenantUserId == userId || u.OwnerUserId == userId)));
+        }
+
         public async Task<IActionResult> Index()
         {
-            // Dummy check for current user, in real scenario get from User.Identity
-            string userEmail = User.Identity?.Name ?? "shadow@example.com"; 
+            var (user, userEmail) = await GetCurrentResidentAsync();
+            if (user == null && string.IsNullOrEmpty(userEmail)) return Challenge();
 
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == userEmail);
             bool isShadow = user?.IsShadowAccount ?? false;
 
-            var units = await _context.BuildingUnits
-                .Include(u => u.Building)
-                .Where(u => u.TenantEmail == userEmail || u.OwnerEmail == userEmail)
-                .ToListAsync();
-
+            var units = await GetUserUnitsQuery(user?.Id, userEmail).ToListAsync();
             var unitIds = units.Select(u => u.Id).ToList();
 
             var unpaidDebts = await _context.UnitDebts
@@ -43,7 +64,6 @@ namespace GMK360.Web.Controllers
             {
                 MyUnits = units,
                 UnpaidDebts = unpaidDebts,
-                // If the user is a shadow account (just invited by manager), show them Cross-Sell CTAs
                 ShowRenovationCta = isShadow,
                 ShowPropertyEvaluationCta = isShadow,
                 ShowInsuranceCta = isShadow
@@ -54,11 +74,11 @@ namespace GMK360.Web.Controllers
 
         public async Task<IActionResult> Details(int id)
         {
-            string userEmail = User.Identity?.Name ?? "shadow@example.com"; 
+            var (user, userEmail) = await GetCurrentResidentAsync();
+            if (user == null && string.IsNullOrEmpty(userEmail)) return Challenge();
 
-            var unit = await _context.BuildingUnits
-                .Include(u => u.Building)
-                .FirstOrDefaultAsync(u => u.Id == id && (u.TenantEmail == userEmail || u.OwnerEmail == userEmail));
+            var unit = await GetUserUnitsQuery(user?.Id, userEmail)
+                .FirstOrDefaultAsync(u => u.Id == id);
 
             if (unit == null)
             {
@@ -71,10 +91,10 @@ namespace GMK360.Web.Controllers
         // Karar Defteri (Sakinler için Salt Okunur)
         public async Task<IActionResult> Meetings()
         {
-            string userEmail = User.Identity?.Name ?? "shadow@example.com"; 
+            var (user, userEmail) = await GetCurrentResidentAsync();
+            if (user == null && string.IsNullOrEmpty(userEmail)) return Challenge();
 
-            var buildingIds = await _context.BuildingUnits
-                .Where(u => u.TenantEmail == userEmail || u.OwnerEmail == userEmail)
+            var buildingIds = await GetUserUnitsQuery(user?.Id, userEmail)
                 .Select(u => u.BuildingId)
                 .Distinct()
                 .ToListAsync();
@@ -91,27 +111,47 @@ namespace GMK360.Web.Controllers
         // İç Talepler (Support Tickets)
         public async Task<IActionResult> Tickets()
         {
-            string userEmail = User.Identity?.Name ?? "shadow@example.com"; 
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == userEmail);
-            if (user == null) return NotFound();
+            var (user, userEmail) = await GetCurrentResidentAsync();
+            if (user == null) return Challenge();
 
             var tickets = await _context.SupportTickets
                 .Where(t => t.CreatorUserId == user.Id)
                 .OrderByDescending(t => t.CreatedAt)
                 .ToListAsync();
 
+            ViewBag.UserBuildings = await GetUserUnitsQuery(user.Id, userEmail)
+                .Select(u => u.Building)
+                .Where(b => b != null)
+                .Distinct()
+                .ToListAsync();
+
             return View(tickets);
         }
 
         [HttpPost]
-        public async Task<IActionResult> CreateTicket(string title, string description, string category, int contextId)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CreateTicket(string title, string description, string category, int contextId = 0)
         {
-            string userEmail = User.Identity?.Name ?? "shadow@example.com"; 
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == userEmail);
+            var (user, userEmail) = await GetCurrentResidentAsync();
             if (user == null) return Unauthorized();
 
-            // Find building manager to assign
-            var building = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == contextId);
+            var userBuildingIds = await GetUserUnitsQuery(user.Id, userEmail)
+                .Select(u => u.BuildingId)
+                .Distinct()
+                .ToListAsync();
+
+            if (contextId <= 0)
+            {
+                contextId = userBuildingIds.FirstOrDefault();
+            }
+            else if (!userBuildingIds.Contains(contextId) && !User.IsInRole("Admin") && !User.IsInRole("SuperAdmin"))
+            {
+                return Forbid();
+            }
+
+            var building = contextId > 0
+                ? await _context.Buildings.FirstOrDefaultAsync(b => b.Id == contextId)
+                : null;
 
             var ticket = new SupportTicket
             {
@@ -121,7 +161,7 @@ namespace GMK360.Web.Controllers
                 Status = "Open",
                 Priority = "Normal",
                 CreatorUserId = user.Id,
-                AssignedToUserId = building?.ManagerUserId, // Assign to building manager
+                AssignedToUserId = building?.ManagerUserId,
                 ContextType = "Building",
                 ContextId = contextId,
                 ContextInfo = "Yeni Talep",
