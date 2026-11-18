@@ -291,34 +291,39 @@ app.UseRateLimiter(); // Rate limiter devreye alÃ„Â±nÃ„Â±yor
 app.UseAuthentication();
 app.UseAuthorization();
 
-using (var scope = app.Services.CreateScope())
+// Production ortaminda mevcut veritabanina otomatik mudehale edilmemesi icin
+// yalnizca Development modunda veya RunStartupDbInit=true ayarlandiginda calisir.
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("RunStartupDbInit"))
 {
-    var services = scope.ServiceProvider;
-    var logger = services.GetRequiredService<ILogger<Program>>();
-    var dbContext = services.GetRequiredService<GMK360.Data.Contexts.ApplicationDbContext>();
-    try
+    using (var scope = app.Services.CreateScope())
     {
-        dbContext.Database.Migrate();
-    }
-    catch (Exception ex)
-    {
-        logger.LogWarning(ex, "Otomatik migration sırasında uyarı (manuel yüklenmiş DB ise normaldir).");
-    }
-
-    try
-    {
-        await GMK360.Data.Seeds.RoleAndUserSeeder.SeedRolesAndAdminAsync(services);
-        await GMK360.Data.Seeds.DefinitionSeeder.SeedDefinitionsAsync(services);
-        
-        // Demo verileri sadece Development ortaminda yuklenir
-        if (app.Environment.IsDevelopment())
+        var services = scope.ServiceProvider;
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        var dbContext = services.GetRequiredService<GMK360.Data.Contexts.ApplicationDbContext>();
+        try
         {
-            await GMK360.Data.Seeds.DemoSeeder.SeedDemoDataAsync(services);
+            dbContext.Database.Migrate();
         }
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Roller ve Admin hesabı oluşturulurken bir hata meydana geldi.");
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Otomatik migration sırasında uyarı (manuel yüklenmiş DB ise normaldir).");
+        }
+
+        try
+        {
+            await GMK360.Data.Seeds.RoleAndUserSeeder.SeedRolesAndAdminAsync(services);
+            await GMK360.Data.Seeds.DefinitionSeeder.SeedDefinitionsAsync(services);
+            
+            // Demo verileri sadece Development ortaminda yuklenir
+            if (app.Environment.IsDevelopment())
+            {
+                await GMK360.Data.Seeds.DemoSeeder.SeedDemoDataAsync(services);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Roller ve Admin hesabı oluşturulurken bir hata meydana geldi.");
+        }
     }
 }
 
