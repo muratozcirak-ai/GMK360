@@ -1,0 +1,58 @@
+<!-- PWA Service Worker Kaydı & Uygulama Yükle Butonu -->
+<div id="gmkPwaInstallBanner" class="d-none position-fixed bottom-0 start-0 m-3 shadow-lg rounded-pill bg-dark text-white px-3 py-2 align-items-center gap-2 border border-warning" style="z-index: 1080; font-size: 0.82rem;">
+    <img src="/icons/icon-192.png" alt="GMK360" width="24" height="24" class="rounded" />
+    <span class="fw-semibold">GMK360 Uygulamasını Yükle</span>
+    <button type="button" id="gmkPwaInstallBtn" class="btn btn-warning btn-sm rounded-pill fw-bold px-3 py-0 text-dark">Yükle</button>
+    <button type="button" id="gmkPwaDismissBtn" class="btn btn-link btn-sm text-white-50 p-0 ms-1 text-decoration-none" title="Kapat" aria-label="Kapat">✕</button>
+</div>
+
+<script>
+    (function () {
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () { });
+            });
+        }
+
+        var deferredPrompt = null;
+        var banner = document.getElementById('gmkPwaInstallBanner');
+        var installBtn = document.getElementById('gmkPwaInstallBtn');
+        var dismissBtn = document.getElementById('gmkPwaDismissBtn');
+
+        var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        if (isStandalone) return;
+
+        window.addEventListener('beforeinstallprompt', function (e) {
+            e.preventDefault();
+            deferredPrompt = e;
+            if (banner && !sessionStorage.getItem('gmk_pwa_dismissed')) {
+                banner.classList.remove('d-none');
+                banner.classList.add('d-inline-flex');
+            }
+        });
+
+        if (installBtn) {
+            installBtn.addEventListener('click', function () {
+                if (!deferredPrompt) return;
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(function () {
+                    deferredPrompt = null;
+                    if (banner) {
+                        banner.classList.add('d-none');
+                        banner.classList.remove('d-inline-flex');
+                    }
+                });
+            });
+        }
+
+        if (dismissBtn) {
+            dismissBtn.addEventListener('click', function () {
+                sessionStorage.setItem('gmk_pwa_dismissed', '1');
+                if (banner) {
+                    banner.classList.add('d-none');
+                    banner.classList.remove('d-inline-flex');
+                }
+            });
+        }
+    })();
+</script>
