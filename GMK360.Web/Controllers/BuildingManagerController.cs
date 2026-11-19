@@ -53,10 +53,17 @@ namespace GMK360.Web.Controllers
         {
             var userId = GetUserId();
             var query = _context.Buildings
+                .Include(b => b.HousingComplex)
+                .Include(b => b.City)
+                .Include(b => b.District)
+                .Include(b => b.ChildBuildings)
+                    .ThenInclude(cb => cb.Units)
+                        .ThenInclude(u => u.Debts)
                 .Include(b => b.Units)
                     .ThenInclude(u => u.Debts)
                         .ThenInclude(d => d.BuildingExpense)
                 .Include(b => b.Expenses)
+                .Where(b => b.ParentBuildingId == null)
                 .AsQueryable();
 
             if (!User.IsInRole("Admin") && !User.IsInRole("SuperAdmin"))
@@ -64,17 +71,23 @@ namespace GMK360.Web.Controllers
                 query = query.Where(b => b.ManagerUserId == userId || b.CreatedByUserId == userId);
             }
 
-            var buildings = await query.ToListAsync();
+            var buildings = await query
+                .OrderByDescending(b => b.Id)
+                .ToListAsync();
 
-            // Mükerrer tohum/test binalarını tekilleştir (Aynı isimli olanlardan en zengin birimli olanı tek satır tut)
+            // Yalnizca tohum/ornek verilerden kalan birebir ayni isimli coklu ornek kayit varsa koru (gercek bloklara dokunma)
             buildings = buildings
-                .GroupBy(b => (b.Name ?? string.Empty).Trim().ToLowerInvariant())
-                .Select(g => g.OrderByDescending(x => x.Units?.Count ?? 0).ThenByDescending(x => x.Id).First())
+                .GroupBy(b => b.Id)
+                .Select(g => g.First())
                 .ToList();
 
-            // Portföy Çapında Genel İstatistikler
-            var allUnits = buildings.SelectMany(b => b.Units ?? new List<BuildingUnit>()).ToList();
-            var allDebts = allUnits.SelectMany(u => u.Debts ?? new List<UnitDebt>()).ToList();
+            // Portföy Çapında Genel İstatistikler (Kök yapı + kulelerin tüm birimleri)
+            var allUnits = buildings
+                .SelectMany(b => (b.Units ?? new System.Collections.Generic.List<BuildingUnit>())
+                    .Concat((b.ChildBuildings ?? new System.Collections.Generic.List<Building>()).SelectMany(cb => cb.Units ?? new System.Collections.Generic.List<BuildingUnit>())))
+                .Where(u => !(u.Category ?? "").StartsWith("OrtakAlan"))
+                .ToList();
+            var allDebts = allUnits.SelectMany(u => u.Debts ?? new System.Collections.Generic.List<UnitDebt>()).ToList();
 
             ViewBag.TotalBuildings = buildings.Count;
             ViewBag.TotalUnits = allUnits.Count;
@@ -335,89 +348,652 @@ namespace GMK360.Web.Controllers
             return RedirectToAction(nameof(Onboarding), new { id = building.Id });
         }
 
-        // Onboarding (SPA - Tek Sayfa)
-        public async Task<IActionResult> Onboarding(int? id)
+        // 2. Yeni Bina / Site Açılış & 3 Adımlı Sihirbaz
+        public async Task<IActionResult> Onboarding(int? id, string? mode = null, string? name = null)
         {
             var userId = GetUserId();
-            Building? building = null;
+            var vm = new GMK360.Web.Models.FacilityWizardPageViewModel
+            {
+                ManagementMode = string.Equals(mode, "Site", StringComparison.OrdinalIgnoreCase) ? "Site" : "Apartman",
+                Name = name?.Trim() ?? string.Empty
+            };
 
             if (id.HasValue)
             {
-                building = await _context.Buildings
-                    .Include(b => b.Units)
-                    .FirstOrDefaultAsync(b => b.Id == id);
+                var building = await _context.Buildings
+                    .Include(b => b.HousingComplex)
+                    .Include(b => b.ChildBuildings)
+                    .FirstOrDefaultAsync(b => b.Id == id.Value);
 
-                if (building != null && !CanAccessBuilding(building, userId))
-                    return Forbid();
+                if (building == null) return NotFound();
+                if (!CanAccessBuilding(building, userId)) return Forbid();
+                if (building.ParentBuildingId.HasValue)
+                {
+                    return RedirectToAction(nameof(Onboarding), new { id = building.ParentBuildingId.Value });
+                }
+
+                vm.BuildingId = building.Id;
+                vm.HousingComplexId = building.HousingComplexId;
+                vm.ManagementMode = building.HousingComplexId.HasValue ? "Site" : ParseTechnicalTag(building.TechnicalFeatures, "YapiTuru") ?? (building.ChildBuildings.Any() ? "Site" : "Apartman");
+                vm.Name = building.HousingComplex?.Name ?? building.Name;
+                vm.Description = building.Description;
+                vm.BuildingAge = building.BuildingAge;
+                vm.TaxNumber = building.TaxNumber;
+                vm.CityId = building.CityId;
+                vm.DistrictId = building.DistrictId;
+                vm.NeighborhoodId = building.NeighborhoodId;
+                vm.StreetId = building.StreetId;
+                vm.StreetName = building.StreetName;
+                vm.BuildingNumber = building.BuildingNumber;
+                vm.ExtraAddressLabel = ParseTechnicalTag(building.TechnicalFeatures, "EkNo");
+                vm.Ada = ParseTechnicalTag(building.TechnicalFeatures, "Ada");
+                vm.Parsel = ParseTechnicalTag(building.TechnicalFeatures, "Parsel");
+                vm.Latitude = building.Latitude?.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                vm.Longitude = building.Longitude?.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                vm.RootBuilding = building;
+
+                var docs = await _context.DocumentArchives
+                    .Where(d => d.BuildingId == building.Id && d.SourceModule == "BuildingManager")
+                    .OrderByDescending(d => d.Id)
+                    .ToListAsync();
+                vm.Photos = docs.Where(d => d.Category == "BinaGorseli").ToList();
+                vm.DecisionDocument = docs.FirstOrDefault(d => d.Category == "KararDefteriYetki");
+
+                // Mevcut yapıları (Site ise aynı complex altındaki tüm kök binalar, değilse sadece bu bina) yükle
+                var rootStructures = building.HousingComplexId.HasValue
+                    ? await _context.Buildings.Include(b => b.ChildBuildings).Where(b => b.HousingComplexId == building.HousingComplexId && b.ParentBuildingId == null).OrderBy(b => b.Id).ToListAsync()
+                    : new System.Collections.Generic.List<Building> { building };
+
+                vm.InitialStructures = rootStructures.Select(rb => new GMK360.Web.Models.FacilityStep2StructureDto
+                {
+                    LayoutPattern = rb.LayoutPattern ?? "Tekil Yapı",
+                    BlockName = string.IsNullOrWhiteSpace(rb.BlockName) ? "Ana Bina" : rb.BlockName,
+                    BaseArea = rb.BaseArea,
+                    TotalFloors = rb.TotalFloors ?? 5,
+                    TotalApartments = rb.TotalApartments,
+                    TotalShops = rb.TotalShops,
+                    BasementFloors = rb.BasementFloors,
+                    HasGroundFloor = rb.HasGroundFloor,
+                    HasRoof = rb.HasRoof,
+                    RoofType = rb.RoofType ?? "Düz Teras Çatı (Tabliye)",
+                    Children = (rb.ChildBuildings ?? new System.Collections.Generic.List<Building>())
+                        .OrderBy(c => c.Id)
+                        .Select(c => new GMK360.Web.Models.FacilityStep2ChildBlockDto
+                        {
+                            BlockName = c.BlockName,
+                            TotalFloors = c.TotalFloors ?? 8,
+                            TotalApartments = c.TotalApartments,
+                            TotalShops = c.TotalShops,
+                            BasementFloors = c.BasementFloors,
+                            HasGroundFloor = c.HasGroundFloor,
+                            HasRoof = c.HasRoof,
+                            RoofType = c.RoofType ?? "Düz Teras Çatı (Tabliye)"
+                        }).ToList()
+                }).ToList();
             }
 
-            // Eğer id yoksa veya bulunamadıysa yeni bina onboarding başlatılır (Step 0)
-            return View(building);
+            ViewBag.Cities = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(
+                await _context.Cities.OrderBy(c => c.Name).ToListAsync(), "Id", "Name", vm.CityId);
+            ViewBag.Districts = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(
+                vm.CityId > 0 ? await _context.Districts.Where(d => d.CityId == vm.CityId).OrderBy(d => d.Name).ToListAsync() : new System.Collections.Generic.List<District>(),
+                "Id", "Name", vm.DistrictId);
+            ViewBag.Neighborhoods = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(
+                vm.DistrictId > 0 ? await _context.Neighborhoods.Where(n => n.DistrictId == vm.DistrictId).OrderBy(n => n.Name).ToListAsync() : new System.Collections.Generic.List<Neighborhood>(),
+                "Id", "Name", vm.NeighborhoodId);
+            ViewBag.Streets = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(
+                vm.NeighborhoodId > 0 ? await _context.Streets.Where(s => s.NeighborhoodId == vm.NeighborhoodId).OrderBy(s => s.Name).ToListAsync() : new System.Collections.Generic.List<Street>(),
+                "Id", "Name", vm.StreetId);
+
+            return View(vm);
         }
 
-        // API Endpoint for Step 1: Bina ve Adres Kaydı
-        [HttpPost]
-        public async Task<IActionResult> SaveOnboardingStep1([FromBody] Building buildingData)
+        // Tekil Merkez Adres ID: İl + İlçe + Mahalle + Sokak + Bina/Kapı No mükerrer kontrolü
+        [HttpGet]
+        public async Task<IActionResult> CheckDuplicateAddress(
+            int cityId,
+            int districtId,
+            int neighborhoodId,
+            int? streetId,
+            string? streetName,
+            string? buildingNumber,
+            int? excludeBuildingId = null)
         {
+            if (cityId <= 0 || districtId <= 0 || neighborhoodId <= 0 || string.IsNullOrWhiteSpace(buildingNumber))
+            {
+                return Json(new { exists = false });
+            }
+
+            var resolvedStreetName = streetName;
+            if (streetId.HasValue && streetId.Value > 0 && string.IsNullOrWhiteSpace(resolvedStreetName))
+            {
+                resolvedStreetName = await _context.Streets.Where(s => s.Id == streetId.Value).Select(s => s.Name).FirstOrDefaultAsync();
+            }
+
+            var existing = await FindDuplicateAddressBuildingAsync(cityId, districtId, neighborhoodId, streetId, resolvedStreetName, buildingNumber, excludeBuildingId);
+            if (existing == null)
+            {
+                return Json(new { exists = false });
+            }
+
+            return Json(new
+            {
+                exists = true,
+                existingBuildingId = existing.Id,
+                existingBuildingName = existing.Name,
+                addressLabel = $"{existing.StreetName} No: {existing.BuildingNumber}",
+                message = $"Bu adreste (Merkez ID #{existing.Id} — {existing.Name}) sistemde zaten kayıtlı bir yapı bulunmaktadır. Mükerrer bina açılamaz."
+            });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveFacilityStep1([FromForm] GMK360.Web.Models.FacilityStep1FormModel model)
+        {
+            if (string.IsNullOrWhiteSpace(model.Name))
+                return Json(new { success = false, message = "Apartman veya Site adı zorunludur." });
+            if (model.CityId <= 0 || model.DistrictId <= 0 || model.NeighborhoodId <= 0)
+                return Json(new { success = false, message = "Lütfen İl, İlçe ve Mahalle seçimini tamamlayınız." });
+            if (string.IsNullOrWhiteSpace(model.BuildingNumber))
+                return Json(new { success = false, message = "Tekil Merkez Adres ID için Bina / Kapı No zorunludur." });
+
+            string resolvedStreetName = (model.StreetName ?? string.Empty).Trim();
+            if (model.StreetId.HasValue && model.StreetId.Value > 0)
+            {
+                var dbStreetName = await _context.Streets.Where(s => s.Id == model.StreetId.Value).Select(s => s.Name).FirstOrDefaultAsync();
+                if (!string.IsNullOrWhiteSpace(dbStreetName))
+                {
+                    resolvedStreetName = dbStreetName;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(resolvedStreetName))
+                return Json(new { success = false, message = "Lütfen Sokak / Cadde seçiniz veya adını yazınız." });
+
+            int? excludeId = model.BuildingId > 0 ? model.BuildingId : null;
+            var duplicate = await FindDuplicateAddressBuildingAsync(model.CityId, model.DistrictId, model.NeighborhoodId, model.StreetId, resolvedStreetName, model.BuildingNumber, excludeId);
+            if (duplicate != null)
+            {
+                return StatusCode(409, new
+                {
+                    success = false,
+                    isDuplicate = true,
+                    existingBuildingId = duplicate.Id,
+                    message = $"Tekil Merkez ID uyarısı: Bu adreste zaten '{duplicate.Name}' (#{duplicate.Id}) kayıtlı. Mükerrer bina oluşturulamaz."
+                });
+            }
+
+            var userId = GetUserId() ?? string.Empty;
+            var userEmail = User.Identity?.Name;
+            bool isSite = string.Equals(model.ManagementMode, "Site", StringComparison.OrdinalIgnoreCase);
+
+            double? lat = double.TryParse((model.Latitude ?? "").Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsedLat) ? parsedLat : null;
+            double? lng = double.TryParse((model.Longitude ?? "").Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsedLng) ? parsedLng : null;
+
+            Building? building = null;
+            if (model.BuildingId > 0)
+            {
+                building = await _context.Buildings.Include(b => b.HousingComplex).FirstOrDefaultAsync(b => b.Id == model.BuildingId);
+                if (building == null) return NotFound(new { success = false, message = "Bina kaydı bulunamadı." });
+                if (!CanAccessBuilding(building, userId)) return Forbid();
+            }
+
+            // Site seçildiyse HousingComplex oluştur veya güncelle
+            HousingComplex? complex = building?.HousingComplex;
+            if (isSite)
+            {
+                var mgmtId = !string.IsNullOrEmpty(userEmail)
+                    ? await _context.ManagementCompanies.Where(m => m.ContactEmail == userEmail).Select(m => (int?)m.Id).FirstOrDefaultAsync()
+                    : null;
+
+                if (complex == null)
+                {
+                    complex = new HousingComplex
+                    {
+                        Name = model.Name.Trim(),
+                        ManagementCompanyId = mgmtId,
+                        CityId = model.CityId,
+                        DistrictId = model.DistrictId,
+                        NeighborhoodId = model.NeighborhoodId,
+                        StreetId = model.StreetId > 0 ? model.StreetId : null,
+                        Address = $"{resolvedStreetName} No: {model.BuildingNumber.Trim()}",
+                        TotalBlocks = 1
+                    };
+                    _context.HousingComplexes.Add(complex);
+                    await _context.SaveChangesAsync();
+                }
+                else
+                {
+                    complex.Name = model.Name.Trim();
+                    complex.CityId = model.CityId;
+                    complex.DistrictId = model.DistrictId;
+                    complex.NeighborhoodId = model.NeighborhoodId;
+                    complex.StreetId = model.StreetId > 0 ? model.StreetId : null;
+                    complex.Address = $"{resolvedStreetName} No: {model.BuildingNumber.Trim()}";
+                }
+            }
+
+            if (building == null)
+            {
+                building = new Building
+                {
+                    ManagerUserId = userId,
+                    CreatedByUserId = userId,
+                    CreatedAt = DateTime.Now,
+                    HasBlock = true,
+                    BlockName = isSite ? "Ana Blok" : model.Name.Trim(),
+                    TotalFloors = 5,
+                    BasementFloors = 1,
+                    HasGroundFloor = true,
+                    HasRoof = true,
+                    RoofType = "Düz Teras Çatı (Tabliye)",
+                    LayoutPattern = "Tekil Yapı"
+                };
+                _context.Buildings.Add(building);
+            }
+
+            building.Name = model.Name.Trim();
+            building.HousingComplexId = isSite ? complex?.Id : null;
+            building.Description = model.Description?.Trim();
+            building.BuildingAge = model.BuildingAge;
+            building.TaxNumber = model.TaxNumber?.Trim();
+            building.CityId = model.CityId;
+            building.DistrictId = model.DistrictId;
+            building.NeighborhoodId = model.NeighborhoodId;
+            building.StreetId = model.StreetId > 0 ? model.StreetId : null;
+            building.StreetName = resolvedStreetName;
+            building.BuildingNumber = model.BuildingNumber.Trim();
+            building.Latitude = lat;
+            building.Longitude = lng;
+            building.TechnicalFeatures = BuildTechnicalFeaturesString(
+                isSite ? "Site" : "Apartman",
+                model.Ada,
+                model.Parsel,
+                model.ExtraAddressLabel);
+            if (building.OnboardingStep < 1) building.OnboardingStep = 1;
+
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true, buildingId = building.Id, complexId = building.HousingComplexId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UploadFacilityDocument(int buildingId, string category, System.Collections.Generic.List<Microsoft.AspNetCore.Http.IFormFile> files)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+            if (files == null || !files.Any()) return Json(new { success = false, message = "Lütfen dosya seçiniz." });
+
+            bool isDecisionDoc = string.Equals(category, "KararDefteriYetki", StringComparison.OrdinalIgnoreCase);
+            string normalizedCategory = isDecisionDoc ? "KararDefteriYetki" : "BinaGorseli";
+            var allowedExts = isDecisionDoc
+                ? new[] { ".pdf", ".jpg", ".jpeg", ".png", ".webp" }
+                : new[] { ".jpg", ".jpeg", ".png", ".webp" };
+
             var userId = GetUserId();
-            var building = new Building
+            var agencyId = await _context.AgencyConsultants
+                .Where(c => c.UserId == userId && c.IsActive)
+                .Select(c => (int?)c.AgencyId)
+                .FirstOrDefaultAsync();
+
+            var subFolder = isDecisionDoc ? "decisions" : "photos";
+            var createdDocs = new System.Collections.Generic.List<object>();
+
+            foreach (var file in files)
             {
-                Name = buildingData.Name,
-                Address = buildingData.Address,
-                CityId = buildingData.CityId,
-                DistrictId = buildingData.DistrictId,
-                NeighborhoodId = buildingData.NeighborhoodId,
-                ManagerUserId = userId,
-                CreatedByUserId = userId,
-                CreatedAt = DateTime.Now,
-                OnboardingStep = 1
+                if (file == null || file.Length == 0) continue;
+                var ext = System.IO.Path.GetExtension(file.FileName)?.ToLowerInvariant() ?? "";
+                if (!allowedExts.Contains(ext))
+                {
+                    return Json(new { success = false, message = $"Geçersiz dosya formatı ({ext})." });
+                }
+
+                var docUrl = await SaveUploadedBuildingFileAsync(building.Id, subFolder, file, ext);
+                var doc = new DocumentArchive
+                {
+                    AgencyId = agencyId,
+                    BuildingId = building.Id,
+                    Title = isDecisionDoc ? $"Karar Defteri Yetki Yazısı - {building.Name}" : $"{building.Name} Görseli",
+                    FileName = file.FileName,
+                    FileExtension = ext,
+                    Category = normalizedCategory,
+                    SourceModule = "BuildingManager",
+                    SourceRecordId = building.Id,
+                    DocumentUrl = docUrl,
+                    Status = "Onaylandı",
+                    UploadDate = DateTime.Now,
+                    Year = DateTime.Now.Year,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.DocumentArchives.Add(doc);
+                await _context.SaveChangesAsync();
+
+                createdDocs.Add(new { id = doc.Id, fileName = doc.FileName, url = doc.DocumentUrl, category = doc.Category });
+            }
+
+            return Json(new { success = true, documents = createdDocs });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteFacilityDocument(int docId)
+        {
+            var doc = await _context.DocumentArchives.FirstOrDefaultAsync(d => d.Id == docId && d.SourceModule == "BuildingManager");
+            if (doc == null) return NotFound(new { success = false, message = "Dosya bulunamadı." });
+
+            var building = doc.BuildingId.HasValue ? await GetManagedBuildingAsync(doc.BuildingId.Value) : null;
+            if (building == null) return Forbid();
+
+            _context.DocumentArchives.Remove(doc);
+            await _context.SaveChangesAsync();
+            return Json(new { success = true });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveFacilityStep2([FromBody] GMK360.Web.Models.FacilityStep2Request model)
+        {
+            if (model == null || model.BuildingId <= 0 || model.Structures == null || !model.Structures.Any())
+                return Json(new { success = false, message = "En az bir yapı / blok bilgisi gereklidir." });
+
+            var rootBuilding = await _context.Buildings
+                .Include(b => b.ChildBuildings)
+                .FirstOrDefaultAsync(b => b.Id == model.BuildingId);
+
+            if (rootBuilding == null || !CanAccessBuilding(rootBuilding, GetUserId()))
+                return Forbid();
+
+            bool isSite = string.Equals(model.ManagementMode, "Site", StringComparison.OrdinalIgnoreCase) || rootBuilding.HousingComplexId.HasValue;
+            var structures = isSite ? model.Structures : model.Structures.Take(1).ToList();
+
+            // 1. Ana kök yapıyı ve varsa alt kule/bitişik bloklarını senkronize et
+            var firstStruct = structures[0];
+            await SyncRootStructureAsync(rootBuilding, firstStruct, isPrimary: true);
+
+            // 2. Site modunda 2+ bağımsız temel/yapı varsa ek kök binaları oluştur (aynı HousingComplexId ve adres altında)
+            if (isSite && rootBuilding.HousingComplexId.HasValue && structures.Count > 1)
+            {
+                var existingSiblings = await _context.Buildings
+                    .Include(b => b.ChildBuildings)
+                    .Where(b => b.HousingComplexId == rootBuilding.HousingComplexId && b.ParentBuildingId == null && b.Id != rootBuilding.Id)
+                    .OrderBy(b => b.Id)
+                    .ToListAsync();
+
+                for (int i = 1; i < structures.Count; i++)
+                {
+                    var s = structures[i];
+                    Building sibling = i - 1 < existingSiblings.Count
+                        ? existingSiblings[i - 1]
+                        : CloneRootTemplate(rootBuilding, s.BlockName);
+
+                    if (sibling.Id == 0)
+                    {
+                        _context.Buildings.Add(sibling);
+                        await _context.SaveChangesAsync();
+                    }
+                    await SyncRootStructureAsync(sibling, s, isPrimary: false);
+                }
+
+                var complex = await _context.HousingComplexes.FirstOrDefaultAsync(c => c.Id == rootBuilding.HousingComplexId.Value);
+                if (complex != null)
+                {
+                    complex.TotalBlocks = await _context.Buildings.CountAsync(b => b.HousingComplexId == complex.Id);
+                }
+            }
+
+            rootBuilding.OnboardingStep = 3;
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true, redirectUrl = Url.Action(nameof(Detail), new { id = rootBuilding.Id }) });
+        }
+
+        private static string NormalizeAddressToken(string? input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+            return System.Text.RegularExpressions.Regex.Replace(input.Trim().ToLowerInvariant(), @"\s+", " ");
+        }
+
+        private async Task<Building?> FindDuplicateAddressBuildingAsync(
+            int cityId,
+            int districtId,
+            int neighborhoodId,
+            int? streetId,
+            string? streetName,
+            string? buildingNumber,
+            int? excludeBuildingId)
+        {
+            var normNo = NormalizeAddressToken(buildingNumber);
+            var normStreet = NormalizeAddressToken(streetName);
+
+            var candidates = await _context.Buildings
+                .Where(b => b.ParentBuildingId == null
+                    && b.CityId == cityId
+                    && b.DistrictId == districtId
+                    && b.NeighborhoodId == neighborhoodId
+                    && (!excludeBuildingId.HasValue || b.Id != excludeBuildingId.Value))
+                .ToListAsync();
+
+            return candidates.FirstOrDefault(b =>
+                NormalizeAddressToken(b.BuildingNumber) == normNo
+                && ((streetId.HasValue && streetId.Value > 0 && b.StreetId == streetId.Value)
+                    || (!string.IsNullOrEmpty(normStreet) && NormalizeAddressToken(b.StreetName) == normStreet)));
+        }
+
+        private static string BuildTechnicalFeaturesString(string managementMode, string? ada, string? parsel, string? extraLabel)
+        {
+            var parts = new System.Collections.Generic.List<string> { $"YapiTuru:{managementMode}" };
+            if (!string.IsNullOrWhiteSpace(ada)) parts.Add($"Ada:{ada.Trim()}");
+            if (!string.IsNullOrWhiteSpace(parsel)) parts.Add($"Parsel:{parsel.Trim()}");
+            if (!string.IsNullOrWhiteSpace(extraLabel)) parts.Add($"EkNo:{extraLabel.Trim()}");
+            return string.Join(" | ", parts);
+        }
+
+        private static string? ParseTechnicalTag(string? features, string key)
+        {
+            if (string.IsNullOrWhiteSpace(features)) return null;
+            var match = System.Text.RegularExpressions.Regex.Match(features, $@"(?:^|\|\s*){System.Text.RegularExpressions.Regex.Escape(key)}:([^|]+)");
+            return match.Success ? match.Groups[1].Value.Trim() : null;
+        }
+
+        private async Task<string> SaveUploadedBuildingFileAsync(int buildingId, string subFolder, Microsoft.AspNetCore.Http.IFormFile file, string ext)
+        {
+            var env = HttpContext.RequestServices.GetService(typeof(Microsoft.AspNetCore.Hosting.IWebHostEnvironment)) as Microsoft.AspNetCore.Hosting.IWebHostEnvironment;
+            var webRoot = env?.WebRootPath ?? System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot");
+            var folder = System.IO.Path.Combine(webRoot, "uploads", "buildings", buildingId.ToString(), subFolder);
+            System.IO.Directory.CreateDirectory(folder);
+
+            var uniqueName = $"{subFolder}_{buildingId}_{Guid.NewGuid():N}{ext}";
+            var fullPath = System.IO.Path.Combine(folder, uniqueName);
+            using (var stream = new System.IO.FileStream(fullPath, System.IO.FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+            return $"/uploads/buildings/{buildingId}/{subFolder}/{uniqueName}";
+        }
+
+        private static Building CloneRootTemplate(Building source, string blockName)
+        {
+            return new Building
+            {
+                Name = $"{source.Name} - {blockName}",
+                BlockName = blockName,
+                HousingComplexId = source.HousingComplexId,
+                ManagerUserId = source.ManagerUserId,
+                CreatedByUserId = source.CreatedByUserId,
+                TaxNumber = source.TaxNumber,
+                CityId = source.CityId,
+                DistrictId = source.DistrictId,
+                NeighborhoodId = source.NeighborhoodId,
+                StreetId = source.StreetId,
+                StreetName = source.StreetName,
+                BuildingNumber = source.BuildingNumber,
+                Latitude = source.Latitude,
+                Longitude = source.Longitude,
+                TechnicalFeatures = source.TechnicalFeatures,
+                BuildingAge = source.BuildingAge,
+                CreatedAt = DateTime.Now
             };
-
-            _context.Buildings.Add(building);
-            await _context.SaveChangesAsync();
-
-            return Json(new { success = true, buildingId = building.Id, step = 1 });
         }
 
-        // API Endpoint for Step 2: Daireler ve Kişiler
-        [HttpPost]
-        public async Task<IActionResult> SaveOnboardingStep2(int buildingId, [FromBody] List<BuildingUnit> units)
+        private async Task SyncRootStructureAsync(Building target, GMK360.Web.Models.FacilityStep2StructureDto dto, bool isPrimary)
         {
-            var building = await GetManagedBuildingAsync(buildingId);
-            if (building == null) return Json(new { success = false, message = "Bina bulunamadı veya yetkiniz yok." });
-
-            foreach (var unit in units)
-            {
-                unit.BuildingId = buildingId;
-                _context.BuildingUnits.Add(unit);
-            }
-            
-            building.OnboardingStep = 2;
+            bool hasMultiChildren = dto.LayoutPattern != "Tekil Yapı" && dto.Children != null && dto.Children.Any();
+            target.BlockName = string.IsNullOrWhiteSpace(dto.BlockName) ? "Ana Bina" : dto.BlockName.Trim();
+            if (!isPrimary) target.Name = target.BlockName;
+            target.LayoutPattern = dto.LayoutPattern;
+            target.BaseArea = dto.BaseArea;
+            target.TotalFloors = dto.TotalFloors;
+            target.BasementFloors = dto.BasementFloors;
+            target.HasGroundFloor = dto.HasGroundFloor;
+            target.HasRoof = dto.HasRoof;
+            target.RoofType = dto.RoofType;
+            target.TotalApartments = dto.TotalApartments;
+            target.TotalShops = dto.TotalShops;
+            target.TotalUnits = dto.TotalApartments + dto.TotalShops;
+            target.HasBlock = true;
+            target.HasBlocks = hasMultiChildren;
+            target.OnboardingStep = 3;
             await _context.SaveChangesAsync();
 
-            // TODO: Call NetGSM Notification service to invite users here
+            // Ortak baza / podyum veya tekil yapı birimlerini ve ortak alanları üret
+            await GenerateFloorUnitsIfEmptyAsync(target, dto.TotalApartments, dto.TotalShops, dto.TotalFloors, dto.HasGroundFloor);
+            await EnsureBaselineCommonSpacesAsync(target);
 
-            return Json(new { success = true, step = 2 });
+            if (!hasMultiChildren) return;
+
+            var existingChildren = await _context.Buildings
+                .Where(b => b.ParentBuildingId == target.Id)
+                .OrderBy(b => b.Id)
+                .ToListAsync();
+
+            for (int cIdx = 0; cIdx < dto.Children.Count; cIdx++)
+            {
+                var cDto = dto.Children[cIdx];
+                Building child = cIdx < existingChildren.Count
+                    ? existingChildren[cIdx]
+                    : CloneRootTemplate(target, cDto.BlockName);
+
+                child.ParentBuildingId = target.Id;
+                child.BlockName = string.IsNullOrWhiteSpace(cDto.BlockName) ? $"{(char)('A' + cIdx)} Blok" : cDto.BlockName.Trim();
+                child.Name = $"{target.Name} - {child.BlockName}";
+                child.LayoutPattern = dto.LayoutPattern;
+                child.TotalFloors = cDto.TotalFloors;
+                child.TotalApartments = cDto.TotalApartments;
+                child.TotalShops = cDto.TotalShops;
+                child.TotalUnits = cDto.TotalApartments + cDto.TotalShops;
+                child.BasementFloors = cDto.BasementFloors;
+                child.HasGroundFloor = cDto.HasGroundFloor;
+                child.HasRoof = cDto.HasRoof;
+                child.RoofType = cDto.RoofType;
+                child.HasBlock = true;
+                child.OnboardingStep = 3;
+
+                if (child.Id == 0) _context.Buildings.Add(child);
+                await _context.SaveChangesAsync();
+
+                await GenerateFloorUnitsIfEmptyAsync(child, cDto.TotalApartments, cDto.TotalShops, cDto.TotalFloors, cDto.HasGroundFloor);
+                await EnsureBaselineCommonSpacesAsync(child);
+            }
         }
 
-        // API Endpoint for Step 3: Sabit Giderler
-        [HttpPost]
-        public async Task<IActionResult> SaveOnboardingStep3(int buildingId, [FromBody] List<BuildingExpense> expenses)
+        private async Task GenerateFloorUnitsIfEmptyAsync(Building building, int apartmentCount, int shopCount, int totalFloors, bool hasGroundFloor)
         {
-            var building = await GetManagedBuildingAsync(buildingId);
-            if (building == null) return Json(new { success = false, message = "Bina bulunamadı veya yetkiniz yok." });
+            bool alreadyHasLivingUnits = await _context.BuildingUnits
+                .AnyAsync(u => u.BuildingId == building.Id && !(u.Category ?? "").StartsWith("OrtakAlan"));
+            if (alreadyHasLivingUnits) return;
 
-            foreach (var expense in expenses)
+            var newUnits = new System.Collections.Generic.List<BuildingUnit>();
+            int normalFloors = Math.Max(1, totalFloors);
+
+            if (apartmentCount > 0)
             {
-                expense.BuildingId = buildingId;
-                expense.Date = DateTime.Now;
-                _context.BuildingExpenses.Add(expense);
+                int perFloor = (int)Math.Ceiling((double)apartmentCount / normalFloors);
+                int created = 0;
+                for (int fl = 1; fl <= normalFloors && created < apartmentCount; fl++)
+                {
+                    for (int slot = 0; slot < perFloor && created < apartmentCount; slot++)
+                    {
+                        created++;
+                        newUnits.Add(new BuildingUnit
+                        {
+                            BuildingId = building.Id,
+                            FloorLevel = fl,
+                            FloorName = $"{fl}. Kat",
+                            DoorNumber = created.ToString(),
+                            UnitNumber = created.ToString(),
+                            Category = "Daire",
+                            RoomLayout = "3+1",
+                            IsEmpty = true
+                        });
+                    }
+                }
             }
-            
-            building.OnboardingStep = 3;
+
+            if (shopCount > 0)
+            {
+                int shopFloor = hasGroundFloor ? 0 : 1;
+                string shopFloorName = hasGroundFloor ? "Zemin Kat" : "1. Kat";
+                for (int s = 1; s <= shopCount; s++)
+                {
+                    newUnits.Add(new BuildingUnit
+                    {
+                        BuildingId = building.Id,
+                        FloorLevel = shopFloor,
+                        FloorName = shopFloorName,
+                        DoorNumber = $"D{s}",
+                        UnitNumber = $"D{s}",
+                        Category = "Dükkan",
+                        RoomLayout = "Dükkan",
+                        IsEmpty = true
+                    });
+                }
+            }
+
+            if (newUnits.Any())
+            {
+                _context.BuildingUnits.AddRange(newUnits);
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        private async Task EnsureBaselineCommonSpacesAsync(Building building)
+        {
+            bool exists = await _context.BuildingUnits
+                .AnyAsync(u => u.BuildingId == building.Id && (u.Category == "OrtakAlan_Blok" || (u.Category ?? "").StartsWith("OrtakAlan")));
+            if (exists) return;
+
+            var commonUnit = new BuildingUnit
+            {
+                BuildingId = building.Id,
+                FloorLevel = 0,
+                FloorName = "Ortak Alanlar",
+                DoorNumber = "ORTAK",
+                UnitNumber = "ORTAK",
+                Category = "OrtakAlan_Blok",
+                IsEmpty = false
+            };
+            _context.BuildingUnits.Add(commonUnit);
             await _context.SaveChangesAsync();
 
-            return Json(new { success = true, step = 3 });
+            var spaces = new System.Collections.Generic.List<UnitSpace>
+            {
+                new UnitSpace { BuildingUnitId = commonUnit.Id, Name = "Merdiven & Sahanlık", Type = "OrtakAlan" }
+            };
+            if (building.HasRoof)
+            {
+                spaces.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = $"Çatı ({building.RoofType ?? "Ana Çatı"})", Type = "OrtakAlan" });
+            }
+            if ((building.TotalFloors ?? 0) >= 4)
+            {
+                spaces.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = "Asansör & Makine Dairesi", Type = "OrtakAlan" });
+            }
+            if (building.BasementFloors > 0)
+            {
+                spaces.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = "Bodrum, Hidrofor & Otopark", Type = "OrtakAlan" });
+            }
+
+            _context.UnitSpaces.AddRange(spaces);
+            await _context.SaveChangesAsync();
         }
 
 
