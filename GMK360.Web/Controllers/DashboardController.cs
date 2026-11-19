@@ -30,13 +30,14 @@ namespace GMK360.Web.Controllers
         public async Task<IActionResult> Hub()
         {
             var user = await _userManager.GetUserAsync(User);
-            if (user != null && user.UserType == UserType.Corporate && !User.IsInRole("Corporate"))
+            if (user != null && user.UserType == UserType.Corporate && (!User.IsInRole("Corporate") || (User.IsInRole("InsaatFirmasi") && !GMK360.Web.Helpers.RoleLandingHelper.HasConstructionModule(user.ActiveModules))))
             {
                 if (!await _userManager.IsInRoleAsync(user, "Corporate"))
                 {
                     await _userManager.AddToRoleAsync(user, "Corporate");
                 }
-                if (!await _userManager.IsInRoleAsync(user, "InsaatFirmasi"))
+                await GMK360.Web.Helpers.RoleLandingHelper.NormalizeCorporateRolesAsync(_userManager, user);
+                if (GMK360.Web.Helpers.RoleLandingHelper.HasConstructionModule(user.ActiveModules) && !await _userManager.IsInRoleAsync(user, "InsaatFirmasi"))
                 {
                     await _userManager.AddToRoleAsync(user, "InsaatFirmasi");
                 }

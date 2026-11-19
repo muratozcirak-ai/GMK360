@@ -1,59 +1,186 @@
+@using Microsoft.AspNetCore.Identity
+@using GMK360.Core.Entities.Identity
+@using Microsoft.EntityFrameworkCore
+@inject UserManager<ApplicationUser> UserManager
+@inject GMK360.Data.Contexts.ApplicationDbContext DbContext
+
 @{
-    Layout = "_Layout";
+    var currentUser = await UserManager.GetUserAsync(User);
+    var currentConsultant = currentUser != null
+        ? await DbContext.AgencyConsultants.Include(c => c.Agency).FirstOrDefaultAsync(c => c.UserId == currentUser.Id && c.IsActive)
+        : null;
+    var currentAgency = currentConsultant?.Agency;
+    var currentCompanyName = currentAgency?.CompanyName ?? currentUser?.DisplayName ?? "Bina & Site Yönetimi";
+    var currentController = ViewContext.RouteData.Values["Controller"]?.ToString() ?? "";
+    var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
 }
 
-<div class="container-fluid px-3 px-md-4 mt-4">
-    <div class="row">
-        <!-- BİNA & SİTE YÖNETİMİ ÖZEL SOL MENÜ -->
-        <div class="col-lg-3 col-md-4 mb-4">
-            <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
-                <div class="card-header bg-success text-white fw-bold py-3">
-                    <i class="bi bi-building-gear me-2"></i> Bina & Site Yönetimi
-                </div>
-                <div class="list-group list-group-flush">
-                    
-                    <a href="/BuildingManager/Index" class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "Index" ? "active bg-success border-success" : "")">
-                        <i class="bi bi-speedometer2 me-2"></i> Yönetim Genel Merkezi
-                    </a>
-                    
-                    <a href="/BuildingManager/Sakinler" class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "Sakinler" ? "active bg-success border-success" : "")">
-                        <i class="bi bi-people me-2"></i> Sakinler & Kiracılar
-                    </a>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <partial name="_PwaHeadPartial" />
+    <title>@ViewData["Title"] - GMK360 Bina & Site Yönetimi</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <script src="https://unpkg.com/@@phosphor-icons/web"></script>
+    <style>
+        body { background-color: #f4f6f9; }
+        .text-orange { color: #FF6B00; }
+        .text-navy { color: #1e3a8a; }
+        .facility-nav-item {
+            border: 0 !important;
+            border-radius: 10px !important;
+            margin-bottom: 4px;
+            font-size: 0.88rem;
+            font-weight: 500;
+            color: #334155;
+            padding: 0.6rem 0.85rem;
+        }
+        .facility-nav-item:hover {
+            background-color: #ecfdf5;
+            color: #15803d;
+        }
+        .facility-nav-item.active {
+            background-color: #15803d !important;
+            color: #fff !important;
+            font-weight: 600;
+        }
+    </style>
+    @await RenderSectionAsync("SEO", required: false)
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body class="d-flex flex-column min-vh-100">
 
-                    <a href="/BuildingManager/Aidatlar" class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "Aidatlar" ? "active bg-success border-success" : "")">
-                        <i class="bi bi-cash-stack me-2"></i> Aidat Çetelesi & Borçlar
-                    </a>
+    <!-- ÜST ÇALIŞMA ALANI BARI -->
+    <header class="fixed-top bg-white border-bottom shadow-sm" style="z-index: 1030;">
+        <div class="container-fluid px-3 d-flex justify-content-between align-items-center py-2">
+            <div class="d-flex align-items-center gap-2 min-w-0">
+                <a href="/BuildingManager/Index" class="text-decoration-none d-flex align-items-center gap-1 flex-shrink-0">
+                    <i class="ph-fill ph-infinity text-orange" style="font-size: 1.45rem;"></i>
+                    <span class="fs-5 fw-bold text-navy" style="letter-spacing:-0.5px;">GMK<span class="text-orange">360</span></span>
+                </a>
+                <span class="text-muted d-none d-sm-inline">|</span>
+                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-2 py-1 d-none d-md-inline-flex align-items-center gap-1">
+                    <i class="bi bi-building-gear"></i> Bina & Site Yönetimi
+                </span>
+                <span class="fw-bold text-dark text-truncate" style="font-size: 0.9rem; max-width: 260px;">@currentCompanyName</span>
+            </div>
 
-                    <a href="/BuildingManager/Giderler" class="list-group-item list-group-item-action @(ViewContext.RouteData.Values["Action"]?.ToString() == "Giderler" ? "active bg-success border-success" : "")">
-                        <i class="bi bi-receipt me-2"></i> Gider ve Fatura Takibi
-                    </a>
-
-                    <!-- YÖNETİM CRM & ARŞİV -->
-                    <div class="list-group-item bg-light fw-bold mt-2" style="font-size: 0.85rem; color: #6c757d;">
-                        YÖNETİM ARŞİVİ (AİDİYETLİ)
+            <div class="d-flex align-items-center gap-2">
+                <div class="d-none d-lg-block text-end lh-sm border-end pe-3 me-1">
+                    <div class="text-navy fw-bold" style="font-size: 0.78rem;">
+                        <i class="bi bi-person-check-fill text-success me-1"></i>@(currentUser?.DisplayName ?? User.Identity?.Name)
                     </div>
-                    <a href="/Crm/Talepler?context=facility" class="list-group-item list-group-item-action">
-                        <i class="bi bi-chat-left-text me-2"></i> Sakin Talepleri / Şikayetler
-                    </a>
-                    <a href="/DocumentArchive/Index?context=facility" class="list-group-item list-group-item-action">
-                        <i class="bi bi-folder-fill me-2"></i> Karar Defteri & Belgeler
-                    </a>
-                    <a href="/Crm/Ajanda?context=facility" class="list-group-item list-group-item-action">
-                        <i class="bi bi-calendar-event me-2"></i> Toplantı Takvimi
-                    </a>
-                    
-                    <a href="/Dashboard/Hub" class="list-group-item list-group-item-action bg-dark text-white mt-3 text-center rounded-bottom">
-                        <i class="bi bi-grid-3x3-gap-fill me-2"></i> Tüm Uygulamalar (Hub)
-                    </a>
+                    <div class="text-muted" style="font-size: 0.7rem;">
+                        <i class="bi bi-clock-history me-1"></i><span id="facilityLiveClock" class="fw-semibold">@DateTime.Now.ToString("HH:mm:ss")</span>
+                    </div>
+                </div>
+
+                <a href="/Dashboard/Hub" class="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-semibold d-none d-sm-inline-flex align-items-center gap-1" title="Tüm Modüller">
+                    <i class="ph ph-squares-four"></i> Modüller (Hub)
+                </a>
+
+                @if (User?.Identity?.IsAuthenticated == true)
+                {
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-success rounded-pill px-3 dropdown-toggle d-flex align-items-center gap-1 fw-semibold" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="ph-fill ph-user-circle fs-6"></i>
+                            <span class="d-none d-md-inline">Hesabım</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2" style="border-radius: 12px; min-width: 210px;">
+                            <li class="px-3 py-2 border-bottom bg-light rounded-top-3">
+                                <div class="fw-bold text-dark small">@currentCompanyName</div>
+                                <small class="text-muted">@User.Identity?.Name</small>
+                            </li>
+                            <li><a class="dropdown-item small py-2" href="/BuildingManager/Index"><i class="bi bi-speedometer2 me-2 text-success"></i>Yönetim Merkezi</a></li>
+                            <li><a class="dropdown-item small py-2" href="/Dashboard/Hub"><i class="ph ph-squares-four me-2 text-primary"></i>Çalışma Alanı (Hub)</a></li>
+                            <li><a class="dropdown-item small py-2" href="/Profile"><i class="ph ph-user me-2 text-secondary"></i>Profil & Güvenlik</a></li>
+                            <li><hr class="dropdown-divider my-1"></li>
+                            <li>
+                                <form asp-controller="Account" asp-action="Logout" method="post" class="m-0 p-0">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="dropdown-item small py-2 text-danger"><i class="ph ph-sign-out me-2"></i>Çıkış Yap</button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
+                }
+            </div>
+        </div>
+    </header>
+
+    <!-- ANA YÖNETİM PANELİ -->
+    <main class="flex-grow-1" style="margin-top: 62px;">
+        <div class="container-fluid px-3 px-md-4 py-3">
+            <div class="row g-3">
+                <!-- SOL YÖNETİM MENÜSÜ -->
+                <div class="col-xl-2 col-lg-3 col-md-4">
+                    <div class="card border-0 shadow-sm rounded-4 overflow-hidden sticky-md-top" style="top: 76px;">
+                        <div class="card-header bg-success text-white fw-bold py-2 px-3 d-flex align-items-center justify-content-between">
+                            <span class="small"><i class="bi bi-building-gear me-2"></i>Yönetim Menüsü</span>
+                        </div>
+                        <div class="p-2 bg-white">
+                            <div class="list-group list-group-flush">
+                                <a href="/BuildingManager/Index" class="list-group-item list-group-item-action facility-nav-item @(currentController == "BuildingManager" && currentAction == "Index" ? "active" : "")">
+                                    <i class="bi bi-speedometer2 me-2"></i>Genel Bakış & Bloklar
+                                </a>
+                                <a href="/BuildingManager/Sakinler" class="list-group-item list-group-item-action facility-nav-item @(currentController == "BuildingManager" && currentAction == "Sakinler" ? "active" : "")">
+                                    <i class="bi bi-people me-2"></i>Mal Sahibi & Kiracılar
+                                </a>
+                                <a href="/BuildingManager/Aidatlar" class="list-group-item list-group-item-action facility-nav-item @(currentController == "BuildingManager" && currentAction == "Aidatlar" ? "active" : "")">
+                                    <i class="bi bi-cash-stack me-2"></i>Aidat & Tahsilat
+                                </a>
+                                <a href="/BuildingManager/Giderler" class="list-group-item list-group-item-action facility-nav-item @(currentController == "BuildingManager" && currentAction == "Giderler" ? "active" : "")">
+                                    <i class="bi bi-receipt me-2"></i>Gider, Fatura & Bakım
+                                </a>
+                                <a href="/BuildingManager/Accounting" class="list-group-item list-group-item-action facility-nav-item @(currentController == "BuildingManager" && currentAction == "Accounting" ? "active" : "")">
+                                    <i class="bi bi-wallet2 me-2"></i>Muhasebe & Kasa
+                                </a>
+                                <a href="/BuildingManager/Oylamalar" class="list-group-item list-group-item-action facility-nav-item @(currentController == "BuildingManager" && currentAction == "Oylamalar" ? "active" : "")">
+                                    <i class="bi bi-patch-check me-2"></i>Toplantı & Oylamalar
+                                </a>
+
+                                <div class="px-2 pt-3 pb-1 text-uppercase text-muted fw-bold" style="font-size: 0.7rem; letter-spacing: 0.04em;">
+                                    Karar, Talep & Arşiv
+                                </div>
+                                <a href="/DocumentArchive/Index?context=facility" class="list-group-item list-group-item-action facility-nav-item @(currentController == "DocumentArchive" ? "active" : "")">
+                                    <i class="bi bi-journal-bookmark me-2"></i>Karar Defteri & Evrak
+                                </a>
+                                <a href="/Crm/Talepler?context=facility" class="list-group-item list-group-item-action facility-nav-item @(currentController == "Crm" && currentAction == "Talepler" ? "active" : "")">
+                                    <i class="bi bi-chat-left-text me-2"></i>Sakin Talepleri / Arıza
+                                </a>
+                                <a href="/Crm/Rehber?context=facility" class="list-group-item list-group-item-action facility-nav-item @(currentController == "Crm" && currentAction == "Rehber" ? "active" : "")">
+                                    <i class="bi bi-person-lines-fill me-2"></i>Usta & Tedarikçi Rehberi
+                                </a>
+                                <a href="/Crm/Ajanda?context=facility" class="list-group-item list-group-item-action facility-nav-item @(currentController == "Crm" && currentAction == "Ajanda" ? "active" : "")">
+                                    <i class="bi bi-calendar-event me-2"></i>Toplantı & Bakım Takvimi
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SAĞ ANA İÇERİK -->
+                <div class="col-xl-10 col-lg-9 col-md-8">
+                    @RenderBody()
                 </div>
             </div>
         </div>
+    </main>
 
-        <!-- Ana İçerik -->
-        <div class="col-md-9">
-            @RenderBody()
-        </div>
-    </div>
-</div>
-
-@RenderSection("Scripts", required: false)
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <partial name="_PwaScriptsPartial" />
+    @await RenderSectionAsync("Scripts", required: false)
+    <script>
+        setInterval(function () {
+            var el = document.getElementById('facilityLiveClock');
+            if (el) el.innerText = new Date().toLocaleTimeString('tr-TR', { hour12: false });
+        }, 1000);
+    </script>
+</body>
+</html>

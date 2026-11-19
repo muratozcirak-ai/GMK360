@@ -44,6 +44,25 @@ namespace GMK360.Web.Controllers
         }
 
         [HttpGet]
+        public async Task<IActionResult> Start()
+        {
+            if (User?.Identity?.IsAuthenticated != true)
+            {
+                return RedirectToAction(nameof(Login));
+            }
+
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null)
+            {
+                return RedirectToAction(nameof(Login));
+            }
+
+            await GMK360.Web.Helpers.RoleLandingHelper.NormalizeCorporateRolesAsync(_userManager, user);
+            var landingUrl = await GMK360.Web.Helpers.RoleLandingHelper.ResolveLandingUrlAsync(_userManager, _context, user);
+            return LocalRedirect(landingUrl);
+        }
+
+        [HttpGet]
         public IActionResult Login(string returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
@@ -177,18 +196,8 @@ namespace GMK360.Web.Controllers
                         // }
                     }
 
-                    // Kurumsal hesapların rollerini garantiye al (Cookie'ye işlensin)
-                    if (user.UserType == UserType.Corporate)
-                    {
-                        if (!await _userManager.IsInRoleAsync(user, "Corporate"))
-                        {
-                            await _userManager.AddToRoleAsync(user, "Corporate");
-                        }
-                        if (!await _userManager.IsInRoleAsync(user, "InsaatFirmasi"))
-                        {
-                            await _userManager.AddToRoleAsync(user, "InsaatFirmasi");
-                        }
-                    }
+                    // Kurumsal hesaplarda sadece Corporate rolünü koru ve yanlış atanmış InsaatFirmasi rolünü temizle
+                    await GMK360.Web.Helpers.RoleLandingHelper.NormalizeCorporateRolesAsync(_userManager, user);
 
                     // GÜVENİLİR CİHAZ VEYA HATA DURUMLARI (Normal Login Akışı)
                     // Kullanıcı bulunduysa, her zaman UserName ile login dene (Email veya Phone yerine UserName)
@@ -196,33 +205,13 @@ namespace GMK360.Web.Controllers
                     
                     if (result.Succeeded)
                     {
-
                         if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
                         {
                             return Redirect(returnUrl);
                         }
 
-                        if (await _userManager.IsInRoleAsync(user, "SuperAdmin") || await _userManager.IsInRoleAsync(user, "Admin")) { return RedirectToAction("Index", "Admin"); }
-                        
-                        if (await _userManager.IsInRoleAsync(user, "InsaatFirmasi")) { return RedirectToAction("Index", "ConstructionProject"); }
-                        if (await _userManager.IsInRoleAsync(user, "Corporate")) { return RedirectToAction("Corporate", "Dashboard"); }
-                        
-                        // AkÄ±llÄ± YÃ¶nlendirme ve KaldÄ±ÄŸÄ± Yerden Devam Etme (Sihirbaz)
-                        if (user.UserType == UserType.Individual || user.UserType == UserType.PropertyOwner)
-                        {
-                            // EÄŸer kullanÄ±cÄ±nÄ±n henÃ¼z hiÃ§ bir "Evi" (Property) yoksa, sihirbazÄ± tamamlamamÄ±ÅŸ demektir.
-                            bool hasCompletedWizard = _context.Properties.Any(p => p.UserId == user.Id);
-                            if (!hasCompletedWizard)
-                            {
-                                return RedirectToAction("SetupWizard", "DigitalHome");
-                            }
-                        }
-                        else if (user.UserType == UserType.ServiceProvider)
-                        {
-                            // Usta sihirbaz kontrolÃ¼ (ileride eklenecek)
-                        }
-                        
-                        return RedirectToAction("PropertyOwner", "Dashboard");
+                        var landingUrl = await GMK360.Web.Helpers.RoleLandingHelper.ResolveLandingUrlAsync(_userManager, _context, user);
+                        return LocalRedirect(landingUrl);
                     }
                     
                     if (result.IsNotAllowed)
