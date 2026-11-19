@@ -58,6 +58,7 @@ namespace GMK360.Web.Models
     {
         public int BuildingId { get; set; }
         public string ManagementMode { get; set; } = "Apartman";
+        public bool KvkkAuthorityAccepted { get; set; }
         public List<FacilityStep2StructureDto> Structures { get; set; } = new List<FacilityStep2StructureDto>();
     }
 

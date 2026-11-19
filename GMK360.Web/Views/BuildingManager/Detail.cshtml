@@ -70,10 +70,20 @@
     <!-- Başarı Bildirimi -->
     @if (TempData["SuccessMessage"] != null)
     {
-        <div class="alert alert-success alert-dismissible fade show rounded-4 shadow-sm border-0 mb-4" role="alert">
+        <div class="alert alert-success alert-dismissible fade show rounded-4 shadow-sm border-0 mb-3" role="alert">
             <div class="d-flex align-items-center">
                 <i class="bi bi-check-circle-fill fs-4 me-3 text-success"></i>
                 <div class="fw-bold">@TempData["SuccessMessage"]</div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-4 shadow-sm border-0 mb-3" role="alert">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-exclamation-octagon-fill fs-4 me-3 text-danger"></i>
+                <div class="fw-bold">@TempData["ErrorMessage"]</div>
             </div>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
@@ -152,6 +162,57 @@
                         <small class="text-muted" style="font-size: 0.75rem;">@expenses.Count Kayıtlı Fatura</small>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- YÖNETİŞİM, TEKİL MERKEZ ID, KVKK YETKİ KİLİDİ VE PAKET ÇUBUĞU -->
+    @{
+        var pricingTier = ViewBag.PricingTier as GMK360.Web.Helpers.FacilityPricingResult;
+        bool hasAuthDoc = ViewBag.HasDecisionAuthority is bool bAuth && bAuth;
+        var govMembers = ViewBag.GovernanceMembers as List<GMK360.Core.Entities.BuildingManager> ?? new List<GMK360.Core.Entities.BuildingManager>();
+        int rootBuildingId = ViewBag.RootBuildingId is int rId ? rId : Model.Id;
+    }
+    <div class="card border-0 shadow-sm rounded-4 bg-white mb-4">
+        <div class="card-body p-3 d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <span class="badge bg-dark text-white rounded-pill px-3 py-2">
+                    <i class="bi bi-fingerprint me-1 text-warning"></i> Tekil Merkez ID: #@rootBuildingId
+                </span>
+                @if (pricingTier != null)
+                {
+                    <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3 py-2">
+                        <i class="bi bi-tag-fill me-1"></i> @pricingTier.TierName: @pricingTier.AnnualPrice.ToString("N0") ₺/yıl (14 Gün Deneme)
+                    </span>
+                }
+                @if (hasAuthDoc)
+                {
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-2">
+                        <i class="bi bi-patch-check-fill me-1"></i> Karar Defteri Yetkisi Onaylı
+                    </span>
+                }
+                else
+                {
+                    <a href="/BuildingManager/Onboarding/@rootBuildingId" class="badge bg-warning-subtle text-warning-emphasis border border-warning rounded-pill px-3 py-2 text-decoration-none" title="KVKK gereği sakin telefonu eklemek için belge yükleyin">
+                        <i class="bi bi-shield-exclamation me-1"></i> Taslak Modu: Karar Yetki Yazısı Yükle &rarr;
+                    </a>
+                }
+            </div>
+
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                @foreach (var gm in govMembers)
+                {
+                    var roleLabel = gm.Role == GMK360.Core.Entities.BuildingManagerRole.HeadManager ? "Yönetici" : (gm.Role == GMK360.Core.Entities.BuildingManagerRole.BoardMember ? "Aza" : "Denetçi");
+                    <span class="badge bg-light text-dark border rounded-pill px-2 py-1 small">
+                        <i class="bi bi-person-badge me-1 text-success"></i>@roleLabel: @(gm.User != null ? $"{gm.User.FirstName} {gm.User.LastName}" : gm.UserId)
+                    </span>
+                }
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-semibold" data-bs-toggle="modal" data-bs-target="#governanceModal">
+                    <i class="bi bi-people-fill me-1"></i> Kurul / Aza &amp; Devir
+                </button>
+                <a href="/BuildingManager/Onboarding/@rootBuildingId" class="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-semibold">
+                    <i class="bi bi-magic me-1"></i> Yapı Sihirbazı
+                </a>
             </div>
         </div>
     </div>
@@ -1031,6 +1092,49 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- 7. YÖNETİM KURULU / AZA ATAMA & YÖNETİCİ DEVRİ MODALI -->
+<div class="modal fade" id="governanceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-dark text-white border-0 py-3">
+                <h5 class="modal-title fw-bold mb-0"><i class="bi bi-shield-lock me-2 text-warning"></i>Yönetim Kurulu (Aza) &amp; Yetki Devri</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form asp-action="AssignGovernanceMember" asp-controller="BuildingManager" method="post" class="mb-4 pb-3 border-bottom">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="buildingId" value="@Model.Id" />
+                    <h6 class="fw-bold text-primary mb-2"><i class="bi bi-person-plus me-1"></i>Yönetim Kurulu Azası / Denetçi Ekle</h6>
+                    <p class="small text-muted mb-2">Çoklu onay güvenliği için binanızdaki kat maliki azaları veya denetçiyi ekleyin.</p>
+                    <div class="row g-2">
+                        <div class="col-7">
+                            <input type="email" name="email" class="form-control form-control-sm" placeholder="Üye e-posta adresi" required />
+                        </div>
+                        <div class="col-5">
+                            <select name="role" class="form-select form-select-sm">
+                                <option value="2">Aza (Yönetim Kurulu)</option>
+                                <option value="3">Denetçi</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary rounded-pill px-3 mt-2 fw-semibold">Kadroya Ekle</button>
+                </form>
+
+                <form asp-action="TransferHeadManager" asp-controller="BuildingManager" method="post" onsubmit="return confirm('Ana yöneticilik yetkisini devretmek istediğinize emin misiniz? Tüm bina verileri korunarak yeni yöneticiye geçecektir.');">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="buildingId" value="@Model.Id" />
+                    <h6 class="fw-bold text-danger mb-2"><i class="bi bi-arrow-left-right me-1"></i>Ana Yöneticiliği Devret</h6>
+                    <p class="small text-muted mb-2">Yönetici değiştiğinde bina verileri, kasa ve karar defteri silinmeden yeni yöneticiye aktarılır.</p>
+                    <div class="input-group input-group-sm">
+                        <input type="email" name="newManagerEmail" class="form-control" placeholder="Yeni yöneticinin GMK360 e-postası" required />
+                        <button type="submit" class="btn btn-danger fw-semibold">Yetkiyi Devret</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 </div>
