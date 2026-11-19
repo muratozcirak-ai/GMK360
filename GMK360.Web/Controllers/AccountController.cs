@@ -205,12 +205,18 @@ namespace GMK360.Web.Controllers
                     
                     if (result.Succeeded)
                     {
-                        if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+                        var landingUrl = await GMK360.Web.Helpers.RoleLandingHelper.ResolveLandingUrlAsync(_userManager, _context, user);
+                        bool isStaleConstructionReturn = !string.IsNullOrWhiteSpace(returnUrl)
+                            && returnUrl.StartsWith("/ConstructionProject", StringComparison.OrdinalIgnoreCase)
+                            && !GMK360.Web.Helpers.RoleLandingHelper.HasConstructionModule(user.ActiveModules)
+                            && !await _userManager.IsInRoleAsync(user, "Admin")
+                            && !await _userManager.IsInRoleAsync(user, "SuperAdmin");
+
+                        if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl) && !isStaleConstructionReturn)
                         {
                             return Redirect(returnUrl);
                         }
 
-                        var landingUrl = await GMK360.Web.Helpers.RoleLandingHelper.ResolveLandingUrlAsync(_userManager, _context, user);
                         return LocalRedirect(landingUrl);
                     }
                     

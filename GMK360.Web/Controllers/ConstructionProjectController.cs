@@ -242,6 +242,21 @@ namespace GMK360.Web.Controllers
 
             var staff = await GetCurrentStaffAsync();
 
+            var currentUser = await _userManager.GetUserAsync(User);
+            if (currentUser != null
+                && !User.IsInRole("Admin")
+                && !User.IsInRole("SuperAdmin")
+                && !string.IsNullOrWhiteSpace(currentUser.ActiveModules)
+                && !GMK360.Web.Helpers.RoleLandingHelper.HasConstructionModule(currentUser.ActiveModules))
+            {
+                await GMK360.Web.Helpers.RoleLandingHelper.NormalizeCorporateRolesAsync(_userManager, currentUser);
+                var landingUrl = await GMK360.Web.Helpers.RoleLandingHelper.ResolveLandingUrlAsync(_userManager, _context, currentUser);
+                if (!landingUrl.StartsWith("/ConstructionProject", StringComparison.OrdinalIgnoreCase))
+                {
+                    return LocalRedirect(landingUrl);
+                }
+            }
+
             if (staff != null && staff.Role == GMK360.Core.Entities.AgencyRole.Driver)
 
             {
