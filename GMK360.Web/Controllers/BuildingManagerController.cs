@@ -1556,7 +1556,8 @@ namespace GMK360.Web.Controllers
             decimal totalAmount,
             BuildingExpenseType? expenseType,
             string? payerType,
-            Microsoft.AspNetCore.Http.IFormFile? invoiceFile = null)
+            Microsoft.AspNetCore.Http.IFormFile? invoiceFile = null,
+            string? returnAction = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -1574,6 +1575,10 @@ namespace GMK360.Web.Controllers
                 GetUserId() ?? "system");
 
             TempData[result.Success ? "SuccessMessage" : "ErrorMessage"] = result.Message;
+            if (string.Equals(returnAction, "Giderler", StringComparison.OrdinalIgnoreCase))
+            {
+                return RedirectToAction(nameof(Giderler), new { buildingId });
+            }
             return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
 
@@ -1610,7 +1615,7 @@ namespace GMK360.Web.Controllers
         // 5C. Fatura / Gider İptali (Fiziksel Silme Yasak -> Ters Kayıt & 2 Aza Onay Kuyruğu)
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RequestExpenseReversal(int expenseId, int buildingId, string reason)
+        public async Task<IActionResult> RequestExpenseReversal(int expenseId, int buildingId, string reason, string? returnAction = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -1621,6 +1626,10 @@ namespace GMK360.Web.Controllers
                 GetUserId() ?? "system");
 
             TempData[result.Success ? (result.PendingApproval ? "WarningMessage" : "SuccessMessage") : "ErrorMessage"] = result.Message;
+            if (string.Equals(returnAction, "Giderler", StringComparison.OrdinalIgnoreCase))
+            {
+                return RedirectToAction(nameof(Giderler), new { buildingId });
+            }
             return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
 
@@ -1672,62 +1681,207 @@ namespace GMK360.Web.Controllers
         // 7. Sakinler & Daireler Listesi
         public async Task<IActionResult> Sakinler(int? buildingId)
         {
-            var userId = GetUserId();
-            bool isAdmin = IsAdminOrSuperAdmin();
-            var buildingsQuery = _context.Buildings.AsQueryable();
-            if (!isAdmin) buildingsQuery = buildingsQuery.Where(b => b.ManagerUserId == userId || b.CreatedByUserId == userId);
+            var buildings = await GetUserManagedRootBuildingsAsync();
+            var allowedIds = buildings.Select(b => b.Id).ToList();
 
-            var query = _context.BuildingUnits
-                .Include(u => u.Building)
-                .Where(u => u.Category != "OrtakAlan_Blok" && (u.Category == null || !u.Category.StartsWith("OrtakAlan")));
-            if (!isAdmin) query = query.Where(u => u.Building.ManagerUserId == userId || u.Building.CreatedByUserId == userId);
-            if (buildingId.HasValue) query = query.Where(u => u.BuildingId == buildingId.Value);
-            
-            var units = await query.ToListAsync();
-            ViewBag.Buildings = await buildingsQuery.ToListAsync();
+            if (buildingId.HasValue)
+            {
+                var target = await GetManagedBuildingAsync(buildingId.Value);
+                if (target == null) return Forbid();
+                allowedIds = new System.Collections.Generic.List<int> { target.Id };
+            }
+
+            // Sihirbazda sayisi belirlenmis ama henüz unit satiri uretilmemis binalarin (orn: 17 Daire + 2 Dukkan) kartlarini ac
+            foreach (var b in buildings.Where(x => allowedIds.Contains(x.Id)))
+            {
+                bool hasLiving = await _context.BuildingUnits
+                    .AnyAsync(u => u.BuildingId == b.Id && !(u.Category ?? "").StartsWith("OrtakAlan"));
+                if (!hasLiving && (b.TotalApartments + b.TotalShops) > 0)
+                {
+                    await GenerateFloorUnitsIfEmptyAsync(b, b.TotalApartments, b.TotalShops, b.TotalFloors ?? 5, b.HasGroundFloor);
+                    await EnsureBaselineCommonSpacesAsync(b);
+                }
+            }
+
+            var units = allowedIds.Any()
+                ? await _context.BuildingUnits
+                    .Include(u => u.Building)
+                    .Where(u => allowedIds.Contains(u.BuildingId)
+                        && u.Category != "OrtakAlan_Blok"
+                        && (u.Category == null || !u.Category.StartsWith("OrtakAlan")))
+                    .OrderBy(u => u.BuildingId)
+                    .ThenBy(u => u.FloorLevel)
+                    .ThenBy(u => u.DoorNumber)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<BuildingUnit>();
+
+            int checkBuildingId = buildingId ?? buildings.FirstOrDefault()?.Id ?? 0;
+            ViewBag.Buildings = buildings;
             ViewBag.SelectedBuildingId = buildingId;
+            ViewBag.HasAuthorityDoc = checkBuildingId > 0 && await HasDecisionAuthorityAsync(checkBuildingId);
             return View(units);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateUnitContacts(
+            int unitId,
+            int buildingId,
+            string? ownerName,
+            string? ownerPhone,
+            string? ownerEmail,
+            string? tenantName,
+            string? tenantPhone,
+            string? tenantEmail,
+            bool isEmpty,
+            int? selectedBuildingFilter)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var unit = await _context.BuildingUnits.FirstOrDefaultAsync(u => u.Id == unitId && u.BuildingId == buildingId);
+            if (unit == null) return NotFound();
+
+            bool hasAuthority = await HasDecisionAuthorityAsync(building.ParentBuildingId ?? building.Id);
+            if (!hasAuthority && (!string.IsNullOrWhiteSpace(ownerPhone) || !string.IsNullOrWhiteSpace(tenantPhone) || !string.IsNullOrWhiteSpace(ownerEmail) || !string.IsNullOrWhiteSpace(tenantEmail)))
+            {
+                TempData["ErrorMessage"] = "KVKK ve KMK gereği Karar Defteri / Yetki Yazısı yüklenmeden sakin telefon/e-posta verisi işlenemez. Adım 1 (Sihirbaz) üzerinden yetki belgesi yükleyin.";
+                return RedirectToAction(nameof(Sakinler), new { buildingId = selectedBuildingFilter });
+            }
+
+            unit.OwnerName = ownerName?.Trim();
+            unit.OwnerPhone = ownerPhone?.Trim();
+            unit.OwnerEmail = ownerEmail?.Trim();
+            unit.TenantName = isEmpty ? null : tenantName?.Trim();
+            unit.TenantPhone = isEmpty ? null : tenantPhone?.Trim();
+            unit.TenantEmail = isEmpty ? null : tenantEmail?.Trim();
+            unit.IsEmpty = isEmpty;
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"'{unit.DoorNumber}' bağımsız bölümü malik/kiracı bilgileri güncellendi.";
+            return RedirectToAction(nameof(Sakinler), new { buildingId = selectedBuildingFilter });
         }
 
         // 8. Aidat ve Borç Takibi
         public async Task<IActionResult> Aidatlar(int? buildingId)
         {
-            var userId = GetUserId();
-            bool isAdmin = IsAdminOrSuperAdmin();
-            var buildingsQuery = _context.Buildings.AsQueryable();
-            if (!isAdmin) buildingsQuery = buildingsQuery.Where(b => b.ManagerUserId == userId || b.CreatedByUserId == userId);
+            var buildings = await GetUserManagedRootBuildingsAsync();
+            var allowedIds = buildings.Select(b => b.Id).ToList();
+            if (buildingId.HasValue)
+            {
+                var target = await GetManagedBuildingAsync(buildingId.Value);
+                if (target == null) return Forbid();
+                allowedIds = new System.Collections.Generic.List<int> { target.Id };
+            }
 
-            var query = _context.UnitDebts
-                .Include(d => d.BuildingUnit).ThenInclude(u => u.Building)
-                .Include(d => d.BuildingExpense)
-                .AsQueryable();
-            if (!isAdmin) query = query.Where(d => d.BuildingUnit.Building.ManagerUserId == userId || d.BuildingUnit.Building.CreatedByUserId == userId);
-                
-            if (buildingId.HasValue) query = query.Where(d => d.BuildingUnit.BuildingId == buildingId.Value);
-            
-            var debts = await query.OrderByDescending(d => d.Id).ToListAsync();
-            ViewBag.Buildings = await buildingsQuery.ToListAsync();
+            var debts = allowedIds.Any()
+                ? await _context.UnitDebts
+                    .Include(d => d.BuildingUnit).ThenInclude(u => u.Building)
+                    .Include(d => d.BuildingExpense)
+                    .Where(d => allowedIds.Contains(d.BuildingUnit.BuildingId))
+                    .OrderByDescending(d => d.Id)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<UnitDebt>();
+
+            ViewBag.Buildings = buildings;
             ViewBag.SelectedBuildingId = buildingId;
             return View(debts);
         }
 
-        // 9. Giderler
+        // 9. Sabit Giderler Ajandası + Satın Almalar & Fatura Takibi
         public async Task<IActionResult> Giderler(int? buildingId)
         {
-            var userId = GetUserId();
-            bool isAdmin = IsAdminOrSuperAdmin();
-            var buildingsQuery = _context.Buildings.AsQueryable();
-            if (!isAdmin) buildingsQuery = buildingsQuery.Where(b => b.ManagerUserId == userId || b.CreatedByUserId == userId);
+            var buildings = await GetUserManagedRootBuildingsAsync();
+            var allowedIds = buildings.Select(b => b.Id).ToList();
+            if (buildingId.HasValue)
+            {
+                var target = await GetManagedBuildingAsync(buildingId.Value);
+                if (target == null) return Forbid();
+                allowedIds = new System.Collections.Generic.List<int> { target.Id };
+            }
 
-            var query = _context.BuildingExpenses.Include(e => e.Building).AsQueryable();
-            if (!isAdmin) query = query.Where(e => e.Building.ManagerUserId == userId || e.Building.CreatedByUserId == userId);
-            
-            if (buildingId.HasValue) query = query.Where(e => e.BuildingId == buildingId.Value);
-            
-            var expenses = await query.OrderByDescending(e => e.Date).ToListAsync();
-            ViewBag.Buildings = await buildingsQuery.ToListAsync();
+            var expenses = allowedIds.Any()
+                ? await _context.BuildingExpenses
+                    .Include(e => e.Building)
+                    .Where(e => e.BuildingId.HasValue && allowedIds.Contains(e.BuildingId.Value))
+                    .OrderByDescending(e => e.Date)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<BuildingExpense>();
+
+            var recurringSchedules = allowedIds.Any()
+                ? await _context.SpaceFixtures
+                    .Include(f => f.UnitSpace).ThenInclude(s => s.BuildingUnit).ThenInclude(u => u.Building)
+                    .Where(f => allowedIds.Contains(f.UnitSpace.BuildingUnit.BuildingId)
+                        && (f.Category == "SabitGider" || f.Category == "SGK & Maaş"))
+                    .OrderBy(f => f.NextMaintenanceDate ?? DateTime.MaxValue)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<SpaceFixture>();
+
+            var staffMembers = allowedIds.Any()
+                ? await _context.ManagementMembers
+                    .Include(m => m.Building)
+                    .Where(m => m.BuildingId.HasValue && allowedIds.Contains(m.BuildingId.Value) && m.IsActive)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<ManagementMember>();
+
+            ViewBag.Buildings = buildings;
             ViewBag.SelectedBuildingId = buildingId;
+            ViewBag.RecurringSchedules = recurringSchedules;
+            ViewBag.StaffMembers = staffMembers;
             return View(expenses);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddFixedExpenseSchedule(
+            int buildingId,
+            string category,
+            string itemName,
+            decimal monthlyAmount,
+            DateTime dueDate,
+            string? serviceName,
+            string? notes)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var commonUnit = await _context.BuildingUnits
+                .Include(u => u.Spaces)
+                .FirstOrDefaultAsync(u => u.BuildingId == buildingId && (u.Category == "OrtakAlan_Blok" || (u.Category ?? "").StartsWith("OrtakAlan")));
+            if (commonUnit == null)
+            {
+                await EnsureBaselineCommonSpacesAsync(building);
+                commonUnit = await _context.BuildingUnits
+                    .Include(u => u.Spaces)
+                    .FirstOrDefaultAsync(u => u.BuildingId == buildingId && (u.Category == "OrtakAlan_Blok" || (u.Category ?? "").StartsWith("OrtakAlan")));
+            }
+
+            var targetSpace = commonUnit!.Spaces.FirstOrDefault(s => s.Name.Contains("Sabit Gider"))
+                ?? commonUnit.Spaces.FirstOrDefault();
+            if (targetSpace == null)
+            {
+                targetSpace = new UnitSpace { BuildingUnitId = commonUnit.Id, Name = "Sabit Gider & Muhasebe", Type = "OrtakAlan" };
+                _context.UnitSpaces.Add(targetSpace);
+                await _context.SaveChangesAsync();
+            }
+
+            _context.SpaceFixtures.Add(new SpaceFixture
+            {
+                UnitSpaceId = targetSpace.Id,
+                Category = category == "SGK & Maaş" ? "SGK & Maaş" : "SabitGider",
+                ItemName = itemName?.Trim() ?? "Sabit Gider",
+                EstimatedPrice = monthlyAmount,
+                Quantity = 1,
+                Unit = "Ay",
+                TechnicalServiceName = serviceName?.Trim(),
+                MaintenanceNotes = notes?.Trim(),
+                NextMaintenanceDate = dueDate,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"'{itemName}' sabit gider ödeme takvimine eklendi.";
+            return RedirectToAction(nameof(Giderler), new { buildingId });
         }
 
         // 7. İç Talepler (Ticket) Yönetimi
@@ -1805,6 +1959,17 @@ namespace GMK360.Web.Controllers
                 .Where(a => a.OwnerType == OwnerType.Building && a.OwnerId == building.Id && a.IsActive)
                 .OrderByDescending(a => a.Id)
                 .ToListAsync();
+
+            var staffIds = (building.ManagementMembers ?? new System.Collections.Generic.List<ManagementMember>()).Select(m => m.Id).ToList();
+            ViewBag.Payrolls = staffIds.Any()
+                ? await _context.StaffPayrolls
+                    .Include(p => p.ManagementMember)
+                    .Include(p => p.PaidFromBankAccount)
+                    .Where(p => staffIds.Contains(p.ManagementMemberId))
+                    .OrderByDescending(p => p.Id)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<StaffPayroll>();
+
             ViewBag.Buildings = buildings;
 
             return View(building);
@@ -1836,7 +2001,7 @@ namespace GMK360.Web.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddStaff(int buildingId, string firstName, string lastName, string title, decimal salary, ManagementStaffRole role)
+        public async Task<IActionResult> AddStaff(int buildingId, string firstName, string lastName, string title, decimal salary, ManagementStaffRole role, string? sgkNumber = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -1848,13 +2013,68 @@ namespace GMK360.Web.Controllers
                 LastName = lastName?.Trim() ?? "",
                 Title = title?.Trim() ?? "Personel",
                 MonthlySalary = salary,
+                SgkNumber = sgkNumber?.Trim(),
                 Role = role,
                 IsActive = true,
                 StartDate = DateTime.UtcNow
             });
             await _context.SaveChangesAsync();
 
-            TempData["Success"] = "Sabit personel kadroya eklendi.";
+            TempData["Success"] = "Sabit personel ve SGK sicil bilgisi kadroya eklendi.";
+            return RedirectToAction(nameof(Accounting), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PayStaffSalaryAndSgk(
+            int buildingId,
+            int managementMemberId,
+            string period,
+            decimal netSalary,
+            decimal sgkAndTaxAmount,
+            int? bankAccountId,
+            bool distributeToUnits)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var staff = await _context.ManagementMembers
+                .FirstOrDefaultAsync(m => m.Id == managementMemberId && m.BuildingId == buildingId);
+            if (staff == null) return NotFound();
+
+            _context.StaffPayrolls.Add(new StaffPayroll
+            {
+                ManagementMemberId = staff.Id,
+                Period = string.IsNullOrWhiteSpace(period) ? DateTime.Today.ToString("yyyy-MM") : period.Trim(),
+                NetSalary = netSalary,
+                IsPaid = true,
+                PaymentDate = DateTime.Now,
+                PaidFromBankAccountId = bankAccountId,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            if (bankAccountId.HasValue)
+            {
+                var acc = await _context.BankAccounts.FirstOrDefaultAsync(a => a.Id == bankAccountId.Value && a.OwnerId == buildingId);
+                if (acc != null)
+                {
+                    acc.CurrentBalance -= (netSalary + Math.Max(0m, sgkAndTaxAmount));
+                }
+            }
+            await _context.SaveChangesAsync();
+
+            if (distributeToUnits && (netSalary + Math.Max(0m, sgkAndTaxAmount)) > 0)
+            {
+                await _governanceService.DistributeExpenseAsync(
+                    buildingId,
+                    $"Personel Maaş + SGK ({period}) - {staff.FirstName} {staff.LastName} ({staff.Title})",
+                    netSalary + Math.Max(0m, sgkAndTaxAmount),
+                    BuildingExpenseType.Operational,
+                    null,
+                    GetUserId() ?? "system");
+            }
+
+            TempData["Success"] = $"{staff.FirstName} {staff.LastName} ({period}) maaş & SGK ödemesi muhasebeye işlendi.";
             return RedirectToAction(nameof(Accounting), new { buildingId });
         }
 

@@ -1,96 +1,300 @@
 @model IEnumerable<GMK360.Core.Entities.BuildingUnit>
 @{
-    ViewData["Title"] = "Sakinler ve Daireler";
+    ViewData["Title"] = "Mal Sahibi & Kiracılar (Bağımsız Bölümler)";
     Layout = "~/Views/Shared/_FacilityLayout.cshtml";
-    var buildings = ViewBag.Buildings as IEnumerable<GMK360.Core.Entities.Building>;
+    var buildings = ViewBag.Buildings as List<GMK360.Core.Entities.Building> ?? new List<GMK360.Core.Entities.Building>();
     var selectedBuildingId = ViewBag.SelectedBuildingId as int?;
+    int targetWizardId = selectedBuildingId ?? buildings.FirstOrDefault()?.Id ?? 0;
+    bool hasAuthorityDoc = ViewBag.HasAuthorityDoc is bool ha && ha;
+
+    int aptCount = Model.Count(u => u.Category != "Dukkan" && u.Category != "Dükkan");
+    int shopCount = Model.Count(u => u.Category == "Dukkan" || u.Category == "Dükkan");
 }
 
-<div class="card shadow-sm border-0 mb-4">
-    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-        <h5 class="mb-0"><i class="bi bi-people"></i> Sakinler ve Daireler</h5>
-        <div class="d-flex gap-2">
-            <form method="get" class="d-flex">
-                <select name="buildingId" class="form-select form-select-sm me-2" onchange="this.form.submit()">
+<div class="container-fluid py-3 px-1">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 bg-white p-4 rounded-4 shadow-sm">
+        <div>
+            <h2 class="fw-bold text-dark mb-1"><i class="bi bi-people-fill text-success me-2"></i>Mal Sahibi &amp; Kiracılar (@aptCount Daire, @shopCount Dükkan)</h2>
+            <p class="text-muted small mb-0">Kurulumda tanımladığınız her bağımsız bölüm için buradan doğrudan malik ve kiracı bilgisi girebilirsiniz.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            @if (targetWizardId > 0)
+            {
+                <a href="/BuildingManager/Onboarding/@targetWizardId" class="btn btn-outline-secondary rounded-pill px-3 fw-semibold">
+                    <i class="bi bi-arrow-left-circle me-1"></i> Sihirbaza Dön / Blok Düzenle
+                </a>
+                <button type="button" class="btn btn-success rounded-pill px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#addUnitQuickModal">
+                    <i class="bi bi-plus-circle me-1"></i> Yeni Bölüm Ekle
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
+            @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
+            @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (!hasAuthorityDoc && targetWizardId > 0)
+    {
+        <div class="alert alert-warning rounded-4 border-0 shadow-sm mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="small">
+                <i class="bi bi-shield-lock-fill me-1"></i>
+                <strong>KVKK Yetki Kilidi:</strong> Karar Defteri yetki yazısı yüklenene kadar sakin adı ve doluluk durumu girilebilir, telefon/e-posta alanları güvenlik amacıyla kilitli tutulur.
+            </div>
+            <a href="/BuildingManager/Onboarding/@targetWizardId" class="btn btn-sm btn-dark rounded-pill px-3">Yetki Belgesi Yükle &rarr;</a>
+        </div>
+    }
+
+    <div class="card shadow-sm border-0 rounded-4 mb-4 bg-white overflow-hidden">
+        <div class="card-header bg-white border-bottom p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-door-open text-primary me-2"></i>Daire &amp; Dükkan Sakin Listesi (@Model.Count() Bölüm)</h5>
+            <form method="get" class="d-flex gap-2">
+                <select name="buildingId" class="form-select form-select-sm" onchange="this.form.submit()">
                     <option value="">Tüm Binalar</option>
-                    @if(buildings != null)
+                    @foreach (var b in buildings)
                     {
-                        foreach(var b in buildings)
+                        if (selectedBuildingId == b.Id)
                         {
-                            if(selectedBuildingId == b.Id)
-                            {
-                                <option value="@b.Id" selected>@b.Name</option>
-                            }
-                            else
-                            {
-                                <option value="@b.Id">@b.Name</option>
-                            }
+                            <option value="@b.Id" selected>@b.Name</option>
+                        }
+                        else
+                        {
+                            <option value="@b.Id">@b.Name</option>
                         }
                     }
                 </select>
             </form>
-            <button class="btn btn-sm btn-primary"><i class="bi bi-person-plus"></i> Yeni Sakin Ekle</button>
         </div>
-    </div>
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle">
-                <thead class="table-light">
-                    <tr>
-                        <th>Bina Adı</th>
-                        <th>Daire No</th>
-                        <th>Ev Sahibi</th>
-                        <th>Kiracı (Sakin)</th>
-                        <th>Durum</th>
-                        <th>İşlemler</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if(!Model.Any())
-                    {
-                        <tr><td colspan="6" class="text-center text-muted">Kayıt bulunamadı.</td></tr>
-                    }
-                    else
-                    {
-                        foreach (var unit in Model)
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light small">
+                        <tr>
+                            <th class="ps-3">Bina</th>
+                            <th>Kat / Kapı No</th>
+                            <th>Tür</th>
+                            <th>Ev Sahibi (Malik)</th>
+                            <th>Kiracı (Sakin)</th>
+                            <th>Durum</th>
+                            <th class="pe-3 text-end">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!Model.Any())
                         {
                             <tr>
-                                <td><span class="badge bg-secondary">@unit.Building.Name</span></td>
-                                <td><strong>@unit.UnitNumber</strong></td>
-                                <td>
-                                    @unit.OwnerName <br/>
-                                    <small class="text-muted">@unit.OwnerPhone</small>
-                                </td>
-                                <td>
-                                    @if(string.IsNullOrEmpty(unit.TenantName))
+                                <td colspan="7" class="text-center py-5 text-muted">
+                                    Henüz bağımsız bölüm bulunmuyor.
+                                    @if (targetWizardId > 0)
                                     {
-                                        <span class="text-muted fst-italic">Kiracı Yok</span>
+                                        <div class="mt-2">
+                                            <a href="/BuildingManager/Onboarding/@targetWizardId" class="btn btn-sm btn-primary rounded-pill px-4">Sihirbaza Dön ve Daireleri Oluştur</a>
+                                        </div>
                                     }
-                                    else
-                                    {
-                                        @unit.TenantName <br/>
-                                        <small class="text-muted">@unit.TenantPhone</small>
-                                    }
-                                </td>
-                                <td>
-                                    @if(unit.IsEmpty)
-                                    {
-                                        <span class="badge bg-danger">Boş Daire</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-success">Dolu</span>
-                                    }
-                                </td>
-                                <td>
-                                    <a href="/BuildingManager/Detail/@unit.BuildingId" class="btn btn-sm btn-outline-info" title="Bina Detayı"><i class="bi bi-building"></i></a>
-                                    <button class="btn btn-sm btn-outline-secondary" title="Düzenle"><i class="bi bi-pencil"></i></button>
                                 </td>
                             </tr>
                         }
-                    }
-                </tbody>
-            </table>
+                        else
+                        {
+                            foreach (var unit in Model)
+                            {
+                                bool isShop = unit.Category == "Dukkan" || unit.Category == "Dükkan";
+                                <tr>
+                                    <td class="ps-3"><span class="badge bg-light text-dark border">@unit.Building?.Name</span></td>
+                                    <td>
+                                        <div class="fw-bold text-dark">@(isShop ? $"Dükkan {unit.DoorNumber}" : $"Daire {unit.DoorNumber}")</div>
+                                        <small class="text-muted">@(unit.FloorName ?? $"{unit.FloorLevel}. Kat")</small>
+                                    </td>
+                                    <td>
+                                        @if (isShop)
+                                        {
+                                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Dükkan</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Daire (@(unit.RoomLayout ?? "3+1"))</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(unit.OwnerName))
+                                        {
+                                            <div class="fw-semibold text-dark">@unit.OwnerName</div>
+                                            <small class="text-muted">@(unit.OwnerPhone ?? unit.OwnerEmail ?? "-")</small>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small fst-italic">Henüz girilmedi</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(unit.TenantName))
+                                        {
+                                            <div class="fw-semibold text-info">@unit.TenantName</div>
+                                            <small class="text-muted">@(unit.TenantPhone ?? unit.TenantEmail ?? "-")</small>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small fst-italic">Kiracı Yok</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (unit.IsEmpty)
+                                        {
+                                            <span class="badge bg-secondary">Boş</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success">Dolu</span>
+                                        }
+                                    </td>
+                                    <td class="pe-3 text-end">
+                                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold"
+                                                onclick="openEditUnitModal(@unit.Id, @unit.BuildingId, '@System.Web.HttpUtility.JavaScriptStringEncode(unit.DoorNumber)', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerEmail ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantEmail ?? "")', @(unit.IsEmpty ? "true" : "false"))">
+                                            <i class="bi bi-pencil-square me-1"></i> Bilgi Gir / Düzenle
+                                        </button>
+                                        <a href="/BuildingManager/Detail/@unit.BuildingId" class="btn btn-sm btn-outline-secondary rounded-pill" title="Bina Masası">
+                                            <i class="bi bi-building"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
+
+<!-- Bölüm Malik & Kiracı Güncelleme Modalı -->
+<div class="modal fade" id="editUnitContactsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="UpdateUnitContacts" asp-controller="BuildingManager" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="unitId" id="euUnitId" />
+            <input type="hidden" name="buildingId" id="euBuildingId" />
+            <input type="hidden" name="selectedBuildingFilter" value="@selectedBuildingId" />
+            <div class="modal-header bg-primary text-white border-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-person-vcard me-2"></i><span id="euTitle">Bölüm Bilgileri</span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-bold small">Ev Sahibi / Mülk Sahibi Adı Soyadı</label>
+                    <input type="text" name="ownerName" id="euOwnerName" class="form-control" placeholder="Örn: Ahmet Yılmaz" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Malik Telefon @(hasAuthorityDoc ? "" : "(KVKK Kilitli)")</label>
+                    <input type="text" name="ownerPhone" id="euOwnerPhone" class="form-control" placeholder="05XX XXX XX XX" @(hasAuthorityDoc ? "" : "readonly") />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Malik E-Posta</label>
+                    <input type="email" name="ownerEmail" id="euOwnerEmail" class="form-control" placeholder="malik@ornek.com" @(hasAuthorityDoc ? "" : "readonly") />
+                </div>
+                <div class="col-12 border-top pt-3">
+                    <label class="form-label fw-bold small">Kiracı Adı Soyadı (Varsa)</label>
+                    <input type="text" name="tenantName" id="euTenantName" class="form-control" placeholder="Boş bırakılabilir" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Kiracı Telefon @(hasAuthorityDoc ? "" : "(KVKK Kilitli)")</label>
+                    <input type="text" name="tenantPhone" id="euTenantPhone" class="form-control" placeholder="05XX XXX XX XX" @(hasAuthorityDoc ? "" : "readonly") />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Kiracı E-Posta</label>
+                    <input type="email" name="tenantEmail" id="euTenantEmail" class="form-control" placeholder="kiraci@ornek.com" @(hasAuthorityDoc ? "" : "readonly") />
+                </div>
+                <div class="col-12">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="isEmpty" value="true" id="euIsEmpty">
+                        <label class="form-check-label fw-bold small" for="euIsEmpty">Bölüm Şu An Boş</label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@if (buildings.Any())
+{
+    <!-- Yeni Bölüm Ekle Modalı -->
+    <div class="modal fade" id="addUnitQuickModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content rounded-4 border-0 shadow" asp-action="AddUnit" asp-controller="BuildingManager" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header bg-success text-white border-0">
+                    <h5 class="modal-title fw-bold">Yeni Bağımsız Bölüm Ekle</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 row g-3">
+                    <div class="col-12">
+                        <label class="form-label fw-bold small">Bina</label>
+                        <select name="buildingId" class="form-select" required>
+                            @foreach (var b in buildings)
+                            {
+                                <option value="@b.Id">@b.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Tür</label>
+                        <select name="category" class="form-select">
+                            <option value="Daire">Daire</option>
+                            <option value="Dukkan">Dükkan</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Kapı No *</label>
+                        <input type="text" name="unitNumber" class="form-control" required placeholder="Örn: 18 veya D3" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Ev Sahibi Adı</label>
+                        <input type="text" name="ownerName" class="form-control" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Kiracı Adı</label>
+                        <input type="text" name="tenantName" class="form-control" />
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="isEmpty" value="true" id="addEmptySw">
+                            <label class="form-check-label small fw-bold" for="addEmptySw">Bölüm Boş mu?</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold w-100">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+<script>
+    function openEditUnitModal(unitId, buildingId, doorNo, oName, oPhone, oEmail, tName, tPhone, tEmail, isEmpty) {
+        document.getElementById('euUnitId').value = unitId;
+        document.getElementById('euBuildingId').value = buildingId;
+        document.getElementById('euTitle').innerText = 'Kapı No: ' + doorNo + ' - Malik & Kiracı';
+        document.getElementById('euOwnerName').value = oName || '';
+        document.getElementById('euOwnerPhone').value = oPhone || '';
+        document.getElementById('euOwnerEmail').value = oEmail || '';
+        document.getElementById('euTenantName').value = tName || '';
+        document.getElementById('euTenantPhone').value = tPhone || '';
+        document.getElementById('euTenantEmail').value = tEmail || '';
+        document.getElementById('euIsEmpty').checked = !!isEmpty;
+        new bootstrap.Modal(document.getElementById('editUnitContactsModal')).show();
+    }
+</script>
