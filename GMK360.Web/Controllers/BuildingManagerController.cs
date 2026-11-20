@@ -1523,17 +1523,49 @@ namespace GMK360.Web.Controllers
             return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
 
+        private async Task SaveFixtureDocumentIfProvidedAsync(int buildingId, SpaceFixture fixture, Microsoft.AspNetCore.Http.IFormFile? documentFile)
+        {
+            if (documentFile == null || documentFile.Length == 0) return;
+            var ext = System.IO.Path.GetExtension(documentFile.FileName)?.ToLowerInvariant() ?? "";
+            var allowed = new[] { ".pdf", ".jpg", ".jpeg", ".png", ".webp" };
+            if (!allowed.Contains(ext)) return;
+
+            var docUrl = await SaveUploadedBuildingFileAsync(buildingId, "fixtures", documentFile, ext);
+            _context.DocumentArchives.Add(new DocumentArchive
+            {
+                BuildingId = buildingId,
+                Title = $"{fixture.ItemName} - Garanti / Bakım Evrağı",
+                FileName = documentFile.FileName,
+                FileExtension = ext,
+                Category = "DemirbasEvrak",
+                SourceModule = "SpaceFixture",
+                SourceRecordId = fixture.Id,
+                DocumentUrl = docUrl,
+                Status = "Onaylandı",
+                UploadDate = DateTime.Now,
+                Year = DateTime.Now.Year,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> AddFixtureToFloorUnit(
             int buildingId,
             int unitId,
             string itemName,
+            string? category = "Demirbaş",
             string? brand = null,
+            string? model = null,
             double quantity = 1,
+            string? unitMeasure = "Adet",
+            string? supplierName = null,
             string? serviceName = null,
+            DateTime? warrantyExpiryDate = null,
+            DateTime? nextMaintenanceDate = null,
             string? notes = null,
-            DateTime? nextMaintenanceDate = null)
+            Microsoft.AspNetCore.Http.IFormFile? documentFile = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -1563,23 +1595,159 @@ namespace GMK360.Web.Controllers
                 await _context.SaveChangesAsync();
             }
 
-            _context.SpaceFixtures.Add(new SpaceFixture
+            var fixture = new SpaceFixture
             {
                 UnitSpaceId = space.Id,
-                Category = "Demirbaş & Ekipman",
+                Category = string.IsNullOrWhiteSpace(category) ? "Demirbaş" : category.Trim(),
                 ItemName = itemName.Trim(),
                 StandardBrand = brand?.Trim(),
+                StandardModel = model?.Trim(),
+                SupplierName = supplierName?.Trim(),
                 TechnicalServiceName = serviceName?.Trim(),
-                MaintenanceNotes = notes?.Trim(),
+                WarrantyExpiryDate = warrantyExpiryDate,
                 NextMaintenanceDate = nextMaintenanceDate,
-                Quantity = Math.Max(1, quantity),
-                Unit = "Adet",
+                MaintenanceNotes = notes?.Trim(),
+                Quantity = Math.Max(0.01, quantity),
+                Unit = string.IsNullOrWhiteSpace(unitMeasure) ? "Adet" : unitMeasure.Trim(),
                 CreatedAt = DateTime.Now
-            });
+            };
+
+            _context.SpaceFixtures.Add(fixture);
+            await _context.SaveChangesAsync();
+            await SaveFixtureDocumentIfProvidedAsync(buildingId, fixture, documentFile);
+
+            TempData["SuccessMessage"] = $"'{fixture.ItemName}' ({fixture.Category}) '{unit.DoorNumber}' birimine kaydedildi.";
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateFloorFixture(
+            int buildingId,
+            int fixtureId,
+            string itemName,
+            string? category = "Demirbaş",
+            string? brand = null,
+            string? model = null,
+            double quantity = 1,
+            string? unitMeasure = "Adet",
+            string? supplierName = null,
+            string? serviceName = null,
+            DateTime? warrantyExpiryDate = null,
+            DateTime? nextMaintenanceDate = null,
+            string? notes = null,
+            Microsoft.AspNetCore.Http.IFormFile? documentFile = null)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var fixture = await _context.SpaceFixtures
+                .Include(f => f.UnitSpace)
+                    .ThenInclude(s => s.BuildingUnit)
+                .FirstOrDefaultAsync(f => f.Id == fixtureId && f.UnitSpace.BuildingUnit.BuildingId == buildingId);
+            if (fixture == null) return NotFound();
+
+            if (!string.IsNullOrWhiteSpace(itemName)) fixture.ItemName = itemName.Trim();
+            if (!string.IsNullOrWhiteSpace(category)) fixture.Category = category.Trim();
+            fixture.StandardBrand = brand?.Trim();
+            fixture.StandardModel = model?.Trim();
+            fixture.Quantity = Math.Max(0.01, quantity);
+            fixture.Unit = string.IsNullOrWhiteSpace(unitMeasure) ? "Adet" : unitMeasure.Trim();
+            fixture.SupplierName = supplierName?.Trim();
+            fixture.TechnicalServiceName = serviceName?.Trim();
+            fixture.WarrantyExpiryDate = warrantyExpiryDate;
+            fixture.NextMaintenanceDate = nextMaintenanceDate;
+            fixture.MaintenanceNotes = notes?.Trim();
+
+            await _context.SaveChangesAsync();
+            await SaveFixtureDocumentIfProvidedAsync(buildingId, fixture, documentFile);
+
+            TempData["SuccessMessage"] = $"'{fixture.ItemName}' teknik kartı / servis bilgisi güncellendi.";
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteFloorFixture(int buildingId, int fixtureId)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var fixture = await _context.SpaceFixtures
+                .Include(f => f.UnitSpace)
+                    .ThenInclude(s => s.BuildingUnit)
+                .FirstOrDefaultAsync(f => f.Id == fixtureId && f.UnitSpace.BuildingUnit.BuildingId == buildingId);
+            if (fixture == null) return NotFound();
+
+            var docs = await _context.DocumentArchives
+                .Where(d => d.BuildingId == buildingId && d.SourceModule == "SpaceFixture" && d.SourceRecordId == fixtureId)
+                .ToListAsync();
+            if (docs.Any()) _context.DocumentArchives.RemoveRange(docs);
+
+            _context.SpaceFixtures.Remove(fixture);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = $"'{itemName.Trim()}' demirbaşı '{unit.DoorNumber}' birimine eklendi.";
+            TempData["SuccessMessage"] = $"'{fixture.ItemName}' envanterden kaldırıldı.";
             return RedirectToAction(nameof(Detail), new { id = buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> BulkSwitchTechnicalService(int buildingId, string? categoryFilter, string newServiceName)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+            if (string.IsNullOrWhiteSpace(newServiceName))
+            {
+                TempData["ErrorMessage"] = "Yeni teknik servis firma adı ve telefonu zorunludur.";
+                return RedirectToAction(nameof(Detail), new { id = buildingId });
+            }
+
+            var query = _context.SpaceFixtures
+                .Include(f => f.UnitSpace)
+                    .ThenInclude(s => s.BuildingUnit)
+                .Where(f => f.UnitSpace.BuildingUnit.BuildingId == buildingId);
+
+            if (!string.IsNullOrWhiteSpace(categoryFilter) && categoryFilter != "ALL")
+            {
+                query = query.Where(f => f.Category == categoryFilter);
+            }
+
+            var list = await query.ToListAsync();
+            foreach (var fx in list)
+            {
+                fx.TechnicalServiceName = newServiceName.Trim();
+            }
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"{list.Count} kalemin yetkili teknik servisi '{newServiceName.Trim()}' olarak güncellendi.";
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> PrintEquipmentInventory(int id)
+        {
+            var building = await GetManagedBuildingAsync(id);
+            if (building == null) return Forbid();
+
+            var unitsWithSpaces = await _context.BuildingUnits
+                .Include(u => u.Spaces)
+                    .ThenInclude(s => s.Fixtures)
+                .Where(u => u.BuildingId == id)
+                .OrderByDescending(u => u.FloorLevel)
+                .ThenBy(u => u.DoorNumber)
+                .ToListAsync();
+
+            var fixtureDocs = await _context.DocumentArchives
+                .Where(d => d.BuildingId == id && d.SourceModule == "SpaceFixture" && d.SourceRecordId.HasValue)
+                .ToListAsync();
+
+            ViewBag.Building = building;
+            ViewBag.FixtureDocuments = fixtureDocs
+                .GroupBy(d => d.SourceRecordId!.Value)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            return View(unitsWithSpaces);
         }
 
         [HttpPost]
@@ -1712,11 +1880,19 @@ namespace GMK360.Web.Controllers
                 .OrderByDescending(a => a.Id)
                 .ToListAsync();
 
+            var fixtureDocs = await _context.DocumentArchives
+                .Where(d => d.BuildingId == id && d.SourceModule == "SpaceFixture" && d.SourceRecordId.HasValue)
+                .OrderByDescending(d => d.Id)
+                .ToListAsync();
+
             ViewBag.HasDecisionAuthority = hasAuthorityDoc;
             ViewBag.GovernanceMembers = governanceMembers;
             ViewBag.ActiveBoardMemberCount = await _governanceService.GetActiveBoardMemberCountAsync(rootId);
             ViewBag.ResidencyPeriods = residencyPeriods;
             ViewBag.PendingApprovals = pendingApprovals;
+            ViewBag.FixtureDocuments = fixtureDocs
+                .GroupBy(d => d.SourceRecordId!.Value)
+                .ToDictionary(g => g.Key, g => g.ToList());
             ViewBag.PricingTier = GMK360.Web.Helpers.FacilityPricingHelper.Calculate(isSite, blockCount, livingUnitCount);
             ViewBag.RootBuildingId = rootId;
 

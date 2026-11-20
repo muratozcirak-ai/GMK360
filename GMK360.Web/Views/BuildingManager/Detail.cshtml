@@ -36,7 +36,33 @@
     var commonSpaces = ViewBag.CommonSpaces as List<GMK360.Core.Entities.UnitSpace> ?? new List<GMK360.Core.Entities.UnitSpace>();
     var residencyPeriods = ViewBag.ResidencyPeriods as List<GMK360.Core.Entities.ResidencyPeriod> ?? new List<GMK360.Core.Entities.ResidencyPeriod>();
     var pendingApprovals = ViewBag.PendingApprovals as List<GMK360.Core.Entities.ApprovalRequest> ?? new List<GMK360.Core.Entities.ApprovalRequest>();
+    var fixtureDocs = ViewBag.FixtureDocuments as Dictionary<int, List<GMK360.Core.Entities.DocumentArchive>> ?? new Dictionary<int, List<GMK360.Core.Entities.DocumentArchive>>();
     int activeBoardCount = ViewBag.ActiveBoardMemberCount is int bc ? bc : 0;
+
+    // Tüm Bina Ağaç Envanteri (Kat -> Birim -> Demirbaş / Yangın / Sarf)
+    var treeInventory = new List<(int FloorLevel, string FloorLabel, int UnitId, string UnitName, double? UnitSqm, GMK360.Core.Entities.SpaceFixture Fixture)>();
+    var seenFixtureIds = new HashSet<int>();
+    foreach (var u in (Model.Units ?? new List<GMK360.Core.Entities.BuildingUnit>()).OrderByDescending(x => x.FloorLevel).ThenBy(x => x.DoorNumber))
+    {
+        var flLbl = u.FloorLevel == -99 ? "Bahçe & Çevre" : (u.FloorLevel == 99 ? "Çatı / Teras" : (u.FloorLevel == 0 ? "Zemin Kat" : (u.FloorLevel < 0 ? $"{Math.Abs(u.FloorLevel)}. Bodrum" : $"{u.FloorLevel}. Kat")));
+        foreach (var sp in (u.Spaces ?? new List<GMK360.Core.Entities.UnitSpace>()))
+        {
+            foreach (var fx in (sp.Fixtures ?? new List<GMK360.Core.Entities.SpaceFixture>()))
+            {
+                if (seenFixtureIds.Add(fx.Id))
+                {
+                    var locUnitName = (u.Category == "OrtakAlan_Blok" || u.DoorNumber == "ORTAK") ? sp.Name : u.DoorNumber;
+                    treeInventory.Add((u.FloorLevel, flLbl, u.Id, locUnitName, u.GrossSquareMeters ?? sp.SquareMeters, fx));
+                }
+            }
+        }
+    }
+    var demirbasCount = treeInventory.Count(x => !x.Fixture.Category.Contains("Yangın", StringComparison.OrdinalIgnoreCase) && !x.Fixture.Category.Contains("Sarf", StringComparison.OrdinalIgnoreCase));
+    var yanginCount = treeInventory.Count(x => x.Fixture.Category.Contains("Yangın", StringComparison.OrdinalIgnoreCase));
+    var sarfCount = treeInventory.Count(x => x.Fixture.Category.Contains("Sarf", StringComparison.OrdinalIgnoreCase));
+    var alertCount = treeInventory.Count(x =>
+        (x.Fixture.NextMaintenanceDate.HasValue && x.Fixture.NextMaintenanceDate.Value.Date <= DateTime.Today.AddDays(30))
+        || (x.Fixture.WarrantyExpiryDate.HasValue && x.Fixture.WarrantyExpiryDate.Value.Date <= DateTime.Today.AddDays(30)));
 }
 
 <div class="container-fluid py-3 px-1">
@@ -285,16 +311,26 @@
         </div>
     }
 
-    <!-- 2 ANA OMURGA SEKMESİ (TABS) -->
+    <!-- 3 ANA OMURGA SEKMESİ (TABS) -->
     <ul class="nav nav-pills mb-4 bg-white p-2 rounded-4 shadow-sm border" id="mainPillTab" role="tablist">
         <li class="nav-item flex-fill text-center" role="presentation">
             <button class="nav-link active rounded-pill py-3 fw-bold fs-6 w-100" id="tab-structure-pill" data-bs-toggle="pill" data-bs-target="#tab-structure" type="button" role="tab">
-                <i class="bi bi-building-fill-up me-2 text-primary"></i> 1. YAPI, KATLAR & TESİS EKOSİSTEMİ (Fiziksel Canlı Kesit)
+                <i class="bi bi-building-fill-up me-2 text-primary"></i> 1. YAPI, KATLAR & TESİS EKOSİSTEMİ
             </button>
         </li>
         <li class="nav-item flex-fill text-center" role="presentation">
             <button class="nav-link rounded-pill py-3 fw-bold fs-6 w-100" id="tab-summary-pill" data-bs-toggle="pill" data-bs-target="#tab-summary" type="button" role="tab">
-                <i class="bi bi-pie-chart-fill me-2 text-success"></i> 2. YÖNETİM & FİNANS ÖZETİ (Kararlar, Aidat & Faturalar)
+                <i class="bi bi-pie-chart-fill me-2 text-success"></i> 2. YÖNETİM & FİNANS ÖZETİ
+            </button>
+        </li>
+        <li class="nav-item flex-fill text-center" role="presentation">
+            <button class="nav-link rounded-pill py-3 fw-bold fs-6 w-100" id="tab-inventory-pill" data-bs-toggle="pill" data-bs-target="#tab-inventory" type="button" role="tab">
+                <i class="bi bi-diagram-3-fill me-2 text-warning"></i> 3. DEMİRBAŞ, YANGIN & SARF AĞACI
+                <span class="badge bg-dark rounded-pill ms-1">@treeInventory.Count</span>
+                @if (alertCount > 0)
+                {
+                    <span class="badge bg-danger rounded-pill ms-1">@alertCount Uyarı</span>
+                }
             </button>
         </li>
     </ul>
@@ -934,6 +970,224 @@
 
         </div>
 
+        <!-- ========================================================================= -->
+        <!-- SEKME 3: YAŞAYAN DEMİRBAŞ, YANGIN & SARF ENVANTERİ (AĞAÇ KONUM HARİTASI) -->
+        <!-- ========================================================================= -->
+        <div class="tab-pane fade" id="tab-inventory" role="tabpanel">
+            <div class="alert alert-warning bg-warning bg-opacity-10 border-warning border-opacity-25 rounded-4 d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-diagram-3-fill fs-2 text-warning-emphasis me-3"></i>
+                    <div class="small">
+                        <strong class="text-dark fs-6 d-block">Cansız Ama Yaşayan Yapı: Ne Nerede? + Garanti + Servis + Bakım Takibi</strong>
+                        Yapı mekanı (örn. <em>1. Bodrum › Hidrofor Odası</em>) ile içindeki ekipman (<em>2 adet Pompa, Yangın Tüpü, Sarf Stoğu</em>) birbirinden ayrıdır.
+                        Yeni bir teknik firmayla anlaştığınızda veya acil durumda tek tıkla konumu, garantiyi ve evrakı gösterir.
+                    </div>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="/BuildingManager/PrintEquipmentInventory/@Model.Id" target="_blank" class="btn btn-sm btn-dark rounded-pill px-3 fw-bold">
+                        <i class="bi bi-printer me-1"></i> Teknik Firma Devir &amp; Acil Durum Listesi
+                    </a>
+                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#bulkSwitchServiceModal">
+                        <i class="bi bi-arrow-repeat me-1"></i> Yeni Teknik Firmaya Devret
+                    </button>
+                </div>
+            </div>
+
+            <!-- Üst 4 Sayaç Kartı -->
+            <div class="row g-3 mb-4">
+                <div class="col-md-3 col-6">
+                    <div class="p-3 bg-white rounded-4 border shadow-sm">
+                        <span class="small text-muted fw-semibold d-block">⚙️ Demirbaş &amp; Makine</span>
+                        <h3 class="fw-bold text-primary mb-0">@demirbasCount</h3>
+                        <small class="text-muted">Pompa, hidrofor, kazan, motor</small>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="p-3 bg-white rounded-4 border border-danger-subtle shadow-sm">
+                        <span class="small text-muted fw-semibold d-block">🧯 Yangın &amp; Güvenlik</span>
+                        <h3 class="fw-bold text-danger mb-0">@yanginCount</h3>
+                        <small class="text-muted">Yangın tüpü, dolap, dedektör</small>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="p-3 bg-white rounded-4 border border-info-subtle shadow-sm">
+                        <span class="small text-muted fw-semibold d-block">📦 Sarf &amp; Tüketim</span>
+                        <h3 class="fw-bold text-info mb-0">@sarfCount</h3>
+                        <small class="text-muted">Tuz, filtre, kimyasal, lamba stoğu</small>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="p-3 bg-white rounded-4 border @(alertCount > 0 ? "border-danger bg-danger bg-opacity-10" : "border-success-subtle") shadow-sm">
+                        <span class="small text-muted fw-semibold d-block">⚠️ Kontrol / Bitiş Alarmı</span>
+                        <h3 class="fw-bold @(alertCount > 0 ? "text-danger" : "text-success") mb-0">@alertCount</h3>
+                        <small class="text-muted">30 gün içi veya tarihi geçmiş</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filtre & Arama Çubuğu -->
+            <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
+                <div class="card-header bg-white border-bottom p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div class="d-flex flex-wrap gap-1" id="invFilterBtns">
+                        <button type="button" class="btn btn-sm btn-dark rounded-pill px-3 active" onclick="filterInventory('ALL', this)">Tümü (@treeInventory.Count)</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="filterInventory('Demirbas', this)">⚙️ Demirbaş (@demirbasCount)</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3" onclick="filterInventory('Yangin', this)">🧯 Yangın (@yanginCount)</button>
+                        <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-3" onclick="filterInventory('Sarf', this)">📦 Sarf / Stok (@sarfCount)</button>
+                        <button type="button" class="btn btn-sm btn-outline-warning rounded-pill px-3" onclick="filterInventory('ALERT', this)">⚠️ Bakımı / Bitişi Yaklaşan (@alertCount)</button>
+                    </div>
+                    <div style="min-width:250px;">
+                        <input type="text" id="invSearchInput" class="form-control form-control-sm rounded-pill px-3" placeholder="Ne nerede? Ara (pompa, tüp, bodrum, servis)..." oninput="applyInventoryFilters()" />
+                    </div>
+                </div>
+
+                <div class="card-body p-0">
+                    @if (!treeInventory.Any())
+                    {
+                        <div class="text-center py-5 text-muted">
+                            <i class="bi bi-diagram-3 fs-1 d-block mb-2 text-warning"></i>
+                            <div class="fw-bold text-dark">Henüz envanter / demirbaş kaydı yok.</div>
+                            <p class="small mb-2">1. Sekmedeki kat matrisinden herhangi bir birimin (örn. <em>1. Bodrum › Hidrofor Odası</em>) içindeki <strong>"+ Demirbaş / Pompa Ekle"</strong> butonunu kullanın.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0 small" id="treeInventoryTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Ağaç Konum (Kat › Birim)</th>
+                                        <th>Ekipman / Yangın / Sarf</th>
+                                        <th>Miktar</th>
+                                        <th>Garanti Bitiş</th>
+                                        <th>Teknik Servis &amp; Tedarikçi</th>
+                                        <th>Kontrol / Dolum / Bitiş</th>
+                                        <th>Evrak</th>
+                                        <th class="text-end">İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in treeInventory)
+                                    {
+                                        var fx = item.Fixture;
+                                        var catLow = (fx.Category ?? "").ToLowerInvariant();
+                                        var catKey = catLow.Contains("yangın") || catLow.Contains("yangin") ? "Yangin" : (catLow.Contains("sarf") ? "Sarf" : "Demirbas");
+                                        var isMaintAlert = fx.NextMaintenanceDate.HasValue && fx.NextMaintenanceDate.Value.Date <= DateTime.Today.AddDays(30);
+                                        var isWarAlert = fx.WarrantyExpiryDate.HasValue && fx.WarrantyExpiryDate.Value.Date <= DateTime.Today.AddDays(30);
+                                        var isAlert = isMaintAlert || isWarAlert;
+                                        var docs = fixtureDocs.TryGetValue(fx.Id, out var dList) ? dList : new List<GMK360.Core.Entities.DocumentArchive>();
+                                        var searchBlob = $"{item.FloorLabel} {item.UnitName} {fx.ItemName} {fx.StandardBrand} {fx.StandardModel} {fx.TechnicalServiceName} {fx.SupplierName} {fx.MaintenanceNotes} {fx.Category}".ToLowerInvariant();
+
+                                        <tr class="inv-row" data-cat="@catKey" data-alert="@(isAlert ? "true" : "false")" data-search="@searchBlob">
+                                            <td>
+                                                <span class="badge bg-light text-dark border fw-semibold">
+                                                    <i class="bi bi-geo-alt-fill text-danger me-1"></i>@item.FloorLabel &rsaquo; @item.UnitName
+                                                </span>
+                                                @if (item.UnitSqm.HasValue && item.UnitSqm > 0)
+                                                {
+                                                    <span class="badge bg-secondary-subtle text-secondary ms-1">@item.UnitSqm.Value.ToString("0.##") m²</span>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(fx.MaintenanceNotes))
+                                                {
+                                                    <div class="text-muted mt-1" style="font-size:0.75rem;"><i class="bi bi-pin-angle me-1"></i>@fx.MaintenanceNotes</div>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="badge @(catKey == "Yangin" ? "bg-danger" : (catKey == "Sarf" ? "bg-info text-dark" : "bg-primary")) me-1">@(fx.Category ?? "Demirbaş")</span>
+                                                <strong class="text-dark">@fx.ItemName</strong>
+                                                @if (!string.IsNullOrWhiteSpace(fx.StandardBrand) || !string.IsNullOrWhiteSpace(fx.StandardModel))
+                                                {
+                                                    <div class="text-muted" style="font-size:0.76rem;">@fx.StandardBrand @fx.StandardModel</div>
+                                                }
+                                            </td>
+                                            <td class="fw-bold">@fx.Quantity.ToString("0.##") @fx.Unit</td>
+                                            <td>
+                                                @if (!fx.WarrantyExpiryDate.HasValue)
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                                else if (fx.WarrantyExpiryDate.Value.Date < DateTime.Today)
+                                                {
+                                                    <span class="badge bg-secondary-subtle text-secondary">Bitti (@fx.WarrantyExpiryDate.Value.ToString("dd.MM.yyyy"))</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-shield-check me-1"></i>@fx.WarrantyExpiryDate.Value.ToString("dd.MM.yyyy")</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrWhiteSpace(fx.TechnicalServiceName))
+                                                {
+                                                    <div class="fw-semibold text-dark"><i class="bi bi-tools text-primary me-1"></i>@fx.TechnicalServiceName</div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted fst-italic">Servis atanmadı</span>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(fx.SupplierName))
+                                                {
+                                                    <div class="text-muted" style="font-size:0.74rem;">Tedarik: @fx.SupplierName</div>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!fx.NextMaintenanceDate.HasValue)
+                                                {
+                                                    <span class="text-muted">Tarih yok</span>
+                                                }
+                                                else
+                                                {
+                                                    var daysLeft = (fx.NextMaintenanceDate.Value.Date - DateTime.Today).Days;
+                                                    if (daysLeft < 0)
+                                                    {
+                                                        <span class="badge bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Gecikti (@Math.Abs(daysLeft) gün) • @fx.NextMaintenanceDate.Value.ToString("dd.MM.yyyy")</span>
+                                                    }
+                                                    else if (daysLeft <= 30)
+                                                    {
+                                                        <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>@daysLeft gün kaldı • @fx.NextMaintenanceDate.Value.ToString("dd.MM.yyyy")</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle">@fx.NextMaintenanceDate.Value.ToString("dd.MM.yyyy")</span>
+                                                    }
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (docs.Any())
+                                                {
+                                                    foreach (var doc in docs.Take(2))
+                                                    {
+                                                        <a href="@doc.DocumentUrl" target="_blank" class="badge bg-light text-primary border text-decoration-none d-inline-block mb-1" title="@doc.FileName">
+                                                            <i class="bi bi-file-earmark-pdf me-1"></i>Evrak
+                                                        </a>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td class="text-end text-nowrap">
+                                                <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2"
+                                                        onclick="openEditFixtureModal(@fx.Id, '@Html.Raw((fx.ItemName ?? "").Replace("'", "\\'"))', '@Html.Raw((fx.Category ?? "Demirbaş").Replace("'", "\\'"))', '@Html.Raw((fx.StandardBrand ?? "").Replace("'", "\\'"))', '@Html.Raw((fx.StandardModel ?? "").Replace("'", "\\'"))', '@fx.Quantity', '@Html.Raw((fx.Unit ?? "Adet").Replace("'", "\\'"))', '@Html.Raw((fx.SupplierName ?? "").Replace("'", "\\'"))', '@Html.Raw((fx.TechnicalServiceName ?? "").Replace("'", "\\'"))', '@(fx.WarrantyExpiryDate?.ToString("yyyy-MM-dd") ?? "")', '@(fx.NextMaintenanceDate?.ToString("yyyy-MM-dd") ?? "")', '@Html.Raw((fx.MaintenanceNotes ?? "").Replace("'", "\\'").Replace("\r", "").Replace("\n", " "))')"
+                                                        title="Düzenle / Servis Değiştir / Evrak Yükle">
+                                                    <i class="bi bi-pencil-square"></i>
+                                                </button>
+                                                <form asp-action="DeleteFloorFixture" asp-controller="BuildingManager" method="post" class="d-inline" onsubmit="return confirm('Bu ekipmanı/demirbaşı silmek istediğinize emin misiniz?');">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="buildingId" value="@Model.Id" />
+                                                    <input type="hidden" name="fixtureId" value="@fx.Id" />
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Sil"><i class="bi bi-trash"></i></button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
 
@@ -1535,52 +1789,202 @@
     </div>
 </div>
 
-<!-- 12. BİRİM İÇİNE DEMİRBAŞ / POMPA / EKİPMAN ZİMMETLEME MODALI -->
+<!-- 12. BİRİM İÇİNE DEMİRBAŞ / YANGIN / SARF ZİMMETLEME MODALI -->
 <div class="modal fade" id="addFloorFixtureModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
             <div class="modal-header bg-primary text-white border-0 py-3">
-                <h5 class="modal-title fw-bold mb-0"><i class="bi bi-wrench-adjustable-circle me-2"></i>Birime Demirbaş / Pompa Ekle</h5>
+                <h5 class="modal-title fw-bold mb-0"><i class="bi bi-wrench-adjustable-circle me-2"></i>Birime Demirbaş / Yangın / Sarf Ekle</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form asp-action="AddFixtureToFloorUnit" asp-controller="BuildingManager" method="post">
+            <form asp-action="AddFixtureToFloorUnit" asp-controller="BuildingManager" method="post" enctype="multipart/form-data">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="buildingId" value="@Model.Id" />
                 <input type="hidden" name="unitId" id="fixtureTargetUnitId" value="0" />
                 <div class="modal-body p-4 row g-3">
                     <div class="col-12">
                         <div class="alert alert-light border mb-0 py-2 px-3 small">
-                            Hedef Birim: <strong id="fixtureTargetUnitTitle" class="text-primary">-</strong>
+                            📍 Ağaç Konumu: <strong id="fixtureTargetUnitTitle" class="text-primary">-</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Sınıf / Takip Türü <span class="text-danger">*</span></label>
+                        <select name="category" class="form-select fw-semibold">
+                            <option value="Demirbaş">⚙️ Demirbaş / Makine (Pompa, Motor vb.)</option>
+                            <option value="Yangın / Güvenlik">🧯 Yangın / Güvenlik (Tüp, Dolap, Dedektör)</option>
+                            <option value="Sarf / Tüketim">📦 Sarf / Tüketim (Tuz, Filtre, Lamba Stoğu)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold small">Ürün / Ekipman Adı <span class="text-danger">*</span></label>
+                        <input type="text" name="itemName" class="form-control fw-bold" list="techFixtureSuggestions" required placeholder="Örn: Hidrofor Pompası, 6 Kg ABC Yangın Tüpü, Arıtma Tuzu..." />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Marka</label>
+                        <input type="text" name="brand" class="form-control" placeholder="Örn: Wilo / Grundfos / Yangınsan" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Model / Kapasite</label>
+                        <input type="text" name="model" class="form-control" placeholder="Örn: CM 5-4 / 2.2 kW / 6 Kg" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold small">Miktar</label>
+                        <input type="number" step="0.5" min="0.5" name="quantity" class="form-control" value="1" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold small">Birim</label>
+                        <select name="unitMeasure" class="form-select">
+                            <option value="Adet">Adet</option>
+                            <option value="Set">Set</option>
+                            <option value="Kg">Kg</option>
+                            <option value="Litre">Litre</option>
+                            <option value="Kutu">Kutu</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Yetkili Teknik Servis &amp; Telefon</label>
+                        <input type="text" name="serviceName" class="form-control" placeholder="Örn: Yılmaz Pompa Teknik 0532 000 00 00" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Tedarikçi / Satıcı Firma</label>
+                        <input type="text" name="supplierName" class="form-control" placeholder="Örn: Anadolu Mekanik A.Ş." />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small"><i class="bi bi-shield-check text-success me-1"></i>Garanti Bitiş Tarihi</label>
+                        <input type="date" name="warrantyExpiryDate" class="form-control" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small"><i class="bi bi-calendar-event text-warning me-1"></i>Kontrol / Dolum / Bitiş Tarihi</label>
+                        <input type="date" name="nextMaintenanceDate" class="form-control" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small"><i class="bi bi-file-earmark-arrow-up text-primary me-1"></i>Garanti / Evrak / Fatura</label>
+                        <input type="file" name="documentFile" class="form-control" accept=".pdf,image/*" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold small">Konum / Raf / Seri No &amp; Bakım Notu</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="Örn: Bodrum girişi sağ duvar vanası yanı, Seri: #84920"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="submit" class="btn btn-primary fw-bold rounded-pill px-4">
+                        <i class="bi bi-check2-circle me-1"></i> Envantere Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 13. DEMİRBAŞ / SERVİS / GARANTİ DÜZENLEME MODALI -->
+<div class="modal fade" id="editFloorFixtureModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-dark text-white border-0 py-3">
+                <h5 class="modal-title fw-bold mb-0"><i class="bi bi-pencil-square text-warning me-2"></i>Teknik Kart, Servis &amp; Evrak Güncelle</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="UpdateFloorFixture" asp-controller="BuildingManager" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="buildingId" value="@Model.Id" />
+                <input type="hidden" name="fixtureId" id="editFixtureId" value="0" />
+                <div class="modal-body p-4 row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Sınıf / Takip Türü</label>
+                        <select name="category" id="editFixtureCategory" class="form-select fw-semibold">
+                            <option value="Demirbaş">⚙️ Demirbaş / Makine</option>
+                            <option value="Yangın / Güvenlik">🧯 Yangın / Güvenlik</option>
+                            <option value="Sarf / Tüketim">📦 Sarf / Tüketim</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold small">Ürün / Ekipman Adı <span class="text-danger">*</span></label>
+                        <input type="text" name="itemName" id="editFixtureName" class="form-control fw-bold" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Marka</label>
+                        <input type="text" name="brand" id="editFixtureBrand" class="form-control" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Model / Güç</label>
+                        <input type="text" name="model" id="editFixtureModel" class="form-control" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold small">Miktar</label>
+                        <input type="number" step="0.5" min="0.5" name="quantity" id="editFixtureQty" class="form-control" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold small">Birim</label>
+                        <input type="text" name="unitMeasure" id="editFixtureUnit" class="form-control" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Yetkili Teknik Servis &amp; Tel</label>
+                        <input type="text" name="serviceName" id="editFixtureService" class="form-control" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Tedarikçi Firma</label>
+                        <input type="text" name="supplierName" id="editFixtureSupplier" class="form-control" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Garanti Bitiş Tarihi</label>
+                        <input type="date" name="warrantyExpiryDate" id="editFixtureWarranty" class="form-control" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Kontrol / Dolum / Bitiş Tarihi</label>
+                        <input type="date" name="nextMaintenanceDate" id="editFixtureMaint" class="form-control" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Ek Evrak / Garanti / Rapor Yükle</label>
+                        <input type="file" name="documentFile" class="form-control" accept=".pdf,image/*" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold small">Konum / Seri No &amp; Bakım Notu</label>
+                        <textarea name="notes" id="editFixtureNotes" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="submit" class="btn btn-dark fw-bold rounded-pill px-4">
+                        <i class="bi bi-save me-1"></i> Değişiklikleri Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 14. YENİ TEKNİK FİRMAYA DEVİR (TOPLU SERVİS GÜNCELLEME) MODALI -->
+<div class="modal fade" id="bulkSwitchServiceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-primary text-white border-0 py-3">
+                <h5 class="modal-title fw-bold mb-0"><i class="bi bi-arrow-repeat me-2"></i>Yeni Teknik Firmaya Devret</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="BulkSwitchTechnicalService" asp-controller="BuildingManager" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="buildingId" value="@Model.Id" />
+                <div class="modal-body p-4 row g-3">
+                    <div class="col-12">
+                        <div class="alert alert-info small mb-0">
+                            Yeni bir bakım firması ile anlaştığınızda tüm demirbaşların veya yalnızca seçtiğiniz grubun yetkili servis bilgisini tek tıkla güncelleyebilirsiniz.
                         </div>
                     </div>
                     <div class="col-12">
-                        <label class="form-label fw-bold small">Demirbaş / Pompa / Ekipman Adı <span class="text-danger">*</span></label>
-                        <input type="text" name="itemName" class="form-control fw-bold" list="techFixtureSuggestions" required placeholder="Örn: Hidrofor Pompası, Dalgıç Pompa, Genleşme Tankı..." />
-                    </div>
-                    <div class="col-md-8">
-                        <label class="form-label fw-bold small">Marka / Model / Güç</label>
-                        <input type="text" name="brand" class="form-control" placeholder="Örn: Grundfos CM 5-4 / Wilo 2.2 kW" />
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label fw-bold small">Adet</label>
-                        <input type="number" step="1" min="1" name="quantity" class="form-control" value="1" />
-                    </div>
-                    <div class="col-md-7">
-                        <label class="form-label fw-bold small">Yetkili Servis / Usta Adı &amp; Tel</label>
-                        <input type="text" name="serviceName" class="form-control" placeholder="Örn: Yılmaz Pompa Teknik 0532..." />
-                    </div>
-                    <div class="col-md-5">
-                        <label class="form-label fw-bold small">Sonraki Bakım Tarihi</label>
-                        <input type="date" name="nextMaintenanceDate" class="form-control" />
+                        <label class="form-label fw-bold small">Hangi Ekipman Grubu Devredilsin?</label>
+                        <select name="categoryFilter" class="form-select">
+                            <option value="ALL">Tüm Demirbaş, Yangın &amp; Tesisat Kalemleri</option>
+                            <option value="Demirbaş">Yalnızca Demirbaş &amp; Mekanik (Pompa, Hidrofor, Kazan)</option>
+                            <option value="Yangın / Güvenlik">Yalnızca Yangın &amp; Güvenlik</option>
+                        </select>
                     </div>
                     <div class="col-12">
-                        <label class="form-label fw-bold small">Teknik Not / Garanti / Seri No</label>
-                        <textarea name="notes" class="form-control" rows="2" placeholder="Örn: Mekanik salmastra değişti, 6 ayda bir kontrol"></textarea>
+                        <label class="form-label fw-bold small">Yeni Teknik Firma Adı &amp; 7/24 Telefonu <span class="text-danger">*</span></label>
+                        <input type="text" name="newServiceName" class="form-control fw-bold" required placeholder="Örn: Akdeniz Teknik Bakım A.Ş. - 0532 000 00 00" />
                     </div>
                 </div>
                 <div class="modal-footer border-0 bg-light">
                     <button type="submit" class="btn btn-primary fw-bold rounded-pill w-100">
-                        <i class="bi bi-check2-circle me-1"></i> Demirbaşı Birime Kaydet
+                        <i class="bi bi-check2-all me-1"></i> Yetkili Teknik Servisi Güncelle
                     </button>
                 </div>
             </form>
@@ -1709,5 +2113,47 @@
         document.getElementById('fixtureTargetUnitId').value = unitId;
         document.getElementById('fixtureTargetUnitTitle').innerText = unitTitle;
         new bootstrap.Modal(document.getElementById('addFloorFixtureModal')).show();
+    }
+
+    function openEditFixtureModal(id, name, cat, brand, model, qty, unit, supplier, service, warranty, maint, notes) {
+        document.getElementById('editFixtureId').value = id;
+        document.getElementById('editFixtureName').value = name || '';
+        const catSel = document.getElementById('editFixtureCategory');
+        if (catSel) {
+            const catLow = (cat || '').toLowerCase();
+            catSel.value = catLow.indexOf('yang') >= 0 ? 'Yangın / Güvenlik' : (catLow.indexOf('sarf') >= 0 ? 'Sarf / Tüketim' : 'Demirbaş');
+        }
+        document.getElementById('editFixtureBrand').value = brand || '';
+        document.getElementById('editFixtureModel').value = model || '';
+        document.getElementById('editFixtureQty').value = qty || '1';
+        document.getElementById('editFixtureUnit').value = unit || 'Adet';
+        document.getElementById('editFixtureSupplier').value = supplier || '';
+        document.getElementById('editFixtureService').value = service || '';
+        document.getElementById('editFixtureWarranty').value = warranty || '';
+        document.getElementById('editFixtureMaint').value = maint || '';
+        document.getElementById('editFixtureNotes').value = notes || '';
+        new bootstrap.Modal(document.getElementById('editFloorFixtureModal')).show();
+    }
+
+    let currentInvFilter = 'ALL';
+    function filterInventory(catKey, btn) {
+        currentInvFilter = catKey;
+        document.querySelectorAll('#invFilterBtns button').forEach(b => b.classList.remove('active', 'btn-dark'));
+        if (btn) btn.classList.add('active');
+        applyInventoryFilters();
+    }
+
+    function applyInventoryFilters() {
+        const q = (document.getElementById('invSearchInput')?.value || '').trim().toLowerCase();
+        document.querySelectorAll('#treeInventoryTable .inv-row').forEach(row => {
+            const cat = row.getAttribute('data-cat') || '';
+            const isAlert = row.getAttribute('data-alert') === 'true';
+            const blob = row.getAttribute('data-search') || '';
+            const matchFilter = currentInvFilter === 'ALL'
+                || (currentInvFilter === 'ALERT' && isAlert)
+                || (currentInvFilter === cat);
+            const matchSearch = !q || blob.indexOf(q) >= 0;
+            row.style.display = (matchFilter && matchSearch) ? '' : 'none';
+        });
     }
 </script>

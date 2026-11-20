@@ -1,0 +1,136 @@
+@model List<GMK360.Core.Entities.BuildingUnit>
+@{
+    Layout = null;
+    var building = ViewBag.Building as GMK360.Core.Entities.Building;
+    var fixtureDocs = ViewBag.FixtureDocuments as Dictionary<int, List<GMK360.Core.Entities.DocumentArchive>> ?? new Dictionary<int, List<GMK360.Core.Entities.DocumentArchive>>();
+
+    string FormatFloor(int f) => f == -99 ? "Bahçe & Çevre Alanı" : (f == 99 ? "Çatı / Teras" : (f == 0 ? "Zemin Kat" : (f < 0 ? $"{Math.Abs(f)}. Bodrum" : $"{f}. Kat")));
+
+    var rows = new List<(string FloorLabel, string UnitName, double? Sqm, GMK360.Core.Entities.SpaceFixture Fx)>();
+    var seen = new HashSet<int>();
+    foreach (var u in Model)
+    {
+        var fl = FormatFloor(u.FloorLevel);
+        foreach (var sp in (u.Spaces ?? new List<GMK360.Core.Entities.UnitSpace>()))
+        {
+            foreach (var fx in (sp.Fixtures ?? new List<GMK360.Core.Entities.SpaceFixture>()))
+            {
+                if (seen.Add(fx.Id))
+                {
+                    var unitTitle = (u.Category == "OrtakAlan_Blok" || u.DoorNumber == "ORTAK") ? sp.Name : u.DoorNumber;
+                    rows.Add((fl, unitTitle, u.GrossSquareMeters ?? sp.SquareMeters, fx));
+                }
+            }
+        }
+    }
+}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@(building?.Name ?? "Bina") — Teknik Ekipman, Yangın &amp; Sarf Devir Haritası</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+    <style>
+        body { background: #f8f9fa; color: #111827; font-family: system-ui, -apple-system, sans-serif; }
+        .sheet { max-width: 1100px; margin: 24px auto; background: #fff; padding: 32px; border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,0.06); }
+        @@media print {
+            body { background: #fff; }
+            .sheet { margin: 0; padding: 12px; box-shadow: none; max-width: 100%; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="sheet">
+        <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-4">
+            <div>
+                <h3 class="fw-bold mb-1">@(building?.Name ?? "Bina") — Teknik Firma Devir &amp; Acil Durum Haritası</h3>
+                <div class="text-muted small">
+                    <strong>Adres:</strong> @(building?.StreetName ?? building?.Address) No: @(building?.BuildingNumber ?? "-") &bull;
+                    <strong>Rapor Tarihi:</strong> @DateTime.Now.ToString("dd.MM.yyyy HH:mm") &bull;
+                    <strong>Toplam Kayıt:</strong> @rows.Count Kalem
+                </div>
+            </div>
+            <div class="no-print d-flex gap-2">
+                <button type="button" class="btn btn-dark btn-sm rounded-pill px-3 fw-bold" onclick="window.print()">Yazdır / PDF</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" onclick="window.close()">Kapat</button>
+            </div>
+        </div>
+
+        @if (!rows.Any())
+        {
+            <div class="alert alert-light border text-center py-4">Henüz kayıtlı demirbaş, yangın donanımı veya sarf ekipman bulunmamaktadır.</div>
+        }
+        else
+        {
+            <table class="table table-bordered table-sm align-middle small">
+                <thead class="table-light">
+                    <tr>
+                        <th>Kat &rsaquo; Birim (Konum)</th>
+                        <th>Sınıf</th>
+                        <th>Cihaz / Donanım &amp; Marka-Model</th>
+                        <th>Miktar</th>
+                        <th>Garanti Bitiş</th>
+                        <th>Yetkili Teknik Servis &amp; Tel</th>
+                        <th>Sonraki Kontrol / Dolum / Bitiş</th>
+                        <th>Not / Evrak</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in rows)
+                    {
+                        var docs = fixtureDocs.TryGetValue(r.Fx.Id, out var dl) ? dl : new List<GMK360.Core.Entities.DocumentArchive>();
+                        <tr>
+                            <td class="fw-semibold">
+                                @r.FloorLabel &rsaquo; @r.UnitName
+                                @if (r.Sqm.HasValue && r.Sqm > 0)
+                                {
+                                    <span class="text-muted">(@r.Sqm.Value.ToString("0.##") m²)</span>
+                                }
+                            </td>
+                            <td>@(r.Fx.Category ?? "Demirbaş")</td>
+                            <td>
+                                <strong>@r.Fx.ItemName</strong>
+                                @if (!string.IsNullOrWhiteSpace(r.Fx.StandardBrand) || !string.IsNullOrWhiteSpace(r.Fx.StandardModel))
+                                {
+                                    <div class="text-muted">@r.Fx.StandardBrand @r.Fx.StandardModel</div>
+                                }
+                            </td>
+                            <td>@r.Fx.Quantity.ToString("0.##") @r.Fx.Unit</td>
+                            <td>@(r.Fx.WarrantyExpiryDate?.ToString("dd.MM.yyyy") ?? "-")</td>
+                            <td>
+                                @(r.Fx.TechnicalServiceName ?? "-")
+                                @if (!string.IsNullOrWhiteSpace(r.Fx.SupplierName))
+                                {
+                                    <div class="text-muted">Tedarik: @r.Fx.SupplierName</div>
+                                }
+                            </td>
+                            <td>
+                                @if (r.Fx.NextMaintenanceDate.HasValue)
+                                {
+                                    var d = (r.Fx.NextMaintenanceDate.Value.Date - DateTime.Today).Days;
+                                    <span class="fw-bold @(d < 0 ? "text-danger" : (d <= 30 ? "text-warning-emphasis" : "text-success"))">
+                                        @r.Fx.NextMaintenanceDate.Value.ToString("dd.MM.yyyy")
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span>-</span>
+                                }
+                            </td>
+                            <td>
+                                @(r.Fx.MaintenanceNotes ?? "-")
+                                @if (docs.Any())
+                                {
+                                    <div class="text-primary fw-semibold">@docs.Count ekli evrak</div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</body>
+</html>
