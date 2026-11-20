@@ -78,6 +78,26 @@
             </div>
         </div>
     }
+    @{
+        GMK360.Core.Entities.Identity.ApplicationUser? layoutUser = null;
+        string[] layoutModules = Array.Empty<string>();
+        bool isLayoutAdmin = false;
+        if (User?.Identity?.IsAuthenticated == true)
+        {
+            layoutUser = await UserManager.GetUserAsync(User);
+            layoutModules = GMK360.Web.Helpers.RoleLandingHelper.ParseModules(layoutUser?.ActiveModules);
+            isLayoutAdmin = User.IsInRole("SuperAdmin") || User.IsInRole("Admin");
+        }
+        bool showConstruction = isLayoutAdmin || GMK360.Web.Helpers.RoleLandingHelper.HasConstructionModule(layoutUser?.ActiveModules) || User?.IsInRole("InsaatFirmasi") == true;
+        bool showFacility = isLayoutAdmin || layoutModules.Contains("facility") || User?.IsInRole("BinaYoneticisi") == true;
+        bool showOwner = isLayoutAdmin || layoutModules.Contains("owner") || User?.IsInRole("PropertyOwner") == true || User?.IsInRole("Sakin") == true;
+        bool showService = isLayoutAdmin || layoutModules.Contains("service") || User?.IsInRole("Usta") == true;
+        bool showSubcontractor = isLayoutAdmin || layoutModules.Contains("subcontractor");
+        bool showSupplier = isLayoutAdmin || layoutModules.Contains("supplier");
+        bool showB2B = isLayoutAdmin || layoutModules.Contains("b2b");
+        bool showRealtor = isLayoutAdmin || layoutModules.Contains("realestate") || User?.IsInRole("Emlakci") == true;
+        bool showHubSwitcher = isLayoutAdmin || layoutModules.Length > 1;
+    }
     <header class="fixed-top bg-white border-bottom shadow-sm">
         <div class="container d-flex justify-content-between align-items-center py-3">
             <a asp-controller="Home" asp-action="Index" class="text-decoration-none d-flex align-items-center gap-2">
@@ -87,10 +107,27 @@
             
             <nav class="d-none d-md-flex gap-3 fw-medium text-secondary">
                 <a asp-controller="Home" asp-action="Index" class="text-decoration-none text-dark hover-orange fw-bold">Ana Sayfa</a>
-                <a href="/Emlak/Ara" class="text-decoration-none text-dark hover-orange fw-bold"><i class="ph-bold ph-columns text-primary me-1"></i>Emlak Kıyasla</a>
-                <a href="/Projeler" class="text-decoration-none text-dark hover-orange fw-bold"><i class="ph-bold ph-compass text-info me-1"></i>Yeni Projeler</a>
-                <a href="/Usta" class="text-decoration-none text-dark hover-orange fw-bold"><i class="bi bi-tools text-warning me-1"></i>Usta & Tadilat</a>
-                <a href="/Realtor" class="text-decoration-none text-dark hover-orange fw-bold"><i class="ph-bold ph-buildings text-success me-1"></i>Emlakçı Masası</a>
+                @if (User?.Identity?.IsAuthenticated != true || isLayoutAdmin || showRealtor || showOwner)
+                {
+                    <a href="/Emlak/Ara" class="text-decoration-none text-dark hover-orange fw-bold"><i class="ph-bold ph-columns text-primary me-1"></i>Emlak Kıyasla</a>
+                    <a href="/Projeler" class="text-decoration-none text-dark hover-orange fw-bold"><i class="ph-bold ph-compass text-info me-1"></i>Yeni Projeler</a>
+                }
+                @if (User?.Identity?.IsAuthenticated != true || isLayoutAdmin || showService)
+                {
+                    <a href="/Usta" class="text-decoration-none text-dark hover-orange fw-bold"><i class="bi bi-tools text-warning me-1"></i>Usta & Tadilat</a>
+                }
+                @if (User?.Identity?.IsAuthenticated != true || isLayoutAdmin || showRealtor)
+                {
+                    <a href="/Realtor" class="text-decoration-none text-dark hover-orange fw-bold"><i class="ph-bold ph-buildings text-success me-1"></i>Emlakçı Masası</a>
+                }
+                @if (User?.Identity?.IsAuthenticated == true && showFacility && !isLayoutAdmin)
+                {
+                    <a href="/BuildingManager/Index" class="text-decoration-none text-success hover-orange fw-bold"><i class="bi bi-building-gear me-1"></i>Bina &amp; Site Panelim</a>
+                }
+                @if (User?.Identity?.IsAuthenticated == true && showConstruction && !isLayoutAdmin)
+                {
+                    <a href="/ConstructionProject" class="text-decoration-none text-primary hover-orange fw-bold"><i class="ph ph-buildings me-1"></i>Şantiye &amp; İnşaat ERP</a>
+                }
             </nav>
 
             <div class="d-flex gap-3 align-items-center">
@@ -102,35 +139,60 @@
                     <span id="navLiveTime"></span>
                 </div>
                 
-                @if (User.Identity.IsAuthenticated)
+                @if (User?.Identity?.IsAuthenticated == true)
                 {
                     <div class="dropdown">
                         <button class="btn btn-outline-navy px-4 rounded-pill dropdown-toggle d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="ph-fill ph-user-circle fs-5"></i>
                             <span class="d-none d-md-inline">Hesabım</span>
                         </button>
-                        <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2" style="border-radius: 12px; min-width: 200px;">
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2" style="border-radius: 12px; min-width: 220px;">
                             <li class="px-3 py-2 border-bottom mb-1">
-                                <div class="fw-bold">@( (await UserManager.GetUserAsync(User))?.DisplayName ?? User.Identity.Name )</div>
+                                <div class="fw-bold">@(layoutUser?.DisplayName ?? User.Identity.Name)</div>
                             </li>
-                            @if (User.IsInRole("SuperAdmin") || User.IsInRole("Admin"))
+                            @if (isLayoutAdmin)
                             {
                                 <li><a class="dropdown-item" asp-controller="Admin" asp-action="Index"><i class="ph ph-gear me-2 text-muted"></i>Sistem Yönetimi</a></li>
                             }
                             else
                             {
-                                @if (User.IsInRole("InsaatFirmasi") || User.IsInRole("Corporate"))
+                                @if (showConstruction)
                                 {
-                                    <li><a class="dropdown-item" href="/Dashboard/Construction"><i class="ph ph-buildings me-2 text-primary"></i>Şirket Panosu (ERP)</a></li>
+                                    <li><a class="dropdown-item" href="/ConstructionProject"><i class="ph ph-buildings me-2 text-primary"></i>Şirket Panosu (ERP)</a></li>
                                 }
-                                <li><a class="dropdown-item" href="/BuildingManager/Index"><i class="bi bi-building-gear me-2 text-success"></i>Bina & Site Yönetimi</a></li>
-                                <li><a class="dropdown-item" href="/Landlord/Dashboard"><i class="bi bi-person-workspace me-2 text-primary"></i>Ultra Pro Mülk Sahibi Kokpiti</a></li>
-                                <li><a class="dropdown-item" href="/Usta"><i class="bi bi-tools me-2 text-warning"></i>Usta Mobil Masası (PWA)</a></li>
-                                <li><a class="dropdown-item" href="/Taseron"><i class="bi bi-cone-striped me-2 text-primary"></i>Taşeron & Puantaj Masası</a></li>
-                                <li><a class="dropdown-item" href="/Tedarikci"><i class="bi bi-shop me-2 text-warning"></i>Nalbur & Tedarikçi Masası</a></li>
-                                <li><a class="dropdown-item" href="/Kurumsal"><i class="bi bi-buildings-fill me-2 text-dark"></i>Kurumsal B2B & Sanayi Hub'ı</a></li>
-                                <li><a class="dropdown-item" asp-controller="CustomerDashboard" asp-action="Index"><i class="ph ph-squares-four me-2 text-muted"></i>Çalışma Alanı (Hub)</a></li>
-                                <li><a class="dropdown-item" asp-controller="Profile" asp-action="Index"><i class="ph ph-user me-2 text-muted"></i>Profil & Ayarlar</a></li>
+                                @if (showFacility)
+                                {
+                                    <li><a class="dropdown-item" href="/BuildingManager/Index"><i class="bi bi-building-gear me-2 text-success"></i>Bina &amp; Site Yönetimi</a></li>
+                                }
+                                @if (showOwner)
+                                {
+                                    <li><a class="dropdown-item" href="/Landlord/Dashboard"><i class="bi bi-person-workspace me-2 text-primary"></i>Mülk Sahibi Kokpiti</a></li>
+                                }
+                                @if (showService)
+                                {
+                                    <li><a class="dropdown-item" href="/Usta"><i class="bi bi-tools me-2 text-warning"></i>Usta Mobil Masası (PWA)</a></li>
+                                }
+                                @if (showSubcontractor)
+                                {
+                                    <li><a class="dropdown-item" href="/Taseron"><i class="bi bi-cone-striped me-2 text-primary"></i>Taşeron &amp; Puantaj Masası</a></li>
+                                }
+                                @if (showSupplier)
+                                {
+                                    <li><a class="dropdown-item" href="/Tedarikci"><i class="bi bi-shop me-2 text-warning"></i>Nalbur &amp; Tedarikçi Masası</a></li>
+                                }
+                                @if (showB2B)
+                                {
+                                    <li><a class="dropdown-item" href="/Kurumsal"><i class="bi bi-buildings-fill me-2 text-dark"></i>Kurumsal B2B &amp; Sanayi Hub'ı</a></li>
+                                }
+                                @if (showRealtor)
+                                {
+                                    <li><a class="dropdown-item" href="/Realtor"><i class="ph-bold ph-buildings me-2 text-success"></i>Emlakçı Masası</a></li>
+                                }
+                                @if (showHubSwitcher)
+                                {
+                                    <li><a class="dropdown-item" href="/Dashboard/Hub"><i class="ph ph-squares-four me-2 text-muted"></i>Çalışma Alanı (Hub)</a></li>
+                                }
+                                <li><a class="dropdown-item" asp-controller="Profile" asp-action="Index"><i class="ph ph-user me-2 text-muted"></i>Profil &amp; Ayarlar</a></li>
                             }
                             <li><hr class="dropdown-divider"></li>
                             <li>
