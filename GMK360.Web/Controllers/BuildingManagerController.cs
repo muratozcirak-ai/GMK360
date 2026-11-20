@@ -488,6 +488,13 @@ namespace GMK360.Web.Controllers
                         RoofType = rb.RoofType ?? "Düz Teras Çatı (Tabliye)",
                         IndoorCommonAreas = commonSpacesList.Where(s => s.Type != "CevreDuzenleme").Select(s => s.Name).ToList(),
                         OutdoorCommonAreas = commonSpacesList.Where(s => s.Type == "CevreDuzenleme").Select(s => s.Name).ToList(),
+                        CommonSpaces = commonSpacesList.Select(s => new GMK360.Web.Models.FacilityCommonSpaceDto
+                        {
+                            Name = s.Name,
+                            SpaceGroup = s.Type == "CevreDuzenleme" ? "CevreDuzenleme" : "BinaIci",
+                            SquareMeters = s.SquareMeters,
+                            Description = s.Description
+                        }).ToList(),
                         Children = (rb.ChildBuildings ?? new System.Collections.Generic.List<Building>())
                             .OrderBy(c => c.Id)
                             .Select(c => new GMK360.Web.Models.FacilityStep2ChildBlockDto
@@ -988,7 +995,7 @@ namespace GMK360.Web.Controllers
 
             // Ortak baza / podyum veya tekil yapı birimlerini ve bina içi / çevre düzenleme ortak alanlarını üret
             await GenerateFloorUnitsIfEmptyAsync(target, dto.TotalApartments, dto.TotalShops, dto.TotalFloors, dto.HasGroundFloor, dto.GroundApartments, allowResyncIfClean: true);
-            await EnsureBaselineCommonSpacesAsync(target, dto.IndoorCommonAreas, dto.OutdoorCommonAreas);
+            await EnsureBaselineCommonSpacesAsync(target, dto.IndoorCommonAreas, dto.OutdoorCommonAreas, dto.CommonSpaces);
 
             if (!hasMultiChildren) return;
 
@@ -1139,7 +1146,8 @@ namespace GMK360.Web.Controllers
         private async Task EnsureBaselineCommonSpacesAsync(
             Building building,
             System.Collections.Generic.List<string>? indoorAreas = null,
-            System.Collections.Generic.List<string>? outdoorAreas = null)
+            System.Collections.Generic.List<string>? outdoorAreas = null,
+            System.Collections.Generic.List<GMK360.Web.Models.FacilityCommonSpaceDto>? customCommonSpaces = null)
         {
             var commonUnit = await _context.BuildingUnits
                 .Include(u => u.Spaces)
@@ -1161,11 +1169,49 @@ namespace GMK360.Web.Controllers
                 await _context.SaveChangesAsync();
             }
 
-            var existingNames = (commonUnit.Spaces ?? new System.Collections.Generic.List<UnitSpace>())
-                .Select(s => s.Name)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
+            var existingList = (commonUnit.Spaces ?? new System.Collections.Generic.List<UnitSpace>()).ToList();
             var spacesToAdd = new System.Collections.Generic.List<UnitSpace>();
+
+            if (customCommonSpaces != null && customCommonSpaces.Any())
+            {
+                var desiredNames = customCommonSpaces
+                    .Where(x => !string.IsNullOrWhiteSpace(x.Name))
+                    .Select(x => x.Name.Trim())
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                // Demirbaşı olmayan kaldırılmış boş alanları temizle
+                var toRemove = existingList.Where(s => !desiredNames.Contains(s.Name) && !_context.SpaceFixtures.Any(f => f.UnitSpaceId == s.Id)).ToList();
+                if (toRemove.Any()) _context.UnitSpaces.RemoveRange(toRemove);
+
+                foreach (var cs in customCommonSpaces.Where(x => !string.IsNullOrWhiteSpace(x.Name)))
+                {
+                    string cleanName = cs.Name.Trim();
+                    string spaceType = cs.SpaceGroup == "CevreDuzenleme" ? "CevreDuzenleme" : "BinaIci";
+                    var existing = existingList.FirstOrDefault(s => string.Equals(s.Name, cleanName, StringComparison.OrdinalIgnoreCase));
+                    if (existing != null)
+                    {
+                        existing.Type = spaceType;
+                        existing.SquareMeters = cs.SquareMeters;
+                        existing.Description = cs.Description?.Trim();
+                    }
+                    else
+                    {
+                        spacesToAdd.Add(new UnitSpace
+                        {
+                            BuildingUnitId = commonUnit.Id,
+                            Name = cleanName,
+                            Type = spaceType,
+                            SquareMeters = cs.SquareMeters,
+                            Description = cs.Description?.Trim()
+                        });
+                    }
+                }
+                if (spacesToAdd.Any()) _context.UnitSpaces.AddRange(spacesToAdd);
+                await _context.SaveChangesAsync();
+                return;
+            }
+
+            var existingNames = existingList.Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
             if (indoorAreas != null && indoorAreas.Any())
             {
                 foreach (var name in indoorAreas.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct())
@@ -1184,7 +1230,7 @@ namespace GMK360.Web.Controllers
                 if ((building.TotalFloors ?? 0) >= 4)
                     spacesToAdd.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = "Asansör & Makine Dairesi", Type = "BinaIci" });
                 if (building.BasementFloors > 0)
-                    spacesToAdd.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = "Bodrum, Hidrofor & Garaj/Otopark", Type = "BinaIci" });
+                    spacesToAdd.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = "Bodrum, Ardiye/Kömürlük & Garaj", Type = "BinaIci" });
             }
 
             if (outdoorAreas != null && outdoorAreas.Any())
@@ -1203,6 +1249,41 @@ namespace GMK360.Web.Controllers
                 _context.UnitSpaces.AddRange(spacesToAdd);
                 await _context.SaveChangesAsync();
             }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddCommonSpaceToBuilding(int buildingId, string name, string spaceGroup, double? squareMeters, string? description)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                TempData["ErrorMessage"] = "Alan adı zorunludur.";
+                return RedirectToAction(nameof(Detail), new { id = buildingId });
+            }
+
+            var commonUnit = await _context.BuildingUnits
+                .FirstOrDefaultAsync(u => u.BuildingId == buildingId && (u.Category == "OrtakAlan_Blok" || (u.Category ?? "").StartsWith("OrtakAlan")));
+            if (commonUnit == null)
+            {
+                await EnsureBaselineCommonSpacesAsync(building);
+                commonUnit = await _context.BuildingUnits
+                    .FirstOrDefaultAsync(u => u.BuildingId == buildingId && (u.Category == "OrtakAlan_Blok" || (u.Category ?? "").StartsWith("OrtakAlan")));
+            }
+
+            _context.UnitSpaces.Add(new UnitSpace
+            {
+                BuildingUnitId = commonUnit!.Id,
+                Name = name.Trim(),
+                Type = spaceGroup == "CevreDuzenleme" ? "CevreDuzenleme" : "BinaIci",
+                SquareMeters = squareMeters,
+                Description = description?.Trim()
+            });
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"'{name}' ortak alanlara ({(squareMeters.HasValue ? $"{squareMeters:0.##} m²" : "m² belirtilmedi")}) eklendi.";
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
 
 

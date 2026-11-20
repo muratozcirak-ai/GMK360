@@ -77,7 +77,16 @@ namespace GMK360.Web.Models
         public string RoofType { get; set; } = "Düz Teras Çatı (Tabliye)";
         public List<string> IndoorCommonAreas { get; set; } = new List<string>();
         public List<string> OutdoorCommonAreas { get; set; } = new List<string>();
+        public List<FacilityCommonSpaceDto> CommonSpaces { get; set; } = new List<FacilityCommonSpaceDto>();
         public List<FacilityStep2ChildBlockDto> Children { get; set; } = new List<FacilityStep2ChildBlockDto>();
+    }
+
+    public class FacilityCommonSpaceDto
+    {
+        public string Name { get; set; } = string.Empty;
+        public string SpaceGroup { get; set; } = "BinaIci"; // "BinaIci" | "CevreDuzenleme"
+        public double? SquareMeters { get; set; }
+        public string? Description { get; set; }
     }
 
     public class FacilityStep2ChildBlockDto

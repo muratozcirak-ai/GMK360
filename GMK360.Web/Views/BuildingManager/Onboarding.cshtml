@@ -841,12 +841,67 @@
                 TotalShops: 2,
                 BasementFloors: 1,
                 HasGroundFloor: true,
-                HasRoof: true,
+                HasRoof: false,
                 RoofType: 'Düz Teras Çatı (Tabliye)',
-                IndoorCommonAreas: ['Merdiven & Sahanlık', 'Asansör & Makine Dairesi', 'Çatı / Teras', 'Hidrofor & Su Deposu', 'Sığınak'],
+                IndoorCommonAreas: ['Merdiven & Sahanlık', 'Asansör & Makine Dairesi', 'Hidrofor & Su Deposu', 'Sığınak', 'Ardiye / Kömürlük / Kiler'],
                 OutdoorCommonAreas: ['Kamelya / Çardak', 'Bahçe & Ağaç Peyzajı'],
+                CommonSpaces: [
+                    { Name: 'Merdiven & Sahanlık', SpaceGroup: 'BinaIci', SquareMeters: null, Description: '' },
+                    { Name: 'Asansör & Makine Dairesi', SpaceGroup: 'BinaIci', SquareMeters: null, Description: 'Aylık periyodik bakım & yeşil/mavi etiket kontrolü' },
+                    { Name: 'Hidrofor & Su Deposu', SpaceGroup: 'BinaIci', SquareMeters: null, Description: 'Hidrofor pompa & depo temizlik bakımı' },
+                    { Name: 'Sığınak', SpaceGroup: 'BinaIci', SquareMeters: null, Description: '' },
+                    { Name: 'Ardiye / Kömürlük / Kiler', SpaceGroup: 'BinaIci', SquareMeters: null, Description: 'Daire başı kiler / depo bölmeleri' },
+                    { Name: 'Kamelya / Çardak', SpaceGroup: 'CevreDuzenleme', SquareMeters: null, Description: '' },
+                    { Name: 'Bahçe & Ağaç Peyzajı', SpaceGroup: 'CevreDuzenleme', SquareMeters: null, Description: 'Mevsimlik budama & sulama takibi' }
+                ],
                 Children: []
             };
+        }
+
+        function ensureStructureCommonSpaces(st) {
+            if (!st.CommonSpaces || !Array.isArray(st.CommonSpaces) || st.CommonSpaces.length === 0) {
+                var list = [];
+                (st.IndoorCommonAreas || []).forEach(function (n) {
+                    list.push({ Name: n, SpaceGroup: 'BinaIci', SquareMeters: null, Description: '' });
+                });
+                (st.OutdoorCommonAreas || []).forEach(function (n) {
+                    list.push({ Name: n, SpaceGroup: 'CevreDuzenleme', SquareMeters: null, Description: '' });
+                });
+                if (list.length === 0) {
+                    list = createDefaultStructure(0).CommonSpaces;
+                }
+                st.CommonSpaces = list;
+            }
+            return st.CommonSpaces;
+        }
+
+        function computeStructurePreviewText(floors, totalApts, groundApts, shops, hasGround, hasRoof) {
+            floors = Math.max(0, floors || 0);
+            totalApts = Math.max(0, totalApts || 0);
+            groundApts = Math.max(0, groundApts || 0);
+            shops = Math.max(0, shops || 0);
+            if (!hasGround) groundApts = 0;
+            var actualGroundApts = Math.min(groundApts, totalApts);
+            var upperApts = Math.max(0, totalApts - actualGroundApts);
+            var parts = [];
+            if (hasGround) {
+                parts.push('Zemin Kat: ' + actualGroundApts + ' Daire + ' + shops + ' Dükkan');
+            } else if (shops > 0) {
+                parts.push('Cadde Katı: ' + shops + ' Dükkan');
+            }
+            if (floors > 0 && upperApts > 0) {
+                var perFloor = Math.floor(upperApts / floors);
+                var rem = upperApts % floors;
+                if (rem === 0) {
+                    parts.push('1-' + floors + '. Normal Katlar: Her katta ' + perFloor + ' Daire');
+                } else {
+                    parts.push('1-' + floors + '. Normal Katlar: Kat başı ~' + perFloor + ' Daire (üst katta ' + (rem) + ' fark — eşit ' + (perFloor + 1) + ' daire/kat için Toplam Daire: ' + (actualGroundApts + floors * (perFloor + 1)) + ')');
+                }
+            } else if (floors > 0) {
+                parts.push(floors + ' Normal Kat (Üstte konut seçilmedi)');
+            }
+            parts.push(hasRoof ? 'Çatı Katı / Teras Var' : 'Çatı Katı Yok');
+            return parts.join(' • ');
         }
 
         function createDefaultChild(idx) {
@@ -936,45 +991,92 @@
                     '    <input type="number" class="form-control rounded-3 s-area" value="' + (st.BaseArea || '') + '" placeholder="Örn: 450" /></div>' +
                     '</div>';
 
+                var commonSpaces = ensureStructureCommonSpaces(st);
+                var hasSpace = function (name) {
+                    return commonSpaces.some(function (cs) { return (cs.Name || '').toLowerCase() === name.toLowerCase(); });
+                };
+
                 if (!isAdjacent) {
+                    var previewText = computeStructurePreviewText(st.TotalFloors, st.TotalApartments, st.GroundApartments || 0, st.TotalShops, st.HasGroundFloor, st.HasRoof);
                     html += '<div class="p-3 rounded-3 bg-light border mb-3">' +
                         '<div class="small fw-bold text-primary mb-2">' + (isPodium ? '1. BÖLÜM: ORTAK BAZA & PODYUM KATLARI (Otopark, Ticari)' : 'BLOK KAT & DAİRE DETAYLARI') + '</div>' +
                         '<div class="row g-2">' +
-                        '  <div class="col-md-2"><label class="form-label small fw-bold">Normal Kat (Üst)</label><input type="number" class="form-control s-floors" min="0" value="' + st.TotalFloors + '" /></div>' +
-                        '  <div class="col-md-2"><label class="form-label small fw-bold">Toplam Daire</label><input type="number" class="form-control s-apts" min="0" value="' + st.TotalApartments + '" /></div>' +
-                        '  <div class="col-md-2"><label class="form-label small fw-bold">Zeminde Daire</label><input type="number" class="form-control s-ground-apts" min="0" value="' + (st.GroundApartments || 0) + '" title="Örn: Zemin katta 1 daire + 2 dükkan varsa buraya 1 yazın" /></div>' +
-                        '  <div class="col-md-2"><label class="form-label small fw-bold">Zeminde Dükkan</label><input type="number" class="form-control s-shops" min="0" value="' + st.TotalShops + '" /></div>' +
-                        '  <div class="col-md-2"><label class="form-label small fw-bold">Bodrum Kat</label><input type="number" class="form-control s-base" min="0" value="' + st.BasementFloors + '" /></div>' +
-                        '  <div class="col-md-2"><label class="form-label small fw-bold">Çatı / Teras</label>' + buildRoofSelect('s-roof', st.RoofType) + '</div>' +
-                        '  <div class="col-12 mt-1"><div class="form-check form-switch"><input class="form-check-input s-ground" type="checkbox"' + (st.HasGroundFloor ? ' checked' : '') + ' /><label class="form-check-label small fw-semibold">Zemin Kat Mevcut (Zemin Daire ve Dükkanlar Zemin Katta konumlanır)</label></div></div>' +
+                        '  <div class="col-md-2"><label class="form-label small fw-bold">Normal Kat (Üst)</label><input type="number" class="form-control s-floors" min="0" value="' + st.TotalFloors + '" oninput="refreshLivePreview(' + idx + ')" /></div>' +
+                        '  <div class="col-md-2"><label class="form-label small fw-bold">Toplam Daire</label><input type="number" class="form-control s-apts" min="0" value="' + st.TotalApartments + '" oninput="refreshLivePreview(' + idx + ')" /></div>' +
+                        '  <div class="col-md-2"><label class="form-label small fw-bold">Zeminde Daire</label><input type="number" class="form-control s-ground-apts" min="0" value="' + (st.GroundApartments || 0) + '" oninput="refreshLivePreview(' + idx + ')" title="Örn: Zemin katta 1 daire + 2 dükkan varsa buraya 1 yazın" /></div>' +
+                        '  <div class="col-md-2"><label class="form-label small fw-bold">Zeminde Dükkan</label><input type="number" class="form-control s-shops" min="0" value="' + st.TotalShops + '" oninput="refreshLivePreview(' + idx + ')" /></div>' +
+                        '  <div class="col-md-2"><label class="form-label small fw-bold">Bodrum Kat</label><input type="number" class="form-control s-base" min="0" value="' + st.BasementFloors + '" oninput="refreshLivePreview(' + idx + ')" /></div>' +
+                        '  <div class="col-md-2"><label class="form-label small fw-bold">Çatı / Teras Tipi</label>' + buildRoofSelect('s-roof', st.RoofType, !st.HasRoof) + '</div>' +
+                        '  <div class="col-12 mt-2 d-flex flex-wrap gap-4">' +
+                        '    <div class="form-check form-switch"><input class="form-check-input s-ground" type="checkbox"' + (st.HasGroundFloor ? ' checked' : '') + ' onchange="refreshLivePreview(' + idx + ')" /><label class="form-check-label small fw-semibold">Zemin Kat Mevcut (Zemin Daire + Dükkanlar Zemin Katta birleşik görünür)</label></div>' +
+                        '    <div class="form-check form-switch"><input class="form-check-input s-has-roof" type="checkbox"' + (st.HasRoof ? ' checked' : '') + ' onchange="onHasRoofToggle(' + idx + ', this.checked)" /><label class="form-check-label small fw-semibold">Çatı Katı / Kullanılabilir Teras Var</label></div>' +
+                        '  </div>' +
+                        '  <div class="col-12 mt-2"><div class="alert alert-light border border-primary-subtle py-2 px-3 mb-0 small text-dark" id="livePreview-' + idx + '"><i class="bi bi-layers text-primary me-1"></i><strong>Kat Önizlemesi:</strong> <span class="preview-txt">' + previewText + '</span></div></div>' +
                         '</div></div>';
                 } else {
                     html += '<input type="hidden" class="s-floors" value="0" /><input type="hidden" class="s-apts" value="0" /><input type="hidden" class="s-ground-apts" value="0" /><input type="hidden" class="s-shops" value="0" /><input type="hidden" class="s-base" value="0" />';
                 }
 
-                // Yapı İçi Ortak Alanlar + Bahçe / Çevre Düzenleme Seçici (Tekil binalarda da kamelya/park olur)
-                var indoorOpts = ['Merdiven & Sahanlık', 'Asansör & Makine Dairesi', 'Çatı / Teras', 'Garaj / Kapalı Otopark', 'Hidrofor & Su Deposu', 'Sığınak', 'Jeneratör Odası', 'Kazan / Merkezi Sistem'];
-                var outdoorOpts = ['Kamelya / Çardak', 'Bahçe & Ağaç Peyzajı', 'Çocuk Oyun Parkı', 'Açık Misafir Otoparkı', 'Giriş Güvenlik & Kamera Sistemi', 'Bisiklet & Bebek Arabası Alanı', 'Havuz / Sosyal Tesis'];
-                var selIndoor = st.IndoorCommonAreas && st.IndoorCommonAreas.length ? st.IndoorCommonAreas : ['Merdiven & Sahanlık', 'Asansör & Makine Dairesi', 'Çatı / Teras', 'Hidrofor & Su Deposu', 'Sığınak'];
-                var selOutdoor = st.OutdoorCommonAreas && st.OutdoorCommonAreas.length ? st.OutdoorCommonAreas : ['Kamelya / Çardak', 'Bahçe & Ağaç Peyzajı'];
+                // Esnek Ortak Alan & Teknik Hacim Yönetimi (İnşaat/Yapı düzenine uyumlu m² ve bakım notlu)
+                var indoorOpts = [
+                    'Merdiven & Sahanlık', 'Asansör & Makine Dairesi', 'Ardiye / Kömürlük / Kiler',
+                    'Eski Kazan Dairesi (Depo)', 'Hidrofor & Su Deposu', 'Sığınak',
+                    'Garaj / Kapalı Otopark', 'Jeneratör Odası', 'Kapıcı / Görevli Dairesi', 'Çatı / Teras'
+                ];
+                var outdoorOpts = [
+                    'Kamelya / Çardak', 'Bahçe & Ağaç Peyzajı', 'Çocuk Oyun Parkı',
+                    'Bahçe Su Kuyusu & Pompa Motoru', 'Açık Misafir Otoparkı', 'Giriş Güvenlik & Kamera Sistemi',
+                    'Bisiklet & Bebek Arabası Alanı', 'Havuz / Sosyal Tesis'
+                ];
 
                 html += '<div class="row g-3 mb-3">' +
                     '  <div class="col-md-6"><div class="p-3 rounded-3 border bg-light h-100">' +
-                    '    <div class="small fw-bold text-dark mb-2"><i class="bi bi-building-gear text-primary me-1"></i>Bina / Blok İçi Teknik &amp; Ortak Alanlar</div>' +
+                    '    <div class="small fw-bold text-dark mb-2"><i class="bi bi-building-gear text-primary me-1"></i>Bina / Blok İçi Teknik &amp; Eklenti Alanlar (Hızlı Ekle/Çıkar)</div>' +
                     '    <div class="d-flex flex-wrap gap-2">' +
                     indoorOpts.map(function (item) {
-                        var chk = selIndoor.indexOf(item) >= 0 ? ' checked' : '';
-                        return '<label class="badge bg-white text-dark border px-2 py-2 fw-normal d-inline-flex align-items-center gap-1" style="cursor:pointer;"><input type="checkbox" class="form-check-input m-0 s-indoor-opt" value="' + escapeAttr(item) + '"' + chk + ' /> ' + item + '</label>';
+                        var chk = hasSpace(item) ? ' checked' : '';
+                        return '<label class="badge bg-white text-dark border px-2 py-2 fw-normal d-inline-flex align-items-center gap-1" style="cursor:pointer;"><input type="checkbox" class="form-check-input m-0" onchange="togglePresetCommonSpace(' + idx + ', \'' + escapeAttr(item) + '\', \'BinaIci\', this.checked)"' + chk + ' /> ' + item + '</label>';
                     }).join('') +
                     '    </div></div></div>' +
                     '  <div class="col-md-6"><div class="p-3 rounded-3 border bg-success bg-opacity-10 border-success-subtle h-100">' +
-                    '    <div class="small fw-bold text-success mb-2"><i class="bi bi-tree-fill me-1"></i>Çevre Düzenleme, Bahçe &amp; Kamelya (Tekil Bina &amp; Site)</div>' +
+                    '    <div class="small fw-bold text-success mb-2"><i class="bi bi-tree-fill me-1"></i>Çevre Düzenleme, Bahçe, Kuyu &amp; Kamelya (Hızlı Ekle/Çıkar)</div>' +
                     '    <div class="d-flex flex-wrap gap-2">' +
                     outdoorOpts.map(function (item) {
-                        var chk = selOutdoor.indexOf(item) >= 0 ? ' checked' : '';
-                        return '<label class="badge bg-white text-dark border px-2 py-2 fw-normal d-inline-flex align-items-center gap-1" style="cursor:pointer;"><input type="checkbox" class="form-check-input m-0 s-outdoor-opt" value="' + escapeAttr(item) + '"' + chk + ' /> ' + item + '</label>';
+                        var chk = hasSpace(item) ? ' checked' : '';
+                        return '<label class="badge bg-white text-dark border px-2 py-2 fw-normal d-inline-flex align-items-center gap-1" style="cursor:pointer;"><input type="checkbox" class="form-check-input m-0" onchange="togglePresetCommonSpace(' + idx + ', \'' + escapeAttr(item) + '\', \'CevreDuzenleme\', this.checked)"' + chk + ' /> ' + item + '</label>';
                     }).join('') +
                     '    </div></div></div>' +
+                    '</div>';
+
+                // Esnek Ortak Alan & m² & Bakım Notu Listesi + Özel Ekleme Çubuğu
+                html += '<div class="p-3 rounded-3 border bg-white mb-3">' +
+                    '  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">' +
+                    '    <span class="small fw-bold text-dark"><i class="bi bi-rulers text-warning me-1"></i>Tanımlı Ortak Alanlar, Eklentiler &amp; m² / Ekipman Bilgileri (' + commonSpaces.length + ' Alan)</span>' +
+                    '    <span class="small text-muted">Ardiye, kömürlük, eski kazan dairesi, bahçe su kuyusu motoru vb. dilediğiniz alanı ekleyebilirsiniz.</span>' +
+                    '  </div>' +
+                    '  <div class="table-responsive mb-2">' +
+                    '    <table class="table table-sm align-middle mb-0">' +
+                    '      <thead class="table-light small"><tr><th>Alan Adı</th><th style="width:155px;">Konum / Grup</th><th style="width:110px;">Alan (m²)</th><th>Ekipman / Bakım Notu</th><th style="width:55px;"></th></tr></thead>' +
+                    '      <tbody>' +
+                    commonSpaces.map(function (cs, csIdx) {
+                        return '<tr class="cs-row" data-cs-idx="' + csIdx + '">' +
+                            '<td><input type="text" class="form-control form-control-sm fw-semibold cs-name" value="' + escapeAttr(cs.Name) + '" /></td>' +
+                            '<td><select class="form-select form-select-sm cs-group"><option value="BinaIci"' + (cs.SpaceGroup !== 'CevreDuzenleme' ? ' selected' : '') + '>Bina / Blok İçi</option><option value="CevreDuzenleme"' + (cs.SpaceGroup === 'CevreDuzenleme' ? ' selected' : '') + '>Çevre / Bahçe</option></select></td>' +
+                            '<td><input type="number" step="0.5" min="0" class="form-control form-control-sm cs-sqm" value="' + (cs.SquareMeters != null ? cs.SquareMeters : '') + '" placeholder="m²" /></td>' +
+                            '<td><input type="text" class="form-control form-control-sm cs-desc" value="' + escapeAttr(cs.Description || '') + '" placeholder="Örn: Dalgıç pompa motoru, kiler bölmesi..." /></td>' +
+                            '<td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="removeCommonSpaceRow(' + idx + ', ' + csIdx + ')" title="Kaldır"><i class="bi bi-x-lg"></i></button></td>' +
+                            '</tr>';
+                    }).join('') +
+                    '      </tbody>' +
+                    '    </table>' +
+                    '  </div>' +
+                    '  <div class="row g-2 align-items-end pt-2 border-top bg-light bg-opacity-50 p-2 rounded-3">' +
+                    '    <div class="col-md-4"><label class="form-label small fw-bold mb-1">Yeni Özel Alan / Kuyu / Kiler Adı</label><input type="text" class="form-control form-control-sm" id="customSpaceName-' + idx + '" placeholder="Örn: Kuzey Cephe Ardiye / Bahçe Su Kuyusu" /></div>' +
+                    '    <div class="col-md-2"><label class="form-label small fw-bold mb-1">Grup</label><select class="form-select form-select-sm" id="customSpaceGroup-' + idx + '"><option value="BinaIci">Bina İçi</option><option value="CevreDuzenleme">Çevre / Bahçe</option></select></div>' +
+                    '    <div class="col-md-2"><label class="form-label small fw-bold mb-1">Alan (m²)</label><input type="number" step="0.5" min="0" class="form-control form-control-sm" id="customSpaceSqm-' + idx + '" placeholder="Örn: 25" /></div>' +
+                    '    <div class="col-md-3"><label class="form-label small fw-bold mb-1">Ekipman / Bakım Notu</label><input type="text" class="form-control form-control-sm" id="customSpaceDesc-' + idx + '" placeholder="Örn: Hidrofor / kuyu motoru bakımı" /></div>' +
+                    '    <div class="col-md-1 d-grid"><button type="button" class="btn btn-sm btn-primary fw-bold" onclick="addCustomCommonSpace(' + idx + ')">+ Ekle</button></div>' +
+                    '  </div>' +
                     '</div>';
 
                 if (isMulti) {
@@ -994,7 +1096,7 @@
                             '  <div class="col-md-2"><label class="form-label small fw-bold">Dükkan</label><input type="number" class="form-control c-shops" min="0" value="' + ch.TotalShops + '" /></div>' +
                             '  <div class="col-md-1"><label class="form-label small fw-bold">Bodrum</label><input type="number" class="form-control c-base" min="0" value="' + ch.BasementFloors + '" /></div>' +
                             '  <div class="col-md-1 d-flex align-items-end pb-1"><div class="form-check"><input class="form-check-input c-ground" type="checkbox"' + (ch.HasGroundFloor ? ' checked' : '') + ' /><label class="form-check-label small">Zemin</label></div></div>' +
-                            '  <div class="col-md-2"><label class="form-label small fw-bold">Çatı Tipi</label>' + buildRoofSelect('c-roof', ch.RoofType) + '</div>' +
+                            '  <div class="col-md-2"><label class="form-label small fw-bold">Çatı Tipi</label>' + buildRoofSelect('c-roof', ch.RoofType, false) + '</div>' +
                             '</div></div>';
                     });
                     html += '</div>';
@@ -1005,13 +1107,79 @@
             });
         }
 
-        function buildRoofSelect(cls, selectedVal) {
-            var opts = ['Düz Teras Çatı (Tabliye)', 'Eğimli Kiremit', 'Eğimli Saç / Sandviç', 'Podyum Terası / Peyzaj', 'Çatı Dubleksi'];
-            var html = '<select class="form-select ' + cls + '">';
+        function buildRoofSelect(cls, selectedVal, isDisabled) {
+            var opts = ['Düz Teras Çatı (Tabliye)', 'Eğimli Kiremit', 'Eğimli Saç / Sandviç', 'Podyum Terası / Peyzaj', 'Çatı Dubleksi', 'Çatı Katı Yok (Teras Yok)'];
+            var html = '<select class="form-select ' + cls + '"' + (isDisabled ? ' disabled' : '') + '>';
             opts.forEach(function (o) {
                 html += '<option value="' + o + '"' + (selectedVal === o ? ' selected' : '') + '>' + o + '</option>';
             });
             return html + '</select>';
+        }
+
+        function onHasRoofToggle(idx, checked) {
+            syncStateFromDom();
+            stateStructures[idx].HasRoof = !!checked;
+            if (!checked) {
+                stateStructures[idx].RoofType = 'Çatı Katı Yok (Teras Yok)';
+            } else if (stateStructures[idx].RoofType === 'Çatı Katı Yok (Teras Yok)') {
+                stateStructures[idx].RoofType = 'Düz Teras Çatı (Tabliye)';
+            }
+            renderStructures();
+        }
+
+        function refreshLivePreview(idx) {
+            var card = document.querySelector('.structure-card[data-s-idx="' + idx + '"]');
+            if (!card) return;
+            var floors = parseInt(card.querySelector('.s-floors')?.value || '0', 10) || 0;
+            var totalApts = parseInt(card.querySelector('.s-apts')?.value || '0', 10) || 0;
+            var groundApts = parseInt(card.querySelector('.s-ground-apts')?.value || '0', 10) || 0;
+            var shops = parseInt(card.querySelector('.s-shops')?.value || '0', 10) || 0;
+            var hasGround = !!card.querySelector('.s-ground')?.checked;
+            var hasRoof = !!card.querySelector('.s-has-roof')?.checked;
+            var txtEl = card.querySelector('#livePreview-' + idx + ' .preview-txt');
+            if (txtEl) {
+                txtEl.textContent = computeStructurePreviewText(floors, totalApts, groundApts, shops, hasGround, hasRoof);
+            }
+        }
+
+        function togglePresetCommonSpace(idx, name, spaceGroup, isChecked) {
+            syncStateFromDom();
+            var list = ensureStructureCommonSpaces(stateStructures[idx]);
+            var existingIdx = list.findIndex(function (x) { return (x.Name || '').toLowerCase() === name.toLowerCase(); });
+            if (isChecked && existingIdx < 0) {
+                list.push({ Name: name, SpaceGroup: spaceGroup, SquareMeters: null, Description: '' });
+            } else if (!isChecked && existingIdx >= 0) {
+                list.splice(existingIdx, 1);
+            }
+            renderStructures();
+        }
+
+        function addCustomCommonSpace(idx) {
+            syncStateFromDom();
+            var nameEl = document.getElementById('customSpaceName-' + idx);
+            var grpEl = document.getElementById('customSpaceGroup-' + idx);
+            var sqmEl = document.getElementById('customSpaceSqm-' + idx);
+            var descEl = document.getElementById('customSpaceDesc-' + idx);
+            var name = (nameEl?.value || '').trim();
+            if (!name) {
+                alert('Lütfen ortak alan / ardiye / kuyu adını girin.');
+                return;
+            }
+            var list = ensureStructureCommonSpaces(stateStructures[idx]);
+            list.push({
+                Name: name,
+                SpaceGroup: grpEl?.value || 'BinaIci',
+                SquareMeters: sqmEl && sqmEl.value !== '' ? (parseFloat(sqmEl.value) || null) : null,
+                Description: (descEl?.value || '').trim()
+            });
+            renderStructures();
+        }
+
+        function removeCommonSpaceRow(idx, csIdx) {
+            syncStateFromDom();
+            var list = ensureStructureCommonSpaces(stateStructures[idx]);
+            list.splice(csIdx, 1);
+            renderStructures();
         }
 
         function escapeAttr(str) {
@@ -1047,10 +1215,24 @@
                 st.BasementFloors = parseInt(card.querySelector('.s-base')?.value || '0', 10) || 0;
                 var groundEl = card.querySelector('.s-ground');
                 if (groundEl) st.HasGroundFloor = groundEl.checked;
+                var hasRoofEl = card.querySelector('.s-has-roof');
+                if (hasRoofEl) st.HasRoof = hasRoofEl.checked;
                 var roofEl = card.querySelector('.s-roof');
-                if (roofEl) st.RoofType = roofEl.value;
-                st.IndoorCommonAreas = Array.from(card.querySelectorAll('.s-indoor-opt:checked')).map(el => el.value);
-                st.OutdoorCommonAreas = Array.from(card.querySelectorAll('.s-outdoor-opt:checked')).map(el => el.value);
+                if (roofEl) st.RoofType = st.HasRoof ? roofEl.value : 'Çatı Katı Yok (Teras Yok)';
+
+                var csRows = [];
+                card.querySelectorAll('.cs-row').forEach(function (row) {
+                    var n = (row.querySelector('.cs-name')?.value || '').trim();
+                    if (!n) return;
+                    var grp = row.querySelector('.cs-group')?.value || 'BinaIci';
+                    var sqmRaw = row.querySelector('.cs-sqm')?.value;
+                    var sqm = (sqmRaw !== undefined && sqmRaw !== null && sqmRaw !== '') ? (parseFloat(sqmRaw) || null) : null;
+                    var desc = (row.querySelector('.cs-desc')?.value || '').trim();
+                    csRows.push({ Name: n, SpaceGroup: grp, SquareMeters: sqm, Description: desc });
+                });
+                st.CommonSpaces = csRows;
+                st.IndoorCommonAreas = csRows.filter(function (x) { return x.SpaceGroup !== 'CevreDuzenleme'; }).map(function (x) { return x.Name; });
+                st.OutdoorCommonAreas = csRows.filter(function (x) { return x.SpaceGroup === 'CevreDuzenleme'; }).map(function (x) { return x.Name; });
 
                 if (st.LayoutPattern !== 'Tekil Yapı') {
                     var children = [];

@@ -21,8 +21,8 @@
     var shopCount = units.Count(u => u.Category == "Dukkan");
     var resCount = units.Count(u => u.Category != "Dukkan");
 
-    // Kat Hiyerarşisi (En Üst Kattan Aşağıya)
-    var distinctFloors = units.Where(u => u.Category != "Dukkan").Select(u => u.FloorLevel).Distinct().OrderByDescending(f => f).ToList();
+    // Kat Hiyerarşisi (En Üst Kattan Aşağıya — Zemin Daire ve Dükkanlar Zemin Katta Birlikte)
+    var distinctFloors = units.Select(u => u.FloorLevel).Distinct().OrderByDescending(f => f).ToList();
     if (!distinctFloors.Any()) { distinctFloors = new List<int> { 1 }; }
 
     var meetings = ViewBag.Meetings as List<GMK360.Core.Entities.SystemMeeting> ?? new List<GMK360.Core.Entities.SystemMeeting>();
@@ -322,16 +322,21 @@
                         </span>
                         <h5 class="fw-bold text-dark mb-0">Bina İçi Teknik Alanlar ve Bahçe / Kamelya / Çevre Alanları</h5>
                     </div>
-                    <a href="/BuildingManager/Onboarding/@rootBuildingId" class="btn btn-sm btn-outline-dark rounded-pill px-3 fw-semibold">
-                        <i class="bi bi-pencil-square me-1"></i> Yapı &amp; Çevre Alanlarını Düzenle
-                    </a>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold" data-bs-toggle="modal" data-bs-target="#addCommonSpaceModal">
+                            <i class="bi bi-plus-circle me-1"></i> Ortak Alan / Ardiye / Kuyu Ekle (m²)
+                        </button>
+                        <a href="/BuildingManager/Onboarding/@rootBuildingId" class="btn btn-sm btn-outline-dark rounded-pill px-3 fw-semibold">
+                            <i class="bi bi-pencil-square me-1"></i> Yapı &amp; Çevre Alanlarını Düzenle
+                        </a>
+                    </div>
                 </div>
                 <div class="card-body p-4">
                     @if (!commonSpaces.Any())
                     {
                         <div class="text-center py-3 text-muted small">
                             <i class="bi bi-tools fs-3 d-block mb-2 text-warning"></i>
-                            Bu bina için henüz tanımlı ortak alan mekanı yok. Kurulum sihirbazından Asansör, Garaj, Kamelya, Park veya Bahçe seçebilirsiniz.
+                            Bu bina için henüz tanımlı ortak alan mekanı yok. Sağ üstteki "+ Ortak Alan / Ardiye / Kuyu Ekle" veya Sihirbaz'dan ekleyebilirsiniz.
                         </div>
                     }
                     else
@@ -343,10 +348,20 @@
                                 var fixtures = space.Fixtures?.ToList() ?? new List<GMK360.Core.Entities.SpaceFixture>();
                                 <div class="col-md-4">
                                     <div class="p-3 border rounded-3 bg-light h-100">
-                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <div class="d-flex justify-content-between align-items-center mb-2 gap-1">
                                             <h6 class="fw-bold text-dark mb-0"><i class="bi bi-gear-wide-connected text-primary me-1"></i> @space.Name</h6>
-                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Bina İçi</span>
+                                            <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                                                @if (space.SquareMeters.HasValue)
+                                                {
+                                                    <span class="badge bg-white text-dark border">@space.SquareMeters.Value.ToString("0.##") m²</span>
+                                                }
+                                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Bina İçi</span>
+                                            </div>
                                         </div>
+                                        @if (!string.IsNullOrWhiteSpace(space.Description))
+                                        {
+                                            <div class="small text-secondary mb-1"><i class="bi bi-info-circle me-1"></i>@space.Description</div>
+                                        }
                                         @if (fixtures.Any())
                                         {
                                             <div class="small border-top pt-2 mt-2">
@@ -356,7 +371,7 @@
                                                 }
                                             </div>
                                         }
-                                        else
+                                        else if (string.IsNullOrWhiteSpace(space.Description))
                                         {
                                             <div class="small text-muted fst-italic">Teknik / Demirbaş Kapsamında</div>
                                         }
@@ -366,12 +381,12 @@
                         </div>
 
                         <div class="d-flex justify-content-between align-items-center mb-2 pt-2 border-top">
-                            <h6 class="fw-bold text-success mb-0"><i class="bi bi-tree-fill me-1"></i>Bahçe, Kamelya &amp; Çevre Düzenleme Alanları</h6>
+                            <h6 class="fw-bold text-success mb-0"><i class="bi bi-tree-fill me-1"></i>Bahçe, Kamelya, Kuyu &amp; Çevre Düzenleme Alanları</h6>
                             <a href="/BuildingManager/BakimTakvimi?buildingId=@Model.Id" class="small fw-semibold text-success text-decoration-none">Budama &amp; Bakım Takvimi &rarr;</a>
                         </div>
                         if (!outdoorCommon.Any())
                         {
-                            <p class="small text-muted fst-italic mb-0">Çevre düzenleme alanı (Kamelya, Bahçe, Çocuk Parkı vb.) henüz seçilmedi; sağ üstteki düzenle butonundan ekleyebilirsiniz.</p>
+                            <p class="small text-muted fst-italic mb-0">Çevre düzenleme alanı (Kamelya, Bahçe, Su Kuyusu, Çocuk Parkı vb.) henüz seçilmedi; sağ üstteki ekle veya düzenle butonundan ekleyebilirsiniz.</p>
                         }
                         else
                         {
@@ -381,10 +396,20 @@
                                     var fixtures = space.Fixtures?.ToList() ?? new List<GMK360.Core.Entities.SpaceFixture>();
                                     <div class="col-md-4">
                                         <div class="p-3 border border-success-subtle rounded-3 bg-success bg-opacity-10 h-100">
-                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <div class="d-flex justify-content-between align-items-center mb-2 gap-1">
                                                 <h6 class="fw-bold text-dark mb-0"><i class="bi bi-tree text-success me-1"></i> @space.Name</h6>
-                                                <span class="badge bg-success text-white">Çevre / Sosyal</span>
+                                                <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                                                    @if (space.SquareMeters.HasValue)
+                                                    {
+                                                        <span class="badge bg-white text-dark border">@space.SquareMeters.Value.ToString("0.##") m²</span>
+                                                    }
+                                                    <span class="badge bg-success text-white">Çevre / Sosyal</span>
+                                                </div>
                                             </div>
+                                            @if (!string.IsNullOrWhiteSpace(space.Description))
+                                            {
+                                                <div class="small text-secondary mb-1"><i class="bi bi-wrench-adjustable me-1"></i>@space.Description</div>
+                                            }
                                             @if (fixtures.Any())
                                             {
                                                 <div class="small border-top pt-2 mt-2">
@@ -394,7 +419,7 @@
                                                     }
                                                 </div>
                                             }
-                                            else
+                                            else if (string.IsNullOrWhiteSpace(space.Description))
                                             {
                                                 <div class="small text-muted fst-italic">Mevsimlik Bakım &amp; Peyzaj Kapsamında</div>
                                             }
@@ -407,40 +432,50 @@
                 </div>
             </div>
 
-            <!-- 1. B) NORMAL KATLAR & BAĞIMSIZ BÖLÜMLER (DİKEY KESİT) -->
+            <!-- 1. B) NORMAL KATLAR & BAĞIMSIZ BÖLÜMLER (DİKEY KESİT - ZEMİN DAİRE VE DÜKKANLAR BİRLİKTE) -->
             <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white">
                 <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
                     <div>
-                        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-layers-half text-primary me-2"></i> Konut Katları & Daire Dağılım Matrisi</h5>
-                        <small class="text-muted">Daireye tıklayarak ev sahibi, kiracı, arsa payı ve aidat borç durumunu görebilirsiniz.</small>
+                        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-layers-half text-primary me-2"></i> Katlar &amp; Bağımsız Bölüm Dağılım Matrisi</h5>
+                        <small class="text-muted">Zemin kattaki daire ve dükkanlar Zemin Kat satırında birlikte gösterilir; daire/dükkana tıklayarak malik, kiracı ve aidat durumunu görebilirsiniz.</small>
                     </div>
                     <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2 rounded-pill fw-bold">
-                        @resCount Daire Mevcut
+                        @resCount Daire@(shopCount > 0 ? $" • {shopCount} Dükkan" : "")
                     </span>
                 </div>
                 <div class="card-body p-4 bg-light bg-opacity-50">
                     
                     @foreach (var floor in distinctFloors)
                     {
-                        var floorUnits = units.Where(u => u.FloorLevel == floor && u.Category != "Dukkan").ToList();
+                        var floorUnits = units
+                            .Where(u => u.FloorLevel == floor)
+                            .OrderBy(u => u.Category == "Dukkan" ? 1 : 0)
+                            .ThenBy(u => u.DoorNumber)
+                            .ToList();
+                        var floorAptCount = floorUnits.Count(u => u.Category != "Dukkan");
+                        var floorShopCount = floorUnits.Count(u => u.Category == "Dukkan");
+                        var floorParts = new List<string>();
+                        if (floorAptCount > 0) floorParts.Add($"{floorAptCount} Daire");
+                        if (floorShopCount > 0) floorParts.Add($"{floorShopCount} Dükkan");
+                        var floorSummaryLabel = floorParts.Any() ? string.Join(" + ", floorParts) : "Boş Kat";
                         
                         <div class="row align-items-center mb-3 pb-3 border-bottom border-secondary border-opacity-10">
                             <!-- Sol: Kat Etiketi -->
                             <div class="col-md-2 col-sm-3 mb-2 mb-sm-0">
                                 <div class="bg-white border rounded-4 p-2 text-center shadow-sm">
                                     <span class="fw-bold text-dark fs-5 d-block">@(floor == 0 ? "ZEMİN KAT" : $"{floor}. KAT")</span>
-                                    <small class="text-muted" style="font-size:0.75rem;">@floorUnits.Count Daire</small>
+                                    <small class="text-muted fw-semibold" style="font-size:0.75rem;">@floorSummaryLabel</small>
                                 </div>
                             </div>
 
-                            <!-- Sağ: Daire Kutucukları Grid'i -->
+                            <!-- Sağ: Daire ve Zemin Dükkan Kutucukları Grid'i -->
                             <div class="col-md-10 col-sm-9">
                                 <div class="row g-2">
                                     @if (!floorUnits.Any())
                                     {
                                         <div class="col-12">
                                             <div class="p-2 border rounded-3 text-center bg-white small text-muted fst-italic">
-                                                Bu katta henüz tanımlı daire yok.
+                                                Bu katta henüz tanımlı bağımsız bölüm yok.
                                             </div>
                                         </div>
                                     }
@@ -448,17 +483,21 @@
                                     {
                                         var unitDebts = unit.Debts?.ToList() ?? new List<GMK360.Core.Entities.UnitDebt>();
                                         var unitUnpaid = unitDebts.Where(d => !d.IsPaid).Sum(d => d.Amount);
-                                        var isOwnerLiving = string.IsNullOrEmpty(unit.TenantName) && !unit.IsEmpty;
+                                        var isShop = unit.Category == "Dukkan";
 
-                                        <div class="col-lg-6 col-md-12">
-                                            <div class="card border rounded-4 p-3 bg-white shadow-sm hover-shadow transition-all cursor-pointer" onclick="openUnitModal(@unit.Id, '@unit.DoorNumber', '@unit.RoomLayout', '@(unit.OwnerName ?? "-")', '@(unit.OwnerPhone ?? "-")', '@(unit.TenantName ?? "-")', '@(unit.TenantPhone ?? "-")', @unitUnpaid, @(unit.IsEmpty ? "true" : "false"))">
+                                        <div class="col-lg-4 col-md-6">
+                                            <div class="card border @(isShop ? "border-success bg-success bg-opacity-10" : "bg-white") rounded-4 p-3 shadow-sm hover-shadow transition-all cursor-pointer h-100" onclick="openUnitModal(@unit.Id, '@unit.DoorNumber', '@unit.RoomLayout', '@(unit.OwnerName ?? "-")', '@(unit.OwnerPhone ?? "-")', '@(unit.TenantName ?? "-")', '@(unit.TenantPhone ?? "-")', @unitUnpaid, @(unit.IsEmpty ? "true" : "false"))">
                                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                                     <div>
-                                                        <span class="badge bg-dark rounded-pill px-2 py-1 mb-1 font-monospace">@unit.DoorNumber</span>
-                                                        <span class="badge bg-light text-dark border ms-1">@(unit.RoomLayout ?? "3+1")</span>
+                                                        <span class="badge @(isShop ? "bg-success" : "bg-dark") rounded-pill px-2 py-1 mb-1 font-monospace">@unit.DoorNumber</span>
+                                                        <span class="badge bg-light text-dark border ms-1">@(unit.RoomLayout ?? (isShop ? "Dükkan" : "3+1"))</span>
                                                     </div>
                                                     <div>
-                                                        @if (unit.IsEmpty)
+                                                        @if (isShop)
+                                                        {
+                                                            <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">🏪 Dükkan (Asansör Muaf)</span>
+                                                        }
+                                                        else if (unit.IsEmpty)
                                                         {
                                                             <span class="badge bg-secondary rounded-pill">⚪ Boş Daire</span>
                                                         }
@@ -1241,6 +1280,48 @@
                 </div>
                 <div class="modal-footer border-0 bg-light">
                     <button type="submit" class="btn btn-danger fw-bold rounded-pill w-100">Ters Kayıt Talebi Gönder</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 10. ORTAK ALAN / ARDİYE / BAHÇE KUYUSU EKLEME MODALI -->
+<div class="modal fade" id="addCommonSpaceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-primary text-white border-0 py-3">
+                <h5 class="modal-title fw-bold mb-0"><i class="bi bi-rulers me-2"></i>Ortak Alan / Ardiye / Kuyu Ekle (m²)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="AddCommonSpaceToBuilding" asp-controller="BuildingManager" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="buildingId" value="@Model.Id" />
+                <div class="modal-body p-4 row g-3">
+                    <div class="col-12">
+                        <label class="form-label fw-bold small">Alan / Hacim Adı <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="form-control" required placeholder="Örn: Ardiye / Kömürlük, Eski Kazan Dairesi, Bahçe Su Kuyusu..." />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Konum / Grup</label>
+                        <select name="spaceGroup" class="form-select">
+                            <option value="BinaIci">Bina / Blok İçi (Ardiye, Kazan, Sığınak vb.)</option>
+                            <option value="CevreDuzenleme">Çevre / Bahçe (Kuyu, Kamelya, Park vb.)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Alan (m² - Opsiyonel)</label>
+                        <input type="number" step="0.5" min="0" name="squareMeters" class="form-control" placeholder="Örn: 35" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold small">Ekipman / Motor / Bakım Notu</label>
+                        <textarea name="description" class="form-control" rows="2" placeholder="Örn: Dalgıç pompa motor bakımı veya daire başı kiler bölmesi"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="submit" class="btn btn-primary fw-bold rounded-pill w-100">
+                        <i class="bi bi-check-circle me-1"></i> Ortak Alana Kaydet
+                    </button>
                 </div>
             </form>
         </div>
