@@ -524,6 +524,78 @@ namespace GMK360.Data.Migrations
                     b.ToTable("ApiCredentials");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.ApprovalRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ApprovalCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ApprovedByJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("BuildingId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ExecutedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("RequestType")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("RequestedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("RequiredApprovals")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("TargetEntityId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TargetEntityName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuildingId");
+
+                    b.ToTable("ApprovalRequests");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.Article", b =>
                 {
                     b.Property<int>("Id")
@@ -1613,6 +1685,12 @@ namespace GMK360.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ArchivedByUserId")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("BuildingId")
                         .HasColumnType("int");
 
@@ -1641,11 +1719,17 @@ namespace GMK360.Data.Migrations
                     b.Property<string>("InvoiceDocumentUrl")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
                     b.Property<string>("PayerType")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("ReversalOfExpenseId")
+                        .HasColumnType("int");
 
                     b.Property<int>("ScopeType")
                         .HasColumnType("int");
@@ -3418,11 +3502,13 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Description")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("DistrictId")
                         .HasColumnType("int");
+
+                    b.Property<string>("DxfFilePath")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ElevatorType")
                         .HasColumnType("nvarchar(max)");
@@ -3469,6 +3555,9 @@ namespace GMK360.Data.Migrations
                     b.Property<string>("GoogleMapsUrl")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("HasDxfDrawing")
+                        .HasColumnType("bit");
+
                     b.Property<string>("InnerWallType")
                         .HasColumnType("nvarchar(max)");
 
@@ -3476,6 +3565,9 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsJointVenture")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsNewDesignForExisting")
@@ -3496,6 +3588,9 @@ namespace GMK360.Data.Migrations
                     b.Property<double?>("Longitude")
                         .HasColumnType("float");
 
+                    b.Property<string>("ManagerApprovalPin")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -3506,13 +3601,52 @@ namespace GMK360.Data.Migrations
                     b.Property<decimal?>("OfficialCostPerSqm")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal>("OurSharePercentage")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("OurVaultAdvance")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("OuterWallType")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ParcelPolygonGeoJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("ParentProjectId")
+                        .HasColumnType("int");
 
                     b.Property<string>("Parsel")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PartnerCompanyName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PartnerContactPerson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PartnerContractDocumentPath")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PartnerEmail")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PartnerPhone")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("PartnerSharePercentage")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("PartnerVaultAdvance")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("PartnersJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("PlumbingType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProjectExecutionMode")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("ProjectOriginId")
@@ -3525,6 +3659,12 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PublicDescription")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("RelatedAmenityId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RentPolicyJson")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RoofMaterial")
@@ -3544,6 +3684,9 @@ namespace GMK360.Data.Migrations
 
                     b.Property<int?>("StreetId")
                         .HasColumnType("int");
+
+                    b.Property<string>("SubProjectCategory")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("TargetTotalApartments")
                         .HasColumnType("int");
@@ -3566,6 +3709,10 @@ namespace GMK360.Data.Migrations
 
                     b.HasIndex("BinaYoneticisiId");
 
+                    b.HasIndex("ParentProjectId");
+
+                    b.HasIndex("RelatedAmenityId");
+
                     b.ToTable("ConstructionProjects");
                 });
 
@@ -3583,14 +3730,42 @@ namespace GMK360.Data.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal?>("AmountExcludingVat")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ApprovalPin")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ApprovalStatus")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ApprovalType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("Currency")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("CurrencyAmount")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("DocumentNo")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("ExchangeRate")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("ExpenseDate")
                         .HasColumnType("datetime2");
@@ -3601,8 +3776,32 @@ namespace GMK360.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsJointVenture")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsPaid")
                         .HasColumnType("bit");
+
+                    b.Property<decimal?>("OurShareAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("OurSharePercentage")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("PartnerCompanyName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("PartnerShareAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("PartnerSharePercentage")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("PayeeOrSupplier")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PaymentSource")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PhotoPath")
                         .HasColumnType("nvarchar(max)");
@@ -3610,12 +3809,24 @@ namespace GMK360.Data.Migrations
                     b.Property<int?>("ProjectId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("SiteDiaryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("SiteDiaryNote")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("VatAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("VatRate")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -4656,24 +4867,69 @@ namespace GMK360.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("BankName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("Iban")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastPaymentDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("MonthlyRentAllowance")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<int?>("PaymentDay")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PaymentStatus")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
+
+                    b.Property<string>("ReceiptUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal?>("RelocationAllowance")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("RentEndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("RentStartDate")
+                        .HasColumnType("datetime2");
 
                     b.Property<int>("Role")
                         .HasColumnType("int");
 
                     b.Property<decimal?>("SharePercentage")
                         .HasColumnType("decimal(5,2)");
+
+                    b.Property<string>("ShareRatio")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int?>("UnitCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UnitNumbers")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -4947,30 +5203,65 @@ namespace GMK360.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal?>("ApprovedPriceDifference")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int>("BuildingUnitId")
                         .HasColumnType("int");
+
+                    b.Property<string>("Category")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ConfirmedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<TimeSpan?>("ConfirmedTime")
+                        .HasColumnType("time");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("CustomRequestImageUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CustomRequestNotes")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("IsApprovedByAdmin")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsConfirmedViaSms")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<int>("ProjectMaterialCatalogId")
+                    b.Property<string>("OtpCode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("ProjectMaterialCatalogId")
                         .HasColumnType("int");
 
                     b.Property<string>("SelectedByUserId")
-                        .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
                     b.Property<DateTime>("SelectionDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("SelectionStatus")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ShowroomProductCode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ShowroomSupplierName")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("VerificationPhone")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -5918,8 +6209,17 @@ namespace GMK360.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("CompletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("CompletedDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("DocumentUrl")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsCompleted")
                         .HasColumnType("bit");
@@ -5927,11 +6227,20 @@ namespace GMK360.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PhotoUrl")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("ProjectScheduleTaskId")
                         .HasColumnType("int");
 
                     b.Property<bool>("RequiresPhoto")
                         .HasColumnType("bit");
+
+                    b.Property<string>("TestResultValue")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -5955,11 +6264,13 @@ namespace GMK360.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("BuildingId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("FloorOrZone")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsCancelled")
@@ -5968,7 +6279,19 @@ namespace GMK360.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<string>("MaterialTitle")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("OrderIndex")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PartCategory")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("PartIndex")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PlannedCrewSize")
                         .HasColumnType("int");
 
                     b.Property<int>("PlannedDurationDays")
@@ -5980,8 +6303,14 @@ namespace GMK360.Data.Migrations
                     b.Property<DateTime?>("PlannedStartDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("ProfessionName")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
+
+                    b.Property<decimal?>("Quantity")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -5989,6 +6318,9 @@ namespace GMK360.Data.Migrations
 
                     b.Property<string>("TaskName")
                         .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Unit")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -9850,11 +10182,32 @@ namespace GMK360.Data.Migrations
                     b.Property<decimal>("CurrentWorkingHours")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<DateTime?>("InspectionExpiryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("InsuranceCompany")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("InsuranceExpiryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("InsurancePolicyNo")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("InsurancePolicyPhotoPath")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
                     b.Property<string>("PlateNumber")
                         .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RegistrationPhotoPath")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RegistrationSerialNo")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Status")
@@ -9995,14 +10348,26 @@ namespace GMK360.Data.Migrations
                     b.Property<string>("DriverName")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("DumpSiteName")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("EndKm")
                         .HasColumnType("int");
 
                     b.Property<string>("EndTime")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<decimal?>("EndWorkHour")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("FuelLiters")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
+
+                    b.Property<string>("MaterialType")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("StartKm")
                         .HasColumnType("int");
@@ -10010,8 +10375,14 @@ namespace GMK360.Data.Migrations
                     b.Property<string>("StartTime")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<decimal?>("StartWorkHour")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("Status")
                         .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TaskCategory")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("TaskDate")
@@ -10020,6 +10391,18 @@ namespace GMK360.Data.Migrations
                     b.Property<string>("TaskDescription")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TicketNumber")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TicketPhotoPath")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("Tonnage")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("TripNumber")
+                        .HasColumnType("int");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -12450,6 +12833,91 @@ namespace GMK360.Data.Migrations
                     b.ToTable("Reservations");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.ResidencyPeriod", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ArchiveNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ArchivedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("BuildingUnitId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("EndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("ProxyDocumentUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ProxyUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ResidentUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("RoleType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("VotingPinHash")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuildingUnitId");
+
+                    b.HasIndex("ResidentUserId");
+
+                    b.ToTable("ResidencyPeriods");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.SavedSearch", b =>
                 {
                     b.Property<int>("Id")
@@ -13238,8 +13706,17 @@ namespace GMK360.Data.Migrations
                     b.Property<double?>("Length")
                         .HasColumnType("float");
 
+                    b.Property<string>("MaterialSelectionNotes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("PriceDifference")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<double>("Quantity")
                         .HasColumnType("float");
+
+                    b.Property<string>("SelectedMaterialOption")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Unit")
                         .IsRequired()
@@ -14127,6 +14604,9 @@ namespace GMK360.Data.Migrations
                     b.Property<int>("BuildingUnitId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsPaid")
                         .HasColumnType("bit");
 
@@ -14134,14 +14614,26 @@ namespace GMK360.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PayerRole")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("PaymentDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<int?>("ResidencyPeriodId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ReversalOfDebtId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
                     b.HasIndex("BuildingExpenseId");
 
                     b.HasIndex("BuildingUnitId");
+
+                    b.HasIndex("ResidencyPeriodId");
 
                     b.ToTable("UnitDebts");
                 });
@@ -15063,6 +15555,17 @@ namespace GMK360.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.ApprovalRequest", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Building", "Building")
+                        .WithMany()
+                        .HasForeignKey("BuildingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Building");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.Article", b =>
                 {
                     b.HasOne("GMK360.Core.Entities.Identity.ApplicationUser", "Author")
@@ -15720,15 +16223,29 @@ namespace GMK360.Data.Migrations
                         .WithMany()
                         .HasForeignKey("BinaYoneticisiId");
 
+                    b.HasOne("GMK360.Core.Entities.Construction.ConstructionProject", "ParentProject")
+                        .WithMany("SubProjects")
+                        .HasForeignKey("ParentProjectId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("GMK360.Core.Entities.Construction.ProjectAmenity", "RelatedAmenity")
+                        .WithMany()
+                        .HasForeignKey("RelatedAmenityId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Agency");
 
                     b.Navigation("BinaYoneticisi");
+
+                    b.Navigation("ParentProject");
+
+                    b.Navigation("RelatedAmenity");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.Construction.ConstructionProjectExpense", b =>
                 {
                     b.HasOne("GMK360.Core.Entities.Construction.ConstructionProject", "Project")
-                        .WithMany()
+                        .WithMany("Expenses")
                         .HasForeignKey("ProjectId");
 
                     b.Navigation("Project");
@@ -16113,15 +16630,12 @@ namespace GMK360.Data.Migrations
 
                     b.HasOne("GMK360.Core.Entities.Construction.ProjectMaterialCatalog", "ProjectMaterialCatalog")
                         .WithMany("Selections")
-                        .HasForeignKey("ProjectMaterialCatalogId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("ProjectMaterialCatalogId");
 
                     b.HasOne("GMK360.Core.Entities.Identity.ApplicationUser", "SelectedByUser")
                         .WithMany()
                         .HasForeignKey("SelectedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("BuildingUnit");
 
@@ -17868,6 +18382,24 @@ namespace GMK360.Data.Migrations
                     b.Navigation("Unit");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.ResidencyPeriod", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.BuildingUnit", "BuildingUnit")
+                        .WithMany()
+                        .HasForeignKey("BuildingUnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GMK360.Core.Entities.Identity.ApplicationUser", "ResidentUser")
+                        .WithMany()
+                        .HasForeignKey("ResidentUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("BuildingUnit");
+
+                    b.Navigation("ResidentUser");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.SavedSearch", b =>
                 {
                     b.HasOne("GMK360.Core.Entities.Identity.ApplicationUser", "User")
@@ -18231,9 +18763,16 @@ namespace GMK360.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("GMK360.Core.Entities.ResidencyPeriod", "ResidencyPeriod")
+                        .WithMany("Debts")
+                        .HasForeignKey("ResidencyPeriodId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("BuildingExpense");
 
                     b.Navigation("BuildingUnit");
+
+                    b.Navigation("ResidencyPeriod");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.UnitSpace", b =>
@@ -18599,9 +19138,13 @@ namespace GMK360.Data.Migrations
 
                     b.Navigation("BudgetItems");
 
+                    b.Navigation("Expenses");
+
                     b.Navigation("KatMalikleri");
 
                     b.Navigation("MaterialCatalogs");
+
+                    b.Navigation("SubProjects");
 
                     b.Navigation("Tasks");
 
@@ -18855,6 +19398,11 @@ namespace GMK360.Data.Migrations
             modelBuilder.Entity("GMK360.Core.Entities.Reservation", b =>
                 {
                     b.Navigation("Guests");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.ResidencyPeriod", b =>
+                {
+                    b.Navigation("Debts");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.ServiceCategory", b =>

@@ -45,5 +45,11 @@ namespace GMK360.Core.Entities
         public string? PayerType { get; set; } 
 
         public BuildingExpenseType ExpenseType { get; set; } = BuildingExpenseType.Operational;
+
+        // Değişmez Muhasebe Defteri: Fiziksel silme yasak, iptalde Ters Kayıt (Reversal Entry) açılır
+        public bool IsArchived { get; set; } = false;
+        public DateTime? ArchivedAt { get; set; }
+        public string? ArchivedByUserId { get; set; }
+        public int? ReversalOfExpenseId { get; set; }
     }
 }

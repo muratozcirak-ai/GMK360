@@ -3,12 +3,16 @@
     ViewData["Title"] = Model.Name + " - Yönetim Masası & Yapı Ekosistemi";
     Layout = "~/Views/Shared/_FacilityLayout.cshtml";
 
-    var units = Model.Units?.OrderBy(u => u.FloorLevel).ThenBy(u => u.DoorNumber).ToList() ?? new List<GMK360.Core.Entities.BuildingUnit>();
+    var units = Model.Units?
+        .Where(u => !(u.Category ?? "").StartsWith("OrtakAlan"))
+        .OrderBy(u => u.FloorLevel).ThenBy(u => u.DoorNumber)
+        .ToList() ?? new List<GMK360.Core.Entities.BuildingUnit>();
     var debts = units.SelectMany(u => u.Debts ?? new List<GMK360.Core.Entities.UnitDebt>()).ToList();
     var expenses = Model.Expenses?.OrderByDescending(e => e.Date).ToList() ?? new List<GMK360.Core.Entities.BuildingExpense>();
+    var activeExpenses = expenses.Where(e => !e.IsArchived && e.ReversalOfExpenseId == null).ToList();
 
     var totalPaid = debts.Where(d => d.IsPaid).Sum(d => d.Amount);
-    var totalUnpaid = debts.Where(d => !d.IsPaid).Sum(d => d.Amount);
+    var totalUnpaid = Math.Max(0m, debts.Where(d => !d.IsPaid).Sum(d => d.Amount));
     var totalDebts = totalPaid + totalUnpaid;
     decimal collectionRate = totalDebts > 0 ? (totalPaid / totalDebts) * 100 : 0;
 
@@ -19,10 +23,13 @@
 
     // Kat Hiyerarşisi (En Üst Kattan Aşağıya)
     var distinctFloors = units.Where(u => u.Category != "Dukkan").Select(u => u.FloorLevel).Distinct().OrderByDescending(f => f).ToList();
-    if (!distinctFloors.Any()) { distinctFloors = new List<int> { 5, 4, 3, 2, 1 }; }
+    if (!distinctFloors.Any()) { distinctFloors = new List<int> { 1 }; }
 
     var meetings = ViewBag.Meetings as List<GMK360.Core.Entities.SystemMeeting> ?? new List<GMK360.Core.Entities.SystemMeeting>();
     var commonSpaces = ViewBag.CommonSpaces as List<GMK360.Core.Entities.UnitSpace> ?? new List<GMK360.Core.Entities.UnitSpace>();
+    var residencyPeriods = ViewBag.ResidencyPeriods as List<GMK360.Core.Entities.ResidencyPeriod> ?? new List<GMK360.Core.Entities.ResidencyPeriod>();
+    var pendingApprovals = ViewBag.PendingApprovals as List<GMK360.Core.Entities.ApprovalRequest> ?? new List<GMK360.Core.Entities.ApprovalRequest>();
+    int activeBoardCount = ViewBag.ActiveBoardMemberCount is int bc ? bc : 0;
 }
 
 <div class="container-fluid py-3 px-1">
@@ -84,6 +91,16 @@
             <div class="d-flex align-items-center">
                 <i class="bi bi-exclamation-octagon-fill fs-4 me-3 text-danger"></i>
                 <div class="fw-bold">@TempData["ErrorMessage"]</div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["WarningMessage"] != null)
+    {
+        <div class="alert alert-warning alert-dismissible fade show rounded-4 shadow-sm border-0 mb-3" role="alert">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-shield-lock-fill fs-4 me-3 text-warning"></i>
+                <div class="fw-bold">@TempData["WarningMessage"]</div>
             </div>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
@@ -157,9 +174,9 @@
                         <i class="bi bi-tools fs-3"></i>
                     </div>
                     <div>
-                        <span class="text-muted small fw-bold text-uppercase">Toplam Gider / Bakım</span>
-                        <h4 class="fw-bold mb-0 text-dark">@expenses.Sum(e => e.TotalAmount).ToString("N0") ₺</h4>
-                        <small class="text-muted" style="font-size: 0.75rem;">@expenses.Count Kayıtlı Fatura</small>
+                        <span class="text-muted small fw-bold text-uppercase">Net Aktif Gider / Bakım</span>
+                        <h4 class="fw-bold mb-0 text-dark">@activeExpenses.Sum(e => e.TotalAmount).ToString("N0") ₺</h4>
+                        <small class="text-muted" style="font-size: 0.75rem;">@activeExpenses.Count Aktif / @expenses.Count Toplam Kayıt</small>
                     </div>
                 </div>
             </div>
@@ -217,6 +234,50 @@
         </div>
     </div>
 
+    @if (pendingApprovals.Any())
+    {
+        <div class="card border-warning shadow-sm rounded-4 bg-warning bg-opacity-10 mb-4">
+            <div class="card-header bg-transparent border-warning border-opacity-25 p-3 d-flex justify-content-between align-items-center">
+                <div class="fw-bold text-dark">
+                    <i class="bi bi-shield-lock-fill text-warning me-2"></i>2 Aza Multi-Sig Onay Kuyruğu (@pendingApprovals.Count Bekleyen Kritik İşlem)
+                </div>
+                <span class="badge bg-dark rounded-pill">Aktif Aza: @activeBoardCount</span>
+            </div>
+            <div class="card-body p-3">
+                <div class="row g-2">
+                    @foreach (var req in pendingApprovals)
+                    {
+                        <div class="col-md-6">
+                            <div class="bg-white border rounded-3 p-3 d-flex justify-content-between align-items-center gap-2">
+                                <div>
+                                    <span class="badge bg-warning text-dark mb-1">@req.RequestType (@req.ApprovalCount / @req.RequiredApprovals Onay)</span>
+                                    <div class="small fw-semibold text-dark">@req.Reason</div>
+                                    <small class="text-muted">Talep #@req.Id • @req.CreatedAt.ToString("dd.MM.yyyy HH:mm")</small>
+                                </div>
+                                <div class="d-flex gap-1">
+                                    <form asp-action="DecideApprovalRequest" asp-controller="BuildingManager" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="requestId" value="@req.Id" />
+                                        <input type="hidden" name="buildingId" value="@Model.Id" />
+                                        <input type="hidden" name="approve" value="true" />
+                                        <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 fw-bold">Onayla</button>
+                                    </form>
+                                    <form asp-action="DecideApprovalRequest" asp-controller="BuildingManager" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="requestId" value="@req.Id" />
+                                        <input type="hidden" name="buildingId" value="@Model.Id" />
+                                        <input type="hidden" name="approve" value="false" />
+                                        <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-2">Reddet</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
     <!-- 2 ANA OMURGA SEKMESİ (TABS) -->
     <ul class="nav nav-pills mb-4 bg-white p-2 rounded-4 shadow-sm border" id="mainPillTab" role="tablist">
         <li class="nav-item flex-fill text-center" role="presentation">
@@ -248,58 +309,67 @@
                 </div>
             </div>
 
-            <!-- 1. A) ÇATI KATI & TERAS (EN ÜST) -->
+            <!-- 1. A) ORTAK ALANLAR, ÇATI, ASANSÖR & YERALTI TESİSLERİ (GERÇEK VERİ) -->
             <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white overflow-hidden border-top border-4 border-warning">
-                <div class="card-header bg-warning bg-opacity-10 border-0 p-3 d-flex justify-content-between align-items-center">
+                <div class="card-header bg-warning bg-opacity-10 border-0 p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
                     <div class="d-flex align-items-center">
                         <span class="badge bg-warning text-dark px-3 py-2 rounded-pill fw-bold me-2">
-                            <i class="bi bi-triangle-half me-1"></i> EN ÜST NOKTA
+                            <i class="bi bi-building-gear me-1"></i> ORTAK ALAN &amp; TESİSLER
                         </span>
-                        <h5 class="fw-bold text-dark mb-0">🏠 Çatı Katı, Teras & Asansör Kulesi</h5>
+                        <h5 class="fw-bold text-dark mb-0">Çatı, Asansör, Bodrum, Sığınak &amp; Sosyal Alanlar</h5>
                     </div>
-                    <span class="badge bg-light text-dark border">Ortak Alan / Demirbaş Kapsamında</span>
+                    <a href="/BuildingManager/Onboarding/@rootBuildingId" class="btn btn-sm btn-outline-dark rounded-pill px-3 fw-semibold">
+                        <i class="bi bi-pencil-square me-1"></i> Ortak Alanları Düzenle
+                    </a>
                 </div>
                 <div class="card-body p-4">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <div class="p-3 border rounded-3 bg-light h-100">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <h6 class="fw-bold text-dark mb-0"><i class="bi bi-arrow-up-circle-fill text-primary me-1"></i> Asansör Makine Dairesi</h6>
-                                    <span class="badge bg-success">Yeşil Etiketli</span>
-                                </div>
-                                <p class="small text-muted mb-2">Kone 630 Kg Halatlı Çift Hızlı Asansör Motoru</p>
-                                <div class="small">
-                                    <span class="text-muted">Yetkili Servis:</span> <b>Kone Yetkili Servis (0216 444 0 566)</b><br/>
-                                    <span class="text-muted">Son Muayene:</span> <b class="text-success">Eylül 2026 (Geçerli)</b>
-                                </div>
-                            </div>
+                    @if (!commonSpaces.Any())
+                    {
+                        <div class="text-center py-3 text-muted small">
+                            <i class="bi bi-tools fs-3 d-block mb-2 text-warning"></i>
+                            Bu bina için henüz tanımlı ortak alan mekanı yok. Kurulum sihirbazından Asansör, Çatı, Jeneratör, Otopark veya Sığınak ekleyebilirsiniz.
                         </div>
-                        <div class="col-md-4">
-                            <div class="p-3 border rounded-3 bg-light h-100">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <h6 class="fw-bold text-dark mb-0"><i class="bi bi-shield-shaded text-danger me-1"></i> Çatı Su İzolasyonu</h6>
-                                    <span class="badge bg-primary">Yenilendi</span>
+                    }
+                    else
+                    {
+                        <div class="row g-3">
+                            @foreach (var space in commonSpaces)
+                            {
+                                var fixtures = space.Fixtures?.ToList() ?? new List<GMK360.Core.Entities.SpaceFixture>();
+                                <div class="col-md-4">
+                                    <div class="p-3 border rounded-3 bg-light h-100">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-gear-wide-connected text-primary me-1"></i> @space.Name</h6>
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle">@(space.Type ?? "Ortak Alan")</span>
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(space.Description))
+                                        {
+                                            <p class="small text-muted mb-2">@space.Description</p>
+                                        }
+                                        @if (fixtures.Any())
+                                        {
+                                            <div class="small border-top pt-2 mt-2">
+                                                @foreach (var fx in fixtures.Take(3))
+                                                {
+                                                    <div class="mb-1">
+                                                        <span class="fw-semibold text-dark">@fx.ItemName</span>
+                                                        @if (!string.IsNullOrWhiteSpace(fx.TechnicalServiceName))
+                                                        {
+                                                            <span class="text-muted"> • @fx.TechnicalServiceName</span>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="small text-muted fst-italic">Ortak Alan / Demirbaş Kapsamında</div>
+                                        }
+                                    </div>
                                 </div>
-                                <p class="small text-muted mb-2">Çift Kat Kiremit Altı Mebran İzolasyon & Yağmur Olukları</p>
-                                <div class="small">
-                                    <span class="text-muted">Onarım Tarihi:</span> <b>Ekim 2026</b><br/>
-                                    <span class="text-muted">Maliyet / Fatura:</span> <b class="text-danger">36.000 TL (Malik Demirbaşı)</b>
-                                </div>
-                            </div>
+                            }
                         </div>
-                        <div class="col-md-4">
-                            <div class="p-3 border rounded-3 bg-light h-100">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <h6 class="fw-bold text-dark mb-0"><i class="bi bi-broadcast-pin text-info me-1"></i> Merkezi Anten & Güneş Paneli</h6>
-                                    <span class="badge bg-secondary">Aktif</span>
-                                </div>
-                                <p class="small text-muted mb-2">Ortak Uydu Santrali (Türksat / Hotbird) & Paratoner Sistemi</p>
-                                <div class="small">
-                                    <span class="text-muted">Paratoner Topraklama:</span> <b class="text-success">Ölçüm Yapıldı (Uygun)</b>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    }
                 </div>
             </div>
 
@@ -476,127 +546,6 @@
                 </div>
             </div>
 
-            <!-- 1. D) BODRUM KATI & YERALTI TESİSLERİ (EN ALT) -->
-            <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white border-top border-4 border-dark">
-                <div class="card-header bg-dark text-white p-3 d-flex justify-content-between align-items-center">
-                    <div class="d-flex align-items-center">
-                        <span class="badge bg-light text-dark px-3 py-2 rounded-pill fw-bold me-2">
-                            <i class="bi bi-arrow-down-circle me-1"></i> YERALTI TESİSLERİ
-                        </span>
-                        <h5 class="fw-bold text-white mb-0">🚨 Bodrum Kat, Sığınak, Jeneratör & Tesis Odaları</h5>
-                    </div>
-                    <span class="badge bg-secondary">Zimmet & Muayene Takip Sistemi</span>
-                </div>
-                <div class="card-body p-4">
-                    <div class="row g-3">
-                        <!-- Sığınak -->
-                        <div class="col-md-6 col-lg-3">
-                            <div class="p-3 border rounded-3 bg-light h-100">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <h6 class="fw-bold text-dark mb-0"><i class="bi bi-shield-fill-check text-danger me-1"></i> Sığınak & Depo</h6>
-                                    <span class="badge bg-success">Zorunlu Alan</span>
-                                </div>
-                                <p class="small text-muted mb-2">Kapasite: 50 Kişi | Acil Çıkış Kapısı Mevcut</p>
-                                <div class="small">
-                                    <span class="text-muted">Acil Su Deposu:</span> <b>5 Ton (Dolu)</b><br/>
-                                    <span class="text-muted">Havalandırma:</span> <b class="text-success">Filtreleri Temiz</b>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Jeneratör -->
-                        <div class="col-md-6 col-lg-3">
-                            <div class="p-3 border rounded-3 bg-light h-100">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <h6 class="fw-bold text-dark mb-0"><i class="bi bi-lightning-charge-fill text-warning me-1"></i> Jeneratör Odası</h6>
-                                    <span class="badge bg-warning text-dark">Aksa 110 kVA</span>
-                                </div>
-                                <p class="small text-muted mb-2">Otomatik Transfer Panolu Dizel Jeneratör</p>
-                                <div class="small">
-                                    <span class="text-muted">Yetkili Servis:</span> <b>Aksa Kadıköy (0216 555 12 12)</b><br/>
-                                    <span class="text-muted">Mazot Seviyesi:</span> <b class="text-success">%85 (140 Lt)</b>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Kazan Dairesi & Hidrofor -->
-                        <div class="col-md-6 col-lg-3">
-                            <div class="p-3 border rounded-3 bg-light h-100">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <h6 class="fw-bold text-dark mb-0"><i class="bi bi-droplet-half text-info me-1"></i> Hidrofor & Kazan</h6>
-                                    <span class="badge bg-info text-dark">Alarko Çift Pompa</span>
-                                </div>
-                                <p class="small text-muted mb-2">Şebeke Basınç Dengeleyici & Su Arıtma</p>
-                                <div class="small">
-                                    <span class="text-muted">Filtre Değişimi:</span> <b>Temmuz 2026</b><br/>
-                                    <span class="text-muted">Genleşme Tankı:</span> <b class="text-success">Basınç Normal (4.5 Bar)</b>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Yangın Güvenlik İstasyonu -->
-                        <div class="col-md-6 col-lg-3">
-                            <div class="p-3 border rounded-3 bg-light h-100">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <h6 class="fw-bold text-dark mb-0"><i class="bi bi-fire text-danger me-1"></i> Yangın İstasyonu</h6>
-                                    <span class="badge bg-danger">6 Adet Tüp</span>
-                                </div>
-                                <p class="small text-muted mb-2">Her Kat Sahanlığı + Sığınak 6 Kg KKT Tüp</p>
-                                <div class="small">
-                                    <span class="text-muted">Son Dolum:</span> <b>Mayıs 2026</b><br/>
-                                    <span class="text-muted">Vade:</span> <b class="text-danger">Mayıs 2027 (Muayene Şart)</b>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 1. E) SİTE AÇIK ALAN & SOSYAL TESİSLER (PARK, KAMELYA, OTOPARK) -->
-            <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white">
-                <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-tree text-success me-2"></i> Site Açık Alan & Sosyal Donatı Yönetimi</h5>
-                        <small class="text-muted">Çocuk parkı, çardaklar, açık/kapalı otopark ve bahçe ekipmanlarının zimmet dökümü</small>
-                    </div>
-                    <span class="badge bg-light text-dark border">Site İçi Tesisler</span>
-                </div>
-                <div class="card-body p-4">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <div class="p-3 border rounded-3 bg-light h-100">
-                                <h6 class="fw-bold text-dark mb-1"><i class="bi bi-emoji-smile text-warning me-1"></i> Çocuk Oyun Parkı</h6>
-                                <p class="small text-muted mb-2">Salıncak Takımı, Kaydırak & Kauçuk Zemin Kaplama</p>
-                                <div class="small text-muted">
-                                    <span>Güvenlik Kontrolü:</span> <b class="text-success">Tamamlandı (Ekim 2026)</b><br/>
-                                    <span>Durum:</span> <b>Kusursuz / Aktif</b>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="p-3 border rounded-3 bg-light h-100">
-                                <h6 class="fw-bold text-dark mb-1"><i class="bi bi-umbrella text-success me-1"></i> Bahçe Kamelyaları & Çardak</h6>
-                                <p class="small text-muted mb-2">2 Adet Ahşap Kamelya & Oturma Grupları</p>
-                                <div class="small text-muted">
-                                    <span>Bakım / Vernik:</span> <b>Ağustos 2026</b><br/>
-                                    <span>Aydınlatma:</span> <b class="text-success">LED Solar Lambalı</b>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="p-3 border rounded-3 bg-light h-100">
-                                <h6 class="fw-bold text-dark mb-1"><i class="bi bi-tools text-primary me-1"></i> Bahçıvan & Bakım Ekipmanları</h6>
-                                <p class="small text-muted mb-2">Honda Çim Biçme, 50m Bahçe Hortumu, Kar Küreği</p>
-                                <div class="small text-muted">
-                                    <span>Zimmetli Personel:</span> <b class="text-dark">Apartman Görevlisi Ali Usta</b><br/>
-                                    <span>Teslim Tarihi:</span> <b class="text-primary">İmzalı Tutanak Mevcut</b>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </div>
 
         <!-- ========================================================================= -->
@@ -700,24 +649,51 @@
                                         }
                                         @foreach (var exp in expenses)
                                         {
-                                            <tr>
+                                            bool isFixture = exp.ExpenseType == GMK360.Core.Entities.BuildingExpenseType.CapitalExpenditure
+                                                || string.Equals(exp.PayerType, "Owner", StringComparison.OrdinalIgnoreCase);
+                                            bool isReversal = exp.ReversalOfExpenseId != null || exp.TotalAmount < 0;
+                                            <tr class="@(exp.IsArchived ? "table-secondary opacity-75" : "")">
                                                 <td class="ps-3 small">@exp.Date.ToString("dd.MM.yyyy")</td>
                                                 <td>
                                                     <span class="fw-bold text-dark">@exp.Description</span>
+                                                    @if (isReversal)
+                                                    {
+                                                        <span class="badge bg-dark ms-1">TERS KAYIT</span>
+                                                    }
+                                                    else if (exp.IsArchived)
+                                                    {
+                                                        <span class="badge bg-secondary ms-1">İPTAL EDİLDİ (ARŞİV)</span>
+                                                    }
+                                                    @if (!string.IsNullOrWhiteSpace(exp.InvoiceDocumentUrl))
+                                                    {
+                                                        <a href="@exp.InvoiceDocumentUrl" target="_blank" class="badge bg-info-subtle text-info-emphasis border border-info-subtle text-decoration-none ms-1">
+                                                            <i class="bi bi-file-earmark-text"></i> Fatura
+                                                        </a>
+                                                    }
                                                 </td>
                                                 <td>
-                                                    @if (exp.PayerType == "Owner")
+                                                    @if (isFixture)
                                                     {
-                                                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">🔨 Demirbaş (Ev Sahibi)</span>
+                                                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">🔨 Demirbaş (Daima Malik)</span>
                                                     }
                                                     else
                                                     {
-                                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary">💡 İşletme (Kiracı/Sakin)</span>
+                                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary">💡 İşletme (Kiracı / Malik)</span>
                                                     }
                                                 </td>
-                                                <td class="fw-bold text-dark">@exp.TotalAmount.ToString("N2") ₺</td>
+                                                <td class="fw-bold @(exp.TotalAmount < 0 ? "text-danger" : "text-dark")">@exp.TotalAmount.ToString("N2") ₺</td>
                                                 <td class="pe-3 text-end">
-                                                    <span class="badge bg-light text-dark border">Bina Geneli</span>
+                                                    @if (!exp.IsArchived && !isReversal)
+                                                    {
+                                                        <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-2"
+                                                                onclick="openReversalModal(@exp.Id, '@System.Web.HttpUtility.JavaScriptStringEncode(exp.Description)', '@exp.TotalAmount.ToString("N2")')">
+                                                            <i class="bi bi-arrow-counterclockwise me-1"></i>Ters Kayıt / İptal
+                                                        </button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-light text-muted border">Arşiv Korumalı</span>
+                                                    }
                                                 </td>
                                             </tr>
                                         }
@@ -753,48 +729,36 @@
 
                     <!-- KASA & BANKA HESABI -->
                     <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white">
-                        <div class="card-header bg-white border-bottom p-3">
-                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-bank text-success me-2"></i> Site Banka Hesabı</h6>
+                        <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
+                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-bank text-success me-2"></i> Bina Kasa &amp; Aidat Takibi</h6>
+                            <a href="/BuildingManager/AidatTakibi?buildingId=@Model.Id" class="btn btn-sm btn-outline-success rounded-pill px-2">Aidat Cetveli</a>
                         </div>
                         <div class="card-body p-3">
-                            <div class="p-3 bg-light rounded-3 mb-2">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <span class="fw-bold text-dark">Vakıfbank - Kadıköy Şb.</span>
-                                    <span class="badge bg-success fs-6">14.500,00 ₺</span>
-                                </div>
-                                <small class="text-muted font-monospace d-block">TR44 0001 5001 5800 7301 2289 01</small>
+                            <div class="p-3 bg-light rounded-3 mb-2 d-flex justify-content-between align-items-center">
+                                <span class="small fw-semibold text-muted">Tahsil Edilen</span>
+                                <span class="badge bg-success fs-6">@totalPaid.ToString("N2") ₺</span>
+                            </div>
+                            <div class="p-3 bg-light rounded-3 mb-2 d-flex justify-content-between align-items-center">
+                                <span class="small fw-semibold text-muted">Bekleyen Alacak</span>
+                                <span class="badge bg-danger fs-6">@totalUnpaid.ToString("N2") ₺</span>
                             </div>
                             <small class="text-muted d-block" style="font-size:0.75rem;">
-                                Aidat ödemeleri doğrudan bu IBAN'a yönlendirilir ve SMS makbuzu kesilir.
+                                Ters kayıt ve 2 Aza onaylı değişiklikler denetim izinde saklanır.
                             </small>
                         </div>
                     </div>
 
-                    <!-- SAKİN ARcalendarIZA & ŞİKAYET TALEPLERİ -->
+                    <!-- SAKİN ARIZA & ŞİKAYET TALEPLERİ -->
                     <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white">
                         <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
-                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-headset text-info me-2"></i> Sakin Talepleri & Arızalar</h6>
-                            <span class="badge bg-danger rounded-pill">2 Bekleyen</span>
+                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-headset text-info me-2"></i> Sakin Talepleri &amp; Arızalar</h6>
+                            <a href="/BuildingManager/TicketManagement?buildingId=@Model.Id" class="btn btn-sm btn-outline-info rounded-pill px-2">Tümünü Aç</a>
                         </div>
                         <div class="card-body p-3">
-                            <ul class="list-group list-group-flush">
-                                <li class="list-group-item px-0 py-2 border-bottom">
-                                    <div class="d-flex justify-content-between">
-                                        <span class="fw-bold text-dark small">Daire 4 (Burak Koç):</span>
-                                        <small class="text-muted">Bugün</small>
-                                    </div>
-                                    <small class="text-muted d-block">"3. Kat asansör dış kapı mekanizması takılıyor."</small>
-                                    <span class="badge bg-warning text-dark mt-1" style="font-size:0.65rem;">İnceleniyor</span>
-                                </li>
-                                <li class="list-group-item px-0 py-2">
-                                    <div class="d-flex justify-content-between">
-                                        <span class="fw-bold text-dark small">Daire 7 (Zeynep Çelik):</span>
-                                        <small class="text-muted">Dün</small>
-                                    </div>
-                                    <small class="text-muted d-block">"Bahçe otopark girişi sensörü bazen açmıyor."</small>
-                                    <span class="badge bg-info text-dark mt-1" style="font-size:0.65rem;">Teknik Servise İletildi</span>
-                                </li>
-                            </ul>
+                            <p class="small text-muted mb-2">Bina sakinlerinden gelen arıza ve teknik servis taleplerini buradan yönetebilirsiniz.</p>
+                            <a href="/BuildingManager/TicketManagement?buildingId=@Model.Id" class="btn btn-sm btn-light border rounded-pill w-100 fw-semibold">
+                                <i class="bi bi-wrench-adjustable me-1"></i> Arıza Masasına Git
+                            </a>
                         </div>
                     </div>
 
@@ -845,6 +809,17 @@
                     <small class="text-muted"><i class="bi bi-telephone me-1"></i><span id="modalTenantPhone">-</span></small>
                 </div>
 
+                <!-- Dönemsel Cari Geçmişi (ResidencyPeriods) -->
+                <div class="mb-3 p-3 border rounded-3 bg-light">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-bold small text-dark"><i class="bi bi-clock-history text-primary me-1"></i> Dönemsel İkamet &amp; Mülkiyet Geçmişi</span>
+                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold" onclick="openResidencyTransferFromUnit()">
+                            <i class="bi bi-arrow-left-right me-1"></i> Taşınma / Devir (Kıstelyevm)
+                        </button>
+                    </div>
+                    <div id="modalResidencyHistory" class="small text-muted">Yükleniyor...</div>
+                </div>
+
                 <!-- Daire İçi Özel Demirbaş Mahremiyet Uyarısı -->
                 <div class="p-3 bg-warning bg-opacity-10 border border-warning rounded-3 small">
                     <div class="fw-bold text-dark mb-1"><i class="bi bi-lock-fill text-warning me-1"></i> Daire İçi Demirbaş Zimmeti (Kombi, Klima vb.):</div>
@@ -866,10 +841,11 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow">
             <div class="modal-header bg-danger bg-opacity-10 border-0">
-                <h5 class="modal-title fw-bold text-danger"><i class="bi bi-receipt me-2"></i> Gider / Fatura Girişi & Dağıtımı</h5>
+                <h5 class="modal-title fw-bold text-danger"><i class="bi bi-receipt me-2"></i> Gider / Fatura Girişi &amp; İkili Cari Dağıtımı</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form asp-action="AddExpense" asp-controller="BuildingManager" method="post">
+            <form asp-action="AddExpense" asp-controller="BuildingManager" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
                 <input type="hidden" name="buildingId" value="@Model.Id" />
                 <div class="modal-body p-4 row g-3">
                     <div class="col-12">
@@ -878,24 +854,28 @@
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold small">Toplam Tutar (TL) <span class="text-danger">*</span></label>
-                        <input type="number" step="0.01" name="totalAmount" class="form-control fw-bold text-danger" required placeholder="Örn: 12500" />
+                        <input type="number" step="0.01" min="0.01" name="totalAmount" class="form-control fw-bold text-danger" required placeholder="Örn: 12500" />
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-bold small">Kim Ödemeli? (KMK Ayrımı) <span class="text-danger">*</span></label>
-                        <select name="payerType" class="form-select fw-bold">
-                            <option value="Owner">🔨 Mülk Sahibi (Demirbaş / Çatı / Asansör)</option>
-                            <option value="Tenant">💡 Kiracı / Sakin (İşletme / Elektrik / Temizlik)</option>
+                        <label class="form-label fw-bold small">İkili Cari Yönlendirme <span class="text-danger">*</span></label>
+                        <select name="expenseType" class="form-select fw-bold">
+                            <option value="2">💡 İşletme Gideri (Kiracıya, yoksa Malike)</option>
+                            <option value="1">🔨 Demirbaş Gideri (Daima Mülk Sahibine + GMSİ)</option>
                         </select>
                     </div>
                     <div class="col-12">
+                        <label class="form-label fw-bold small">Fatura / Belge (GMSİ Arşivi - PDF/Görsel)</label>
+                        <input type="file" name="invoiceFile" class="form-control" accept=".pdf,image/*" />
+                    </div>
+                    <div class="col-12">
                         <small class="text-muted">
-                            <i class="bi bi-info-circle me-1"></i> Demirbaş seçilirse ev sahiplerinin Mart ayı GMSİ vergi beyannamesine işlenir.
+                            <i class="bi bi-shield-check me-1 text-success"></i> Fiziksel silme kapalıdır; hatalı girişlerde Ters Kayıt (Reversal) uygulanır. Demirbaş giderleri dairede kiracı olsa dahi doğrudan Mülk Sahibi carisine yazılır.
                         </small>
                     </div>
                 </div>
                 <div class="modal-footer border-0 bg-light">
                     <button type="submit" class="btn btn-danger fw-bold rounded-pill w-100 py-2">
-                        <i class="bi bi-check-circle me-1"></i> Faturayı İşle ve Dairelere Dağıt
+                        <i class="bi bi-check-circle me-1"></i> Faturayı İşle ve İkili Cariye Dağıt
                     </button>
                 </div>
             </form>
@@ -1139,8 +1119,121 @@
     </div>
 </div>
 
+<!-- 8. TAŞINMA / DEVİR (DÖNEMSEL CARİ İZOLASYONU & KISTELYEVM) MODALI -->
+<div class="modal fade" id="residencyTransferModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-primary text-white border-0 py-3">
+                <h5 class="modal-title fw-bold mb-0"><i class="bi bi-arrow-left-right me-2"></i>Daire Devri / Taşınma &amp; Kıstelyevm</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="TransferUnitResidency" asp-controller="BuildingManager" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="buildingId" value="@Model.Id" />
+                <input type="hidden" name="unitId" id="transferUnitId" value="0" />
+                <div class="modal-body p-4 row g-3">
+                    <div class="col-12">
+                        <div class="alert alert-info small py-2 mb-0">
+                            <strong id="transferUnitTitle">Daire</strong> için eski dönem <code>ARCHIVED</code> yapılarak PWA yetkisi anında kesilir, yeni sakin <strong>0,00 ₺</strong> temiz cari ile başlar.
+                            @if (activeBoardCount >= 2)
+                            {
+                                <div class="mt-1 fw-semibold text-warning-emphasis">
+                                    <i class="bi bi-shield-lock-fill me-1"></i> Eski sakinin ödenmemiş borcu varsa devir otomatik <strong>2 Aza onay kuyruğuna</strong> alınır.
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Devredilen Dönem <span class="text-danger">*</span></label>
+                        <select name="roleType" class="form-select form-select-sm fw-semibold">
+                            <option value="Tenant">Kiracı Değişimi (Tahliye / Yeni Kiracı)</option>
+                            <option value="Owner">Mülkiyet Devri (Satış / Yeni Malik)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Taşınma / Devir Tarihi <span class="text-danger">*</span></label>
+                        <input type="date" name="transferDate" id="transferDateInput" class="form-control form-control-sm" value="@DateTime.Today.ToString("yyyy-MM-dd")" required oninput="updateProrationPreview()" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold small">Yeni Sakin / Malik Adı Soyadı <small class="text-muted">(Boş bırakılırsa Daire Boş işaretlenir)</small></label>
+                        <input type="text" name="newFullName" class="form-control form-control-sm" placeholder="Örn: Selin Kaya" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Telefon (İsteğe Bağlı)</label>
+                        <input type="text" name="newPhone" class="form-control form-control-sm" placeholder="05XX XXX XX XX" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">E-Posta (GMK360 Erişimi)</label>
+                        <input type="email" name="newEmail" class="form-control form-control-sm" placeholder="sakin@ornek.com" />
+                    </div>
+                    <div class="col-12 border-top pt-2">
+                        <label class="form-label fw-bold small">Aylık Aidat Kıstelyevm Bölüşümü (TL - Opsiyonel)</label>
+                        <input type="number" step="0.01" min="0" name="monthlyDuesForProration" id="prorationAmountInput" class="form-control form-control-sm" placeholder="Örn: 1500" oninput="updateProrationPreview()" />
+                        <div id="prorationPreviewText" class="small text-success mt-1"></div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="submit" class="btn btn-primary fw-bold rounded-pill w-100 py-2">
+                        <i class="bi bi-check2-circle me-1"></i> Devri Başlat / Kıstelyevm İşle
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 9. FATURA TERS KAYIT (REVERSAL) MODALI -->
+<div class="modal fade" id="reversalModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-danger text-white border-0 py-3">
+                <h5 class="modal-title fw-bold mb-0"><i class="bi bi-arrow-counterclockwise me-2"></i>Değişmez Defter: Ters Kayıt (İptal)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="RequestExpenseReversal" asp-controller="BuildingManager" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="buildingId" value="@Model.Id" />
+                <input type="hidden" name="expenseId" id="reversalExpenseId" value="0" />
+                <div class="modal-body p-4">
+                    <div class="alert alert-warning small">
+                        <strong id="reversalExpenseSummary">Fatura</strong> fiziksel olarak SİLİNMEZ. Eksi (-) tutarlı Ters Kayıt oluşturularak arşivlenir.
+                        @if (activeBoardCount >= 2)
+                        {
+                            <div class="mt-1 fw-bold">Yönetim kurulunda 2+ Aza bulunduğu için işlem 2 Aza onay kuyruğuna düşecektir.</div>
+                        }
+                    </div>
+                    <label class="form-label fw-bold small">Ters Kayıt / İptal Gerekçesi <span class="text-danger">*</span></label>
+                    <textarea name="reason" class="form-control" rows="2" required placeholder="Örn: Yanlış tutar girişi düzeltmesi"></textarea>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="submit" class="btn btn-danger fw-bold rounded-pill w-100">Ters Kayıt Talebi Gönder</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@{
+    var periodsByUnit = residencyPeriods
+        .GroupBy(rp => rp.BuildingUnitId)
+        .ToDictionary(g => g.Key, g => g.Select(x => new {
+            role = x.RoleType == "Owner" ? "Malik" : "Kiracı",
+            name = x.FullName,
+            status = x.Status,
+            start = x.StartDate.ToString("dd.MM.yyyy"),
+            end = x.EndDate?.ToString("dd.MM.yyyy")
+        }).ToList());
+}
+
 <script>
+    const unitResidencyMap = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(periodsByUnit));
+    let activeModalUnitId = 0;
+    let activeModalDoorNo = '';
+
     function openUnitModal(id, doorNo, layout, owner, ownerPhone, tenant, tenantPhone, unpaidDebt, isEmpty) {
+        activeModalUnitId = id;
+        activeModalDoorNo = doorNo || ('Bölüm #' + id);
+
         document.getElementById('modalUnitTitle').innerHTML = '<i class="bi bi-door-closed me-2"></i> ' + doorNo + ' Detayı';
         document.getElementById('modalRoomLayout').innerText = layout || 'Standart';
         document.getElementById('modalOwnerName').innerText = owner || 'Belirtilmedi';
@@ -1168,7 +1261,55 @@
             document.getElementById('modalTenantPhone').innerText = '-';
         }
 
+        const histEl = document.getElementById('modalResidencyHistory');
+        const list = unitResidencyMap[id] || unitResidencyMap[String(id)] || [];
+        if (list.length === 0) {
+            histEl.innerHTML = '<span>Bu bölüm için henüz devir/arşiv geçmişi oluşmadı; mevcut sakin aktif dönem sayılır.</span>';
+        } else {
+            histEl.innerHTML = list.map(p => {
+                const badge = p.status === 'ACTIVE'
+                    ? '<span class="badge bg-success me-1">AKTİF</span>'
+                    : '<span class="badge bg-secondary me-1">ARŞİV</span>';
+                const dates = p.end ? `${p.start} - ${p.end}` : `${p.start} - Günümüz`;
+                return `<div class="mb-1">${badge}<strong>${p.role}:</strong> ${p.name} <span class="text-muted">(${dates})</span></div>`;
+            }).join('');
+        }
+
         var myModal = new bootstrap.Modal(document.getElementById('unitDetailModal'));
         myModal.show();
+    }
+
+    function openResidencyTransferFromUnit() {
+        const detailEl = document.getElementById('unitDetailModal');
+        const detailInst = bootstrap.Modal.getInstance(detailEl);
+        if (detailInst) detailInst.hide();
+
+        document.getElementById('transferUnitId').value = activeModalUnitId;
+        document.getElementById('transferUnitTitle').innerText = activeModalDoorNo;
+        updateProrationPreview();
+        new bootstrap.Modal(document.getElementById('residencyTransferModal')).show();
+    }
+
+    function openReversalModal(expenseId, desc, amountText) {
+        document.getElementById('reversalExpenseId').value = expenseId;
+        document.getElementById('reversalExpenseSummary').innerText = `${desc} (${amountText} ₺)`;
+        new bootstrap.Modal(document.getElementById('reversalModal')).show();
+    }
+
+    function updateProrationPreview() {
+        const amt = parseFloat(document.getElementById('prorationAmountInput').value || '0');
+        const dateVal = document.getElementById('transferDateInput').value;
+        const out = document.getElementById('prorationPreviewText');
+        if (!amt || amt <= 0 || !dateVal) {
+            out.innerText = '';
+            return;
+        }
+        const dt = new Date(dateVal + 'T00:00:00');
+        const daysInMonth = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate();
+        const leavingDays = dt.getDate();
+        const enteringDays = Math.max(1, daysInMonth - leavingDays + 1);
+        const leavingAmt = ((amt / daysInMonth) * leavingDays).toFixed(2);
+        const enteringAmt = ((amt / daysInMonth) * enteringDays).toFixed(2);
+        out.innerText = `Kıstelyevm (${daysInMonth} gün): Çıkan sakin ${leavingDays} gün (${leavingAmt} ₺) • Yeni sakin ${enteringDays} gün (${enteringAmt} ₺)`;
     }
 </script>

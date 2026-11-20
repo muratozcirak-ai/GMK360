@@ -378,9 +378,14 @@
                     Haritaya tıklayarak pini binanın tam üzerine getirebilirsiniz.
                 </div>
             </div>
-            <div class="modal-footer bg-white py-2">
-                <button type="button" class="btn btn-light rounded-pill px-3" data-bs-dismiss="modal">İptal</button>
-                <button type="button" class="btn btn-success rounded-pill px-4 fw-bold" onclick="confirmMapLocation()">Konumu Onayla</button>
+            <div class="modal-footer bg-white py-2 justify-content-between">
+                <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-semibold" onclick="geocodeCurrentAddressAndFocus()">
+                    <i class="bi bi-crosshair me-1"></i> Seçili Adrese Odakla
+                </button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-light rounded-pill px-3" data-bs-dismiss="modal">İptal</button>
+                    <button type="button" class="btn btn-success rounded-pill px-4 fw-bold" onclick="confirmMapLocation()">Konumu Onayla</button>
+                </div>
             </div>
         </div>
     </div>
@@ -600,24 +605,90 @@
                 tempLng = lng;
 
                 if (!document.getElementById('latInput').value) {
-                    var cityTxt = selectedText('citySelect');
-                    var distTxt = selectedText('districtSelect');
-                    var streetTxt = getSelectedStreetText();
-                    var q = [streetTxt, distTxt, cityTxt, 'Türkiye'].filter(Boolean).join(', ');
-                    if (q) {
-                        fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q))
-                            .then(r => r.json())
-                            .then(pts => {
-                                if (pts && pts.length > 0) {
-                                    var gLat = parseFloat(pts[0].lat), gLng = parseFloat(pts[0].lon);
-                                    mapInstance.setView([gLat, gLng], 16);
-                                    mapMarker.setLatLng([gLat, gLng]);
-                                    tempLat = gLat; tempLng = gLng;
-                                }
-                            }).catch(function () { });
-                    }
+                    geocodeCurrentAddressAndFocus();
                 }
             }, 300);
+        }
+
+        function setMapPin(lat, lng, zoom) {
+            if (!mapInstance || !mapMarker) return;
+            mapInstance.setView([lat, lng], zoom);
+            mapMarker.setLatLng([lat, lng]);
+            tempLat = lat;
+            tempLng = lng;
+        }
+
+        function cleanGeoNeighborhood(raw) {
+            if (!raw || /seçin|yükleniyor/i.test(raw)) return '';
+            return raw.replace(/\([^)]*\)/g, '')
+                .replace(/\bMAHALLESİ\b|\bMAHALLESI\b|\bMAH\.?\b/gi, '')
+                .trim();
+        }
+
+        function cleanGeoStreet(raw) {
+            if (!raw || /seçin|yükleniyor/i.test(raw)) return '';
+            var base = raw.replace(/\([^)]*\)/g, '').trim();
+            var hadTypeInParens = /\(([^)]+)\)/.exec(raw);
+            base = base
+                .replace(/\bSK\.?\b|\bSOK\.?\b|\bSOKAK\b/gi, 'Sokağı')
+                .replace(/\bCD\.?\b|\bCAD\.?\b|\bCADDE\b/gi, 'Caddesi')
+                .replace(/\bBLV\.?\b|\bBULVAR\b/gi, 'Bulvarı')
+                .trim();
+            if (base && !/(sokağı|sokak|caddesi|cadde|bulvarı|bulvar|yolu|çıkmazı|meydanı)/i.test(base)) {
+                var suffix = hadTypeInParens && /cadde/i.test(hadTypeInParens[1]) ? ' Caddesi'
+                    : (hadTypeInParens && /bulvar/i.test(hadTypeInParens[1]) ? ' Bulvarı' : ' Sokağı');
+                base += suffix;
+            }
+            return base;
+        }
+
+        function geocodeCurrentAddressAndFocus() {
+            var cityTxt = selectedText('citySelect');
+            var distTxt = selectedText('districtSelect');
+            var neighTxt = cleanGeoNeighborhood(selectedText('neighborhoodSelect'));
+            var streetTxt = cleanGeoStreet(getSelectedStreetText());
+            var doorNo = (document.getElementById('buildingNumberInput').value || '').trim();
+            if (!cityTxt) return;
+
+            var zoomTarget = streetTxt ? (doorNo ? 18 : 17) : (neighTxt ? 15 : 13);
+            var arcLine = [
+                streetTxt ? (streetTxt + (doorNo ? ' No:' + doorNo : '')) : '',
+                neighTxt ? (neighTxt + ' Mahallesi') : '',
+                distTxt,
+                cityTxt,
+                'Türkiye'
+            ].filter(Boolean).join(', ');
+
+            var tryNominatim = function (q, zoom) {
+                if (!q) return;
+                fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tr&q=' + encodeURIComponent(q))
+                    .then(r => r.json())
+                    .then(pts => {
+                        if (pts && pts.length > 0) {
+                            setMapPin(parseFloat(pts[0].lat), parseFloat(pts[0].lon), zoom);
+                        } else if (streetTxt && q.indexOf(streetTxt) !== -1 && neighTxt) {
+                            tryNominatim([neighTxt + ' Mahallesi', distTxt, cityTxt, 'Türkiye'].filter(Boolean).join(', '), 15);
+                        } else if (neighTxt && q.indexOf(neighTxt) !== -1 && distTxt) {
+                            tryNominatim([distTxt, cityTxt, 'Türkiye'].filter(Boolean).join(', '), 13);
+                        }
+                    }).catch(function () { });
+            };
+
+            fetch('https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=3&countryCode=TUR&SingleLine=' + encodeURIComponent(arcLine))
+                .then(r => r.json())
+                .then(arc => {
+                    if (arc && arc.candidates && arc.candidates.length > 0 && arc.candidates[0].score >= 75) {
+                        var loc = arc.candidates[0].location;
+                        setMapPin(loc.y, loc.x, zoomTarget);
+                    } else {
+                        var nomQuery = [streetTxt, neighTxt ? (neighTxt + ' Mahallesi') : '', distTxt, cityTxt, 'Türkiye'].filter(Boolean).join(', ');
+                        tryNominatim(nomQuery, zoomTarget);
+                    }
+                })
+                .catch(function () {
+                    var nomQuery = [streetTxt, neighTxt ? (neighTxt + ' Mahallesi') : '', distTxt, cityTxt, 'Türkiye'].filter(Boolean).join(', ');
+                    tryNominatim(nomQuery, zoomTarget);
+                });
         }
 
         function selectedText(id) {

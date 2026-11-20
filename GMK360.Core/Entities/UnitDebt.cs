@@ -18,6 +18,13 @@ namespace GMK360.Core.Entities
         public DateTime? PaymentDate { get; set; }
         
         // Ödemeyi kim yaptı? (Ahmet, Mehmet)
-        public string PaidBy { get; set; }
+        public string PaidBy { get; set; } = string.Empty;
+
+        // Dönemsel Cari İzolasyonu & Ters Kayıt Desteği
+        public int? ResidencyPeriodId { get; set; }
+        public virtual ResidencyPeriod? ResidencyPeriod { get; set; }
+        public string PayerRole { get; set; } = "Tenant"; // "Owner" | "Tenant"
+        public bool IsArchived { get; set; } = false;
+        public int? ReversalOfDebtId { get; set; }
     }
 }

@@ -303,6 +303,8 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         
         // --- PHASE 7 B?NA Y?NET?M ROLLER? ---
         public DbSet<BuildingManager> BuildingManagers { get; set; }
+        public DbSet<ResidencyPeriod> ResidencyPeriods { get; set; }
+        public DbSet<ApprovalRequest> ApprovalRequests { get; set; }
         
         // --- PHASE 8 GENERIC MEETINGS & SURVEYS ---
         public DbSet<SystemMeeting> SystemMeetings { get; set; }
@@ -1370,6 +1372,30 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
                 .WithMany()
                 .HasForeignKey(ud => ud.BuildingExpenseId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<UnitDebt>()
+                .HasOne(ud => ud.ResidencyPeriod)
+                .WithMany(rp => rp.Debts)
+                .HasForeignKey(ud => ud.ResidencyPeriodId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            builder.Entity<ResidencyPeriod>()
+                .HasOne(rp => rp.BuildingUnit)
+                .WithMany()
+                .HasForeignKey(rp => rp.BuildingUnitId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<ResidencyPeriod>()
+                .HasOne(rp => rp.ResidentUser)
+                .WithMany()
+                .HasForeignKey(rp => rp.ResidentUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            builder.Entity<ApprovalRequest>()
+                .HasOne(ar => ar.Building)
+                .WithMany()
+                .HasForeignKey(ar => ar.BuildingId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // ?n?aat Y?netimi ?li?kileri (Cascade Delete Loop ?nleme)
             builder.Entity<UnitMaterialSelection>()

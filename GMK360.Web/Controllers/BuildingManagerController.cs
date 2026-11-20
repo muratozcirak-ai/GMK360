@@ -8,6 +8,7 @@ using GMK360.Data.Contexts;
 using GMK360.Core.Entities;
 using System.Security.Claims;
 using GMK360.Core.Interfaces;
+using GMK360.Web.Services;
 
 namespace GMK360.Web.Controllers
 {
@@ -16,11 +17,16 @@ namespace GMK360.Web.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly IBuildingManagementService _buildingManagementService;
+        private readonly FacilityGovernanceService _governanceService;
 
-        public BuildingManagerController(ApplicationDbContext context, IBuildingManagementService buildingManagementService)
+        public BuildingManagerController(
+            ApplicationDbContext context,
+            IBuildingManagementService buildingManagementService,
+            FacilityGovernanceService governanceService)
         {
             _context = context;
             _buildingManagementService = buildingManagementService;
+            _governanceService = governanceService;
         }
 
         private string? GetUserId()
@@ -1128,8 +1134,25 @@ namespace GMK360.Web.Controllers
             int livingUnitCount = (building.Units?.Count(u => !(u.Category ?? "").StartsWith("OrtakAlan")) ?? 0)
                 + (building.ChildBuildings?.Sum(cb => cb.Units?.Count(u => !(u.Category ?? "").StartsWith("OrtakAlan")) ?? 0) ?? 0);
 
+            var unitIds = building.Units?.Select(u => u.Id).ToList() ?? new System.Collections.Generic.List<int>();
+            var residencyPeriods = unitIds.Any()
+                ? await _context.ResidencyPeriods
+                    .Where(rp => unitIds.Contains(rp.BuildingUnitId))
+                    .OrderByDescending(rp => rp.Status == "ACTIVE")
+                    .ThenByDescending(rp => rp.StartDate)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<ResidencyPeriod>();
+
+            var pendingApprovals = await _context.ApprovalRequests
+                .Where(a => a.BuildingId == rootId && a.Status == "PENDING")
+                .OrderByDescending(a => a.Id)
+                .ToListAsync();
+
             ViewBag.HasDecisionAuthority = hasAuthorityDoc;
             ViewBag.GovernanceMembers = governanceMembers;
+            ViewBag.ActiveBoardMemberCount = await _governanceService.GetActiveBoardMemberCountAsync(rootId);
+            ViewBag.ResidencyPeriods = residencyPeriods;
+            ViewBag.PendingApprovals = pendingApprovals;
             ViewBag.PricingTier = GMK360.Web.Helpers.FacilityPricingHelper.Calculate(isSite, blockCount, livingUnitCount);
             ViewBag.RootBuildingId = rootId;
 
@@ -1482,55 +1505,100 @@ namespace GMK360.Web.Controllers
             return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
 
-        // 5. Gider Ekle ve Dağıt
+        // 5. Gider Ekle ve Dağıt (İkili Cari: İşletme -> Kiracı/Malik, Demirbaş -> Daima Malik)
         [HttpPost]
-        public async Task<IActionResult> AddExpense(int buildingId, string description, decimal totalAmount, string payerType)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddExpense(
+            int buildingId,
+            string description,
+            decimal totalAmount,
+            BuildingExpenseType? expenseType,
+            string? payerType,
+            Microsoft.AspNetCore.Http.IFormFile? invoiceFile = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
 
-            if (totalAmount <= 0)
-            {
-                TempData["ErrorMessage"] = "Gider tutarı sıfırdan büyük olmalıdır.";
-                return RedirectToAction(nameof(Detail), new { id = buildingId });
-            }
+            var resolvedType = expenseType ?? (string.Equals(payerType, "Owner", StringComparison.OrdinalIgnoreCase)
+                ? BuildingExpenseType.CapitalExpenditure
+                : BuildingExpenseType.Operational);
 
-            var expense = new BuildingExpense
-            {
-                BuildingId = buildingId,
-                Description = description,
-                TotalAmount = totalAmount,
-                PayerType = payerType,
-                Date = DateTime.Now
-            };
-            
-            _context.BuildingExpenses.Add(expense);
-            await _context.SaveChangesAsync(); // ID almak için
+            var result = await _governanceService.DistributeExpenseAsync(
+                buildingId,
+                description,
+                totalAmount,
+                resolvedType,
+                invoiceFile,
+                GetUserId() ?? "system");
 
-            // OrtakAlan kayitlari haric tum bagimsiz bolumlere paylastir
-            var units = await _context.BuildingUnits
-                .Where(u => u.BuildingId == buildingId && u.Category != "OrtakAlan_Blok" && (u.Category == null || !u.Category.StartsWith("OrtakAlan")))
-                .ToListAsync();
-            
-            if (units.Any())
-            {
-                decimal amountPerUnit = Math.Round(totalAmount / units.Count, 2);
+            TempData[result.Success ? "SuccessMessage" : "ErrorMessage"] = result.Message;
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
+        }
 
-                foreach (var unit in units)
-                {
-                    _context.UnitDebts.Add(new UnitDebt
-                    {
-                        BuildingUnitId = unit.Id,
-                        BuildingExpenseId = expense.Id,
-                        Amount = amountPerUnit,
-                        IsPaid = false
-                    });
-                }
-                
-                await _context.SaveChangesAsync();
-            }
+        // 5B. Daire Taşınma / Devir (Dönemsel Cari İzolasyonu + Kıstelyevm + Borçlu Devir Kilidi)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> TransferUnitResidency(
+            int unitId,
+            int buildingId,
+            string roleType,
+            string? newFullName,
+            string? newPhone,
+            string? newEmail,
+            DateTime transferDate,
+            decimal? monthlyDuesForProration)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
 
-            TempData["SuccessMessage"] = "Gider işlendi ve bağımsız bölümlere dağıtıldı.";
+            var result = await _governanceService.TransferResidencyAsync(
+                unitId,
+                roleType,
+                newFullName,
+                newPhone,
+                newEmail,
+                transferDate == default ? DateTime.Today : transferDate,
+                monthlyDuesForProration,
+                GetUserId() ?? "system");
+
+            TempData[result.Success ? (result.PendingApproval ? "WarningMessage" : "SuccessMessage") : "ErrorMessage"] = result.Message;
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
+        }
+
+        // 5C. Fatura / Gider İptali (Fiziksel Silme Yasak -> Ters Kayıt & 2 Aza Onay Kuyruğu)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RequestExpenseReversal(int expenseId, int buildingId, string reason)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var result = await _governanceService.RequestOrExecuteExpenseReversalAsync(
+                expenseId,
+                reason,
+                GetUserId() ?? "system");
+
+            TempData[result.Success ? (result.PendingApproval ? "WarningMessage" : "SuccessMessage") : "ErrorMessage"] = result.Message;
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
+        }
+
+        // 5D. Yönetim Kurulu Aza Multi-Sig Onay / Ret İşlemi
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DecideApprovalRequest(int requestId, int buildingId, bool approve)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var approverEmail = User.Identity?.Name ?? User.FindFirstValue(ClaimTypes.Email) ?? "onayci@gmk360.com";
+            var result = await _governanceService.SubmitApprovalDecisionAsync(
+                requestId,
+                GetUserId() ?? string.Empty,
+                approverEmail,
+                approve,
+                IsAdminOrSuperAdmin());
+
+            TempData[result.Success ? "SuccessMessage" : "ErrorMessage"] = result.Message;
             return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
 
