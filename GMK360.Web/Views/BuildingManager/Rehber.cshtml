@@ -1,0 +1,102 @@
+@model IEnumerable<GMK360.Core.Entities.SpaceFixture>
+@{
+    Layout = "~/Views/Shared/_FacilityLayout.cshtml";
+    ViewData["Title"] = "Usta & Tedarikçi Rehberi";
+    var buildings = ViewBag.Buildings as List<GMK360.Core.Entities.Building> ?? new List<GMK360.Core.Entities.Building>();
+    var providers = ViewBag.ServiceProviders as List<GMK360.Core.Entities.ServiceProvider> ?? new List<GMK360.Core.Entities.ServiceProvider>();
+}
+
+<div class="container-fluid py-3 px-1">
+    <div class="bg-white p-4 rounded-4 shadow-sm mb-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+            <h2 class="fw-bold text-dark mb-1"><i class="bi bi-person-lines-fill text-success me-2"></i>Usta &amp; Tedarikçi Rehberi</h2>
+            <p class="text-muted small mb-0">Binalarınızdaki kayıtlı teknik servisler (asansör, hidrofor, bahçe, çatı) ve platform ustaları</p>
+        </div>
+        <a href="/BuildingManager/BakimTakvimi" class="btn btn-outline-success rounded-pill px-4 fw-semibold">
+            <i class="bi bi-calendar-check me-1"></i> Planlı Bakım Takvimine Git
+        </a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-bottom p-3 fw-bold text-dark">
+                    <i class="bi bi-wrench-adjustable-circle text-primary me-2"></i>Bina Demirbaş &amp; Yetkili Servis Kayıtları
+                </div>
+                <div class="card-body p-3">
+                    @if (!Model.Any())
+                    {
+                        <div class="text-center py-4 text-muted small">
+                            Henüz ortak alan demirbaşına bağlı servis veya tedarikçi eklenmemiş. <br />
+                            <a href="/BuildingManager/BakimTakvimi" class="fw-semibold">Planlı İşler &amp; Bakım Takvimi</a> üzerinden teknik servis ekleyebilirsiniz.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var fx in Model)
+                            {
+                                <div class="list-group-item px-0 py-3">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <div class="fw-bold text-dark">@fx.ItemName</div>
+                                            <small class="text-muted">@fx.UnitSpace?.BuildingUnit?.Building?.Name • @fx.UnitSpace?.Name</small>
+                                        </div>
+                                        <span class="badge bg-light text-dark border">@fx.Category</span>
+                                    </div>
+                                    <div class="small mt-2">
+                                        @if (!string.IsNullOrWhiteSpace(fx.TechnicalServiceName))
+                                        {
+                                            <div><i class="bi bi-tools text-success me-1"></i><strong>Yetkili Servis:</strong> @fx.TechnicalServiceName</div>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(fx.SupplierName))
+                                        {
+                                            <div><i class="bi bi-shop text-warning me-1"></i><strong>Tedarikçi:</strong> @fx.SupplierName</div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-bottom p-3 fw-bold text-dark">
+                    <i class="bi bi-patch-check-fill text-success me-2"></i>Kayıtlı Platform Usta &amp; Firmaları
+                </div>
+                <div class="card-body p-3">
+                    @if (!providers.Any())
+                    {
+                        <div class="text-center py-4 text-muted small">
+                            Sistemde henüz onaylı dış usta profili bulunmuyor.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var sp in providers)
+                            {
+                                <div class="list-group-item px-0 py-3 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="fw-bold text-dark">
+                                            @sp.BusinessName
+                                            @if (sp.IsVerified)
+                                            {
+                                                <i class="bi bi-patch-check-fill text-primary ms-1" title="Onaylı"></i>
+                                            }
+                                        </div>
+                                        <small class="text-muted">Güven Skoru: %@sp.ReliabilityScore • @(sp.IsEmergencyModeActive ? "7/24 Acil Servis" : "Standart Mesai")</small>
+                                    </div>
+                                    <span class="badge bg-warning text-dark">★ @sp.AverageRating.ToString("0.0")</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

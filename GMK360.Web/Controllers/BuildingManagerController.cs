@@ -62,6 +62,24 @@ namespace GMK360.Web.Controllers
             return CanAccessBuilding(building, userId) ? building : null;
         }
 
+        private async Task<System.Collections.Generic.List<Building>> GetUserManagedRootBuildingsAsync()
+        {
+            var userId = GetUserId();
+            var query = _context.Buildings
+                .Where(b => b.ParentBuildingId == null)
+                .AsQueryable();
+
+            if (!IsAdminOrSuperAdmin())
+            {
+                query = query.Where(b =>
+                    b.BuildingManagers.Any(m => m.IsActive)
+                        ? b.BuildingManagers.Any(m => m.UserId == userId && m.IsActive)
+                        : (b.ManagerUserId == userId || b.CreatedByUserId == userId));
+            }
+
+            return await query.OrderByDescending(b => b.Id).ToListAsync();
+        }
+
         private async Task<bool> HasDecisionAuthorityAsync(int buildingId)
         {
             if (IsAdminOrSuperAdmin()) return true;
@@ -1713,18 +1731,33 @@ namespace GMK360.Web.Controllers
         }
 
         // 7. İç Talepler (Ticket) Yönetimi
-        public async Task<IActionResult> TicketManagement(int buildingId)
+        public async Task<IActionResult> TicketManagement(int? buildingId)
         {
-            var building = await GetManagedBuildingAsync(buildingId);
-            if (building == null) return Forbid();
+            var buildings = await GetUserManagedRootBuildingsAsync();
+            if (!buildings.Any())
+            {
+                TempData["ErrorMessage"] = "Önce yönettiğiniz bir bina veya site oluşturmalısınız.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var selectedIds = buildings.Select(b => b.Id).ToList();
+            Building? selectedBuilding = null;
+            if (buildingId.HasValue)
+            {
+                selectedBuilding = await GetManagedBuildingAsync(buildingId.Value);
+                if (selectedBuilding == null) return Forbid();
+                selectedIds = new System.Collections.Generic.List<int> { selectedBuilding.Id };
+            }
 
             var tickets = await _context.SupportTickets
                 .Include(t => t.CreatorUser)
-                .Where(t => t.ContextType == "Building" && t.ContextId == buildingId)
+                .Where(t => t.ContextType == "Building" && t.ContextId.HasValue && selectedIds.Contains(t.ContextId.Value))
                 .OrderByDescending(t => t.CreatedAt)
                 .ToListAsync();
 
-            ViewBag.Building = building;
+            ViewBag.Building = selectedBuilding ?? buildings.First();
+            ViewBag.Buildings = buildings;
+            ViewBag.SelectedBuildingId = buildingId;
             return View(tickets);
         }
 
@@ -1748,6 +1781,236 @@ namespace GMK360.Web.Controllers
             await _context.SaveChangesAsync();
 
             return RedirectToAction(nameof(TicketManagement), new { buildingId = ticket.ContextId });
+        }
+
+        // 10. Muhasebe, Banka Hesapları & Sabit Personel
+        public async Task<IActionResult> Accounting(int? buildingId)
+        {
+            var buildings = await GetUserManagedRootBuildingsAsync();
+            if (!buildings.Any())
+            {
+                TempData["ErrorMessage"] = "Muhasebe ve kasa ekranı için önce bir bina/site oluşturun.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            int targetId = buildingId ?? buildings.First().Id;
+            var building = await _context.Buildings
+                .Include(b => b.ManagementMembers)
+                .FirstOrDefaultAsync(b => b.Id == targetId);
+
+            if (building == null) return NotFound();
+            if (!CanAccessBuilding(building, GetUserId())) return Forbid();
+
+            ViewBag.BankAccounts = await _context.BankAccounts
+                .Where(a => a.OwnerType == OwnerType.Building && a.OwnerId == building.Id && a.IsActive)
+                .OrderByDescending(a => a.Id)
+                .ToListAsync();
+            ViewBag.Buildings = buildings;
+
+            return View(building);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddBankAccount(int buildingId, string bankName, string accountName, string iban)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            _context.BankAccounts.Add(new BankAccount
+            {
+                OwnerType = OwnerType.Building,
+                OwnerId = buildingId,
+                BankName = bankName?.Trim() ?? "Banka",
+                AccountName = accountName?.Trim() ?? "Aidat Hesabı",
+                IBAN = iban?.Trim() ?? "",
+                CurrentBalance = 0m,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+
+            TempData["Success"] = "Banka hesabı kaydedildi.";
+            return RedirectToAction(nameof(Accounting), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddStaff(int buildingId, string firstName, string lastName, string title, decimal salary, ManagementStaffRole role)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            _context.ManagementMembers.Add(new ManagementMember
+            {
+                BuildingId = buildingId,
+                FirstName = firstName?.Trim() ?? "",
+                LastName = lastName?.Trim() ?? "",
+                Title = title?.Trim() ?? "Personel",
+                MonthlySalary = salary,
+                Role = role,
+                IsActive = true,
+                StartDate = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+
+            TempData["Success"] = "Sabit personel kadroya eklendi.";
+            return RedirectToAction(nameof(Accounting), new { buildingId });
+        }
+
+        // 11. Toplantı & Karar Masası
+        public async Task<IActionResult> Oylamalar(int? buildingId)
+        {
+            var buildings = await GetUserManagedRootBuildingsAsync();
+            var allowedIds = buildings.Select(b => b.Id).ToList();
+            if (buildingId.HasValue)
+            {
+                var b = await GetManagedBuildingAsync(buildingId.Value);
+                if (b == null) return Forbid();
+                allowedIds = new System.Collections.Generic.List<int> { b.Id };
+            }
+
+            var meetings = allowedIds.Any()
+                ? await _context.SystemMeetings
+                    .Include(m => m.Decisions)
+                    .Where(m => m.ContextType == "Building" && allowedIds.Contains(m.ContextId))
+                    .OrderByDescending(m => m.MeetingDate)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<SystemMeeting>();
+
+            var approvals = allowedIds.Any()
+                ? await _context.ApprovalRequests
+                    .Include(a => a.Building)
+                    .Where(a => allowedIds.Contains(a.BuildingId))
+                    .OrderByDescending(a => a.Id)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<ApprovalRequest>();
+
+            ViewBag.Buildings = buildings;
+            ViewBag.SelectedBuildingId = buildingId;
+            ViewBag.Approvals = approvals;
+            return View(meetings);
+        }
+
+        // 12. Usta & Tedarikçi Rehberi (Tesis Özel + Onaylı Platform Rehberi)
+        public async Task<IActionResult> Rehber(int? buildingId)
+        {
+            var buildings = await GetUserManagedRootBuildingsAsync();
+            var allowedIds = buildings.Select(b => b.Id).ToList();
+            if (buildingId.HasValue)
+            {
+                var b = await GetManagedBuildingAsync(buildingId.Value);
+                if (b == null) return Forbid();
+                allowedIds = new System.Collections.Generic.List<int> { b.Id };
+            }
+
+            var fixtures = allowedIds.Any()
+                ? await _context.SpaceFixtures
+                    .Include(f => f.UnitSpace).ThenInclude(s => s.BuildingUnit).ThenInclude(u => u.Building)
+                    .Where(f => allowedIds.Contains(f.UnitSpace.BuildingUnit.BuildingId)
+                        && (!string.IsNullOrEmpty(f.TechnicalServiceName) || !string.IsNullOrEmpty(f.SupplierName)))
+                    .OrderByDescending(f => f.Id)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<SpaceFixture>();
+
+            var providers = await _context.ServiceProviders
+                .Include(sp => sp.User)
+                .OrderByDescending(sp => sp.IsVerified)
+                .ThenByDescending(sp => sp.AverageRating)
+                .Take(24)
+                .ToListAsync();
+
+            ViewBag.Buildings = buildings;
+            ViewBag.SelectedBuildingId = buildingId;
+            ViewBag.ServiceProviders = providers;
+            return View(fixtures);
+        }
+
+        // 13. Planlı İşler & Mevsimlik Bakım Takvimi
+        public async Task<IActionResult> BakimTakvimi(int? buildingId)
+        {
+            var buildings = await GetUserManagedRootBuildingsAsync();
+            var allowedIds = buildings.Select(b => b.Id).ToList();
+            if (buildingId.HasValue)
+            {
+                var b = await GetManagedBuildingAsync(buildingId.Value);
+                if (b == null) return Forbid();
+                allowedIds = new System.Collections.Generic.List<int> { b.Id };
+            }
+
+            var fixtures = allowedIds.Any()
+                ? await _context.SpaceFixtures
+                    .Include(f => f.UnitSpace).ThenInclude(s => s.BuildingUnit).ThenInclude(u => u.Building)
+                    .Where(f => allowedIds.Contains(f.UnitSpace.BuildingUnit.BuildingId))
+                    .OrderBy(f => f.NextMaintenanceDate ?? DateTime.MaxValue)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<SpaceFixture>();
+
+            var meetings = allowedIds.Any()
+                ? await _context.SystemMeetings
+                    .Where(m => m.ContextType == "Building" && allowedIds.Contains(m.ContextId))
+                    .OrderByDescending(m => m.MeetingDate)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<SystemMeeting>();
+
+            ViewBag.Buildings = buildings;
+            ViewBag.SelectedBuildingId = buildingId;
+            ViewBag.Meetings = meetings;
+            return View(fixtures);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SchedulePlannedMaintenance(
+            int buildingId,
+            string spaceName,
+            string category,
+            string itemName,
+            string? serviceName,
+            DateTime nextMaintenanceDate,
+            string? notes)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var commonUnit = await _context.BuildingUnits
+                .Include(u => u.Spaces)
+                .FirstOrDefaultAsync(u => u.BuildingId == buildingId && (u.Category == "OrtakAlan_Blok" || (u.Category ?? "").StartsWith("OrtakAlan")));
+
+            if (commonUnit == null)
+            {
+                await EnsureBaselineCommonSpacesAsync(building);
+                commonUnit = await _context.BuildingUnits
+                    .Include(u => u.Spaces)
+                    .FirstOrDefaultAsync(u => u.BuildingId == buildingId && (u.Category == "OrtakAlan_Blok" || (u.Category ?? "").StartsWith("OrtakAlan")));
+            }
+
+            var targetSpace = commonUnit!.Spaces.FirstOrDefault(s => s.Name.Contains(spaceName, StringComparison.OrdinalIgnoreCase))
+                ?? commonUnit.Spaces.FirstOrDefault();
+
+            if (targetSpace == null)
+            {
+                targetSpace = new UnitSpace { BuildingUnitId = commonUnit.Id, Name = spaceName, Type = "OrtakAlan" };
+                _context.UnitSpaces.Add(targetSpace);
+                await _context.SaveChangesAsync();
+            }
+
+            _context.SpaceFixtures.Add(new SpaceFixture
+            {
+                UnitSpaceId = targetSpace.Id,
+                Category = string.IsNullOrWhiteSpace(category) ? "Bakım" : category.Trim(),
+                ItemName = itemName?.Trim() ?? "Planlı Bakım İşi",
+                Quantity = 1,
+                Unit = "İş",
+                TechnicalServiceName = serviceName?.Trim(),
+                MaintenanceNotes = notes?.Trim(),
+                NextMaintenanceDate = nextMaintenanceDate,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"'{itemName}' planlı işler bakım takvimine eklendi.";
+            return RedirectToAction(nameof(BakimTakvimi), new { buildingId });
         }
     }
 }
