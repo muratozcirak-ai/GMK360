@@ -1029,7 +1029,7 @@ namespace GMK360.Web.Controllers
                         FloorName = shopFloorName,
                         DoorNumber = $"D{s}",
                         UnitNumber = $"D{s}",
-                        Category = "Dükkan",
+                        Category = "Dukkan",
                         RoomLayout = "Dükkan",
                         IsEmpty = true
                     });
@@ -1105,6 +1105,23 @@ namespace GMK360.Web.Controllers
 
             if (building == null) return NotFound();
             if (!CanAccessBuilding(building, userId)) return Forbid();
+
+            // Daha once Step 2/3 sirasinda hata sebebiyle birimleri olusamamis kayitlari otomatik onar
+            bool hasLivingUnits = building.Units?.Any(u => !(u.Category ?? "").StartsWith("OrtakAlan")) ?? false;
+            if (!hasLivingUnits && building.OnboardingStep >= 3 && (building.TotalApartments + building.TotalShops) > 0)
+            {
+                await GenerateFloorUnitsIfEmptyAsync(building, building.TotalApartments, building.TotalShops, building.TotalFloors ?? 5, building.HasGroundFloor);
+                await EnsureBaselineCommonSpacesAsync(building);
+                building = await _context.Buildings
+                    .Include(b => b.HousingComplex)
+                    .Include(b => b.City)
+                    .Include(b => b.District)
+                    .Include(b => b.ChildBuildings).ThenInclude(cb => cb.Units).ThenInclude(u => u.Debts)
+                    .Include(b => b.BuildingManagers).ThenInclude(m => m.User)
+                    .Include(b => b.Units).ThenInclude(u => u.Debts).ThenInclude(d => d.BuildingExpense)
+                    .Include(b => b.Expenses)
+                    .FirstOrDefaultAsync(b => b.Id == id) ?? building;
+            }
 
             int rootId = building.ParentBuildingId ?? building.Id;
 
