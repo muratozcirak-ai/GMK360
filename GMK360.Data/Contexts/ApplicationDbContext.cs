@@ -305,6 +305,10 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         public DbSet<BuildingManager> BuildingManagers { get; set; }
         public DbSet<ResidencyPeriod> ResidencyPeriods { get; set; }
         public DbSet<ApprovalRequest> ApprovalRequests { get; set; }
+        public DbSet<BuildingStaff> BuildingStaffs { get; set; }
+        public DbSet<BuildingFixedExpense> BuildingFixedExpenses { get; set; }
+        public DbSet<BuildingStaffLeave> BuildingStaffLeaves { get; set; }
+        public DbSet<BuildingStaffMonthlyPayroll> BuildingStaffMonthlyPayrolls { get; set; }
         
         // --- PHASE 8 GENERIC MEETINGS & SURVEYS ---
         public DbSet<SystemMeeting> SystemMeetings { get; set; }
@@ -1396,6 +1400,30 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
                 .WithMany()
                 .HasForeignKey(ar => ar.BuildingId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<BuildingStaff>()
+                .HasOne(bs => bs.Building)
+                .WithMany()
+                .HasForeignKey(bs => bs.BuildingId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<BuildingFixedExpense>()
+                .HasOne(bfe => bfe.Building)
+                .WithMany()
+                .HasForeignKey(bfe => bfe.BuildingId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<BuildingStaffLeave>()
+                .HasOne(bsl => bsl.Staff)
+                .WithMany(s => s.Leaves)
+                .HasForeignKey(bsl => bsl.BuildingStaffId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<BuildingStaffMonthlyPayroll>()
+                .HasOne(bsp => bsp.Staff)
+                .WithMany(s => s.MonthlyPayrolls)
+                .HasForeignKey(bsp => bsp.BuildingStaffId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // ?n?aat Y?netimi ?li?kileri (Cascade Delete Loop ?nleme)
             builder.Entity<UnitMaterialSelection>()

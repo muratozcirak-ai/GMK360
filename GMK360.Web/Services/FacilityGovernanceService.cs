@@ -20,6 +20,7 @@ namespace GMK360.Web.Services
     {
         public bool Success { get; set; }
         public bool PendingApproval { get; set; }
+        public int? CreatedExpenseId { get; set; }
         public string Message { get; set; } = string.Empty;
     }
 
@@ -104,7 +105,8 @@ namespace GMK360.Web.Services
             decimal totalAmount,
             BuildingExpenseType expenseType,
             IFormFile? invoiceFile,
-            string actorUserId)
+            string actorUserId,
+            string distributionRule = "Esit")
         {
             if (totalAmount <= 0)
                 return new GovernanceActionResult { Success = false, Message = "Gider tutarı sıfırdan büyük olmalıdır." };
@@ -150,9 +152,17 @@ namespace GMK360.Web.Services
 
             if (units.Any())
             {
-                decimal amountPerUnit = Math.Round(totalAmount / units.Count, 2);
+                bool useAreaWeight = (string.Equals(distributionRule, "Metrekare", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(distributionRule, "ArsaPayi", StringComparison.OrdinalIgnoreCase))
+                    && units.All(u => (u.GrossSquareMeters ?? 0) > 0);
+                double totalArea = useAreaWeight ? units.Sum(u => u.GrossSquareMeters ?? 0) : 0;
+
                 foreach (var unit in units)
                 {
+                    decimal shareAmount = useAreaWeight && totalArea > 0
+                        ? Math.Round(totalAmount * (decimal)((unit.GrossSquareMeters ?? 0) / totalArea), 2)
+                        : Math.Round(totalAmount / units.Count, 2);
+
                     var ownerPeriod = await EnsureActivePeriodFromUnitAsync(unit, "Owner");
                     var tenantPeriod = isCapital ? null : await EnsureActivePeriodFromUnitAsync(unit, "Tenant");
 
@@ -165,7 +175,7 @@ namespace GMK360.Web.Services
                         BuildingExpenseId = expense.Id,
                         ResidencyPeriodId = targetPeriod?.Id,
                         PayerRole = payerRole,
-                        Amount = amountPerUnit,
+                        Amount = shareAmount,
                         IsPaid = false
                     });
                 }
@@ -177,6 +187,7 @@ namespace GMK360.Web.Services
                 buildingId,
                 expense.TotalAmount,
                 ExpenseType = expense.ExpenseType.ToString(),
+                DistributionRule = distributionRule,
                 expense.InvoiceDocumentUrl
             });
             await _context.SaveChangesAsync();
@@ -184,6 +195,7 @@ namespace GMK360.Web.Services
             return new GovernanceActionResult
             {
                 Success = true,
+                CreatedExpenseId = expense.Id,
                 Message = isCapital
                     ? "Demirbaş gideri işlendi ve yalnız Mal Sahiplerinin carisine paylaştırıldı."
                     : "İşletme aidat gideri işlendi (kiracısı olan dairede kiracıya, boş/malik oturan dairede malike yansıtıldı)."

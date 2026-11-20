@@ -1,17 +1,23 @@
 @model GMK360.Core.Entities.Building
 @{
-    ViewData["Title"] = "Muhasebe, Kasa, Banka & Personel SGK";
+    ViewData["Title"] = "Tam Muhasebe: Kasa, Banka, Personel SGK, Kıdem Fonu & Puantaj";
     Layout = "~/Views/Shared/_FacilityLayout.cshtml";
     var bankAccounts = ViewBag.BankAccounts as List<GMK360.Core.Entities.BankAccount> ?? new List<GMK360.Core.Entities.BankAccount>();
-    var payrolls = ViewBag.Payrolls as List<GMK360.Core.Entities.StaffPayroll> ?? new List<GMK360.Core.Entities.StaffPayroll>();
     var buildings = ViewBag.Buildings as List<GMK360.Core.Entities.Building> ?? new List<GMK360.Core.Entities.Building>();
+    var buildingStaffs = ViewBag.BuildingStaffs as List<GMK360.Core.Entities.BuildingStaff> ?? new List<GMK360.Core.Entities.BuildingStaff>();
+    var monthlyPayrolls = ViewBag.MonthlyPayrolls as List<GMK360.Core.Entities.BuildingStaffMonthlyPayroll> ?? new List<GMK360.Core.Entities.BuildingStaffMonthlyPayroll>();
+    var budget = ViewBag.BudgetSummary as GMK360.Web.Services.BuildingMonthlyBudgetSummary ?? new GMK360.Web.Services.BuildingMonthlyBudgetSummary();
+    var holidays = ViewBag.Holidays as List<GMK360.Web.Helpers.TurkishHolidayItem> ?? new List<GMK360.Web.Helpers.TurkishHolidayItem>();
+
+    bool allSgkClear = monthlyPayrolls.Any() && monthlyPayrolls.All(p => p.IsSgkPaid);
+    int pendingSgkCount = monthlyPayrolls.Count(p => !p.IsSgkPaid);
 }
 
 <div class="container-fluid py-3 px-1">
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 bg-white p-4 rounded-4 shadow-sm">
         <div>
-            <h2 class="fw-bold text-dark mb-1"><i class="bi bi-wallet2 text-success me-2"></i>Tam Muhasebe: Kasa, Banka &amp; Personel SGK</h2>
-            <p class="text-muted small mb-0">@Model.Name - Banka hesapları, apartman görevlisi / bahçıvan maaşları ve SGK tahakkuk defteri</p>
+            <h2 class="fw-bold text-dark mb-1"><i class="bi bi-wallet2 text-success me-2"></i>Tam Muhasebe: Kasa, Personel SGK, Kıdem Fonu &amp; Puantaj</h2>
+            <p class="text-muted small mb-0">@Model.Name - İşletme maaş/SGK kasası, Malik Kıdem Tazminatı fonu, bayram çift yevmiye ve izin çakışma kontrolü</p>
         </div>
         <div class="d-flex flex-wrap gap-2 align-items-center">
             @if (buildings.Count > 1)
@@ -32,6 +38,9 @@
                     </select>
                 </form>
             }
+            <button class="btn btn-success rounded-pill px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#addBuildingStaffModal">
+                <i class="bi bi-person-plus me-1"></i> + Kadro Personeli Ekle
+            </button>
             <a asp-action="Detail" asp-route-id="@Model.Id" class="btn btn-outline-secondary rounded-pill px-3">Binaya Dön</a>
         </div>
     </div>
@@ -43,11 +52,251 @@
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     }
+    @if (TempData["WarningMessage"] != null)
+    {
+        <div class="alert alert-warning alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["WarningMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
+            @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- ÖZET BÜTÇE & KIDEM FONU & SGK DENETİM ÇUBUĞU -->
+    <div class="row g-3 mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-start border-4 border-primary h-100">
+                <span class="text-muted small fw-bold text-uppercase">Aylık İşletme Yükü (Oturan)</span>
+                <h3 class="fw-bold text-primary mb-1">@budget.TotalMonthlyOperatingBudget.ToString("N2") ₺</h3>
+                <small class="text-muted">Personel + SGK: @budget.MonthlyStaffOperatingCost.ToString("N0") ₺ | Sabit: @budget.MonthlyFixedOperatingCost.ToString("N0") ₺</small>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-start border-4 border-danger h-100">
+                <span class="text-muted small fw-bold text-uppercase">Kıdem Fonu &amp; Demirbaş (Malik)</span>
+                <h3 class="fw-bold text-danger mb-1">@budget.TotalMonthlyCapitalBudget.ToString("N2") ₺/ay</h3>
+                <small class="text-muted">Aylık Kıdem Karşılığı: @budget.MonthlySeveranceFundTotal.ToString("N0") ₺ (Malik Kasası)</small>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-start border-4 border-success h-100">
+                <span class="text-muted small fw-bold text-uppercase">Tahmini Min. Daire Aidatı</span>
+                <h3 class="fw-bold text-success mb-1">@budget.EstimatedMinOperatingDuesPerUnit.ToString("N2") ₺</h3>
+                <small class="text-muted">@budget.ActiveUnitCount aktif bölüm için İşletme (Malik ek fon: @budget.EstimatedSeverancePerOwnerUnit.ToString("N0") ₺)</small>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-start border-4 @(allSgkClear ? "border-success" : "border-warning") h-100">
+                <span class="text-muted small fw-bold text-uppercase">SGK Bildirge &amp; Denetim Raporu</span>
+                @if (!monthlyPayrolls.Any())
+                {
+                    <h5 class="fw-bold text-secondary mb-1">Henüz Bordro Kesilmedi</h5>
+                    <small class="text-muted">Aşağıdan aylık puantaj oluşturun.</small>
+                }
+                else if (allSgkClear)
+                {
+                    <h4 class="fw-bold text-success mb-1"><i class="bi bi-shield-check me-1"></i>SGK Borcu Yoktur</h4>
+                    <small class="text-muted">Kesilen tüm dönemlerin SGK primi ödenmiş.</small>
+                }
+                else
+                {
+                    <h4 class="fw-bold text-warning-emphasis mb-1">@pendingSgkCount Dönem SGK Bekliyor</h4>
+                    <small class="text-muted">Denetim için SGK ödemesini işleyin.</small>
+                }
+            </div>
+        </div>
+    </div>
 
     <div class="row g-4">
-        <!-- Banka Hesapları -->
-        <div class="col-lg-5">
-            <div class="card shadow-sm border-0 rounded-4 h-100 bg-white">
+        <!-- 1. SABİT PERSONEL & KIDEM FONU & İZİN KARTLARI -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0 rounded-4 bg-white mb-4">
+                <div class="card-header bg-white border-bottom p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-people-fill text-success me-2"></i>Bina / Site Sabit Personel Kadrosu (@buildingStaffs.Count)</h5>
+                        <small class="text-muted">Net Maaş + SGK İşveren + Vergi İşletme Kasasına; Aylık Kıdem Fonu Malik Kasasına ayrılır.</small>
+                    </div>
+                </div>
+                <div class="card-body p-3">
+                    @if (!buildingStaffs.Any())
+                    {
+                        <div class="text-center py-4 text-muted small">
+                            Henüz tam bordrolu kadro personeli eklenmemiş. Sağ üstten <strong>+ Kadro Personeli Ekle</strong> ile Kapıcı (Vergi İstisnalı), Güvenlik, Temizlik veya Bahçıvan ekleyebilirsiniz.
+                        </div>
+                    }
+                    else
+                    {
+                        foreach (var st in buildingStaffs)
+                        {
+                            int usedLeaveDays = (st.Leaves ?? new List<GMK360.Core.Entities.BuildingStaffLeave>())
+                                .Where(l => l.LeaveYear == DateTime.Today.Year && l.LeaveType == "YillikIzin" && !l.IsDeleted)
+                                .Sum(l => l.TotalDays);
+                            int remainLeave = Math.Max(0, st.AnnualLeaveEntitlementDays - usedLeaveDays);
+                            decimal dailyRate = st.NetSalary > 0 ? Math.Round(st.NetSalary / 30m, 2) : 0m;
+
+                            <div class="border rounded-4 p-3 mb-3 bg-light">
+                                <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+                                    <div>
+                                        <span class="badge bg-dark me-1">@st.RoleType</span>
+                                        <strong class="fs-5 text-dark">@st.FullName</strong>
+                                        <div class="small text-muted mt-1">
+                                            İşe Giriş: <b>@st.HireDate.ToString("dd.MM.yyyy")</b> |
+                                            SGK Sicil: <b>@(st.SgkNumber ?? "-")</b> |
+                                            Günlük Yevmiye: <b>@dailyRate.ToString("N2") ₺</b>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold"
+                                                onclick="openPayrollModal(@st.Id, '@System.Web.HttpUtility.JavaScriptStringEncode(st.FullName)', @dailyRate.ToString(System.Globalization.CultureInfo.InvariantCulture))">
+                                            <i class="bi bi-calculator me-1"></i> Puantaj &amp; Bayram Hesapla
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-warning text-dark rounded-pill px-3 fw-semibold"
+                                                onclick="openLeaveModal(@st.Id, '@System.Web.HttpUtility.JavaScriptStringEncode(st.FullName)')">
+                                            <i class="bi bi-calendar-range me-1"></i> İzin Planla (@remainLeave/@st.AnnualLeaveEntitlementDays gün)
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="row g-2 small mt-1">
+                                    <div class="col-md-3">
+                                        <div class="bg-white p-2 rounded border">
+                                            <span class="text-muted d-block">Net Maaş + Yol/Yemek</span>
+                                            <strong class="text-dark">@((st.NetSalary + st.FringeBenefits).ToString("N2")) ₺</strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="bg-white p-2 rounded border">
+                                            <span class="text-muted d-block">SGK İşveren + Vergi</span>
+                                            <strong class="text-primary">@((st.SgkEmployerShare + st.IncomeAndStampTax).ToString("N2")) ₺</strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="bg-white p-2 rounded border">
+                                            <span class="text-muted d-block">Aylık İşletme Maliyeti</span>
+                                            <strong class="text-success">@st.TotalMonthlyOperatingCost.ToString("N2") ₺</strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="bg-white p-2 rounded border border-danger-subtle">
+                                            <span class="text-danger d-block">Kıdem Fonu (Malik)</span>
+                                            <strong class="text-danger">@st.MonthlySeveranceFund.ToString("N2") ₺/ay</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                                @if (st.Leaves != null && st.Leaves.Any(l => !l.IsDeleted))
+                                {
+                                    <div class="mt-2 small text-muted">
+                                        <strong>İzinler:</strong>
+                                        @foreach (var lv in st.Leaves.Where(l => !l.IsDeleted).OrderByDescending(l => l.StartDate).Take(3))
+                                        {
+                                            <span class="badge bg-white text-dark border me-1">
+                                                @lv.LeaveType (@lv.StartDate:dd.MM - @lv.EndDate:dd.MM • @lv.TotalDays gün@(lv.ReplacementCost > 0 ? $" • İkame: {lv.ReplacementCost:N0}₺" : ""))
+                                            </span>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+
+            <!-- 2. AYLIK PUANTAJ, BAYRAM ÇİFT YEVMİYE & MAAŞ / SGK ÖDEME TABLOSU -->
+            <div class="card shadow-sm border-0 rounded-4 bg-white">
+                <div class="card-header bg-white border-bottom p-3 fw-bold text-dark">
+                    <i class="bi bi-calendar2-check text-primary me-2"></i>Aylık Puantaj, Bayram Mesaisi &amp; Maaş / SGK Ödeme Eşleşmesi
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light small">
+                                <tr>
+                                    <th class="ps-3">Dönem</th>
+                                    <th>Personel</th>
+                                    <th>Bayram (+1 Yevmiye) &amp; Kesinti</th>
+                                    <th>Personele Net / Toplam Site Yükü</th>
+                                    <th>Kıdem Fonu</th>
+                                    <th>Maaş &amp; SGK Durumu</th>
+                                    <th class="pe-3 text-end">Öde &amp; Dağıt</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (!monthlyPayrolls.Any())
+                                {
+                                    <tr><td colspan="7" class="text-center py-4 text-muted small">Henüz puantaj oluşturulmadı. Personel kartından <strong>Puantaj &amp; Bayram Hesapla</strong> butonuna basın.</td></tr>
+                                }
+                                @foreach (var pr in monthlyPayrolls)
+                                {
+                                    <tr>
+                                        <td class="ps-3 fw-bold">@pr.Year-@pr.Month.ToString("00")</td>
+                                        <td>
+                                            <div class="fw-bold text-dark">@pr.Staff?.FullName</div>
+                                            <small class="text-muted">Yevmiye: @pr.DailyWageRate.ToString("N2") ₺/gün</small>
+                                        </td>
+                                        <td class="small">
+                                            @if (pr.HolidayDaysWorked > 0)
+                                            {
+                                                <div class="text-success fw-semibold">+@pr.HolidayDaysWorked.ToString("0.#") gün bayram (+@pr.HolidayExtraPay.ToString("N2") ₺)</div>
+                                            }
+                                            @if (pr.UnpaidLeaveDays > 0)
+                                            {
+                                                <div class="text-danger">-@pr.UnpaidLeaveDays gün ücretsiz izin (-@pr.UnpaidLeaveDeduction.ToString("N2") ₺)</div>
+                                            }
+                                            @if (pr.ReplacementStaffCost > 0)
+                                            {
+                                                <div class="text-warning-emphasis">İkame maliyeti: +@pr.ReplacementStaffCost.ToString("N2") ₺</div>
+                                            }
+                                            @if (pr.HolidayDaysWorked == 0 && pr.UnpaidLeaveDays == 0 && pr.ReplacementStaffCost == 0)
+                                            {
+                                                <span class="text-muted">Tam normal çalışma</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="fw-bold text-dark">@pr.NetPayableToStaff.ToString("N2") ₺ <small class="text-muted">(Net)</small></div>
+                                            <small class="text-primary fw-semibold">Site Toplam: @pr.TotalSiteCostForMonth.ToString("N2") ₺</small>
+                                        </td>
+                                        <td class="fw-bold text-danger">@pr.MonthlySeveranceFund.ToString("N2") ₺</td>
+                                        <td>
+                                            <div>
+                                                <span class="badge @(pr.IsSalaryPaid ? "bg-success" : "bg-warning text-dark")">
+                                                    Maaş: @(pr.IsSalaryPaid ? "Ödendi" : "Bekliyor")
+                                                </span>
+                                            </div>
+                                            <div class="mt-1">
+                                                <span class="badge @(pr.IsSgkPaid ? "bg-success" : "bg-danger")">
+                                                    SGK: @(pr.IsSgkPaid ? "Ödendi" : "Bekliyor")
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td class="pe-3 text-end">
+                                            @if (!pr.IsSalaryPaid || !pr.IsSgkPaid || !pr.OperatingExpenseId.HasValue)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-success rounded-pill px-3"
+                                                        onclick="openPayMonthlyPayrollModal(@pr.Id, '@System.Web.HttpUtility.JavaScriptStringEncode(pr.Staff?.FullName ?? "")', '@pr.Year-@pr.Month.ToString("00")', @pr.TotalSiteCostForMonth.ToString(System.Globalization.CultureInfo.InvariantCulture), @pr.MonthlySeveranceFund.ToString(System.Globalization.CultureInfo.InvariantCulture))">
+                                                    Öde / Carilere İşle
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-light text-success border"><i class="bi bi-check2-all me-1"></i>Tamamlandı</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SAĞ KOLON: BANKA HESAPLARI + RESMİ & DİNİ BAYRAM TAKVİMİ -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 rounded-4 bg-white mb-4">
                 <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
                     <h5 class="fw-bold text-primary mb-0"><i class="bi bi-bank me-2"></i>Banka Hesapları</h5>
                     <button class="btn btn-sm btn-primary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#addBankModal">+ Yeni Hesap</button>
@@ -71,103 +320,27 @@
                     }
                     else
                     {
-                        <p class="text-muted text-center py-4 small">Henüz banka hesabı eklenmemiş.</p>
+                        <p class="text-muted text-center py-3 small mb-0">Henüz banka hesabı eklenmemiş.</p>
                     }
                 </div>
             </div>
-        </div>
 
-        <!-- Personel & SGK -->
-        <div class="col-lg-7">
-            <div class="card shadow-sm border-0 rounded-4 h-100 bg-white">
-                <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
-                    <h5 class="fw-bold text-success mb-0"><i class="bi bi-person-badge me-2"></i>Sabit Personel, Maaş &amp; SGK</h5>
-                    <button class="btn btn-sm btn-success rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#addStaffModal">+ Yeni Personel</button>
-                </div>
-                <div class="card-body">
-                    @if (Model.ManagementMembers != null && Model.ManagementMembers.Any())
-                    {
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead class="table-light small">
-                                    <tr>
-                                        <th>Personel &amp; SGK Sicil</th>
-                                        <th>Görev</th>
-                                        <th class="text-end">Aylık Net Maaş</th>
-                                        <th class="text-end">İşlem</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var staff in Model.ManagementMembers)
-                                    {
-                                        <tr>
-                                            <td>
-                                                <div class="fw-bold text-dark">@staff.FirstName @staff.LastName</div>
-                                                <small class="text-muted">SGK: @(string.IsNullOrWhiteSpace(staff.SgkNumber) ? "Girilmedi" : staff.SgkNumber)</small>
-                                            </td>
-                                            <td>
-                                                <span class="badge bg-light text-dark border">@staff.Title</span>
-                                                <small class="d-block text-muted">@staff.Role</small>
-                                            </td>
-                                            <td class="text-end fw-bold text-success">@staff.MonthlySalary.ToString("N2") ₺</td>
-                                            <td class="text-end">
-                                                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3"
-                                                        onclick="openPaySalaryModal(@staff.Id, '@System.Web.HttpUtility.JavaScriptStringEncode($"{staff.FirstName} {staff.LastName}")', '@staff.MonthlySalary.ToString(System.Globalization.CultureInfo.InvariantCulture)')">
-                                                    Maaş &amp; SGK Öde
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                    else
-                    {
-                        <p class="text-muted text-center py-4 small">Bu binada henüz sabit çalışan bulunmuyor.</p>
-                    }
-                </div>
-            </div>
-        </div>
-
-        <!-- Ödenmiş Maaş & SGK Bordro Geçmişi -->
-        <div class="col-12">
             <div class="card shadow-sm border-0 rounded-4 bg-white">
                 <div class="card-header bg-white border-bottom p-3 fw-bold text-dark">
-                    <i class="bi bi-journal-check text-primary me-2"></i>Personel Maaş &amp; SGK Bordro Ödeme Defteri
+                    <i class="bi bi-calendar-event text-warning me-2"></i>@DateTime.Today.Year Resmi &amp; Dini Tatil Takvimi
                 </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="table-light small">
-                                <tr>
-                                    <th class="ps-3">Dönem</th>
-                                    <th>Personel</th>
-                                    <th>Ödeme Hesabı</th>
-                                    <th>Ödeme Tarihi</th>
-                                    <th class="pe-3 text-end">Ödenen Net Tutar</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @if (!payrolls.Any())
-                                {
-                                    <tr><td colspan="5" class="text-center py-4 text-muted small">Henüz işlenmiş maaş/SGK bordrosu yok.</td></tr>
-                                }
-                                else
-                                {
-                                    foreach (var pr in payrolls)
-                                    {
-                                        <tr>
-                                            <td class="ps-3 fw-bold">@pr.Period</td>
-                                            <td>@pr.ManagementMember?.FirstName @pr.ManagementMember?.LastName (@pr.ManagementMember?.Title)</td>
-                                            <td class="small">@(pr.PaidFromBankAccount != null ? $"{pr.PaidFromBankAccount.BankName} - {pr.PaidFromBankAccount.AccountName}" : "Nakit / Elden")</td>
-                                            <td class="small">@(pr.PaymentDate?.ToString("dd.MM.yyyy") ?? "-")</td>
-                                            <td class="pe-3 text-end fw-bold text-success">@pr.NetSalary.ToString("N2") ₺</td>
-                                        </tr>
-                                    }
-                                }
-                            </tbody>
-                        </table>
+                <div class="card-body p-3">
+                    <p class="small text-muted mb-2">Personel tatil gününde çalıştığında puantajda işaretlenen gün kadar <strong>+1 yevmiye (2x)</strong> bayram mesaisi eklenir.</p>
+                    <div class="list-group list-group-flush small">
+                        @foreach (var h in holidays)
+                        {
+                            <div class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="fw-bold text-dark">@h.Date.ToString("dd.MM.yyyy")</span> - @h.Name
+                                </div>
+                                <span class="badge @(h.Category == "Dini" ? "bg-warning text-dark" : "bg-info text-dark")">@h.DayWeight.ToString("0.#")g</span>
+                            </div>
+                        }
                     </div>
                 </div>
             </div>
@@ -175,7 +348,7 @@
     </div>
 </div>
 
-<!-- Add Bank Modal -->
+<!-- 1. Banka Hesabı Modal -->
 <div class="modal fade" id="addBankModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <form class="modal-content rounded-4 border-0 shadow" asp-action="AddBankAccount" method="post">
@@ -186,136 +359,261 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label small fw-bold">Banka Adı</label>
-                    <input type="text" name="bankName" class="form-control" placeholder="Örn: Ziraat Bankası" required />
-                </div>
-                <div class="mb-3">
-                    <label class="form-label small fw-bold">Hesap Tanımı</label>
-                    <input type="text" name="accountName" class="form-control" placeholder="Örn: Aidat Toplama Hesabı" required />
-                </div>
-                <div class="mb-3">
-                    <label class="form-label small fw-bold">IBAN</label>
-                    <input type="text" name="iban" class="form-control" placeholder="TR..." required />
-                </div>
+                <div class="mb-3"><label class="form-label small fw-bold">Banka Adı</label><input type="text" name="bankName" class="form-control" required /></div>
+                <div class="mb-3"><label class="form-label small fw-bold">Hesap Tanımı</label><input type="text" name="accountName" class="form-control" required /></div>
+                <div class="mb-3"><label class="form-label small fw-bold">IBAN</label><input type="text" name="iban" class="form-control" required /></div>
             </div>
             <div class="modal-footer border-0">
-                <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
                 <button type="submit" class="btn btn-primary rounded-pill px-4">Kaydet</button>
             </div>
         </form>
     </div>
 </div>
 
-<!-- Add Staff Modal -->
-<div class="modal fade" id="addStaffModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <form class="modal-content rounded-4 border-0 shadow" asp-action="AddStaff" method="post">
+<!-- 2. Tam Bordrolu Kadro Personeli Ekle Modal -->
+<div class="modal fade" id="addBuildingStaffModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="AddBuildingStaff" asp-controller="BuildingManager" method="post">
             @Html.AntiForgeryToken()
             <input type="hidden" name="buildingId" value="@Model.Id" />
-            <div class="modal-header border-0">
-                <h5 class="modal-title fw-bold">Yeni Personel (Maaş &amp; SGK) Ekle</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <div class="modal-header bg-success text-white border-0">
+                <h5 class="modal-title fw-bold">Bina / Site Kadro Personeli Ekle (Tam SGK &amp; Kıdem Kurulumu)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label small fw-bold">Ad</label>
-                        <input type="text" name="firstName" class="form-control" required />
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label small fw-bold">Soyad</label>
-                        <input type="text" name="lastName" class="form-control" required />
-                    </div>
+            <div class="modal-body p-4 row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Adı Soyadı *</label>
+                    <input type="text" name="fullName" class="form-control" required placeholder="Örn: Ali Yılmaz" />
                 </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label small fw-bold">Görev / Unvan</label>
-                        <input type="text" name="title" class="form-control" placeholder="Örn: Apartman Görevlisi" required />
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label small fw-bold">SGK Sicil No (Opsiyonel)</label>
-                        <input type="text" name="sgkNumber" class="form-control" placeholder="Örn: 3400..." />
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label small fw-bold">Aylık Net Maaş (₺)</label>
-                    <input type="number" name="salary" class="form-control" placeholder="22104.67" step="0.01" required />
-                </div>
-                <div class="mb-3">
-                    <label class="form-label small fw-bold">Sistem İçi Yetki Rolü</label>
-                    <select name="role" class="form-select" required>
-                        <option value="3">Çalışan (Görevli / Bahçıvan / Güvenlik - Maaş &amp; SGK takibi)</option>
-                        <option value="2">Denetmen</option>
-                        <option value="1">Aza / Yönetim Kurulu</option>
-                        <option value="0">Yönetici</option>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Personel Tipi *</label>
+                    <select name="roleType" id="staffRoleTypeSelect" class="form-select fw-semibold" onchange="onStaffRolePresetChange()">
+                        <option value="Kapıcı (Vergi İstisnalı)">Kapıcı / Konut Görevlisi (Gelir/Damga Vergisi İstisnalı)</option>
+                        <option value="Güvenlik">Güvenlik Görevlisi</option>
+                        <option value="Temizlik">Temizlik Personeli</option>
+                        <option value="Bahçıvan">Bahçıvan</option>
+                        <option value="Teknik">Teknik / Tesisat Personeli</option>
                     </select>
                 </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">TC Kimlik No</label>
+                    <input type="text" name="tcIdentityNo" maxlength="11" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">SGK Sicil No</label>
+                    <input type="text" name="sgkNumber" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">İşe Giriş Tarihi *</label>
+                    <input type="date" name="hireDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Net Maaş (₺) *</label>
+                    <input type="number" step="0.01" name="netSalary" class="form-control" value="22104.67" required />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">SGK İşveren + İşsizlik (₺)</label>
+                    <input type="number" step="0.01" name="sgkEmployerShare" class="form-control" value="4850" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Gelir + Damga Vergisi (₺)</label>
+                    <input type="number" step="0.01" name="incomeAndStampTax" id="staffTaxInput" class="form-control" value="0" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Yol / Yemek / Yan Hak (₺)</label>
+                    <input type="number" step="0.01" name="fringeBenefits" class="form-control" value="0" />
+                </div>
+                <div class="col-12 border-top pt-3">
+                    <label class="form-label small fw-bold text-danger">Aylık Kıdem Tazminatı Fon Karşılığı (Malik Hesabına Ayrılır - ₺)</label>
+                    <input type="number" step="0.01" name="monthlySeveranceFund" class="form-control border-danger-subtle" value="2200" />
+                    <small class="text-muted">Personel ayrıldığında toplu tazminat sorunu yaşamamak için her ay ayrı Kat Maliki fonunda biriktirilir.</small>
+                </div>
             </div>
-            <div class="modal-footer border-0">
-                <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
-                <button type="submit" class="btn btn-success rounded-pill px-4">Kadroya Ekle</button>
+            <div class="modal-footer border-0 bg-light">
+                <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold w-100">Kadroya Kaydet</button>
             </div>
         </form>
     </div>
 </div>
 
-<!-- Maaş & SGK Ödeme Modalı -->
-<div class="modal fade" id="paySalaryModal" tabindex="-1" aria-hidden="true">
+<!-- 3. Aylık Puantaj & Bayram Çift Yevmiye Modal -->
+<div class="modal fade" id="payrollCalcModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <form class="modal-content rounded-4 border-0 shadow" asp-action="PayStaffSalaryAndSgk" asp-controller="BuildingManager" method="post">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="GenerateBuildingStaffPayroll" asp-controller="BuildingManager" method="post">
             @Html.AntiForgeryToken()
             <input type="hidden" name="buildingId" value="@Model.Id" />
-            <input type="hidden" name="managementMemberId" id="payStaffId" />
-            <div class="modal-header bg-success text-white border-0">
-                <h5 class="modal-title fw-bold">Maaş &amp; SGK Ödemesi İşle</h5>
+            <input type="hidden" name="buildingStaffId" id="pcStaffId" />
+            <div class="modal-header bg-primary text-white border-0">
+                <h5 class="modal-title fw-bold">Aylık Puantaj &amp; Bayram Çift Yevmiye</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4 row g-3">
+                <div class="col-12"><strong id="pcStaffName">Personel</strong> <small class="text-muted" id="pcDailyRateText"></small></div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Yıl</label>
+                    <input type="number" name="year" class="form-control" value="@DateTime.Today.Year" required />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Ay</label>
+                    <input type="number" min="1" max="12" name="month" class="form-control" value="@DateTime.Today.Month" required />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Bayramda Çalıştığı Gün (Örn: 3 veya 3.5)</label>
+                    <input type="number" step="0.5" min="0" name="holidayDaysWorked" id="pcHolidayDays" class="form-control" value="0" oninput="updateHolidayPreview()" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Ücretsiz İzin (Gün Kesintisi)</label>
+                    <input type="number" min="0" name="unpaidLeaveDays" class="form-control" value="0" />
+                </div>
                 <div class="col-12">
-                    <div class="fw-bold text-dark" id="payStaffName">Personel</div>
+                    <div id="pcHolidayPreview" class="small fw-semibold text-success"></div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-bold">Geçici İkame Personel Maliyeti (Boş bırakılırsa izin kaydından çekilir)</label>
+                    <input type="number" step="0.01" name="overrideReplacementCost" class="form-control" placeholder="Otomatik veya tutar..." />
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="submit" class="btn btn-primary rounded-pill w-100 fw-bold">Puantajı Oluştur / Güncelle</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 4. İzin Planla Modal (Çakışma Kontrollü) -->
+<div class="modal fade" id="planLeaveModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="PlanBuildingStaffLeave" asp-controller="BuildingManager" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="buildingId" value="@Model.Id" />
+            <input type="hidden" name="buildingStaffId" id="lvStaffId" />
+            <div class="modal-header bg-warning border-0">
+                <h5 class="modal-title fw-bold text-dark">Personel İzin Planlama (Çakışma Kontrollü)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 row g-3">
+                <div class="col-12"><strong id="lvStaffName">Personel</strong></div>
+                <div class="col-12">
+                    <label class="form-label small fw-bold">İzin Türü</label>
+                    <select name="leaveType" class="form-select">
+                        <option value="YillikIzin">Yıllık İzin</option>
+                        <option value="BayramIzni">Bayram İzni</option>
+                        <option value="Rapor">Sağlık Raporu</option>
+                        <option value="UcretsizIzin">Ücretsiz İzin</option>
+                    </select>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label small fw-bold">Bordro Dönemi</label>
-                    <input type="month" name="period" class="form-control" value="@DateTime.Today.ToString("yyyy-MM")" required />
+                    <label class="form-label small fw-bold">Başlangıç</label>
+                    <input type="date" name="startDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label small fw-bold">Ödeme Hesabı</label>
+                    <label class="form-label small fw-bold">Bitiş</label>
+                    <input type="date" name="endDate" class="form-control" value="@DateTime.Today.AddDays(6).ToString("yyyy-MM-dd")" required />
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-bold">Yerine Geçici Personel / İkame Maliyeti (₺ - Opsiyonel)</label>
+                    <input type="number" step="0.01" min="0" name="replacementCost" class="form-control" value="0" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-bold">Not</label>
+                    <input type="text" name="notes" class="form-control" />
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="submit" class="btn btn-warning fw-bold rounded-pill w-100">İzni Kaydet &amp; Çakışma Kontrol Et</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 5. Aylık Bordro Öde & İşletme / Kıdem Carilerine Yansıt Modal -->
+<div class="modal fade" id="payMonthlyPayrollModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="PayBuildingStaffPayroll" asp-controller="BuildingManager" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="buildingId" value="@Model.Id" />
+            <input type="hidden" name="payrollId" id="pmPayrollId" />
+            <div class="modal-header bg-success text-white border-0">
+                <h5 class="modal-title fw-bold">Maaş / SGK Öde &amp; Carilere Yansıt</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 row g-3">
+                <div class="col-12"><strong id="pmTitle">Bordro</strong></div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Ödeme Türü</label>
+                    <select name="paymentKind" class="form-select">
+                        <option value="Both">Maaş + SGK Tamamını Öde</option>
+                        <option value="Salary">Sadece Maaş Banka Ödemesi</option>
+                        <option value="Sgk">Sadece SGK Bildirge Ödemesi</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Banka Hesabı</label>
                     <select name="bankAccountId" class="form-select">
-                        <option value="">Nakit / Kasa</option>
+                        <option value="">Kasa / Nakit</option>
                         @foreach (var acc in bankAccounts)
                         {
                             <option value="@acc.Id">@acc.BankName - @acc.AccountName</option>
                         }
                     </select>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">Net Maaş (TL)</label>
-                    <input type="number" step="0.01" name="netSalary" id="payNetSalary" class="form-control" required />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">SGK + Stopaj Prim Tutarı (TL)</label>
-                    <input type="number" step="0.01" name="sgkAndTaxAmount" value="0" class="form-control" />
-                </div>
                 <div class="col-12">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" name="distributeToUnits" value="true" id="distSalarySwitch" checked>
-                        <label class="form-check-label small fw-semibold" for="distSalarySwitch">Toplam maliyeti İşletme Gideri olarak daire/dükkan aidat carilerine yansıt</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="distributeOperatingToUnits" value="true" id="pmDistOp" checked>
+                        <label class="form-check-label small fw-semibold" for="pmDistOp">İşletme maliyetini (<span id="pmOpAmt">0</span> ₺) Oturan / Kiracı aidat carisine dağıt</label>
+                    </div>
+                    <div class="form-check mt-1">
+                        <input class="form-check-input" type="checkbox" name="postSeveranceFundToOwners" value="true" id="pmDistSev" checked>
+                        <label class="form-check-label small fw-semibold text-danger" for="pmDistSev">Aylık Kıdem Fonunu (<span id="pmSevAmt">0</span> ₺) Mülk Sahibi Demirbaş fonuna yaz</label>
                     </div>
                 </div>
             </div>
             <div class="modal-footer border-0 bg-light">
-                <button type="submit" class="btn btn-success rounded-pill w-100 fw-bold">Ödemeyi &amp; SGK Bordrosunu İşle</button>
+                <button type="submit" class="btn btn-success rounded-pill w-100 fw-bold">Onayla ve Kaydet</button>
             </div>
         </form>
     </div>
 </div>
 
 <script>
-    function openPaySalaryModal(staffId, name, netSal) {
-        document.getElementById('payStaffId').value = staffId;
-        document.getElementById('payStaffName').innerText = name;
-        document.getElementById('payNetSalary').value = netSal || '0';
-        new bootstrap.Modal(document.getElementById('paySalaryModal')).show();
+    let currentDailyRate = 0;
+
+    function onStaffRolePresetChange() {
+        const val = document.getElementById('staffRoleTypeSelect').value;
+        const taxInput = document.getElementById('staffTaxInput');
+        if (val.indexOf('Kapıcı') >= 0) {
+            taxInput.value = '0';
+        }
+    }
+
+    function openPayrollModal(staffId, name, dailyRate) {
+        currentDailyRate = parseFloat(dailyRate || '0');
+        document.getElementById('pcStaffId').value = staffId;
+        document.getElementById('pcStaffName').innerText = name;
+        document.getElementById('pcDailyRateText').innerText = '(1 Günlük Yevmiye: ' + currentDailyRate.toFixed(2) + ' ₺)';
+        updateHolidayPreview();
+        new bootstrap.Modal(document.getElementById('payrollCalcModal')).show();
+    }
+
+    function updateHolidayPreview() {
+        const days = parseFloat(document.getElementById('pcHolidayDays').value || '0');
+        const extra = (days * currentDailyRate).toFixed(2);
+        document.getElementById('pcHolidayPreview').innerText = days > 0
+            ? `Bayram Mesaisi (+1 Yevmiye = 2x): +${extra} ₺ net maaşa ilave edilecek.`
+            : '';
+    }
+
+    function openLeaveModal(staffId, name) {
+        document.getElementById('lvStaffId').value = staffId;
+        document.getElementById('lvStaffName').innerText = name;
+        new bootstrap.Modal(document.getElementById('planLeaveModal')).show();
+    }
+
+    function openPayMonthlyPayrollModal(payrollId, name, period, opAmt, sevAmt) {
+        document.getElementById('pmPayrollId').value = payrollId;
+        document.getElementById('pmTitle').innerText = `${name} (${period}) Bordro Ödemesi`;
+        document.getElementById('pmOpAmt').innerText = Number(opAmt || 0).toFixed(2);
+        document.getElementById('pmSevAmt').innerText = Number(sevAmt || 0).toFixed(2);
+        new bootstrap.Modal(document.getElementById('payMonthlyPayrollModal')).show();
     }
 </script>

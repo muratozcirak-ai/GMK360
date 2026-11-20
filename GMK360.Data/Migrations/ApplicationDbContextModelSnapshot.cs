@@ -1805,6 +1805,68 @@ namespace GMK360.Data.Migrations
                     b.ToTable("BuildingExpenseShares");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.BuildingFixedExpense", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BuildingId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DistributionRule")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("DueDayOfMonth")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ExpenseScope")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsAutoRecurring")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("MonthlyAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ProviderName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("SubscriberNo")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuildingId");
+
+                    b.ToTable("BuildingFixedExpenses");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.BuildingIncome", b =>
                 {
                     b.Property<int>("Id")
@@ -1897,6 +1959,215 @@ namespace GMK360.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("BuildingManagers");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.BuildingStaff", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BuildingId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("FringeBenefits")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("HireDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("IncomeAndStampTax")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LeaveDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("MonthlySeveranceFund")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("NetSalary")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("RoleType")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<decimal>("SgkEmployerShare")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("SgkNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("TcIdentityNo")
+                        .HasMaxLength(11)
+                        .HasColumnType("nvarchar(11)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuildingId");
+
+                    b.ToTable("BuildingStaffs");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.BuildingStaffLeave", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BuildingStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LeaveType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("LeaveYear")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal>("ReplacementCost")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("TotalDays")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuildingStaffId");
+
+                    b.ToTable("BuildingStaffLeaves");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.BuildingStaffMonthlyPayroll", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("BaseFringeBenefits")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("BaseIncomeAndStampTax")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("BaseNetSalary")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("BaseSgkEmployerShare")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("BuildingStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("HolidayDaysWorked")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPaid")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSalaryPaid")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSgkPaid")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("MonthlySeveranceFund")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("OperatingExpenseId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PaidFromBankAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PaymentDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("ReplacementStaffCost")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("SalaryPaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("SeveranceExpenseId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("SgkPaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UnpaidLeaveDays")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuildingStaffId");
+
+                    b.ToTable("BuildingStaffMonthlyPayrolls");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.BuildingUnit", b =>
@@ -15908,6 +16179,17 @@ namespace GMK360.Data.Migrations
                     b.Navigation("Property");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.BuildingFixedExpense", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Building", "Building")
+                        .WithMany()
+                        .HasForeignKey("BuildingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Building");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.BuildingIncome", b =>
                 {
                     b.HasOne("GMK360.Core.Entities.Building", "Building")
@@ -15940,6 +16222,39 @@ namespace GMK360.Data.Migrations
                     b.Navigation("Building");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.BuildingStaff", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.Building", "Building")
+                        .WithMany()
+                        .HasForeignKey("BuildingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Building");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.BuildingStaffLeave", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.BuildingStaff", "Staff")
+                        .WithMany("Leaves")
+                        .HasForeignKey("BuildingStaffId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Staff");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.BuildingStaffMonthlyPayroll", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.BuildingStaff", "Staff")
+                        .WithMany("MonthlyPayrolls")
+                        .HasForeignKey("BuildingStaffId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Staff");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.BuildingUnit", b =>
@@ -19089,6 +19404,13 @@ namespace GMK360.Data.Migrations
                     b.Navigation("ManagementMembers");
 
                     b.Navigation("Units");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.BuildingStaff", b =>
+                {
+                    b.Navigation("Leaves");
+
+                    b.Navigation("MonthlyPayrolls");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.BuildingUnit", b =>

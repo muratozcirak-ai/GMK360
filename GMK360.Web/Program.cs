@@ -130,6 +130,7 @@ builder.Services.AddScoped<ILocationService, LocationService>();
 builder.Services.AddScoped<IEmailService, GMK360.Core.Services.EmailService>();
 builder.Services.AddScoped<IBuildingManagementService, GMK360.Web.Services.BuildingManagementService>();
 builder.Services.AddScoped<GMK360.Web.Services.FacilityGovernanceService>();
+builder.Services.AddScoped<GMK360.Web.Services.FacilityPayrollAndBudgetService>();
 
 // Register newly created B2B and Rental Services
 builder.Services.AddScoped<GMK360.Core.Interfaces.ITradesmanService, GMK360.Core.Services.TradesmanService>();

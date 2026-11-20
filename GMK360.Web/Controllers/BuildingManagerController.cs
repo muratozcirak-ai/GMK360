@@ -18,15 +18,18 @@ namespace GMK360.Web.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IBuildingManagementService _buildingManagementService;
         private readonly FacilityGovernanceService _governanceService;
+        private readonly FacilityPayrollAndBudgetService _payrollService;
 
         public BuildingManagerController(
             ApplicationDbContext context,
             IBuildingManagementService buildingManagementService,
-            FacilityGovernanceService governanceService)
+            FacilityGovernanceService governanceService,
+            FacilityPayrollAndBudgetService payrollService)
         {
             _context = context;
             _buildingManagementService = buildingManagementService;
             _governanceService = governanceService;
+            _payrollService = payrollService;
         }
 
         private string? GetUserId()
@@ -1824,11 +1827,82 @@ namespace GMK360.Web.Controllers
                     .ToListAsync()
                 : new System.Collections.Generic.List<ManagementMember>();
 
+            var buildingStaffs = allowedIds.Any()
+                ? await _context.BuildingStaffs
+                    .Include(s => s.Building)
+                    .Where(s => allowedIds.Contains(s.BuildingId) && s.IsActive && !s.IsDeleted)
+                    .OrderBy(s => s.FullName)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<BuildingStaff>();
+
+            var fixedExpenses = allowedIds.Any()
+                ? await _context.BuildingFixedExpenses
+                    .Include(f => f.Building)
+                    .Where(f => allowedIds.Contains(f.BuildingId) && f.IsActive && !f.IsDeleted)
+                    .OrderBy(f => f.DueDayOfMonth)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<BuildingFixedExpense>();
+
+            int budgetBuildingId = buildingId ?? allowedIds.FirstOrDefault();
+            ViewBag.BudgetSummary = budgetBuildingId > 0
+                ? await _payrollService.CalculateMonthlyBudgetSummaryAsync(budgetBuildingId)
+                : new BuildingMonthlyBudgetSummary();
+
             ViewBag.Buildings = buildings;
             ViewBag.SelectedBuildingId = buildingId;
             ViewBag.RecurringSchedules = recurringSchedules;
             ViewBag.StaffMembers = staffMembers;
+            ViewBag.BuildingStaffs = buildingStaffs;
+            ViewBag.FixedExpenses = fixedExpenses;
             return View(expenses);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddBuildingFixedExpense(
+            int buildingId,
+            string title,
+            string expenseScope,
+            string distributionRule,
+            int dueDayOfMonth,
+            decimal monthlyAmount,
+            string? providerName,
+            string? subscriberNo,
+            bool isAutoRecurring)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            _context.BuildingFixedExpenses.Add(new BuildingFixedExpense
+            {
+                BuildingId = buildingId,
+                Title = title?.Trim() ?? "Sabit Gider",
+                ExpenseScope = string.Equals(expenseScope, "Demirbas", StringComparison.OrdinalIgnoreCase) ? "Demirbas" : "Isletme",
+                DistributionRule = string.IsNullOrWhiteSpace(distributionRule) ? "Esit" : distributionRule.Trim(),
+                DueDayOfMonth = Math.Clamp(dueDayOfMonth, 1, 31),
+                MonthlyAmount = Math.Max(0m, monthlyAmount),
+                ProviderName = providerName?.Trim(),
+                SubscriberNo = subscriberNo?.Trim(),
+                IsAutoRecurring = isAutoRecurring,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"'{title}' aylık sabit bina giderleri bütçesine eklendi.";
+            return RedirectToAction(nameof(Giderler), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DistributeBuildingFixedExpense(int fixedExpenseId, int buildingId)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var res = await _payrollService.DistributeFixedExpenseAsync(fixedExpenseId, DateTime.Today.Year, DateTime.Today.Month, GetUserId() ?? "system");
+            TempData[res.Success ? "SuccessMessage" : "ErrorMessage"] = res.Message;
+            return RedirectToAction(nameof(Giderler), new { buildingId });
         }
 
         [HttpPost]
@@ -1970,6 +2044,25 @@ namespace GMK360.Web.Controllers
                     .ToListAsync()
                 : new System.Collections.Generic.List<StaffPayroll>();
 
+            var buildingStaffs = await _context.BuildingStaffs
+                .Include(s => s.Leaves)
+                .Where(s => s.BuildingId == building.Id && s.IsActive && !s.IsDeleted)
+                .OrderBy(s => s.FullName)
+                .ToListAsync();
+            var bStaffIds = buildingStaffs.Select(s => s.Id).ToList();
+
+            ViewBag.BuildingStaffs = buildingStaffs;
+            ViewBag.MonthlyPayrolls = bStaffIds.Any()
+                ? await _context.BuildingStaffMonthlyPayrolls
+                    .Include(p => p.Staff)
+                    .Where(p => bStaffIds.Contains(p.BuildingStaffId) && !p.IsDeleted)
+                    .OrderByDescending(p => p.Year)
+                    .ThenByDescending(p => p.Month)
+                    .ThenByDescending(p => p.Id)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<BuildingStaffMonthlyPayroll>();
+            ViewBag.BudgetSummary = await _payrollService.CalculateMonthlyBudgetSummaryAsync(building.Id);
+            ViewBag.Holidays = GMK360.Web.Helpers.TurkishHolidayHelper.GetHolidaysForYear(DateTime.Today.Year);
             ViewBag.Buildings = buildings;
 
             return View(building);
@@ -2075,6 +2168,131 @@ namespace GMK360.Web.Controllers
             }
 
             TempData["Success"] = $"{staff.FirstName} {staff.LastName} ({period}) maaş & SGK ödemesi muhasebeye işlendi.";
+            return RedirectToAction(nameof(Accounting), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddBuildingStaff(
+            int buildingId,
+            string fullName,
+            string? tcIdentityNo,
+            string? sgkNumber,
+            string roleType,
+            decimal netSalary,
+            decimal sgkEmployerShare,
+            decimal incomeAndStampTax,
+            decimal fringeBenefits,
+            decimal monthlySeveranceFund,
+            DateTime hireDate)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var staff = new BuildingStaff
+            {
+                BuildingId = buildingId,
+                FullName = fullName?.Trim() ?? "Personel",
+                TcIdentityNo = tcIdentityNo?.Trim(),
+                SgkNumber = sgkNumber?.Trim(),
+                RoleType = string.IsNullOrWhiteSpace(roleType) ? "Kapıcı (Vergi İstisnalı)" : roleType.Trim(),
+                NetSalary = Math.Max(0m, netSalary),
+                SgkEmployerShare = Math.Max(0m, sgkEmployerShare),
+                IncomeAndStampTax = Math.Max(0m, incomeAndStampTax),
+                FringeBenefits = Math.Max(0m, fringeBenefits),
+                MonthlySeveranceFund = Math.Max(0m, monthlySeveranceFund),
+                HireDate = hireDate == default ? DateTime.Today : hireDate,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.BuildingStaffs.Add(staff);
+            await _context.SaveChangesAsync();
+
+            TempData["Success"] = $"'{staff.FullName}' kadroya eklendi. Aylık işletme maliyeti: {staff.TotalMonthlyOperatingCost:N2} ₺, Kıdem fonu: {staff.MonthlySeveranceFund:N2} ₺.";
+            return RedirectToAction(nameof(Accounting), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PlanBuildingStaffLeave(
+            int buildingId,
+            int buildingStaffId,
+            string leaveType,
+            DateTime startDate,
+            DateTime endDate,
+            decimal replacementCost,
+            string? notes)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var res = await _payrollService.PlanStaffLeaveAsync(buildingStaffId, leaveType, startDate, endDate, replacementCost, notes);
+            if (res.OverlapWarning != null)
+            {
+                TempData["WarningMessage"] = res.Message;
+            }
+            else
+            {
+                TempData[res.Success ? "Success" : "ErrorMessage"] = res.Message;
+            }
+            return RedirectToAction(nameof(Accounting), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> GenerateBuildingStaffPayroll(
+            int buildingId,
+            int buildingStaffId,
+            int year,
+            int month,
+            decimal holidayDaysWorked,
+            int unpaidLeaveDays,
+            decimal? overrideReplacementCost)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var payroll = await _payrollService.GenerateOrUpdateMonthlyPayrollAsync(
+                buildingStaffId,
+                year < 2020 ? DateTime.Today.Year : year,
+                Math.Clamp(month, 1, 12),
+                holidayDaysWorked,
+                unpaidLeaveDays,
+                overrideReplacementCost);
+
+            if (payroll == null)
+            {
+                TempData["ErrorMessage"] = "Puantaj oluşturulacak personel bulunamadı.";
+            }
+            else
+            {
+                TempData["Success"] = $"{payroll.Year}-{payroll.Month:00} puantajı hesaplandı (Ödenecek Net: {payroll.NetPayableToStaff:N2} ₺, Toplam Site Yükü: {payroll.TotalSiteCostForMonth:N2} ₺).";
+            }
+            return RedirectToAction(nameof(Accounting), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PayBuildingStaffPayroll(
+            int buildingId,
+            int payrollId,
+            string paymentKind,
+            int? bankAccountId,
+            bool distributeOperatingToUnits,
+            bool postSeveranceFundToOwners)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var res = await _payrollService.MarkPayrollPaidAndPostLedgersAsync(
+                payrollId,
+                paymentKind,
+                bankAccountId,
+                distributeOperatingToUnits,
+                postSeveranceFundToOwners,
+                GetUserId() ?? "system");
+
+            TempData[res.Success ? "Success" : "ErrorMessage"] = res.Message;
             return RedirectToAction(nameof(Accounting), new { buildingId });
         }
 
