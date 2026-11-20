@@ -737,6 +737,8 @@ namespace GMK360.Web.Controllers
             if (rootBuilding == null || !CanAccessBuilding(rootBuilding, userId))
                 return Forbid();
 
+            try
+            {
             bool isSite = string.Equals(model.ManagementMode, "Site", StringComparison.OrdinalIgnoreCase) || rootBuilding.HousingComplexId.HasValue;
             var structures = isSite ? model.Structures : model.Structures.Take(1).ToList();
 
@@ -825,6 +827,11 @@ namespace GMK360.Web.Controllers
             await _context.SaveChangesAsync();
 
             return Json(new { success = true, redirectUrl = Url.Action(nameof(Detail), new { id = rootBuilding.Id }) });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = $"Yapı oluşturulurken hata: {ex.GetBaseException().Message}" });
+            }
         }
 
         private static string NormalizeAddressToken(string? input)

@@ -1121,7 +1121,9 @@
                 return;
             }
             var btn = document.getElementById('btnFinishWizard');
+            var origHtml = btn.innerHTML;
             btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Yapı Oluşturuluyor...';
 
             try {
                 var payload = {
@@ -1139,14 +1141,24 @@
                     },
                     body: JSON.stringify(payload)
                 });
-                var data = await res.json();
-                if (!data.success) {
-                    showAlert('step3ErrorAlert', data.message || 'Yapı oluşturulamadı.');
+
+                var rawText = await res.text();
+                var data = null;
+                try { data = rawText ? JSON.parse(rawText) : null; } catch (_) { }
+
+                if (!res.ok || !data || !data.success) {
+                    var errMsg = (data && data.message)
+                        ? data.message
+                        : ('Sunucu hatası (HTTP ' + res.status + '). Lütfen tekrar deneyin.');
+                    showAlert('step3ErrorAlert', errMsg);
                     return;
                 }
                 window.location.href = data.redirectUrl || ('/BuildingManager/Detail/' + payload.BuildingId);
+            } catch (err) {
+                showAlert('step3ErrorAlert', 'İstek gönderilirken bağlantı hatası oluştu: ' + (err?.message || err));
             } finally {
                 btn.disabled = false;
+                btn.innerHTML = origHtml;
             }
         }
     </script>
