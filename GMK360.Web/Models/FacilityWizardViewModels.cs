@@ -68,12 +68,15 @@ namespace GMK360.Web.Models
         public string BlockName { get; set; } = "Ana Bina";
         public double? BaseArea { get; set; }
         public int TotalFloors { get; set; } = 5;
+        public int GroundApartments { get; set; } = 0;
         public int TotalApartments { get; set; } = 10;
         public int TotalShops { get; set; } = 0;
         public int BasementFloors { get; set; } = 1;
         public bool HasGroundFloor { get; set; } = true;
         public bool HasRoof { get; set; } = true;
         public string RoofType { get; set; } = "Düz Teras Çatı (Tabliye)";
+        public List<string> IndoorCommonAreas { get; set; } = new List<string>();
+        public List<string> OutdoorCommonAreas { get; set; } = new List<string>();
         public List<FacilityStep2ChildBlockDto> Children { get; set; } = new List<FacilityStep2ChildBlockDto>();
     }
 
@@ -81,6 +84,7 @@ namespace GMK360.Web.Models
     {
         public string BlockName { get; set; } = "A Blok";
         public int TotalFloors { get; set; } = 8;
+        public int GroundApartments { get; set; } = 0;
         public int TotalApartments { get; set; } = 16;
         public int TotalShops { get; set; } = 0;
         public int BasementFloors { get; set; } = 0;

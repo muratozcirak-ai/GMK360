@@ -309,17 +309,21 @@
                 </div>
             </div>
 
-            <!-- 1. A) ORTAK ALANLAR, ÇATI, ASANSÖR & YERALTI TESİSLERİ (GERÇEK VERİ) -->
+            @{
+                var indoorCommon = commonSpaces.Where(s => s.Type != "CevreDuzenleme").ToList();
+                var outdoorCommon = commonSpaces.Where(s => s.Type == "CevreDuzenleme").ToList();
+            }
+            <!-- 1. A) BİNA İÇİ TEKNİK ALANLAR & ÇEVRE DÜZENLEME YÖNETİMİ (GERÇEK VERİ) -->
             <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white overflow-hidden border-top border-4 border-warning">
                 <div class="card-header bg-warning bg-opacity-10 border-0 p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
                     <div class="d-flex align-items-center">
                         <span class="badge bg-warning text-dark px-3 py-2 rounded-pill fw-bold me-2">
-                            <i class="bi bi-building-gear me-1"></i> ORTAK ALAN &amp; TESİSLER
+                            <i class="bi bi-building-gear me-1"></i> BİNA İÇİ &amp; ÇEVRE DÜZENLEME
                         </span>
-                        <h5 class="fw-bold text-dark mb-0">Çatı, Asansör, Bodrum, Sığınak &amp; Sosyal Alanlar</h5>
+                        <h5 class="fw-bold text-dark mb-0">Bina İçi Teknik Alanlar ve Bahçe / Kamelya / Çevre Alanları</h5>
                     </div>
                     <a href="/BuildingManager/Onboarding/@rootBuildingId" class="btn btn-sm btn-outline-dark rounded-pill px-3 fw-semibold">
-                        <i class="bi bi-pencil-square me-1"></i> Ortak Alanları Düzenle
+                        <i class="bi bi-pencil-square me-1"></i> Yapı &amp; Çevre Alanlarını Düzenle
                     </a>
                 </div>
                 <div class="card-body p-4">
@@ -327,48 +331,78 @@
                     {
                         <div class="text-center py-3 text-muted small">
                             <i class="bi bi-tools fs-3 d-block mb-2 text-warning"></i>
-                            Bu bina için henüz tanımlı ortak alan mekanı yok. Kurulum sihirbazından Asansör, Çatı, Jeneratör, Otopark veya Sığınak ekleyebilirsiniz.
+                            Bu bina için henüz tanımlı ortak alan mekanı yok. Kurulum sihirbazından Asansör, Garaj, Kamelya, Park veya Bahçe seçebilirsiniz.
                         </div>
                     }
                     else
                     {
-                        <div class="row g-3">
-                            @foreach (var space in commonSpaces)
+                        <h6 class="fw-bold text-primary mb-2"><i class="bi bi-building-gear me-1"></i>Bina / Blok İçi Teknik &amp; Ortak Alanlar</h6>
+                        <div class="row g-3 mb-4">
+                            @foreach (var space in indoorCommon)
                             {
                                 var fixtures = space.Fixtures?.ToList() ?? new List<GMK360.Core.Entities.SpaceFixture>();
                                 <div class="col-md-4">
                                     <div class="p-3 border rounded-3 bg-light h-100">
                                         <div class="d-flex justify-content-between align-items-center mb-2">
                                             <h6 class="fw-bold text-dark mb-0"><i class="bi bi-gear-wide-connected text-primary me-1"></i> @space.Name</h6>
-                                            <span class="badge bg-success-subtle text-success border border-success-subtle">@(space.Type ?? "Ortak Alan")</span>
+                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Bina İçi</span>
                                         </div>
-                                        @if (!string.IsNullOrWhiteSpace(space.Description))
-                                        {
-                                            <p class="small text-muted mb-2">@space.Description</p>
-                                        }
                                         @if (fixtures.Any())
                                         {
                                             <div class="small border-top pt-2 mt-2">
                                                 @foreach (var fx in fixtures.Take(3))
                                                 {
-                                                    <div class="mb-1">
-                                                        <span class="fw-semibold text-dark">@fx.ItemName</span>
-                                                        @if (!string.IsNullOrWhiteSpace(fx.TechnicalServiceName))
-                                                        {
-                                                            <span class="text-muted"> • @fx.TechnicalServiceName</span>
-                                                        }
-                                                    </div>
+                                                    <div class="mb-1"><span class="fw-semibold text-dark">@fx.ItemName</span> @(!string.IsNullOrWhiteSpace(fx.TechnicalServiceName) ? $"• {fx.TechnicalServiceName}" : "")</div>
                                                 }
                                             </div>
                                         }
                                         else
                                         {
-                                            <div class="small text-muted fst-italic">Ortak Alan / Demirbaş Kapsamında</div>
+                                            <div class="small text-muted fst-italic">Teknik / Demirbaş Kapsamında</div>
                                         }
                                     </div>
                                 </div>
                             }
                         </div>
+
+                        <div class="d-flex justify-content-between align-items-center mb-2 pt-2 border-top">
+                            <h6 class="fw-bold text-success mb-0"><i class="bi bi-tree-fill me-1"></i>Bahçe, Kamelya &amp; Çevre Düzenleme Alanları</h6>
+                            <a href="/BuildingManager/BakimTakvimi?buildingId=@Model.Id" class="small fw-semibold text-success text-decoration-none">Budama &amp; Bakım Takvimi &rarr;</a>
+                        </div>
+                        if (!outdoorCommon.Any())
+                        {
+                            <p class="small text-muted fst-italic mb-0">Çevre düzenleme alanı (Kamelya, Bahçe, Çocuk Parkı vb.) henüz seçilmedi; sağ üstteki düzenle butonundan ekleyebilirsiniz.</p>
+                        }
+                        else
+                        {
+                            <div class="row g-3">
+                                @foreach (var space in outdoorCommon)
+                                {
+                                    var fixtures = space.Fixtures?.ToList() ?? new List<GMK360.Core.Entities.SpaceFixture>();
+                                    <div class="col-md-4">
+                                        <div class="p-3 border border-success-subtle rounded-3 bg-success bg-opacity-10 h-100">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <h6 class="fw-bold text-dark mb-0"><i class="bi bi-tree text-success me-1"></i> @space.Name</h6>
+                                                <span class="badge bg-success text-white">Çevre / Sosyal</span>
+                                            </div>
+                                            @if (fixtures.Any())
+                                            {
+                                                <div class="small border-top pt-2 mt-2">
+                                                    @foreach (var fx in fixtures.Take(3))
+                                                    {
+                                                        <div class="mb-1"><span class="fw-semibold text-dark">@fx.ItemName</span></div>
+                                                    }
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="small text-muted fst-italic">Mevsimlik Bakım &amp; Peyzaj Kapsamında</div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
                     }
                 </div>
             </div>
@@ -394,7 +428,7 @@
                             <!-- Sol: Kat Etiketi -->
                             <div class="col-md-2 col-sm-3 mb-2 mb-sm-0">
                                 <div class="bg-white border rounded-4 p-2 text-center shadow-sm">
-                                    <span class="fw-bold text-dark fs-5 d-block">@(floor). KAT</span>
+                                    <span class="fw-bold text-dark fs-5 d-block">@(floor == 0 ? "ZEMİN KAT" : $"{floor}. KAT")</span>
                                     <small class="text-muted" style="font-size:0.75rem;">@floorUnits.Count Daire</small>
                                 </div>
                             </div>

@@ -835,13 +835,16 @@
                 LayoutPattern: 'Tekil Yapı',
                 BlockName: mode === 'Apartman' ? rootName : (String.fromCharCode(65 + index) + ' Blok'),
                 BaseArea: 300,
-                TotalFloors: 5,
-                TotalApartments: 10,
-                TotalShops: 0,
+                TotalFloors: 8,
+                GroundApartments: 1,
+                TotalApartments: 17,
+                TotalShops: 2,
                 BasementFloors: 1,
                 HasGroundFloor: true,
                 HasRoof: true,
                 RoofType: 'Düz Teras Çatı (Tabliye)',
+                IndoorCommonAreas: ['Merdiven & Sahanlık', 'Asansör & Makine Dairesi', 'Çatı / Teras', 'Hidrofor & Su Deposu', 'Sığınak'],
+                OutdoorCommonAreas: ['Kamelya / Çardak', 'Bahçe & Ağaç Peyzajı'],
                 Children: []
             };
         }
@@ -850,6 +853,7 @@
             return {
                 BlockName: String.fromCharCode(65 + idx) + ' Blok',
                 TotalFloors: 8,
+                GroundApartments: 0,
                 TotalApartments: 16,
                 TotalShops: 0,
                 BasementFloors: 0,
@@ -936,16 +940,42 @@
                     html += '<div class="p-3 rounded-3 bg-light border mb-3">' +
                         '<div class="small fw-bold text-primary mb-2">' + (isPodium ? '1. BÖLÜM: ORTAK BAZA & PODYUM KATLARI (Otopark, Ticari)' : 'BLOK KAT & DAİRE DETAYLARI') + '</div>' +
                         '<div class="row g-2">' +
-                        '  <div class="col-md-2"><label class="form-label small fw-bold">Normal Kat</label><input type="number" class="form-control s-floors" min="0" value="' + st.TotalFloors + '" /></div>' +
-                        '  <div class="col-md-2"><label class="form-label small fw-bold">Daire (Adet)</label><input type="number" class="form-control s-apts" min="0" value="' + st.TotalApartments + '" /></div>' +
-                        '  <div class="col-md-2"><label class="form-label small fw-bold">Dükkan</label><input type="number" class="form-control s-shops" min="0" value="' + st.TotalShops + '" /></div>' +
+                        '  <div class="col-md-2"><label class="form-label small fw-bold">Normal Kat (Üst)</label><input type="number" class="form-control s-floors" min="0" value="' + st.TotalFloors + '" /></div>' +
+                        '  <div class="col-md-2"><label class="form-label small fw-bold">Toplam Daire</label><input type="number" class="form-control s-apts" min="0" value="' + st.TotalApartments + '" /></div>' +
+                        '  <div class="col-md-2"><label class="form-label small fw-bold">Zeminde Daire</label><input type="number" class="form-control s-ground-apts" min="0" value="' + (st.GroundApartments || 0) + '" title="Örn: Zemin katta 1 daire + 2 dükkan varsa buraya 1 yazın" /></div>' +
+                        '  <div class="col-md-2"><label class="form-label small fw-bold">Zeminde Dükkan</label><input type="number" class="form-control s-shops" min="0" value="' + st.TotalShops + '" /></div>' +
                         '  <div class="col-md-2"><label class="form-label small fw-bold">Bodrum Kat</label><input type="number" class="form-control s-base" min="0" value="' + st.BasementFloors + '" /></div>' +
-                        '  <div class="col-md-2 d-flex align-items-end pb-1"><div class="form-check form-switch"><input class="form-check-input s-ground" type="checkbox"' + (st.HasGroundFloor ? ' checked' : '') + ' /><label class="form-check-label small fw-bold">Zemin Kat</label></div></div>' +
                         '  <div class="col-md-2"><label class="form-label small fw-bold">Çatı / Teras</label>' + buildRoofSelect('s-roof', st.RoofType) + '</div>' +
+                        '  <div class="col-12 mt-1"><div class="form-check form-switch"><input class="form-check-input s-ground" type="checkbox"' + (st.HasGroundFloor ? ' checked' : '') + ' /><label class="form-check-label small fw-semibold">Zemin Kat Mevcut (Zemin Daire ve Dükkanlar Zemin Katta konumlanır)</label></div></div>' +
                         '</div></div>';
                 } else {
-                    html += '<input type="hidden" class="s-floors" value="0" /><input type="hidden" class="s-apts" value="0" /><input type="hidden" class="s-shops" value="0" /><input type="hidden" class="s-base" value="0" />';
+                    html += '<input type="hidden" class="s-floors" value="0" /><input type="hidden" class="s-apts" value="0" /><input type="hidden" class="s-ground-apts" value="0" /><input type="hidden" class="s-shops" value="0" /><input type="hidden" class="s-base" value="0" />';
                 }
+
+                // Yapı İçi Ortak Alanlar + Bahçe / Çevre Düzenleme Seçici (Tekil binalarda da kamelya/park olur)
+                var indoorOpts = ['Merdiven & Sahanlık', 'Asansör & Makine Dairesi', 'Çatı / Teras', 'Garaj / Kapalı Otopark', 'Hidrofor & Su Deposu', 'Sığınak', 'Jeneratör Odası', 'Kazan / Merkezi Sistem'];
+                var outdoorOpts = ['Kamelya / Çardak', 'Bahçe & Ağaç Peyzajı', 'Çocuk Oyun Parkı', 'Açık Misafir Otoparkı', 'Giriş Güvenlik & Kamera Sistemi', 'Bisiklet & Bebek Arabası Alanı', 'Havuz / Sosyal Tesis'];
+                var selIndoor = st.IndoorCommonAreas && st.IndoorCommonAreas.length ? st.IndoorCommonAreas : ['Merdiven & Sahanlık', 'Asansör & Makine Dairesi', 'Çatı / Teras', 'Hidrofor & Su Deposu', 'Sığınak'];
+                var selOutdoor = st.OutdoorCommonAreas && st.OutdoorCommonAreas.length ? st.OutdoorCommonAreas : ['Kamelya / Çardak', 'Bahçe & Ağaç Peyzajı'];
+
+                html += '<div class="row g-3 mb-3">' +
+                    '  <div class="col-md-6"><div class="p-3 rounded-3 border bg-light h-100">' +
+                    '    <div class="small fw-bold text-dark mb-2"><i class="bi bi-building-gear text-primary me-1"></i>Bina / Blok İçi Teknik &amp; Ortak Alanlar</div>' +
+                    '    <div class="d-flex flex-wrap gap-2">' +
+                    indoorOpts.map(function (item) {
+                        var chk = selIndoor.indexOf(item) >= 0 ? ' checked' : '';
+                        return '<label class="badge bg-white text-dark border px-2 py-2 fw-normal d-inline-flex align-items-center gap-1" style="cursor:pointer;"><input type="checkbox" class="form-check-input m-0 s-indoor-opt" value="' + escapeAttr(item) + '"' + chk + ' /> ' + item + '</label>';
+                    }).join('') +
+                    '    </div></div></div>' +
+                    '  <div class="col-md-6"><div class="p-3 rounded-3 border bg-success bg-opacity-10 border-success-subtle h-100">' +
+                    '    <div class="small fw-bold text-success mb-2"><i class="bi bi-tree-fill me-1"></i>Çevre Düzenleme, Bahçe &amp; Kamelya (Tekil Bina &amp; Site)</div>' +
+                    '    <div class="d-flex flex-wrap gap-2">' +
+                    outdoorOpts.map(function (item) {
+                        var chk = selOutdoor.indexOf(item) >= 0 ? ' checked' : '';
+                        return '<label class="badge bg-white text-dark border px-2 py-2 fw-normal d-inline-flex align-items-center gap-1" style="cursor:pointer;"><input type="checkbox" class="form-check-input m-0 s-outdoor-opt" value="' + escapeAttr(item) + '"' + chk + ' /> ' + item + '</label>';
+                    }).join('') +
+                    '    </div></div></div>' +
+                    '</div>';
 
                 if (isMulti) {
                     html += '<div class="p-3 rounded-3 border border-success-subtle bg-success bg-opacity-10">' +
@@ -1011,6 +1041,7 @@
                 st.BlockName = card.querySelector('.s-name')?.value?.trim() || 'Ana Bina';
                 st.BaseArea = parseFloat(card.querySelector('.s-area')?.value || '') || null;
                 st.TotalFloors = parseInt(card.querySelector('.s-floors')?.value || '0', 10) || 0;
+                st.GroundApartments = parseInt(card.querySelector('.s-ground-apts')?.value || '0', 10) || 0;
                 st.TotalApartments = parseInt(card.querySelector('.s-apts')?.value || '0', 10) || 0;
                 st.TotalShops = parseInt(card.querySelector('.s-shops')?.value || '0', 10) || 0;
                 st.BasementFloors = parseInt(card.querySelector('.s-base')?.value || '0', 10) || 0;
@@ -1018,6 +1049,8 @@
                 if (groundEl) st.HasGroundFloor = groundEl.checked;
                 var roofEl = card.querySelector('.s-roof');
                 if (roofEl) st.RoofType = roofEl.value;
+                st.IndoorCommonAreas = Array.from(card.querySelectorAll('.s-indoor-opt:checked')).map(el => el.value);
+                st.OutdoorCommonAreas = Array.from(card.querySelectorAll('.s-outdoor-opt:checked')).map(el => el.value);
 
                 if (st.LayoutPattern !== 'Tekil Yapı') {
                     var children = [];

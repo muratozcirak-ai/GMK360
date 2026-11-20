@@ -453,34 +453,57 @@ namespace GMK360.Web.Controllers
 
                 // Mevcut yapıları (Site ise aynı complex altındaki tüm kök binalar, değilse sadece bu bina) yükle
                 var rootStructures = building.HousingComplexId.HasValue
-                    ? await _context.Buildings.Include(b => b.ChildBuildings).Where(b => b.HousingComplexId == building.HousingComplexId && b.ParentBuildingId == null).OrderBy(b => b.Id).ToListAsync()
-                    : new System.Collections.Generic.List<Building> { building };
+                    ? await _context.Buildings
+                        .Include(b => b.ChildBuildings).ThenInclude(c => c.Units)
+                        .Include(b => b.Units).ThenInclude(u => u.Spaces)
+                        .Where(b => b.HousingComplexId == building.HousingComplexId && b.ParentBuildingId == null)
+                        .OrderBy(b => b.Id)
+                        .ToListAsync()
+                    : await _context.Buildings
+                        .Include(b => b.ChildBuildings).ThenInclude(c => c.Units)
+                        .Include(b => b.Units).ThenInclude(u => u.Spaces)
+                        .Where(b => b.Id == building.Id)
+                        .ToListAsync();
 
-                vm.InitialStructures = rootStructures.Select(rb => new GMK360.Web.Models.FacilityStep2StructureDto
+                vm.InitialStructures = rootStructures.Select(rb =>
                 {
-                    LayoutPattern = rb.LayoutPattern ?? "Tekil Yapı",
-                    BlockName = string.IsNullOrWhiteSpace(rb.BlockName) ? "Ana Bina" : rb.BlockName,
-                    BaseArea = rb.BaseArea,
-                    TotalFloors = rb.TotalFloors ?? 5,
-                    TotalApartments = rb.TotalApartments,
-                    TotalShops = rb.TotalShops,
-                    BasementFloors = rb.BasementFloors,
-                    HasGroundFloor = rb.HasGroundFloor,
-                    HasRoof = rb.HasRoof,
-                    RoofType = rb.RoofType ?? "Düz Teras Çatı (Tabliye)",
-                    Children = (rb.ChildBuildings ?? new System.Collections.Generic.List<Building>())
-                        .OrderBy(c => c.Id)
-                        .Select(c => new GMK360.Web.Models.FacilityStep2ChildBlockDto
-                        {
-                            BlockName = c.BlockName,
-                            TotalFloors = c.TotalFloors ?? 8,
-                            TotalApartments = c.TotalApartments,
-                            TotalShops = c.TotalShops,
-                            BasementFloors = c.BasementFloors,
-                            HasGroundFloor = c.HasGroundFloor,
-                            HasRoof = c.HasRoof,
-                            RoofType = c.RoofType ?? "Düz Teras Çatı (Tabliye)"
-                        }).ToList()
+                    var commonSpacesList = (rb.Units ?? new System.Collections.Generic.List<BuildingUnit>())
+                        .Where(u => (u.Category ?? "").StartsWith("OrtakAlan"))
+                        .SelectMany(u => u.Spaces ?? new System.Collections.Generic.List<UnitSpace>())
+                        .ToList();
+
+                    return new GMK360.Web.Models.FacilityStep2StructureDto
+                    {
+                        LayoutPattern = rb.LayoutPattern ?? "Tekil Yapı",
+                        BlockName = string.IsNullOrWhiteSpace(rb.BlockName) ? "Ana Bina" : rb.BlockName,
+                        BaseArea = rb.BaseArea,
+                        TotalFloors = rb.TotalFloors ?? 5,
+                        GroundApartments = (rb.Units ?? new System.Collections.Generic.List<BuildingUnit>())
+                            .Count(u => u.FloorLevel == 0 && u.Category != "Dukkan" && u.Category != "Dükkan" && !(u.Category ?? "").StartsWith("OrtakAlan")),
+                        TotalApartments = rb.TotalApartments,
+                        TotalShops = rb.TotalShops,
+                        BasementFloors = rb.BasementFloors,
+                        HasGroundFloor = rb.HasGroundFloor,
+                        HasRoof = rb.HasRoof,
+                        RoofType = rb.RoofType ?? "Düz Teras Çatı (Tabliye)",
+                        IndoorCommonAreas = commonSpacesList.Where(s => s.Type != "CevreDuzenleme").Select(s => s.Name).ToList(),
+                        OutdoorCommonAreas = commonSpacesList.Where(s => s.Type == "CevreDuzenleme").Select(s => s.Name).ToList(),
+                        Children = (rb.ChildBuildings ?? new System.Collections.Generic.List<Building>())
+                            .OrderBy(c => c.Id)
+                            .Select(c => new GMK360.Web.Models.FacilityStep2ChildBlockDto
+                            {
+                                BlockName = c.BlockName,
+                                TotalFloors = c.TotalFloors ?? 8,
+                                GroundApartments = (c.Units ?? new System.Collections.Generic.List<BuildingUnit>())
+                                    .Count(u => u.FloorLevel == 0 && u.Category != "Dukkan" && u.Category != "Dükkan" && !(u.Category ?? "").StartsWith("OrtakAlan")),
+                                TotalApartments = c.TotalApartments,
+                                TotalShops = c.TotalShops,
+                                BasementFloors = c.BasementFloors,
+                                HasGroundFloor = c.HasGroundFloor,
+                                HasRoof = c.HasRoof,
+                                RoofType = c.RoofType ?? "Düz Teras Çatı (Tabliye)"
+                            }).ToList()
+                    };
                 }).ToList();
             }
 
@@ -963,9 +986,9 @@ namespace GMK360.Web.Controllers
             target.OnboardingStep = 3;
             await _context.SaveChangesAsync();
 
-            // Ortak baza / podyum veya tekil yapı birimlerini ve ortak alanları üret
-            await GenerateFloorUnitsIfEmptyAsync(target, dto.TotalApartments, dto.TotalShops, dto.TotalFloors, dto.HasGroundFloor);
-            await EnsureBaselineCommonSpacesAsync(target);
+            // Ortak baza / podyum veya tekil yapı birimlerini ve bina içi / çevre düzenleme ortak alanlarını üret
+            await GenerateFloorUnitsIfEmptyAsync(target, dto.TotalApartments, dto.TotalShops, dto.TotalFloors, dto.HasGroundFloor, dto.GroundApartments, allowResyncIfClean: true);
+            await EnsureBaselineCommonSpacesAsync(target, dto.IndoorCommonAreas, dto.OutdoorCommonAreas);
 
             if (!hasMultiChildren) return;
 
@@ -999,36 +1022,84 @@ namespace GMK360.Web.Controllers
                 if (child.Id == 0) _context.Buildings.Add(child);
                 await _context.SaveChangesAsync();
 
-                await GenerateFloorUnitsIfEmptyAsync(child, cDto.TotalApartments, cDto.TotalShops, cDto.TotalFloors, cDto.HasGroundFloor);
-                await EnsureBaselineCommonSpacesAsync(child);
+                await GenerateFloorUnitsIfEmptyAsync(child, cDto.TotalApartments, cDto.TotalShops, cDto.TotalFloors, cDto.HasGroundFloor, cDto.GroundApartments, allowResyncIfClean: true);
+                await EnsureBaselineCommonSpacesAsync(child, null, null);
             }
         }
 
-        private async Task GenerateFloorUnitsIfEmptyAsync(Building building, int apartmentCount, int shopCount, int totalFloors, bool hasGroundFloor)
+        private async Task GenerateFloorUnitsIfEmptyAsync(
+            Building building,
+            int apartmentCount,
+            int shopCount,
+            int totalFloors,
+            bool hasGroundFloor,
+            int groundApartments = 0,
+            bool allowResyncIfClean = false)
         {
-            bool alreadyHasLivingUnits = await _context.BuildingUnits
-                .AnyAsync(u => u.BuildingId == building.Id && !(u.Category ?? "").StartsWith("OrtakAlan"));
-            if (alreadyHasLivingUnits) return;
+            var existingLivingUnits = await _context.BuildingUnits
+                .Include(u => u.Debts)
+                .Where(u => u.BuildingId == building.Id && !(u.Category ?? "").StartsWith("OrtakAlan"))
+                .ToListAsync();
+
+            if (existingLivingUnits.Any())
+            {
+                // Güvenlik: Kayıtlı malik, kiracı veya borcu olmayan boş taslak daireler Sihirbaz'dan kat/zemin düzeltmesiyle güncellenebilir
+                bool isCleanTemplate = allowResyncIfClean && existingLivingUnits.All(u =>
+                    string.IsNullOrWhiteSpace(u.OwnerName)
+                    && string.IsNullOrWhiteSpace(u.TenantName)
+                    && string.IsNullOrWhiteSpace(u.OwnerUserId)
+                    && string.IsNullOrWhiteSpace(u.TenantUserId)
+                    && !(u.Debts?.Any() ?? false));
+
+                if (!isCleanTemplate) return;
+
+                _context.BuildingUnits.RemoveRange(existingLivingUnits);
+                await _context.SaveChangesAsync();
+            }
 
             var newUnits = new System.Collections.Generic.List<BuildingUnit>();
             int normalFloors = Math.Max(1, totalFloors);
+            int createdApt = 0;
 
-            if (apartmentCount > 0)
+            // 1. Zemin Kattaki Daireler (örn: Zemin katta 1 daire + 2 dükkan)
+            int actualGroundApts = (hasGroundFloor || groundApartments > 0)
+                ? Math.Clamp(groundApartments, 0, apartmentCount)
+                : 0;
+            for (int g = 0; g < actualGroundApts; g++)
             {
-                int perFloor = (int)Math.Ceiling((double)apartmentCount / normalFloors);
-                int created = 0;
-                for (int fl = 1; fl <= normalFloors && created < apartmentCount; fl++)
+                createdApt++;
+                newUnits.Add(new BuildingUnit
                 {
-                    for (int slot = 0; slot < perFloor && created < apartmentCount; slot++)
+                    BuildingId = building.Id,
+                    FloorLevel = 0,
+                    FloorName = "Zemin Kat",
+                    DoorNumber = createdApt.ToString(),
+                    UnitNumber = createdApt.ToString(),
+                    Category = "Daire",
+                    RoomLayout = "2+1",
+                    IsEmpty = true
+                });
+            }
+
+            // 2. Normal Katlara Kalan Dairelerin Dağılımı (1..normalFloors)
+            int remainingApts = Math.Max(0, apartmentCount - createdApt);
+            if (remainingApts > 0)
+            {
+                int basePerFloor = remainingApts / normalFloors;
+                int extra = remainingApts % normalFloors;
+                for (int fl = 1; fl <= normalFloors && createdApt < apartmentCount; fl++)
+                {
+                    int onThisFloor = basePerFloor + (fl <= extra ? 1 : 0);
+                    for (int slot = 0; slot < onThisFloor && createdApt < apartmentCount; slot++)
                     {
-                        created++;
+                        createdApt++;
                         newUnits.Add(new BuildingUnit
                         {
                             BuildingId = building.Id,
                             FloorLevel = fl,
                             FloorName = $"{fl}. Kat",
-                            DoorNumber = created.ToString(),
-                            UnitNumber = created.ToString(),
+                            DoorNumber = createdApt.ToString(),
+                            UnitNumber = createdApt.ToString(),
                             Category = "Daire",
                             RoomLayout = "3+1",
                             IsEmpty = true
@@ -1037,10 +1108,11 @@ namespace GMK360.Web.Controllers
                 }
             }
 
+            // 3. Zemin / Cadde Dükkanları
             if (shopCount > 0)
             {
-                int shopFloor = hasGroundFloor ? 0 : 1;
-                string shopFloorName = hasGroundFloor ? "Zemin Kat" : "1. Kat";
+                int shopFloor = (hasGroundFloor || groundApartments > 0) ? 0 : 1;
+                string shopFloorName = shopFloor == 0 ? "Zemin Kat" : "1. Kat";
                 for (int s = 1; s <= shopCount; s++)
                 {
                     newUnits.Add(new BuildingUnit
@@ -1064,44 +1136,73 @@ namespace GMK360.Web.Controllers
             }
         }
 
-        private async Task EnsureBaselineCommonSpacesAsync(Building building)
+        private async Task EnsureBaselineCommonSpacesAsync(
+            Building building,
+            System.Collections.Generic.List<string>? indoorAreas = null,
+            System.Collections.Generic.List<string>? outdoorAreas = null)
         {
-            bool exists = await _context.BuildingUnits
-                .AnyAsync(u => u.BuildingId == building.Id && (u.Category == "OrtakAlan_Blok" || (u.Category ?? "").StartsWith("OrtakAlan")));
-            if (exists) return;
+            var commonUnit = await _context.BuildingUnits
+                .Include(u => u.Spaces)
+                .FirstOrDefaultAsync(u => u.BuildingId == building.Id && (u.Category == "OrtakAlan_Blok" || (u.Category ?? "").StartsWith("OrtakAlan")));
 
-            var commonUnit = new BuildingUnit
+            if (commonUnit == null)
             {
-                BuildingId = building.Id,
-                FloorLevel = 0,
-                FloorName = "Ortak Alanlar",
-                DoorNumber = "ORTAK",
-                UnitNumber = "ORTAK",
-                Category = "OrtakAlan_Blok",
-                IsEmpty = false
-            };
-            _context.BuildingUnits.Add(commonUnit);
-            await _context.SaveChangesAsync();
-
-            var spaces = new System.Collections.Generic.List<UnitSpace>
-            {
-                new UnitSpace { BuildingUnitId = commonUnit.Id, Name = "Merdiven & Sahanlık", Type = "OrtakAlan" }
-            };
-            if (building.HasRoof)
-            {
-                spaces.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = $"Çatı ({building.RoofType ?? "Ana Çatı"})", Type = "OrtakAlan" });
-            }
-            if ((building.TotalFloors ?? 0) >= 4)
-            {
-                spaces.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = "Asansör & Makine Dairesi", Type = "OrtakAlan" });
-            }
-            if (building.BasementFloors > 0)
-            {
-                spaces.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = "Bodrum, Hidrofor & Otopark", Type = "OrtakAlan" });
+                commonUnit = new BuildingUnit
+                {
+                    BuildingId = building.Id,
+                    FloorLevel = 0,
+                    FloorName = "Ortak Alanlar",
+                    DoorNumber = "ORTAK",
+                    UnitNumber = "ORTAK",
+                    Category = "OrtakAlan_Blok",
+                    IsEmpty = false
+                };
+                _context.BuildingUnits.Add(commonUnit);
+                await _context.SaveChangesAsync();
             }
 
-            _context.UnitSpaces.AddRange(spaces);
-            await _context.SaveChangesAsync();
+            var existingNames = (commonUnit.Spaces ?? new System.Collections.Generic.List<UnitSpace>())
+                .Select(s => s.Name)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var spacesToAdd = new System.Collections.Generic.List<UnitSpace>();
+            if (indoorAreas != null && indoorAreas.Any())
+            {
+                foreach (var name in indoorAreas.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct())
+                {
+                    if (!existingNames.Contains(name.Trim()))
+                    {
+                        spacesToAdd.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = name.Trim(), Type = "BinaIci" });
+                    }
+                }
+            }
+            else if (!existingNames.Any())
+            {
+                spacesToAdd.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = "Merdiven & Sahanlık", Type = "BinaIci" });
+                if (building.HasRoof)
+                    spacesToAdd.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = $"Çatı ({building.RoofType ?? "Ana Çatı"})", Type = "BinaIci" });
+                if ((building.TotalFloors ?? 0) >= 4)
+                    spacesToAdd.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = "Asansör & Makine Dairesi", Type = "BinaIci" });
+                if (building.BasementFloors > 0)
+                    spacesToAdd.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = "Bodrum, Hidrofor & Garaj/Otopark", Type = "BinaIci" });
+            }
+
+            if (outdoorAreas != null && outdoorAreas.Any())
+            {
+                foreach (var name in outdoorAreas.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct())
+                {
+                    if (!existingNames.Contains(name.Trim()))
+                    {
+                        spacesToAdd.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = name.Trim(), Type = "CevreDuzenleme" });
+                    }
+                }
+            }
+
+            if (spacesToAdd.Any())
+            {
+                _context.UnitSpaces.AddRange(spacesToAdd);
+                await _context.SaveChangesAsync();
+            }
         }
 
 
