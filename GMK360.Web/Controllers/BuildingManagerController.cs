@@ -467,10 +467,52 @@ namespace GMK360.Web.Controllers
 
                 vm.InitialStructures = rootStructures.Select(rb =>
                 {
-                    var commonSpacesList = (rb.Units ?? new System.Collections.Generic.List<BuildingUnit>())
-                        .Where(u => (u.Category ?? "").StartsWith("OrtakAlan"))
-                        .SelectMany(u => u.Spaces ?? new System.Collections.Generic.List<UnitSpace>())
+                    var allUnits = rb.Units ?? new System.Collections.Generic.List<BuildingUnit>();
+                    var physicalTechUnits = allUnits
+                        .Where(u => u.Category == "OrtakAlan_Tesis" || u.Category == "OrtakAlan_Depo")
+                        .OrderBy(u => u.FloorLevel).ThenBy(u => u.Id)
                         .ToList();
+
+                    var mappedCommonSpaces = physicalTechUnits.Any()
+                        ? physicalTechUnits.Select(u =>
+                        {
+                            var firstSpace = u.Spaces?.FirstOrDefault();
+                            bool isOutdoor = u.FloorLevel == -99 || firstSpace?.Type == "CevreDuzenleme";
+                            return new GMK360.Web.Models.FacilityCommonSpaceDto
+                            {
+                                Name = u.DoorNumber,
+                                SpaceGroup = isOutdoor ? "CevreDuzenleme" : "BinaIci",
+                                FloorLevel = u.FloorLevel,
+                                SquareMeters = u.GrossSquareMeters ?? firstSpace?.SquareMeters,
+                                Description = !string.IsNullOrWhiteSpace(firstSpace?.Description) ? firstSpace.Description : u.RoomLayout
+                            };
+                        }).ToList()
+                        : allUnits
+                            .Where(u => u.Category == "OrtakAlan_Blok" || (u.Category ?? "").StartsWith("OrtakAlan"))
+                            .SelectMany(u => u.Spaces ?? new System.Collections.Generic.List<UnitSpace>())
+                            .Where(s => s.Name != "Sabit Gider & Muhasebe")
+                            .Select(s =>
+                            {
+                                int guessedFloor = s.Type == "CevreDuzenleme" ? -99
+                                    : (s.Name.Contains("Bodrum", StringComparison.OrdinalIgnoreCase)
+                                       || s.Name.Contains("Sığınak", StringComparison.OrdinalIgnoreCase)
+                                       || s.Name.Contains("Pompa", StringComparison.OrdinalIgnoreCase)
+                                       || s.Name.Contains("Hidrofor", StringComparison.OrdinalIgnoreCase)
+                                       || s.Name.Contains("Depo", StringComparison.OrdinalIgnoreCase)
+                                       || s.Name.Contains("Ardiye", StringComparison.OrdinalIgnoreCase)
+                                       || s.Name.Contains("Kömür", StringComparison.OrdinalIgnoreCase)
+                                       || s.Name.Contains("Kazan", StringComparison.OrdinalIgnoreCase)
+                                       || s.Name.Contains("Jeneratör", StringComparison.OrdinalIgnoreCase)
+                                       || s.Name.Contains("Garaj", StringComparison.OrdinalIgnoreCase) ? -1 : 0);
+                                return new GMK360.Web.Models.FacilityCommonSpaceDto
+                                {
+                                    Name = s.Name,
+                                    SpaceGroup = s.Type == "CevreDuzenleme" ? "CevreDuzenleme" : "BinaIci",
+                                    FloorLevel = guessedFloor,
+                                    SquareMeters = s.SquareMeters,
+                                    Description = s.Description
+                                };
+                            }).ToList();
 
                     return new GMK360.Web.Models.FacilityStep2StructureDto
                     {
@@ -478,7 +520,7 @@ namespace GMK360.Web.Controllers
                         BlockName = string.IsNullOrWhiteSpace(rb.BlockName) ? "Ana Bina" : rb.BlockName,
                         BaseArea = rb.BaseArea,
                         TotalFloors = rb.TotalFloors ?? 5,
-                        GroundApartments = (rb.Units ?? new System.Collections.Generic.List<BuildingUnit>())
+                        GroundApartments = allUnits
                             .Count(u => u.FloorLevel == 0 && u.Category != "Dukkan" && u.Category != "Dükkan" && !(u.Category ?? "").StartsWith("OrtakAlan")),
                         TotalApartments = rb.TotalApartments,
                         TotalShops = rb.TotalShops,
@@ -486,15 +528,9 @@ namespace GMK360.Web.Controllers
                         HasGroundFloor = rb.HasGroundFloor,
                         HasRoof = rb.HasRoof,
                         RoofType = rb.RoofType ?? "Düz Teras Çatı (Tabliye)",
-                        IndoorCommonAreas = commonSpacesList.Where(s => s.Type != "CevreDuzenleme").Select(s => s.Name).ToList(),
-                        OutdoorCommonAreas = commonSpacesList.Where(s => s.Type == "CevreDuzenleme").Select(s => s.Name).ToList(),
-                        CommonSpaces = commonSpacesList.Select(s => new GMK360.Web.Models.FacilityCommonSpaceDto
-                        {
-                            Name = s.Name,
-                            SpaceGroup = s.Type == "CevreDuzenleme" ? "CevreDuzenleme" : "BinaIci",
-                            SquareMeters = s.SquareMeters,
-                            Description = s.Description
-                        }).ToList(),
+                        IndoorCommonAreas = mappedCommonSpaces.Where(s => s.SpaceGroup != "CevreDuzenleme").Select(s => s.Name).ToList(),
+                        OutdoorCommonAreas = mappedCommonSpaces.Where(s => s.SpaceGroup == "CevreDuzenleme").Select(s => s.Name).ToList(),
+                        CommonSpaces = mappedCommonSpaces,
                         Children = (rb.ChildBuildings ?? new System.Collections.Generic.List<Building>())
                             .OrderBy(c => c.Id)
                             .Select(c => new GMK360.Web.Models.FacilityStep2ChildBlockDto
@@ -1143,6 +1179,23 @@ namespace GMK360.Web.Controllers
             }
         }
 
+        private static string FormatFacilityFloorName(int floorLevel)
+        {
+            if (floorLevel == -99) return "Bahçe & Çevre Alanı";
+            if (floorLevel == 99) return "Çatı / Teras";
+            if (floorLevel < 0) return $"{Math.Abs(floorLevel)}. Bodrum";
+            if (floorLevel == 0) return "Zemin Kat";
+            return $"{floorLevel}. Kat";
+        }
+
+        private static bool IsStorageSpaceName(string name)
+        {
+            return name.Contains("Depo", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("Ardiye", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("Kömür", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("Kiler", StringComparison.OrdinalIgnoreCase);
+        }
+
         private async Task EnsureBaselineCommonSpacesAsync(
             Building building,
             System.Collections.Generic.List<string>? indoorAreas = null,
@@ -1151,7 +1204,7 @@ namespace GMK360.Web.Controllers
         {
             var commonUnit = await _context.BuildingUnits
                 .Include(u => u.Spaces)
-                .FirstOrDefaultAsync(u => u.BuildingId == building.Id && (u.Category == "OrtakAlan_Blok" || (u.Category ?? "").StartsWith("OrtakAlan")));
+                .FirstOrDefaultAsync(u => u.BuildingId == building.Id && u.Category == "OrtakAlan_Blok");
 
             if (commonUnit == null)
             {
@@ -1169,49 +1222,140 @@ namespace GMK360.Web.Controllers
                 await _context.SaveChangesAsync();
             }
 
-            var existingList = (commonUnit.Spaces ?? new System.Collections.Generic.List<UnitSpace>()).ToList();
-            var spacesToAdd = new System.Collections.Generic.List<UnitSpace>();
-
             if (customCommonSpaces != null && customCommonSpaces.Any())
             {
+                var existingPhysicalTech = await _context.BuildingUnits
+                    .Include(u => u.Spaces)
+                        .ThenInclude(s => s.Fixtures)
+                    .Where(u => u.BuildingId == building.Id && (u.Category == "OrtakAlan_Tesis" || u.Category == "OrtakAlan_Depo"))
+                    .ToListAsync();
+
                 var desiredNames = customCommonSpaces
                     .Where(x => !string.IsNullOrWhiteSpace(x.Name))
                     .Select(x => x.Name.Trim())
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-                // Demirbaşı olmayan kaldırılmış boş alanları temizle
-                var toRemove = existingList.Where(s => !desiredNames.Contains(s.Name) && !_context.SpaceFixtures.Any(f => f.UnitSpaceId == s.Id)).ToList();
-                if (toRemove.Any()) _context.UnitSpaces.RemoveRange(toRemove);
+                // Demirbaşı olmayan kaldırılmış fiziksel teknik birimleri temizle
+                var toRemoveUnits = existingPhysicalTech
+                    .Where(u => !desiredNames.Contains(u.DoorNumber)
+                             && !(u.Spaces?.Any(s => s.Fixtures != null && s.Fixtures.Any()) ?? false))
+                    .ToList();
+                if (toRemoveUnits.Any())
+                {
+                    var remSpaces = toRemoveUnits.SelectMany(u => u.Spaces ?? new System.Collections.Generic.List<UnitSpace>()).ToList();
+                    if (remSpaces.Any()) _context.UnitSpaces.RemoveRange(remSpaces);
+                    _context.BuildingUnits.RemoveRange(toRemoveUnits);
+                }
+
+                // Eski ORTAK container üzerindeki boş eski mekanları temizle (Sabit Gider hariç), çift gösterimi önle
+                var legacyEmptySpaces = (commonUnit.Spaces ?? new System.Collections.Generic.List<UnitSpace>())
+                    .Where(s => s.Name != "Sabit Gider & Muhasebe" && !_context.SpaceFixtures.Any(f => f.UnitSpaceId == s.Id))
+                    .ToList();
+                if (legacyEmptySpaces.Any()) _context.UnitSpaces.RemoveRange(legacyEmptySpaces);
 
                 foreach (var cs in customCommonSpaces.Where(x => !string.IsNullOrWhiteSpace(x.Name)))
                 {
                     string cleanName = cs.Name.Trim();
                     string spaceType = cs.SpaceGroup == "CevreDuzenleme" ? "CevreDuzenleme" : "BinaIci";
-                    var existing = existingList.FirstOrDefault(s => string.Equals(s.Name, cleanName, StringComparison.OrdinalIgnoreCase));
-                    if (existing != null)
+                    int targetFloor = cs.FloorLevel;
+                    if (spaceType == "CevreDuzenleme" && targetFloor == 0) targetFloor = -99;
+                    string floorName = FormatFacilityFloorName(targetFloor);
+                    string techCat = IsStorageSpaceName(cleanName) ? "OrtakAlan_Depo" : "OrtakAlan_Tesis";
+
+                    var existingUnit = existingPhysicalTech.FirstOrDefault(u => string.Equals(u.DoorNumber, cleanName, StringComparison.OrdinalIgnoreCase));
+                    if (existingUnit != null)
                     {
-                        existing.Type = spaceType;
-                        existing.SquareMeters = cs.SquareMeters;
-                        existing.Description = cs.Description?.Trim();
+                        existingUnit.FloorLevel = targetFloor;
+                        existingUnit.FloorName = floorName;
+                        existingUnit.Category = techCat;
+                        existingUnit.GrossSquareMeters = cs.SquareMeters;
+                        existingUnit.RoomLayout = string.IsNullOrWhiteSpace(cs.Description) ? floorName : cs.Description.Trim();
+
+                        var innerSpace = existingUnit.Spaces?.FirstOrDefault();
+                        if (innerSpace == null)
+                        {
+                            _context.UnitSpaces.Add(new UnitSpace
+                            {
+                                BuildingUnitId = existingUnit.Id,
+                                Name = cleanName,
+                                Type = spaceType,
+                                SquareMeters = cs.SquareMeters,
+                                Description = cs.Description?.Trim()
+                            });
+                        }
+                        else
+                        {
+                            innerSpace.Name = cleanName;
+                            innerSpace.Type = spaceType;
+                            innerSpace.SquareMeters = cs.SquareMeters;
+                            innerSpace.Description = cs.Description?.Trim();
+                        }
                     }
                     else
                     {
-                        spacesToAdd.Add(new UnitSpace
+                        var newTechUnit = new BuildingUnit
                         {
-                            BuildingUnitId = commonUnit.Id,
-                            Name = cleanName,
-                            Type = spaceType,
-                            SquareMeters = cs.SquareMeters,
-                            Description = cs.Description?.Trim()
-                        });
+                            BuildingId = building.Id,
+                            FloorLevel = targetFloor,
+                            FloorName = floorName,
+                            DoorNumber = cleanName,
+                            UnitNumber = cleanName,
+                            Category = techCat,
+                            GrossSquareMeters = cs.SquareMeters,
+                            RoomLayout = string.IsNullOrWhiteSpace(cs.Description) ? floorName : cs.Description.Trim(),
+                            IsEmpty = false,
+                            Spaces = new System.Collections.Generic.List<UnitSpace>
+                            {
+                                new UnitSpace
+                                {
+                                    Name = cleanName,
+                                    Type = spaceType,
+                                    SquareMeters = cs.SquareMeters,
+                                    Description = cs.Description?.Trim()
+                                }
+                            }
+                        };
+                        _context.BuildingUnits.Add(newTechUnit);
                     }
                 }
-                if (spacesToAdd.Any()) _context.UnitSpaces.AddRange(spacesToAdd);
+
                 await _context.SaveChangesAsync();
                 return;
             }
 
+            // Geriye dönük / otomatik onarım modu: Bodrum katı varsa en azından Sığınak / Depo başlangıç birimi oluştur
+            if (building.BasementFloors > 0)
+            {
+                bool hasAnyBasementUnit = await _context.BuildingUnits.AnyAsync(u => u.BuildingId == building.Id && u.FloorLevel < 0 && u.FloorLevel != -99);
+                if (!hasAnyBasementUnit)
+                {
+                    for (int b = 1; b <= building.BasementFloors; b++)
+                    {
+                        int fl = -b;
+                        string bTitle = b == 1 ? "Sığınak & Depolama Alanı" : $"{b}. Bodrum Garaj / Tesis";
+                        _context.BuildingUnits.Add(new BuildingUnit
+                        {
+                            BuildingId = building.Id,
+                            FloorLevel = fl,
+                            FloorName = FormatFacilityFloorName(fl),
+                            DoorNumber = bTitle,
+                            UnitNumber = bTitle,
+                            Category = "OrtakAlan_Tesis",
+                            RoomLayout = "Bodrum Ortak & Teknik Alan",
+                            GrossSquareMeters = building.BaseArea,
+                            IsEmpty = false,
+                            Spaces = new System.Collections.Generic.List<UnitSpace>
+                            {
+                                new UnitSpace { Name = bTitle, Type = "BinaIci", SquareMeters = building.BaseArea, Description = "Bodrum kat ortak teknik hacmi" }
+                            }
+                        });
+                    }
+                }
+            }
+
+            var existingList = (commonUnit.Spaces ?? new System.Collections.Generic.List<UnitSpace>()).ToList();
             var existingNames = existingList.Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var spacesToAdd = new System.Collections.Generic.List<UnitSpace>();
             if (indoorAreas != null && indoorAreas.Any())
             {
                 foreach (var name in indoorAreas.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct())
@@ -1229,8 +1373,6 @@ namespace GMK360.Web.Controllers
                     spacesToAdd.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = $"Çatı ({building.RoofType ?? "Ana Çatı"})", Type = "BinaIci" });
                 if ((building.TotalFloors ?? 0) >= 4)
                     spacesToAdd.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = "Asansör & Makine Dairesi", Type = "BinaIci" });
-                if (building.BasementFloors > 0)
-                    spacesToAdd.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = "Bodrum, Ardiye/Kömürlük & Garaj", Type = "BinaIci" });
             }
 
             if (outdoorAreas != null && outdoorAreas.Any())
@@ -1247,13 +1389,13 @@ namespace GMK360.Web.Controllers
             if (spacesToAdd.Any())
             {
                 _context.UnitSpaces.AddRange(spacesToAdd);
-                await _context.SaveChangesAsync();
             }
+            await _context.SaveChangesAsync();
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddCommonSpaceToBuilding(int buildingId, string name, string spaceGroup, double? squareMeters, string? description)
+        public async Task<IActionResult> AddCommonSpaceToBuilding(int buildingId, string name, string spaceGroup, int floorLevel = -1, double? squareMeters = null, string? description = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -1263,26 +1405,210 @@ namespace GMK360.Web.Controllers
                 return RedirectToAction(nameof(Detail), new { id = buildingId });
             }
 
-            var commonUnit = await _context.BuildingUnits
-                .FirstOrDefaultAsync(u => u.BuildingId == buildingId && (u.Category == "OrtakAlan_Blok" || (u.Category ?? "").StartsWith("OrtakAlan")));
-            if (commonUnit == null)
+            string cleanName = name.Trim();
+            int targetFloor = spaceGroup == "CevreDuzenleme" ? -99 : floorLevel;
+            string spaceType = spaceGroup == "CevreDuzenleme" ? "CevreDuzenleme" : "BinaIci";
+            string category = IsStorageSpaceName(cleanName) ? "OrtakAlan_Depo" : "OrtakAlan_Tesis";
+
+            var techUnit = new BuildingUnit
             {
-                await EnsureBaselineCommonSpacesAsync(building);
-                commonUnit = await _context.BuildingUnits
-                    .FirstOrDefaultAsync(u => u.BuildingId == buildingId && (u.Category == "OrtakAlan_Blok" || (u.Category ?? "").StartsWith("OrtakAlan")));
+                BuildingId = buildingId,
+                FloorLevel = targetFloor,
+                FloorName = FormatFacilityFloorName(targetFloor),
+                DoorNumber = cleanName,
+                UnitNumber = cleanName,
+                Category = category,
+                GrossSquareMeters = squareMeters,
+                RoomLayout = string.IsNullOrWhiteSpace(description) ? FormatFacilityFloorName(targetFloor) : description.Trim(),
+                IsEmpty = false,
+                Spaces = new System.Collections.Generic.List<UnitSpace>
+                {
+                    new UnitSpace
+                    {
+                        Name = cleanName,
+                        Type = spaceType,
+                        SquareMeters = squareMeters,
+                        Description = description?.Trim()
+                    }
+                }
+            };
+            _context.BuildingUnits.Add(techUnit);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"'{cleanName}' ({FormatFacilityFloorName(targetFloor)}) birimi eklendi.";
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
+        }
+
+        // İnşaat ERP Yapısı ile Uyumlu Kat / Bodrum / Bahçe Birim Ekleme (Pompa Odası, Hidrofor, Depo, Daire, Dükkan)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddFloorUnit(
+            int buildingId,
+            int floorLevel,
+            string category,
+            string unitName,
+            double? squareMeters,
+            string? roomLayout,
+            string? firstFixtureName = null,
+            string? firstFixtureBrand = null,
+            string? technicalServiceName = null,
+            DateTime? nextMaintenanceDate = null)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+            if (string.IsNullOrWhiteSpace(unitName))
+            {
+                TempData["ErrorMessage"] = "Birim adı / kapı numarası zorunludur.";
+                return RedirectToAction(nameof(Detail), new { id = buildingId });
             }
 
-            _context.UnitSpaces.Add(new UnitSpace
+            string cleanName = unitName.Trim();
+            string cleanCat = string.IsNullOrWhiteSpace(category) ? "OrtakAlan_Tesis" : category.Trim();
+            if (cleanCat == "Dükkan") cleanCat = "Dukkan";
+            string floorName = FormatFacilityFloorName(floorLevel);
+            bool isTechOrStorage = cleanCat.StartsWith("OrtakAlan");
+
+            var newUnit = new BuildingUnit
             {
-                BuildingUnitId = commonUnit!.Id,
-                Name = name.Trim(),
-                Type = spaceGroup == "CevreDuzenleme" ? "CevreDuzenleme" : "BinaIci",
-                SquareMeters = squareMeters,
-                Description = description?.Trim()
+                BuildingId = buildingId,
+                FloorLevel = floorLevel,
+                FloorName = floorName,
+                DoorNumber = cleanName,
+                UnitNumber = cleanName,
+                Category = cleanCat,
+                GrossSquareMeters = squareMeters,
+                RoomLayout = string.IsNullOrWhiteSpace(roomLayout)
+                    ? (cleanCat == "OrtakAlan_Depo" ? "Depolama / Ardiye" : (isTechOrStorage ? "Teknik / Ortak Birim" : (cleanCat == "Dukkan" ? "Dükkan" : "3+1")))
+                    : roomLayout.Trim(),
+                IsEmpty = !isTechOrStorage
+            };
+
+            if (isTechOrStorage)
+            {
+                var space = new UnitSpace
+                {
+                    Name = cleanName,
+                    Type = floorLevel == -99 ? "CevreDuzenleme" : "BinaIci",
+                    SquareMeters = squareMeters,
+                    Description = roomLayout?.Trim()
+                };
+                if (!string.IsNullOrWhiteSpace(firstFixtureName))
+                {
+                    space.Fixtures = new System.Collections.Generic.List<SpaceFixture>
+                    {
+                        new SpaceFixture
+                        {
+                            Category = "Teknik Ekipman",
+                            ItemName = firstFixtureName.Trim(),
+                            StandardBrand = firstFixtureBrand?.Trim(),
+                            TechnicalServiceName = technicalServiceName?.Trim(),
+                            NextMaintenanceDate = nextMaintenanceDate,
+                            Quantity = 1,
+                            Unit = "Adet",
+                            CreatedAt = DateTime.Now
+                        }
+                    };
+                }
+                newUnit.Spaces = new System.Collections.Generic.List<UnitSpace> { space };
+            }
+            else
+            {
+                building.TotalUnits += 1;
+            }
+
+            _context.BuildingUnits.Add(newUnit);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"{floorName} katına '{cleanName}' birimi eklendi.";
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddFixtureToFloorUnit(
+            int buildingId,
+            int unitId,
+            string itemName,
+            string? brand = null,
+            double quantity = 1,
+            string? serviceName = null,
+            string? notes = null,
+            DateTime? nextMaintenanceDate = null)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+            if (string.IsNullOrWhiteSpace(itemName))
+            {
+                TempData["ErrorMessage"] = "Demirbaş / ekipman adı zorunludur.";
+                return RedirectToAction(nameof(Detail), new { id = buildingId });
+            }
+
+            var unit = await _context.BuildingUnits
+                .Include(u => u.Spaces)
+                .FirstOrDefaultAsync(u => u.Id == unitId && u.BuildingId == buildingId);
+            if (unit == null) return NotFound();
+
+            var space = unit.Spaces?.FirstOrDefault();
+            if (space == null)
+            {
+                space = new UnitSpace
+                {
+                    BuildingUnitId = unit.Id,
+                    Name = unit.DoorNumber,
+                    Type = unit.FloorLevel == -99 ? "CevreDuzenleme" : "BinaIci",
+                    SquareMeters = unit.GrossSquareMeters,
+                    Description = unit.RoomLayout
+                };
+                _context.UnitSpaces.Add(space);
+                await _context.SaveChangesAsync();
+            }
+
+            _context.SpaceFixtures.Add(new SpaceFixture
+            {
+                UnitSpaceId = space.Id,
+                Category = "Demirbaş & Ekipman",
+                ItemName = itemName.Trim(),
+                StandardBrand = brand?.Trim(),
+                TechnicalServiceName = serviceName?.Trim(),
+                MaintenanceNotes = notes?.Trim(),
+                NextMaintenanceDate = nextMaintenanceDate,
+                Quantity = Math.Max(1, quantity),
+                Unit = "Adet",
+                CreatedAt = DateTime.Now
             });
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = $"'{name}' ortak alanlara ({(squareMeters.HasValue ? $"{squareMeters:0.##} m²" : "m² belirtilmedi")}) eklendi.";
+            TempData["SuccessMessage"] = $"'{itemName.Trim()}' demirbaşı '{unit.DoorNumber}' birimine eklendi.";
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteFloorTechnicalUnit(int buildingId, int unitId)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var unit = await _context.BuildingUnits
+                .Include(u => u.Spaces)
+                    .ThenInclude(s => s.Fixtures)
+                .FirstOrDefaultAsync(u => u.Id == unitId && u.BuildingId == buildingId);
+
+            if (unit == null || !(unit.Category ?? "").StartsWith("OrtakAlan") || unit.Category == "OrtakAlan_Blok")
+            {
+                TempData["ErrorMessage"] = "Yalnızca kat içi teknik veya depolama birimleri buradan kaldırılabilir.";
+                return RedirectToAction(nameof(Detail), new { id = buildingId });
+            }
+
+            var allFixtures = (unit.Spaces ?? new System.Collections.Generic.List<UnitSpace>())
+                .SelectMany(s => s.Fixtures ?? new System.Collections.Generic.List<SpaceFixture>())
+                .ToList();
+            if (allFixtures.Any()) _context.SpaceFixtures.RemoveRange(allFixtures);
+            if (unit.Spaces != null && unit.Spaces.Any()) _context.UnitSpaces.RemoveRange(unit.Spaces);
+            _context.BuildingUnits.Remove(unit);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"'{unit.DoorNumber}' birimi kaldırıldı.";
             return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
 
@@ -1303,17 +1629,24 @@ namespace GMK360.Web.Controllers
                 .Include(b => b.Units)
                     .ThenInclude(u => u.Debts)
                         .ThenInclude(d => d.BuildingExpense)
+                .Include(b => b.Units)
+                    .ThenInclude(u => u.Spaces)
+                        .ThenInclude(s => s.Fixtures)
                 .Include(b => b.Expenses)
                 .FirstOrDefaultAsync(b => b.Id == id);
 
             if (building == null) return NotFound();
             if (!CanAccessBuilding(building, userId)) return Forbid();
 
-            // Daha once Step 2/3 sirasinda hata sebebiyle birimleri olusamamis kayitlari otomatik onar
+            // Daha once Step 2/3 sirasinda hata sebebiyle birimleri olusamamis kayitlari otomatik onar veya eksik bodrumları tamamla
             bool hasLivingUnits = building.Units?.Any(u => !(u.Category ?? "").StartsWith("OrtakAlan")) ?? false;
-            if (!hasLivingUnits && building.OnboardingStep >= 3 && (building.TotalApartments + building.TotalShops) > 0)
+            bool missingBasement = building.BasementFloors > 0 && !(building.Units?.Any(u => u.FloorLevel < 0 && u.FloorLevel != -99) ?? false);
+            if ((!hasLivingUnits && building.OnboardingStep >= 3 && (building.TotalApartments + building.TotalShops) > 0) || missingBasement)
             {
-                await GenerateFloorUnitsIfEmptyAsync(building, building.TotalApartments, building.TotalShops, building.TotalFloors ?? 5, building.HasGroundFloor);
+                if (!hasLivingUnits && building.OnboardingStep >= 3 && (building.TotalApartments + building.TotalShops) > 0)
+                {
+                    await GenerateFloorUnitsIfEmptyAsync(building, building.TotalApartments, building.TotalShops, building.TotalFloors ?? 5, building.HasGroundFloor);
+                }
                 await EnsureBaselineCommonSpacesAsync(building);
                 building = await _context.Buildings
                     .Include(b => b.HousingComplex)
@@ -1322,6 +1655,7 @@ namespace GMK360.Web.Controllers
                     .Include(b => b.ChildBuildings).ThenInclude(cb => cb.Units).ThenInclude(u => u.Debts)
                     .Include(b => b.BuildingManagers).ThenInclude(m => m.User)
                     .Include(b => b.Units).ThenInclude(u => u.Debts).ThenInclude(d => d.BuildingExpense)
+                    .Include(b => b.Units).ThenInclude(u => u.Spaces).ThenInclude(s => s.Fixtures)
                     .Include(b => b.Expenses)
                     .FirstOrDefaultAsync(b => b.Id == id) ?? building;
             }
@@ -1343,7 +1677,10 @@ namespace GMK360.Web.Controllers
                 .Where(u => u.BuildingId == id && (u.Category == "OrtakAlan_Blok" || (u.Category ?? "").StartsWith("OrtakAlan")))
                 .ToListAsync();
 
-            ViewBag.CommonSpaces = commonUnits.SelectMany(u => u.Spaces ?? new List<UnitSpace>()).ToList();
+            ViewBag.CommonSpaces = commonUnits
+                .SelectMany(u => u.Spaces ?? new List<UnitSpace>())
+                .Where(s => s.Name != "Sabit Gider & Muhasebe")
+                .ToList();
 
             bool hasAuthorityDoc = await HasDecisionAuthorityAsync(rootId);
             var governanceMembers = await _context.BuildingManagers

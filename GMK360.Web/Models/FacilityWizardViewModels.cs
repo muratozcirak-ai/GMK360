@@ -85,6 +85,7 @@ namespace GMK360.Web.Models
     {
         public string Name { get; set; } = string.Empty;
         public string SpaceGroup { get; set; } = "BinaIci"; // "BinaIci" | "CevreDuzenleme"
+        public int FloorLevel { get; set; } = -1; // -1/-2: Bodrum, 0: Zemin/Bina İçi, 99: Çatı, -99: Bahçe/Çevre
         public double? SquareMeters { get; set; }
         public string? Description { get; set; }
     }

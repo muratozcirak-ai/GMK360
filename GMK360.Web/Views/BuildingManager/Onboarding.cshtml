@@ -843,35 +843,64 @@
                 HasGroundFloor: true,
                 HasRoof: false,
                 RoofType: 'Düz Teras Çatı (Tabliye)',
-                IndoorCommonAreas: ['Merdiven & Sahanlık', 'Asansör & Makine Dairesi', 'Hidrofor & Su Deposu', 'Sığınak', 'Ardiye / Kömürlük / Kiler'],
+                IndoorCommonAreas: ['Merdiven & Sahanlık', 'Asansör & Makine Dairesi', 'Hidrofor Odası', 'Pompa Odası', 'Sığınak', 'Depolama Alanı / Ardiye'],
                 OutdoorCommonAreas: ['Kamelya / Çardak', 'Bahçe & Ağaç Peyzajı'],
                 CommonSpaces: [
-                    { Name: 'Merdiven & Sahanlık', SpaceGroup: 'BinaIci', SquareMeters: null, Description: '' },
-                    { Name: 'Asansör & Makine Dairesi', SpaceGroup: 'BinaIci', SquareMeters: null, Description: 'Aylık periyodik bakım & yeşil/mavi etiket kontrolü' },
-                    { Name: 'Hidrofor & Su Deposu', SpaceGroup: 'BinaIci', SquareMeters: null, Description: 'Hidrofor pompa & depo temizlik bakımı' },
-                    { Name: 'Sığınak', SpaceGroup: 'BinaIci', SquareMeters: null, Description: '' },
-                    { Name: 'Ardiye / Kömürlük / Kiler', SpaceGroup: 'BinaIci', SquareMeters: null, Description: 'Daire başı kiler / depo bölmeleri' },
-                    { Name: 'Kamelya / Çardak', SpaceGroup: 'CevreDuzenleme', SquareMeters: null, Description: '' },
-                    { Name: 'Bahçe & Ağaç Peyzajı', SpaceGroup: 'CevreDuzenleme', SquareMeters: null, Description: 'Mevsimlik budama & sulama takibi' }
+                    { Name: 'Merdiven & Sahanlık', SpaceGroup: 'BinaIci', FloorLevel: 0, SquareMeters: null, Description: '' },
+                    { Name: 'Asansör & Makine Dairesi', SpaceGroup: 'BinaIci', FloorLevel: 0, SquareMeters: null, Description: 'Aylık periyodik bakım & etiket kontrolü' },
+                    { Name: 'Hidrofor Odası', SpaceGroup: 'BinaIci', FloorLevel: -1, SquareMeters: null, Description: 'Hidrofor pompası & genleşme tankı' },
+                    { Name: 'Pompa Odası', SpaceGroup: 'BinaIci', FloorLevel: -1, SquareMeters: null, Description: 'Su / yangın / drenaj pompa motoru' },
+                    { Name: 'Sığınak', SpaceGroup: 'BinaIci', FloorLevel: -1, SquareMeters: null, Description: '' },
+                    { Name: 'Depolama Alanı / Ardiye', SpaceGroup: 'BinaIci', FloorLevel: -1, SquareMeters: null, Description: 'Daire başı kiler / kömürlük / depo bölmesi' },
+                    { Name: 'Kamelya / Çardak', SpaceGroup: 'CevreDuzenleme', FloorLevel: -99, SquareMeters: null, Description: '' },
+                    { Name: 'Bahçe & Ağaç Peyzajı', SpaceGroup: 'CevreDuzenleme', FloorLevel: -99, SquareMeters: null, Description: 'Mevsimlik budama & sulama takibi' }
                 ],
                 Children: []
             };
+        }
+
+        function guessDefaultFloorForSpace(name, spaceGroup) {
+            if (spaceGroup === 'CevreDuzenleme') return -99;
+            var low = (name || '').toLowerCase();
+            if (low.indexOf('çatı') >= 0 || low.indexOf('teras') >= 0) return 99;
+            if (low.indexOf('bodrum') >= 0 || low.indexOf('sığınak') >= 0 || low.indexOf('pompa') >= 0 || low.indexOf('hidrofor') >= 0 || low.indexOf('depo') >= 0 || low.indexOf('ardiye') >= 0 || low.indexOf('kömür') >= 0 || low.indexOf('kazan') >= 0 || low.indexOf('jeneratör') >= 0 || low.indexOf('garaj') >= 0) return -1;
+            return 0;
+        }
+
+        function buildFloorSelectHtml(cls, selectedVal) {
+            var opts = [
+                { val: -1, lbl: '1. Bodrum (-1)' },
+                { val: -2, lbl: '2. Bodrum (-2)' },
+                { val: 0, lbl: 'Zemin / Kat İçi' },
+                { val: 99, lbl: 'Çatı / Teras' },
+                { val: -99, lbl: 'Bahçe / Dış Alan' }
+            ];
+            var html = '<select class="form-select form-select-sm ' + cls + '">';
+            opts.forEach(function (o) {
+                html += '<option value="' + o.val + '"' + (parseInt(selectedVal, 10) === o.val ? ' selected' : '') + '>' + o.lbl + '</option>';
+            });
+            return html + '</select>';
         }
 
         function ensureStructureCommonSpaces(st) {
             if (!st.CommonSpaces || !Array.isArray(st.CommonSpaces) || st.CommonSpaces.length === 0) {
                 var list = [];
                 (st.IndoorCommonAreas || []).forEach(function (n) {
-                    list.push({ Name: n, SpaceGroup: 'BinaIci', SquareMeters: null, Description: '' });
+                    list.push({ Name: n, SpaceGroup: 'BinaIci', FloorLevel: guessDefaultFloorForSpace(n, 'BinaIci'), SquareMeters: null, Description: '' });
                 });
                 (st.OutdoorCommonAreas || []).forEach(function (n) {
-                    list.push({ Name: n, SpaceGroup: 'CevreDuzenleme', SquareMeters: null, Description: '' });
+                    list.push({ Name: n, SpaceGroup: 'CevreDuzenleme', FloorLevel: -99, SquareMeters: null, Description: '' });
                 });
                 if (list.length === 0) {
                     list = createDefaultStructure(0).CommonSpaces;
                 }
                 st.CommonSpaces = list;
             }
+            st.CommonSpaces.forEach(function (cs) {
+                if (cs.FloorLevel === undefined || cs.FloorLevel === null) {
+                    cs.FloorLevel = guessDefaultFloorForSpace(cs.Name, cs.SpaceGroup);
+                }
+            });
             return st.CommonSpaces;
         }
 
@@ -1017,11 +1046,12 @@
                     html += '<input type="hidden" class="s-floors" value="0" /><input type="hidden" class="s-apts" value="0" /><input type="hidden" class="s-ground-apts" value="0" /><input type="hidden" class="s-shops" value="0" /><input type="hidden" class="s-base" value="0" />';
                 }
 
-                // Esnek Ortak Alan & Teknik Hacim Yönetimi (İnşaat/Yapı düzenine uyumlu m² ve bakım notlu)
+                // Esnek Ortak Alan & Teknik Hacim Yönetimi (İnşaat ERP düzenine uyumlu kat bazlı birim + m² + demirbaş notu)
                 var indoorOpts = [
-                    'Merdiven & Sahanlık', 'Asansör & Makine Dairesi', 'Ardiye / Kömürlük / Kiler',
-                    'Eski Kazan Dairesi (Depo)', 'Hidrofor & Su Deposu', 'Sığınak',
-                    'Garaj / Kapalı Otopark', 'Jeneratör Odası', 'Kapıcı / Görevli Dairesi', 'Çatı / Teras'
+                    'Merdiven & Sahanlık', 'Asansör & Makine Dairesi', 'Hidrofor Odası',
+                    'Pompa Odası', 'Depolama Alanı / Ardiye', 'Sığınak',
+                    'Eski Kazan Dairesi (Depo)', 'Garaj / Kapalı Otopark', 'Jeneratör Odası',
+                    'Elektrik & Sayaç Odası', 'Kapıcı / Görevli Dairesi', 'Çatı / Teras'
                 ];
                 var outdoorOpts = [
                     'Kamelya / Çardak', 'Bahçe & Ağaç Peyzajı', 'Çocuk Oyun Parkı',
@@ -1031,7 +1061,7 @@
 
                 html += '<div class="row g-3 mb-3">' +
                     '  <div class="col-md-6"><div class="p-3 rounded-3 border bg-light h-100">' +
-                    '    <div class="small fw-bold text-dark mb-2"><i class="bi bi-building-gear text-primary me-1"></i>Bina / Blok İçi Teknik &amp; Eklenti Alanlar (Hızlı Ekle/Çıkar)</div>' +
+                    '    <div class="small fw-bold text-dark mb-2"><i class="bi bi-building-gear text-primary me-1"></i>Bina / Bodrum İçi Teknik &amp; Depolama Birimleri (Hızlı Ekle/Çıkar)</div>' +
                     '    <div class="d-flex flex-wrap gap-2">' +
                     indoorOpts.map(function (item) {
                         var chk = hasSpace(item) ? ' checked' : '';
@@ -1048,22 +1078,23 @@
                     '    </div></div></div>' +
                     '</div>';
 
-                // Esnek Ortak Alan & m² & Bakım Notu Listesi + Özel Ekleme Çubuğu
+                // Esnek Kat Bazlı Birim, m² & Ekipman Listesi + Manuel Ekleme Çubuğu
                 html += '<div class="p-3 rounded-3 border bg-white mb-3">' +
                     '  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">' +
-                    '    <span class="small fw-bold text-dark"><i class="bi bi-rulers text-warning me-1"></i>Tanımlı Ortak Alanlar, Eklentiler &amp; m² / Ekipman Bilgileri (' + commonSpaces.length + ' Alan)</span>' +
-                    '    <span class="small text-muted">Ardiye, kömürlük, eski kazan dairesi, bahçe su kuyusu motoru vb. dilediğiniz alanı ekleyebilirsiniz.</span>' +
+                    '    <span class="small fw-bold text-dark"><i class="bi bi-rulers text-warning me-1"></i>Katlara Açılacak Ortak Birimler, Depolar &amp; m² / Ekipman Planı (' + commonSpaces.length + ' Birim)</span>' +
+                    '    <span class="small text-muted">Seçilen katta (örn. 1. Bodrum) ayrı birim açılır; içine pompa, hidrofor, motor ve demirbaş ekleyebilirsiniz.</span>' +
                     '  </div>' +
                     '  <div class="table-responsive mb-2">' +
                     '    <table class="table table-sm align-middle mb-0">' +
-                    '      <thead class="table-light small"><tr><th>Alan Adı</th><th style="width:155px;">Konum / Grup</th><th style="width:110px;">Alan (m²)</th><th>Ekipman / Bakım Notu</th><th style="width:55px;"></th></tr></thead>' +
+                    '      <thead class="table-light small"><tr><th>Birim / Alan Adı</th><th style="width:145px;">Kat Konumu</th><th style="width:130px;">Grup</th><th style="width:95px;">Alan (m²)</th><th>Demirbaş / Bakım Notu</th><th style="width:45px;"></th></tr></thead>' +
                     '      <tbody>' +
                     commonSpaces.map(function (cs, csIdx) {
                         return '<tr class="cs-row" data-cs-idx="' + csIdx + '">' +
                             '<td><input type="text" class="form-control form-control-sm fw-semibold cs-name" value="' + escapeAttr(cs.Name) + '" /></td>' +
-                            '<td><select class="form-select form-select-sm cs-group"><option value="BinaIci"' + (cs.SpaceGroup !== 'CevreDuzenleme' ? ' selected' : '') + '>Bina / Blok İçi</option><option value="CevreDuzenleme"' + (cs.SpaceGroup === 'CevreDuzenleme' ? ' selected' : '') + '>Çevre / Bahçe</option></select></td>' +
+                            '<td>' + buildFloorSelectHtml('cs-floor', cs.FloorLevel) + '</td>' +
+                            '<td><select class="form-select form-select-sm cs-group"><option value="BinaIci"' + (cs.SpaceGroup !== 'CevreDuzenleme' ? ' selected' : '') + '>Bina / Bodrum İçi</option><option value="CevreDuzenleme"' + (cs.SpaceGroup === 'CevreDuzenleme' ? ' selected' : '') + '>Çevre / Bahçe</option></select></td>' +
                             '<td><input type="number" step="0.5" min="0" class="form-control form-control-sm cs-sqm" value="' + (cs.SquareMeters != null ? cs.SquareMeters : '') + '" placeholder="m²" /></td>' +
-                            '<td><input type="text" class="form-control form-control-sm cs-desc" value="' + escapeAttr(cs.Description || '') + '" placeholder="Örn: Dalgıç pompa motoru, kiler bölmesi..." /></td>' +
+                            '<td><input type="text" class="form-control form-control-sm cs-desc" value="' + escapeAttr(cs.Description || '') + '" placeholder="Örn: Pompa, hidrofor, kiler bölmesi..." /></td>' +
                             '<td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="removeCommonSpaceRow(' + idx + ', ' + csIdx + ')" title="Kaldır"><i class="bi bi-x-lg"></i></button></td>' +
                             '</tr>';
                     }).join('') +
@@ -1071,10 +1102,11 @@
                     '    </table>' +
                     '  </div>' +
                     '  <div class="row g-2 align-items-end pt-2 border-top bg-light bg-opacity-50 p-2 rounded-3">' +
-                    '    <div class="col-md-4"><label class="form-label small fw-bold mb-1">Yeni Özel Alan / Kuyu / Kiler Adı</label><input type="text" class="form-control form-control-sm" id="customSpaceName-' + idx + '" placeholder="Örn: Kuzey Cephe Ardiye / Bahçe Su Kuyusu" /></div>' +
-                    '    <div class="col-md-2"><label class="form-label small fw-bold mb-1">Grup</label><select class="form-select form-select-sm" id="customSpaceGroup-' + idx + '"><option value="BinaIci">Bina İçi</option><option value="CevreDuzenleme">Çevre / Bahçe</option></select></div>' +
-                    '    <div class="col-md-2"><label class="form-label small fw-bold mb-1">Alan (m²)</label><input type="number" step="0.5" min="0" class="form-control form-control-sm" id="customSpaceSqm-' + idx + '" placeholder="Örn: 25" /></div>' +
-                    '    <div class="col-md-3"><label class="form-label small fw-bold mb-1">Ekipman / Bakım Notu</label><input type="text" class="form-control form-control-sm" id="customSpaceDesc-' + idx + '" placeholder="Örn: Hidrofor / kuyu motoru bakımı" /></div>' +
+                    '    <div class="col-md-3"><label class="form-label small fw-bold mb-1">Yeni Birim / Oda Adı</label><input type="text" class="form-control form-control-sm" id="customSpaceName-' + idx + '" placeholder="Örn: Pompa Odası, Depolama Alanı" /></div>' +
+                    '    <div class="col-md-2"><label class="form-label small fw-bold mb-1">Kat Konumu</label>' + buildFloorSelectHtml('form-select-sm" id="customSpaceFloor-' + idx, -1) + '</div>' +
+                    '    <div class="col-md-2"><label class="form-label small fw-bold mb-1">Grup</label><select class="form-select form-select-sm" id="customSpaceGroup-' + idx + '"><option value="BinaIci">Bina / Bodrum İçi</option><option value="CevreDuzenleme">Çevre / Bahçe</option></select></div>' +
+                    '    <div class="col-md-1"><label class="form-label small fw-bold mb-1">m²</label><input type="number" step="0.5" min="0" class="form-control form-control-sm" id="customSpaceSqm-' + idx + '" placeholder="25" /></div>' +
+                    '    <div class="col-md-3"><label class="form-label small fw-bold mb-1">Demirbaş / Bakım Notu</label><input type="text" class="form-control form-control-sm" id="customSpaceDesc-' + idx + '" placeholder="Örn: 2 adet hidrofor pompası" /></div>' +
                     '    <div class="col-md-1 d-grid"><button type="button" class="btn btn-sm btn-primary fw-bold" onclick="addCustomCommonSpace(' + idx + ')">+ Ekle</button></div>' +
                     '  </div>' +
                     '</div>';
@@ -1147,7 +1179,7 @@
             var list = ensureStructureCommonSpaces(stateStructures[idx]);
             var existingIdx = list.findIndex(function (x) { return (x.Name || '').toLowerCase() === name.toLowerCase(); });
             if (isChecked && existingIdx < 0) {
-                list.push({ Name: name, SpaceGroup: spaceGroup, SquareMeters: null, Description: '' });
+                list.push({ Name: name, SpaceGroup: spaceGroup, FloorLevel: guessDefaultFloorForSpace(name, spaceGroup), SquareMeters: null, Description: '' });
             } else if (!isChecked && existingIdx >= 0) {
                 list.splice(existingIdx, 1);
             }
@@ -1157,18 +1189,20 @@
         function addCustomCommonSpace(idx) {
             syncStateFromDom();
             var nameEl = document.getElementById('customSpaceName-' + idx);
+            var flrEl = document.getElementById('customSpaceFloor-' + idx);
             var grpEl = document.getElementById('customSpaceGroup-' + idx);
             var sqmEl = document.getElementById('customSpaceSqm-' + idx);
             var descEl = document.getElementById('customSpaceDesc-' + idx);
             var name = (nameEl?.value || '').trim();
             if (!name) {
-                alert('Lütfen ortak alan / ardiye / kuyu adını girin.');
+                alert('Lütfen ortak alan / pompa odası / depo adını girin.');
                 return;
             }
             var list = ensureStructureCommonSpaces(stateStructures[idx]);
             list.push({
                 Name: name,
                 SpaceGroup: grpEl?.value || 'BinaIci',
+                FloorLevel: parseInt(flrEl?.value ?? '-1', 10),
                 SquareMeters: sqmEl && sqmEl.value !== '' ? (parseFloat(sqmEl.value) || null) : null,
                 Description: (descEl?.value || '').trim()
             });
@@ -1224,11 +1258,12 @@
                 card.querySelectorAll('.cs-row').forEach(function (row) {
                     var n = (row.querySelector('.cs-name')?.value || '').trim();
                     if (!n) return;
+                    var flrVal = parseInt(row.querySelector('.cs-floor')?.value ?? '-1', 10);
                     var grp = row.querySelector('.cs-group')?.value || 'BinaIci';
                     var sqmRaw = row.querySelector('.cs-sqm')?.value;
                     var sqm = (sqmRaw !== undefined && sqmRaw !== null && sqmRaw !== '') ? (parseFloat(sqmRaw) || null) : null;
                     var desc = (row.querySelector('.cs-desc')?.value || '').trim();
-                    csRows.push({ Name: n, SpaceGroup: grp, SquareMeters: sqm, Description: desc });
+                    csRows.push({ Name: n, SpaceGroup: grp, FloorLevel: isNaN(flrVal) ? -1 : flrVal, SquareMeters: sqm, Description: desc });
                 });
                 st.CommonSpaces = csRows;
                 st.IndoorCommonAreas = csRows.filter(function (x) { return x.SpaceGroup !== 'CevreDuzenleme'; }).map(function (x) { return x.Name; });

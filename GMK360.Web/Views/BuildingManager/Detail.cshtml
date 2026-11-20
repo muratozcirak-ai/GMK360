@@ -3,10 +3,13 @@
     ViewData["Title"] = Model.Name + " - Yönetim Masası & Yapı Ekosistemi";
     Layout = "~/Views/Shared/_FacilityLayout.cshtml";
 
-    var units = Model.Units?
-        .Where(u => !(u.Category ?? "").StartsWith("OrtakAlan"))
+    var allPhysicalUnits = Model.Units?
+        .Where(u => u.Category != "OrtakAlan_Blok" && u.DoorNumber != "ORTAK" && u.DoorNumber != "Ortak Tesisler")
         .OrderBy(u => u.FloorLevel).ThenBy(u => u.DoorNumber)
         .ToList() ?? new List<GMK360.Core.Entities.BuildingUnit>();
+    var units = allPhysicalUnits
+        .Where(u => !(u.Category ?? "").StartsWith("OrtakAlan"))
+        .ToList();
     var debts = units.SelectMany(u => u.Debts ?? new List<GMK360.Core.Entities.UnitDebt>()).ToList();
     var expenses = Model.Expenses?.OrderByDescending(e => e.Date).ToList() ?? new List<GMK360.Core.Entities.BuildingExpense>();
     var activeExpenses = expenses.Where(e => !e.IsArchived && e.ReversalOfExpenseId == null).ToList();
@@ -21,9 +24,13 @@
     var shopCount = units.Count(u => u.Category == "Dukkan");
     var resCount = units.Count(u => u.Category != "Dukkan");
 
-    // Kat Hiyerarşisi (En Üst Kattan Aşağıya — Zemin Daire ve Dükkanlar Zemin Katta Birlikte)
-    var distinctFloors = units.Select(u => u.FloorLevel).Distinct().OrderByDescending(f => f).ToList();
-    if (!distinctFloors.Any()) { distinctFloors = new List<int> { 1 }; }
+    // Kat Hiyerarşisi (Çatı/Normal -> Zemin -> Bodrum (-1, -2) -> Bahçe & Çevre (-99))
+    var floorSet = allPhysicalUnits.Select(u => u.FloorLevel).ToHashSet();
+    for (int b = 1; b <= Model.BasementFloors; b++) { floorSet.Add(-b); }
+    if (Model.HasGroundFloor) { floorSet.Add(0); }
+    floorSet.Add(-99); // Bahçe & Çevre Alanı satırı her zaman hızlı birim/kuyu/kamelya eklemeye açık
+    var distinctFloors = floorSet.OrderByDescending(f => f).ToList();
+    if (!distinctFloors.Any()) { distinctFloors = new List<int> { 1, 0, -1, -99 }; }
 
     var meetings = ViewBag.Meetings as List<GMK360.Core.Entities.SystemMeeting> ?? new List<GMK360.Core.Entities.SystemMeeting>();
     var commonSpaces = ViewBag.CommonSpaces as List<GMK360.Core.Entities.UnitSpace> ?? new List<GMK360.Core.Entities.UnitSpace>();
@@ -432,119 +439,206 @@
                 </div>
             </div>
 
-            <!-- 1. B) NORMAL KATLAR & BAĞIMSIZ BÖLÜMLER (DİKEY KESİT - ZEMİN DAİRE VE DÜKKANLAR BİRLİKTE) -->
+            <!-- 1. B) NORMAL KATLAR, ZEMİN, BODRUM & TEKNİK BİRİMLER (İNŞAAT ERP UYUMLU DİKEY KESİT) -->
             <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white">
-                <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
+                <div class="card-header bg-white border-bottom p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
                     <div>
-                        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-layers-half text-primary me-2"></i> Katlar &amp; Bağımsız Bölüm Dağılım Matrisi</h5>
-                        <small class="text-muted">Zemin kattaki daire ve dükkanlar Zemin Kat satırında birlikte gösterilir; daire/dükkana tıklayarak malik, kiracı ve aidat durumunu görebilirsiniz.</small>
+                        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-layers-half text-primary me-2"></i> Katlar, Bodrum, Bahçe &amp; Birim Dağılım Matrisi</h5>
+                        <small class="text-muted">Zemin katta daire ve dükkanlar birlikte görünür; Bodrum ve tüm katlara pompa odası, hidrofor, depo/ardiye ekleyip içine demirbaş koyabilirsiniz.</small>
                     </div>
-                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2 rounded-pill fw-bold">
-                        @resCount Daire@(shopCount > 0 ? $" • {shopCount} Dükkan" : "")
-                    </span>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2 rounded-pill fw-bold">
+                            @resCount Daire@(shopCount > 0 ? $" • {shopCount} Dükkan" : "")
+                        </span>
+                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold" onclick="openFloorUnitModal(-1, '1. BODRUM')">
+                            <i class="bi bi-plus-circle me-1"></i> Kat / Bodrum Birimi Ekle
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body p-4 bg-light bg-opacity-50">
                     
                     @foreach (var floor in distinctFloors)
                     {
-                        var floorUnits = units
+                        var floorUnits = allPhysicalUnits
                             .Where(u => u.FloorLevel == floor)
-                            .OrderBy(u => u.Category == "Dukkan" ? 1 : 0)
+                            .OrderBy(u => (u.Category ?? "").StartsWith("OrtakAlan") ? 2 : (u.Category == "Dukkan" ? 1 : 0))
                             .ThenBy(u => u.DoorNumber)
                             .ToList();
-                        var floorAptCount = floorUnits.Count(u => u.Category != "Dukkan");
+                        var floorAptCount = floorUnits.Count(u => !(u.Category ?? "").StartsWith("OrtakAlan") && u.Category != "Dukkan");
                         var floorShopCount = floorUnits.Count(u => u.Category == "Dukkan");
+                        var floorTechCount = floorUnits.Count(u => (u.Category ?? "").StartsWith("OrtakAlan"));
                         var floorParts = new List<string>();
                         if (floorAptCount > 0) floorParts.Add($"{floorAptCount} Daire");
                         if (floorShopCount > 0) floorParts.Add($"{floorShopCount} Dükkan");
-                        var floorSummaryLabel = floorParts.Any() ? string.Join(" + ", floorParts) : "Boş Kat";
+                        if (floorTechCount > 0) floorParts.Add($"{floorTechCount} Teknik/Depo");
+                        var floorSummaryLabel = floorParts.Any() ? string.Join(" + ", floorParts) : "Birim Eklenebilir";
+                        var floorTitle = floor == -99
+                            ? "BAHÇE & ÇEVRE"
+                            : (floor == 99
+                                ? "ÇATI / TERAS"
+                                : (floor == 0
+                                    ? "ZEMİN KAT"
+                                    : (floor < 0 ? $"{Math.Abs(floor)}. BODRUM" : $"{floor}. KAT")));
+                        var isBasementFloor = floor < 0 && floor != -99;
+                        var isGardenFloor = floor == -99;
                         
-                        <div class="row align-items-center mb-3 pb-3 border-bottom border-secondary border-opacity-10">
-                            <!-- Sol: Kat Etiketi -->
-                            <div class="col-md-2 col-sm-3 mb-2 mb-sm-0">
-                                <div class="bg-white border rounded-4 p-2 text-center shadow-sm">
-                                    <span class="fw-bold text-dark fs-5 d-block">@(floor == 0 ? "ZEMİN KAT" : $"{floor}. KAT")</span>
-                                    <small class="text-muted fw-semibold" style="font-size:0.75rem;">@floorSummaryLabel</small>
+                        <div class="row align-items-stretch mb-3 pb-3 border-bottom border-secondary border-opacity-10">
+                            <!-- Sol: Kat Etiketi + Bu Kata Birim Ekle Butonu -->
+                            <div class="col-md-2 col-sm-3 mb-2 mb-sm-0 d-flex">
+                                <div class="bg-white border @(isBasementFloor ? "border-secondary border-2" : (isGardenFloor ? "border-success border-2" : "")) rounded-4 p-2 text-center shadow-sm w-100 d-flex flex-column justify-content-center">
+                                    <span class="fw-bold @(isBasementFloor ? "text-secondary" : (isGardenFloor ? "text-success" : "text-dark")) fs-6 d-block">@floorTitle</span>
+                                    <small class="text-muted fw-semibold d-block mb-2" style="font-size:0.75rem;">@floorSummaryLabel</small>
+                                    <button type="button" class="btn btn-xs btn-outline-primary rounded-pill px-2 py-1 fw-semibold" style="font-size:0.72rem;" onclick="openFloorUnitModal(@floor, '@floorTitle')">
+                                        <i class="bi bi-plus-lg me-1"></i>Birim Ekle
+                                    </button>
                                 </div>
                             </div>
 
-                            <!-- Sağ: Daire ve Zemin Dükkan Kutucukları Grid'i -->
+                            <!-- Sağ: Daire, Zemin Dükkan ve Teknik / Depolama Birimleri Grid'i -->
                             <div class="col-md-10 col-sm-9">
                                 <div class="row g-2">
                                     @if (!floorUnits.Any())
                                     {
                                         <div class="col-12">
-                                            <div class="p-2 border rounded-3 text-center bg-white small text-muted fst-italic">
-                                                Bu katta henüz tanımlı bağımsız bölüm yok.
+                                            <div class="p-3 border border-dashed rounded-3 text-center bg-white small text-muted fst-italic">
+                                                @floorTitle için henüz birim tanımlanmadı. Soldaki <strong>"+ Birim Ekle"</strong> ile Pompa Odası, Hidrofor, Depo veya Kuyu ekleyebilirsiniz.
                                             </div>
                                         </div>
                                     }
                                     @foreach (var unit in floorUnits)
                                     {
-                                        var unitDebts = unit.Debts?.ToList() ?? new List<GMK360.Core.Entities.UnitDebt>();
-                                        var unitUnpaid = unitDebts.Where(d => !d.IsPaid).Sum(d => d.Amount);
-                                        var isShop = unit.Category == "Dukkan";
+                                        var isTechUnit = (unit.Category ?? "").StartsWith("OrtakAlan");
+                                        if (isTechUnit)
+                                        {
+                                            var isStorage = unit.Category == "OrtakAlan_Depo";
+                                            var unitFixtures = (unit.Spaces ?? new List<GMK360.Core.Entities.UnitSpace>())
+                                                .SelectMany(s => s.Fixtures ?? new List<GMK360.Core.Entities.SpaceFixture>())
+                                                .ToList();
+                                            var cardBorder = isGardenFloor ? "border-success bg-success bg-opacity-10" : (isStorage ? "border-secondary bg-light" : "border-warning bg-warning bg-opacity-10");
+                                            var catBadge = isGardenFloor ? "Çevre / Bahçe Birimi" : (isStorage ? "Depo / Ardiye" : "Teknik / Tesis Birimi");
 
-                                        <div class="col-lg-4 col-md-6">
-                                            <div class="card border @(isShop ? "border-success bg-success bg-opacity-10" : "bg-white") rounded-4 p-3 shadow-sm hover-shadow transition-all cursor-pointer h-100" onclick="openUnitModal(@unit.Id, '@unit.DoorNumber', '@unit.RoomLayout', '@(unit.OwnerName ?? "-")', '@(unit.OwnerPhone ?? "-")', '@(unit.TenantName ?? "-")', '@(unit.TenantPhone ?? "-")', @unitUnpaid, @(unit.IsEmpty ? "true" : "false"))">
-                                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                                    <div>
-                                                        <span class="badge @(isShop ? "bg-success" : "bg-dark") rounded-pill px-2 py-1 mb-1 font-monospace">@unit.DoorNumber</span>
-                                                        <span class="badge bg-light text-dark border ms-1">@(unit.RoomLayout ?? (isShop ? "Dükkan" : "3+1"))</span>
+                                            <div class="col-lg-4 col-md-6">
+                                                <div class="card border @cardBorder rounded-4 p-3 shadow-sm h-100">
+                                                    <div class="d-flex justify-content-between align-items-start gap-1 mb-2">
+                                                        <div>
+                                                            <span class="fw-bold text-dark fs-6 d-block">
+                                                                <i class="bi @(isGardenFloor ? "bi-tree-fill text-success" : (isStorage ? "bi-box-seam-fill text-secondary" : "bi-gear-wide-connected text-warning-emphasis")) me-1"></i>@unit.DoorNumber
+                                                            </span>
+                                                            @if (!string.IsNullOrWhiteSpace(unit.RoomLayout))
+                                                            {
+                                                                <small class="text-muted">@unit.RoomLayout</small>
+                                                            }
+                                                        </div>
+                                                        <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                                                            @if (unit.GrossSquareMeters.HasValue && unit.GrossSquareMeters > 0)
+                                                            {
+                                                                <span class="badge bg-white text-dark border">@unit.GrossSquareMeters.Value.ToString("0.##") m²</span>
+                                                            }
+                                                            <span class="badge bg-dark">@catBadge</span>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        @if (isShop)
+
+                                                    <div class="small bg-white bg-opacity-75 rounded-3 p-2 border mb-2">
+                                                        <div class="fw-bold text-dark mb-1" style="font-size:0.75rem;">
+                                                            <i class="bi bi-wrench-adjustable-circle text-primary me-1"></i>Birim Demirbaşları &amp; Ekipman (@unitFixtures.Count)
+                                                        </div>
+                                                        @if (!unitFixtures.Any())
                                                         {
-                                                            <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">🏪 Dükkan (Asansör Muaf)</span>
-                                                        }
-                                                        else if (unit.IsEmpty)
-                                                        {
-                                                            <span class="badge bg-secondary rounded-pill">⚪ Boş Daire</span>
-                                                        }
-                                                        else if (!string.IsNullOrEmpty(unit.TenantName))
-                                                        {
-                                                            <span class="badge bg-info text-dark rounded-pill">🟢 Kiracıda</span>
+                                                            <div class="text-muted fst-italic" style="font-size:0.75rem;">Henüz pompa / motor / demirbaş eklenmedi.</div>
                                                         }
                                                         else
                                                         {
-                                                            <span class="badge bg-primary rounded-pill">🔵 Ev Sahibi</span>
+                                                            foreach (var fx in unitFixtures)
+                                                            {
+                                                                <div class="d-flex justify-content-between align-items-center border-top pt-1 mt-1" style="font-size:0.78rem;">
+                                                                    <span class="fw-semibold text-dark">@fx.ItemName @(!string.IsNullOrWhiteSpace(fx.StandardBrand) ? $"({fx.StandardBrand})" : "")</span>
+                                                                    <span class="badge bg-primary-subtle text-primary">x@fx.Quantity</span>
+                                                                </div>
+                                                            }
+                                                        }
+                                                    </div>
+
+                                                    <div class="d-flex justify-content-between align-items-center mt-auto pt-1">
+                                                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-2 py-1 fw-bold" style="font-size:0.75rem;" onclick="openFloorFixtureModal(@unit.Id, '@unit.DoorNumber.Replace("'", "\\'")')">
+                                                            <i class="bi bi-plus-circle me-1"></i>Demirbaş / Pompa Ekle
+                                                        </button>
+                                                        <form asp-action="DeleteFloorTechnicalUnit" asp-controller="BuildingManager" method="post" class="d-inline" onsubmit="return confirm('Bu teknik/depo birimini kaldırmak istediğinize emin misiniz?');">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="buildingId" value="@Model.Id" />
+                                                            <input type="hidden" name="unitId" value="@unit.Id" />
+                                                            <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="Birimi Kaldır"><i class="bi bi-trash"></i></button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            var unitDebts = unit.Debts?.ToList() ?? new List<GMK360.Core.Entities.UnitDebt>();
+                                            var unitUnpaid = unitDebts.Where(d => !d.IsPaid).Sum(d => d.Amount);
+                                            var isShop = unit.Category == "Dukkan";
+
+                                            <div class="col-lg-4 col-md-6">
+                                                <div class="card border @(isShop ? "border-success bg-success bg-opacity-10" : "bg-white") rounded-4 p-3 shadow-sm hover-shadow transition-all cursor-pointer h-100" onclick="openUnitModal(@unit.Id, '@unit.DoorNumber', '@unit.RoomLayout', '@(unit.OwnerName ?? "-")', '@(unit.OwnerPhone ?? "-")', '@(unit.TenantName ?? "-")', '@(unit.TenantPhone ?? "-")', @unitUnpaid, @(unit.IsEmpty ? "true" : "false"))">
+                                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                                        <div>
+                                                            <span class="badge @(isShop ? "bg-success" : "bg-dark") rounded-pill px-2 py-1 mb-1 font-monospace">@unit.DoorNumber</span>
+                                                            <span class="badge bg-light text-dark border ms-1">@(unit.RoomLayout ?? (isShop ? "Dükkan" : "3+1"))</span>
+                                                        </div>
+                                                        <div>
+                                                            @if (isShop)
+                                                            {
+                                                                <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">🏪 Dükkan (Asansör Muaf)</span>
+                                                            }
+                                                            else if (unit.IsEmpty)
+                                                            {
+                                                                <span class="badge bg-secondary rounded-pill">⚪ Boş Daire</span>
+                                                            }
+                                                            else if (!string.IsNullOrEmpty(unit.TenantName))
+                                                            {
+                                                                <span class="badge bg-info text-dark rounded-pill">🟢 Kiracıda</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="badge bg-primary rounded-pill">🔵 Ev Sahibi</span>
+                                                            }
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="small mb-2">
+                                                        <div class="d-flex justify-content-between">
+                                                            <span class="text-muted"><i class="bi bi-person-fill text-secondary me-1"></i> Ev Sahibi:</span>
+                                                            <span class="fw-bold text-dark text-truncate" style="max-width: 180px;">@(unit.OwnerName ?? "Belirtilmedi")</span>
+                                                        </div>
+                                                        @if (!string.IsNullOrEmpty(unit.TenantName))
+                                                        {
+                                                            <div class="d-flex justify-content-between mt-1">
+                                                                <span class="text-muted"><i class="bi bi-person-check text-info me-1"></i> Kiracı:</span>
+                                                                <span class="fw-bold text-info text-truncate" style="max-width: 180px;">@unit.TenantName</span>
+                                                            </div>
+                                                        }
+                                                    </div>
+
+                                                    <div class="d-flex justify-content-between align-items-center pt-2 border-top small">
+                                                        <span class="text-muted" style="font-size:0.75rem;">
+                                                            <i class="bi bi-arrows-fullscreen me-1"></i>@(unit.GrossSquareMeters ?? 110) m²
+                                                        </span>
+                                                        @if (unitUnpaid > 0)
+                                                        {
+                                                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger fw-bold">
+                                                                <i class="bi bi-exclamation-circle me-1"></i>@unitUnpaid.ToString("N0") ₺ Borçlu
+                                                            </span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge bg-success bg-opacity-10 text-success border border-success fw-bold">
+                                                                <i class="bi bi-check2 me-1"></i>Borcu Yok
+                                                            </span>
                                                         }
                                                     </div>
                                                 </div>
-
-                                                <div class="small mb-2">
-                                                    <div class="d-flex justify-content-between">
-                                                        <span class="text-muted"><i class="bi bi-person-fill text-secondary me-1"></i> Ev Sahibi:</span>
-                                                        <span class="fw-bold text-dark text-truncate" style="max-width: 180px;">@(unit.OwnerName ?? "Belirtilmedi")</span>
-                                                    </div>
-                                                    @if (!string.IsNullOrEmpty(unit.TenantName))
-                                                    {
-                                                        <div class="d-flex justify-content-between mt-1">
-                                                            <span class="text-muted"><i class="bi bi-person-check text-info me-1"></i> Kiracı:</span>
-                                                            <span class="fw-bold text-info text-truncate" style="max-width: 180px;">@unit.TenantName</span>
-                                                        </div>
-                                                    }
-                                                </div>
-
-                                                <div class="d-flex justify-content-between align-items-center pt-2 border-top small">
-                                                    <span class="text-muted" style="font-size:0.75rem;">
-                                                        <i class="bi bi-arrows-fullscreen me-1"></i>@(unit.GrossSquareMeters ?? 110) m²
-                                                    </span>
-                                                    @if (unitUnpaid > 0)
-                                                    {
-                                                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger fw-bold">
-                                                            <i class="bi bi-exclamation-circle me-1"></i>@unitUnpaid.ToString("N0") ₺ Borçlu
-                                                        </span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="badge bg-success bg-opacity-10 text-success border border-success fw-bold">
-                                                            <i class="bi bi-check2 me-1"></i>Borcu Yok
-                                                        </span>
-                                                    }
-                                                </div>
                                             </div>
-                                        </div>
+                                        }
                                     }
                                 </div>
                             </div>
@@ -1291,7 +1385,7 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
             <div class="modal-header bg-primary text-white border-0 py-3">
-                <h5 class="modal-title fw-bold mb-0"><i class="bi bi-rulers me-2"></i>Ortak Alan / Ardiye / Kuyu Ekle (m²)</h5>
+                <h5 class="modal-title fw-bold mb-0"><i class="bi bi-rulers me-2"></i>Ortak Alan / Pompa / Depo Ekle (m²)</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <form asp-action="AddCommonSpaceToBuilding" asp-controller="BuildingManager" method="post">
@@ -1299,28 +1393,194 @@
                 <input type="hidden" name="buildingId" value="@Model.Id" />
                 <div class="modal-body p-4 row g-3">
                     <div class="col-12">
-                        <label class="form-label fw-bold small">Alan / Hacim Adı <span class="text-danger">*</span></label>
-                        <input type="text" name="name" class="form-control" required placeholder="Örn: Ardiye / Kömürlük, Eski Kazan Dairesi, Bahçe Su Kuyusu..." />
+                        <label class="form-label fw-bold small">Alan / Birim Adı <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="form-control" list="techUnitSuggestions" required placeholder="Örn: Pompa Odası, Hidrofor Odası, Depolama Alanı, Bahçe Su Kuyusu..." />
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold small">Konum / Grup</label>
-                        <select name="spaceGroup" class="form-select">
-                            <option value="BinaIci">Bina / Blok İçi (Ardiye, Kazan, Sığınak vb.)</option>
-                            <option value="CevreDuzenleme">Çevre / Bahçe (Kuyu, Kamelya, Park vb.)</option>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Kat Konumu</label>
+                        <select name="floorLevel" class="form-select">
+                            <option value="-1" selected>1. Bodrum (-1)</option>
+                            <option value="-2">2. Bodrum (-2)</option>
+                            <option value="0">Zemin / Bina İçi (0)</option>
+                            <option value="99">Çatı / Teras (+99)</option>
+                            <option value="-99">Bahçe / Dış Alan</option>
                         </select>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold small">Alan (m² - Opsiyonel)</label>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Grup</label>
+                        <select name="spaceGroup" class="form-select">
+                            <option value="BinaIci">Bina / Bodrum İçi</option>
+                            <option value="CevreDuzenleme">Çevre / Bahçe</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Alan (m²)</label>
                         <input type="number" step="0.5" min="0" name="squareMeters" class="form-control" placeholder="Örn: 35" />
                     </div>
                     <div class="col-12">
                         <label class="form-label fw-bold small">Ekipman / Motor / Bakım Notu</label>
-                        <textarea name="description" class="form-control" rows="2" placeholder="Örn: Dalgıç pompa motor bakımı veya daire başı kiler bölmesi"></textarea>
+                        <textarea name="description" class="form-control" rows="2" placeholder="Örn: Hidrofor pompası, dalgıç pompa veya daire başı kiler bölmesi"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer border-0 bg-light">
                     <button type="submit" class="btn btn-primary fw-bold rounded-pill w-100">
-                        <i class="bi bi-check-circle me-1"></i> Ortak Alana Kaydet
+                        <i class="bi bi-check-circle me-1"></i> Kata / Ortak Alana Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 11. İNŞAAT ERP TARZI KAT BAZLI BİRİM EKLEME MODALI (POMPA ODASI, HİDROFOR, DEPO, DAİRE) -->
+<datalist id="techUnitSuggestions">
+    <option value="Pompa Odası"></option>
+    <option value="Hidrofor &amp; Su Deposu Odası"></option>
+    <option value="Depolama Alanı / Ardiye"></option>
+    <option value="Kömürlük / Kiler"></option>
+    <option value="Sığınak"></option>
+    <option value="Eski Kazan Dairesi (Depo)"></option>
+    <option value="Jeneratör Odası"></option>
+    <option value="Elektrik &amp; Sayaç Odası"></option>
+    <option value="Kapalı Garaj / Otopark"></option>
+    <option value="Bahçe Su Kuyusu &amp; Pompa"></option>
+    <option value="Kamelya / Çardak"></option>
+    <option value="Çocuk Oyun Parkı"></option>
+</datalist>
+
+<datalist id="techFixtureSuggestions">
+    <option value="Hidrofor Pompası"></option>
+    <option value="Dalgıç Su Kuyusu Pompası"></option>
+    <option value="Yangın Hidrofor Pompası"></option>
+    <option value="Genleşme Tankı (500L)"></option>
+    <option value="Su Deposu (Paslanmaz / Modüler)"></option>
+    <option value="Sirkülasyon Pompası"></option>
+    <option value="Merkezi Kalorifer Kazanı"></option>
+    <option value="Jeneratör Grubu"></option>
+    <option value="Asansör Motoru &amp; Panosu"></option>
+    <option value="Çelik Arşiv / Depolama Rafı"></option>
+</datalist>
+
+<div class="modal fade" id="addFloorUnitModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-dark text-white border-0 py-3">
+                <h5 class="modal-title fw-bold mb-0"><i class="bi bi-building-add me-2 text-warning"></i>Kata Yeni Birim / Teknik Hacim Ekle <span class="badge bg-warning text-dark ms-2" id="floorUnitModalBadge">1. BODRUM</span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="AddFloorUnit" asp-controller="BuildingManager" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="buildingId" value="@Model.Id" />
+                <div class="modal-body p-4 row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Bulunduğu Kat <span class="text-danger">*</span></label>
+                        <select name="floorLevel" id="floorUnitFloorSelect" class="form-select">
+                            <option value="-2">2. Bodrum (-2)</option>
+                            <option value="-1" selected>1. Bodrum (-1)</option>
+                            <option value="0">Zemin Kat (0)</option>
+                            @for (int fl = 1; fl <= Math.Max(1, Model.TotalFloors ?? 8); fl++)
+                            {
+                                <option value="@fl">@fl. Kat</option>
+                            }
+                            <option value="99">Çatı / Teras (+99)</option>
+                            <option value="-99">Bahçe &amp; Çevre Alanı (Dış Mekan)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Birim Kategorisi <span class="text-danger">*</span></label>
+                        <select name="category" id="floorUnitCatSelect" class="form-select">
+                            <option value="OrtakAlan_Tesis" selected>Teknik / Tesis Birimi (Pompa, Hidrofor, Sığınak)</option>
+                            <option value="OrtakAlan_Depo">Depolama Alanı / Ardiye / Kömürlük</option>
+                            <option value="Daire">Mesken / Daire (veya Kapıcı Dairesi)</option>
+                            <option value="Dukkan">Dükkan / Ticari Bölüm</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Alan (m²)</label>
+                        <input type="number" step="0.5" min="0" name="squareMeters" class="form-control" placeholder="Örn: 28" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Birim Adı / Kapı No <span class="text-danger">*</span></label>
+                        <input type="text" name="unitName" class="form-control fw-bold" list="techUnitSuggestions" required placeholder="Örn: Pompa Odası, Hidrofor Odası, Depolama Alanı..." />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Kullanım Notu / Tip</label>
+                        <input type="text" name="roomLayout" class="form-control" placeholder="Örn: Bodrum batı kanat tesisat odası" />
+                    </div>
+                    <div class="col-12 border-top pt-3 mt-2">
+                        <div class="small fw-bold text-primary mb-2"><i class="bi bi-wrench-adjustable me-1"></i>Bu Birime İlk Demirbaş / Pompa / Ekipman Ekle (İsteğe Bağlı)</div>
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <input type="text" name="firstFixtureName" class="form-control form-control-sm" list="techFixtureSuggestions" placeholder="Demirbaş: Örn. Hidrofor Pompası" />
+                            </div>
+                            <div class="col-md-3">
+                                <input type="text" name="firstFixtureBrand" class="form-control form-control-sm" placeholder="Marka/Model (Örn: Wilo 2x2.2kW)" />
+                            </div>
+                            <div class="col-md-3">
+                                <input type="text" name="technicalServiceName" class="form-control form-control-sm" placeholder="Bakım Servisi / Telefon" />
+                            </div>
+                            <div class="col-md-2">
+                                <input type="date" name="nextMaintenanceDate" class="form-control form-control-sm" title="Sonraki Bakım Tarihi" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="submit" class="btn btn-primary fw-bold rounded-pill px-4">
+                        <i class="bi bi-check2-circle me-1"></i> Birimi Kata Aç
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 12. BİRİM İÇİNE DEMİRBAŞ / POMPA / EKİPMAN ZİMMETLEME MODALI -->
+<div class="modal fade" id="addFloorFixtureModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-primary text-white border-0 py-3">
+                <h5 class="modal-title fw-bold mb-0"><i class="bi bi-wrench-adjustable-circle me-2"></i>Birime Demirbaş / Pompa Ekle</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="AddFixtureToFloorUnit" asp-controller="BuildingManager" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="buildingId" value="@Model.Id" />
+                <input type="hidden" name="unitId" id="fixtureTargetUnitId" value="0" />
+                <div class="modal-body p-4 row g-3">
+                    <div class="col-12">
+                        <div class="alert alert-light border mb-0 py-2 px-3 small">
+                            Hedef Birim: <strong id="fixtureTargetUnitTitle" class="text-primary">-</strong>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold small">Demirbaş / Pompa / Ekipman Adı <span class="text-danger">*</span></label>
+                        <input type="text" name="itemName" class="form-control fw-bold" list="techFixtureSuggestions" required placeholder="Örn: Hidrofor Pompası, Dalgıç Pompa, Genleşme Tankı..." />
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold small">Marka / Model / Güç</label>
+                        <input type="text" name="brand" class="form-control" placeholder="Örn: Grundfos CM 5-4 / Wilo 2.2 kW" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Adet</label>
+                        <input type="number" step="1" min="1" name="quantity" class="form-control" value="1" />
+                    </div>
+                    <div class="col-md-7">
+                        <label class="form-label fw-bold small">Yetkili Servis / Usta Adı &amp; Tel</label>
+                        <input type="text" name="serviceName" class="form-control" placeholder="Örn: Yılmaz Pompa Teknik 0532..." />
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold small">Sonraki Bakım Tarihi</label>
+                        <input type="date" name="nextMaintenanceDate" class="form-control" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold small">Teknik Not / Garanti / Seri No</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="Örn: Mekanik salmastra değişti, 6 ayda bir kontrol"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="submit" class="btn btn-primary fw-bold rounded-pill w-100">
+                        <i class="bi bi-check2-circle me-1"></i> Demirbaşı Birime Kaydet
                     </button>
                 </div>
             </form>
@@ -1426,5 +1686,28 @@
         const leavingAmt = ((amt / daysInMonth) * leavingDays).toFixed(2);
         const enteringAmt = ((amt / daysInMonth) * enteringDays).toFixed(2);
         out.innerText = `Kıstelyevm (${daysInMonth} gün): Çıkan sakin ${leavingDays} gün (${leavingAmt} ₺) • Yeni sakin ${enteringDays} gün (${enteringAmt} ₺)`;
+    }
+
+    function openFloorUnitModal(floorLevel, floorLabel) {
+        const sel = document.getElementById('floorUnitFloorSelect');
+        if (sel) {
+            const valStr = String(floorLevel);
+            if (!Array.from(sel.options).some(o => o.value === valStr)) {
+                const opt = document.createElement('option');
+                opt.value = valStr;
+                opt.text = floorLabel;
+                sel.appendChild(opt);
+            }
+            sel.value = valStr;
+        }
+        const badge = document.getElementById('floorUnitModalBadge');
+        if (badge) badge.innerText = floorLabel;
+        new bootstrap.Modal(document.getElementById('addFloorUnitModal')).show();
+    }
+
+    function openFloorFixtureModal(unitId, unitTitle) {
+        document.getElementById('fixtureTargetUnitId').value = unitId;
+        document.getElementById('fixtureTargetUnitTitle').innerText = unitTitle;
+        new bootstrap.Modal(document.getElementById('addFloorFixtureModal')).show();
     }
 </script>
