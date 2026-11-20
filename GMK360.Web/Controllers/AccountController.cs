@@ -262,6 +262,24 @@ namespace GMK360.Web.Controllers
         }
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> QuickPinLogin(
+            string phone,
+            string pin,
+            [FromServices] GMK360.Web.Services.FacilityTaskDispatchService dispatchService)
+        {
+            var res = await dispatchService.AuthenticateByPhoneAndPinAsync(phone, pin);
+            if (!res.Success || res.User == null)
+            {
+                TempData["QuickPinError"] = res.Message;
+                return RedirectToAction(nameof(Login));
+            }
+
+            await _signInManager.SignInAsync(res.User, isPersistent: true);
+            return RedirectToAction("Index", "FacilityPortal");
+        }
+
+        [HttpPost]
         [ValidateAntiForgeryToken] public async Task<IActionResult> Logout()
         {
             await _signInManager.SignOutAsync();

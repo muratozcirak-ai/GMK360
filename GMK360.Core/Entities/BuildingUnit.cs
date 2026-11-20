@@ -17,6 +17,9 @@ namespace GMK360.Core.Entities
         public string UnitNumber { get => DoorNumber; set => DoorNumber = value; }
         public double? GrossSquareMeters { get; set; }
         public double? NetSquareMeters { get; set; }
+        [Column(TypeName = "decimal(18,4)")]
+        public decimal LandShare { get; set; } = 0m;
+        public string? ResidentQuickPinHash { get; set; }
         public string FacadeDirection { get; set; } = string.Empty;
         
         public string? RoomLayout { get; set; } // Eski UnitType - Örn: "3+1", "2+1"

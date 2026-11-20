@@ -18,6 +18,15 @@ namespace GMK360.Core.Entities
         [Required, MaxLength(150)]
         public string FullName { get; set; } = string.Empty;
 
+        [MaxLength(450)]
+        public string? UserId { get; set; }
+
+        [MaxLength(30)]
+        public string? PhoneNumber { get; set; }
+
+        [MaxLength(256)]
+        public string? QuickPinHash { get; set; }
+
         [MaxLength(11)]
         public string? TcIdentityNo { get; set; }
 

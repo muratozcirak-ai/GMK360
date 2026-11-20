@@ -2004,6 +2004,14 @@ namespace GMK360.Data.Migrations
                     b.Property<decimal>("NetSalary")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("QuickPinHash")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
                     b.Property<string>("RoleType")
                         .IsRequired()
                         .HasMaxLength(80)
@@ -2022,6 +2030,10 @@ namespace GMK360.Data.Migrations
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
 
@@ -2170,6 +2182,94 @@ namespace GMK360.Data.Migrations
                     b.ToTable("BuildingStaffMonthlyPayrolls");
                 });
 
+            modelBuilder.Entity("GMK360.Core.Entities.BuildingTaskTicket", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AfterPhotoUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("AssignedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("AssignedStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BeforePhotoUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("BuildingId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("BuildingUnitId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByRole")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LocationNote")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("StaffCompletionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedStaffId");
+
+                    b.HasIndex("BuildingId");
+
+                    b.HasIndex("BuildingUnitId");
+
+                    b.ToTable("BuildingTaskTickets");
+                });
+
             modelBuilder.Entity("GMK360.Core.Entities.BuildingUnit", b =>
                 {
                     b.Property<int>("Id")
@@ -2216,6 +2316,9 @@ namespace GMK360.Data.Migrations
                     b.Property<bool>("IsEmpty")
                         .HasColumnType("bit");
 
+                    b.Property<decimal>("LandShare")
+                        .HasColumnType("decimal(18,4)");
+
                     b.Property<decimal?>("ListPrice")
                         .HasColumnType("decimal(18,2)");
 
@@ -2242,6 +2345,9 @@ namespace GMK360.Data.Migrations
 
                     b.Property<int?>("PropertyId")
                         .HasColumnType("int");
+
+                    b.Property<string>("ResidentQuickPinHash")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RoomLayout")
                         .HasColumnType("nvarchar(max)");
@@ -16255,6 +16361,31 @@ namespace GMK360.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Staff");
+                });
+
+            modelBuilder.Entity("GMK360.Core.Entities.BuildingTaskTicket", b =>
+                {
+                    b.HasOne("GMK360.Core.Entities.BuildingStaff", "AssignedStaff")
+                        .WithMany()
+                        .HasForeignKey("AssignedStaffId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GMK360.Core.Entities.Building", "Building")
+                        .WithMany()
+                        .HasForeignKey("BuildingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GMK360.Core.Entities.BuildingUnit", "BuildingUnit")
+                        .WithMany()
+                        .HasForeignKey("BuildingUnitId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("AssignedStaff");
+
+                    b.Navigation("Building");
+
+                    b.Navigation("BuildingUnit");
                 });
 
             modelBuilder.Entity("GMK360.Core.Entities.BuildingUnit", b =>

@@ -97,9 +97,14 @@ namespace GMK360.Web.Helpers
                 return "/SubcontractorContract";
             }
 
+            if (await userManager.IsInRoleAsync(user, "Personel") || await context.BuildingStaffs.AnyAsync(s => s.UserId == user.Id && s.IsActive))
+            {
+                return "/FacilityPortal/Index";
+            }
+
             if (await userManager.IsInRoleAsync(user, "Sakin"))
             {
-                return "/ResidentPortal/Index";
+                return "/FacilityPortal/Index";
             }
 
             if (await userManager.IsInRoleAsync(user, "Corporate"))

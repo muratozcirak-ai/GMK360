@@ -152,16 +152,23 @@ namespace GMK360.Web.Services
 
             if (units.Any())
             {
-                bool useAreaWeight = (string.Equals(distributionRule, "Metrekare", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(distributionRule, "ArsaPayi", StringComparison.OrdinalIgnoreCase))
+                bool useLandShare = string.Equals(distributionRule, "ArsaPayi", StringComparison.OrdinalIgnoreCase)
+                    && units.All(u => u.LandShare > 0);
+                bool useAreaWeight = !useLandShare
+                    && (string.Equals(distributionRule, "Metrekare", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(distributionRule, "ArsaPayi", StringComparison.OrdinalIgnoreCase))
                     && units.All(u => (u.GrossSquareMeters ?? 0) > 0);
+
+                decimal totalLandShare = useLandShare ? units.Sum(u => u.LandShare) : 0m;
                 double totalArea = useAreaWeight ? units.Sum(u => u.GrossSquareMeters ?? 0) : 0;
 
                 foreach (var unit in units)
                 {
-                    decimal shareAmount = useAreaWeight && totalArea > 0
-                        ? Math.Round(totalAmount * (decimal)((unit.GrossSquareMeters ?? 0) / totalArea), 2)
-                        : Math.Round(totalAmount / units.Count, 2);
+                    decimal shareAmount = useLandShare && totalLandShare > 0
+                        ? Math.Round(totalAmount * (unit.LandShare / totalLandShare), 2)
+                        : (useAreaWeight && totalArea > 0
+                            ? Math.Round(totalAmount * (decimal)((unit.GrossSquareMeters ?? 0) / totalArea), 2)
+                            : Math.Round(totalAmount / units.Count, 2));
 
                     var ownerPeriod = await EnsureActivePeriodFromUnitAsync(unit, "Owner");
                     var tenantPeriod = isCapital ? null : await EnsureActivePeriodFromUnitAsync(unit, "Tenant");

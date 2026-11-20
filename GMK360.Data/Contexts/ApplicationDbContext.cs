@@ -309,6 +309,7 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         public DbSet<BuildingFixedExpense> BuildingFixedExpenses { get; set; }
         public DbSet<BuildingStaffLeave> BuildingStaffLeaves { get; set; }
         public DbSet<BuildingStaffMonthlyPayroll> BuildingStaffMonthlyPayrolls { get; set; }
+        public DbSet<BuildingTaskTicket> BuildingTaskTickets { get; set; }
         
         // --- PHASE 8 GENERIC MEETINGS & SURVEYS ---
         public DbSet<SystemMeeting> SystemMeetings { get; set; }
@@ -1424,6 +1425,24 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
                 .WithMany(s => s.MonthlyPayrolls)
                 .HasForeignKey(bsp => bsp.BuildingStaffId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<BuildingTaskTicket>()
+                .HasOne(t => t.Building)
+                .WithMany()
+                .HasForeignKey(t => t.BuildingId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<BuildingTaskTicket>()
+                .HasOne(t => t.BuildingUnit)
+                .WithMany()
+                .HasForeignKey(t => t.BuildingUnitId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            builder.Entity<BuildingTaskTicket>()
+                .HasOne(t => t.AssignedStaff)
+                .WithMany()
+                .HasForeignKey(t => t.AssignedStaffId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             // ?n?aat Y?netimi ?li?kileri (Cascade Delete Loop ?nleme)
             builder.Entity<UnitMaterialSelection>()

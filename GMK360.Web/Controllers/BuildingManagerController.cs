@@ -1737,6 +1737,9 @@ namespace GMK360.Web.Controllers
             string? tenantPhone,
             string? tenantEmail,
             bool isEmpty,
+            decimal? landShare,
+            double? grossSquareMeters,
+            string? residentQuickPin,
             int? selectedBuildingFilter)
         {
             var building = await GetManagedBuildingAsync(buildingId);
@@ -1759,9 +1762,15 @@ namespace GMK360.Web.Controllers
             unit.TenantPhone = isEmpty ? null : tenantPhone?.Trim();
             unit.TenantEmail = isEmpty ? null : tenantEmail?.Trim();
             unit.IsEmpty = isEmpty;
+            if (landShare.HasValue) unit.LandShare = Math.Max(0m, landShare.Value);
+            if (grossSquareMeters.HasValue) unit.GrossSquareMeters = Math.Max(0, grossSquareMeters.Value);
+            if (!string.IsNullOrWhiteSpace(residentQuickPin) && residentQuickPin.Trim().Length >= 4)
+            {
+                unit.ResidentQuickPinHash = FacilityTaskDispatchService.HashQuickPin(residentQuickPin.Trim());
+            }
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = $"'{unit.DoorNumber}' bağımsız bölümü malik/kiracı bilgileri güncellendi.";
+            TempData["SuccessMessage"] = $"'{unit.DoorNumber}' bağımsız bölümü malik/kiracı, arsa payı ve PWA PIN bilgileri güncellendi.";
             return RedirectToAction(nameof(Sakinler), new { buildingId = selectedBuildingFilter });
         }
 
@@ -2178,6 +2187,8 @@ namespace GMK360.Web.Controllers
             string fullName,
             string? tcIdentityNo,
             string? sgkNumber,
+            string? phoneNumber,
+            string? quickPin,
             string roleType,
             decimal netSalary,
             decimal sgkEmployerShare,
@@ -2195,6 +2206,10 @@ namespace GMK360.Web.Controllers
                 FullName = fullName?.Trim() ?? "Personel",
                 TcIdentityNo = tcIdentityNo?.Trim(),
                 SgkNumber = sgkNumber?.Trim(),
+                PhoneNumber = phoneNumber?.Trim(),
+                QuickPinHash = (!string.IsNullOrWhiteSpace(quickPin) && quickPin.Trim().Length >= 4)
+                    ? FacilityTaskDispatchService.HashQuickPin(quickPin.Trim())
+                    : null,
                 RoleType = string.IsNullOrWhiteSpace(roleType) ? "Kapıcı (Vergi İstisnalı)" : roleType.Trim(),
                 NetSalary = Math.Max(0m, netSalary),
                 SgkEmployerShare = Math.Max(0m, sgkEmployerShare),
