@@ -423,72 +423,101 @@
                     @{
                         var projectAmenities = Model.ConstructionProject?.Amenities?.Where(a => !a.IsExisting).ToList() ?? new List<GMK360.Core.Entities.Construction.ProjectAmenity>();
                         double totalAmenitySqm = projectAmenities.Sum(a => a.SquareMeters ?? 0);
+                        int projectBlockCount = Model.ConstructionProject?.Blocks?.Count(b => b.ParentBuildingId == null && !b.IsExistingBuilding) ?? 1;
+                        bool isMultiBlockSite = projectBlockCount > 1;
                     }
 
-                    <div class="d-flex justify-content-between align-items-center pb-2 mb-3 border-bottom flex-wrap gap-2">
-                        <div class="d-flex align-items-center gap-2">
-                            <div class="bg-success bg-opacity-10 text-success rounded-circle p-2 d-flex align-items-center justify-content-center" style="width:40px;height:40px;">
-                                <i class="bi bi-tree-fill fs-5"></i>
-                            </div>
-                            <div>
-                                <h5 class="fw-bold mb-0 text-dark">Dış Alanlar & Donatılar</h5>
-                                <span class="text-muted small">Bahçe, çocuk parkı, otopark, kamelya ve çevre düzenleme</span>
-                            </div>
-                        </div>
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="badge bg-success bg-opacity-10 text-success border border-success fw-bold px-3 py-1">@totalAmenitySqm m² Toplam</span>
-                            <a href="/ConstructionProject/Amenities?projectId=@Model.ConstructionProjectId&isExisting=false" 
-                               class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold shadow-sm" title="Dış Alanları Düzenle">
-                                <i class="bi bi-pencil me-1"></i>Yönet
-                            </a>
-                        </div>
-                    </div>
-
-                    <!-- Dış Alan Kalemleri Listesi -->
-                    @if (projectAmenities.Any())
+                    @if (isMultiBlockSite)
                     {
-                        <div class="row g-2 mb-3">
-                            @foreach (var am in projectAmenities)
-                            {
-                                <div class="col-sm-6">
-                                    <div class="p-2 border rounded-3 bg-light shadow-sm h-100 d-flex flex-column justify-content-between">
-                                        <div class="d-flex justify-content-between align-items-center mb-1">
-                                            <strong class="text-dark small text-truncate" style="max-width: 140px;" title="@am.Name">
-                                                <i class="bi bi-flower1 text-success me-1"></i>@am.Name
-                                            </strong>
-                                            <span class="badge bg-white text-dark border small">@(am.SquareMeters.HasValue ? $"{am.SquareMeters} m²" : "-")</span>
-                                        </div>
-                                        @if (!string.IsNullOrEmpty(am.Description))
-                                        {
-                                            <div class="text-muted small text-truncate mb-2" style="font-size: 0.72rem;">@am.Description</div>
-                                        }
-                                        <div class="d-flex gap-1 justify-content-end mt-1">
-                                            <a href="/SubcontractorBidding/CreateSubcontractorTender?projectId=@Model.ConstructionProjectId&title=@Uri.EscapeDataString(am.Name + " İmalatı")" 
-                                               class="btn btn-xs btn-outline-warning text-dark py-0 px-2 rounded-pill fw-semibold" style="font-size: 0.7rem;" title="Taşeron Teklifi Topla">
-                                                <i class="bi bi-file-earmark-text me-1"></i>Teklif Al
-                                            </a>
-                                            <a href="/ProjectMeeting/Index?projectId=@Model.ConstructionProjectId" 
-                                               class="btn btn-xs btn-outline-primary py-0 px-2 rounded-pill fw-semibold" style="font-size: 0.7rem;" title="Toplantı Masasında Görüş">
-                                                <i class="bi bi-people me-1"></i>Karar
-                                            </a>
-                                        </div>
-                                    </div>
+                        <div class="d-flex justify-content-between align-items-center pb-2 mb-3 border-bottom flex-wrap gap-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="bg-success bg-opacity-10 text-success rounded-circle p-2 d-flex align-items-center justify-content-center" style="width:40px;height:40px;">
+                                    <i class="bi bi-tree-fill fs-5"></i>
                                 </div>
-                            }
+                                <div>
+                                    <h5 class="fw-bold mb-0 text-dark">Bu Yapının Özellikleri (Blok İçi)</h5>
+                                    <span class="text-muted small">Projede @projectBlockCount ayrı blok/yapı olduğu için dış çevre donatıları proje genelinde ortaktır.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-success bg-success bg-opacity-10 border-success border-opacity-25 rounded-3 py-2 px-3 mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div class="small text-dark">
+                                <i class="bi bi-tree me-1 text-success"></i>
+                                <strong>Ortak Proje Dış Çevre &amp; Sosyal Alanlar:</strong> @projectAmenities.Count kalem • <strong>@totalAmenitySqm m²</strong>
+                            </div>
+                            <a href="/ConstructionProject/Amenities?projectId=@Model.ConstructionProjectId&isExisting=false" class="btn btn-xs btn-success rounded-pill px-3 py-1 fw-semibold" style="font-size:0.75rem;">
+                                Proje Dış Alanlarını Yönet &rarr;
+                            </a>
                         </div>
                     }
                     else
                     {
-                        <div class="text-center py-3 text-muted small bg-light rounded-3 mb-3 border">
-                            <i class="bi bi-tree fs-3 d-block text-secondary mb-1"></i>
-                            Henüz dış alan donatısı eklenmemiş. <a href="/ConstructionProject/Amenities?projectId=@Model.ConstructionProjectId&isExisting=false" class="text-decoration-none fw-semibold">Buradan ekleyin</a>.
+                        <div class="d-flex justify-content-between align-items-center pb-2 mb-3 border-bottom flex-wrap gap-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="bg-success bg-opacity-10 text-success rounded-circle p-2 d-flex align-items-center justify-content-center" style="width:40px;height:40px;">
+                                    <i class="bi bi-tree-fill fs-5"></i>
+                                </div>
+                                <div>
+                                    <h5 class="fw-bold mb-0 text-dark">Dış Alanlar & Donatılar</h5>
+                                    <span class="text-muted small">Bahçe, çocuk parkı, otopark, kamelya ve çevre düzenleme</span>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-success bg-opacity-10 text-success border border-success fw-bold px-3 py-1">@totalAmenitySqm m² Toplam</span>
+                                <a href="/ConstructionProject/Amenities?projectId=@Model.ConstructionProjectId&isExisting=false" 
+                                   class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold shadow-sm" title="Dış Alanları Düzenle">
+                                    <i class="bi bi-pencil me-1"></i>Yönet
+                                </a>
+                            </div>
                         </div>
+
+                        <!-- Dış Alan Kalemleri Listesi -->
+                        @if (projectAmenities.Any())
+                        {
+                            <div class="row g-2 mb-3">
+                                @foreach (var am in projectAmenities)
+                                {
+                                    <div class="col-sm-6">
+                                        <div class="p-2 border rounded-3 bg-light shadow-sm h-100 d-flex flex-column justify-content-between">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <strong class="text-dark small text-truncate" style="max-width: 140px;" title="@am.Name">
+                                                    <i class="bi bi-flower1 text-success me-1"></i>@am.Name
+                                                </strong>
+                                                <span class="badge bg-white text-dark border small">@(am.SquareMeters.HasValue ? $"{am.SquareMeters} m²" : "-")</span>
+                                            </div>
+                                            @if (!string.IsNullOrEmpty(am.Description))
+                                            {
+                                                <div class="text-muted small text-truncate mb-2" style="font-size: 0.72rem;">@am.Description</div>
+                                            }
+                                            <div class="d-flex gap-1 justify-content-end mt-1">
+                                                <a href="/SubcontractorBidding/CreateSubcontractorTender?projectId=@Model.ConstructionProjectId&title=@Uri.EscapeDataString(am.Name + " İmalatı")" 
+                                                   class="btn btn-xs btn-outline-warning text-dark py-0 px-2 rounded-pill fw-semibold" style="font-size: 0.7rem;" title="Taşeron Teklifi Topla">
+                                                    <i class="bi bi-file-earmark-text me-1"></i>Teklif Al
+                                                </a>
+                                                <a href="/ProjectMeeting/Index?projectId=@Model.ConstructionProjectId" 
+                                                   class="btn btn-xs btn-outline-primary py-0 px-2 rounded-pill fw-semibold" style="font-size: 0.7rem;" title="Toplantı Masasında Görüş">
+                                                    <i class="bi bi-people me-1"></i>Karar
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-3 text-muted small bg-light rounded-3 mb-3 border">
+                                <i class="bi bi-tree fs-3 d-block text-secondary mb-1"></i>
+                                Henüz dış alan donatısı eklenmemiş. <a href="/ConstructionProject/Amenities?projectId=@Model.ConstructionProjectId&isExisting=false" class="text-decoration-none fw-semibold">Buradan ekleyin</a>.
+                            </div>
+                        }
                     }
                 </div>
 
                 <!-- Yapı Özellikleri (Özet - Açılır Kapanır Div) -->
                 <div class="pt-2 border-top">
-                    <div class="d-flex justify-content-between align-items-center" role="button" data-bs-toggle="collapse" data-bs-target="#yapiOzellikleriCollapse" aria-expanded="false" style="cursor: pointer;">
+                    <div class="d-flex justify-content-between align-items-center" role="button" data-bs-toggle="collapse" data-bs-target="#yapiOzellikleriCollapse" aria-expanded="@(isMultiBlockSite ? "true" : "false")" style="cursor: pointer;">
                         <span class="text-dark fw-bold small">
                             <i class="bi bi-info-square text-info me-1"></i>Yapı Özellikleri & Künye (Özet)
                         </span>
@@ -500,7 +529,7 @@
                         </div>
                     </div>
 
-                    <div class="collapse mt-2 pt-2 border-top" id="yapiOzellikleriCollapse">
+                    <div class="collapse @(isMultiBlockSite ? "show" : "") mt-2 pt-2 border-top" id="yapiOzellikleriCollapse">
                         <div class="row g-2 small">
                             <div class="col-6">
                                 <span class="text-muted d-block" style="font-size:0.75rem;">Taban Oturumu:</span>

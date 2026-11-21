@@ -468,8 +468,14 @@ namespace GMK360.Web.Controllers
                 vm.InitialStructures = rootStructures.Select(rb =>
                 {
                     var allUnits = rb.Units ?? new System.Collections.Generic.List<BuildingUnit>();
+                    bool IsBuildingWideAbstractTag(string name) =>
+                        name.StartsWith("Çatı", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(name, "Merdiven & Sahanlık", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(name, "Asansör & Makine Dairesi", StringComparison.OrdinalIgnoreCase);
+
                     var physicalTechUnits = allUnits
-                        .Where(u => u.Category == "OrtakAlan_Tesis" || u.Category == "OrtakAlan_Depo")
+                        .Where(u => (u.Category == "OrtakAlan_Tesis" || u.Category == "OrtakAlan_Depo")
+                                 && !IsBuildingWideAbstractTag(u.DoorNumber))
                         .OrderBy(u => u.FloorLevel).ThenBy(u => u.Id)
                         .ToList();
 
@@ -490,7 +496,7 @@ namespace GMK360.Web.Controllers
                         : allUnits
                             .Where(u => u.Category == "OrtakAlan_Blok" || (u.Category ?? "").StartsWith("OrtakAlan"))
                             .SelectMany(u => u.Spaces ?? new System.Collections.Generic.List<UnitSpace>())
-                            .Where(s => s.Name != "Sabit Gider & Muhasebe")
+                            .Where(s => s.Name != "Sabit Gider & Muhasebe" && !IsBuildingWideAbstractTag(s.Name))
                             .Select(s =>
                             {
                                 int guessedFloor = s.Type == "CevreDuzenleme" ? -99
@@ -845,6 +851,12 @@ namespace GMK360.Web.Controllers
                 for (int i = 1; i < structures.Count; i++)
                 {
                     var s = structures[i];
+                    // Site modunda dış çevre yalnızca ana site kök yapısında tek kez tutulur; ikincil bloklarda yalnızca bina içi kalır
+                    s.OutdoorCommonAreas = new System.Collections.Generic.List<string>();
+                    if (s.CommonSpaces != null)
+                    {
+                        s.CommonSpaces = s.CommonSpaces.Where(cs => cs.SpaceGroup != "CevreDuzenleme" && cs.FloorLevel != -99).ToList();
+                    }
                     Building sibling = i - 1 < existingSiblings.Count
                         ? existingSiblings[i - 1]
                         : CloneRootTemplate(rootBuilding, s.BlockName);
@@ -1222,7 +1234,7 @@ namespace GMK360.Web.Controllers
                 await _context.SaveChangesAsync();
             }
 
-            if (customCommonSpaces != null && customCommonSpaces.Any())
+            if (customCommonSpaces != null)
             {
                 var existingPhysicalTech = await _context.BuildingUnits
                     .Include(u => u.Spaces)
@@ -1235,9 +1247,14 @@ namespace GMK360.Web.Controllers
                     .Select(x => x.Name.Trim())
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-                // Demirbaşı olmayan kaldırılmış fiziksel teknik birimleri temizle
+                bool IsWholeBuildingTag(string n) =>
+                    n.StartsWith("Çatı", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(n, "Merdiven & Sahanlık", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(n, "Asansör & Makine Dairesi", StringComparison.OrdinalIgnoreCase);
+
+                // Demirbaşı olmayan kaldırılmış fiziksel teknik birimleri ve Zemin Katı kirleten eski Çatı/Merdiven kartlarını temizle
                 var toRemoveUnits = existingPhysicalTech
-                    .Where(u => !desiredNames.Contains(u.DoorNumber)
+                    .Where(u => (!desiredNames.Contains(u.DoorNumber) || (u.FloorLevel == 0 && IsWholeBuildingTag(u.DoorNumber)))
                              && !(u.Spaces?.Any(s => s.Fixtures != null && s.Fixtures.Any()) ?? false))
                     .ToList();
                 if (toRemoveUnits.Any())
@@ -1257,12 +1274,25 @@ namespace GMK360.Web.Controllers
                 {
                     string cleanName = cs.Name.Trim();
                     string spaceType = cs.SpaceGroup == "CevreDuzenleme" ? "CevreDuzenleme" : "BinaIci";
+                    if (IsWholeBuildingTag(cleanName))
+                    {
+                        _context.UnitSpaces.Add(new UnitSpace
+                        {
+                            BuildingUnitId = commonUnit.Id,
+                            Name = cleanName,
+                            Type = spaceType,
+                            SquareMeters = cs.SquareMeters,
+                            Description = cs.Description?.Trim()
+                        });
+                        continue;
+                    }
+
                     int targetFloor = cs.FloorLevel;
-                    if (spaceType == "CevreDuzenleme" && targetFloor == 0) targetFloor = -99;
+                    if (spaceType == "CevreDuzenleme") targetFloor = -99;
                     string floorName = FormatFacilityFloorName(targetFloor);
                     string techCat = IsStorageSpaceName(cleanName) ? "OrtakAlan_Depo" : "OrtakAlan_Tesis";
 
-                    var existingUnit = existingPhysicalTech.FirstOrDefault(u => string.Equals(u.DoorNumber, cleanName, StringComparison.OrdinalIgnoreCase));
+                    var existingUnit = existingPhysicalTech.FirstOrDefault(u => string.Equals(u.DoorNumber, cleanName, StringComparison.OrdinalIgnoreCase) && !toRemoveUnits.Contains(u));
                     if (existingUnit != null)
                     {
                         existingUnit.FloorLevel = targetFloor;
@@ -1885,6 +1915,28 @@ namespace GMK360.Web.Controllers
                 .OrderByDescending(d => d.Id)
                 .ToListAsync();
 
+            bool isSiteSecondaryBlock = building.ParentBuildingId != null;
+            int? sitePrimaryBuildingId = building.ParentBuildingId;
+            string? sitePrimaryBuildingName = building.ParentBuilding?.Name;
+            if (!isSiteSecondaryBlock && building.HousingComplexId.HasValue)
+            {
+                var sitePrimary = await _context.Buildings
+                    .Where(b => b.HousingComplexId == building.HousingComplexId && b.ParentBuildingId == null)
+                    .OrderBy(b => b.Id)
+                    .Select(b => new { b.Id, b.Name })
+                    .FirstOrDefaultAsync();
+                if (sitePrimary != null && sitePrimary.Id != building.Id)
+                {
+                    isSiteSecondaryBlock = true;
+                    sitePrimaryBuildingId = sitePrimary.Id;
+                    sitePrimaryBuildingName = sitePrimary.Name;
+                }
+            }
+
+            ViewBag.IsSiteSecondaryBlock = isSiteSecondaryBlock;
+            ViewBag.SitePrimaryBuildingId = sitePrimaryBuildingId;
+            ViewBag.SitePrimaryBuildingName = sitePrimaryBuildingName;
+            ViewBag.IsMultiBlockSite = isSite || blockCount > 1;
             ViewBag.HasDecisionAuthority = hasAuthorityDoc;
             ViewBag.GovernanceMembers = governanceMembers;
             ViewBag.ActiveBoardMemberCount = await _governanceService.GetActiveBoardMemberCountAsync(rootId);

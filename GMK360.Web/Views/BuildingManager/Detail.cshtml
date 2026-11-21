@@ -3,8 +3,22 @@
     ViewData["Title"] = Model.Name + " - Yönetim Masası & Yapı Ekosistemi";
     Layout = "~/Views/Shared/_FacilityLayout.cshtml";
 
+    bool isSiteSecondaryBlock = ViewBag.IsSiteSecondaryBlock is bool sb && sb;
+    int? sitePrimaryId = ViewBag.SitePrimaryBuildingId as int?;
+    string sitePrimaryName = ViewBag.SitePrimaryBuildingName as string ?? "Site Ana Yönetimi";
+
+    bool IsWholeBuildingAbstractOnGround(GMK360.Core.Entities.BuildingUnit u) =>
+        u.FloorLevel == 0 && (
+            (u.DoorNumber ?? "").StartsWith("Çatı", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(u.DoorNumber, "Merdiven & Sahanlık", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(u.DoorNumber, "Asansör & Makine Dairesi", StringComparison.OrdinalIgnoreCase));
+
     var allPhysicalUnits = Model.Units?
-        .Where(u => u.Category != "OrtakAlan_Blok" && u.DoorNumber != "ORTAK" && u.DoorNumber != "Ortak Tesisler")
+        .Where(u => u.Category != "OrtakAlan_Blok"
+                 && u.DoorNumber != "ORTAK"
+                 && u.DoorNumber != "Ortak Tesisler"
+                 && !IsWholeBuildingAbstractOnGround(u)
+                 && (!isSiteSecondaryBlock || u.FloorLevel != -99))
         .OrderBy(u => u.FloorLevel).ThenBy(u => u.DoorNumber)
         .ToList() ?? new List<GMK360.Core.Entities.BuildingUnit>();
     var units = allPhysicalUnits
@@ -24,13 +38,13 @@
     var shopCount = units.Count(u => u.Category == "Dukkan");
     var resCount = units.Count(u => u.Category != "Dukkan");
 
-    // Kat Hiyerarşisi (Çatı/Normal -> Zemin -> Bodrum (-1, -2) -> Bahçe & Çevre (-99))
+    // Kat Hiyerarşisi (Çatı/Normal -> Zemin -> Bodrum (-1, -2) -> Yalnızca Tekil/Ana Yapıda Bahçe & Çevre (-99))
     var floorSet = allPhysicalUnits.Select(u => u.FloorLevel).ToHashSet();
     for (int b = 1; b <= Model.BasementFloors; b++) { floorSet.Add(-b); }
     if (Model.HasGroundFloor) { floorSet.Add(0); }
-    floorSet.Add(-99); // Bahçe & Çevre Alanı satırı her zaman hızlı birim/kuyu/kamelya eklemeye açık
+    if (!isSiteSecondaryBlock) { floorSet.Add(-99); }
     var distinctFloors = floorSet.OrderByDescending(f => f).ToList();
-    if (!distinctFloors.Any()) { distinctFloors = new List<int> { 1, 0, -1, -99 }; }
+    if (!distinctFloors.Any()) { distinctFloors = new List<int> { 1, 0, -1 }; }
 
     var meetings = ViewBag.Meetings as List<GMK360.Core.Entities.SystemMeeting> ?? new List<GMK360.Core.Entities.SystemMeeting>();
     var commonSpaces = ViewBag.CommonSpaces as List<GMK360.Core.Entities.UnitSpace> ?? new List<GMK360.Core.Entities.UnitSpace>();
@@ -423,53 +437,69 @@
                             }
                         </div>
 
-                        <div class="d-flex justify-content-between align-items-center mb-2 pt-2 border-top">
-                            <h6 class="fw-bold text-success mb-0"><i class="bi bi-tree-fill me-1"></i>Bahçe, Kamelya, Kuyu &amp; Çevre Düzenleme Alanları</h6>
-                            <a href="/BuildingManager/BakimTakvimi?buildingId=@Model.Id" class="small fw-semibold text-success text-decoration-none">Budama &amp; Bakım Takvimi &rarr;</a>
-                        </div>
-                        if (!outdoorCommon.Any())
+                        @if (isSiteSecondaryBlock)
                         {
-                            <p class="small text-muted fst-italic mb-0">Çevre düzenleme alanı (Kamelya, Bahçe, Su Kuyusu, Çocuk Parkı vb.) henüz seçilmedi; sağ üstteki ekle veya düzenle butonundan ekleyebilirsiniz.</p>
+                            <div class="alert alert-success bg-success bg-opacity-10 border-success border-opacity-25 rounded-3 d-flex flex-wrap justify-content-between align-items-center gap-2 mb-0 py-2 px-3">
+                                <div class="small text-dark">
+                                    <i class="bi bi-tree-fill text-success me-1"></i>
+                                    <strong>Site Ortak Dış Çevre &amp; Sosyal Alanları:</strong> Çok bloklu site olduğu için dış çevre donatıları bloklarda tekrarlanmaz; ortak site yönetiminde tek yerde tutulur.
+                                </div>
+                                @if (sitePrimaryId.HasValue)
+                                {
+                                    <a href="/BuildingManager/Detail/@sitePrimaryId" class="btn btn-xs btn-success rounded-pill px-3 fw-semibold" style="font-size:0.78rem;">@sitePrimaryName Ortak Alanına Git &rarr;</a>
+                                }
+                            </div>
                         }
                         else
                         {
-                            <div class="row g-3">
-                                @foreach (var space in outdoorCommon)
-                                {
-                                    var fixtures = space.Fixtures?.ToList() ?? new List<GMK360.Core.Entities.SpaceFixture>();
-                                    <div class="col-md-4">
-                                        <div class="p-3 border border-success-subtle rounded-3 bg-success bg-opacity-10 h-100">
-                                            <div class="d-flex justify-content-between align-items-center mb-2 gap-1">
-                                                <h6 class="fw-bold text-dark mb-0"><i class="bi bi-tree text-success me-1"></i> @space.Name</h6>
-                                                <div class="d-flex align-items-center gap-1 flex-shrink-0">
-                                                    @if (space.SquareMeters.HasValue)
-                                                    {
-                                                        <span class="badge bg-white text-dark border">@space.SquareMeters.Value.ToString("0.##") m²</span>
-                                                    }
-                                                    <span class="badge bg-success text-white">Çevre / Sosyal</span>
-                                                </div>
-                                            </div>
-                                            @if (!string.IsNullOrWhiteSpace(space.Description))
-                                            {
-                                                <div class="small text-secondary mb-1"><i class="bi bi-wrench-adjustable me-1"></i>@space.Description</div>
-                                            }
-                                            @if (fixtures.Any())
-                                            {
-                                                <div class="small border-top pt-2 mt-2">
-                                                    @foreach (var fx in fixtures.Take(3))
-                                                    {
-                                                        <div class="mb-1"><span class="fw-semibold text-dark">@fx.ItemName</span></div>
-                                                    }
-                                                </div>
-                                            }
-                                            else if (string.IsNullOrWhiteSpace(space.Description))
-                                            {
-                                                <div class="small text-muted fst-italic">Mevsimlik Bakım &amp; Peyzaj Kapsamında</div>
-                                            }
-                                        </div>
-                                    </div>
-                                }
+                            <div class="d-flex justify-content-between align-items-center mb-2 pt-2 border-top">
+                                <h6 class="fw-bold text-success mb-0"><i class="bi bi-tree-fill me-1"></i>Bahçe, Kamelya, Kuyu &amp; Çevre Düzenleme Alanları</h6>
+                                <a href="/BuildingManager/BakimTakvimi?buildingId=@Model.Id" class="small fw-semibold text-success text-decoration-none">Budama &amp; Bakım Takvimi &rarr;</a>
                             </div>
+                            if (!outdoorCommon.Any())
+                            {
+                                <p class="small text-muted fst-italic mb-0">Çevre düzenleme alanı (Kamelya, Bahçe, Su Kuyusu, Çocuk Parkı vb.) henüz seçilmedi; sağ üstteki ekle veya düzenle butonundan ekleyebilirsiniz.</p>
+                            }
+                            else
+                            {
+                                <div class="row g-3">
+                                    @foreach (var space in outdoorCommon)
+                                    {
+                                        var fixtures = space.Fixtures?.ToList() ?? new List<GMK360.Core.Entities.SpaceFixture>();
+                                        <div class="col-md-4">
+                                            <div class="p-3 border border-success-subtle rounded-3 bg-success bg-opacity-10 h-100">
+                                                <div class="d-flex justify-content-between align-items-center mb-2 gap-1">
+                                                    <h6 class="fw-bold text-dark mb-0"><i class="bi bi-tree text-success me-1"></i> @space.Name</h6>
+                                                    <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                                                        @if (space.SquareMeters.HasValue)
+                                                        {
+                                                            <span class="badge bg-white text-dark border">@space.SquareMeters.Value.ToString("0.##") m²</span>
+                                                        }
+                                                        <span class="badge bg-success text-white">Çevre / Sosyal</span>
+                                                    </div>
+                                                </div>
+                                                @if (!string.IsNullOrWhiteSpace(space.Description))
+                                                {
+                                                    <div class="small text-secondary mb-1"><i class="bi bi-wrench-adjustable me-1"></i>@space.Description</div>
+                                                }
+                                                @if (fixtures.Any())
+                                                {
+                                                    <div class="small border-top pt-2 mt-2">
+                                                        @foreach (var fx in fixtures.Take(3))
+                                                        {
+                                                            <div class="mb-1"><span class="fw-semibold text-dark">@fx.ItemName</span></div>
+                                                        }
+                                                    </div>
+                                                }
+                                                else if (string.IsNullOrWhiteSpace(space.Description))
+                                                {
+                                                    <div class="small text-muted fst-italic">Mevsimlik Bakım &amp; Peyzaj Kapsamında</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
                         }
                     }
                 </div>

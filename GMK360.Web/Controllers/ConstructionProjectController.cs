@@ -3104,6 +3104,7 @@ namespace GMK360.Web.Controllers
 
 
 
+                .Include(b => b.ConstructionProject).ThenInclude(p => p.Blocks)
                 .Include(b => b.Units).ThenInclude(u => u.ParentUnit).Include(b => b.ParentBuilding).Include(b => b.ChildBuildings).ThenInclude(c => c.Units)
 
 
