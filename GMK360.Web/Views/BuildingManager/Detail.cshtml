@@ -369,37 +369,145 @@
             @{
                 var indoorCommon = commonSpaces.Where(s => s.Type != "CevreDuzenleme").ToList();
                 var outdoorCommon = commonSpaces.Where(s => s.Type == "CevreDuzenleme").ToList();
+                double? landAreaSqm = ViewBag.LandAreaSqm as double?;
+                double totalFootprintSqm = ViewBag.TotalFootprintSqm is double fp ? fp : (Model.BaseArea ?? 0);
+                double totalOutdoorSqm = outdoorCommon.Sum(s => s.SquareMeters ?? 0);
+                double? remainingLandSqm = landAreaSqm.HasValue ? (landAreaSqm.Value - totalFootprintSqm - totalOutdoorSqm) : (double?)null;
             }
-            <!-- 1. A) BİNA İÇİ TEKNİK ALANLAR & ÇEVRE DÜZENLEME YÖNETİMİ (GERÇEK VERİ) -->
-            <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white overflow-hidden border-top border-4 border-warning">
-                <div class="card-header bg-warning bg-opacity-10 border-0 p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <!-- 1. A) DIŞ ALAN, ARAZİ OTO-KONTROLÜ & BİNA İÇİ ORTAK ALANLAR (SİHİRBAZDAN BAĞIMSIZ) -->
+            <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white overflow-hidden border-top border-4 border-success">
+                <div class="card-header bg-success bg-opacity-10 border-0 p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
                     <div class="d-flex align-items-center">
-                        <span class="badge bg-warning text-dark px-3 py-2 rounded-pill fw-bold me-2">
-                            <i class="bi bi-building-gear me-1"></i> BİNA İÇİ &amp; ÇEVRE DÜZENLEME
+                        <span class="badge bg-success text-white px-3 py-2 rounded-pill fw-bold me-2">
+                            <i class="bi bi-tree-fill me-1"></i> ARAZİ, DIŞ ÇEVRE &amp; ORTAK ALANLAR
                         </span>
-                        <h5 class="fw-bold text-dark mb-0">Bina İçi Teknik Alanlar ve Bahçe / Kamelya / Çevre Alanları</h5>
+                        <h5 class="fw-bold text-dark mb-0">Kurulum Sonrası Bağımsız Alan &amp; Sosyal Donatı Yönetimi</h5>
                     </div>
                     <div class="d-flex flex-wrap gap-2">
-                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold" data-bs-toggle="modal" data-bs-target="#addCommonSpaceModal">
-                            <i class="bi bi-plus-circle me-1"></i> Ortak Alan / Ardiye / Kuyu Ekle (m²)
+                        <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-semibold" onclick="openOutdoorSpaceModal()">
+                            <i class="bi bi-tree me-1"></i> + Dış Alan / Kamelya Ekle
                         </button>
-                        <a href="/BuildingManager/Onboarding/@rootBuildingId" class="btn btn-sm btn-outline-dark rounded-pill px-3 fw-semibold">
-                            <i class="bi bi-pencil-square me-1"></i> Yapı &amp; Çevre Alanlarını Düzenle
-                        </a>
+                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold" onclick="openFloorUnitModal(-1, '1. BODRUM')">
+                            <i class="bi bi-building-add me-1"></i> + Bina / Bodrum Birimi Ekle
+                        </button>
                     </div>
                 </div>
                 <div class="card-body p-4">
-                    @if (!commonSpaces.Any())
+                    @if (!isSiteSecondaryBlock)
                     {
-                        <div class="text-center py-3 text-muted small">
-                            <i class="bi bi-tools fs-3 d-block mb-2 text-warning"></i>
-                            Bu bina için henüz tanımlı ortak alan mekanı yok. Sağ üstteki "+ Ortak Alan / Ardiye / Kuyu Ekle" veya Sihirbaz'dan ekleyebilirsiniz.
+                        <!-- İNŞAAT ERP TARZI ARAZİ DAĞILIMI VE OTO-KONTROL -->
+                        <div class="row g-3 align-items-center p-3 mb-4 rounded-4 border bg-light bg-opacity-75">
+                            <div class="col-lg-5">
+                                <form asp-action="UpdateBuildingLandArea" asp-controller="BuildingManager" method="post" class="d-flex align-items-end gap-2">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="buildingId" value="@Model.Id" />
+                                    <div class="flex-grow-1">
+                                        <label class="form-label small fw-bold text-dark mb-1">
+                                            <i class="bi bi-bounding-box text-success me-1"></i>Tapudaki Toplam Arazi Alanı (m² - Opsiyonel)
+                                        </label>
+                                        <input type="number" step="0.01" min="0" name="landAreaSqm" class="form-control form-control-sm fw-bold" value="@(landAreaSqm?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "")" placeholder="Örn: 3600" />
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-dark rounded-pill px-3 fw-semibold">Araziyi Kaydet</button>
+                                </form>
+                            </div>
+                            <div class="col-lg-7">
+                                <div class="row g-2 text-center">
+                                    <div class="col-4">
+                                        <div class="p-2 bg-white rounded-3 border">
+                                            <span class="d-block text-muted" style="font-size:0.72rem;">Blok Taban Oturumu</span>
+                                            <strong class="text-primary fs-6">@totalFootprintSqm.ToString("0.##") m²</strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="p-2 bg-white rounded-3 border">
+                                            <span class="d-block text-muted" style="font-size:0.72rem;">Eklenen Dış Alanlar</span>
+                                            <strong class="text-success fs-6">@totalOutdoorSqm.ToString("0.##") m²</strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="p-2 bg-white rounded-3 border">
+                                            <span class="d-block text-muted" style="font-size:0.72rem;">Kalan Boş Alan (Net)</span>
+                                            @if (remainingLandSqm.HasValue)
+                                            {
+                                                <strong class="@(remainingLandSqm < 0 ? "text-danger" : "text-dark") fs-6">@remainingLandSqm.Value.ToString("0.##") m²</strong>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted small">Arazi girilmedi</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
+
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="fw-bold text-success mb-0"><i class="bi bi-tree-fill me-1"></i>Dış Alanlar, Bahçe, Kamelya, Kuyu &amp; Sosyal Donatılar (@outdoorCommon.Count)</h6>
+                            <a href="/BuildingManager/BakimTakvimi?buildingId=@Model.Id" class="small fw-semibold text-success text-decoration-none">Budama &amp; Bakım Takvimi &rarr;</a>
+                        </div>
+                        @if (!outdoorCommon.Any())
+                        {
+                            <p class="small text-muted fst-italic mb-3">Henüz dış alan donatısı eklenmedi. Yukarıdaki <strong>"+ Dış Alan / Kamelya Ekle"</strong> ile Sihirbaza dönmeden doğrudan ekleyebilirsiniz.</p>
+                        }
+                        else
+                        {
+                            <div class="row g-3 mb-3">
+                                @foreach (var space in outdoorCommon)
+                                {
+                                    var fixtures = space.Fixtures?.ToList() ?? new List<GMK360.Core.Entities.SpaceFixture>();
+                                    <div class="col-md-4">
+                                        <div class="p-3 border border-success-subtle rounded-3 bg-success bg-opacity-10 h-100">
+                                            <div class="d-flex justify-content-between align-items-center mb-2 gap-1">
+                                                <h6 class="fw-bold text-dark mb-0"><i class="bi bi-tree text-success me-1"></i> @space.Name</h6>
+                                                <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                                                    @if (space.SquareMeters.HasValue)
+                                                    {
+                                                        <span class="badge bg-white text-dark border">@space.SquareMeters.Value.ToString("0.##") m²</span>
+                                                    }
+                                                    <span class="badge bg-success text-white">Dış Alan</span>
+                                                </div>
+                                            </div>
+                                            @if (!string.IsNullOrWhiteSpace(space.Description))
+                                            {
+                                                <div class="small text-secondary mb-1"><i class="bi bi-wrench-adjustable me-1"></i>@space.Description</div>
+                                            }
+                                            @if (fixtures.Any())
+                                            {
+                                                <div class="small border-top pt-2 mt-2">
+                                                    @foreach (var fx in fixtures.Take(3))
+                                                    {
+                                                        <div class="mb-1"><span class="fw-semibold text-dark">@fx.ItemName</span></div>
+                                                    }
+                                                </div>
+                                            }
+                                            else if (string.IsNullOrWhiteSpace(space.Description))
+                                            {
+                                                <div class="small text-muted fst-italic">Mevsimlik Bakım &amp; Peyzaj Kapsamında</div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
                     }
                     else
                     {
-                        <h6 class="fw-bold text-primary mb-2"><i class="bi bi-building-gear me-1"></i>Bina / Blok İçi Teknik &amp; Ortak Alanlar</h6>
-                        <div class="row g-3 mb-4">
+                        <div class="alert alert-success bg-success bg-opacity-10 border-success border-opacity-25 rounded-3 d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 py-2 px-3">
+                            <div class="small text-dark">
+                                <i class="bi bi-tree-fill text-success me-1"></i>
+                                <strong>Site Ortak Dış Çevre &amp; Sosyal Alanları:</strong> Çok bloklu site olduğu için dış çevre donatıları bloklarda tekrarlanmaz; ortak site yönetiminde tek yerde tutulur.
+                            </div>
+                            @if (sitePrimaryId.HasValue)
+                            {
+                                <a href="/BuildingManager/Detail/@sitePrimaryId" class="btn btn-xs btn-success rounded-pill px-3 fw-semibold" style="font-size:0.78rem;">@sitePrimaryName Ortak Alanına Git &rarr;</a>
+                            }
+                        </div>
+                    }
+
+                    @if (indoorCommon.Any())
+                    {
+                        <h6 class="fw-bold text-primary mb-2 pt-3 border-top"><i class="bi bi-building-gear me-1"></i>Bina / Blok İçi Ortak Teknik Alanlar (@indoorCommon.Count)</h6>
+                        <div class="row g-3">
                             @foreach (var space in indoorCommon)
                             {
                                 var fixtures = space.Fixtures?.ToList() ?? new List<GMK360.Core.Entities.SpaceFixture>();
@@ -436,71 +544,6 @@
                                 </div>
                             }
                         </div>
-
-                        @if (isSiteSecondaryBlock)
-                        {
-                            <div class="alert alert-success bg-success bg-opacity-10 border-success border-opacity-25 rounded-3 d-flex flex-wrap justify-content-between align-items-center gap-2 mb-0 py-2 px-3">
-                                <div class="small text-dark">
-                                    <i class="bi bi-tree-fill text-success me-1"></i>
-                                    <strong>Site Ortak Dış Çevre &amp; Sosyal Alanları:</strong> Çok bloklu site olduğu için dış çevre donatıları bloklarda tekrarlanmaz; ortak site yönetiminde tek yerde tutulur.
-                                </div>
-                                @if (sitePrimaryId.HasValue)
-                                {
-                                    <a href="/BuildingManager/Detail/@sitePrimaryId" class="btn btn-xs btn-success rounded-pill px-3 fw-semibold" style="font-size:0.78rem;">@sitePrimaryName Ortak Alanına Git &rarr;</a>
-                                }
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="d-flex justify-content-between align-items-center mb-2 pt-2 border-top">
-                                <h6 class="fw-bold text-success mb-0"><i class="bi bi-tree-fill me-1"></i>Bahçe, Kamelya, Kuyu &amp; Çevre Düzenleme Alanları</h6>
-                                <a href="/BuildingManager/BakimTakvimi?buildingId=@Model.Id" class="small fw-semibold text-success text-decoration-none">Budama &amp; Bakım Takvimi &rarr;</a>
-                            </div>
-                            if (!outdoorCommon.Any())
-                            {
-                                <p class="small text-muted fst-italic mb-0">Çevre düzenleme alanı (Kamelya, Bahçe, Su Kuyusu, Çocuk Parkı vb.) henüz seçilmedi; sağ üstteki ekle veya düzenle butonundan ekleyebilirsiniz.</p>
-                            }
-                            else
-                            {
-                                <div class="row g-3">
-                                    @foreach (var space in outdoorCommon)
-                                    {
-                                        var fixtures = space.Fixtures?.ToList() ?? new List<GMK360.Core.Entities.SpaceFixture>();
-                                        <div class="col-md-4">
-                                            <div class="p-3 border border-success-subtle rounded-3 bg-success bg-opacity-10 h-100">
-                                                <div class="d-flex justify-content-between align-items-center mb-2 gap-1">
-                                                    <h6 class="fw-bold text-dark mb-0"><i class="bi bi-tree text-success me-1"></i> @space.Name</h6>
-                                                    <div class="d-flex align-items-center gap-1 flex-shrink-0">
-                                                        @if (space.SquareMeters.HasValue)
-                                                        {
-                                                            <span class="badge bg-white text-dark border">@space.SquareMeters.Value.ToString("0.##") m²</span>
-                                                        }
-                                                        <span class="badge bg-success text-white">Çevre / Sosyal</span>
-                                                    </div>
-                                                </div>
-                                                @if (!string.IsNullOrWhiteSpace(space.Description))
-                                                {
-                                                    <div class="small text-secondary mb-1"><i class="bi bi-wrench-adjustable me-1"></i>@space.Description</div>
-                                                }
-                                                @if (fixtures.Any())
-                                                {
-                                                    <div class="small border-top pt-2 mt-2">
-                                                        @foreach (var fx in fixtures.Take(3))
-                                                        {
-                                                            <div class="mb-1"><span class="fw-semibold text-dark">@fx.ItemName</span></div>
-                                                        }
-                                                    </div>
-                                                }
-                                                else if (string.IsNullOrWhiteSpace(space.Description))
-                                                {
-                                                    <div class="small text-muted fst-italic">Mevsimlik Bakım &amp; Peyzaj Kapsamında</div>
-                                                }
-                                            </div>
-                                        </div>
-                                    }
-                                </div>
-                            }
-                        }
                     }
                 </div>
             </div>
@@ -512,10 +555,13 @@
                         <h5 class="fw-bold text-dark mb-0"><i class="bi bi-layers-half text-primary me-2"></i> Katlar, Bodrum, Bahçe &amp; Birim Dağılım Matrisi</h5>
                         <small class="text-muted">Zemin katta daire ve dükkanlar birlikte görünür; Bodrum ve tüm katlara pompa odası, hidrofor, depo/ardiye ekleyip içine demirbaş koyabilirsiniz.</small>
                     </div>
-                    <div class="d-flex align-items-center gap-2">
+                    <div class="d-flex flex-wrap align-items-center gap-2">
                         <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2 rounded-pill fw-bold">
                             @resCount Daire@(shopCount > 0 ? $" • {shopCount} Dükkan" : "")
                         </span>
+                        <button type="button" class="btn btn-sm btn-warning text-dark rounded-pill px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#bulkFloorUnitModal">
+                            <i class="bi bi-lightning-charge-fill me-1"></i> Çoklu Kat / Birim Üretici
+                        </button>
                         <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold" onclick="openFloorUnitModal(-1, '1. BODRUM')">
                             <i class="bi bi-plus-circle me-1"></i> Kat / Bodrum Birimi Ekle
                         </button>
@@ -1682,7 +1728,7 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-bold small">Kat Konumu</label>
-                        <select name="floorLevel" class="form-select">
+                        <select name="floorLevel" id="commonModalFloor" class="form-select">
                             <option value="-1" selected>1. Bodrum (-1)</option>
                             <option value="-2">2. Bodrum (-2)</option>
                             <option value="0">Zemin / Bina İçi (0)</option>
@@ -1692,7 +1738,7 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-bold small">Grup</label>
-                        <select name="spaceGroup" class="form-select">
+                        <select name="spaceGroup" id="commonModalGroup" class="form-select">
                             <option value="BinaIci">Bina / Bodrum İçi</option>
                             <option value="CevreDuzenleme">Çevre / Bahçe</option>
                         </select>
@@ -2022,6 +2068,73 @@
     </div>
 </div>
 
+<!-- 15. ÇOKLU KAT / ORTAK BİRİM ÜRETİCİ MODALI (İNŞAAT ERP MANTIĞI) -->
+<div class="modal fade" id="bulkFloorUnitModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-warning text-dark border-0 py-3">
+                <h5 class="modal-title fw-bold mb-0"><i class="bi bi-lightning-charge-fill me-2"></i>Çoklu Kat &amp; Ortak Birim Üretici</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="BulkPopulateFloorUnits" asp-controller="BuildingManager" method="post" onsubmit="return prepareBulkFloorSubmit()">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="buildingId" value="@Model.Id" />
+                <input type="hidden" name="targetFloorsCsv" id="bulkTargetFloorsCsv" value="" />
+                <div class="modal-body p-4 row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Birim / Mahal Türü</label>
+                        <select name="category" class="form-select">
+                            <option value="OrtakAlan_Tesis" selected>Teknik / Tesis Birimi (Pompa, Yangın İst., Sığınak)</option>
+                            <option value="OrtakAlan_Depo">Depolama Alanı / Ardiye / Kömürlük</option>
+                            <option value="Daire">Konut (Daire)</option>
+                            <option value="Dukkan">Dükkan / Ticari</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Birim Adı <span class="text-danger">*</span></label>
+                        <input type="text" name="unitName" class="form-control fw-bold" list="techUnitSuggestions" required placeholder="Örn: Kat Yangın İstasyonu, Kat Ardiyesi" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold small">Alan (m²)</label>
+                        <input type="number" step="0.5" min="0" name="squareMeters" class="form-control" placeholder="15" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold small">Kat Başı Adet</label>
+                        <input type="number" min="1" max="10" name="countPerFloor" class="form-control" value="1" />
+                    </div>
+
+                    <div class="col-12 border-top pt-3">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                            <span class="fw-bold small text-dark">Hedef Katları Seçin:</span>
+                            <div class="d-flex gap-1">
+                                <button type="button" class="btn btn-xs btn-outline-primary rounded-pill px-2 py-0" style="font-size:0.75rem;" onclick="selectBulkFloors('ALL')">Tümünü Seç</button>
+                                <button type="button" class="btn btn-xs btn-outline-success rounded-pill px-2 py-0" style="font-size:0.75rem;" onclick="selectBulkFloors('NORMAL')">Normal Katlar</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill px-2 py-0" style="font-size:0.75rem;" onclick="selectBulkFloors('BASE')">Zemin &amp; Bodrum</button>
+                                <button type="button" class="btn btn-xs btn-outline-danger rounded-pill px-2 py-0" style="font-size:0.75rem;" onclick="selectBulkFloors('CLEAR')">Temizle</button>
+                            </div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 p-3 bg-light rounded-3 border">
+                            @foreach (var fl in distinctFloors)
+                            {
+                                var flLabel = fl == -99 ? "Bahçe & Çevre" : (fl == 99 ? "Çatı / Teras" : (fl == 0 ? "Zemin Kat" : (fl < 0 ? $"{Math.Abs(fl)}. Bodrum" : $"{fl}. Kat")));
+                                var flType = fl > 0 && fl < 99 ? "NORMAL" : (fl <= 0 && fl != -99 ? "BASE" : "OTHER");
+                                <label class="badge bg-white text-dark border px-3 py-2 fw-normal d-inline-flex align-items-center gap-2" style="cursor:pointer;">
+                                    <input type="checkbox" class="form-check-input m-0 bulk-floor-chk" value="@fl" data-fltype="@flType" /> @flLabel
+                                </label>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="submit" class="btn btn-warning text-dark fw-bold rounded-pill px-4">
+                        <i class="bi bi-lightning-charge me-1"></i> Seçili Katlara Üret ve Ekle
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 @{
     var periodsByUnit = residencyPeriods
         .GroupBy(rp => rp.BuildingUnitId)
@@ -2185,5 +2298,33 @@
             const matchSearch = !q || blob.indexOf(q) >= 0;
             row.style.display = (matchFilter && matchSearch) ? '' : 'none';
         });
+    }
+
+    function openOutdoorSpaceModal() {
+        const fl = document.getElementById('commonModalFloor');
+        const grp = document.getElementById('commonModalGroup');
+        if (fl) fl.value = '-99';
+        if (grp) grp.value = 'CevreDuzenleme';
+        new bootstrap.Modal(document.getElementById('addCommonSpaceModal')).show();
+    }
+
+    function selectBulkFloors(mode) {
+        document.querySelectorAll('.bulk-floor-chk').forEach(chk => {
+            const t = chk.getAttribute('data-fltype') || '';
+            if (mode === 'ALL') chk.checked = true;
+            else if (mode === 'CLEAR') chk.checked = false;
+            else if (mode === 'NORMAL') chk.checked = (t === 'NORMAL');
+            else if (mode === 'BASE') chk.checked = (t === 'BASE');
+        });
+    }
+
+    function prepareBulkFloorSubmit() {
+        const vals = Array.from(document.querySelectorAll('.bulk-floor-chk:checked')).map(c => c.value);
+        if (vals.length === 0) {
+            alert('Lütfen en az bir hedef kat seçiniz.');
+            return false;
+        }
+        document.getElementById('bulkTargetFloorsCsv').value = vals.join(',');
+        return true;
     }
 </script>

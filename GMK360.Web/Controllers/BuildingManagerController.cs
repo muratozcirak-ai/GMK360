@@ -1237,7 +1237,7 @@ namespace GMK360.Web.Controllers
                 await _context.SaveChangesAsync();
             }
 
-            if (customCommonSpaces != null)
+            if (customCommonSpaces != null && customCommonSpaces.Any())
             {
                 var existingPhysicalTech = await _context.BuildingUnits
                     .Include(u => u.Spaces)
@@ -1399,14 +1399,6 @@ namespace GMK360.Web.Controllers
                     }
                 }
             }
-            else if (!existingNames.Any())
-            {
-                spacesToAdd.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = "Merdiven & Sahanlık", Type = "BinaIci" });
-                if (building.HasRoof)
-                    spacesToAdd.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = $"Çatı ({building.RoofType ?? "Ana Çatı"})", Type = "BinaIci" });
-                if ((building.TotalFloors ?? 0) >= 4)
-                    spacesToAdd.Add(new UnitSpace { BuildingUnitId = commonUnit.Id, Name = "Asansör & Makine Dairesi", Type = "BinaIci" });
-            }
 
             if (outdoorAreas != null && outdoorAreas.Any())
             {
@@ -1424,6 +1416,111 @@ namespace GMK360.Web.Controllers
                 _context.UnitSpaces.AddRange(spacesToAdd);
             }
             await _context.SaveChangesAsync();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateBuildingLandArea(int buildingId, double? landAreaSqm)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            string mode = building.HousingComplexId.HasValue ? "Site" : (ParseTechnicalTag(building.TechnicalFeatures, "YapiTuru") ?? "Apartman");
+            string? ada = ParseTechnicalTag(building.TechnicalFeatures, "Ada");
+            string? parsel = ParseTechnicalTag(building.TechnicalFeatures, "Parsel");
+            string? ekNo = ParseTechnicalTag(building.TechnicalFeatures, "EkNo");
+            string? landStr = (landAreaSqm.HasValue && landAreaSqm.Value > 0)
+                ? landAreaSqm.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+                : null;
+
+            building.TechnicalFeatures = BuildTechnicalFeaturesString(mode, ada, parsel, ekNo, landStr);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = landAreaSqm.HasValue && landAreaSqm > 0
+                ? $"Toplam arazi ölçüsü {landAreaSqm.Value:0.##} m² olarak güncellendi."
+                : "Toplam arazi ölçüsü temizlendi.";
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> BulkPopulateFloorUnits(
+            int buildingId,
+            string category,
+            string unitName,
+            string targetFloorsCsv,
+            double? squareMeters = null,
+            int countPerFloor = 1)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+            if (string.IsNullOrWhiteSpace(unitName) || string.IsNullOrWhiteSpace(targetFloorsCsv))
+            {
+                TempData["ErrorMessage"] = "Birim adı ve en az bir hedef kat seçimi zorunludur.";
+                return RedirectToAction(nameof(Detail), new { id = buildingId });
+            }
+
+            string cleanCat = string.IsNullOrWhiteSpace(category) ? "OrtakAlan_Tesis" : category.Trim();
+            if (cleanCat == "Dükkan") cleanCat = "Dukkan";
+            bool isTechOrStorage = cleanCat.StartsWith("OrtakAlan");
+            int count = Math.Clamp(countPerFloor, 1, 20);
+            var floors = targetFloorsCsv
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(s => int.TryParse(s, out int f) ? (int?)f : null)
+                .Where(f => f.HasValue)
+                .Select(f => f!.Value)
+                .Distinct()
+                .ToList();
+
+            if (!floors.Any())
+            {
+                TempData["ErrorMessage"] = "Geçerli bir kat seçilmedi.";
+                return RedirectToAction(nameof(Detail), new { id = buildingId });
+            }
+
+            int addedCount = 0;
+            foreach (var fl in floors)
+            {
+                string floorName = FormatFacilityFloorName(fl);
+                for (int i = 1; i <= count; i++)
+                {
+                    string door = count > 1 ? $"{unitName.Trim()} {i}" : unitName.Trim();
+                    var unit = new BuildingUnit
+                    {
+                        BuildingId = buildingId,
+                        FloorLevel = fl,
+                        FloorName = floorName,
+                        DoorNumber = door,
+                        UnitNumber = door,
+                        Category = cleanCat,
+                        GrossSquareMeters = squareMeters,
+                        RoomLayout = cleanCat == "OrtakAlan_Depo" ? "Depolama / Ardiye" : (isTechOrStorage ? "Teknik / Ortak Birim" : (cleanCat == "Dukkan" ? "Dükkan" : "3+1")),
+                        IsEmpty = !isTechOrStorage
+                    };
+                    if (isTechOrStorage)
+                    {
+                        unit.Spaces = new System.Collections.Generic.List<UnitSpace>
+                        {
+                            new UnitSpace
+                            {
+                                Name = door,
+                                Type = fl == -99 ? "CevreDuzenleme" : "BinaIci",
+                                SquareMeters = squareMeters
+                            }
+                        };
+                    }
+                    else
+                    {
+                        building.TotalUnits += 1;
+                    }
+                    _context.BuildingUnits.Add(unit);
+                    addedCount++;
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"{floors.Count} katta toplam {addedCount} adet '{unitName.Trim()}' birimi üretildi.";
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
 
         [HttpPost]
@@ -1936,6 +2033,17 @@ namespace GMK360.Web.Controllers
                 }
             }
 
+            double? landAreaSqm = null;
+            if (double.TryParse(ParseTechnicalTag(building.TechnicalFeatures, "AraziM2"), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double parsedLand))
+            {
+                landAreaSqm = parsedLand;
+            }
+            double totalFootprintSqm = building.HousingComplexId.HasValue
+                ? (await _context.Buildings.Where(b => b.HousingComplexId == building.HousingComplexId && b.ParentBuildingId == null).SumAsync(b => b.BaseArea ?? 0))
+                : (building.BaseArea ?? 0);
+
+            ViewBag.LandAreaSqm = landAreaSqm;
+            ViewBag.TotalFootprintSqm = totalFootprintSqm;
             ViewBag.IsSiteSecondaryBlock = isSiteSecondaryBlock;
             ViewBag.SitePrimaryBuildingId = sitePrimaryBuildingId;
             ViewBag.SitePrimaryBuildingName = sitePrimaryBuildingName;

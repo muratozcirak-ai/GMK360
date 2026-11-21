@@ -1054,58 +1054,10 @@
                     html += '<input type="hidden" class="s-floors" value="0" /><input type="hidden" class="s-apts" value="0" /><input type="hidden" class="s-ground-apts" value="0" /><input type="hidden" class="s-shops" value="0" /><input type="hidden" class="s-base" value="0" />';
                 }
 
-                // Yalın İnşaat ERP Mantığı: Sihirbazda sadece yapının fiziksel mekanları (Ad + Kat + m²) tanımlanır; demirbaş/pompa/yangın tüpü Yönetim Masasından eklenir.
-                var blockIndoorSpaces = isSite
-                    ? commonSpaces.filter(function (cs) { return cs.SpaceGroup !== 'CevreDuzenleme' && parseInt(cs.FloorLevel, 10) !== -99; })
-                    : commonSpaces;
-
-                var indoorChips = ['Hidrofor Odası', 'Pompa Odası', 'Sığınak', 'Depolama Alanı / Ardiye', 'Eski Kazan Dairesi (Depo)', 'Jeneratör Odası', 'Kapalı Garaj', 'Kapıcı Dairesi'];
-                var outdoorChips = !isSite ? ['Kamelya / Çardak', 'Bahçe & Ağaç Peyzajı', 'Bahçe Su Kuyusu', 'Çocuk Oyun Parkı'] : [];
-
-                html += '<div class="p-3 rounded-3 border bg-white mb-3">' +
-                    '  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">' +
-                    '    <span class="small fw-bold text-dark"><i class="bi bi-building-gear text-primary me-1"></i>' + (isSite ? 'Bu Bloğa Ait Bina / Bodrum İçi Ortak Hacimler' : 'Bina, Bodrum &amp; Bahçe Ortak Hacimleri') + ' (' + blockIndoorSpaces.length + ' Mekan)</span>' +
-                    '    <div class="d-flex align-items-center gap-2">' +
-                    '      <span class="small text-muted d-none d-md-inline">İçine pompa/demirbaş/yangın tüpü Yönetim Masasından eklenir.</span>' +
-                    (blockIndoorSpaces.length > 0 ? '<button type="button" class="btn btn-xs btn-outline-danger rounded-pill px-2 py-0" style="font-size:0.74rem;" onclick="clearStructureSpaces(' + idx + ')">Listeyi Temizle</button>' : '') +
-                    '    </div>' +
-                    '  </div>' +
-                    '  <div class="d-flex flex-wrap gap-1 mb-2">' +
-                    indoorChips.map(function (c) {
-                        var exists = hasSpace(c);
-                        return '<button type="button" class="btn btn-xs ' + (exists ? 'btn-primary' : 'btn-outline-secondary') + ' rounded-pill px-2 py-1" style="font-size:0.74rem;" onclick="togglePresetCommonSpace(' + idx + ', \'' + escapeAttr(c) + '\', \'BinaIci\', ' + (!exists) + ')">' + (exists ? '✓ ' : '+ ') + c + '</button>';
-                    }).join('') +
-                    outdoorChips.map(function (c) {
-                        var exists = hasSpace(c);
-                        return '<button type="button" class="btn btn-xs ' + (exists ? 'btn-success' : 'btn-outline-success') + ' rounded-pill px-2 py-1" style="font-size:0.74rem;" onclick="togglePresetCommonSpace(' + idx + ', \'' + escapeAttr(c) + '\', \'CevreDuzenleme\', ' + (!exists) + ')">' + (exists ? '✓ ' : '+ ') + c + '</button>';
-                    }).join('') +
-                    '  </div>';
-
-                if (blockIndoorSpaces.length > 0) {
-                    html += '  <div class="table-responsive mb-2">' +
-                        '    <table class="table table-sm align-middle mb-0">' +
-                        '      <thead class="table-light small"><tr><th>Mekan / Birim Adı</th><th style="width:170px;">Bulunduğu Kat</th><th style="width:110px;">Alan (m²)</th><th style="width:45px;"></th></tr></thead>' +
-                        '      <tbody>' +
-                        commonSpaces.map(function (cs, csIdx) {
-                            if (isSite && (cs.SpaceGroup === 'CevreDuzenleme' || parseInt(cs.FloorLevel, 10) === -99)) return '';
-                            return '<tr class="cs-row" data-cs-idx="' + csIdx + '">' +
-                                '<td><input type="text" class="form-control form-control-sm fw-semibold cs-name" value="' + escapeAttr(cs.Name) + '" /></td>' +
-                                '<td>' + buildFloorSelectHtml('cs-floor', cs.FloorLevel, !isSite) + '</td>' +
-                                '<td><input type="number" step="0.5" min="0" class="form-control form-control-sm cs-sqm" value="' + (cs.SquareMeters != null ? cs.SquareMeters : '') + '" placeholder="m²" /></td>' +
-                                '<td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="removeCommonSpaceRow(' + idx + ', ' + csIdx + ')" title="Kaldır"><i class="bi bi-x-lg"></i></button></td>' +
-                                '</tr>';
-                        }).join('') +
-                        '      </tbody>' +
-                        '    </table>' +
-                        '  </div>';
-                }
-
-                html += '  <div class="row g-2 align-items-end pt-2 border-top bg-light bg-opacity-50 p-2 rounded-3">' +
-                    '    <div class="col-md-5"><label class="form-label small fw-bold mb-1">Manuel Mekan / Oda Ekle</label><input type="text" class="form-control form-control-sm" id="customSpaceName-' + idx + '" placeholder="Örn: Pompa Odası, Ardiye, Kapıcı Dairesi..." /></div>' +
-                    '    <div class="col-md-3"><label class="form-label small fw-bold mb-1">Bulunduğu Kat</label>' + buildFloorSelectHtml('form-select-sm" id="customSpaceFloor-' + idx, -1, !isSite) + '</div>' +
-                    '    <div class="col-md-2"><label class="form-label small fw-bold mb-1">Alan (m²)</label><input type="number" step="0.5" min="0" class="form-control form-control-sm" id="customSpaceSqm-' + idx + '" placeholder="Örn: 25" /></div>' +
-                    '    <div class="col-md-2 d-grid"><button type="button" class="btn btn-sm btn-primary fw-bold" onclick="addCustomCommonSpace(' + idx + ')">+ Ekle</button></div>' +
-                    '  </div>' +
+                html += '<div class="alert alert-light border rounded-3 py-2 px-3 mb-2 small text-muted">' +
+                    '<i class="bi bi-info-circle text-primary me-1"></i>' +
+                    '<strong>Not (İnşaat ERP Yapısı):</strong> Kurulumda yalnızca yapının kat/daire/dükkan iskeletini tanımlarsınız. ' +
+                    'Pompa odası, hidrofor, depo/ardiye, bahçe/kamelya dış alanları ve içindeki demirbaşlar kurulum sonrasında Yönetim Masasından bağımsız olarak eklenir.' +
                     '</div>';
 
                 if (isMulti) {
@@ -1134,90 +1086,6 @@
                 html += '</div>';
                 container.insertAdjacentHTML('beforeend', html);
             });
-
-            // SİTE MODUNDA DIŞ ÇEVRE & SOSYAL ALANLAR TEK ORTAK YERDE (BLOKLARDA TEKRARLANMAZ)
-            if (isSite && stateStructures.length > 0) {
-                var rootSpaces = ensureStructureCommonSpaces(stateStructures[0]);
-                var siteOutdoorSpaces = rootSpaces.filter(function (cs) {
-                    return cs.SpaceGroup === 'CevreDuzenleme' || parseInt(cs.FloorLevel, 10) === -99;
-                });
-                var siteOutdoorChips = ['Kamelya / Çardak', 'Bahçe & Ağaç Peyzajı', 'Çocuk Oyun Parkı', 'Bahçe Su Kuyusu', 'Açık Misafir Otoparkı', 'Güvenlik Kulübesi', 'Havuz / Sosyal Tesis'];
-                var hasSiteOutdoor = function (n) {
-                    return siteOutdoorSpaces.some(function (cs) { return (cs.Name || '').toLowerCase() === n.toLowerCase(); });
-                };
-
-                var siteHtml = '<div class="card border-success border-opacity-50 rounded-4 p-4 mb-4 bg-success bg-opacity-10 shadow-sm" id="siteSharedOutdoorCard">' +
-                    '  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">' +
-                    '    <div>' +
-                    '      <h6 class="fw-bold text-success mb-0"><i class="bi bi-tree-fill me-2"></i>Site Ortak Dış Çevre &amp; Sosyal Alanları (Tüm Bloklar İçin Tek)</h6>' +
-                    '      <small class="text-muted">Blokların kendi ekranlarında tekrarlanmaz; tüm site blokları bu ortak dış alanı paylaşır.</small>' +
-                    '    </div>' +
-                    '    <span class="badge bg-success text-white rounded-pill px-3 py-2">' + siteOutdoorSpaces.length + ' Ortak Dış Alan</span>' +
-                    '  </div>' +
-                    '  <div class="d-flex flex-wrap gap-1 mb-3">' +
-                    siteOutdoorChips.map(function (c) {
-                        var ex = hasSiteOutdoor(c);
-                        return '<button type="button" class="btn btn-xs ' + (ex ? 'btn-success' : 'btn-outline-success bg-white') + ' rounded-pill px-2 py-1" style="font-size:0.75rem;" onclick="togglePresetCommonSpace(0, \'' + escapeAttr(c) + '\', \'CevreDuzenleme\', ' + (!ex) + ')">' + (ex ? '✓ ' : '+ ') + c + '</button>';
-                    }).join('') +
-                    '  </div>' +
-                    '  <div class="bg-white rounded-3 p-3 border">';
-
-                if (siteOutdoorSpaces.length > 0) {
-                    siteHtml += '<div class="table-responsive mb-2"><table class="table table-sm align-middle mb-0">' +
-                        '<thead class="table-light small"><tr><th>Ortak Dış Alan / Donatı Adı</th><th style="width:120px;">Alan (m²)</th><th style="width:45px;"></th></tr></thead><tbody>' +
-                        rootSpaces.map(function (cs, csIdx) {
-                            if (cs.SpaceGroup !== 'CevreDuzenleme' && parseInt(cs.FloorLevel, 10) !== -99) return '';
-                            return '<tr class="site-out-row">' +
-                                '<td><input type="text" class="form-control form-control-sm fw-semibold so-name" value="' + escapeAttr(cs.Name) + '" /></td>' +
-                                '<td><input type="number" step="0.5" min="0" class="form-control form-control-sm so-sqm" value="' + (cs.SquareMeters != null ? cs.SquareMeters : '') + '" placeholder="m²" /></td>' +
-                                '<td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="removeCommonSpaceRow(0, ' + csIdx + ')" title="Kaldır"><i class="bi bi-x-lg"></i></button></td>' +
-                                '</tr>';
-                        }).join('') +
-                        '</tbody></table></div>';
-                }
-
-                siteHtml += '<div class="row g-2 align-items-end pt-2 border-top">' +
-                    '  <div class="col-md-7"><label class="form-label small fw-bold mb-1">Özel Site Dış Alanı Ekle</label><input type="text" class="form-control form-control-sm" id="siteCustomOutdoorName" placeholder="Örn: Kuzey Kamelya, Site Su Kuyusu..." /></div>' +
-                    '  <div class="col-md-3"><label class="form-label small fw-bold mb-1">Alan (m²)</label><input type="number" step="0.5" min="0" class="form-control form-control-sm" id="siteCustomOutdoorSqm" placeholder="m²" /></div>' +
-                    '  <div class="col-md-2 d-grid"><button type="button" class="btn btn-sm btn-success fw-bold" onclick="addSiteOutdoorSpace()">+ Ekle</button></div>' +
-                    '</div></div></div>';
-
-                container.insertAdjacentHTML('beforeend', siteHtml);
-            }
-        }
-
-        function clearStructureSpaces(idx) {
-            syncStateFromDom();
-            var st = stateStructures[idx];
-            if (!st) return;
-            var isSite = document.getElementById('managementModeInput').value === 'Site';
-            if (isSite && idx === 0) {
-                st.CommonSpaces = (st.CommonSpaces || []).filter(function (cs) {
-                    return cs.SpaceGroup === 'CevreDuzenleme' || parseInt(cs.FloorLevel, 10) === -99;
-                });
-            } else {
-                st.CommonSpaces = [];
-            }
-            st._spacesInitialized = true;
-            renderStructures();
-        }
-
-        function addSiteOutdoorSpace() {
-            syncStateFromDom();
-            var nameEl = document.getElementById('siteCustomOutdoorName');
-            var sqmEl = document.getElementById('siteCustomOutdoorSqm');
-            var name = (nameEl?.value || '').trim();
-            if (!name || !stateStructures[0]) return;
-            var list = ensureStructureCommonSpaces(stateStructures[0]);
-            list.push({
-                Name: name,
-                SpaceGroup: 'CevreDuzenleme',
-                FloorLevel: -99,
-                SquareMeters: sqmEl && sqmEl.value !== '' ? (parseFloat(sqmEl.value) || null) : null,
-                Description: ''
-            });
-            stateStructures[0]._spacesInitialized = true;
-            renderStructures();
         }
 
         function buildRoofSelect(cls, selectedVal, isDisabled) {
@@ -1234,9 +1102,6 @@
             stateStructures[idx].HasRoof = !!checked;
             if (!checked) {
                 stateStructures[idx].RoofType = 'Çatı Katı Yok (Teras Yok)';
-                stateStructures[idx].CommonSpaces = (stateStructures[idx].CommonSpaces || []).filter(function (cs) {
-                    return (cs.Name || '').toLowerCase().indexOf('çatı') !== 0;
-                });
             } else if (stateStructures[idx].RoofType === 'Çatı Katı Yok (Teras Yok)') {
                 stateStructures[idx].RoofType = 'Düz Teras Çatı (Tabliye)';
             }
@@ -1256,51 +1121,6 @@
             if (txtEl) {
                 txtEl.textContent = computeStructurePreviewText(floors, totalApts, groundApts, shops, hasGround, hasRoof);
             }
-        }
-
-        function togglePresetCommonSpace(idx, name, spaceGroup, isChecked) {
-            syncStateFromDom();
-            var list = ensureStructureCommonSpaces(stateStructures[idx]);
-            stateStructures[idx]._spacesInitialized = true;
-            var existingIdx = list.findIndex(function (x) { return (x.Name || '').toLowerCase() === name.toLowerCase(); });
-            if (isChecked && existingIdx < 0) {
-                list.push({ Name: name, SpaceGroup: spaceGroup, FloorLevel: guessDefaultFloorForSpace(name, spaceGroup), SquareMeters: null, Description: '' });
-            } else if (!isChecked && existingIdx >= 0) {
-                list.splice(existingIdx, 1);
-            }
-            renderStructures();
-        }
-
-        function addCustomCommonSpace(idx) {
-            syncStateFromDom();
-            var nameEl = document.getElementById('customSpaceName-' + idx);
-            var flrEl = document.getElementById('customSpaceFloor-' + idx);
-            var sqmEl = document.getElementById('customSpaceSqm-' + idx);
-            var name = (nameEl?.value || '').trim();
-            if (!name) {
-                alert('Lütfen mekan / oda adını girin.');
-                return;
-            }
-            var flrVal = parseInt(flrEl?.value ?? '-1', 10);
-            var grpVal = flrVal === -99 ? 'CevreDuzenleme' : 'BinaIci';
-            var list = ensureStructureCommonSpaces(stateStructures[idx]);
-            stateStructures[idx]._spacesInitialized = true;
-            list.push({
-                Name: name,
-                SpaceGroup: grpVal,
-                FloorLevel: isNaN(flrVal) ? -1 : flrVal,
-                SquareMeters: sqmEl && sqmEl.value !== '' ? (parseFloat(sqmEl.value) || null) : null,
-                Description: ''
-            });
-            renderStructures();
-        }
-
-        function removeCommonSpaceRow(idx, csIdx) {
-            syncStateFromDom();
-            var list = ensureStructureCommonSpaces(stateStructures[idx]);
-            stateStructures[idx]._spacesInitialized = true;
-            list.splice(csIdx, 1);
-            renderStructures();
         }
 
         function escapeAttr(str) {
@@ -1323,7 +1143,6 @@
         }
 
         function syncStateFromDom() {
-            var isSiteMode = document.getElementById('managementModeInput')?.value === 'Site';
             document.querySelectorAll('.structure-card').forEach(function (card) {
                 var idx = parseInt(card.getAttribute('data-s-idx'), 10);
                 var st = stateStructures[idx];
@@ -1341,33 +1160,9 @@
                 if (hasRoofEl) st.HasRoof = hasRoofEl.checked;
                 var roofEl = card.querySelector('.s-roof');
                 if (roofEl) st.RoofType = st.HasRoof ? roofEl.value : 'Çatı Katı Yok (Teras Yok)';
-
-                var csRows = [];
-                card.querySelectorAll('.cs-row').forEach(function (row) {
-                    var n = (row.querySelector('.cs-name')?.value || '').trim();
-                    if (!n) return;
-                    var flrVal = parseInt(row.querySelector('.cs-floor')?.value ?? '-1', 10);
-                    flrVal = isNaN(flrVal) ? -1 : flrVal;
-                    var grp = flrVal === -99 ? 'CevreDuzenleme' : 'BinaIci';
-                    var sqmRaw = row.querySelector('.cs-sqm')?.value;
-                    var sqm = (sqmRaw !== undefined && sqmRaw !== null && sqmRaw !== '') ? (parseFloat(sqmRaw) || null) : null;
-                    csRows.push({ Name: n, SpaceGroup: grp, FloorLevel: flrVal, SquareMeters: sqm, Description: '' });
-                });
-
-                if (isSiteMode && idx === 0) {
-                    document.querySelectorAll('#siteSharedOutdoorCard .site-out-row').forEach(function (row) {
-                        var n = (row.querySelector('.so-name')?.value || '').trim();
-                        if (!n) return;
-                        var sqmRaw = row.querySelector('.so-sqm')?.value;
-                        var sqm = (sqmRaw !== undefined && sqmRaw !== null && sqmRaw !== '') ? (parseFloat(sqmRaw) || null) : null;
-                        csRows.push({ Name: n, SpaceGroup: 'CevreDuzenleme', FloorLevel: -99, SquareMeters: sqm, Description: '' });
-                    });
-                }
-
-                st.CommonSpaces = csRows;
-                st._spacesInitialized = true;
-                st.IndoorCommonAreas = csRows.filter(function (x) { return x.SpaceGroup !== 'CevreDuzenleme'; }).map(function (x) { return x.Name; });
-                st.OutdoorCommonAreas = csRows.filter(function (x) { return x.SpaceGroup === 'CevreDuzenleme'; }).map(function (x) { return x.Name; });
+                st.CommonSpaces = [];
+                st.IndoorCommonAreas = [];
+                st.OutdoorCommonAreas = [];
 
                 if (st.LayoutPattern !== 'Tekil Yapı') {
                     var children = [];
