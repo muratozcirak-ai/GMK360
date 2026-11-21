@@ -24,6 +24,39 @@ namespace GMK360.Web.Services
         public string Message { get; set; } = string.Empty;
     }
 
+    public sealed class ExpenseDistributionPreviewItem
+    {
+        public int BuildingUnitId { get; set; }
+        public string BuildingName { get; set; } = string.Empty;
+        public string DoorNumber { get; set; } = string.Empty;
+        public string Category { get; set; } = "Daire";
+        public string RoomLayout { get; set; } = string.Empty;
+        public decimal LandShare { get; set; }
+        public double GrossSquareMeters { get; set; }
+        public decimal DuesMultiplier { get; set; }
+        public decimal ParticipationPercent { get; set; }
+        public decimal EffectiveWeight { get; set; }
+        public decimal OwnerAmount { get; set; }
+        public decimal TenantAmount { get; set; }
+        public decimal TotalShareAmount { get; set; }
+        public string? OwnerName { get; set; }
+        public string? TenantName { get; set; }
+        public string StatusNote { get; set; } = string.Empty;
+        public bool IsExempt => TotalShareAmount <= 0m;
+    }
+
+    public sealed class ExpenseDistributionPreviewResult
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public string ScopeLabel { get; set; } = string.Empty;
+        public string DistributionRule { get; set; } = "Esit";
+        public decimal TotalAmount { get; set; }
+        public int ParticipatingUnitCount { get; set; }
+        public int ExemptUnitCount { get; set; }
+        public List<ExpenseDistributionPreviewItem> Items { get; set; } = new();
+    }
+
     public sealed class ApprovalSignatureItem
     {
         public string UserId { get; set; } = string.Empty;
@@ -99,6 +132,361 @@ namespace GMK360.Web.Services
             return period;
         }
 
+        public Task<ExpenseDistributionPreviewResult> PreviewExpenseDistributionAsync(
+            int buildingId,
+            decimal totalAmount,
+            BuildingExpenseType expenseType,
+            string distributionRule = "Esit",
+            string expenseItemKey = "Genel",
+            ExpenseScopeType scopeType = ExpenseScopeType.Building,
+            decimal shopParticipationPercent = 100m,
+            decimal? ownerSplitPercent = null)
+        {
+            return ComputeExpenseDistributionInternalAsync(
+                buildingId,
+                totalAmount,
+                expenseType,
+                distributionRule,
+                expenseItemKey,
+                scopeType,
+                shopParticipationPercent,
+                ownerSplitPercent);
+        }
+
+        private async Task<List<BuildingUnit>> LoadTargetLivingUnitsAsync(int buildingId, ExpenseScopeType scopeType)
+        {
+            List<int> targetBuildingIds;
+            if (scopeType == ExpenseScopeType.HousingComplex)
+            {
+                var current = await _context.Buildings.AsNoTracking().FirstOrDefaultAsync(b => b.Id == buildingId);
+                int rootId = current?.ParentBuildingId ?? buildingId;
+                targetBuildingIds = await _context.Buildings
+                    .AsNoTracking()
+                    .Where(b => b.Id == rootId || b.ParentBuildingId == rootId)
+                    .Select(b => b.Id)
+                    .ToListAsync();
+                if (!targetBuildingIds.Any()) targetBuildingIds = new List<int> { buildingId };
+            }
+            else
+            {
+                targetBuildingIds = new List<int> { buildingId };
+            }
+
+            return await _context.BuildingUnits
+                .Include(u => u.Building)
+                .Where(u => targetBuildingIds.Contains(u.BuildingId)
+                    && u.Category != "OrtakAlan_Blok"
+                    && (u.Category == null || !u.Category.StartsWith("OrtakAlan")))
+                .OrderBy(u => u.BuildingId)
+                .ThenBy(u => u.FloorLevel)
+                .ThenBy(u => u.DoorNumber)
+                .ToListAsync();
+        }
+
+        private async Task<ExpenseDistributionPreviewResult> ComputeExpenseDistributionInternalAsync(
+            int buildingId,
+            decimal totalAmount,
+            BuildingExpenseType expenseType,
+            string distributionRule,
+            string expenseItemKey,
+            ExpenseScopeType scopeType,
+            decimal shopParticipationPercent,
+            decimal? ownerSplitPercent)
+        {
+            if (totalAmount <= 0)
+            {
+                return new ExpenseDistributionPreviewResult { Success = false, Message = "Gider tutarı sıfırdan büyük olmalıdır." };
+            }
+
+            var units = await LoadTargetLivingUnitsAsync(buildingId, scopeType);
+            if (!units.Any())
+            {
+                return new ExpenseDistributionPreviewResult { Success = false, Message = "Dağıtılacak aktif daire veya dükkan bulunamadı." };
+            }
+
+            string normalizedRule = string.IsNullOrWhiteSpace(distributionRule) ? "Esit" : distributionRule.Trim();
+            string normalizedItem = string.IsNullOrWhiteSpace(expenseItemKey) ? "Genel" : expenseItemKey.Trim();
+            bool isCapital = expenseType == BuildingExpenseType.CapitalExpenditure;
+            decimal clampedShopPct = Math.Max(0m, shopParticipationPercent);
+
+            // Her birim için masraf kalemine bağlı muafiyet / katılım yüzdesi
+            var unitFactors = new Dictionary<int, (decimal Factor, string Note)>();
+            foreach (var u in units)
+            {
+                bool isShop = string.Equals(u.Category, "Dukkan", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(u.Category, "Dükkan", StringComparison.OrdinalIgnoreCase);
+
+                decimal factor = 1.00m;
+                string note = "Standart Katılım (%100)";
+
+                if (string.Equals(normalizedItem, "Asansor", StringComparison.OrdinalIgnoreCase) && u.IsExemptFromElevator)
+                {
+                    factor = 0m;
+                    note = "Asansör Kaleminden Muaf (%0)";
+                }
+                else if (string.Equals(normalizedItem, "Merdiven", StringComparison.OrdinalIgnoreCase) && u.IsExemptFromStairwell)
+                {
+                    factor = 0m;
+                    note = "Merdiven/Aydınlatmadan Muaf (%0)";
+                }
+                else if (string.Equals(normalizedItem, "CopTemizlik", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (u.CleaningParticipationPercent != 100m)
+                    {
+                        factor = Math.Max(0m, u.CleaningParticipationPercent) / 100m;
+                        note = factor == 0m
+                            ? "Çöp/Temizlik Muaf (%0)"
+                            : $"Birim Çöp/Temizlik Oranı (%{u.CleaningParticipationPercent:0.##})";
+                    }
+                    else if (isShop && clampedShopPct != 100m)
+                    {
+                        factor = clampedShopPct / 100m;
+                        note = factor == 0m
+                            ? "Dükkan Muaf (%0)"
+                            : (factor > 1m ? $"Dükkan Yoğun Çöp/Temizlik (%{clampedShopPct:0.##})" : $"Dükkan İndirimli (%{clampedShopPct:0.##})");
+                    }
+                }
+                else if (isShop && clampedShopPct != 100m)
+                {
+                    factor = clampedShopPct / 100m;
+                    note = factor == 0m
+                        ? $"Dükkan Muaf ({normalizedItem} %0)"
+                        : (factor > 1m ? $"Dükkan Artışlı Pay (%{clampedShopPct:0.##})" : $"Dükkan İndirimli Pay (%{clampedShopPct:0.##})");
+                }
+
+                unitFactors[u.Id] = (factor, note);
+            }
+
+            // Sessiz fallback yerine eksik arsa payı / m² kontrolü (sadece muaf olmayan birimlerde)
+            var participatingUnits = units.Where(u => unitFactors[u.Id].Factor > 0m).ToList();
+            if (!participatingUnits.Any())
+            {
+                return new ExpenseDistributionPreviewResult
+                {
+                    Success = false,
+                    Message = "Seçilen kural ve muafiyetlere göre katılımcı birim kalmadığı için dağıtım yapılamıyor."
+                };
+            }
+
+            if (string.Equals(normalizedRule, "ArsaPayi", StringComparison.OrdinalIgnoreCase))
+            {
+                var missing = participatingUnits.Where(u => u.LandShare <= 0m).Select(u => u.DoorNumber).Take(6).ToList();
+                if (missing.Any())
+                {
+                    return new ExpenseDistributionPreviewResult
+                    {
+                        Success = false,
+                        Message = $"Arsa Payı dağıtımı için önce şu bölümlere Arsa Payı girilmelidir (Sakinler / Daire düzenleden): {string.Join(", ", missing)}"
+                    };
+                }
+            }
+            else if (string.Equals(normalizedRule, "Metrekare", StringComparison.OrdinalIgnoreCase))
+            {
+                var missing = participatingUnits.Where(u => (u.GrossSquareMeters ?? 0) <= 0).Select(u => u.DoorNumber).Take(6).ToList();
+                if (missing.Any())
+                {
+                    return new ExpenseDistributionPreviewResult
+                    {
+                        Success = false,
+                        Message = $"Metrekare dağıtımı için şu bölümlere Brüt m² girilmelidir: {string.Join(", ", missing)}"
+                    };
+                }
+            }
+
+            // Efektif ağırlıklar
+            var weights = new Dictionary<int, decimal>();
+            foreach (var u in units)
+            {
+                var (factor, _) = unitFactors[u.Id];
+                decimal baseWeight = normalizedRule.ToLowerInvariant() switch
+                {
+                    "arsapayi" => u.LandShare,
+                    "metrekare" => (decimal)(u.GrossSquareMeters ?? 0),
+                    "katsayi" => u.DuesMultiplier > 0m ? u.DuesMultiplier : 1.00m,
+                    _ => 1.00m
+                };
+                weights[u.Id] = Math.Max(0m, baseWeight * factor);
+            }
+
+            decimal totalWeight = weights.Values.Sum();
+            if (totalWeight <= 0m)
+            {
+                return new ExpenseDistributionPreviewResult { Success = false, Message = "Toplam dağıtım ağırlığı sıfır çıktı." };
+            }
+
+            // Kuruş-dengeli (Remainder Allocation) paylaşım
+            var exactMap = new Dictionary<int, decimal>();
+            var shareMap = new Dictionary<int, decimal>();
+            foreach (var u in units)
+            {
+                decimal w = weights[u.Id];
+                decimal exact = w > 0m ? totalAmount * (w / totalWeight) : 0m;
+                exactMap[u.Id] = exact;
+                shareMap[u.Id] = Math.Round(exact, 2, MidpointRounding.AwayFromZero);
+            }
+
+            decimal diff = totalAmount - shareMap.Values.Sum();
+            int remainderCents = (int)Math.Round(diff * 100m, 0, MidpointRounding.AwayFromZero);
+            if (remainderCents != 0)
+            {
+                int stepDir = remainderCents > 0 ? 1 : -1;
+                var candidates = units
+                    .Where(u => weights[u.Id] > 0m)
+                    .OrderByDescending(u => stepDir > 0
+                        ? (exactMap[u.Id] - shareMap[u.Id])
+                        : (shareMap[u.Id] - exactMap[u.Id]))
+                    .ThenByDescending(u => weights[u.Id])
+                    .ToList();
+
+                int idx = 0;
+                while (remainderCents != 0 && candidates.Any())
+                {
+                    var cand = candidates[idx % candidates.Count];
+                    decimal nextVal = shareMap[cand.Id] + (stepDir * 0.01m);
+                    if (nextVal >= 0m)
+                    {
+                        shareMap[cand.Id] = nextVal;
+                        remainderCents -= stepDir;
+                    }
+                    idx++;
+                    if (idx > candidates.Count * 10) break;
+                }
+            }
+
+            decimal? effectiveOwnerPct = ownerSplitPercent.HasValue
+                ? Math.Clamp(ownerSplitPercent.Value, 0m, 100m)
+                : (isCapital ? 100m : (decimal?)null);
+
+            var previewItems = new List<ExpenseDistributionPreviewItem>();
+            foreach (var u in units)
+            {
+                decimal unitShare = shareMap[u.Id];
+                var (factor, baseNote) = unitFactors[u.Id];
+                bool hasTenant = !u.IsEmpty && !string.IsNullOrWhiteSpace(u.TenantName);
+
+                decimal ownerAmt = 0m;
+                decimal tenantAmt = 0m;
+                string payerNote;
+
+                if (unitShare <= 0m)
+                {
+                    payerNote = baseNote;
+                }
+                else if (effectiveOwnerPct.HasValue)
+                {
+                    if (effectiveOwnerPct.Value >= 100m || !hasTenant)
+                    {
+                        ownerAmt = unitShare;
+                        payerNote = effectiveOwnerPct.Value >= 100m && hasTenant
+                            ? "Kiracı Muaf → Malik %100"
+                            : (!hasTenant ? "Malik (Kiracı Yok)" : baseNote);
+                    }
+                    else if (effectiveOwnerPct.Value <= 0m)
+                    {
+                        tenantAmt = unitShare;
+                        payerNote = "Kiracı %100";
+                    }
+                    else
+                    {
+                        ownerAmt = Math.Round(unitShare * (effectiveOwnerPct.Value / 100m), 2, MidpointRounding.AwayFromZero);
+                        tenantAmt = unitShare - ownerAmt;
+                        payerNote = $"Karma %{effectiveOwnerPct.Value:0.##} Malik / %{(100m - effectiveOwnerPct.Value):0.##} Kiracı";
+                    }
+                }
+                else
+                {
+                    if (hasTenant)
+                    {
+                        tenantAmt = unitShare;
+                        payerNote = "Kiracı (İşletme)";
+                    }
+                    else
+                    {
+                        ownerAmt = unitShare;
+                        payerNote = "Malik (Oturan / Boş)";
+                    }
+                }
+
+                string combinedNote = unitShare <= 0m || baseNote == "Standart Katılım (%100)"
+                    ? payerNote
+                    : $"{baseNote} • {payerNote}";
+
+                previewItems.Add(new ExpenseDistributionPreviewItem
+                {
+                    BuildingUnitId = u.Id,
+                    BuildingName = u.Building?.Name ?? "-",
+                    DoorNumber = u.DoorNumber,
+                    Category = u.Category ?? "Daire",
+                    RoomLayout = u.RoomLayout ?? (string.Equals(u.Category, "Dukkan", StringComparison.OrdinalIgnoreCase) ? "Dükkan" : "Daire"),
+                    LandShare = u.LandShare,
+                    GrossSquareMeters = u.GrossSquareMeters ?? 0,
+                    DuesMultiplier = u.DuesMultiplier > 0m ? u.DuesMultiplier : 1.00m,
+                    ParticipationPercent = Math.Round(factor * 100m, 2),
+                    EffectiveWeight = Math.Round(weights[u.Id], 4),
+                    OwnerAmount = ownerAmt,
+                    TenantAmount = tenantAmt,
+                    TotalShareAmount = unitShare,
+                    OwnerName = u.OwnerName,
+                    TenantName = u.TenantName,
+                    StatusNote = combinedNote
+                });
+            }
+
+            return new ExpenseDistributionPreviewResult
+            {
+                Success = true,
+                Message = "Dağıtım hesaplaması hazır.",
+                ScopeLabel = scopeType == ExpenseScopeType.HousingComplex ? "Tüm Site / Bloklar" : (units.FirstOrDefault()?.Building?.Name ?? "Seçili Blok"),
+                DistributionRule = normalizedRule,
+                TotalAmount = totalAmount,
+                ParticipatingUnitCount = previewItems.Count(x => x.TotalShareAmount > 0m),
+                ExemptUnitCount = previewItems.Count(x => x.TotalShareAmount <= 0m),
+                Items = previewItems
+            };
+        }
+
+        private async Task PersistUnitDebtsFromPreviewAsync(
+            int buildingId,
+            ExpenseScopeType scopeType,
+            BuildingExpense expense,
+            ExpenseDistributionPreviewResult preview)
+        {
+            var unitLookup = (await LoadTargetLivingUnitsAsync(buildingId, scopeType)).ToDictionary(u => u.Id);
+            foreach (var item in preview.Items.Where(i => i.TotalShareAmount > 0m))
+            {
+                if (!unitLookup.TryGetValue(item.BuildingUnitId, out var unit)) continue;
+
+                if (item.OwnerAmount > 0m)
+                {
+                    var ownerPeriod = await EnsureActivePeriodFromUnitAsync(unit, "Owner");
+                    _context.UnitDebts.Add(new UnitDebt
+                    {
+                        BuildingUnitId = unit.Id,
+                        BuildingExpenseId = expense.Id,
+                        ResidencyPeriodId = ownerPeriod?.Id,
+                        PayerRole = "Owner",
+                        Amount = item.OwnerAmount,
+                        IsPaid = false
+                    });
+                }
+
+                if (item.TenantAmount > 0m)
+                {
+                    var tenantPeriod = await EnsureActivePeriodFromUnitAsync(unit, "Tenant");
+                    _context.UnitDebts.Add(new UnitDebt
+                    {
+                        BuildingUnitId = unit.Id,
+                        BuildingExpenseId = expense.Id,
+                        ResidencyPeriodId = tenantPeriod?.Id,
+                        PayerRole = "Tenant",
+                        Amount = item.TenantAmount,
+                        IsPaid = false
+                    });
+                }
+            }
+            await _context.SaveChangesAsync();
+        }
+
         public async Task<GovernanceActionResult> DistributeExpenseAsync(
             int buildingId,
             string description,
@@ -106,10 +494,24 @@ namespace GMK360.Web.Services
             BuildingExpenseType expenseType,
             IFormFile? invoiceFile,
             string actorUserId,
-            string distributionRule = "Esit")
+            string distributionRule = "Esit",
+            string expenseItemKey = "Genel",
+            ExpenseScopeType scopeType = ExpenseScopeType.Building,
+            decimal shopParticipationPercent = 100m,
+            decimal? ownerSplitPercent = null)
         {
-            if (totalAmount <= 0)
-                return new GovernanceActionResult { Success = false, Message = "Gider tutarı sıfırdan büyük olmalıdır." };
+            var preview = await ComputeExpenseDistributionInternalAsync(
+                buildingId,
+                totalAmount,
+                expenseType,
+                distributionRule,
+                expenseItemKey,
+                scopeType,
+                shopParticipationPercent,
+                ownerSplitPercent);
+
+            if (!preview.Success)
+                return new GovernanceActionResult { Success = false, Message = preview.Message };
 
             string? invoiceUrl = null;
             if (invoiceFile != null && invoiceFile.Length > 0)
@@ -132,12 +534,20 @@ namespace GMK360.Web.Services
             }
 
             bool isCapital = expenseType == BuildingExpenseType.CapitalExpenditure;
+            string payerType = ownerSplitPercent.HasValue
+                ? (ownerSplitPercent.Value >= 100m ? "Owner" : (ownerSplitPercent.Value <= 0m ? "Tenant" : "Split"))
+                : (isCapital ? "Owner" : "Tenant");
+
             var expense = new BuildingExpense
             {
                 BuildingId = buildingId,
-                ScopeType = ExpenseScopeType.Building,
+                ScopeType = scopeType,
                 ExpenseType = expenseType,
-                PayerType = isCapital ? "Owner" : "Tenant",
+                PayerType = payerType,
+                ExpenseItemKey = string.IsNullOrWhiteSpace(expenseItemKey) ? "Genel" : expenseItemKey.Trim(),
+                DistributionRule = preview.DistributionRule,
+                ShopParticipationPercent = Math.Max(0m, shopParticipationPercent),
+                OwnerSplitPercent = ownerSplitPercent,
                 Description = description.Trim(),
                 TotalAmount = totalAmount,
                 InvoiceDocumentUrl = invoiceUrl,
@@ -146,56 +556,172 @@ namespace GMK360.Web.Services
             _context.BuildingExpenses.Add(expense);
             await _context.SaveChangesAsync();
 
-            var units = await _context.BuildingUnits
-                .Where(u => u.BuildingId == buildingId && u.Category != "OrtakAlan_Blok" && (u.Category == null || !u.Category.StartsWith("OrtakAlan")))
-                .ToListAsync();
-
-            if (units.Any())
-            {
-                bool useLandShare = string.Equals(distributionRule, "ArsaPayi", StringComparison.OrdinalIgnoreCase)
-                    && units.All(u => u.LandShare > 0);
-                bool useAreaWeight = !useLandShare
-                    && (string.Equals(distributionRule, "Metrekare", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(distributionRule, "ArsaPayi", StringComparison.OrdinalIgnoreCase))
-                    && units.All(u => (u.GrossSquareMeters ?? 0) > 0);
-
-                decimal totalLandShare = useLandShare ? units.Sum(u => u.LandShare) : 0m;
-                double totalArea = useAreaWeight ? units.Sum(u => u.GrossSquareMeters ?? 0) : 0;
-
-                foreach (var unit in units)
-                {
-                    decimal shareAmount = useLandShare && totalLandShare > 0
-                        ? Math.Round(totalAmount * (unit.LandShare / totalLandShare), 2)
-                        : (useAreaWeight && totalArea > 0
-                            ? Math.Round(totalAmount * (decimal)((unit.GrossSquareMeters ?? 0) / totalArea), 2)
-                            : Math.Round(totalAmount / units.Count, 2));
-
-                    var ownerPeriod = await EnsureActivePeriodFromUnitAsync(unit, "Owner");
-                    var tenantPeriod = isCapital ? null : await EnsureActivePeriodFromUnitAsync(unit, "Tenant");
-
-                    var targetPeriod = isCapital ? ownerPeriod : (tenantPeriod ?? ownerPeriod);
-                    string payerRole = isCapital ? "Owner" : (tenantPeriod != null ? "Tenant" : "Owner");
-
-                    _context.UnitDebts.Add(new UnitDebt
-                    {
-                        BuildingUnitId = unit.Id,
-                        BuildingExpenseId = expense.Id,
-                        ResidencyPeriodId = targetPeriod?.Id,
-                        PayerRole = payerRole,
-                        Amount = shareAmount,
-                        IsPaid = false
-                    });
-                }
-                await _context.SaveChangesAsync();
-            }
+            await PersistUnitDebtsFromPreviewAsync(buildingId, scopeType, expense, preview);
 
             WriteAuditLog(actorUserId, "EXPENSE_CREATED", "BuildingExpense", expense.Id.ToString(), new
             {
                 buildingId,
                 expense.TotalAmount,
                 ExpenseType = expense.ExpenseType.ToString(),
-                DistributionRule = distributionRule,
+                ScopeType = scopeType.ToString(),
+                expense.ExpenseItemKey,
+                expense.DistributionRule,
+                expense.ShopParticipationPercent,
+                expense.OwnerSplitPercent,
+                Participating = preview.ParticipatingUnitCount,
+                Exempt = preview.ExemptUnitCount,
                 expense.InvoiceDocumentUrl
+            });
+            await _context.SaveChangesAsync();
+
+            string exemptInfo = preview.ExemptUnitCount > 0 ? $" ({preview.ExemptUnitCount} muaf bölüm hariç tutuldu)" : "";
+            return new GovernanceActionResult
+            {
+                Success = true,
+                CreatedExpenseId = expense.Id,
+                Message = $"'{description.Trim()}' ({totalAmount:N2} ₺) {preview.DistributionRule} kuralıyla {preview.ParticipatingUnitCount} bölüme exact kuruşlu paylaştırıldı{exemptInfo}."
+            };
+        }
+
+        public async Task<ExpenseDistributionPreviewResult> PreviewFixedUnitDuesAsync(
+            int buildingId,
+            int year,
+            int month,
+            decimal defaultBaseDues = 0m,
+            ExpenseScopeType scopeType = ExpenseScopeType.Building,
+            decimal? ownerSplitPercent = null)
+        {
+            var units = await LoadTargetLivingUnitsAsync(buildingId, scopeType);
+            if (!units.Any())
+                return new ExpenseDistributionPreviewResult { Success = false, Message = "Aktif bağımsız bölüm bulunamadı." };
+
+            decimal ownerPct = ownerSplitPercent.HasValue ? Math.Clamp(ownerSplitPercent.Value, 0m, 100m) : 0m;
+            var items = new List<ExpenseDistributionPreviewItem>();
+            decimal grandTotal = 0m;
+
+            foreach (var u in units)
+            {
+                decimal mult = u.DuesMultiplier > 0m ? u.DuesMultiplier : 1.00m;
+                decimal share = u.FixedMonthlyDues.HasValue && u.FixedMonthlyDues.Value >= 0m
+                    ? Math.Round(u.FixedMonthlyDues.Value, 2, MidpointRounding.AwayFromZero)
+                    : Math.Round(Math.Max(0m, defaultBaseDues) * mult, 2, MidpointRounding.AwayFromZero);
+
+                bool hasTenant = !u.IsEmpty && !string.IsNullOrWhiteSpace(u.TenantName);
+                decimal ownerAmt = 0m;
+                decimal tenantAmt = 0m;
+                string note;
+
+                if (share <= 0m)
+                {
+                    note = "Sabit Aidat = 0 ₺ (Muaf / Tanımsız)";
+                }
+                else if (!hasTenant || ownerPct >= 100m)
+                {
+                    ownerAmt = share;
+                    note = hasTenant && ownerPct >= 100m ? "Kiracı Muaf → Malik %100" : "Malik (Oturan / Boş)";
+                }
+                else if (ownerPct <= 0m)
+                {
+                    tenantAmt = share;
+                    note = u.FixedMonthlyDues.HasValue ? "Tanımlı Sabit Aidat (Kiracı)" : $"Baz × {mult:0.##}x (Kiracı)";
+                }
+                else
+                {
+                    ownerAmt = Math.Round(share * (ownerPct / 100m), 2, MidpointRounding.AwayFromZero);
+                    tenantAmt = share - ownerAmt;
+                    note = $"%{ownerPct:0.##} Malik / %{(100m - ownerPct):0.##} Kiracı";
+                }
+
+                grandTotal += share;
+                items.Add(new ExpenseDistributionPreviewItem
+                {
+                    BuildingUnitId = u.Id,
+                    BuildingName = u.Building?.Name ?? "-",
+                    DoorNumber = u.DoorNumber,
+                    Category = u.Category ?? "Daire",
+                    RoomLayout = u.RoomLayout ?? "Daire",
+                    LandShare = u.LandShare,
+                    GrossSquareMeters = u.GrossSquareMeters ?? 0,
+                    DuesMultiplier = mult,
+                    ParticipationPercent = share > 0m ? 100m : 0m,
+                    EffectiveWeight = mult,
+                    OwnerAmount = ownerAmt,
+                    TenantAmount = tenantAmt,
+                    TotalShareAmount = share,
+                    OwnerName = u.OwnerName,
+                    TenantName = u.TenantName,
+                    StatusNote = note
+                });
+            }
+
+            if (grandTotal <= 0m)
+            {
+                return new ExpenseDistributionPreviewResult
+                {
+                    Success = false,
+                    Message = "Toplam aidat 0 ₺ çıktı. Bölümlere Sabit Aylık Aidat tanımlayın veya Baz Aidat Tutarı girin."
+                };
+            }
+
+            return new ExpenseDistributionPreviewResult
+            {
+                Success = true,
+                Message = $"{year}-{month:00} aylık sabit aidat önizlemesi hazır.",
+                ScopeLabel = scopeType == ExpenseScopeType.HousingComplex ? "Tüm Site / Bloklar" : (units.FirstOrDefault()?.Building?.Name ?? "Seçili Blok"),
+                DistributionRule = "SabitAidat_Katsayi",
+                TotalAmount = grandTotal,
+                ParticipatingUnitCount = items.Count(i => i.TotalShareAmount > 0m),
+                ExemptUnitCount = items.Count(i => i.TotalShareAmount <= 0m),
+                Items = items
+            };
+        }
+
+        public async Task<GovernanceActionResult> DistributeFixedUnitDuesAsync(
+            int buildingId,
+            int year,
+            int month,
+            decimal defaultBaseDues,
+            ExpenseScopeType scopeType,
+            decimal? ownerSplitPercent,
+            string actorUserId,
+            string? customDescription = null)
+        {
+            var preview = await PreviewFixedUnitDuesAsync(buildingId, year, month, defaultBaseDues, scopeType, ownerSplitPercent);
+            if (!preview.Success)
+                return new GovernanceActionResult { Success = false, Message = preview.Message };
+
+            string desc = string.IsNullOrWhiteSpace(customDescription)
+                ? $"{year}-{month:00} Aylık Aidat Tahakkuku"
+                : customDescription.Trim();
+
+            var expense = new BuildingExpense
+            {
+                BuildingId = buildingId,
+                ScopeType = scopeType,
+                ExpenseType = ownerSplitPercent.HasValue && ownerSplitPercent.Value >= 100m
+                    ? BuildingExpenseType.CapitalExpenditure
+                    : BuildingExpenseType.Operational,
+                PayerType = ownerSplitPercent.HasValue && ownerSplitPercent.Value >= 100m ? "Owner" : "Tenant",
+                ExpenseItemKey = "AidatTahakkuku",
+                DistributionRule = "Katsayi",
+                ShopParticipationPercent = 100m,
+                OwnerSplitPercent = ownerSplitPercent,
+                Description = desc,
+                TotalAmount = preview.TotalAmount,
+                Date = DateTime.Now
+            };
+            _context.BuildingExpenses.Add(expense);
+            await _context.SaveChangesAsync();
+
+            await PersistUnitDebtsFromPreviewAsync(buildingId, scopeType, expense, preview);
+
+            WriteAuditLog(actorUserId, "MONTHLY_DUES_POSTED", "BuildingExpense", expense.Id.ToString(), new
+            {
+                buildingId,
+                year,
+                month,
+                expense.TotalAmount,
+                Participating = preview.ParticipatingUnitCount
             });
             await _context.SaveChangesAsync();
 
@@ -203,9 +729,7 @@ namespace GMK360.Web.Services
             {
                 Success = true,
                 CreatedExpenseId = expense.Id,
-                Message = isCapital
-                    ? "Demirbaş gideri işlendi ve yalnız Mal Sahiplerinin carisine paylaştırıldı."
-                    : "İşletme aidat gideri işlendi (kiracısı olan dairede kiracıya, boş/malik oturan dairede malike yansıtıldı)."
+                Message = $"✅ {desc} başarıyla {preview.ParticipatingUnitCount} bölüme borçlandırıldı (Toplam: {preview.TotalAmount:N2} ₺)."
             };
         }
 

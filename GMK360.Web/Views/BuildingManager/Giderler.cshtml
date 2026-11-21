@@ -152,8 +152,17 @@
                                         @(isDemirbas ? "Demirbaş (Malik)" : "İşletme (Oturan)")
                                     </span>
                                 </td>
-                                <td class="small">
+                                <td>
                                     <span class="badge bg-light text-dark border">@fx.DistributionRule</span>
+                                    <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle ms-1">@fx.ExpenseItemKey</span>
+                                    @if (fx.ShopParticipationPercent != 100m)
+                                    {
+                                        <span class="badge @(fx.ShopParticipationPercent == 0m ? "bg-success-subtle text-success" : "bg-warning-subtle text-warning-emphasis") ms-1">Dükkan %@fx.ShopParticipationPercent.ToString("0.##")</span>
+                                    }
+                                    @if (fx.OwnerSplitPercent.HasValue)
+                                    {
+                                        <span class="badge bg-secondary-subtle text-dark ms-1">Malik %@fx.OwnerSplitPercent.Value.ToString("0.##")</span>
+                                    }
                                     @if (fx.IsAutoRecurring) { <span class="badge bg-success-subtle text-success ms-1">Oto</span> }
                                 </td>
                                 <td class="fw-bold">@fx.MonthlyAmount.ToString("N2") ₺</td>
@@ -306,10 +315,38 @@
                     <div class="col-md-6">
                         <label class="form-label fw-bold small">Dağıtım Kuralı</label>
                         <select name="distributionRule" class="form-select">
-                            <option value="Esit">Eşit (Daire Başı)</option>
-                            <option value="ArsaPayi">Arsa Payı (m² oranlı)</option>
+                            <option value="Esit">Eşit (Bölüm Başı)</option>
+                            <option value="ArsaPayi">Arsa Payı Oranlı</option>
                             <option value="Metrekare">Metrekare Oranlı</option>
+                            <option value="Katsayi">Birim Katsayısı Bazlı</option>
                         </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Masraf Kalemi</label>
+                        <select name="expenseItemKey" class="form-select">
+                            <option value="Genel">Genel Bina Gideri</option>
+                            <option value="Personel">Personel / Kapıcı / Güvenlik</option>
+                            <option value="Asansor">Asansör Bakım &amp; Elektrik</option>
+                            <option value="Merdiven">Merdiven Aydınlatma / Temizlik</option>
+                            <option value="CopTemizlik">Çöp &amp; Çevre Temizliği</option>
+                            <option value="Isinma">Isınma / Ortak Su &amp; Doğalgaz</option>
+                            <option value="Demirbas">Çatı / Cephe / Demirbaş Fonu</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Dükkan Katılımı (%)</label>
+                        <input type="number" step="5" min="0" max="500" name="shopParticipationPercent" class="form-control" value="100" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Site / Blok Kapsamı</label>
+                        <select name="scopeType" class="form-select">
+                            <option value="2">Sadece Bu Blok</option>
+                            <option value="1">Tüm Site Geneli</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Özel Malik Payı % (Opsiyonel)</label>
+                        <input type="number" step="5" min="0" max="100" name="ownerSplitPercent" class="form-control" placeholder="Boş=Standart | 100=Kiracı Muaf" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold small">Aylık Tutar (TL) *</label>
@@ -375,6 +412,42 @@
                             <option value="2">💡 Sabit / Sarf Malzeme Alımı (Kiracı / Oturan)</option>
                             <option value="1">🔨 Demirbaş / Tadilat Satın Alma (Malik + GMSİ)</option>
                         </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Masraf Kalemi</label>
+                        <select name="expenseItemKey" class="form-select">
+                            <option value="Genel">Genel Gider</option>
+                            <option value="Personel">Personel / Güvenlik</option>
+                            <option value="Asansor">Asansör (Muaf Hariç)</option>
+                            <option value="Merdiven">Merdiven Aydınlatma / Temizlik</option>
+                            <option value="CopTemizlik">Çöp &amp; Çevre Temizliği</option>
+                            <option value="Isinma">Isınma / Ortak Su</option>
+                            <option value="Demirbas">Demirbaş / Tadilat</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Dağıtım Kuralı</label>
+                        <select name="distributionRule" class="form-select">
+                            <option value="Esit">Eşit Bölüşüm</option>
+                            <option value="ArsaPayi">Arsa Payı Oranlı</option>
+                            <option value="Metrekare">Brüt m² Oranlı</option>
+                            <option value="Katsayi">Birim Katsayısı Bazlı</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Site / Blok Kapsamı</label>
+                        <select name="scopeType" class="form-select">
+                            <option value="2">Bu Blok</option>
+                            <option value="1">Tüm Site</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Dükkan Katılımı (%)</label>
+                        <input type="number" step="5" min="0" max="500" name="shopParticipationPercent" class="form-control" value="100" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Özel Malik Payı %</label>
+                        <input type="number" step="5" min="0" max="100" name="ownerSplitPercent" class="form-control" placeholder="Boş / 50 / 100" />
                     </div>
                     <div class="col-12">
                         <label class="form-label fw-bold small">Fatura Belgesi (PDF / Fotoğraf)</label>

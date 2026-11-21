@@ -2,44 +2,84 @@
 @{
     ViewData["Title"] = "Aidat ve Borç Takibi";
     Layout = "~/Views/Shared/_FacilityLayout.cshtml";
-    var buildings = ViewBag.Buildings as IEnumerable<GMK360.Core.Entities.Building>;
+    var buildings = ViewBag.Buildings as List<GMK360.Core.Entities.Building> ?? new List<GMK360.Core.Entities.Building>();
     var selectedBuildingId = ViewBag.SelectedBuildingId as int?;
-    
+    var livingUnits = ViewBag.LivingUnits as List<GMK360.Core.Entities.BuildingUnit> ?? new List<GMK360.Core.Entities.BuildingUnit>();
+    var fixedExpenses = ViewBag.FixedExpenses as List<GMK360.Core.Entities.BuildingFixedExpense> ?? new List<GMK360.Core.Entities.BuildingFixedExpense>();
+
     var totalCollected = Model.Where(d => d.IsPaid).Sum(d => d.Amount);
     var totalUnpaid = Model.Where(d => !d.IsPaid).Sum(d => d.Amount);
+    var ownerUnpaid = Model.Where(d => !d.IsPaid && string.Equals(d.PayerRole, "Owner", StringComparison.OrdinalIgnoreCase)).Sum(d => d.Amount);
+    var tenantUnpaid = Model.Where(d => !d.IsPaid && !string.Equals(d.PayerRole, "Owner", StringComparison.OrdinalIgnoreCase)).Sum(d => d.Amount);
+    int defaultBuildingId = selectedBuildingId ?? buildings.FirstOrDefault()?.Id ?? 0;
 }
 
-<div class="row mb-4">
-    <div class="col-md-6">
-        <div class="card bg-success bg-opacity-10 border-success border-start border-4 border-0">
-            <div class="card-body">
-                <h6 class="text-success fw-bold">Tahsil Edilen (Ödenen)</h6>
-                <h3 class="mb-0">@totalCollected.ToString("C")</h3>
-            </div>
+<div class="container-fluid py-3 px-1">
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
+            @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card bg-danger bg-opacity-10 border-danger border-start border-4 border-0">
-            <div class="card-body">
-                <h6 class="text-danger fw-bold">Bekleyen (Ödenmemiş)</h6>
-                <h3 class="mb-0">@totalUnpaid.ToString("C")</h3>
-            </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
+            @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
-    </div>
-</div>
+    }
 
-<div class="card shadow-sm border-0 mb-4">
-    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-        <h5 class="mb-0"><i class="bi bi-cash-stack"></i> Aidat / Gider Borçları</h5>
-        <div class="d-flex gap-2">
-            <form method="get" class="d-flex">
-                <select name="buildingId" class="form-select form-select-sm me-2" onchange="this.form.submit()">
-                    <option value="">Tüm Binalar</option>
-                    @if(buildings != null)
-                    {
-                        foreach(var b in buildings)
+    <div class="row g-3 mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-success bg-opacity-10 border-success border-start border-4 border-0 rounded-4 shadow-sm h-100">
+                <div class="card-body">
+                    <h6 class="text-success fw-bold small text-uppercase">Tahsil Edilen (Ödenen)</h6>
+                    <h3 class="mb-0 fw-bold text-dark">@totalCollected.ToString("N2") ₺</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-danger bg-opacity-10 border-danger border-start border-4 border-0 rounded-4 shadow-sm h-100">
+                <div class="card-body">
+                    <h6 class="text-danger fw-bold small text-uppercase">Toplam Bekleyen Alacak</h6>
+                    <h3 class="mb-0 fw-bold text-dark">@totalUnpaid.ToString("N2") ₺</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-primary bg-opacity-10 border-primary border-start border-4 border-0 rounded-4 shadow-sm h-100">
+                <div class="card-body">
+                    <h6 class="text-primary fw-bold small text-uppercase">Kiracı / Oturan Bekleyen</h6>
+                    <h3 class="mb-0 fw-bold text-dark">@tenantUnpaid.ToString("N2") ₺</h3>
+                    <small class="text-muted">İşletme &amp; Aidat borçları</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-warning bg-opacity-10 border-warning border-start border-4 border-0 rounded-4 shadow-sm h-100">
+                <div class="card-body">
+                    <h6 class="text-warning-emphasis fw-bold small text-uppercase">Mülk Sahibi (Malik) Bekleyen</h6>
+                    <h3 class="mb-0 fw-bold text-dark">@ownerUnpaid.ToString("N2") ₺</h3>
+                    <small class="text-muted">Demirbaş, Kıdem &amp; Malik payları</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 mb-4 bg-white overflow-hidden">
+        <div class="card-header bg-dark text-white d-flex flex-wrap justify-content-between align-items-center gap-2 p-3">
+            <div>
+                <h5 class="mb-0 fw-bold"><i class="bi bi-cash-stack me-2"></i>Aidat / Gider Borçları &amp; Tahakkuk Defteri</h5>
+                <small class="text-white-50">@livingUnits.Count aktif bağımsız bölüm • @fixedExpenses.Count tanımlı sabit bütçe kalemi</small>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <form method="get" class="d-flex">
+                    <select name="buildingId" class="form-select form-select-sm me-2" onchange="this.form.submit()">
+                        <option value="">Tüm Binalar</option>
+                        @foreach (var b in buildings)
                         {
-                            if(selectedBuildingId == b.Id)
+                            if (selectedBuildingId == b.Id)
                             {
                                 <option value="@b.Id" selected>@b.Name</option>
                             }
@@ -48,69 +88,239 @@
                                 <option value="@b.Id">@b.Name</option>
                             }
                         }
-                    }
-                </select>
-            </form>
-            <button class="btn btn-sm btn-primary"><i class="bi bi-plus"></i> Toplu Aidat Borçlandır</button>
+                    </select>
+                </form>
+                <a href="/BuildingManager/Sakinler@(defaultBuildingId > 0 ? $"?buildingId={defaultBuildingId}" : "")" class="btn btn-sm btn-outline-light rounded-pill px-3">
+                    <i class="bi bi-sliders me-1"></i> Katsayı &amp; Muafiyetler
+                </a>
+                <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#batchDuesModal" @(buildings.Any() ? "" : "disabled")>
+                    <i class="bi bi-plus-circle me-1"></i> Toplu Aidat Borçlandır
+                </button>
+            </div>
         </div>
-    </div>
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle">
-                <thead class="table-light">
-                    <tr>
-                        <th>Tarih</th>
-                        <th>Bina / Daire</th>
-                        <th>Açıklama (Gider Tipi)</th>
-                        <th>Tutar</th>
-                        <th>Durum</th>
-                        <th>İşlemler</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if(!Model.Any())
-                    {
-                        <tr><td colspan="6" class="text-center text-muted">Kayıt bulunamadı.</td></tr>
-                    }
-                    else
-                    {
-                        foreach (var debt in Model)
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light small">
+                        <tr>
+                            <th class="ps-3">Tarih</th>
+                            <th>Bina / Bölüm</th>
+                            <th>Açıklama &amp; Dağıtım Kuralı</th>
+                            <th>Muhatap (Cari)</th>
+                            <th>Tutar</th>
+                            <th>Durum</th>
+                            <th class="pe-3 text-end">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!Model.Any())
                         {
-                            <tr>
-                                <td>@debt.BuildingExpense.Date.ToString("dd.MM.yyyy")</td>
-                                <td>
-                                    <span class="badge bg-secondary">@debt.BuildingUnit.Building.Name</span><br/>
-                                    <strong>Daire: @debt.BuildingUnit.UnitNumber</strong>
-                                </td>
-                                <td>@debt.BuildingExpense.Description</td>
-                                <td><strong class="text-dark">@debt.Amount.ToString("C")</strong></td>
-                                <td>
-                                    @if (debt.IsPaid)
-                                    {
-                                        <span class="badge bg-success">Ödendi</span><br/>
-                                        <small class="text-muted">(@debt.PaidBy - @debt.PaymentDate?.ToString("dd.MM.yyyy"))</small>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-danger">Ödenmedi</span>
-                                    }
-                                </td>
-                                <td>
-                                    @if (!debt.IsPaid)
-                                    {
-                                        <form asp-action="MarkDebtAsPaid" method="post" class="d-inline">
-                                            <input type="hidden" name="debtId" value="@debt.Id" />
-                                            <input type="hidden" name="paidBy" value="@(string.IsNullOrEmpty(debt.BuildingUnit.TenantName) ? debt.BuildingUnit.OwnerName : debt.BuildingUnit.TenantName)" />
-                                            <button type="submit" class="btn btn-sm btn-outline-success" title="Tahsil Edildi İşaretle"><i class="bi bi-check2-circle"></i></button>
-                                        </form>
-                                    }
-                                    <button class="btn btn-sm btn-outline-secondary" title="Makbuz/Detay"><i class="bi bi-receipt"></i></button>
-                                </td>
-                            </tr>
+                            <tr><td colspan="7" class="text-center text-muted py-5">Henüz tahakkuk / borç kaydı bulunamadı. Yukarıdan <strong>Toplu Aidat Borçlandır</strong> ile dönem aidatı oluşturabilirsiniz.</td></tr>
                         }
-                    }
-                </tbody>
-            </table>
+                        else
+                        {
+                            foreach (var debt in Model)
+                            {
+                                bool isOwnerRole = string.Equals(debt.PayerRole, "Owner", StringComparison.OrdinalIgnoreCase);
+                                <tr>
+                                    <td class="ps-3 small">@(debt.BuildingExpense?.Date.ToString("dd.MM.yyyy") ?? "-")</td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border">@(debt.BuildingUnit?.Building?.Name ?? "-")</span>
+                                        <div class="fw-bold text-dark mt-1">Kapı @debt.BuildingUnit?.DoorNumber <small class="text-muted fw-normal">(@(debt.BuildingUnit?.Category ?? "Daire"))</small></div>
+                                    </td>
+                                    <td>
+                                        <div class="fw-semibold text-dark">@(debt.BuildingExpense?.Description ?? "-")</div>
+                                        @if (debt.BuildingExpense != null)
+                                        {
+                                            <span class="badge bg-light text-secondary border small">@debt.BuildingExpense.DistributionRule</span>
+                                            <span class="badge bg-info-subtle text-info-emphasis small ms-1">@debt.BuildingExpense.ExpenseItemKey</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (isOwnerRole)
+                                        {
+                                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">🏠 Malik</span>
+                                            <small class="d-block text-muted">@(debt.BuildingUnit?.OwnerName ?? "-")</small>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">🔑 Kiracı / Oturan</span>
+                                            <small class="d-block text-muted">@(debt.BuildingUnit?.TenantName ?? debt.BuildingUnit?.OwnerName ?? "-")</small>
+                                        }
+                                    </td>
+                                    <td><strong class="text-dark">@debt.Amount.ToString("N2") ₺</strong></td>
+                                    <td>
+                                        @if (debt.IsPaid)
+                                        {
+                                            <span class="badge bg-success">Ödendi</span>
+                                            <small class="d-block text-muted">@debt.PaidBy (@debt.PaymentDate?.ToString("dd.MM.yyyy"))</small>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-danger">Ödenmedi</span>
+                                        }
+                                    </td>
+                                    <td class="pe-3 text-end">
+                                        @if (!debt.IsPaid)
+                                        {
+                                            <form asp-action="MarkDebtAsPaid" asp-controller="BuildingManager" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="debtId" value="@debt.Id" />
+                                                <input type="hidden" name="paidBy" value="@(isOwnerRole ? (debt.BuildingUnit?.OwnerName ?? "Malik") : (string.IsNullOrEmpty(debt.BuildingUnit?.TenantName) ? (debt.BuildingUnit?.OwnerName ?? "Sakin") : debt.BuildingUnit!.TenantName))" />
+                                                <button type="submit" class="btn btn-sm btn-outline-success rounded-pill px-3" title="Tahsil Edildi İşaretle">
+                                                    <i class="bi bi-check2-circle me-1"></i> Tahsil Et
+                                                </button>
+                                            </form>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
+
+@if (buildings.Any())
+{
+    <!-- TOPLU AİDAT BORÇLANDIRMA & SİMÜLASYON MODALI -->
+    <div class="modal fade" id="batchDuesModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <form id="batchDuesForm" class="modal-content rounded-4 border-0 shadow" asp-action="PostMonthlyDuesBatch" asp-controller="BuildingManager" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header bg-primary text-white border-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-calculator me-2"></i>Toplu Aylık Aidat Tahakkuku &amp; Karma Bütçe Motoru</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Hedef Bina / Blok</label>
+                        <select name="buildingId" id="bdBuildingId" class="form-select" required>
+                            @foreach (var b in buildings)
+                            {
+                                <option value="@b.Id" selected="@(defaultBuildingId == b.Id ? "selected" : null)">@b.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <label class="form-label fw-bold small">Yıl</label>
+                        <input type="number" name="year" id="bdYear" class="form-control" value="@DateTime.Today.Year" required />
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <label class="form-label fw-bold small">Ay</label>
+                        <input type="number" min="1" max="12" name="month" id="bdMonth" class="form-control" value="@DateTime.Today.Month" required />
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-bold small">Borçlandırma Yöntemi</label>
+                        <select name="mode" id="bdMode" class="form-select fw-semibold" onchange="toggleBatchDuesMode()">
+                            <option value="FixedUnitDues">🏢 Sabit Aylık Aidat / Katsayı Bazlı (İşletme Projesi Aidatları)</option>
+                            <option value="RecurringBudget">⚖️ Sabit Bütçe Kalemlerini + Personel SGK'yı Karma Kurallarla Dağıt</option>
+                        </select>
+                    </div>
+
+                    <div id="fixedDuesOptions" class="row g-3 mt-0">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Varsayılan Baz Aidat (₺)</label>
+                            <input type="number" step="0.01" min="0" name="defaultBaseDues" id="bdBaseDues" class="form-control fw-bold text-primary" value="1500" />
+                            <small class="text-muted" style="font-size:0.7rem;">Birimde özel aidat tanımlıysa o kullanılır; yoksa Baz × Katsayı.</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Kapsam</label>
+                            <select name="scopeType" id="bdScopeType" class="form-select">
+                                <option value="2">Sadece Seçili Blok</option>
+                                <option value="1">Tüm Site (Alt Bloklar Dahil)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Malik / Kiracı Paylaşım</label>
+                            <input type="number" step="5" min="0" max="100" name="ownerSplitPercent" id="bdOwnerSplit" class="form-control" placeholder="Boş=%100 Kiracı | 100=Malik" />
+                        </div>
+                        <div class="col-12">
+                            <input type="text" name="customDescription" class="form-control" placeholder="Özel Açıklama (Boşsa: YYYY-AA Aylık Aidat Tahakkuku)" />
+                        </div>
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between align-items-center bg-light p-2 rounded-3 border">
+                                <small class="text-muted">Tahakkuk öncesi her daire/dükkanın ödeyeceği tutarı görün:</small>
+                                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill fw-bold px-3" onclick="previewBatchDues()">
+                                    <i class="bi bi-eye me-1"></i> Simüle Et &amp; Önizle
+                                </button>
+                            </div>
+                            <div id="bdPreviewContainer" class="mt-2 d-none"></div>
+                        </div>
+                    </div>
+
+                    <div id="recurringBudgetOptions" class="col-12 d-none">
+                        <div class="alert alert-info rounded-4 small mb-2">
+                            <i class="bi bi-info-circle me-1"></i>
+                            <strong>Karma Dağıtım Modu:</strong> Sabit Giderler sayfasındaki her aktif kalemi kendi <em>Dağıtım Kuralı (Eşit / Arsa Payı / m² / Katsayı)</em>, <em>Dükkan Katılım %</em> ve <em>Asansör / Merdiven / Çöp Muafiyeti</em> kurallarıyla ayrı ayrı tahakkuk ettirir.
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="includeStaffCosts" value="true" id="bdIncStaff" checked>
+                            <label class="form-check-label fw-bold small" for="bdIncStaff">Aktif Personel Maaş/SGK (Eşit) ve Kıdem Fonu'nu (Malik) da bu aya işle</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-light rounded-pill px-3" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">Onayla &amp; Borçlandır</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function toggleBatchDuesMode() {
+            const mode = document.getElementById('bdMode').value;
+            document.getElementById('fixedDuesOptions').classList.toggle('d-none', mode !== 'FixedUnitDues');
+            document.getElementById('recurringBudgetOptions').classList.toggle('d-none', mode === 'FixedUnitDues');
+        }
+
+        async function previewBatchDues() {
+            const box = document.getElementById('bdPreviewContainer');
+            box.className = 'mt-2 p-2 bg-white border rounded-3 small';
+            box.innerHTML = '<div class="text-muted"><i class="bi bi-hourglass-split me-1"></i> Önizleme hazırlanıyor...</div>';
+
+            const fd = new FormData();
+            const tokenEl = document.querySelector('#batchDuesForm input[name="__RequestVerificationToken"]');
+            if (tokenEl) fd.append('__RequestVerificationToken', tokenEl.value);
+            fd.append('buildingId', document.getElementById('bdBuildingId').value);
+            fd.append('year', document.getElementById('bdYear').value);
+            fd.append('month', document.getElementById('bdMonth').value);
+            fd.append('defaultBaseDues', document.getElementById('bdBaseDues').value || '0');
+            fd.append('scopeType', document.getElementById('bdScopeType').value);
+            const sp = document.getElementById('bdOwnerSplit').value;
+            if (sp !== '') fd.append('ownerSplitPercent', sp);
+
+            const resp = await fetch('/BuildingManager/PreviewMonthlyDuesBatch', { method: 'POST', body: fd });
+            const res = await resp.json();
+            if (!res.success) {
+                box.className = 'mt-2 alert alert-danger small mb-0';
+                box.innerText = res.message || 'Önizleme oluşturulamadı.';
+                return;
+            }
+            const rows = (res.items || []).map(x => `
+                <tr class="${x.isExempt ? 'table-secondary text-muted' : ''}">
+                    <td><strong>${x.doorNumber}</strong> <small class="text-muted">(${x.roomLayout})</small></td>
+                    <td>${x.duesMultiplier.toFixed(2)}x</td>
+                    <td><small>${x.statusNote}</small></td>
+                    <td class="text-end">${x.ownerAmount.toFixed(2)} ₺</td>
+                    <td class="text-end">${x.tenantAmount.toFixed(2)} ₺</td>
+                    <td class="text-end fw-bold">${x.totalShareAmount.toFixed(2)} ₺</td>
+                </tr>`).join('');
+            box.innerHTML = `
+                <div class="d-flex justify-content-between mb-1 fw-bold text-primary">
+                    <span>${res.scopeLabel} • Toplam Tahakkuk: ${res.totalAmount.toFixed(2)} ₺</span>
+                    <span>${res.participatingUnitCount} Bölüm</span>
+                </div>
+                <div style="max-height:220px; overflow-y:auto;">
+                    <table class="table table-sm table-bordered mb-0" style="font-size:0.78rem;">
+                        <thead class="table-light"><tr><th>Kapı</th><th>Katsayı</th><th>Açıklama</th><th class="text-end">Malik</th><th class="text-end">Kiracı</th><th class="text-end">Toplam</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>`;
+        }
+    </script>
+}

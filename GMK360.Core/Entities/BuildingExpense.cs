@@ -1,4 +1,6 @@
 using System;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace GMK360.Core.Entities
 {
@@ -45,6 +47,18 @@ namespace GMK360.Core.Entities
         public string? PayerType { get; set; } 
 
         public BuildingExpenseType ExpenseType { get; set; } = BuildingExpenseType.Operational;
+
+        [MaxLength(40)]
+        public string ExpenseItemKey { get; set; } = "Genel"; // "Genel" | "Personel" | "Asansor" | "Merdiven" | "CopTemizlik" | "Isinma" | "Demirbas"
+
+        [MaxLength(30)]
+        public string DistributionRule { get; set; } = "Esit"; // "Esit" | "ArsaPayi" | "Metrekare" | "Katsayi"
+
+        [Column(TypeName = "decimal(6,2)")]
+        public decimal ShopParticipationPercent { get; set; } = 100.00m;
+
+        [Column(TypeName = "decimal(6,2)")]
+        public decimal? OwnerSplitPercent { get; set; }
 
         // Değişmez Muhasebe Defteri: Fiziksel silme yasak, iptalde Ters Kayıt (Reversal Entry) açılır
         public bool IsArchived { get; set; } = false;

@@ -314,7 +314,111 @@ namespace GMK360.Web.Services
                 expenseType,
                 null,
                 actorUserId,
-                fixedExp.DistributionRule);
+                fixedExp.DistributionRule,
+                fixedExp.ExpenseItemKey,
+                fixedExp.ScopeType,
+                fixedExp.ShopParticipationPercent,
+                fixedExp.OwnerSplitPercent);
+        }
+
+        public async Task<GovernanceActionResult> DistributeAllRecurringBudgetAsync(int buildingId, int year, int month, bool includeStaffCosts, string actorUserId)
+        {
+            var fixedItems = await _context.BuildingFixedExpenses
+                .Where(f => f.BuildingId == buildingId && f.IsActive && f.IsAutoRecurring && !f.IsDeleted && f.MonthlyAmount > 0m)
+                .OrderBy(f => f.DueDayOfMonth)
+                .ToListAsync();
+
+            var activeStaff = includeStaffCosts
+                ? await _context.BuildingStaffs.Where(s => s.BuildingId == buildingId && s.IsActive && !s.IsDeleted).ToListAsync()
+                : new List<BuildingStaff>();
+
+            if (!fixedItems.Any() && !activeStaff.Any())
+                return new GovernanceActionResult { Success = false, Message = "Bu bina için dağıtılacak otomatik sabit gider veya personel kaydı bulunamadı." };
+
+            int postedCount = 0;
+            decimal postedTotal = 0m;
+            var warnings = new List<string>();
+
+            foreach (var fx in fixedItems)
+            {
+                var res = await DistributeFixedExpenseAsync(fx.Id, year, month, actorUserId);
+                if (res.Success)
+                {
+                    postedCount++;
+                    postedTotal += fx.MonthlyAmount;
+                }
+                else
+                {
+                    warnings.Add($"{fx.Title}: {res.Message}");
+                }
+            }
+
+            if (activeStaff.Any())
+            {
+                decimal opTotal = activeStaff.Sum(s => s.TotalMonthlyOperatingCost);
+                if (opTotal > 0m)
+                {
+                    var opRes = await _governanceService.DistributeExpenseAsync(
+                        buildingId,
+                        $"Personel İşletme Bütçesi ({year}-{month:00} - {activeStaff.Count} Personel)",
+                        opTotal,
+                        BuildingExpenseType.Operational,
+                        null,
+                        actorUserId,
+                        "Esit",
+                        "Personel",
+                        ExpenseScopeType.Building,
+                        100m,
+                        null);
+                    if (opRes.Success)
+                    {
+                        postedCount++;
+                        postedTotal += opTotal;
+                    }
+                    else
+                    {
+                        warnings.Add($"Personel İşletme: {opRes.Message}");
+                    }
+                }
+
+                decimal sevTotal = activeStaff.Sum(s => s.MonthlySeveranceFund);
+                if (sevTotal > 0m)
+                {
+                    var sevRes = await _governanceService.DistributeExpenseAsync(
+                        buildingId,
+                        $"Personel Kıdem Fonu ({year}-{month:00} - Malik Demirbaş)",
+                        sevTotal,
+                        BuildingExpenseType.CapitalExpenditure,
+                        null,
+                        actorUserId,
+                        "Esit",
+                        "Personel",
+                        ExpenseScopeType.Building,
+                        100m,
+                        100m);
+                    if (sevRes.Success)
+                    {
+                        postedCount++;
+                        postedTotal += sevTotal;
+                    }
+                    else
+                    {
+                        warnings.Add($"Personel Kıdem: {sevRes.Message}");
+                    }
+                }
+            }
+
+            if (postedCount == 0)
+            {
+                return new GovernanceActionResult { Success = false, Message = string.Join(" | ", warnings) };
+            }
+
+            string warnSuffix = warnings.Any() ? $" (Uyarılar: {string.Join("; ", warnings)})" : "";
+            return new GovernanceActionResult
+            {
+                Success = true,
+                Message = $"✅ {year}-{month:00} dönemine ait {postedCount} kalem karma kurallarla paylaştırıldı (Toplam: {postedTotal:N2} ₺){warnSuffix}."
+            };
         }
     }
 }

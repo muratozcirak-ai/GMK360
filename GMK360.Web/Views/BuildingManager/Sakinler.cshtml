@@ -20,9 +20,9 @@
         <div class="d-flex flex-wrap gap-2">
             @if (targetWizardId > 0)
             {
-                <a href="/BuildingManager/Onboarding/@targetWizardId" class="btn btn-outline-secondary rounded-pill px-3 fw-semibold">
-                    <i class="bi bi-arrow-left-circle me-1"></i> Sihirbaza Dön / Blok Düzenle
-                </a>
+                <button type="button" class="btn btn-outline-primary rounded-pill px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#bulkDuesProfileModal">
+                    <i class="bi bi-sliders me-1"></i> Toplu Katsayı &amp; Muafiyet Uygula
+                </button>
                 <button type="button" class="btn btn-success rounded-pill px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#addUnitQuickModal">
                     <i class="bi bi-plus-circle me-1"></i> Yeni Bölüm Ekle
                 </button>
@@ -124,6 +124,28 @@
                                         {
                                             <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Daire (@(unit.RoomLayout ?? "3+1"))</span>
                                         }
+                                        <div class="d-flex flex-wrap gap-1 mt-1">
+                                            @if (unit.DuesMultiplier != 1.00m)
+                                            {
+                                                <span class="badge bg-dark-subtle text-dark">@unit.DuesMultiplier.ToString("0.##")x Katsayı</span>
+                                            }
+                                            @if (unit.FixedMonthlyDues.HasValue && unit.FixedMonthlyDues > 0)
+                                            {
+                                                <span class="badge bg-success-subtle text-success">Aidat: @unit.FixedMonthlyDues.Value.ToString("N0") ₺</span>
+                                            }
+                                            @if (unit.IsExemptFromElevator)
+                                            {
+                                                <span class="badge bg-info-subtle text-info-emphasis">Asansör Muaf</span>
+                                            }
+                                            @if (unit.IsExemptFromStairwell)
+                                            {
+                                                <span class="badge bg-info-subtle text-info-emphasis">Merdiven Muaf</span>
+                                            }
+                                            @if (unit.CleaningParticipationPercent != 100m)
+                                            {
+                                                <span class="badge @(unit.CleaningParticipationPercent > 100m ? "bg-danger-subtle text-danger" : "bg-secondary-subtle text-dark")">Çöp %@unit.CleaningParticipationPercent.ToString("0.##")</span>
+                                            }
+                                        </div>
                                     </td>
                                     <td>
                                         @if (!string.IsNullOrWhiteSpace(unit.OwnerName))
@@ -159,7 +181,7 @@
                                     </td>
                                     <td class="pe-3 text-end">
                                         <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold"
-                                                onclick="openEditUnitModal(@unit.Id, @unit.BuildingId, '@System.Web.HttpUtility.JavaScriptStringEncode(unit.DoorNumber)', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerEmail ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantEmail ?? "")', @(unit.IsEmpty ? "true" : "false"), '@unit.LandShare.ToString(System.Globalization.CultureInfo.InvariantCulture)', '@((unit.GrossSquareMeters ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture))')">
+                                                onclick="openEditUnitModal(@unit.Id, @unit.BuildingId, '@System.Web.HttpUtility.JavaScriptStringEncode(unit.DoorNumber)', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerEmail ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantEmail ?? "")', @(unit.IsEmpty ? "true" : "false"), '@unit.LandShare.ToString(System.Globalization.CultureInfo.InvariantCulture)', '@((unit.GrossSquareMeters ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture))', '@unit.DuesMultiplier.ToString(System.Globalization.CultureInfo.InvariantCulture)', '@((unit.FixedMonthlyDues ?? 0m).ToString(System.Globalization.CultureInfo.InvariantCulture))', @(unit.IsExemptFromElevator ? "true" : "false"), @(unit.IsExemptFromStairwell ? "true" : "false"), '@unit.CleaningParticipationPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.DuesRuleNote ?? "")')">
                                             <i class="bi bi-pencil-square me-1"></i> Bilgi Gir / Düzenle
                                         </button>
                                         <a href="/BuildingManager/Detail/@unit.BuildingId" class="btn btn-sm btn-outline-secondary rounded-pill" title="Bina Masası">
@@ -225,7 +247,41 @@
                     <label class="form-label fw-bold small">Sakin PWA PIN (4-6 Hane)</label>
                     <input type="text" maxlength="6" name="residentQuickPin" class="form-control" placeholder="Değişmeyecekse boş" />
                 </div>
-                <div class="col-12">
+                <div class="col-12 border-top pt-3">
+                    <div class="fw-bold small text-primary mb-2"><i class="bi bi-calculator me-1"></i> Aidat Katsayısı &amp; Kalem Muafiyetleri (Yönetim Planı)</div>
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small mb-1">Aidat Katsayısı</label>
+                            <input type="number" step="0.05" min="0" max="10" name="duesMultiplier" id="euDuesMultiplier" class="form-control form-control-sm" value="1" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small mb-1">Sabit Aylık Aidat (₺)</label>
+                            <input type="number" step="0.01" min="0" name="fixedMonthlyDues" id="euFixedDues" class="form-control form-control-sm" placeholder="Opsiyonel" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small mb-1">Çöp/Temizlik (%)</label>
+                            <input type="number" step="5" min="0" max="500" name="cleaningParticipationPercent" id="euCleaningPct" class="form-control form-control-sm" value="100" />
+                        </div>
+                        <div class="col-md-6 mt-2">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="isExemptFromElevator" value="true" id="euExemptElev">
+                                <input type="hidden" name="isExemptFromElevator" value="false" />
+                                <label class="form-check-label small fw-semibold" for="euExemptElev">Asansör Giderinden Muaf</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mt-2">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="isExemptFromStairwell" value="true" id="euExemptStair">
+                                <input type="hidden" name="isExemptFromStairwell" value="false" />
+                                <label class="form-check-label small fw-semibold" for="euExemptStair">Merdiven/Aydınlatmadan Muaf</label>
+                            </div>
+                        </div>
+                        <div class="col-12 mt-1">
+                            <input type="text" name="duesRuleNote" id="euRuleNote" class="form-control form-control-sm" placeholder="Yönetim Planı Notu (örn: Dış girişli dükkan, çöp %150)" />
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 border-top pt-2">
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" name="isEmpty" value="true" id="euIsEmpty">
                         <label class="form-check-label fw-bold small" for="euIsEmpty">Bölüm Şu An Boş</label>
@@ -242,6 +298,74 @@
 
 @if (buildings.Any())
 {
+    <!-- Toplu Katsayı & Muafiyet Profili Modalı -->
+    <div class="modal fade" id="bulkDuesProfileModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content rounded-4 border-0 shadow" asp-action="BulkApplyUnitDuesProfile" asp-controller="BuildingManager" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="returnAction" value="Sakinler" />
+                <div class="modal-header bg-primary text-white border-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-sliders me-2"></i>Toplu Katsayı &amp; Muafiyet Profili Uygula</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Bina</label>
+                        <select name="buildingId" class="form-select" required>
+                            @foreach (var b in buildings)
+                            {
+                                <option value="@b.Id" selected="@(selectedBuildingId == b.Id ? "selected" : null)">@b.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Hedef Bölüm Grubu</label>
+                        <select name="targetCategory" class="form-select fw-bold">
+                            <option value="DUKKAN">🏪 Sadece Dükkanlar</option>
+                            <option value="DAIRE">🏠 Sadece Daireler</option>
+                            <option value="ALL">🏢 Tüm Bağımsız Bölümler</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Aidat Katsayısı</label>
+                        <input type="number" step="0.05" min="0" max="10" name="duesMultiplier" class="form-control" value="1.00" required />
+                        <small class="text-muted" style="font-size:0.7rem;">0.5=Yarı, 1=Normal, 1.5/2=Artış</small>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Sabit Aidat (₺ - Ops.)</label>
+                        <input type="number" step="0.01" min="0" name="fixedMonthlyDues" class="form-control" placeholder="Değişmesin" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Çöp/Temizlik (%)</label>
+                        <input type="number" step="5" min="0" max="500" name="cleaningParticipationPercent" class="form-control" value="100" required />
+                        <small class="text-muted" style="font-size:0.7rem;">Yoğun dükkan: 150-200</small>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="isExemptFromElevator" value="true" id="bulkElevSw">
+                            <input type="hidden" name="isExemptFromElevator" value="false" />
+                            <label class="form-check-label small fw-bold" for="bulkElevSw">Asansör Giderinden Muaf</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="isExemptFromStairwell" value="true" id="bulkStairSw">
+                            <input type="hidden" name="isExemptFromStairwell" value="false" />
+                            <label class="form-check-label small fw-bold" for="bulkStairSw">Merdiven Aydınlatmadan Muaf</label>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold small">Yönetim Planı Notu</label>
+                        <input type="text" name="duesRuleNote" class="form-control" placeholder="Örn: Yönetim Planı Md.8 - Zemin dükkan asansör muaf, çöp %150" />
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold w-100">Seçili Gruba Uygula</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Yeni Bölüm Ekle Modalı -->
     <div class="modal fade" id="addUnitQuickModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -296,7 +420,7 @@
 }
 
 <script>
-    function openEditUnitModal(unitId, buildingId, doorNo, oName, oPhone, oEmail, tName, tPhone, tEmail, isEmpty, landShare, grossSqm) {
+    function openEditUnitModal(unitId, buildingId, doorNo, oName, oPhone, oEmail, tName, tPhone, tEmail, isEmpty, landShare, grossSqm, mult, fixedDues, exElev, exStair, cleanPct, ruleNote) {
         document.getElementById('euUnitId').value = unitId;
         document.getElementById('euBuildingId').value = buildingId;
         document.getElementById('euTitle').innerText = 'Kapı No: ' + doorNo + ' - Malik & Kiracı';
@@ -308,6 +432,12 @@
         document.getElementById('euTenantEmail').value = tEmail || '';
         document.getElementById('euLandShare').value = landShare || '0';
         document.getElementById('euGrossSqm').value = grossSqm || '0';
+        document.getElementById('euDuesMultiplier').value = mult || '1';
+        document.getElementById('euFixedDues').value = (fixedDues && parseFloat(fixedDues) > 0) ? fixedDues : '';
+        document.getElementById('euCleaningPct').value = cleanPct || '100';
+        document.getElementById('euExemptElev').checked = !!exElev;
+        document.getElementById('euExemptStair').checked = !!exStair;
+        document.getElementById('euRuleNote').value = ruleNote || '';
         document.getElementById('euIsEmpty').checked = !!isEmpty;
         new bootstrap.Modal(document.getElementById('editUnitContactsModal')).show();
     }

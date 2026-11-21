@@ -20,8 +20,19 @@ namespace GMK360.Core.Entities
         [Required, MaxLength(30)]
         public string ExpenseScope { get; set; } = "Isletme"; // "Isletme" | "Demirbas"
 
+        [Required, MaxLength(40)]
+        public string ExpenseItemKey { get; set; } = "Genel"; // "Genel" | "Personel" | "Asansor" | "Merdiven" | "CopTemizlik" | "Isinma" | "Demirbas"
+
         [Required, MaxLength(30)]
-        public string DistributionRule { get; set; } = "Esit"; // "Esit" | "ArsaPayi" | "Metrekare"
+        public string DistributionRule { get; set; } = "Esit"; // "Esit" | "ArsaPayi" | "Metrekare" | "Katsayi"
+
+        public ExpenseScopeType ScopeType { get; set; } = ExpenseScopeType.Building; // Building | HousingComplex
+
+        [Column(TypeName = "decimal(6,2)")]
+        public decimal ShopParticipationPercent { get; set; } = 100.00m; // Dükkan katılım % (0=Muaf, 50=İndirimli, 100=Normal, 150+=Artış)
+
+        [Column(TypeName = "decimal(6,2)")]
+        public decimal? OwnerSplitPercent { get; set; } // Null=standart, doluysa Malik payı % (100=Kiracı Muaf)
 
         [Range(1, 31)]
         public int DueDayOfMonth { get; set; } = 15;

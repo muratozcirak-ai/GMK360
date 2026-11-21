@@ -2418,7 +2418,12 @@ namespace GMK360.Web.Controllers
             BuildingExpenseType? expenseType,
             string? payerType,
             Microsoft.AspNetCore.Http.IFormFile? invoiceFile = null,
-            string? returnAction = null)
+            string? returnAction = null,
+            string distributionRule = "Esit",
+            string expenseItemKey = "Genel",
+            ExpenseScopeType scopeType = ExpenseScopeType.Building,
+            decimal shopParticipationPercent = 100m,
+            decimal? ownerSplitPercent = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -2433,7 +2438,12 @@ namespace GMK360.Web.Controllers
                 totalAmount,
                 resolvedType,
                 invoiceFile,
-                GetUserId() ?? "system");
+                GetUserId() ?? "system",
+                distributionRule,
+                expenseItemKey,
+                scopeType,
+                shopParticipationPercent,
+                ownerSplitPercent);
 
             TempData[result.Success ? "SuccessMessage" : "ErrorMessage"] = result.Message;
             if (string.Equals(returnAction, "Giderler", StringComparison.OrdinalIgnoreCase))
@@ -2598,7 +2608,13 @@ namespace GMK360.Web.Controllers
             decimal? landShare,
             double? grossSquareMeters,
             string? residentQuickPin,
-            int? selectedBuildingFilter)
+            int? selectedBuildingFilter,
+            decimal? duesMultiplier = null,
+            decimal? fixedMonthlyDues = null,
+            bool? isExemptFromElevator = null,
+            bool? isExemptFromStairwell = null,
+            decimal? cleaningParticipationPercent = null,
+            string? duesRuleNote = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -2622,14 +2638,72 @@ namespace GMK360.Web.Controllers
             unit.IsEmpty = isEmpty;
             if (landShare.HasValue) unit.LandShare = Math.Max(0m, landShare.Value);
             if (grossSquareMeters.HasValue) unit.GrossSquareMeters = Math.Max(0, grossSquareMeters.Value);
+            if (duesMultiplier.HasValue) unit.DuesMultiplier = Math.Clamp(duesMultiplier.Value, 0m, 10m);
+            if (fixedMonthlyDues.HasValue) unit.FixedMonthlyDues = fixedMonthlyDues.Value > 0m ? Math.Round(fixedMonthlyDues.Value, 2) : null;
+            if (isExemptFromElevator.HasValue) unit.IsExemptFromElevator = isExemptFromElevator.Value;
+            if (isExemptFromStairwell.HasValue) unit.IsExemptFromStairwell = isExemptFromStairwell.Value;
+            if (cleaningParticipationPercent.HasValue) unit.CleaningParticipationPercent = Math.Clamp(cleaningParticipationPercent.Value, 0m, 500m);
+            if (duesRuleNote != null) unit.DuesRuleNote = string.IsNullOrWhiteSpace(duesRuleNote) ? null : duesRuleNote.Trim();
             if (!string.IsNullOrWhiteSpace(residentQuickPin) && residentQuickPin.Trim().Length >= 4)
             {
                 unit.ResidentQuickPinHash = FacilityTaskDispatchService.HashQuickPin(residentQuickPin.Trim());
             }
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = $"'{unit.DoorNumber}' bağımsız bölümü malik/kiracı, arsa payı ve PWA PIN bilgileri güncellendi.";
+            TempData["SuccessMessage"] = $"'{unit.DoorNumber}' bağımsız bölümü malik/kiracı, arsa payı, aidat muafiyet/katsayı ve PWA PIN bilgileri güncellendi.";
             return RedirectToAction(nameof(Sakinler), new { buildingId = selectedBuildingFilter });
+        }
+
+        // 7B. Toplu Aidat Katsayısı & Muafiyet Profili Uygula (Örn: Tüm Dükkanlar Asansör Muaf + Çöp %150)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> BulkApplyUnitDuesProfile(
+            int buildingId,
+            string targetCategory,
+            decimal duesMultiplier,
+            decimal? fixedMonthlyDues,
+            bool isExemptFromElevator,
+            bool isExemptFromStairwell,
+            decimal cleaningParticipationPercent,
+            string? duesRuleNote,
+            string? returnAction = null)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var units = await _context.BuildingUnits
+                .Where(u => u.BuildingId == buildingId
+                    && u.Category != "OrtakAlan_Blok"
+                    && (u.Category == null || !u.Category.StartsWith("OrtakAlan")))
+                .ToListAsync();
+
+            var filtered = (targetCategory ?? "ALL").ToUpperInvariant() switch
+            {
+                "DUKKAN" => units.Where(u => string.Equals(u.Category, "Dukkan", StringComparison.OrdinalIgnoreCase) || string.Equals(u.Category, "Dükkan", StringComparison.OrdinalIgnoreCase)).ToList(),
+                "DAIRE" => units.Where(u => !string.Equals(u.Category, "Dukkan", StringComparison.OrdinalIgnoreCase) && !string.Equals(u.Category, "Dükkan", StringComparison.OrdinalIgnoreCase)).ToList(),
+                _ => units
+            };
+
+            if (!filtered.Any())
+            {
+                TempData["ErrorMessage"] = "Seçilen kategoriye uyan bağımsız bölüm bulunamadı.";
+                return RedirectToAction(returnAction == "Sakinler" ? nameof(Sakinler) : nameof(Aidatlar), new { buildingId });
+            }
+
+            foreach (var u in filtered)
+            {
+                u.DuesMultiplier = Math.Clamp(duesMultiplier, 0m, 10m);
+                if (fixedMonthlyDues.HasValue)
+                    u.FixedMonthlyDues = fixedMonthlyDues.Value > 0m ? Math.Round(fixedMonthlyDues.Value, 2) : null;
+                u.IsExemptFromElevator = isExemptFromElevator;
+                u.IsExemptFromStairwell = isExemptFromStairwell;
+                u.CleaningParticipationPercent = Math.Clamp(cleaningParticipationPercent, 0m, 500m);
+                if (!string.IsNullOrWhiteSpace(duesRuleNote)) u.DuesRuleNote = duesRuleNote.Trim();
+            }
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"{filtered.Count} adet bağımsız bölüme aidat katsayısı ({duesMultiplier:0.##}x) ve muafiyet profili topluca uygulandı.";
+            return RedirectToAction(returnAction == "Sakinler" ? nameof(Sakinler) : nameof(Aidatlar), new { buildingId });
         }
 
         // 8. Aidat ve Borç Takibi
@@ -2648,14 +2722,128 @@ namespace GMK360.Web.Controllers
                 ? await _context.UnitDebts
                     .Include(d => d.BuildingUnit).ThenInclude(u => u.Building)
                     .Include(d => d.BuildingExpense)
-                    .Where(d => allowedIds.Contains(d.BuildingUnit.BuildingId))
+                    .Where(d => allowedIds.Contains(d.BuildingUnit.BuildingId) && !d.IsArchived && d.Amount > 0)
                     .OrderByDescending(d => d.Id)
                     .ToListAsync()
                 : new System.Collections.Generic.List<UnitDebt>();
 
+            var livingUnits = allowedIds.Any()
+                ? await _context.BuildingUnits
+                    .Include(u => u.Building)
+                    .Where(u => allowedIds.Contains(u.BuildingId)
+                        && u.Category != "OrtakAlan_Blok"
+                        && (u.Category == null || !u.Category.StartsWith("OrtakAlan")))
+                    .OrderBy(u => u.BuildingId).ThenBy(u => u.FloorLevel).ThenBy(u => u.DoorNumber)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<BuildingUnit>();
+
+            var fixedExpenses = allowedIds.Any()
+                ? await _context.BuildingFixedExpenses
+                    .AsNoTracking()
+                    .Where(f => allowedIds.Contains(f.BuildingId) && f.IsActive && !f.IsDeleted)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<BuildingFixedExpense>();
+
             ViewBag.Buildings = buildings;
             ViewBag.SelectedBuildingId = buildingId;
+            ViewBag.LivingUnits = livingUnits;
+            ViewBag.FixedExpenses = fixedExpenses;
             return View(debts);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PreviewExpenseDistribution(
+            int buildingId,
+            decimal totalAmount,
+            BuildingExpenseType expenseType = BuildingExpenseType.Operational,
+            string distributionRule = "Esit",
+            string expenseItemKey = "Genel",
+            ExpenseScopeType scopeType = ExpenseScopeType.Building,
+            decimal shopParticipationPercent = 100m,
+            decimal? ownerSplitPercent = null)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var result = await _governanceService.PreviewExpenseDistributionAsync(
+                buildingId,
+                totalAmount,
+                expenseType,
+                distributionRule,
+                expenseItemKey,
+                scopeType,
+                shopParticipationPercent,
+                ownerSplitPercent);
+
+            return Json(result);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PreviewMonthlyDuesBatch(
+            int buildingId,
+            int year,
+            int month,
+            decimal defaultBaseDues = 0m,
+            ExpenseScopeType scopeType = ExpenseScopeType.Building,
+            decimal? ownerSplitPercent = null)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var result = await _governanceService.PreviewFixedUnitDuesAsync(
+                buildingId,
+                year,
+                month,
+                defaultBaseDues,
+                scopeType,
+                ownerSplitPercent);
+
+            return Json(result);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PostMonthlyDuesBatch(
+            int buildingId,
+            string mode,
+            int year,
+            int month,
+            decimal defaultBaseDues = 0m,
+            ExpenseScopeType scopeType = ExpenseScopeType.Building,
+            decimal? ownerSplitPercent = null,
+            bool includeStaffCosts = true,
+            string? customDescription = null)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            GovernanceActionResult res;
+            if (string.Equals(mode, "RecurringBudget", StringComparison.OrdinalIgnoreCase))
+            {
+                res = await _payrollService.DistributeAllRecurringBudgetAsync(
+                    buildingId,
+                    year,
+                    month,
+                    includeStaffCosts,
+                    GetUserId() ?? "system");
+            }
+            else
+            {
+                res = await _governanceService.DistributeFixedUnitDuesAsync(
+                    buildingId,
+                    year,
+                    month,
+                    defaultBaseDues,
+                    scopeType,
+                    ownerSplitPercent,
+                    GetUserId() ?? "system",
+                    customDescription);
+            }
+
+            TempData[res.Success ? "SuccessMessage" : "ErrorMessage"] = res.Message;
+            return RedirectToAction(nameof(Aidatlar), new { buildingId });
         }
 
         // 9. Sabit Giderler Ajandası + Satın Almalar & Fatura Takibi
@@ -2735,7 +2923,11 @@ namespace GMK360.Web.Controllers
             decimal monthlyAmount,
             string? providerName,
             string? subscriberNo,
-            bool isAutoRecurring)
+            bool isAutoRecurring,
+            string expenseItemKey = "Genel",
+            ExpenseScopeType scopeType = ExpenseScopeType.Building,
+            decimal shopParticipationPercent = 100m,
+            decimal? ownerSplitPercent = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -2745,7 +2937,11 @@ namespace GMK360.Web.Controllers
                 BuildingId = buildingId,
                 Title = title?.Trim() ?? "Sabit Gider",
                 ExpenseScope = string.Equals(expenseScope, "Demirbas", StringComparison.OrdinalIgnoreCase) ? "Demirbas" : "Isletme",
+                ExpenseItemKey = string.IsNullOrWhiteSpace(expenseItemKey) ? "Genel" : expenseItemKey.Trim(),
                 DistributionRule = string.IsNullOrWhiteSpace(distributionRule) ? "Esit" : distributionRule.Trim(),
+                ScopeType = scopeType,
+                ShopParticipationPercent = Math.Clamp(shopParticipationPercent, 0m, 500m),
+                OwnerSplitPercent = ownerSplitPercent.HasValue ? Math.Clamp(ownerSplitPercent.Value, 0m, 100m) : null,
                 DueDayOfMonth = Math.Clamp(dueDayOfMonth, 1, 31),
                 MonthlyAmount = Math.Max(0m, monthlyAmount),
                 ProviderName = providerName?.Trim(),

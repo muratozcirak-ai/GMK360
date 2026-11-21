@@ -944,7 +944,7 @@
                     <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white">
                         <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
                             <h6 class="fw-bold text-dark mb-0"><i class="bi bi-bank text-success me-2"></i> Bina Kasa &amp; Aidat Takibi</h6>
-                            <a href="/BuildingManager/AidatTakibi?buildingId=@Model.Id" class="btn btn-sm btn-outline-success rounded-pill px-2">Aidat Cetveli</a>
+                            <a href="/BuildingManager/Aidatlar?buildingId=@Model.Id" class="btn btn-sm btn-outline-success rounded-pill px-2">Aidat Cetveli</a>
                         </div>
                         <div class="card-body p-3">
                             <div class="p-3 bg-light rounded-3 mb-2 d-flex justify-content-between align-items-center">
@@ -1269,44 +1269,85 @@
 
 <!-- 2. YENİ GİDER / FATURA EKLE MODALI -->
 <div class="modal fade" id="newExpenseModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow">
             <div class="modal-header bg-danger bg-opacity-10 border-0">
-                <h5 class="modal-title fw-bold text-danger"><i class="bi bi-receipt me-2"></i> Gider / Fatura Girişi &amp; İkili Cari Dağıtımı</h5>
+                <h5 class="modal-title fw-bold text-danger"><i class="bi bi-receipt me-2"></i> Gider / Fatura Girişi &amp; KMK Dağıtım Motoru</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form asp-action="AddExpense" asp-controller="BuildingManager" method="post" enctype="multipart/form-data">
+            <form id="detailAddExpenseForm" asp-action="AddExpense" asp-controller="BuildingManager" method="post" enctype="multipart/form-data">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="buildingId" value="@Model.Id" />
                 <div class="modal-body p-4 row g-3">
-                    <div class="col-12">
-                        <label class="form-label fw-bold small">Fatura Açıklaması <span class="text-danger">*</span></label>
-                        <input type="text" name="description" class="form-control" required placeholder="Örn: Asansör Motor Revizyonu veya Kasım Elektriği" />
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold small">Fatura / Gider Açıklaması <span class="text-danger">*</span></label>
+                        <input type="text" name="description" id="detExpDesc" class="form-control" required placeholder="Örn: Asansör Motor Revizyonu, Çöp &amp; Temizlik veya Kasım Elektriği" />
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label class="form-label fw-bold small">Toplam Tutar (TL) <span class="text-danger">*</span></label>
-                        <input type="number" step="0.01" min="0.01" name="totalAmount" class="form-control fw-bold text-danger" required placeholder="Örn: 12500" />
+                        <input type="number" step="0.01" min="0.01" name="totalAmount" id="detExpAmount" class="form-control fw-bold text-danger" required placeholder="Örn: 12500" />
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-bold small">İkili Cari Yönlendirme <span class="text-danger">*</span></label>
-                        <select name="expenseType" class="form-select fw-bold">
-                            <option value="2">💡 İşletme Gideri (Kiracıya, yoksa Malike)</option>
-                            <option value="1">🔨 Demirbaş Gideri (Daima Mülk Sahibine + GMSİ)</option>
+                        <label class="form-label fw-bold small">Masraf Kalemi (Muafiyet Anahtarı)</label>
+                        <select name="expenseItemKey" id="detExpItemKey" class="form-select">
+                            <option value="Genel">Genel Bina Gideri</option>
+                            <option value="Personel">👷 Kapıcı / Güvenlik / Personel (KMK Eşit)</option>
+                            <option value="Asansor">🛗 Asansör Bakım &amp; Elektrik (Muaf Birimler Hariç)</option>
+                            <option value="Merdiven">💡 Merdiven Aydınlatma / Temizlik</option>
+                            <option value="CopTemizlik">🧹 Çöp &amp; Çevre Temizliği (Birim % / Artışlı)</option>
+                            <option value="Isinma">🔥 Merkezi Isınma / Yakıt / Ortak Su</option>
+                            <option value="Demirbas">🏗️ Çatı / Dış Cephe / Ana Demirbaş</option>
                         </select>
                     </div>
-                    <div class="col-12">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Dağıtım Kuralı</label>
+                        <select name="distributionRule" id="detExpRule" class="form-select fw-semibold">
+                            <option value="Esit">⚖️ Eşit Bölüşüm (Aktif Bölüm Başı)</option>
+                            <option value="ArsaPayi">📜 Arsa Payı Oranlı (Tapu Payı)</option>
+                            <option value="Metrekare">📐 Brüt m² Oranlı (Yakıt / Bakım)</option>
+                            <option value="Katsayi">✖️ Birim Katsayısı Bazlı (1+1 / Dubleks / Dükkan)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Kapsam</label>
+                        <select name="scopeType" id="detExpScope" class="form-select">
+                            <option value="2">🏢 Sadece Bu Blok</option>
+                            <option value="1">🏘️ Tüm Site (Ortak Gider)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Dükkan Katılımı (%)</label>
+                        <input type="number" step="5" min="0" max="500" name="shopParticipationPercent" id="detExpShopPct" class="form-control" value="100" />
+                        <small class="text-muted" style="font-size:0.7rem;">0=Muaf, 50=İndirim, 100=Normal, 150+=Artış</small>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Kiracı / Malik Yönlendirme</label>
+                        <select name="expenseType" id="detExpType" class="form-select fw-bold">
+                            <option value="2">💡 İşletme (Kiracıya, yoksa Malike)</option>
+                            <option value="1">🔨 Demirbaş (Kiracı Muaf → Malik %100)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Özel Malik Payı % (Opsiyonel Karma Bölüşüm)</label>
+                        <input type="number" step="5" min="0" max="100" name="ownerSplitPercent" id="detExpOwnerSplit" class="form-control" placeholder="Boş=Standart | Örn: 50 (%50 Malik / %50 Kiracı)" />
+                    </div>
+                    <div class="col-md-6">
                         <label class="form-label fw-bold small">Fatura / Belge (GMSİ Arşivi - PDF/Görsel)</label>
                         <input type="file" name="invoiceFile" class="form-control" accept=".pdf,image/*" />
                     </div>
                     <div class="col-12">
-                        <small class="text-muted">
-                            <i class="bi bi-shield-check me-1 text-success"></i> Fiziksel silme kapalıdır; hatalı girişlerde Ters Kayıt (Reversal) uygulanır. Demirbaş giderleri dairede kiracı olsa dahi doğrudan Mülk Sahibi carisine yazılır.
-                        </small>
+                        <div class="d-flex justify-content-between align-items-center bg-light p-2 rounded-3 border">
+                            <small class="text-muted"><i class="bi bi-shield-check me-1 text-success"></i> Fiziksel silme kapalıdır; kuruş farkları otomatik dengelenir.</small>
+                            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill fw-bold px-3" onclick="previewDetailExpense()">
+                                <i class="bi bi-calculator me-1"></i> Önizle (Kime Kaç ₺?)
+                            </button>
+                        </div>
+                        <div id="detExpPreviewBox" class="mt-2 d-none"></div>
                     </div>
                 </div>
                 <div class="modal-footer border-0 bg-light">
                     <button type="submit" class="btn btn-danger fw-bold rounded-pill w-100 py-2">
-                        <i class="bi bi-check-circle me-1"></i> Faturayı İşle ve İkili Cariye Dağıt
+                        <i class="bi bi-check-circle me-1"></i> Faturayı İşle ve Bölümlere Borçlandır
                     </button>
                 </div>
             </form>
@@ -2260,5 +2301,57 @@
         }
         document.getElementById('bulkTargetFloorsCsv').value = vals.join(',');
         return true;
+    }
+
+    async function previewDetailExpense() {
+        const box = document.getElementById('detExpPreviewBox');
+        const amount = parseFloat(document.getElementById('detExpAmount').value || '0');
+        if (!amount || amount <= 0) {
+            box.className = 'mt-2 alert alert-warning small mb-0';
+            box.innerText = 'Önizleme için lütfen 0\'dan büyük bir tutar girin.';
+            return;
+        }
+        box.className = 'mt-2 p-2 bg-white border rounded-3 small';
+        box.innerHTML = '<div class="text-muted"><i class="bi bi-hourglass-split me-1"></i> Hesaplanıyor...</div>';
+
+        const fd = new FormData();
+        const tokenEl = document.querySelector('#detailAddExpenseForm input[name="__RequestVerificationToken"]');
+        if (tokenEl) fd.append('__RequestVerificationToken', tokenEl.value);
+        fd.append('buildingId', '@Model.Id');
+        fd.append('totalAmount', amount.toString());
+        fd.append('expenseType', document.getElementById('detExpType').value);
+        fd.append('distributionRule', document.getElementById('detExpRule').value);
+        fd.append('expenseItemKey', document.getElementById('detExpItemKey').value);
+        fd.append('scopeType', document.getElementById('detExpScope').value);
+        fd.append('shopParticipationPercent', document.getElementById('detExpShopPct').value || '100');
+        const splitVal = document.getElementById('detExpOwnerSplit').value;
+        if (splitVal !== '') fd.append('ownerSplitPercent', splitVal);
+
+        const resp = await fetch('/BuildingManager/PreviewExpenseDistribution', { method: 'POST', body: fd });
+        const res = await resp.json();
+        if (!res.success) {
+            box.className = 'mt-2 alert alert-danger small mb-0';
+            box.innerText = res.message || 'Hesaplanamadı.';
+            return;
+        }
+        let rows = (res.items || []).map(x => `
+            <tr class="${x.isExempt ? 'table-secondary text-muted' : ''}">
+                <td><strong>${x.doorNumber}</strong> <small class="text-muted">(${x.roomLayout})</small></td>
+                <td><small>${x.statusNote}</small></td>
+                <td class="text-end">${x.ownerAmount.toFixed(2)} ₺</td>
+                <td class="text-end">${x.tenantAmount.toFixed(2)} ₺</td>
+                <td class="text-end fw-bold">${x.totalShareAmount.toFixed(2)} ₺</td>
+            </tr>`).join('');
+        box.innerHTML = `
+            <div class="d-flex justify-content-between mb-1 fw-bold text-primary">
+                <span>${res.scopeLabel} • Kural: ${res.distributionRule}</span>
+                <span>Katılımcı: ${res.participatingUnitCount} | Muaf: ${res.exemptUnitCount}</span>
+            </div>
+            <div style="max-height:210px; overflow-y:auto;">
+                <table class="table table-sm table-bordered mb-0" style="font-size:0.78rem;">
+                    <thead class="table-light"><tr><th>Bölüm</th><th>Kural / Muafiyet</th><th class="text-end">Malik</th><th class="text-end">Kiracı</th><th class="text-end">Toplam</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
     }
 </script>

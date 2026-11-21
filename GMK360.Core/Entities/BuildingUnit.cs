@@ -19,6 +19,15 @@ namespace GMK360.Core.Entities
         public double? NetSquareMeters { get; set; }
         [Column(TypeName = "decimal(18,4)")]
         public decimal LandShare { get; set; } = 0m;
+        [Column(TypeName = "decimal(8,2)")]
+        public decimal DuesMultiplier { get; set; } = 1.00m; // Genel aidat katsayısı (1+1: 0.8, 3+1: 1.0, Dubleks: 1.5, Yoğun Dükkan: 2.0)
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal? FixedMonthlyDues { get; set; } // İşletme Projesi sabit aylık aidatı
+        public bool IsExemptFromElevator { get; set; } = false; // Yönetim planı asansör gideri muafiyeti
+        public bool IsExemptFromStairwell { get; set; } = false; // Merdiven aydınlatma/temizlik muafiyeti
+        [Column(TypeName = "decimal(6,2)")]
+        public decimal CleaningParticipationPercent { get; set; } = 100.00m; // Çöp/temizlik katılımı (%0 muaf, %100 normal, %150+ yoğun kullanım)
+        public string? DuesRuleNote { get; set; }
         public string? ResidentQuickPinHash { get; set; }
         public string FacadeDirection { get; set; } = string.Empty;
         

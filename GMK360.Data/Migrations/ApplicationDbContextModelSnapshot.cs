@@ -1704,8 +1704,18 @@ namespace GMK360.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("DistributionRule")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.Property<int?>("ExpenseCategoryId")
                         .HasColumnType("int");
+
+                    b.Property<string>("ExpenseItemKey")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<int>("ExpenseType")
                         .HasColumnType("int");
@@ -1725,6 +1735,9 @@ namespace GMK360.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<decimal?>("OwnerSplitPercent")
+                        .HasColumnType("decimal(6,2)");
+
                     b.Property<string>("PayerType")
                         .HasColumnType("nvarchar(max)");
 
@@ -1733,6 +1746,9 @@ namespace GMK360.Data.Migrations
 
                     b.Property<int>("ScopeType")
                         .HasColumnType("int");
+
+                    b.Property<decimal>("ShopParticipationPercent")
+                        .HasColumnType("decimal(6,2)");
 
                     b.Property<decimal>("TotalAmount")
                         .HasPrecision(18, 2)
@@ -1827,6 +1843,11 @@ namespace GMK360.Data.Migrations
                     b.Property<int>("DueDayOfMonth")
                         .HasColumnType("int");
 
+                    b.Property<string>("ExpenseItemKey")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
                     b.Property<string>("ExpenseScope")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -1844,9 +1865,18 @@ namespace GMK360.Data.Migrations
                     b.Property<decimal>("MonthlyAmount")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal?>("OwnerSplitPercent")
+                        .HasColumnType("decimal(6,2)");
+
                     b.Property<string>("ProviderName")
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("ScopeType")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("ShopParticipationPercent")
+                        .HasColumnType("decimal(6,2)");
 
                     b.Property<string>("SubscriberNo")
                         .HasMaxLength(150)
@@ -2287,13 +2317,25 @@ namespace GMK360.Data.Migrations
                     b.Property<string>("Category")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<decimal>("CleaningParticipationPercent")
+                        .HasColumnType("decimal(6,2)");
+
                     b.Property<string>("DoorNumber")
                         .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("DuesMultiplier")
+                        .HasColumnType("decimal(8,2)");
+
+                    b.Property<string>("DuesRuleNote")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("FacadeDirection")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("FixedMonthlyDues")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("FloorLevel")
                         .HasColumnType("int");
@@ -2314,6 +2356,12 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsEmpty")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsExemptFromElevator")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsExemptFromStairwell")
                         .HasColumnType("bit");
 
                     b.Property<decimal>("LandShare")
