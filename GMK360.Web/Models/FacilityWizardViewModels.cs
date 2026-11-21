@@ -23,6 +23,7 @@ namespace GMK360.Web.Models
         public string? ExtraAddressLabel { get; set; }
         public string? Ada { get; set; }
         public string? Parsel { get; set; }
+        public string? LandAreaSqm { get; set; }
         public string? Latitude { get; set; }
         public string? Longitude { get; set; }
 
@@ -50,6 +51,7 @@ namespace GMK360.Web.Models
         public string? ExtraAddressLabel { get; set; }
         public string? Ada { get; set; }
         public string? Parsel { get; set; }
+        public string? LandAreaSqm { get; set; }
         public string? Latitude { get; set; }
         public string? Longitude { get; set; }
     }

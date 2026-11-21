@@ -440,6 +440,7 @@ namespace GMK360.Web.Controllers
                 vm.ExtraAddressLabel = ParseTechnicalTag(building.TechnicalFeatures, "EkNo");
                 vm.Ada = ParseTechnicalTag(building.TechnicalFeatures, "Ada");
                 vm.Parsel = ParseTechnicalTag(building.TechnicalFeatures, "Parsel");
+                vm.LandAreaSqm = ParseTechnicalTag(building.TechnicalFeatures, "AraziM2");
                 vm.Latitude = building.Latitude?.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 vm.Longitude = building.Longitude?.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 vm.RootBuilding = building;
@@ -732,7 +733,8 @@ namespace GMK360.Web.Controllers
                 isSite ? "Site" : "Apartman",
                 model.Ada,
                 model.Parsel,
-                model.ExtraAddressLabel);
+                model.ExtraAddressLabel,
+                model.LandAreaSqm);
             if (building.OnboardingStep < 1) building.OnboardingStep = 1;
 
             await _context.SaveChangesAsync();
@@ -965,11 +967,12 @@ namespace GMK360.Web.Controllers
                     || (!string.IsNullOrEmpty(normStreet) && NormalizeAddressToken(b.StreetName) == normStreet)));
         }
 
-        private static string BuildTechnicalFeaturesString(string managementMode, string? ada, string? parsel, string? extraLabel)
+        private static string BuildTechnicalFeaturesString(string managementMode, string? ada, string? parsel, string? extraLabel, string? landAreaSqm = null)
         {
             var parts = new System.Collections.Generic.List<string> { $"YapiTuru:{managementMode}" };
             if (!string.IsNullOrWhiteSpace(ada)) parts.Add($"Ada:{ada.Trim()}");
             if (!string.IsNullOrWhiteSpace(parsel)) parts.Add($"Parsel:{parsel.Trim()}");
+            if (!string.IsNullOrWhiteSpace(landAreaSqm)) parts.Add($"AraziM2:{landAreaSqm.Trim()}");
             if (!string.IsNullOrWhiteSpace(extraLabel)) parts.Add($"EkNo:{extraLabel.Trim()}");
             return string.Join(" | ", parts);
         }
