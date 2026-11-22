@@ -2976,6 +2976,8 @@ namespace GMK360.Web.Controllers
             DateTime? contractEndDate = null,
             string? physicalArchiveLocation = null,
             Microsoft.AspNetCore.Http.IFormFile? contractFile = null,
+            bool postFirstPaymentNow = false,
+            int? firstPaymentBankAccountId = null,
             [FromServices] Microsoft.AspNetCore.Hosting.IWebHostEnvironment? env = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
@@ -3005,9 +3007,14 @@ namespace GMK360.Web.Controllers
             }
 
             int normalizedCycle = billingCycleMonths is 3 or 6 or 12 ? billingCycleMonths : 1;
-            int? normalizedBillingMonth = normalizedCycle > 1 && billingMonth.HasValue
-                ? Math.Clamp(billingMonth.Value, 1, 12)
-                : (normalizedCycle > 1 ? DateTime.Today.Month : null);
+            int? normalizedBillingMonth = normalizedCycle > 1 && contractEndDate.HasValue
+                ? contractEndDate.Value.Month
+                : (normalizedCycle > 1 && billingMonth.HasValue
+                    ? Math.Clamp(billingMonth.Value, 1, 12)
+                    : (normalizedCycle > 1 ? DateTime.Today.Month : null));
+            int normalizedDueDay = normalizedCycle > 1 && contractEndDate.HasValue
+                ? contractEndDate.Value.Day
+                : Math.Clamp(dueDayOfMonth, 1, 31);
 
             var resolvedType = string.Equals(expenseScope, "Demirbas", StringComparison.OrdinalIgnoreCase)
                 ? BuildingExpenseType.CapitalExpenditure
@@ -3029,7 +3036,7 @@ namespace GMK360.Web.Controllers
                 ScopeType = scopeType,
                 ShopParticipationPercent = Math.Clamp(shopParticipationPercent, 0m, 500m),
                 OwnerSplitPercent = ownerSplitPercent.HasValue ? Math.Clamp(ownerSplitPercent.Value, 0m, 100m) : null,
-                DueDayOfMonth = Math.Clamp(dueDayOfMonth, 1, 31),
+                DueDayOfMonth = normalizedDueDay,
                 MonthlyAmount = finalAmount,
                 BillingCycleMonths = normalizedCycle,
                 BillingMonth = normalizedBillingMonth,
@@ -3044,8 +3051,30 @@ namespace GMK360.Web.Controllers
             });
             await _context.SaveChangesAsync();
 
+            if (!isVariableAmount && finalAmount > 0m && postFirstPaymentNow)
+            {
+                await _governanceService.DistributeExpenseAsync(
+                    buildingId,
+                    $"{resolvedTitle} ({DateTime.Today:yyyy-MM})",
+                    finalAmount,
+                    resolvedType,
+                    null,
+                    GetUserId() ?? "system",
+                    "Esit",
+                    "Genel",
+                    ExpenseScopeType.Building,
+                    100m,
+                    null,
+                    resolvedGroup,
+                    chargeToUnits: false,
+                    bankAccountId: firstPaymentBankAccountId);
+
+                TempData["SuccessMessage"] = $"✅ '{resolvedTitle}' sözleşmesi kaydedildi ve ilk ödemesi ({finalAmount:N2} ₺) bina kasasına gider olarak işlendi.";
+                return RedirectToAction(nameof(Accounting), new { buildingId, tab = "giderler" });
+            }
+
             TempData["SuccessMessage"] = isVariableAmount
-                ? $"'{resolvedTitle}' değişken faturalı abonelik olarak kaydedildi. Ay geldiğinde yanındaki '+ Bu Ayın Faturasını Gir' butonundan fatura işleyebilirsiniz."
+                ? $"'{resolvedTitle}' değişken faturalı abonelik olarak kaydedildi. Ay geldiğinde yanındaki '+ Fatura / Ödeme İşle' butonundan fatura işleyebilirsiniz."
                 : $"'{resolvedTitle}' düzenli abonelik/sözleşme listesine eklendi.";
             return RedirectToAction(nameof(Accounting), new { buildingId, tab = "giderler" });
         }

@@ -780,18 +780,9 @@
                         <option value="12">Yıllık (Yılda 1 Kez)</option>
                     </select>
                 </div>
-                <div class="col-md-4" id="fxBillingMonthBox" style="display:none;">
-                    <label class="form-label fw-bold small">Yenileme / Ödeme Ayı</label>
-                    <select name="billingMonth" id="fxBillingMonth" class="form-select">
-                        @for (int m = 1; m <= 12; m++)
-                        {
-                            <option value="@m" selected="@(m == DateTime.Today.Month ? "selected" : null)">@m. Ay (@System.Globalization.CultureInfo.GetCultureInfo("tr-TR").DateTimeFormat.GetMonthName(m))</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold small">Ödeme Günü (Ayın Kaçı?)</label>
-                    <input type="number" min="1" max="31" name="dueDayOfMonth" class="form-control" value="15" required />
+                <div class="col-md-4" id="fxDueDayBox">
+                    <label class="form-label fw-bold small">Her Ayın Kaçı?</label>
+                    <input type="number" min="1" max="31" name="dueDayOfMonth" class="form-control" value="15" />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-bold small">Gider Kapsamı</label>
@@ -801,19 +792,19 @@
                     </select>
                 </div>
                 <div class="col-12 border-top pt-2">
-                    <div class="fw-bold small text-dark mb-2"><i class="bi bi-file-earmark-lock text-primary me-1"></i> Sözleşme Belgesi &amp; Fiziksel Arşiv Adresi (Opsiyonel)</div>
+                    <div class="fw-bold small text-dark mb-2"><i class="bi bi-file-earmark-lock text-primary me-1"></i> Sözleşme, Yenileme Tarihi &amp; Fiziksel Arşiv Adresi</div>
                     <div class="row g-2">
-                        <div class="col-md-5">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small mb-1" id="fxContractDateLabel">Sözleşme Bitiş Tarihi (Opsiyonel)</label>
+                            <input type="date" name="contractEndDate" id="fxContractEndDate" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-4">
                             <label class="form-label fw-semibold small mb-1">Sözleşme PDF / Taranmış Fotoğraf</label>
                             <input type="file" name="contractFile" class="form-control form-control-sm" accept=".pdf,image/*" />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label fw-semibold small mb-1">Islak İmzalı Fiziksel Klasör / Raf</label>
                             <input type="text" name="physicalArchiveLocation" class="form-control form-control-sm" placeholder="Örn: Yönetim Dolabı - Mavi Klasör 2" />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold small mb-1">Sözleşme Bitiş Tarihi</label>
-                            <input type="date" name="contractEndDate" class="form-control form-control-sm" />
                         </div>
                     </div>
                 </div>
@@ -822,9 +813,24 @@
                 <input type="hidden" name="shopParticipationPercent" value="100" />
                 <input type="hidden" name="scopeType" value="2" />
                 <div class="col-12" id="fxAutoBox" style="display:none;">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" name="isAutoRecurring" value="true" id="autoRecSw" checked>
-                        <label class="form-check-label small fw-bold" for="autoRecSw">Bütçe özetine dahil et (Yıllık kalemler aylık 1/12 pay olarak hesaplanır)</label>
+                    <div class="p-2 rounded-3 bg-light border">
+                        <div class="form-check form-switch mb-1">
+                            <input class="form-check-input" type="checkbox" name="isAutoRecurring" value="true" id="autoRecSw" checked>
+                            <label class="form-check-label small fw-bold" for="autoRecSw">Bütçe özetine dahil et (Yıllık kalemler aylık 1/12 pay olarak hesaplanır)</label>
+                        </div>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" name="postFirstPaymentNow" value="true" id="fxPostNowSw" onchange="toggleFirstPaymentBank()">
+                            <label class="form-check-label small fw-bold text-success" for="fxPostNowSw">İlk ödemeyi şimdi bina kasasına gider olarak da işle</label>
+                        </div>
+                        <div class="mt-2 d-none" id="fxFirstPayBankBox">
+                            <select name="firstPaymentBankAccountId" class="form-select form-select-sm">
+                                <option value="">Elden / Genel Bina Kasası</option>
+                                @foreach (var acc in bankAccounts)
+                                {
+                                    <option value="@acc.Id">@acc.BankName - @acc.AccountName (@acc.CurrentBalance.ToString("N2") ₺)</option>
+                                }
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1181,7 +1187,24 @@
 
     function toggleBillingCycleFields() {
         const cycle = parseInt(document.getElementById('fxCycle').value || '1', 10);
-        document.getElementById('fxBillingMonthBox').style.display = cycle > 1 ? '' : 'none';
+        document.getElementById('fxDueDayBox').style.display = cycle > 1 ? 'none' : '';
+        const lbl = document.getElementById('fxContractDateLabel');
+        const dateEl = document.getElementById('fxContractEndDate');
+        if (cycle > 1) {
+            lbl.innerHTML = 'Yenileme / Sözleşme Bitiş Tarihi * <small class="text-muted">(Ay &amp; gün buradan alınır)</small>';
+            if (!dateEl.value) {
+                const d = new Date();
+                d.setMonth(d.getMonth() + cycle);
+                dateEl.value = d.toISOString().split('T')[0];
+            }
+        } else {
+            lbl.innerText = 'Sözleşme Bitiş Tarihi (Opsiyonel)';
+        }
+    }
+
+    function toggleFirstPaymentBank() {
+        const checked = document.getElementById('fxPostNowSw').checked;
+        document.getElementById('fxFirstPayBankBox').classList.toggle('d-none', !checked);
     }
 
     function toggleFixedAmountInput() {
