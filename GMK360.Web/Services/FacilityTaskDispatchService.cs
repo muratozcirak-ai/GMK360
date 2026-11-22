@@ -237,9 +237,11 @@ namespace GMK360.Web.Services
 
                 string displayName = phoneMatchesTenant ? (u.TenantName ?? $"Daire {u.DoorNumber} Kiracı") : (u.OwnerName ?? $"Daire {u.DoorNumber} Malik");
                 string? existingUserId = phoneMatchesTenant ? u.TenantUserId : u.OwnerUserId;
+                string? preferredEmail = phoneMatchesTenant ? u.TenantEmail : u.OwnerEmail;
+                string fallbackEmail = $"sakin_{normPhone}@gmk360.local";
                 var user = await EnsurePortalUserAsync(
                     existingUserId,
-                    $"sakin_{normPhone}@gmk360.local",
+                    !string.IsNullOrWhiteSpace(preferredEmail) ? preferredEmail.Trim() : fallbackEmail,
                     displayName,
                     normPhone,
                     "Sakin",
@@ -279,7 +281,18 @@ namespace GMK360.Web.Services
             {
                 user = await _userManager.FindByIdAsync(existingUserId);
             }
-            user ??= await _userManager.FindByEmailAsync(fallbackEmail);
+            if (user == null && !string.IsNullOrWhiteSpace(fallbackEmail))
+            {
+                user = await _userManager.FindByEmailAsync(fallbackEmail);
+            }
+            if (user == null && !string.IsNullOrWhiteSpace(phone))
+            {
+                var altEmail = $"sakin_{NormalizePhoneLast10(phone)}@gmk360.local";
+                if (!string.Equals(altEmail, fallbackEmail, StringComparison.OrdinalIgnoreCase))
+                {
+                    user = await _userManager.FindByEmailAsync(altEmail);
+                }
+            }
 
             if (user == null)
             {

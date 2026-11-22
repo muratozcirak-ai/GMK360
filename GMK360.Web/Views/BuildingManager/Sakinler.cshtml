@@ -46,12 +46,12 @@
     }
     @if (!hasAuthorityDoc && targetWizardId > 0)
     {
-        <div class="alert alert-warning rounded-4 border-0 shadow-sm mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div class="alert alert-info rounded-4 border-0 shadow-sm mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div class="small">
-                <i class="bi bi-shield-lock-fill me-1"></i>
-                <strong>KVKK Yetki Kilidi:</strong> Karar Defteri yetki yazısı yüklenene kadar sakin adı ve doluluk durumu girilebilir, telefon/e-posta alanları güvenlik amacıyla kilitli tutulur.
+                <i class="bi bi-info-circle-fill me-1"></i>
+                <strong>KVKK &amp; Yetki Belgesi Notu:</strong> Sakinlerin telefon, e-posta ve PWA giriş PIN bilgilerini buradan hemen tanımlayabilirsiniz. Kurumsal arşiv için Karar Defteri yetki yazısını da eklemeniz önerilir.
             </div>
-            <a href="/BuildingManager/Onboarding/@targetWizardId" class="btn btn-sm btn-dark rounded-pill px-3">Yetki Belgesi Yükle &rarr;</a>
+            <a href="/BuildingManager/Onboarding/@targetWizardId" class="btn btn-sm btn-outline-dark rounded-pill px-3">Yetki Belgesi Yükle &rarr;</a>
         </div>
     }
 
@@ -178,6 +178,14 @@
                                         {
                                             <span class="badge bg-success">Dolu</span>
                                         }
+                                        @if (!string.IsNullOrWhiteSpace(unit.ResidentQuickPinHash))
+                                        {
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle d-block mt-1">🔑 PWA PIN Hazır</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle d-block mt-1">PIN Yok</span>
+                                        }
                                     </td>
                                     <td class="pe-3 text-end">
                                         <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold"
@@ -216,24 +224,24 @@
                     <input type="text" name="ownerName" id="euOwnerName" class="form-control" placeholder="Örn: Ahmet Yılmaz" />
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-bold small">Malik Telefon @(hasAuthorityDoc ? "" : "(KVKK Kilitli)")</label>
-                    <input type="text" name="ownerPhone" id="euOwnerPhone" class="form-control" placeholder="05XX XXX XX XX" @(hasAuthorityDoc ? "" : "readonly") />
+                    <label class="form-label fw-bold small">Malik Telefon</label>
+                    <input type="text" name="ownerPhone" id="euOwnerPhone" class="form-control" placeholder="05XX XXX XX XX" />
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-bold small">Malik E-Posta</label>
-                    <input type="email" name="ownerEmail" id="euOwnerEmail" class="form-control" placeholder="malik@ornek.com" @(hasAuthorityDoc ? "" : "readonly") />
+                    <input type="email" name="ownerEmail" id="euOwnerEmail" class="form-control" placeholder="malik@ornek.com" />
                 </div>
                 <div class="col-12 border-top pt-3">
                     <label class="form-label fw-bold small">Kiracı Adı Soyadı (Varsa)</label>
-                    <input type="text" name="tenantName" id="euTenantName" class="form-control" placeholder="Boş bırakılabilir" />
+                    <input type="text" name="tenantName" id="euTenantName" class="form-control" placeholder="Boş bırakılabilir (malik oturuyorsa boş)" />
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-bold small">Kiracı Telefon @(hasAuthorityDoc ? "" : "(KVKK Kilitli)")</label>
-                    <input type="text" name="tenantPhone" id="euTenantPhone" class="form-control" placeholder="05XX XXX XX XX" @(hasAuthorityDoc ? "" : "readonly") />
+                    <label class="form-label fw-bold small">Kiracı Telefon</label>
+                    <input type="text" name="tenantPhone" id="euTenantPhone" class="form-control" placeholder="05XX XXX XX XX" />
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-bold small">Kiracı E-Posta</label>
-                    <input type="email" name="tenantEmail" id="euTenantEmail" class="form-control" placeholder="kiraci@ornek.com" @(hasAuthorityDoc ? "" : "readonly") />
+                    <input type="email" name="tenantEmail" id="euTenantEmail" class="form-control" placeholder="kiraci@ornek.com" />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-bold small">Arsa Payı (Demirbaş)</label>
@@ -245,7 +253,18 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-bold small">Sakin PWA PIN (4-6 Hane)</label>
-                    <input type="text" maxlength="6" name="residentQuickPin" class="form-control" placeholder="Değişmeyecekse boş" />
+                    <div class="input-group">
+                        <input type="text" maxlength="6" name="residentQuickPin" id="euQuickPin" class="form-control" placeholder="Örn: 1234" />
+                        <button type="button" class="btn btn-outline-secondary" onclick="generatePinForInput('euQuickPin')" title="Rastgele PIN Üret">🎲</button>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="p-2 rounded-3 bg-light border d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <small class="text-muted"><i class="bi bi-phone me-1 text-success"></i> Sakinler <strong>Telefon + PIN</strong> (Giriş Ekranı) veya burada yazan <strong>E-Posta</strong> ile üye olup otomatik eşleşir.</small>
+                        <button type="button" class="btn btn-sm btn-outline-success rounded-pill fw-semibold" onclick="copyResidentInviteFromEdit()">
+                            <i class="bi bi-whatsapp me-1"></i> Giriş Bilgisi Kopyala
+                        </button>
+                    </div>
                 </div>
                 <div class="col-12 border-top pt-3">
                     <div class="fw-bold small text-primary mb-2"><i class="bi bi-calculator me-1"></i> Aidat Katsayısı &amp; Kalem Muafiyetleri (Yönetim Planı)</div>
@@ -368,51 +387,97 @@
 
     <!-- Yeni Bölüm Ekle Modalı -->
     <div class="modal fade" id="addUnitQuickModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
             <form class="modal-content rounded-4 border-0 shadow" asp-action="AddUnit" asp-controller="BuildingManager" method="post">
                 @Html.AntiForgeryToken()
+                <input type="hidden" name="returnAction" value="Sakinler" />
                 <div class="modal-header bg-success text-white border-0">
-                    <h5 class="modal-title fw-bold">Yeni Bağımsız Bölüm Ekle</h5>
+                    <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle me-2"></i>Yeni Bağımsız Bölüm &amp; Sakin Ekle</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4 row g-3">
-                    <div class="col-12">
+                    <div class="col-md-5">
                         <label class="form-label fw-bold small">Bina</label>
                         <select name="buildingId" class="form-select" required>
                             @foreach (var b in buildings)
                             {
-                                <option value="@b.Id">@b.Name</option>
+                                <option value="@b.Id" selected="@(selectedBuildingId == b.Id ? "selected" : null)">@b.Name</option>
                             }
                         </select>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-3">
                         <label class="form-label fw-bold small">Tür</label>
                         <select name="category" class="form-select">
-                            <option value="Daire">Daire</option>
-                            <option value="Dukkan">Dükkan</option>
+                            <option value="Daire">🏠 Daire</option>
+                            <option value="Dukkan">🏪 Dükkan</option>
                         </select>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold small">Kat</label>
+                        <input type="number" name="floorLevel" class="form-control" value="1" />
+                    </div>
+                    <div class="col-md-2">
                         <label class="form-label fw-bold small">Kapı No *</label>
-                        <input type="text" name="unitNumber" class="form-control" required placeholder="Örn: 18 veya D3" />
+                        <input type="text" name="unitNumber" class="form-control" required placeholder="18 / D3" />
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold small">Ev Sahibi Adı</label>
-                        <input type="text" name="ownerName" class="form-control" />
+
+                    <div class="col-12 border-top pt-2">
+                        <div class="fw-bold small text-dark mb-1"><i class="bi bi-person-badge me-1 text-primary"></i> Ev Sahibi (Mülk Sahibi) Bilgileri</div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold small">Kiracı Adı</label>
-                        <input type="text" name="tenantName" class="form-control" />
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold small">Ev Sahibi Adı</label>
+                        <input type="text" name="ownerName" class="form-control" placeholder="Örn: Ahmet Yılmaz" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold small">Malik Telefon (PWA Girişi)</label>
+                        <input type="text" name="ownerPhone" class="form-control" placeholder="05XX XXX XX XX" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold small">Malik E-Posta</label>
+                        <input type="email" name="ownerEmail" class="form-control" placeholder="malik@ornek.com" />
+                    </div>
+
+                    <div class="col-12 border-top pt-2">
+                        <div class="fw-bold small text-dark mb-1"><i class="bi bi-key me-1 text-info"></i> Kiracı Bilgileri (Ev sahibi oturuyorsa boş bırakın)</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold small">Kiracı Adı</label>
+                        <input type="text" name="tenantName" class="form-control" placeholder="Örn: Mehmet Kaya" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold small">Kiracı Telefon (PWA Girişi)</label>
+                        <input type="text" name="tenantPhone" class="form-control" placeholder="05XX XXX XX XX" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold small">Kiracı E-Posta</label>
+                        <input type="email" name="tenantEmail" class="form-control" placeholder="kiraci@ornek.com" />
+                    </div>
+
+                    <div class="col-md-4 border-top pt-3">
+                        <label class="form-label fw-bold small">Sakin PWA Giriş PIN'i</label>
+                        <div class="input-group">
+                            <input type="text" maxlength="6" name="residentQuickPin" id="addQuickPin" class="form-control" placeholder="4-6 haneli PIN" />
+                            <button type="button" class="btn btn-outline-secondary" onclick="generatePinForInput('addQuickPin')" title="Rastgele PIN Üret">🎲 Üret</button>
+                        </div>
+                        <small class="text-muted" style="font-size:0.7rem;">Telefon + bu PIN ile şifresiz giriş yapar.</small>
+                    </div>
+                    <div class="col-md-4 border-top pt-3">
+                        <label class="form-label fw-bold small">Brüt m²</label>
+                        <input type="number" step="0.1" min="0" name="grossSquareMeters" class="form-control" placeholder="Örn: 110" />
+                    </div>
+                    <div class="col-md-4 border-top pt-3">
+                        <label class="form-label fw-bold small">Arsa Payı</label>
+                        <input type="number" step="0.0001" min="0" name="landShare" class="form-control" placeholder="Örn: 12.5" />
                     </div>
                     <div class="col-12">
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" name="isEmpty" value="true" id="addEmptySw">
-                            <label class="form-check-label small fw-bold" for="addEmptySw">Bölüm Boş mu?</label>
+                            <label class="form-check-label small fw-bold" for="addEmptySw">Bölüm Şu An Tamamen Boş</label>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer border-0 bg-light">
-                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold w-100">Kaydet</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold w-100">Bölümü ve Sakin Giriş Bilgilerini Kaydet</button>
                 </div>
             </form>
         </div>
@@ -438,7 +503,26 @@
         document.getElementById('euExemptElev').checked = !!exElev;
         document.getElementById('euExemptStair').checked = !!exStair;
         document.getElementById('euRuleNote').value = ruleNote || '';
+        document.getElementById('euQuickPin').value = '';
         document.getElementById('euIsEmpty').checked = !!isEmpty;
         new bootstrap.Modal(document.getElementById('editUnitContactsModal')).show();
+    }
+
+    function generatePinForInput(inputId) {
+        const pin = Math.floor(1000 + Math.random() * 9000).toString();
+        document.getElementById(inputId).value = pin;
+    }
+
+    function copyResidentInviteFromEdit() {
+        const title = document.getElementById('euTitle').innerText;
+        const phone = document.getElementById('euTenantPhone').value || document.getElementById('euOwnerPhone').value || '(Telefon giriniz)';
+        const pin = document.getElementById('euQuickPin').value || '(Mevcut / belirlediğiniz PIN)';
+        const loginUrl = window.location.origin + '/Account/Login';
+        const text = `Merhaba, GMK360 Bina Portalı üzerinden aidat, duyuru ve taleplerinizi takip edebilirsiniz.\nBölüm: ${title}\nGiriş Adresi: ${loginUrl}\nTelefon: ${phone}\nHızlı PWA PIN: ${pin}`;
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(text).then(() => alert('Giriş daveti panoya kopyalandı:\n\n' + text));
+        } else {
+            prompt('Aşağıdaki mesajı kopyalayın:', text);
+        }
     }
 </script>

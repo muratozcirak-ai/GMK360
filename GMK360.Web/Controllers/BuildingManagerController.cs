@@ -2368,43 +2368,97 @@ namespace GMK360.Web.Controllers
             return RedirectToAction(nameof(Detail), new { id = building.Id });
         }
 
+        private async Task SyncResidentUsersAndPeriodsAsync(BuildingUnit unit)
+        {
+            if (!string.IsNullOrWhiteSpace(unit.OwnerEmail))
+            {
+                var ownerUser = await _context.Users.AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Email == unit.OwnerEmail || u.NormalizedEmail == unit.OwnerEmail.ToUpper());
+                if (ownerUser != null) unit.OwnerUserId = ownerUser.Id;
+            }
+            if (!unit.IsEmpty && !string.IsNullOrWhiteSpace(unit.TenantEmail))
+            {
+                var tenantUser = await _context.Users.AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Email == unit.TenantEmail || u.NormalizedEmail == unit.TenantEmail.ToUpper());
+                if (tenantUser != null) unit.TenantUserId = tenantUser.Id;
+            }
+            else if (unit.IsEmpty || string.IsNullOrWhiteSpace(unit.TenantName))
+            {
+                unit.TenantUserId = null;
+            }
+
+            await _context.SaveChangesAsync();
+            await _governanceService.EnsureActivePeriodFromUnitAsync(unit, "Owner");
+            if (!unit.IsEmpty && (!string.IsNullOrWhiteSpace(unit.TenantName) || !string.IsNullOrWhiteSpace(unit.TenantPhone) || !string.IsNullOrWhiteSpace(unit.TenantEmail)))
+            {
+                await _governanceService.EnsureActivePeriodFromUnitAsync(unit, "Tenant");
+            }
+        }
+
         // 4. Daire / Bölüm Ekle
         [HttpPost]
-        public async Task<IActionResult> AddUnit(int buildingId, string unitNumber, string? ownerName, string? ownerPhone, string? tenantName, string? tenantPhone, bool isEmpty, string? category = "Daire", string? ownerEmail = null, string? tenantEmail = null)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddUnit(
+            int buildingId,
+            string unitNumber,
+            string? ownerName,
+            string? ownerPhone,
+            string? tenantName,
+            string? tenantPhone,
+            bool isEmpty,
+            string? category = "Daire",
+            string? ownerEmail = null,
+            string? tenantEmail = null,
+            string? residentQuickPin = null,
+            int floorLevel = 1,
+            decimal? landShare = null,
+            double? grossSquareMeters = null,
+            string? returnAction = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
 
-            bool hasResidentContact = !string.IsNullOrWhiteSpace(ownerPhone)
+            bool hasTenantInfo = !string.IsNullOrWhiteSpace(tenantName)
                 || !string.IsNullOrWhiteSpace(tenantPhone)
-                || !string.IsNullOrWhiteSpace(ownerEmail)
                 || !string.IsNullOrWhiteSpace(tenantEmail);
-            if (hasResidentContact && !await HasDecisionAuthorityAsync(buildingId))
-            {
-                TempData["ErrorMessage"] = "KVKK ve KMK gereği sakinlerin telefon/e-posta bilgilerini eklemeden önce Karar Defteri Yetki Yazısını yüklemelisiniz.";
-                return RedirectToAction(nameof(Detail), new { id = buildingId });
-            }
+            bool effectiveEmpty = isEmpty && !hasTenantInfo;
+
+            string floorLabel = floorLevel == 0
+                ? "Zemin Kat"
+                : (floorLevel < 0 ? $"{Math.Abs(floorLevel)}. Bodrum" : $"{floorLevel}. Kat");
 
             var unit = new BuildingUnit
             {
                 BuildingId = buildingId,
-                DoorNumber = unitNumber,
-                UnitNumber = unitNumber,
+                DoorNumber = unitNumber.Trim(),
+                UnitNumber = unitNumber.Trim(),
+                FloorLevel = floorLevel,
+                FloorName = floorLabel,
                 Category = string.IsNullOrWhiteSpace(category) ? "Daire" : category.Trim(),
-                OwnerName = ownerName,
-                OwnerPhone = ownerPhone,
-                OwnerEmail = ownerEmail,
-                TenantName = tenantName,
-                TenantPhone = tenantPhone,
-                TenantEmail = tenantEmail,
-                IsEmpty = isEmpty
+                OwnerName = ownerName?.Trim(),
+                OwnerPhone = ownerPhone?.Trim(),
+                OwnerEmail = ownerEmail?.Trim(),
+                TenantName = effectiveEmpty ? null : tenantName?.Trim(),
+                TenantPhone = effectiveEmpty ? null : tenantPhone?.Trim(),
+                TenantEmail = effectiveEmpty ? null : tenantEmail?.Trim(),
+                IsEmpty = effectiveEmpty,
+                LandShare = landShare.HasValue ? Math.Max(0m, landShare.Value) : 0m,
+                GrossSquareMeters = grossSquareMeters.HasValue && grossSquareMeters.Value > 0 ? grossSquareMeters.Value : null,
+                ResidentQuickPinHash = (!string.IsNullOrWhiteSpace(residentQuickPin) && residentQuickPin.Trim().Length >= 4)
+                    ? FacilityTaskDispatchService.HashQuickPin(residentQuickPin.Trim())
+                    : null
             };
 
             _context.BuildingUnits.Add(unit);
             building.TotalUnits += 1;
             await _context.SaveChangesAsync();
+            await SyncResidentUsersAndPeriodsAsync(unit);
 
-            TempData["SuccessMessage"] = $"'{unitNumber}' bağımsız bölümü eklendi.";
+            TempData["SuccessMessage"] = $"'{unitNumber}' bağımsız bölümü sakin/iletişim bilgileriyle eklendi.";
+            if (string.Equals(returnAction, "Sakinler", StringComparison.OrdinalIgnoreCase))
+            {
+                return RedirectToAction(nameof(Sakinler), new { buildingId });
+            }
             return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
 
@@ -2622,20 +2676,18 @@ namespace GMK360.Web.Controllers
             var unit = await _context.BuildingUnits.FirstOrDefaultAsync(u => u.Id == unitId && u.BuildingId == buildingId);
             if (unit == null) return NotFound();
 
-            bool hasAuthority = await HasDecisionAuthorityAsync(building.ParentBuildingId ?? building.Id);
-            if (!hasAuthority && (!string.IsNullOrWhiteSpace(ownerPhone) || !string.IsNullOrWhiteSpace(tenantPhone) || !string.IsNullOrWhiteSpace(ownerEmail) || !string.IsNullOrWhiteSpace(tenantEmail)))
-            {
-                TempData["ErrorMessage"] = "KVKK ve KMK gereği Karar Defteri / Yetki Yazısı yüklenmeden sakin telefon/e-posta verisi işlenemez. Adım 1 (Sihirbaz) üzerinden yetki belgesi yükleyin.";
-                return RedirectToAction(nameof(Sakinler), new { buildingId = selectedBuildingFilter });
-            }
+            bool hasTenantInfo = !string.IsNullOrWhiteSpace(tenantName)
+                || !string.IsNullOrWhiteSpace(tenantPhone)
+                || !string.IsNullOrWhiteSpace(tenantEmail);
+            bool effectiveEmpty = isEmpty && !hasTenantInfo;
 
             unit.OwnerName = ownerName?.Trim();
             unit.OwnerPhone = ownerPhone?.Trim();
             unit.OwnerEmail = ownerEmail?.Trim();
-            unit.TenantName = isEmpty ? null : tenantName?.Trim();
-            unit.TenantPhone = isEmpty ? null : tenantPhone?.Trim();
-            unit.TenantEmail = isEmpty ? null : tenantEmail?.Trim();
-            unit.IsEmpty = isEmpty;
+            unit.TenantName = effectiveEmpty ? null : tenantName?.Trim();
+            unit.TenantPhone = effectiveEmpty ? null : tenantPhone?.Trim();
+            unit.TenantEmail = effectiveEmpty ? null : tenantEmail?.Trim();
+            unit.IsEmpty = effectiveEmpty;
             if (landShare.HasValue) unit.LandShare = Math.Max(0m, landShare.Value);
             if (grossSquareMeters.HasValue) unit.GrossSquareMeters = Math.Max(0, grossSquareMeters.Value);
             if (duesMultiplier.HasValue) unit.DuesMultiplier = Math.Clamp(duesMultiplier.Value, 0m, 10m);
@@ -2648,7 +2700,7 @@ namespace GMK360.Web.Controllers
             {
                 unit.ResidentQuickPinHash = FacilityTaskDispatchService.HashQuickPin(residentQuickPin.Trim());
             }
-            await _context.SaveChangesAsync();
+            await SyncResidentUsersAndPeriodsAsync(unit);
 
             TempData["SuccessMessage"] = $"'{unit.DoorNumber}' bağımsız bölümü malik/kiracı, arsa payı, aidat muafiyet/katsayı ve PWA PIN bilgileri güncellendi.";
             return RedirectToAction(nameof(Sakinler), new { buildingId = selectedBuildingFilter });
