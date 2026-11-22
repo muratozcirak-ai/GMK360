@@ -2492,7 +2492,9 @@ namespace GMK360.Web.Controllers
             ExpenseScopeType scopeType = ExpenseScopeType.Building,
             decimal shopParticipationPercent = 100m,
             decimal? ownerSplitPercent = null,
-            string? expenseGroup = null)
+            string? expenseGroup = null,
+            bool chargeToUnits = true,
+            int? bankAccountId = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -2513,7 +2515,9 @@ namespace GMK360.Web.Controllers
                 scopeType,
                 shopParticipationPercent,
                 ownerSplitPercent,
-                expenseGroup);
+                expenseGroup,
+                chargeToUnits,
+                bankAccountId);
 
             TempData[result.Success ? "SuccessMessage" : "ErrorMessage"] = result.Message;
             if (string.Equals(returnAction, "Accounting", StringComparison.OrdinalIgnoreCase)
@@ -2952,16 +2956,17 @@ namespace GMK360.Web.Controllers
             string expenseScope,
             string distributionRule,
             int dueDayOfMonth,
-            decimal monthlyAmount,
-            string? providerName,
-            string? subscriberNo,
-            bool isAutoRecurring,
+            decimal monthlyAmount = 0m,
+            string? providerName = null,
+            string? subscriberNo = null,
+            bool isAutoRecurring = true,
             string expenseItemKey = "Genel",
             ExpenseScopeType scopeType = ExpenseScopeType.Building,
             decimal shopParticipationPercent = 100m,
             decimal? ownerSplitPercent = null,
             string? expenseGroup = null,
-            string? returnAction = null)
+            string? returnAction = null,
+            bool isVariableAmount = false)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -2970,6 +2975,7 @@ namespace GMK360.Web.Controllers
                 ? BuildingExpenseType.CapitalExpenditure
                 : BuildingExpenseType.Operational;
             var resolvedGroup = FacilityGovernanceService.ResolveExpenseGroup(resolvedType, expenseItemKey, expenseGroup);
+            decimal finalAmount = isVariableAmount ? 0m : Math.Max(0m, monthlyAmount);
 
             _context.BuildingFixedExpenses.Add(new BuildingFixedExpense
             {
@@ -2983,16 +2989,18 @@ namespace GMK360.Web.Controllers
                 ShopParticipationPercent = Math.Clamp(shopParticipationPercent, 0m, 500m),
                 OwnerSplitPercent = ownerSplitPercent.HasValue ? Math.Clamp(ownerSplitPercent.Value, 0m, 100m) : null,
                 DueDayOfMonth = Math.Clamp(dueDayOfMonth, 1, 31),
-                MonthlyAmount = Math.Max(0m, monthlyAmount),
+                MonthlyAmount = finalAmount,
                 ProviderName = providerName?.Trim(),
                 SubscriberNo = subscriberNo?.Trim(),
-                IsAutoRecurring = isAutoRecurring,
+                IsAutoRecurring = !isVariableAmount && isAutoRecurring && finalAmount > 0m,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             });
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = $"'{title}' aylık sabit bina giderleri bütçesine eklendi.";
+            TempData["SuccessMessage"] = isVariableAmount
+                ? $"'{title}' değişken faturalı abonelik olarak kaydedildi. Ay geldiğinde yanındaki '+ Bu Ayın Faturasını Gir' butonundan fatura işleyebilirsiniz."
+                : $"'{title}' aylık sabit gider bütçesine eklendi.";
             return RedirectToAction(nameof(Accounting), new { buildingId, tab = "giderler" });
         }
 

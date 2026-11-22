@@ -190,8 +190,17 @@
     </ul>
 
     <div class="tab-content">
-        <!-- SEKME 1: SABİT BÜTÇE ŞABLONLARI + GERÇEKLEŞEN FATURALAR -->
+        <!-- SEKME 1: ABONELİKLER, SABİT ÖDEMELER & FATURALAR -->
         <div class="tab-pane fade @(activeTab == "giderler" ? "show active" : "")" id="tabGiderler" role="tabpanel">
+            <div class="alert alert-light border rounded-4 shadow-sm mb-3 py-2 px-3 small">
+                <div class="fw-bold text-dark mb-1"><i class="bi bi-lightbulb-fill text-warning me-1"></i> Nasıl Çalışır? (3 Basit Adım)</div>
+                <div class="row g-2 text-muted">
+                    <div class="col-md-4"><strong class="text-dark">1. Abonelik / Sözleşme Ekle:</strong> Enerjisa, İSKİ, Doğalgaz'ı <em>"Değişken Fatura"</em> olarak; Asansör Bakımı/Mali Müşavir'i <em>"Sabit Tutar"</em> olarak bir kez kaydet.</div>
+                    <div class="col-md-4"><strong class="text-dark">2. Fatura Gelince İşle:</strong> Listeden aboneliğin yanındaki <strong>+ Bu Ayın Faturasını Gir</strong> butonuna bas, sadece tutarı yaz.</div>
+                    <div class="col-md-4"><strong class="text-dark">3. Kasadan mı, Ek Borç mu?</strong> Sabit aidat topluyorsan <em>"Bina Kasasından Öde"</em> seç; ekstra bölüşeceksen <em>"Dairelere Paylaştır"</em> seç.</div>
+                </div>
+            </div>
+
             <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
                 <span class="small fw-bold text-muted me-1">Gider Türü Filtresi:</span>
                 <a href="@Url.Action("Accounting", new { buildingId = Model.Id, tab = "giderler" })"
@@ -208,16 +217,21 @@
                 }
             </div>
 
-            <!-- AYLIK SABİT GİDERLER & ABONELİK ŞABLONLARI -->
+            <!-- AYLIK DÜZENLİ ABONELİKLER & SABİT SÖZLEŞMELER -->
             <div class="card shadow-sm border-0 rounded-4 mb-4 bg-white">
                 <div class="card-header bg-white border-bottom p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
                     <div>
-                        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-calendar2-week text-success me-2"></i>Aylık Sabit Giderler, Abonelikler &amp; KMK Kuralları</h5>
-                        <small class="text-muted">Elektrik, su, doğalgaz, asansör bakım sözleşmeleri — Toplu Aidat ekranında karma kurallarla tek tıkla dağıtılır</small>
+                        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-calendar2-week text-success me-2"></i>Düzenli Abonelikler &amp; Sabit Ödeme Kurumları</h5>
+                        <small class="text-muted">Elektrik, su, doğalgaz (tutarı değişken) veya asansör bakım, mali müşavir (tutarı sabit) kurumlarınızı buraya tanımlayın</small>
                     </div>
-                    <a href="/BuildingManager/Aidatlar?buildingId=@Model.Id" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-semibold">
-                        Aidat &amp; Karma Dağıtıma Git &rarr;
-                    </a>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#addFixedExpenseModal">
+                            <i class="bi bi-plus-circle me-1"></i> + Abonelik / Sabit Kalem Ekle
+                        </button>
+                        <a href="/BuildingManager/Aidatlar?buildingId=@Model.Id" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-semibold">
+                            Aidat Kesme Ekranı &rarr;
+                        </a>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -225,12 +239,12 @@
                             <thead class="table-light small">
                                 <tr>
                                     <th class="ps-3">Ödeme Günü</th>
-                                    <th>Gider Türü (Lookup)</th>
-                                    <th>Başlık / Kurum</th>
-                                    <th>Kapsam (Kasa)</th>
-                                    <th>Dağıtım Kuralı</th>
-                                    <th>Aylık Tutar</th>
-                                    <th class="pe-3 text-end">İşlem</th>
+                                    <th>Gider Türü</th>
+                                    <th>Kurum / Abonelik</th>
+                                    <th>Ödeme Sorumlusu</th>
+                                    <th>Bölüşüm Kuralı</th>
+                                    <th>Tutar Şekli</th>
+                                    <th class="pe-3 text-end">Bu Ay İşlemi</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -238,13 +252,14 @@
                                 {
                                     <tr>
                                         <td colspan="7" class="text-center py-4 text-muted small">
-                                            Bu filtrede tanımlı sabit gider / abonelik yok. Sağ üstten <strong>+ Sabit Gider / Abonelik</strong> ekleyebilirsiniz.
+                                            Henüz abone veya sabit sözleşme eklenmemiş. Yukarıdan <strong>+ Abonelik / Sabit Kalem Ekle</strong> ile Elektrik, Su, Doğalgaz veya Asansör Bakımı ekleyin.
                                         </td>
                                     </tr>
                                 }
                                 @foreach (var fx in filteredFixed)
                                 {
                                     bool isDemirbas = fx.ExpenseScope == "Demirbas";
+                                    bool isVariable = fx.MonthlyAmount <= 0m;
                                     <tr>
                                         <td class="ps-3 small fw-bold">Ayın @(fx.DueDayOfMonth). Günü</td>
                                         <td><span class="badge bg-light text-dark border">@GetGroupDisplayName(fx.ExpenseGroup)</span></td>
@@ -252,12 +267,12 @@
                                             <strong>@fx.Title</strong>
                                             @if (!string.IsNullOrWhiteSpace(fx.ProviderName))
                                             {
-                                                <small class="d-block text-muted">@fx.ProviderName @(!string.IsNullOrWhiteSpace(fx.SubscriberNo) ? $"({fx.SubscriberNo})" : "")</small>
+                                                <small class="d-block text-muted">@fx.ProviderName @(!string.IsNullOrWhiteSpace(fx.SubscriberNo) ? $"(Abone: {fx.SubscriberNo})" : "")</small>
                                             }
                                         </td>
                                         <td>
                                             <span class="badge @(isDemirbas ? "bg-danger" : "bg-primary")">
-                                                @(isDemirbas ? "Demirbaş (Malik)" : "İşletme (Oturan)")
+                                                @(isDemirbas ? "Malik (Demirbaş)" : "İşletme (Oturan)")
                                             </span>
                                         </td>
                                         <td>
@@ -272,14 +287,30 @@
                                                 <span class="badge bg-secondary-subtle text-dark ms-1">Malik %@fx.OwnerSplitPercent.Value.ToString("0.##")</span>
                                             }
                                         </td>
-                                        <td class="fw-bold">@fx.MonthlyAmount.ToString("N2") ₺</td>
+                                        <td>
+                                            @if (isVariable)
+                                            {
+                                                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Değişken Fatura</span>
+                                            }
+                                            else
+                                            {
+                                                <strong class="text-dark">@fx.MonthlyAmount.ToString("N2") ₺ / ay</strong>
+                                            }
+                                        </td>
                                         <td class="pe-3 text-end">
-                                            <form asp-action="DistributeBuildingFixedExpense" asp-controller="BuildingManager" method="post" class="d-inline">
-                                                @Html.AntiForgeryToken()
-                                                <input type="hidden" name="fixedExpenseId" value="@fx.Id" />
-                                                <input type="hidden" name="buildingId" value="@fx.BuildingId" />
-                                                <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill px-3">Bu Aya Dağıt</button>
-                                            </form>
+                                            <button type="button" class="btn btn-sm @(isVariable ? "btn-primary" : "btn-outline-danger") rounded-pill px-3 fw-semibold"
+                                                    onclick="openInvoiceFromSubscription('@System.Web.HttpUtility.JavaScriptStringEncode(fx.Title)', '@System.Web.HttpUtility.JavaScriptStringEncode(fx.ProviderName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(fx.ExpenseGroup)', '@(isDemirbas ? "1" : "2")', '@System.Web.HttpUtility.JavaScriptStringEncode(fx.ExpenseItemKey)', '@System.Web.HttpUtility.JavaScriptStringEncode(fx.DistributionRule)', @((int)fx.ScopeType), @fx.ShopParticipationPercent.ToString(System.Globalization.CultureInfo.InvariantCulture), '@(fx.OwnerSplitPercent?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")', @fx.MonthlyAmount.ToString(System.Globalization.CultureInfo.InvariantCulture))">
+                                                <i class="bi bi-receipt me-1"></i> + Bu Ayın Faturasını Gir
+                                            </button>
+                                            @if (!isVariable)
+                                            {
+                                                <form asp-action="DistributeBuildingFixedExpense" asp-controller="BuildingManager" method="post" class="d-inline ms-1">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="fixedExpenseId" value="@fx.Id" />
+                                                    <input type="hidden" name="buildingId" value="@fx.BuildingId" />
+                                                    <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill px-2" title="Sabit tutarı dairelere borç yaz">Dairelere Böl</button>
+                                                </form>
+                                            }
                                         </td>
                                     </tr>
                                 }
@@ -612,166 +643,100 @@
     </div>
 </div>
 
-<!-- 1. Sabit Bina Gideri / Abonelik Ekle Modalı -->
+<!-- 1. Abonelik / Sabit Ödeme Kurumu Ekle Modalı -->
 <div class="modal fade" id="addFixedExpenseModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <form class="modal-content rounded-4 border-0 shadow" asp-action="AddBuildingFixedExpense" asp-controller="BuildingManager" method="post">
             @Html.AntiForgeryToken()
             <input type="hidden" name="buildingId" value="@Model.Id" />
             <input type="hidden" name="returnAction" value="Accounting" />
             <div class="modal-header bg-success text-white border-0">
-                <h5 class="modal-title fw-bold">Aylık Sabit Gider / Abonelik Tanımla</h5>
+                <h5 class="modal-title fw-bold">Düzenli Abonelik / Sabit Ödeme Tanımla</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4 row g-3">
                 <div class="col-12">
-                    <label class="form-label fw-bold small">Gider Türü (Lookup) *</label>
-                    <select name="expenseGroup" class="form-select fw-semibold" required>
+                    <div class="d-flex flex-wrap gap-1 align-items-center bg-light p-2 rounded-3 border">
+                        <small class="fw-bold text-muted me-1">Hızlı Hazır Şablon:</small>
+                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Ortak Elektrik Faturası', 'FaturaAbonelik', 'Isletme', 'Genel', 'Esit', true, 'Enerjisa')">⚡ Elektrik</button>
+                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Ortak Su Faturası', 'FaturaAbonelik', 'Isletme', 'Isinma', 'Esit', true, 'İSKİ')">💧 Su</button>
+                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Merkezi Doğalgaz / Isınma', 'FaturaAbonelik', 'Isletme', 'Isinma', 'Metrekare', true, 'İGDAŞ')">🔥 Doğalgaz</button>
+                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Asansör Aylık Bakımı', 'BakimOnarim', 'Isletme', 'Asansor', 'Esit', false, 'Asansör Firması')">🛗 Asansör Bakım</button>
+                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Mali Müşavir / Yönetim', 'YonetimIdari', 'Isletme', 'Genel', 'Esit', false, 'Mali Müşavir')">📋 Mali Müşavir</button>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Gider Türü *</label>
+                    <select name="expenseGroup" id="fxGroup" class="form-select fw-semibold" required>
                         @foreach (var grp in expenseGroups)
                         {
                             <option value="@grp.SystemCode" selected="@(grp.SystemCode == "FaturaAbonelik" ? "selected" : null)">@grp.Name</option>
                         }
                     </select>
                 </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Kalem Başlığı *</label>
+                    <input type="text" name="title" id="fxTitle" class="form-control" required placeholder="Örn: Ortak Elektrik, Asansör Bakım" />
+                </div>
                 <div class="col-12">
-                    <label class="form-label fw-bold small">Gider Başlığı *</label>
-                    <input type="text" name="title" class="form-control" required placeholder="Örn: Ortak Elektrik, Asansör Bakım, Mali Müşavir" />
+                    <label class="form-label fw-bold small">Fatura Tutarı Şekli *</label>
+                    <div class="d-flex flex-wrap gap-3 bg-light p-2 rounded-3 border">
+                        <div class="form-check mb-0">
+                            <input class="form-check-input" type="radio" name="isVariableAmount" id="fxVarYes" value="true" checked onchange="toggleFixedAmountInput()">
+                            <label class="form-check-label small fw-bold text-primary" for="fxVarYes">
+                                Değişken Fatura (Elektrik, Su, Gaz — Her ay fatura gelince girilir)
+                            </label>
+                        </div>
+                        <div class="form-check mb-0">
+                            <input class="form-check-input" type="radio" name="isVariableAmount" id="fxVarNo" value="false" onchange="toggleFixedAmountInput()">
+                            <label class="form-check-label small fw-bold" for="fxVarNo">
+                                Her Ay Sabit Tutar (Asansör Bakım, Mali Müşavir)
+                            </label>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">Kapsam (Hangi Kasa?)</label>
-                    <select name="expenseScope" class="form-select fw-semibold">
-                        <option value="Isletme">İşletme (Oturan / Kiracı Öder)</option>
-                        <option value="Demirbas">Demirbaş (Ev Sahibi / Malik Öder)</option>
-                    </select>
+                <div class="col-md-4" id="fxAmountBox" style="display:none;">
+                    <label class="form-label fw-bold small">Sabit Aylık Tutar (₺)</label>
+                    <input type="number" step="0.01" min="0" name="monthlyAmount" id="fxAmount" class="form-control" value="0" placeholder="Örn: 3000" />
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">Dağıtım Kuralı</label>
-                    <select name="distributionRule" class="form-select">
-                        <option value="Esit">Eşit (Bölüm Başı)</option>
-                        <option value="ArsaPayi">Arsa Payı Oranlı</option>
-                        <option value="Metrekare">Metrekare Oranlı</option>
-                        <option value="Katsayi">Birim Katsayısı Bazlı</option>
-                    </select>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Kurum / Firma</label>
+                    <input type="text" name="providerName" id="fxProvider" class="form-control" placeholder="Enerjisa, İSKİ, Kone vb." />
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">KMK Muafiyet Kalemi</label>
-                    <select name="expenseItemKey" class="form-select">
-                        <option value="Genel">Genel Bina Gideri</option>
-                        <option value="Personel">Personel / Kapıcı / Güvenlik</option>
-                        <option value="Asansor">Asansör (Asansör Muaf Hariç)</option>
-                        <option value="Merdiven">Merdiven (Merdiven Muaf Hariç)</option>
-                        <option value="CopTemizlik">Çöp &amp; Çevre Temizliği (%)</option>
-                        <option value="Isinma">Isınma / Ortak Su &amp; Doğalgaz</option>
-                        <option value="Demirbas">Çatı / Cephe / Demirbaş Fonu</option>
-                    </select>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Abone / Sözleşme No</label>
+                    <input type="text" name="subscriberNo" class="form-control" placeholder="Opsiyonel" />
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">Dükkan Katılımı (%)</label>
-                    <input type="number" step="5" min="0" max="500" name="shopParticipationPercent" class="form-control" value="100" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">Site / Blok Kapsamı</label>
-                    <select name="scopeType" class="form-select">
-                        <option value="2">Sadece Bu Blok</option>
-                        <option value="1">Tüm Site Geneli</option>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">Özel Malik Payı % (Opsiyonel)</label>
-                    <input type="number" step="5" min="0" max="100" name="ownerSplitPercent" class="form-control" placeholder="Boş=Standart | 100=Kiracı Muaf" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">Aylık Tutar (TL) *</label>
-                    <input type="number" step="0.01" name="monthlyAmount" class="form-control" required placeholder="Örn: 3500" />
-                </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <label class="form-label fw-bold small">Ödeme Günü (Ayın Kaçı?)</label>
                     <input type="number" min="1" max="31" name="dueDayOfMonth" class="form-control" value="15" required />
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">Kurum / Firma</label>
-                    <input type="text" name="providerName" class="form-control" placeholder="Enerjisa, Kone, İSKİ vb." />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">Abone / Sözleşme No</label>
-                    <input type="text" name="subscriberNo" class="form-control" />
-                </div>
-                <div class="col-12">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" name="isAutoRecurring" value="true" id="autoRecSw" checked>
-                        <label class="form-check-label small fw-bold" for="autoRecSw">Her ay karma aidat bütçesi hesabına dahil et</label>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer border-0 bg-light">
-                <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold w-100">Sabit Bütçeye Ekle</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- 2. Gerçekleşen Fatura / Satın Alma İşle Modalı -->
-<div class="modal fade" id="newExpenseDirectModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <form class="modal-content rounded-4 border-0 shadow" asp-action="AddExpense" asp-controller="BuildingManager" method="post" enctype="multipart/form-data">
-            @Html.AntiForgeryToken()
-            <input type="hidden" name="buildingId" value="@Model.Id" />
-            <input type="hidden" name="returnAction" value="Accounting" />
-            <div class="modal-header bg-danger text-white border-0">
-                <h5 class="modal-title fw-bold">Fatura / Gider İşle &amp; Dağıt</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-4 row g-3">
-                <div class="col-12">
-                    <label class="form-label fw-bold small">Gider Türü (Lookup) *</label>
-                    <select name="expenseGroup" class="form-select fw-semibold" required>
-                        @foreach (var grp in expenseGroups)
-                        {
-                            <option value="@grp.SystemCode" selected="@(grp.SystemCode == "FaturaAbonelik" ? "selected" : null)">@grp.Name</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-12">
-                    <label class="form-label fw-bold small">Gider / Fatura Açıklaması *</label>
-                    <input type="text" name="description" class="form-control" required placeholder="Örn: Kasım Ortak Elektrik Faturası veya Çatı Aktarımı" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">Tutar (TL) *</label>
-                    <input type="number" step="0.01" min="0.01" name="totalAmount" class="form-control fw-bold text-danger" required />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">KMK Cari Kasa *</label>
-                    <select name="expenseType" class="form-select fw-semibold">
-                        <option value="2">💡 İşletme / Sarf (Kiracı / Oturan)</option>
-                        <option value="1">🔨 Demirbaş / Tadilat (Malik + GMSİ)</option>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">KMK Muafiyet Kalemi</label>
-                    <select name="expenseItemKey" class="form-select">
-                        <option value="Genel">Genel Gider</option>
-                        <option value="Personel">Personel / Güvenlik</option>
-                        <option value="Asansor">Asansör (Muaf Hariç)</option>
-                        <option value="Merdiven">Merdiven (Muaf Hariç)</option>
-                        <option value="CopTemizlik">Çöp &amp; Çevre Temizliği</option>
-                        <option value="Isinma">Isınma / Ortak Su</option>
-                        <option value="Demirbas">Demirbaş / Tadilat</option>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">Dağıtım Kuralı</label>
-                    <select name="distributionRule" class="form-select">
-                        <option value="Esit">Eşit Bölüşüm</option>
-                        <option value="ArsaPayi">Arsa Payı Oranlı</option>
-                        <option value="Metrekare">Brüt m² Oranlı</option>
-                        <option value="Katsayi">Birim Katsayısı Bazlı</option>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Kim Öder?</label>
+                    <select name="expenseScope" id="fxScope" class="form-select fw-semibold">
+                        <option value="Isletme">İşletme (Oturan / Aidat Kasası)</option>
+                        <option value="Demirbas">Demirbaş (Ev Sahibi / Malik)</option>
                     </select>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label fw-bold small">Kapsam</label>
-                    <select name="scopeType" class="form-select">
-                        <option value="2">Bu Blok</option>
-                        <option value="1">Tüm Site</option>
+                    <label class="form-label fw-bold small">Hangi Kalem? (Muafiyet İçin)</label>
+                    <select name="expenseItemKey" id="fxItemKey" class="form-select">
+                        <option value="Genel">Genel Bina Gideri</option>
+                        <option value="Asansor">Asansör (Asansör Muaf Hariç)</option>
+                        <option value="Merdiven">Merdiven (Merdiven Muaf Hariç)</option>
+                        <option value="CopTemizlik">Çöp &amp; Çevre Temizliği (%)</option>
+                        <option value="Isinma">Su / Isınma / Doğalgaz</option>
+                        <option value="Personel">Personel / Güvenlik</option>
+                        <option value="Demirbas">Çatı / Cephe / Demirbaş</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Dairelere Bölüşülürse Kuralı</label>
+                    <select name="distributionRule" id="fxRule" class="form-select">
+                        <option value="Esit">Eşit (Bölüm Başı)</option>
+                        <option value="ArsaPayi">Arsa Payı Oranlı</option>
+                        <option value="Metrekare">Metrekare Oranlı</option>
+                        <option value="Katsayi">Aidat Katsayısı Bazlı</option>
                     </select>
                 </div>
                 <div class="col-md-4">
@@ -780,15 +745,114 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-bold small">Özel Malik Payı %</label>
-                    <input type="number" step="5" min="0" max="100" name="ownerSplitPercent" class="form-control" placeholder="Boş / 50 / 100" />
+                    <input type="number" step="5" min="0" max="100" name="ownerSplitPercent" class="form-control" placeholder="Boş=Standart | 100=Malik" />
                 </div>
-                <div class="col-12">
-                    <label class="form-label fw-bold small">Fatura Belgesi (PDF / Fotoğraf)</label>
-                    <input type="file" name="invoiceFile" class="form-control" accept=".pdf,image/*" />
+                <input type="hidden" name="scopeType" value="2" />
+                <div class="col-12" id="fxAutoBox" style="display:none;">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="isAutoRecurring" value="true" id="autoRecSw" checked>
+                        <label class="form-check-label small fw-bold" for="autoRecSw">Sabit tutarı her ay otomatik aidat bütçesine dahil et</label>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer border-0 bg-light">
-                <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold w-100">Kaydet &amp; Dairelere Dağıt</button>
+                <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold w-100">Aboneliği / Kalemi Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 2. Gerçekleşen Fatura / Harcama İşle Modalı -->
+<div class="modal fade" id="newExpenseDirectModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="AddExpense" asp-controller="BuildingManager" method="post" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="buildingId" value="@Model.Id" />
+            <input type="hidden" name="returnAction" value="Accounting" />
+            <div class="modal-header bg-danger text-white border-0">
+                <h5 class="modal-title fw-bold">Fatura / Harcama İşle</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Gider Türü *</label>
+                    <select name="expenseGroup" id="neGroup" class="form-select fw-semibold" required>
+                        @foreach (var grp in expenseGroups)
+                        {
+                            <option value="@grp.SystemCode" selected="@(grp.SystemCode == "FaturaAbonelik" ? "selected" : null)">@grp.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Fatura / Gider Tutarı (₺) *</label>
+                    <input type="number" step="0.01" min="0.01" name="totalAmount" id="neAmount" class="form-control fw-bold text-danger" required placeholder="Örn: 1840.50" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-bold small">Açıklama *</label>
+                    <input type="text" name="description" id="neDesc" class="form-control" required placeholder="Örn: Kasım 2026 Ortak Elektrik Faturası (Enerjisa)" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Bu Gider Nasıl İşlensin? *</label>
+                    <select name="chargeToUnits" id="neChargeMode" class="form-select fw-semibold" onchange="toggleExpenseDistributionOptions()">
+                        <option value="false">💰 Bina Kasasından Öde (Aidat Havuzundan — Daireye Ek Borç Çıkarma)</option>
+                        <option value="true">📊 Daire / Dükkanlara Ek Borç Olarak Paylaştır</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Ödenen Banka / Kasa</label>
+                    <select name="bankAccountId" class="form-select">
+                        <option value="">Elden / Genel Bina Kasası</option>
+                        @foreach (var acc in bankAccounts)
+                        {
+                            <option value="@acc.Id">@acc.BankName - @acc.AccountName (@acc.CurrentBalance.ToString("N2") ₺)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Kim Öder? (Kasa Türü)</label>
+                    <select name="expenseType" id="neExpType" class="form-select fw-semibold">
+                        <option value="2">💡 İşletme / Sarf (Oturan / Aidat Kasası)</option>
+                        <option value="1">🔨 Demirbaş / Tadilat (Malik)</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Fatura Belgesi (PDF / Fotoğraf)</label>
+                    <input type="file" name="invoiceFile" class="form-control" accept=".pdf,image/*" />
+                </div>
+
+                <div id="neDistributionBox" class="row g-2 border-top pt-2 mt-1 d-none">
+                    <div class="col-12 small fw-bold text-primary">Dairelere Bölüşüm Ayarları:</div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold small">Kalem (Muafiyet İçin)</label>
+                        <select name="expenseItemKey" id="neItemKey" class="form-select form-select-sm">
+                            <option value="Genel">Genel Gider</option>
+                            <option value="Personel">Personel / Güvenlik</option>
+                            <option value="Asansor">Asansör (Muaf Hariç)</option>
+                            <option value="Merdiven">Merdiven (Muaf Hariç)</option>
+                            <option value="CopTemizlik">Çöp &amp; Çevre Temizliği</option>
+                            <option value="Isinma">Su / Isınma / Doğalgaz</option>
+                            <option value="Demirbas">Demirbaş / Tadilat</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold small">Dağıtım Kuralı</label>
+                        <select name="distributionRule" id="neRule" class="form-select form-select-sm">
+                            <option value="Esit">Eşit Bölüşüm</option>
+                            <option value="ArsaPayi">Arsa Payı Oranlı</option>
+                            <option value="Metrekare">Brüt m² Oranlı</option>
+                            <option value="Katsayi">Aidat Katsayısı Bazlı</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold small">Dükkan Katılımı (%)</label>
+                        <input type="number" step="5" min="0" max="500" name="shopParticipationPercent" id="neShopPct" class="form-control form-control-sm" value="100" />
+                    </div>
+                    <input type="hidden" name="scopeType" id="neScopeType" value="2" />
+                    <input type="hidden" name="ownerSplitPercent" id="neOwnerSplit" value="" />
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold w-100">Faturayı / Gideri Kaydet</button>
             </div>
         </form>
     </div>
@@ -1054,6 +1118,47 @@
 
 <script>
     let currentDailyRate = 0;
+
+    function applyFixedPreset(title, group, scope, itemKey, rule, isVariable, provider) {
+        document.getElementById('fxTitle').value = title;
+        document.getElementById('fxGroup').value = group;
+        document.getElementById('fxScope').value = scope;
+        document.getElementById('fxItemKey').value = itemKey;
+        document.getElementById('fxRule').value = rule;
+        document.getElementById('fxProvider').value = provider || '';
+        document.getElementById('fxVarYes').checked = !!isVariable;
+        document.getElementById('fxVarNo').checked = !isVariable;
+        toggleFixedAmountInput();
+    }
+
+    function toggleFixedAmountInput() {
+        const isVar = document.getElementById('fxVarYes').checked;
+        document.getElementById('fxAmountBox').style.display = isVar ? 'none' : '';
+        document.getElementById('fxAutoBox').style.display = isVar ? 'none' : '';
+        if (isVar) document.getElementById('fxAmount').value = '0';
+    }
+
+    function toggleExpenseDistributionOptions() {
+        const charge = document.getElementById('neChargeMode').value === 'true';
+        document.getElementById('neDistributionBox').classList.toggle('d-none', !charge);
+    }
+
+    function openInvoiceFromSubscription(title, provider, group, expType, itemKey, rule, scopeType, shopPct, ownerSplit, amount) {
+        document.getElementById('neGroup').value = group || 'FaturaAbonelik';
+        const now = new Date();
+        const ym = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+        document.getElementById('neDesc').value = title + (provider ? ' (' + provider + ' - ' + ym + ')' : ' (' + ym + ')');
+        document.getElementById('neAmount').value = amount && parseFloat(amount) > 0 ? amount : '';
+        document.getElementById('neExpType').value = expType || '2';
+        document.getElementById('neItemKey').value = itemKey || 'Genel';
+        document.getElementById('neRule').value = rule || 'Esit';
+        document.getElementById('neScopeType').value = scopeType || 2;
+        document.getElementById('neShopPct').value = shopPct != null ? shopPct : 100;
+        document.getElementById('neOwnerSplit').value = ownerSplit || '';
+        document.getElementById('neChargeMode').value = 'false';
+        toggleExpenseDistributionOptions();
+        new bootstrap.Modal(document.getElementById('newExpenseDirectModal')).show();
+    }
 
     function openGiderReversalModal(expenseId, buildingId, desc) {
         document.getElementById('revExpId').value = expenseId;

@@ -29,6 +29,7 @@
 - **Veritabanı / VDS Güncelleme Kuralı:**
   - Şema değişikliği yapılan her adımda EF Core migration (`dotnet ef migrations add ...`) yanında mutlaka `GMK360.Data/Migrations/Scripts/YYYYMMDD_<Ad>_VdsSafe.sql` şeklinde **idempotent (`IF COL_LENGTH(...) IS NULL`)** VDS SQL scripti üretilir.
   - Lokal `LocalDB` güncellenir, `dotnet build` **0 Hata** doğrulanır, ardından commit + push yapılır.
+  - **VDS Ortamı (Şifresiz Referans):** Repo: `C:\src\gmk360` | Publish Hedefi: `C:\Inetpub\vhosts\gmk360.com\httpdocs` | AppPool: `gmk360.com(domain)(4.0)(pool)` (`robocopy` ile `appsettings*.json` ve `web.config` hariç tutulur).
 
 ---
 

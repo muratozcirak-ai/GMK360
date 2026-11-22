@@ -529,20 +529,29 @@ namespace GMK360.Web.Services
             ExpenseScopeType scopeType = ExpenseScopeType.Building,
             decimal shopParticipationPercent = 100m,
             decimal? ownerSplitPercent = null,
-            string? expenseGroup = null)
+            string? expenseGroup = null,
+            bool chargeToUnits = true,
+            int? bankAccountId = null)
         {
-            var preview = await ComputeExpenseDistributionInternalAsync(
-                buildingId,
-                totalAmount,
-                expenseType,
-                distributionRule,
-                expenseItemKey,
-                scopeType,
-                shopParticipationPercent,
-                ownerSplitPercent);
+            if (totalAmount <= 0)
+                return new GovernanceActionResult { Success = false, Message = "Gider tutarı sıfırdan büyük olmalıdır." };
 
-            if (!preview.Success)
-                return new GovernanceActionResult { Success = false, Message = preview.Message };
+            ExpenseDistributionPreviewResult? preview = null;
+            if (chargeToUnits)
+            {
+                preview = await ComputeExpenseDistributionInternalAsync(
+                    buildingId,
+                    totalAmount,
+                    expenseType,
+                    distributionRule,
+                    expenseItemKey,
+                    scopeType,
+                    shopParticipationPercent,
+                    ownerSplitPercent);
+
+                if (!preview.Success)
+                    return new GovernanceActionResult { Success = false, Message = preview.Message };
+            }
 
             string? invoiceUrl = null;
             if (invoiceFile != null && invoiceFile.Length > 0)
@@ -571,6 +580,8 @@ namespace GMK360.Web.Services
 
             string resolvedGroup = ResolveExpenseGroup(expenseType, expenseItemKey, expenseGroup);
 
+            string resolvedRule = preview?.DistributionRule ?? (string.IsNullOrWhiteSpace(distributionRule) ? "Esit" : distributionRule.Trim());
+
             var expense = new BuildingExpense
             {
                 BuildingId = buildingId,
@@ -579,7 +590,7 @@ namespace GMK360.Web.Services
                 ExpenseGroup = resolvedGroup,
                 PayerType = payerType,
                 ExpenseItemKey = string.IsNullOrWhiteSpace(expenseItemKey) ? "Genel" : expenseItemKey.Trim(),
-                DistributionRule = preview.DistributionRule,
+                DistributionRule = resolvedRule,
                 ShopParticipationPercent = Math.Max(0m, shopParticipationPercent),
                 OwnerSplitPercent = ownerSplitPercent,
                 Description = description.Trim(),
@@ -588,9 +599,19 @@ namespace GMK360.Web.Services
                 Date = DateTime.Now
             };
             _context.BuildingExpenses.Add(expense);
+
+            if (bankAccountId.HasValue)
+            {
+                var bank = await _context.BankAccounts.FirstOrDefaultAsync(a => a.Id == bankAccountId.Value && a.OwnerId == buildingId);
+                if (bank != null) bank.CurrentBalance -= totalAmount;
+            }
+
             await _context.SaveChangesAsync();
 
-            await PersistUnitDebtsFromPreviewAsync(buildingId, scopeType, expense, preview);
+            if (chargeToUnits && preview != null)
+            {
+                await PersistUnitDebtsFromPreviewAsync(buildingId, scopeType, expense, preview);
+            }
 
             WriteAuditLog(actorUserId, "EXPENSE_CREATED", "BuildingExpense", expense.Id.ToString(), new
             {
@@ -598,17 +619,29 @@ namespace GMK360.Web.Services
                 expense.TotalAmount,
                 ExpenseType = expense.ExpenseType.ToString(),
                 ScopeType = scopeType.ToString(),
+                expense.ExpenseGroup,
                 expense.ExpenseItemKey,
                 expense.DistributionRule,
                 expense.ShopParticipationPercent,
                 expense.OwnerSplitPercent,
-                Participating = preview.ParticipatingUnitCount,
-                Exempt = preview.ExemptUnitCount,
+                ChargeToUnits = chargeToUnits,
+                Participating = preview?.ParticipatingUnitCount ?? 0,
+                Exempt = preview?.ExemptUnitCount ?? 0,
                 expense.InvoiceDocumentUrl
             });
             await _context.SaveChangesAsync();
 
-            string exemptInfo = preview.ExemptUnitCount > 0 ? $" ({preview.ExemptUnitCount} muaf bölüm hariç tutuldu)" : "";
+            if (!chargeToUnits)
+            {
+                return new GovernanceActionResult
+                {
+                    Success = true,
+                    CreatedExpenseId = expense.Id,
+                    Message = $"✅ '{description.Trim()}' ({totalAmount:N2} ₺) bina kasasından gider olarak işlendi (dairelere ek borç çıkarılmadı)."
+                };
+            }
+
+            string exemptInfo = preview!.ExemptUnitCount > 0 ? $" ({preview.ExemptUnitCount} muaf bölüm hariç tutuldu)" : "";
             return new GovernanceActionResult
             {
                 Success = true,
