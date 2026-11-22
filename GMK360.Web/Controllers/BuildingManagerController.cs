@@ -2520,6 +2520,10 @@ namespace GMK360.Web.Controllers
                 bankAccountId);
 
             TempData[result.Success ? "SuccessMessage" : "ErrorMessage"] = result.Message;
+            if (string.Equals(returnAction, "Aidatlar", StringComparison.OrdinalIgnoreCase))
+            {
+                return RedirectToAction(nameof(Aidatlar), new { buildingId });
+            }
             if (string.Equals(returnAction, "Accounting", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(returnAction, "Giderler", StringComparison.OrdinalIgnoreCase))
             {
@@ -2952,10 +2956,10 @@ namespace GMK360.Web.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> AddBuildingFixedExpense(
             int buildingId,
-            string title,
-            string expenseScope,
-            string distributionRule,
-            int dueDayOfMonth,
+            string? title = null,
+            string expenseScope = "Isletme",
+            string distributionRule = "Esit",
+            int dueDayOfMonth = 15,
             decimal monthlyAmount = 0m,
             string? providerName = null,
             string? subscriberNo = null,
@@ -2976,11 +2980,14 @@ namespace GMK360.Web.Controllers
                 : BuildingExpenseType.Operational;
             var resolvedGroup = FacilityGovernanceService.ResolveExpenseGroup(resolvedType, expenseItemKey, expenseGroup);
             decimal finalAmount = isVariableAmount ? 0m : Math.Max(0m, monthlyAmount);
+            string resolvedTitle = !string.IsNullOrWhiteSpace(title)
+                ? title.Trim()
+                : (!string.IsNullOrWhiteSpace(providerName) ? providerName.Trim() : "Düzenli Abonelik");
 
             _context.BuildingFixedExpenses.Add(new BuildingFixedExpense
             {
                 BuildingId = buildingId,
-                Title = title?.Trim() ?? "Sabit Gider",
+                Title = resolvedTitle,
                 ExpenseScope = string.Equals(expenseScope, "Demirbas", StringComparison.OrdinalIgnoreCase) ? "Demirbas" : "Isletme",
                 ExpenseGroup = resolvedGroup,
                 ExpenseItemKey = string.IsNullOrWhiteSpace(expenseItemKey) ? "Genel" : expenseItemKey.Trim(),
@@ -2999,8 +3006,8 @@ namespace GMK360.Web.Controllers
             await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = isVariableAmount
-                ? $"'{title}' değişken faturalı abonelik olarak kaydedildi. Ay geldiğinde yanındaki '+ Bu Ayın Faturasını Gir' butonundan fatura işleyebilirsiniz."
-                : $"'{title}' aylık sabit gider bütçesine eklendi.";
+                ? $"'{resolvedTitle}' değişken faturalı abonelik olarak kaydedildi. Ay geldiğinde yanındaki '+ Bu Ayın Faturasını Gir' butonundan fatura işleyebilirsiniz."
+                : $"'{resolvedTitle}' aylık sabit gider bütçesine eklendi.";
             return RedirectToAction(nameof(Accounting), new { buildingId, tab = "giderler" });
         }
 
@@ -3208,6 +3215,10 @@ namespace GMK360.Web.Controllers
 
             ViewBag.TotalCollectedDues = await _context.UnitDebts
                 .Where(d => d.IsPaid && !d.IsArchived && d.BuildingUnit.BuildingId == building.Id)
+                .SumAsync(d => (decimal?)d.Amount) ?? 0m;
+
+            ViewBag.TotalPendingDues = await _context.UnitDebts
+                .Where(d => !d.IsPaid && !d.IsArchived && d.BuildingUnit.BuildingId == building.Id)
                 .SumAsync(d => (decimal?)d.Amount) ?? 0m;
 
             ViewBag.ExpenseGroups = await GetFacilityExpenseGroupLookupsAsync();
