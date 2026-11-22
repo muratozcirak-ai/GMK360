@@ -49,6 +49,9 @@ namespace GMK360.Core.Entities
         public BuildingExpenseType ExpenseType { get; set; } = BuildingExpenseType.Operational;
 
         [MaxLength(40)]
+        public string ExpenseGroup { get; set; } = "FaturaAbonelik"; // "Personel" | "FaturaAbonelik" | "BakimOnarim" | "DemirbasYatirim" | "YonetimIdari"
+
+        [MaxLength(40)]
         public string ExpenseItemKey { get; set; } = "Genel"; // "Genel" | "Personel" | "Asansor" | "Merdiven" | "CopTemizlik" | "Isinma" | "Demirbas"
 
         [MaxLength(30)]

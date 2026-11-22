@@ -272,7 +272,13 @@ namespace GMK360.Web.Services
                     payroll.TotalSiteCostForMonth,
                     BuildingExpenseType.Operational,
                     null,
-                    actorUserId);
+                    actorUserId,
+                    "Esit",
+                    "Personel",
+                    ExpenseScopeType.Building,
+                    100m,
+                    null,
+                    "Personel");
                 payroll.OperatingExpenseId = opRes.CreatedExpenseId;
                 await _context.SaveChangesAsync();
             }
@@ -285,7 +291,13 @@ namespace GMK360.Web.Services
                     payroll.MonthlySeveranceFund,
                     BuildingExpenseType.CapitalExpenditure,
                     null,
-                    actorUserId);
+                    actorUserId,
+                    "Esit",
+                    "Personel",
+                    ExpenseScopeType.Building,
+                    100m,
+                    100m,
+                    "Personel");
                 payroll.SeveranceExpenseId = sevRes.CreatedExpenseId;
                 await _context.SaveChangesAsync();
             }
@@ -318,7 +330,162 @@ namespace GMK360.Web.Services
                 fixedExp.ExpenseItemKey,
                 fixedExp.ScopeType,
                 fixedExp.ShopParticipationPercent,
-                fixedExp.OwnerSplitPercent);
+                fixedExp.OwnerSplitPercent,
+                fixedExp.ExpenseGroup);
+        }
+
+        public async Task<ExpenseDistributionPreviewResult> PreviewAllRecurringBudgetAsync(int buildingId, int year, int month, bool includeStaffCosts)
+        {
+            var fixedItems = await _context.BuildingFixedExpenses
+                .AsNoTracking()
+                .Where(f => f.BuildingId == buildingId && f.IsActive && f.IsAutoRecurring && !f.IsDeleted && f.MonthlyAmount > 0m)
+                .OrderBy(f => f.DueDayOfMonth)
+                .ToListAsync();
+
+            var activeStaff = includeStaffCosts
+                ? await _context.BuildingStaffs.AsNoTracking().Where(s => s.BuildingId == buildingId && s.IsActive && !s.IsDeleted).ToListAsync()
+                : new List<BuildingStaff>();
+
+            if (!fixedItems.Any() && !activeStaff.Any())
+            {
+                return new ExpenseDistributionPreviewResult
+                {
+                    Success = false,
+                    Message = "Bu bina için karma dağıtımda kullanılacak aktif sabit gider veya personel kaydı bulunamadı."
+                };
+            }
+
+            var subPreviews = new List<(string Title, ExpenseDistributionPreviewResult Result)>();
+
+            foreach (var fx in fixedItems)
+            {
+                var expenseType = string.Equals(fx.ExpenseScope, "Demirbas", StringComparison.OrdinalIgnoreCase)
+                    ? BuildingExpenseType.CapitalExpenditure
+                    : BuildingExpenseType.Operational;
+
+                var prev = await _governanceService.PreviewExpenseDistributionAsync(
+                    fx.BuildingId,
+                    fx.MonthlyAmount,
+                    expenseType,
+                    fx.DistributionRule,
+                    fx.ExpenseItemKey,
+                    fx.ScopeType,
+                    fx.ShopParticipationPercent,
+                    fx.OwnerSplitPercent);
+
+                if (!prev.Success)
+                {
+                    return new ExpenseDistributionPreviewResult
+                    {
+                        Success = false,
+                        Message = $"'{fx.Title}' kaleminde dağıtım hesaplanamadı: {prev.Message}"
+                    };
+                }
+                subPreviews.Add((fx.Title, prev));
+            }
+
+            if (activeStaff.Any())
+            {
+                decimal opTotal = activeStaff.Sum(s => s.TotalMonthlyOperatingCost);
+                if (opTotal > 0m)
+                {
+                    var opPrev = await _governanceService.PreviewExpenseDistributionAsync(
+                        buildingId,
+                        opTotal,
+                        BuildingExpenseType.Operational,
+                        "Esit",
+                        "Personel",
+                        ExpenseScopeType.Building,
+                        100m,
+                        null);
+                    if (!opPrev.Success) return opPrev;
+                    subPreviews.Add(("Personel İşletme", opPrev));
+                }
+
+                decimal sevTotal = activeStaff.Sum(s => s.MonthlySeveranceFund);
+                if (sevTotal > 0m)
+                {
+                    var sevPrev = await _governanceService.PreviewExpenseDistributionAsync(
+                        buildingId,
+                        sevTotal,
+                        BuildingExpenseType.CapitalExpenditure,
+                        "Esit",
+                        "Personel",
+                        ExpenseScopeType.Building,
+                        100m,
+                        100m);
+                    if (!sevPrev.Success) return sevPrev;
+                    subPreviews.Add(("Personel Kıdem (Malik)", sevPrev));
+                }
+            }
+
+            var aggregated = new Dictionary<int, ExpenseDistributionPreviewItem>();
+            var unitNotes = new Dictionary<int, List<string>>();
+
+            foreach (var (title, prev) in subPreviews)
+            {
+                foreach (var item in prev.Items)
+                {
+                    if (!aggregated.TryGetValue(item.BuildingUnitId, out var acc))
+                    {
+                        acc = new ExpenseDistributionPreviewItem
+                        {
+                            BuildingUnitId = item.BuildingUnitId,
+                            BuildingName = item.BuildingName,
+                            DoorNumber = item.DoorNumber,
+                            Category = item.Category,
+                            RoomLayout = item.RoomLayout,
+                            LandShare = item.LandShare,
+                            GrossSquareMeters = item.GrossSquareMeters,
+                            DuesMultiplier = item.DuesMultiplier,
+                            ParticipationPercent = 100m,
+                            EffectiveWeight = 1m,
+                            OwnerName = item.OwnerName,
+                            TenantName = item.TenantName
+                        };
+                        aggregated[item.BuildingUnitId] = acc;
+                        unitNotes[item.BuildingUnitId] = new List<string>();
+                    }
+
+                    acc.OwnerAmount += item.OwnerAmount;
+                    acc.TenantAmount += item.TenantAmount;
+                    acc.TotalShareAmount += item.TotalShareAmount;
+
+                    if (item.TotalShareAmount > 0m)
+                    {
+                        unitNotes[item.BuildingUnitId].Add($"{title}: {item.TotalShareAmount:N2}₺");
+                    }
+                    else if (!string.IsNullOrWhiteSpace(item.StatusNote))
+                    {
+                        unitNotes[item.BuildingUnitId].Add($"{title}: Muaf");
+                    }
+                }
+            }
+
+            var itemsList = aggregated.Values
+                .OrderBy(x => x.BuildingName)
+                .ThenBy(x => x.DoorNumber)
+                .ToList();
+
+            foreach (var x in itemsList)
+            {
+                var notes = unitNotes[x.BuildingUnitId];
+                x.StatusNote = notes.Any()
+                    ? string.Join(" | ", notes.Take(4)) + (notes.Count > 4 ? $" (+{notes.Count - 4} kalem)" : "")
+                    : "Muaf";
+            }
+
+            return new ExpenseDistributionPreviewResult
+            {
+                Success = true,
+                Message = $"{year}-{month:00} karma bütçe önizlemesi hazır.",
+                ScopeLabel = $"Karma Bütçe ({subPreviews.Count} Kalem)",
+                DistributionRule = "Karma",
+                TotalAmount = itemsList.Sum(i => i.TotalShareAmount),
+                ParticipatingUnitCount = itemsList.Count(i => i.TotalShareAmount > 0m),
+                ExemptUnitCount = itemsList.Count(i => i.TotalShareAmount <= 0m),
+                Items = itemsList
+            };
         }
 
         public async Task<GovernanceActionResult> DistributeAllRecurringBudgetAsync(int buildingId, int year, int month, bool includeStaffCosts, string actorUserId)
@@ -369,7 +536,8 @@ namespace GMK360.Web.Services
                         "Personel",
                         ExpenseScopeType.Building,
                         100m,
-                        null);
+                        null,
+                        "Personel");
                     if (opRes.Success)
                     {
                         postedCount++;
@@ -395,7 +563,8 @@ namespace GMK360.Web.Services
                         "Personel",
                         ExpenseScopeType.Building,
                         100m,
-                        100m);
+                        100m,
+                        "Personel");
                     if (sevRes.Success)
                     {
                         postedCount++;

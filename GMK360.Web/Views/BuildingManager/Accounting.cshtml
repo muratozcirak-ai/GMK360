@@ -1,28 +1,54 @@
 @model GMK360.Core.Entities.Building
 @{
-    ViewData["Title"] = "Tam Muhasebe: Kasa, Banka, Personel SGK, Kıdem Fonu & Puantaj";
+    ViewData["Title"] = "Muhasebe, Gider Türleri, Kasa & Personel";
     Layout = "~/Views/Shared/_FacilityLayout.cshtml";
     var bankAccounts = ViewBag.BankAccounts as List<GMK360.Core.Entities.BankAccount> ?? new List<GMK360.Core.Entities.BankAccount>();
     var buildings = ViewBag.Buildings as List<GMK360.Core.Entities.Building> ?? new List<GMK360.Core.Entities.Building>();
     var buildingStaffs = ViewBag.BuildingStaffs as List<GMK360.Core.Entities.BuildingStaff> ?? new List<GMK360.Core.Entities.BuildingStaff>();
     var monthlyPayrolls = ViewBag.MonthlyPayrolls as List<GMK360.Core.Entities.BuildingStaffMonthlyPayroll> ?? new List<GMK360.Core.Entities.BuildingStaffMonthlyPayroll>();
+    var expenses = ViewBag.Expenses as List<GMK360.Core.Entities.BuildingExpense> ?? new List<GMK360.Core.Entities.BuildingExpense>();
+    var fixedExpenses = ViewBag.FixedExpenses as List<GMK360.Core.Entities.BuildingFixedExpense> ?? new List<GMK360.Core.Entities.BuildingFixedExpense>();
+    var expenseGroups = ViewBag.ExpenseGroups as List<GMK360.Core.Entities.DefinitionValue> ?? new List<GMK360.Core.Entities.DefinitionValue>();
     var budget = ViewBag.BudgetSummary as GMK360.Web.Services.BuildingMonthlyBudgetSummary ?? new GMK360.Web.Services.BuildingMonthlyBudgetSummary();
     var holidays = ViewBag.Holidays as List<GMK360.Web.Helpers.TurkishHolidayItem> ?? new List<GMK360.Web.Helpers.TurkishHolidayItem>();
 
+    decimal totalCollectedDues = ViewBag.TotalCollectedDues is decimal tcd ? tcd : 0m;
+    string activeTab = (ViewBag.ActiveTab as string ?? "giderler").ToLowerInvariant();
+    string? selectedGroup = ViewBag.SelectedExpenseGroup as string;
+
+    var activeExpenses = expenses.Where(e => !e.IsArchived && e.ReversalOfExpenseId == null).ToList();
+    decimal totalOperational = activeExpenses.Where(e => e.ExpenseType != GMK360.Core.Entities.BuildingExpenseType.CapitalExpenditure).Sum(e => e.TotalAmount);
+    decimal totalCapital = activeExpenses.Where(e => e.ExpenseType == GMK360.Core.Entities.BuildingExpenseType.CapitalExpenditure).Sum(e => e.TotalAmount);
+    decimal totalRecordedExpenses = totalOperational + totalCapital;
+    decimal totalBankBalance = bankAccounts.Sum(a => a.CurrentBalance);
+    decimal netCashSummary = totalCollectedDues - totalRecordedExpenses;
+
+    var filteredExpenses = string.IsNullOrWhiteSpace(selectedGroup)
+        ? expenses
+        : expenses.Where(e => string.Equals(e.ExpenseGroup, selectedGroup, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    var filteredFixed = string.IsNullOrWhiteSpace(selectedGroup)
+        ? fixedExpenses
+        : fixedExpenses.Where(f => string.Equals(f.ExpenseGroup, selectedGroup, StringComparison.OrdinalIgnoreCase)).ToList();
+
     bool allSgkClear = monthlyPayrolls.Any() && monthlyPayrolls.All(p => p.IsSgkPaid);
     int pendingSgkCount = monthlyPayrolls.Count(p => !p.IsSgkPaid);
+
+    string GetGroupDisplayName(string? code) =>
+        expenseGroups.FirstOrDefault(g => string.Equals(g.SystemCode, code, StringComparison.OrdinalIgnoreCase))?.Name ?? (code ?? "Diğer");
 }
 
 <div class="container-fluid py-3 px-1">
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 bg-white p-4 rounded-4 shadow-sm">
         <div>
-            <h2 class="fw-bold text-dark mb-1"><i class="bi bi-wallet2 text-success me-2"></i>Tam Muhasebe: Kasa, Personel SGK, Kıdem Fonu &amp; Puantaj</h2>
-            <p class="text-muted small mb-0">@Model.Name - İşletme maaş/SGK kasası, Malik Kıdem Tazminatı fonu, bayram çift yevmiye ve izin çakışma kontrolü</p>
+            <h2 class="fw-bold text-dark mb-1"><i class="bi bi-wallet2 text-success me-2"></i>Muhasebe, Gider Türleri &amp; Kasa</h2>
+            <p class="text-muted small mb-0">@Model.Name — 5 dinamik gider türü (Personel, Abonelik/Fatura, Bakım, Demirbaş, İdari), banka/kasa özeti ve puantaj masası</p>
         </div>
         <div class="d-flex flex-wrap gap-2 align-items-center">
             @if (buildings.Count > 1)
             {
                 <form method="get" class="d-flex">
+                    <input type="hidden" name="tab" value="@activeTab" />
                     <select name="buildingId" class="form-select form-select-sm" onchange="this.form.submit()">
                         @foreach (var b in buildings)
                         {
@@ -38,8 +64,14 @@
                     </select>
                 </form>
             }
+            <button class="btn btn-outline-success rounded-pill px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#addFixedExpenseModal">
+                <i class="bi bi-calendar-plus me-1"></i> + Sabit Gider / Abonelik
+            </button>
+            <button class="btn btn-danger rounded-pill px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#newExpenseDirectModal">
+                <i class="bi bi-plus-circle me-1"></i> + Fatura / Gider İşle
+            </button>
             <button class="btn btn-success rounded-pill px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#addBuildingStaffModal">
-                <i class="bi bi-person-plus me-1"></i> + Kadro Personeli Ekle
+                <i class="bi bi-person-plus me-1"></i> + Kadro Personeli
             </button>
             <a asp-action="Detail" asp-route-id="@Model.Id" class="btn btn-outline-secondary rounded-pill px-3">Binaya Dön</a>
         </div>
@@ -49,6 +81,13 @@
     {
         <div class="alert alert-success alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
             @TempData["Success"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
+            @TempData["SuccessMessage"]
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     }
@@ -67,60 +106,281 @@
         </div>
     }
 
-    <!-- ÖZET BÜTÇE & KIDEM FONU & SGK DENETİM ÇUBUĞU -->
-    <div class="row g-3 mb-4">
+    <!-- KASA, TAHAKKUK & BÜTÇE ÖZET KARTLARI -->
+    <div class="row g-3 mb-3">
         <div class="col-xl-3 col-md-6">
-            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-start border-4 border-primary h-100">
-                <span class="text-muted small fw-bold text-uppercase">Aylık İşletme Yükü (Oturan)</span>
-                <h3 class="fw-bold text-primary mb-1">@budget.TotalMonthlyOperatingBudget.ToString("N2") ₺</h3>
-                <small class="text-muted">Personel + SGK: @budget.MonthlyStaffOperatingCost.ToString("N0") ₺ | Sabit: @budget.MonthlyFixedOperatingCost.ToString("N0") ₺</small>
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-start border-4 border-success h-100">
+                <span class="text-muted small fw-bold text-uppercase">Tahsil Edilen Aidat (Giriş)</span>
+                <h3 class="fw-bold text-success mb-1">@totalCollectedDues.ToString("N2") ₺</h3>
+                <small class="text-muted">Tahakkuk defterinde ödenmiş toplam</small>
             </div>
         </div>
         <div class="col-xl-3 col-md-6">
             <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-start border-4 border-danger h-100">
-                <span class="text-muted small fw-bold text-uppercase">Kıdem Fonu &amp; Demirbaş (Malik)</span>
-                <h3 class="fw-bold text-danger mb-1">@budget.TotalMonthlyCapitalBudget.ToString("N2") ₺/ay</h3>
-                <small class="text-muted">Aylık Kıdem Karşılığı: @budget.MonthlySeveranceFundTotal.ToString("N0") ₺ (Malik Kasası)</small>
+                <span class="text-muted small fw-bold text-uppercase">Gerçekleşen Gider (Çıkış)</span>
+                <h3 class="fw-bold text-danger mb-1">@totalRecordedExpenses.ToString("N2") ₺</h3>
+                <small class="text-muted">İşletme: @totalOperational.ToString("N0") ₺ | Demirbaş: @totalCapital.ToString("N0") ₺</small>
             </div>
         </div>
         <div class="col-xl-3 col-md-6">
-            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-start border-4 border-success h-100">
-                <span class="text-muted small fw-bold text-uppercase">Tahmini Min. Daire Aidatı</span>
-                <h3 class="fw-bold text-success mb-1">@budget.EstimatedMinOperatingDuesPerUnit.ToString("N2") ₺</h3>
-                <small class="text-muted">@budget.ActiveUnitCount aktif bölüm için İşletme (Malik ek fon: @budget.EstimatedSeverancePerOwnerUnit.ToString("N0") ₺)</small>
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-start border-4 border-primary h-100">
+                <span class="text-muted small fw-bold text-uppercase">Banka &amp; Net Kasa Dengesi</span>
+                <h3 class="fw-bold @(netCashSummary >= 0 ? "text-primary" : "text-warning-emphasis") mb-1">@netCashSummary.ToString("N2") ₺</h3>
+                <small class="text-muted">Kayıtlı Banka Bakiyesi: @totalBankBalance.ToString("N2") ₺</small>
             </div>
         </div>
         <div class="col-xl-3 col-md-6">
             <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-start border-4 @(allSgkClear ? "border-success" : "border-warning") h-100">
-                <span class="text-muted small fw-bold text-uppercase">SGK Bildirge &amp; Denetim Raporu</span>
+                <span class="text-muted small fw-bold text-uppercase">Min. Aidat &amp; SGK Denetimi</span>
+                <h3 class="fw-bold text-dark mb-1">@budget.EstimatedMinOperatingDuesPerUnit.ToString("N2") ₺</h3>
                 @if (!monthlyPayrolls.Any())
                 {
-                    <h5 class="fw-bold text-secondary mb-1">Henüz Bordro Kesilmedi</h5>
-                    <small class="text-muted">Aşağıdan aylık puantaj oluşturun.</small>
+                    <small class="text-muted">@budget.ActiveUnitCount bölüm • Personel bordrosu bekliyor</small>
                 }
                 else if (allSgkClear)
                 {
-                    <h4 class="fw-bold text-success mb-1"><i class="bi bi-shield-check me-1"></i>SGK Borcu Yoktur</h4>
-                    <small class="text-muted">Kesilen tüm dönemlerin SGK primi ödenmiş.</small>
+                    <small class="text-success fw-semibold"><i class="bi bi-shield-check me-1"></i>SGK Borcu Yoktur</small>
                 }
                 else
                 {
-                    <h4 class="fw-bold text-warning-emphasis mb-1">@pendingSgkCount Dönem SGK Bekliyor</h4>
-                    <small class="text-muted">Denetim için SGK ödemesini işleyin.</small>
+                    <small class="text-warning-emphasis fw-semibold">@pendingSgkCount dönem SGK bekliyor</small>
                 }
             </div>
         </div>
     </div>
 
-    <div class="row g-4">
-        <!-- 1. SABİT PERSONEL & KIDEM FONU & İZİN KARTLARI -->
-        <div class="col-lg-8">
+    <!-- 5 ANA GİDER TÜRÜ HIZLI FİLTRE ŞERİDİ (LOOKUP) -->
+    <div class="row g-2 mb-4">
+        @foreach (var grp in expenseGroups)
+        {
+            decimal grpTotal = activeExpenses
+                .Where(e => string.Equals(e.ExpenseGroup, grp.SystemCode, StringComparison.OrdinalIgnoreCase))
+                .Sum(e => e.TotalAmount);
+            bool isSelected = string.Equals(selectedGroup, grp.SystemCode, StringComparison.OrdinalIgnoreCase);
+            <div class="col-lg col-md-4 col-6">
+                <a href="@Url.Action("Accounting", new { buildingId = Model.Id, tab = "giderler", expenseGroup = isSelected ? null : grp.SystemCode })"
+                   class="card text-decoration-none border-0 shadow-sm rounded-4 p-3 h-100 @(isSelected ? "bg-primary text-white" : "bg-white text-dark")">
+                    <div class="small fw-bold text-truncate @(isSelected ? "text-white-50" : "text-muted")">@grp.Name</div>
+                    <div class="fs-5 fw-bold mt-1">@grpTotal.ToString("N2") ₺</div>
+                </a>
+            </div>
+        }
+    </div>
+
+    <!-- BİRLEŞİK SEKMELER -->
+    <ul class="nav nav-pills gap-2 mb-3 bg-white p-2 rounded-4 shadow-sm" id="accountingTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold rounded-pill px-4 @(activeTab == "giderler" ? "active" : "")"
+                    id="tabGiderlerBtn" data-bs-toggle="tab" data-bs-target="#tabGiderler" type="button" role="tab">
+                <i class="bi bi-receipt me-1"></i> 1. Giderler, Abonelikler &amp; Faturalar (@expenses.Count)
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold rounded-pill px-4 @(activeTab == "personel" ? "active" : "")"
+                    id="tabPersonelBtn" data-bs-toggle="tab" data-bs-target="#tabPersonel" type="button" role="tab">
+                <i class="bi bi-people me-1"></i> 2. Personel, SGK &amp; Puantaj (@buildingStaffs.Count)
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold rounded-pill px-4 @(activeTab == "kasa" ? "active" : "")"
+                    id="tabKasaBtn" data-bs-toggle="tab" data-bs-target="#tabKasa" type="button" role="tab">
+                <i class="bi bi-bank me-1"></i> 3. Banka, Kasa &amp; Tatil Takvimi (@bankAccounts.Count)
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <!-- SEKME 1: SABİT BÜTÇE ŞABLONLARI + GERÇEKLEŞEN FATURALAR -->
+        <div class="tab-pane fade @(activeTab == "giderler" ? "show active" : "")" id="tabGiderler" role="tabpanel">
+            <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+                <span class="small fw-bold text-muted me-1">Gider Türü Filtresi:</span>
+                <a href="@Url.Action("Accounting", new { buildingId = Model.Id, tab = "giderler" })"
+                   class="btn btn-sm rounded-pill @(string.IsNullOrWhiteSpace(selectedGroup) ? "btn-dark" : "btn-outline-secondary")">
+                    Tümü
+                </a>
+                @foreach (var grp in expenseGroups)
+                {
+                    bool activeChip = string.Equals(selectedGroup, grp.SystemCode, StringComparison.OrdinalIgnoreCase);
+                    <a href="@Url.Action("Accounting", new { buildingId = Model.Id, tab = "giderler", expenseGroup = grp.SystemCode })"
+                       class="btn btn-sm rounded-pill @(activeChip ? "btn-primary" : "btn-outline-primary")">
+                        @grp.Name
+                    </a>
+                }
+            </div>
+
+            <!-- AYLIK SABİT GİDERLER & ABONELİK ŞABLONLARI -->
+            <div class="card shadow-sm border-0 rounded-4 mb-4 bg-white">
+                <div class="card-header bg-white border-bottom p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-calendar2-week text-success me-2"></i>Aylık Sabit Giderler, Abonelikler &amp; KMK Kuralları</h5>
+                        <small class="text-muted">Elektrik, su, doğalgaz, asansör bakım sözleşmeleri — Toplu Aidat ekranında karma kurallarla tek tıkla dağıtılır</small>
+                    </div>
+                    <a href="/BuildingManager/Aidatlar?buildingId=@Model.Id" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-semibold">
+                        Aidat &amp; Karma Dağıtıma Git &rarr;
+                    </a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light small">
+                                <tr>
+                                    <th class="ps-3">Ödeme Günü</th>
+                                    <th>Gider Türü (Lookup)</th>
+                                    <th>Başlık / Kurum</th>
+                                    <th>Kapsam (Kasa)</th>
+                                    <th>Dağıtım Kuralı</th>
+                                    <th>Aylık Tutar</th>
+                                    <th class="pe-3 text-end">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (!filteredFixed.Any())
+                                {
+                                    <tr>
+                                        <td colspan="7" class="text-center py-4 text-muted small">
+                                            Bu filtrede tanımlı sabit gider / abonelik yok. Sağ üstten <strong>+ Sabit Gider / Abonelik</strong> ekleyebilirsiniz.
+                                        </td>
+                                    </tr>
+                                }
+                                @foreach (var fx in filteredFixed)
+                                {
+                                    bool isDemirbas = fx.ExpenseScope == "Demirbas";
+                                    <tr>
+                                        <td class="ps-3 small fw-bold">Ayın @(fx.DueDayOfMonth). Günü</td>
+                                        <td><span class="badge bg-light text-dark border">@GetGroupDisplayName(fx.ExpenseGroup)</span></td>
+                                        <td>
+                                            <strong>@fx.Title</strong>
+                                            @if (!string.IsNullOrWhiteSpace(fx.ProviderName))
+                                            {
+                                                <small class="d-block text-muted">@fx.ProviderName @(!string.IsNullOrWhiteSpace(fx.SubscriberNo) ? $"({fx.SubscriberNo})" : "")</small>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="badge @(isDemirbas ? "bg-danger" : "bg-primary")">
+                                                @(isDemirbas ? "Demirbaş (Malik)" : "İşletme (Oturan)")
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-light text-dark border">@fx.DistributionRule</span>
+                                            <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle ms-1">@fx.ExpenseItemKey</span>
+                                            @if (fx.ShopParticipationPercent != 100m)
+                                            {
+                                                <span class="badge @(fx.ShopParticipationPercent == 0m ? "bg-success-subtle text-success" : "bg-warning-subtle text-warning-emphasis") ms-1">Dükkan %@fx.ShopParticipationPercent.ToString("0.##")</span>
+                                            }
+                                            @if (fx.OwnerSplitPercent.HasValue)
+                                            {
+                                                <span class="badge bg-secondary-subtle text-dark ms-1">Malik %@fx.OwnerSplitPercent.Value.ToString("0.##")</span>
+                                            }
+                                        </td>
+                                        <td class="fw-bold">@fx.MonthlyAmount.ToString("N2") ₺</td>
+                                        <td class="pe-3 text-end">
+                                            <form asp-action="DistributeBuildingFixedExpense" asp-controller="BuildingManager" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="fixedExpenseId" value="@fx.Id" />
+                                                <input type="hidden" name="buildingId" value="@fx.BuildingId" />
+                                                <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill px-3">Bu Aya Dağıt</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GERÇEKLEŞEN FATURALAR, SATIN ALMALAR & DEMİRBAŞ DEFTERİ -->
+            <div class="card shadow-sm border-0 rounded-4 bg-white">
+                <div class="card-header bg-white border-bottom p-3">
+                    <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-journal-text text-danger me-2"></i>Gerçekleşen Faturalar, Satın Almalar &amp; Gider Defteri</h5>
+                    <small class="text-muted">Fiziksel silme kapalıdır; hatalı girişlerde Ters Kayıt (Reversal) düzenlenir.</small>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light small">
+                                <tr>
+                                    <th class="ps-3">Tarih</th>
+                                    <th>Gider Türü</th>
+                                    <th>Açıklama</th>
+                                    <th>Cari Yönlendirme (KMK)</th>
+                                    <th>Tutar</th>
+                                    <th>Belge</th>
+                                    <th class="pe-3 text-end">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (!filteredExpenses.Any())
+                                {
+                                    <tr><td colspan="7" class="text-center py-5 text-muted">Bu filtrede gerçekleşen fatura veya gider kaydı yok.</td></tr>
+                                }
+                                else
+                                {
+                                    foreach (var exp in filteredExpenses)
+                                    {
+                                        bool isCapital = exp.ExpenseType == GMK360.Core.Entities.BuildingExpenseType.CapitalExpenditure
+                                            || string.Equals(exp.PayerType, "Owner", StringComparison.OrdinalIgnoreCase);
+                                        bool isReversal = exp.ReversalOfExpenseId != null || exp.TotalAmount < 0;
+                                        <tr class="@(exp.IsArchived ? "table-secondary opacity-75" : "")">
+                                            <td class="ps-3 small">@exp.Date.ToString("dd.MM.yyyy")</td>
+                                            <td><span class="badge bg-light text-dark border">@GetGroupDisplayName(exp.ExpenseGroup)</span></td>
+                                            <td>
+                                                <strong>@exp.Description</strong>
+                                                <div class="small text-muted">@exp.DistributionRule • @exp.ExpenseItemKey</div>
+                                                @if (isReversal) { <span class="badge bg-dark">TERS KAYIT</span> }
+                                                else if (exp.IsArchived) { <span class="badge bg-secondary">İPTAL (ARŞİV)</span> }
+                                            </td>
+                                            <td>
+                                                @if (isCapital)
+                                                {
+                                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">🔨 Demirbaş (Malik + GMSİ)</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary">💡 İşletme (Kiracı / Malik)</span>
+                                                }
+                                            </td>
+                                            <td><strong class="@(exp.TotalAmount < 0 ? "text-danger" : "text-dark")">@exp.TotalAmount.ToString("N2") ₺</strong></td>
+                                            <td>
+                                                @if (!string.IsNullOrWhiteSpace(exp.InvoiceDocumentUrl))
+                                                {
+                                                    <a href="@exp.InvoiceDocumentUrl" target="_blank" class="btn btn-sm btn-outline-info rounded-pill px-2"><i class="bi bi-paperclip"></i> Fatura</a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted small">-</span>
+                                                }
+                                            </td>
+                                            <td class="pe-3 text-end">
+                                                @if (!exp.IsArchived && !isReversal && exp.BuildingId.HasValue)
+                                                {
+                                                    <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-2"
+                                                            onclick="openGiderReversalModal(@exp.Id, @exp.BuildingId.Value, '@System.Web.HttpUtility.JavaScriptStringEncode(exp.Description)')">
+                                                        <i class="bi bi-arrow-counterclockwise"></i> Ters Kayıt
+                                                    </button>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SEKME 2: PERSONEL, SGK & PUANTAJ -->
+        <div class="tab-pane fade @(activeTab == "personel" ? "show active" : "")" id="tabPersonel" role="tabpanel">
             <div class="card shadow-sm border-0 rounded-4 bg-white mb-4">
                 <div class="card-header bg-white border-bottom p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
                     <div>
                         <h5 class="fw-bold text-dark mb-0"><i class="bi bi-people-fill text-success me-2"></i>Bina / Site Sabit Personel Kadrosu (@buildingStaffs.Count)</h5>
                         <small class="text-muted">Net Maaş + SGK İşveren + Vergi İşletme Kasasına; Aylık Kıdem Fonu Malik Kasasına ayrılır.</small>
                     </div>
+                    <button class="btn btn-sm btn-success rounded-pill px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#addBuildingStaffModal">
+                        <i class="bi bi-person-plus me-1"></i> + Kadro Personeli Ekle
+                    </button>
                 </div>
                 <div class="card-body p-3">
                     @if (!buildingStaffs.Any())
@@ -205,7 +465,6 @@
                 </div>
             </div>
 
-            <!-- 2. AYLIK PUANTAJ, BAYRAM ÇİFT YEVMİYE & MAAŞ / SGK ÖDEME TABLOSU -->
             <div class="card shadow-sm border-0 rounded-4 bg-white">
                 <div class="card-header bg-white border-bottom p-3 fw-bold text-dark">
                     <i class="bi bi-calendar2-check text-primary me-2"></i>Aylık Puantaj, Bayram Mesaisi &amp; Maaş / SGK Ödeme Eşleşmesi
@@ -294,53 +553,58 @@
             </div>
         </div>
 
-        <!-- SAĞ KOLON: BANKA HESAPLARI + RESMİ & DİNİ BAYRAM TAKVİMİ -->
-        <div class="col-lg-4">
-            <div class="card shadow-sm border-0 rounded-4 bg-white mb-4">
-                <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
-                    <h5 class="fw-bold text-primary mb-0"><i class="bi bi-bank me-2"></i>Banka Hesapları</h5>
-                    <button class="btn btn-sm btn-primary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#addBankModal">+ Yeni Hesap</button>
-                </div>
-                <div class="card-body">
-                    @if (bankAccounts.Any())
-                    {
-                        <ul class="list-group list-group-flush">
-                            @foreach (var account in bankAccounts)
+        <!-- SEKME 3: BANKA, KASA & TATİL TAKVİMİ -->
+        <div class="tab-pane fade @(activeTab == "kasa" ? "show active" : "")" id="tabKasa" role="tabpanel">
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <div class="card shadow-sm border-0 rounded-4 bg-white mb-4">
+                        <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
+                            <h5 class="fw-bold text-primary mb-0"><i class="bi bi-bank me-2"></i>Banka Hesapları</h5>
+                            <button class="btn btn-sm btn-primary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#addBankModal">+ Yeni Hesap</button>
+                        </div>
+                        <div class="card-body">
+                            @if (bankAccounts.Any())
                             {
-                                <li class="list-group-item px-0 py-3">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <div class="fw-bold text-dark">@account.BankName</div>
-                                        <span class="badge bg-success fs-6">@account.CurrentBalance.ToString("N2") ₺</span>
-                                    </div>
-                                    <div class="text-muted small">@account.AccountName</div>
-                                    <div class="font-monospace small text-primary bg-light p-2 rounded mt-2">@account.IBAN</div>
-                                </li>
+                                <ul class="list-group list-group-flush">
+                                    @foreach (var account in bankAccounts)
+                                    {
+                                        <li class="list-group-item px-0 py-3">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <div class="fw-bold text-dark">@account.BankName</div>
+                                                <span class="badge bg-success fs-6">@account.CurrentBalance.ToString("N2") ₺</span>
+                                            </div>
+                                            <div class="text-muted small">@account.AccountName</div>
+                                            <div class="font-monospace small text-primary bg-light p-2 rounded mt-2">@account.IBAN</div>
+                                        </li>
+                                    }
+                                </ul>
                             }
-                        </ul>
-                    }
-                    else
-                    {
-                        <p class="text-muted text-center py-3 small mb-0">Henüz banka hesabı eklenmemiş.</p>
-                    }
+                            else
+                            {
+                                <p class="text-muted text-center py-3 small mb-0">Henüz banka hesabı eklenmemiş.</p>
+                            }
+                        </div>
+                    </div>
                 </div>
-            </div>
-
-            <div class="card shadow-sm border-0 rounded-4 bg-white">
-                <div class="card-header bg-white border-bottom p-3 fw-bold text-dark">
-                    <i class="bi bi-calendar-event text-warning me-2"></i>@DateTime.Today.Year Resmi &amp; Dini Tatil Takvimi
-                </div>
-                <div class="card-body p-3">
-                    <p class="small text-muted mb-2">Personel tatil gününde çalıştığında puantajda işaretlenen gün kadar <strong>+1 yevmiye (2x)</strong> bayram mesaisi eklenir.</p>
-                    <div class="list-group list-group-flush small">
-                        @foreach (var h in holidays)
-                        {
-                            <div class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
-                                <div>
-                                    <span class="fw-bold text-dark">@h.Date.ToString("dd.MM.yyyy")</span> - @h.Name
-                                </div>
-                                <span class="badge @(h.Category == "Dini" ? "bg-warning text-dark" : "bg-info text-dark")">@h.DayWeight.ToString("0.#")g</span>
+                <div class="col-lg-6">
+                    <div class="card shadow-sm border-0 rounded-4 bg-white">
+                        <div class="card-header bg-white border-bottom p-3 fw-bold text-dark">
+                            <i class="bi bi-calendar-event text-warning me-2"></i>@DateTime.Today.Year Resmi &amp; Dini Tatil Takvimi
+                        </div>
+                        <div class="card-body p-3">
+                            <p class="small text-muted mb-2">Personel tatil gününde çalıştığında puantajda işaretlenen gün kadar <strong>+1 yevmiye (2x)</strong> bayram mesaisi eklenir.</p>
+                            <div class="list-group list-group-flush small">
+                                @foreach (var h in holidays)
+                                {
+                                    <div class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <span class="fw-bold text-dark">@h.Date.ToString("dd.MM.yyyy")</span> - @h.Name
+                                        </div>
+                                        <span class="badge @(h.Category == "Dini" ? "bg-warning text-dark" : "bg-info text-dark")">@h.DayWeight.ToString("0.#")g</span>
+                                    </div>
+                                }
                             </div>
-                        }
+                        </div>
                     </div>
                 </div>
             </div>
@@ -348,7 +612,212 @@
     </div>
 </div>
 
-<!-- 1. Banka Hesabı Modal -->
+<!-- 1. Sabit Bina Gideri / Abonelik Ekle Modalı -->
+<div class="modal fade" id="addFixedExpenseModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="AddBuildingFixedExpense" asp-controller="BuildingManager" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="buildingId" value="@Model.Id" />
+            <input type="hidden" name="returnAction" value="Accounting" />
+            <div class="modal-header bg-success text-white border-0">
+                <h5 class="modal-title fw-bold">Aylık Sabit Gider / Abonelik Tanımla</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-bold small">Gider Türü (Lookup) *</label>
+                    <select name="expenseGroup" class="form-select fw-semibold" required>
+                        @foreach (var grp in expenseGroups)
+                        {
+                            <option value="@grp.SystemCode" selected="@(grp.SystemCode == "FaturaAbonelik" ? "selected" : null)">@grp.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-bold small">Gider Başlığı *</label>
+                    <input type="text" name="title" class="form-control" required placeholder="Örn: Ortak Elektrik, Asansör Bakım, Mali Müşavir" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Kapsam (Hangi Kasa?)</label>
+                    <select name="expenseScope" class="form-select fw-semibold">
+                        <option value="Isletme">İşletme (Oturan / Kiracı Öder)</option>
+                        <option value="Demirbas">Demirbaş (Ev Sahibi / Malik Öder)</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Dağıtım Kuralı</label>
+                    <select name="distributionRule" class="form-select">
+                        <option value="Esit">Eşit (Bölüm Başı)</option>
+                        <option value="ArsaPayi">Arsa Payı Oranlı</option>
+                        <option value="Metrekare">Metrekare Oranlı</option>
+                        <option value="Katsayi">Birim Katsayısı Bazlı</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">KMK Muafiyet Kalemi</label>
+                    <select name="expenseItemKey" class="form-select">
+                        <option value="Genel">Genel Bina Gideri</option>
+                        <option value="Personel">Personel / Kapıcı / Güvenlik</option>
+                        <option value="Asansor">Asansör (Asansör Muaf Hariç)</option>
+                        <option value="Merdiven">Merdiven (Merdiven Muaf Hariç)</option>
+                        <option value="CopTemizlik">Çöp &amp; Çevre Temizliği (%)</option>
+                        <option value="Isinma">Isınma / Ortak Su &amp; Doğalgaz</option>
+                        <option value="Demirbas">Çatı / Cephe / Demirbaş Fonu</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Dükkan Katılımı (%)</label>
+                    <input type="number" step="5" min="0" max="500" name="shopParticipationPercent" class="form-control" value="100" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Site / Blok Kapsamı</label>
+                    <select name="scopeType" class="form-select">
+                        <option value="2">Sadece Bu Blok</option>
+                        <option value="1">Tüm Site Geneli</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Özel Malik Payı % (Opsiyonel)</label>
+                    <input type="number" step="5" min="0" max="100" name="ownerSplitPercent" class="form-control" placeholder="Boş=Standart | 100=Kiracı Muaf" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Aylık Tutar (TL) *</label>
+                    <input type="number" step="0.01" name="monthlyAmount" class="form-control" required placeholder="Örn: 3500" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Ödeme Günü (Ayın Kaçı?)</label>
+                    <input type="number" min="1" max="31" name="dueDayOfMonth" class="form-control" value="15" required />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Kurum / Firma</label>
+                    <input type="text" name="providerName" class="form-control" placeholder="Enerjisa, Kone, İSKİ vb." />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Abone / Sözleşme No</label>
+                    <input type="text" name="subscriberNo" class="form-control" />
+                </div>
+                <div class="col-12">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="isAutoRecurring" value="true" id="autoRecSw" checked>
+                        <label class="form-check-label small fw-bold" for="autoRecSw">Her ay karma aidat bütçesi hesabına dahil et</label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold w-100">Sabit Bütçeye Ekle</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 2. Gerçekleşen Fatura / Satın Alma İşle Modalı -->
+<div class="modal fade" id="newExpenseDirectModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="AddExpense" asp-controller="BuildingManager" method="post" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="buildingId" value="@Model.Id" />
+            <input type="hidden" name="returnAction" value="Accounting" />
+            <div class="modal-header bg-danger text-white border-0">
+                <h5 class="modal-title fw-bold">Fatura / Gider İşle &amp; Dağıt</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-bold small">Gider Türü (Lookup) *</label>
+                    <select name="expenseGroup" class="form-select fw-semibold" required>
+                        @foreach (var grp in expenseGroups)
+                        {
+                            <option value="@grp.SystemCode" selected="@(grp.SystemCode == "FaturaAbonelik" ? "selected" : null)">@grp.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-bold small">Gider / Fatura Açıklaması *</label>
+                    <input type="text" name="description" class="form-control" required placeholder="Örn: Kasım Ortak Elektrik Faturası veya Çatı Aktarımı" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Tutar (TL) *</label>
+                    <input type="number" step="0.01" min="0.01" name="totalAmount" class="form-control fw-bold text-danger" required />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">KMK Cari Kasa *</label>
+                    <select name="expenseType" class="form-select fw-semibold">
+                        <option value="2">💡 İşletme / Sarf (Kiracı / Oturan)</option>
+                        <option value="1">🔨 Demirbaş / Tadilat (Malik + GMSİ)</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">KMK Muafiyet Kalemi</label>
+                    <select name="expenseItemKey" class="form-select">
+                        <option value="Genel">Genel Gider</option>
+                        <option value="Personel">Personel / Güvenlik</option>
+                        <option value="Asansor">Asansör (Muaf Hariç)</option>
+                        <option value="Merdiven">Merdiven (Muaf Hariç)</option>
+                        <option value="CopTemizlik">Çöp &amp; Çevre Temizliği</option>
+                        <option value="Isinma">Isınma / Ortak Su</option>
+                        <option value="Demirbas">Demirbaş / Tadilat</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Dağıtım Kuralı</label>
+                    <select name="distributionRule" class="form-select">
+                        <option value="Esit">Eşit Bölüşüm</option>
+                        <option value="ArsaPayi">Arsa Payı Oranlı</option>
+                        <option value="Metrekare">Brüt m² Oranlı</option>
+                        <option value="Katsayi">Birim Katsayısı Bazlı</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Kapsam</label>
+                    <select name="scopeType" class="form-select">
+                        <option value="2">Bu Blok</option>
+                        <option value="1">Tüm Site</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Dükkan Katılımı (%)</label>
+                    <input type="number" step="5" min="0" max="500" name="shopParticipationPercent" class="form-control" value="100" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Özel Malik Payı %</label>
+                    <input type="number" step="5" min="0" max="100" name="ownerSplitPercent" class="form-control" placeholder="Boş / 50 / 100" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-bold small">Fatura Belgesi (PDF / Fotoğraf)</label>
+                    <input type="file" name="invoiceFile" class="form-control" accept=".pdf,image/*" />
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold w-100">Kaydet &amp; Dairelere Dağıt</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 3. Ters Kayıt Modalı -->
+<div class="modal fade" id="giderReversalModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="RequestExpenseReversal" asp-controller="BuildingManager" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="returnAction" value="Accounting" />
+            <input type="hidden" name="expenseId" id="revExpId" />
+            <input type="hidden" name="buildingId" id="revBldId" />
+            <div class="modal-header bg-dark text-white border-0">
+                <h5 class="modal-title fw-bold">Ters Kayıt (Fatura İptali)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="small text-muted mb-2"><strong id="revExpDesc"></strong> kaydı silinmez; ters kayıt (-) oluşturulur.</p>
+                <textarea name="reason" class="form-control" rows="2" required placeholder="İptal gerekçesi..."></textarea>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="submit" class="btn btn-danger rounded-pill w-100 fw-bold">Ters Kayıt Uygula</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 4. Banka Hesabı Modal -->
 <div class="modal fade" id="addBankModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <form class="modal-content rounded-4 border-0 shadow" asp-action="AddBankAccount" method="post">
@@ -370,7 +839,7 @@
     </div>
 </div>
 
-<!-- 2. Tam Bordrolu Kadro Personeli Ekle Modal -->
+<!-- 5. Tam Bordrolu Kadro Personeli Ekle Modal -->
 <div class="modal fade" id="addBuildingStaffModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <form class="modal-content rounded-4 border-0 shadow" asp-action="AddBuildingStaff" asp-controller="BuildingManager" method="post">
@@ -444,7 +913,7 @@
     </div>
 </div>
 
-<!-- 3. Aylık Puantaj & Bayram Çift Yevmiye Modal -->
+<!-- 6. Aylık Puantaj & Bayram Çift Yevmiye Modal -->
 <div class="modal fade" id="payrollCalcModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <form class="modal-content rounded-4 border-0 shadow" asp-action="GenerateBuildingStaffPayroll" asp-controller="BuildingManager" method="post">
@@ -488,7 +957,7 @@
     </div>
 </div>
 
-<!-- 4. İzin Planla Modal (Çakışma Kontrollü) -->
+<!-- 7. İzin Planla Modal (Çakışma Kontrollü) -->
 <div class="modal fade" id="planLeaveModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <form class="modal-content rounded-4 border-0 shadow" asp-action="PlanBuildingStaffLeave" asp-controller="BuildingManager" method="post">
@@ -534,7 +1003,7 @@
     </div>
 </div>
 
-<!-- 5. Aylık Bordro Öde & İşletme / Kıdem Carilerine Yansıt Modal -->
+<!-- 8. Aylık Bordro Öde & İşletme / Kıdem Carilerine Yansıt Modal -->
 <div class="modal fade" id="payMonthlyPayrollModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <form class="modal-content rounded-4 border-0 shadow" asp-action="PayBuildingStaffPayroll" asp-controller="BuildingManager" method="post">
@@ -585,6 +1054,13 @@
 
 <script>
     let currentDailyRate = 0;
+
+    function openGiderReversalModal(expenseId, buildingId, desc) {
+        document.getElementById('revExpId').value = expenseId;
+        document.getElementById('revBldId').value = buildingId;
+        document.getElementById('revExpDesc').innerText = desc;
+        new bootstrap.Modal(document.getElementById('giderReversalModal')).show();
+    }
 
     function onStaffRolePresetChange() {
         const val = document.getElementById('staffRoleTypeSelect').value;

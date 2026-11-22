@@ -196,6 +196,37 @@ namespace GMK360.Data.Seeds
                 await context.SaveChangesAsync();
             }
 
+            // 8. Bina & Site Yönetimi - Dinamik Gider Türleri (Lookup)
+            var expenseGroupCat = await context.DefinitionCategories.FirstOrDefaultAsync(c => c.SystemCode == "FACILITY_EXPENSE_GROUP");
+            if (expenseGroupCat == null)
+            {
+                expenseGroupCat = new DefinitionCategory { Name = "Bina Gider Türleri", SystemCode = "FACILITY_EXPENSE_GROUP" };
+                context.DefinitionCategories.Add(expenseGroupCat);
+                await context.SaveChangesAsync();
+            }
+
+            var existingGroupCodes = await context.DefinitionValues
+                .Where(v => v.CategoryId == expenseGroupCat.Id)
+                .Select(v => v.SystemCode)
+                .ToListAsync();
+
+            var defaultExpenseGroups = new[]
+            {
+                new DefinitionValue { CategoryId = expenseGroupCat.Id, Name = "Personel Giderleri (Maaş, SGK, Kıdem)", SystemCode = "Personel", Order = 1 },
+                new DefinitionValue { CategoryId = expenseGroupCat.Id, Name = "Faturalar & Abonelikler (Elektrik, Su, Gaz)", SystemCode = "FaturaAbonelik", Order = 2 },
+                new DefinitionValue { CategoryId = expenseGroupCat.Id, Name = "Bakım, Onarım & Sarf Giderleri", SystemCode = "BakimOnarim", Order = 3 },
+                new DefinitionValue { CategoryId = expenseGroupCat.Id, Name = "Demirbaş & Büyük Tadilat (Malik)", SystemCode = "DemirbasYatirim", Order = 4 },
+                new DefinitionValue { CategoryId = expenseGroupCat.Id, Name = "Yönetim, Sigorta & İdari Giderler", SystemCode = "YonetimIdari", Order = 5 }
+            };
+
+            foreach (var grp in defaultExpenseGroups)
+            {
+                if (!existingGroupCodes.Contains(grp.SystemCode))
+                {
+                    context.DefinitionValues.Add(grp);
+                }
+            }
+
             await context.SaveChangesAsync();
         }
     }

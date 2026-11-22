@@ -178,13 +178,29 @@
                                         {
                                             <span class="badge bg-success">Dolu</span>
                                         }
-                                        @if (!string.IsNullOrWhiteSpace(unit.ResidentQuickPinHash))
+                                        @{
+                                            bool hasOwnerPin = !string.IsNullOrWhiteSpace(unit.OwnerQuickPinHash) || !string.IsNullOrWhiteSpace(unit.ResidentQuickPinHash);
+                                            bool hasTenant = !unit.IsEmpty && (!string.IsNullOrWhiteSpace(unit.TenantName) || !string.IsNullOrWhiteSpace(unit.TenantPhone));
+                                            bool hasTenantPin = !string.IsNullOrWhiteSpace(unit.TenantQuickPinHash) || !string.IsNullOrWhiteSpace(unit.ResidentQuickPinHash);
+                                        }
+                                        @if (hasOwnerPin)
                                         {
-                                            <span class="badge bg-success-subtle text-success border border-success-subtle d-block mt-1">🔑 PWA PIN Hazır</span>
+                                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle d-block mt-1">🔑 Malik PIN Hazır</span>
                                         }
                                         else
                                         {
-                                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle d-block mt-1">PIN Yok</span>
+                                            <span class="badge bg-light text-muted border d-block mt-1">Malik PIN Yok</span>
+                                        }
+                                        @if (hasTenant)
+                                        {
+                                            if (hasTenantPin)
+                                            {
+                                                <span class="badge bg-success-subtle text-success border border-success-subtle d-block mt-1">🔑 Kiracı PIN Hazır</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-light text-danger border d-block mt-1">Kiracı PIN Yok</span>
+                                            }
                                         }
                                     </td>
                                     <td class="pe-3 text-end">
@@ -206,9 +222,9 @@
     </div>
 </div>
 
-<!-- Bölüm Malik & Kiracı Güncelleme Modalı -->
+<!-- Bölüm Malik & Kiracı Güncelleme Modalı (2 Sekmeli Sade Düzen) -->
 <div class="modal fade" id="editUnitContactsModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <form class="modal-content rounded-4 border-0 shadow" asp-action="UpdateUnitContacts" asp-controller="BuildingManager" method="post">
             @Html.AntiForgeryToken()
             <input type="hidden" name="unitId" id="euUnitId" />
@@ -218,92 +234,138 @@
                 <h5 class="modal-title fw-bold"><i class="bi bi-person-vcard me-2"></i><span id="euTitle">Bölüm Bilgileri</span></h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-4 row g-3">
-                <div class="col-12">
-                    <label class="form-label fw-bold small">Ev Sahibi / Mülk Sahibi Adı Soyadı</label>
-                    <input type="text" name="ownerName" id="euOwnerName" class="form-control" placeholder="Örn: Ahmet Yılmaz" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">Malik Telefon</label>
-                    <input type="text" name="ownerPhone" id="euOwnerPhone" class="form-control" placeholder="05XX XXX XX XX" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">Malik E-Posta</label>
-                    <input type="email" name="ownerEmail" id="euOwnerEmail" class="form-control" placeholder="malik@ornek.com" />
-                </div>
-                <div class="col-12 border-top pt-3">
-                    <label class="form-label fw-bold small">Kiracı Adı Soyadı (Varsa)</label>
-                    <input type="text" name="tenantName" id="euTenantName" class="form-control" placeholder="Boş bırakılabilir (malik oturuyorsa boş)" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">Kiracı Telefon</label>
-                    <input type="text" name="tenantPhone" id="euTenantPhone" class="form-control" placeholder="05XX XXX XX XX" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">Kiracı E-Posta</label>
-                    <input type="email" name="tenantEmail" id="euTenantEmail" class="form-control" placeholder="kiraci@ornek.com" />
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold small">Arsa Payı (Demirbaş)</label>
-                    <input type="number" step="0.0001" name="landShare" id="euLandShare" class="form-control" placeholder="Örn: 12.5" />
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold small">Brüt m²</label>
-                    <input type="number" step="0.1" name="grossSquareMeters" id="euGrossSqm" class="form-control" placeholder="Örn: 110" />
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold small">Sakin PWA PIN (4-6 Hane)</label>
-                    <div class="input-group">
-                        <input type="text" maxlength="6" name="residentQuickPin" id="euQuickPin" class="form-control" placeholder="Örn: 1234" />
-                        <button type="button" class="btn btn-outline-secondary" onclick="generatePinForInput('euQuickPin')" title="Rastgele PIN Üret">🎲</button>
-                    </div>
-                </div>
-                <div class="col-12">
-                    <div class="p-2 rounded-3 bg-light border d-flex flex-wrap justify-content-between align-items-center gap-2">
-                        <small class="text-muted"><i class="bi bi-phone me-1 text-success"></i> Sakinler <strong>Telefon + PIN</strong> (Giriş Ekranı) veya burada yazan <strong>E-Posta</strong> ile üye olup otomatik eşleşir.</small>
-                        <button type="button" class="btn btn-sm btn-outline-success rounded-pill fw-semibold" onclick="copyResidentInviteFromEdit()">
-                            <i class="bi bi-whatsapp me-1"></i> Giriş Bilgisi Kopyala
+            <div class="modal-body p-4">
+                <ul class="nav nav-pills nav-fill gap-2 mb-3 bg-light p-1 rounded-3 border" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active fw-bold small py-2" id="euTabResidentsBtn" data-bs-toggle="tab" data-bs-target="#euTabResidents" type="button" role="tab">
+                            <i class="bi bi-people me-1"></i> 1. Sakinler &amp; Ayrı PWA PIN
                         </button>
-                    </div>
-                </div>
-                <div class="col-12 border-top pt-3">
-                    <div class="fw-bold small text-primary mb-2"><i class="bi bi-calculator me-1"></i> Aidat Katsayısı &amp; Kalem Muafiyetleri (Yönetim Planı)</div>
-                    <div class="row g-2">
-                        <div class="col-md-4">
-                            <label class="form-label fw-semibold small mb-1">Aidat Katsayısı</label>
-                            <input type="number" step="0.05" min="0" max="10" name="duesMultiplier" id="euDuesMultiplier" class="form-control form-control-sm" value="1" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-semibold small mb-1">Sabit Aylık Aidat (₺)</label>
-                            <input type="number" step="0.01" min="0" name="fixedMonthlyDues" id="euFixedDues" class="form-control form-control-sm" placeholder="Opsiyonel" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-semibold small mb-1">Çöp/Temizlik (%)</label>
-                            <input type="number" step="5" min="0" max="500" name="cleaningParticipationPercent" id="euCleaningPct" class="form-control form-control-sm" value="100" />
-                        </div>
-                        <div class="col-md-6 mt-2">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" name="isExemptFromElevator" value="true" id="euExemptElev">
-                                <input type="hidden" name="isExemptFromElevator" value="false" />
-                                <label class="form-check-label small fw-semibold" for="euExemptElev">Asansör Giderinden Muaf</label>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold small py-2" id="euTabRulesBtn" data-bs-toggle="tab" data-bs-target="#euTabRules" type="button" role="tab">
+                            <i class="bi bi-sliders me-1"></i> 2. Tapu &amp; Aidat Kuralları (Yönetim Planı)
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <!-- SEKME 1: MALİK & KİRACI AYRI GİRİŞ BİLGİLERİ -->
+                    <div class="tab-pane fade show active" id="euTabResidents" role="tabpanel">
+                        <div class="border rounded-4 p-3 mb-3 bg-warning bg-opacity-10 border-warning-subtle">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-bold small text-dark"><i class="bi bi-house-heart me-1 text-warning-emphasis"></i> Ev Sahibi (Malik) &amp; Malik PWA Girişi</span>
+                                <button type="button" class="btn btn-sm btn-outline-dark rounded-pill fw-semibold" onclick="copyResidentInviteByRole('Owner')">
+                                    <i class="bi bi-whatsapp me-1"></i> Malik Daveti Kopyala
+                                </button>
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold small mb-1">Ev Sahibi Adı Soyadı</label>
+                                    <input type="text" name="ownerName" id="euOwnerName" class="form-control form-control-sm" placeholder="Örn: Ahmet Yılmaz" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold small mb-1">Malik Telefon (PWA Girişi)</label>
+                                    <input type="text" name="ownerPhone" id="euOwnerPhone" class="form-control form-control-sm" placeholder="05XX XXX XX XX" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold small mb-1">Malik E-Posta</label>
+                                    <input type="email" name="ownerEmail" id="euOwnerEmail" class="form-control form-control-sm" placeholder="malik@ornek.com" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold small mb-1">Malik PWA PIN (4-6 Hane)</label>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" maxlength="6" name="ownerQuickPin" id="euOwnerQuickPin" class="form-control" placeholder="Değişmeyecekse boş bırakın" />
+                                        <button type="button" class="btn btn-outline-secondary" onclick="generatePinForInput('euOwnerQuickPin')" title="Rastgele PIN Üret">🎲</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-md-6 mt-2">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" name="isExemptFromStairwell" value="true" id="euExemptStair">
-                                <input type="hidden" name="isExemptFromStairwell" value="false" />
-                                <label class="form-check-label small fw-semibold" for="euExemptStair">Merdiven/Aydınlatmadan Muaf</label>
+
+                        <div class="border rounded-4 p-3 mb-3 bg-info bg-opacity-10 border-info-subtle">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-bold small text-dark"><i class="bi bi-key me-1 text-info-emphasis"></i> Kiracı (Varsa) &amp; Kiracı PWA Girişi</span>
+                                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill fw-semibold" onclick="copyResidentInviteByRole('Tenant')">
+                                    <i class="bi bi-whatsapp me-1"></i> Kiracı Daveti Kopyala
+                                </button>
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold small mb-1">Kiracı Adı Soyadı</label>
+                                    <input type="text" name="tenantName" id="euTenantName" class="form-control form-control-sm" placeholder="Malik oturuyorsa boş bırakın" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold small mb-1">Kiracı Telefon (PWA Girişi)</label>
+                                    <input type="text" name="tenantPhone" id="euTenantPhone" class="form-control form-control-sm" placeholder="05XX XXX XX XX" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold small mb-1">Kiracı E-Posta</label>
+                                    <input type="email" name="tenantEmail" id="euTenantEmail" class="form-control form-control-sm" placeholder="kiraci@ornek.com" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold small mb-1">Kiracı PWA PIN (4-6 Hane)</label>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" maxlength="6" name="tenantQuickPin" id="euTenantQuickPin" class="form-control" placeholder="Değişmeyecekse boş bırakın" />
+                                        <button type="button" class="btn btn-outline-secondary" onclick="generatePinForInput('euTenantQuickPin')" title="Rastgele PIN Üret">🎲</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-12 mt-1">
-                            <input type="text" name="duesRuleNote" id="euRuleNote" class="form-control form-control-sm" placeholder="Yönetim Planı Notu (örn: Dış girişli dükkan, çöp %150)" />
+
+                        <div class="d-flex justify-content-between align-items-center bg-light p-2 rounded-3 border">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" name="isEmpty" value="true" id="euIsEmpty">
+                                <label class="form-check-label fw-bold small" for="euIsEmpty">Bölüm Şu An Boş (Kiracı Temizlenir)</label>
+                            </div>
+                            <small class="text-muted">Malik ve Kiracı kendi Telefon + PIN'i ile ayrı panel görür.</small>
                         </div>
                     </div>
-                </div>
-                <div class="col-12 border-top pt-2">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" name="isEmpty" value="true" id="euIsEmpty">
-                        <label class="form-check-label fw-bold small" for="euIsEmpty">Bölüm Şu An Boş</label>
+
+                    <!-- SEKME 2: BÖLÜM TAPU & YÖNETİM PLANI KURALLARI -->
+                    <div class="tab-pane fade" id="euTabRules" role="tabpanel">
+                        <div class="alert alert-light border small text-muted mb-3">
+                            <i class="bi bi-info-circle me-1 text-primary"></i>
+                            <strong>Tapu &amp; Yönetim Planı Alanları:</strong> Arsa payı (Malik demirbaş dağıtımı) ve aidat katsayı/muafiyetleri bağımsız bölüme bağlıdır; kiracı değiştiğinde değişmez.
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">Arsa Payı (Malik / Demirbaş)</label>
+                                <input type="number" step="0.0001" name="landShare" id="euLandShare" class="form-control" placeholder="Örn: 12.5" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">Brüt m²</label>
+                                <input type="number" step="0.1" name="grossSquareMeters" id="euGrossSqm" class="form-control" placeholder="Örn: 110" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small">Aidat Katsayısı</label>
+                                <input type="number" step="0.05" min="0" max="10" name="duesMultiplier" id="euDuesMultiplier" class="form-control" value="1" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small">Sabit Aylık Aidat (₺)</label>
+                                <input type="number" step="0.01" min="0" name="fixedMonthlyDues" id="euFixedDues" class="form-control" placeholder="Opsiyonel" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small">Çöp/Temizlik (%)</label>
+                                <input type="number" step="5" min="0" max="500" name="cleaningParticipationPercent" id="euCleaningPct" class="form-control" value="100" />
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="isExemptFromElevator" value="true" id="euExemptElev">
+                                    <input type="hidden" name="isExemptFromElevator" value="false" />
+                                    <label class="form-check-label small fw-semibold" for="euExemptElev">Asansör Giderinden Muaf</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="isExemptFromStairwell" value="true" id="euExemptStair">
+                                    <input type="hidden" name="isExemptFromStairwell" value="false" />
+                                    <label class="form-check-label small fw-semibold" for="euExemptStair">Merdiven/Aydınlatmadan Muaf</label>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-bold small">Yönetim Planı Notu</label>
+                                <input type="text" name="duesRuleNote" id="euRuleNote" class="form-control" placeholder="Örn: Dış girişli dükkan, asansör muaf, çöp %150" />
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -424,49 +486,55 @@
                     <div class="col-12 border-top pt-2">
                         <div class="fw-bold small text-dark mb-1"><i class="bi bi-person-badge me-1 text-primary"></i> Ev Sahibi (Mülk Sahibi) Bilgileri</div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label fw-semibold small">Ev Sahibi Adı</label>
                         <input type="text" name="ownerName" class="form-control" placeholder="Örn: Ahmet Yılmaz" />
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label fw-semibold small">Malik Telefon (PWA Girişi)</label>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold small">Malik Telefon (PWA)</label>
                         <input type="text" name="ownerPhone" class="form-control" placeholder="05XX XXX XX XX" />
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label fw-semibold small">Malik E-Posta</label>
                         <input type="email" name="ownerEmail" class="form-control" placeholder="malik@ornek.com" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold small">Malik PWA PIN</label>
+                        <div class="input-group">
+                            <input type="text" maxlength="6" name="ownerQuickPin" id="addOwnerPin" class="form-control" placeholder="4-6 hane" />
+                            <button type="button" class="btn btn-outline-secondary" onclick="generatePinForInput('addOwnerPin')" title="Rastgele PIN Üret">🎲</button>
+                        </div>
                     </div>
 
                     <div class="col-12 border-top pt-2">
                         <div class="fw-bold small text-dark mb-1"><i class="bi bi-key me-1 text-info"></i> Kiracı Bilgileri (Ev sahibi oturuyorsa boş bırakın)</div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label fw-semibold small">Kiracı Adı</label>
                         <input type="text" name="tenantName" class="form-control" placeholder="Örn: Mehmet Kaya" />
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label fw-semibold small">Kiracı Telefon (PWA Girişi)</label>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold small">Kiracı Telefon (PWA)</label>
                         <input type="text" name="tenantPhone" class="form-control" placeholder="05XX XXX XX XX" />
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label fw-semibold small">Kiracı E-Posta</label>
                         <input type="email" name="tenantEmail" class="form-control" placeholder="kiraci@ornek.com" />
                     </div>
-
-                    <div class="col-md-4 border-top pt-3">
-                        <label class="form-label fw-bold small">Sakin PWA Giriş PIN'i</label>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold small">Kiracı PWA PIN</label>
                         <div class="input-group">
-                            <input type="text" maxlength="6" name="residentQuickPin" id="addQuickPin" class="form-control" placeholder="4-6 haneli PIN" />
-                            <button type="button" class="btn btn-outline-secondary" onclick="generatePinForInput('addQuickPin')" title="Rastgele PIN Üret">🎲 Üret</button>
+                            <input type="text" maxlength="6" name="tenantQuickPin" id="addTenantPin" class="form-control" placeholder="4-6 hane" />
+                            <button type="button" class="btn btn-outline-secondary" onclick="generatePinForInput('addTenantPin')" title="Rastgele PIN Üret">🎲</button>
                         </div>
-                        <small class="text-muted" style="font-size:0.7rem;">Telefon + bu PIN ile şifresiz giriş yapar.</small>
                     </div>
-                    <div class="col-md-4 border-top pt-3">
+
+                    <div class="col-md-6 border-top pt-3">
                         <label class="form-label fw-bold small">Brüt m²</label>
                         <input type="number" step="0.1" min="0" name="grossSquareMeters" class="form-control" placeholder="Örn: 110" />
                     </div>
-                    <div class="col-md-4 border-top pt-3">
-                        <label class="form-label fw-bold small">Arsa Payı</label>
+                    <div class="col-md-6 border-top pt-3">
+                        <label class="form-label fw-bold small">Arsa Payı (Malik Demirbaş)</label>
                         <input type="number" step="0.0001" min="0" name="landShare" class="form-control" placeholder="Örn: 12.5" />
                     </div>
                     <div class="col-12">
@@ -488,7 +556,7 @@
     function openEditUnitModal(unitId, buildingId, doorNo, oName, oPhone, oEmail, tName, tPhone, tEmail, isEmpty, landShare, grossSqm, mult, fixedDues, exElev, exStair, cleanPct, ruleNote) {
         document.getElementById('euUnitId').value = unitId;
         document.getElementById('euBuildingId').value = buildingId;
-        document.getElementById('euTitle').innerText = 'Kapı No: ' + doorNo + ' - Malik & Kiracı';
+        document.getElementById('euTitle').innerText = 'Kapı No: ' + doorNo + ' - Sakinler & Kurallar';
         document.getElementById('euOwnerName').value = oName || '';
         document.getElementById('euOwnerPhone').value = oPhone || '';
         document.getElementById('euOwnerEmail').value = oEmail || '';
@@ -503,8 +571,11 @@
         document.getElementById('euExemptElev').checked = !!exElev;
         document.getElementById('euExemptStair').checked = !!exStair;
         document.getElementById('euRuleNote').value = ruleNote || '';
-        document.getElementById('euQuickPin').value = '';
+        document.getElementById('euOwnerQuickPin').value = '';
+        document.getElementById('euTenantQuickPin').value = '';
         document.getElementById('euIsEmpty').checked = !!isEmpty;
+        const firstTabEl = document.getElementById('euTabResidentsBtn');
+        if (firstTabEl) bootstrap.Tab.getOrCreateInstance(firstTabEl).show();
         new bootstrap.Modal(document.getElementById('editUnitContactsModal')).show();
     }
 
@@ -513,14 +584,20 @@
         document.getElementById(inputId).value = pin;
     }
 
-    function copyResidentInviteFromEdit() {
+    function copyResidentInviteByRole(role) {
         const title = document.getElementById('euTitle').innerText;
-        const phone = document.getElementById('euTenantPhone').value || document.getElementById('euOwnerPhone').value || '(Telefon giriniz)';
-        const pin = document.getElementById('euQuickPin').value || '(Mevcut / belirlediğiniz PIN)';
+        const isOwner = role === 'Owner';
+        const roleLabel = isOwner ? 'Malik (Ev Sahibi)' : 'Kiracı (Sakin)';
+        const phone = isOwner
+            ? (document.getElementById('euOwnerPhone').value || '(Malik telefonu giriniz)')
+            : (document.getElementById('euTenantPhone').value || '(Kiracı telefonu giriniz)');
+        const pin = isOwner
+            ? (document.getElementById('euOwnerQuickPin').value || '(Malik PIN)')
+            : (document.getElementById('euTenantQuickPin').value || '(Kiracı PIN)');
         const loginUrl = window.location.origin + '/Account/Login';
-        const text = `Merhaba, GMK360 Bina Portalı üzerinden aidat, duyuru ve taleplerinizi takip edebilirsiniz.\nBölüm: ${title}\nGiriş Adresi: ${loginUrl}\nTelefon: ${phone}\nHızlı PWA PIN: ${pin}`;
+        const text = `Merhaba, GMK360 Bina Portalı (${roleLabel}) üzerinden aidat, duyuru ve taleplerinizi takip edebilirsiniz.\nBölüm: ${title}\nGiriş Adresi: ${loginUrl}\nTelefon: ${phone}\nHızlı PWA PIN: ${pin}`;
         if (navigator.clipboard) {
-            navigator.clipboard.writeText(text).then(() => alert('Giriş daveti panoya kopyalandı:\n\n' + text));
+            navigator.clipboard.writeText(text).then(() => alert(roleLabel + ' giriş daveti panoya kopyalandı:\n\n' + text));
         } else {
             prompt('Aşağıdaki mesajı kopyalayın:', text);
         }

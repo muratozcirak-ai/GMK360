@@ -487,6 +487,36 @@ namespace GMK360.Web.Services
             await _context.SaveChangesAsync();
         }
 
+        public static string ResolveExpenseGroup(BuildingExpenseType expenseType, string? expenseItemKey, string? explicitGroup = null)
+        {
+            if (!string.IsNullOrWhiteSpace(explicitGroup))
+            {
+                return explicitGroup.Trim() switch
+                {
+                    "Personel" => "Personel",
+                    "FaturaAbonelik" => "FaturaAbonelik",
+                    "BakimOnarim" => "BakimOnarim",
+                    "DemirbasYatirim" => "DemirbasYatirim",
+                    "YonetimIdari" => "YonetimIdari",
+                    _ => explicitGroup.Trim()
+                };
+            }
+
+            if (expenseType == BuildingExpenseType.CapitalExpenditure
+                || string.Equals(expenseItemKey, "Demirbas", StringComparison.OrdinalIgnoreCase))
+            {
+                return "DemirbasYatirim";
+            }
+
+            return (expenseItemKey ?? "Genel").Trim().ToLowerInvariant() switch
+            {
+                "personel" => "Personel",
+                "isinma" => "FaturaAbonelik",
+                "asansor" or "merdiven" or "copTemizlik" or "coptemizlik" => "BakimOnarim",
+                _ => "FaturaAbonelik"
+            };
+        }
+
         public async Task<GovernanceActionResult> DistributeExpenseAsync(
             int buildingId,
             string description,
@@ -498,7 +528,8 @@ namespace GMK360.Web.Services
             string expenseItemKey = "Genel",
             ExpenseScopeType scopeType = ExpenseScopeType.Building,
             decimal shopParticipationPercent = 100m,
-            decimal? ownerSplitPercent = null)
+            decimal? ownerSplitPercent = null,
+            string? expenseGroup = null)
         {
             var preview = await ComputeExpenseDistributionInternalAsync(
                 buildingId,
@@ -538,11 +569,14 @@ namespace GMK360.Web.Services
                 ? (ownerSplitPercent.Value >= 100m ? "Owner" : (ownerSplitPercent.Value <= 0m ? "Tenant" : "Split"))
                 : (isCapital ? "Owner" : "Tenant");
 
+            string resolvedGroup = ResolveExpenseGroup(expenseType, expenseItemKey, expenseGroup);
+
             var expense = new BuildingExpense
             {
                 BuildingId = buildingId,
                 ScopeType = scopeType,
                 ExpenseType = expenseType,
+                ExpenseGroup = resolvedGroup,
                 PayerType = payerType,
                 ExpenseItemKey = string.IsNullOrWhiteSpace(expenseItemKey) ? "Genel" : expenseItemKey.Trim(),
                 DistributionRule = preview.DistributionRule,

@@ -1712,6 +1712,11 @@ namespace GMK360.Data.Migrations
                     b.Property<int?>("ExpenseCategoryId")
                         .HasColumnType("int");
 
+                    b.Property<string>("ExpenseGroup")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
                     b.Property<string>("ExpenseItemKey")
                         .IsRequired()
                         .HasMaxLength(40)
@@ -1842,6 +1847,11 @@ namespace GMK360.Data.Migrations
 
                     b.Property<int>("DueDayOfMonth")
                         .HasColumnType("int");
+
+                    b.Property<string>("ExpenseGroup")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<string>("ExpenseItemKey")
                         .IsRequired()
@@ -2385,6 +2395,9 @@ namespace GMK360.Data.Migrations
                     b.Property<string>("OwnerPhone")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("OwnerQuickPinHash")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("OwnerUserId")
                         .HasColumnType("nvarchar(450)");
 
@@ -2413,6 +2426,9 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TenantPhone")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TenantQuickPinHash")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TenantUserId")

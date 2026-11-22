@@ -2413,7 +2413,9 @@ namespace GMK360.Web.Controllers
             int floorLevel = 1,
             decimal? landShare = null,
             double? grossSquareMeters = null,
-            string? returnAction = null)
+            string? returnAction = null,
+            string? ownerQuickPin = null,
+            string? tenantQuickPin = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -2426,6 +2428,12 @@ namespace GMK360.Web.Controllers
             string floorLabel = floorLevel == 0
                 ? "Zemin Kat"
                 : (floorLevel < 0 ? $"{Math.Abs(floorLevel)}. Bodrum" : $"{floorLevel}. Kat");
+
+            string? effectiveOwnerPin = !string.IsNullOrWhiteSpace(ownerQuickPin) ? ownerQuickPin
+                : (!hasTenantInfo ? residentQuickPin : null);
+            string? effectiveTenantPin = !effectiveEmpty
+                ? (!string.IsNullOrWhiteSpace(tenantQuickPin) ? tenantQuickPin : residentQuickPin)
+                : null;
 
             var unit = new BuildingUnit
             {
@@ -2446,6 +2454,12 @@ namespace GMK360.Web.Controllers
                 GrossSquareMeters = grossSquareMeters.HasValue && grossSquareMeters.Value > 0 ? grossSquareMeters.Value : null,
                 ResidentQuickPinHash = (!string.IsNullOrWhiteSpace(residentQuickPin) && residentQuickPin.Trim().Length >= 4)
                     ? FacilityTaskDispatchService.HashQuickPin(residentQuickPin.Trim())
+                    : null,
+                OwnerQuickPinHash = (!string.IsNullOrWhiteSpace(effectiveOwnerPin) && effectiveOwnerPin.Trim().Length >= 4)
+                    ? FacilityTaskDispatchService.HashQuickPin(effectiveOwnerPin.Trim())
+                    : null,
+                TenantQuickPinHash = (!string.IsNullOrWhiteSpace(effectiveTenantPin) && effectiveTenantPin.Trim().Length >= 4)
+                    ? FacilityTaskDispatchService.HashQuickPin(effectiveTenantPin.Trim())
                     : null
             };
 
@@ -2477,7 +2491,8 @@ namespace GMK360.Web.Controllers
             string expenseItemKey = "Genel",
             ExpenseScopeType scopeType = ExpenseScopeType.Building,
             decimal shopParticipationPercent = 100m,
-            decimal? ownerSplitPercent = null)
+            decimal? ownerSplitPercent = null,
+            string? expenseGroup = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -2497,12 +2512,14 @@ namespace GMK360.Web.Controllers
                 expenseItemKey,
                 scopeType,
                 shopParticipationPercent,
-                ownerSplitPercent);
+                ownerSplitPercent,
+                expenseGroup);
 
             TempData[result.Success ? "SuccessMessage" : "ErrorMessage"] = result.Message;
-            if (string.Equals(returnAction, "Giderler", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(returnAction, "Accounting", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(returnAction, "Giderler", StringComparison.OrdinalIgnoreCase))
             {
-                return RedirectToAction(nameof(Giderler), new { buildingId });
+                return RedirectToAction(nameof(Accounting), new { buildingId, tab = "giderler" });
             }
             return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
@@ -2551,9 +2568,10 @@ namespace GMK360.Web.Controllers
                 GetUserId() ?? "system");
 
             TempData[result.Success ? (result.PendingApproval ? "WarningMessage" : "SuccessMessage") : "ErrorMessage"] = result.Message;
-            if (string.Equals(returnAction, "Giderler", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(returnAction, "Accounting", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(returnAction, "Giderler", StringComparison.OrdinalIgnoreCase))
             {
-                return RedirectToAction(nameof(Giderler), new { buildingId });
+                return RedirectToAction(nameof(Accounting), new { buildingId, tab = "giderler" });
             }
             return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
@@ -2580,7 +2598,7 @@ namespace GMK360.Web.Controllers
 
         // 6. Ödeme Alındı İşaretle
         [HttpPost]
-        public async Task<IActionResult> MarkDebtAsPaid(int debtId, string paidBy)
+        public async Task<IActionResult> MarkDebtAsPaid(int debtId, string paidBy, string? returnAction = null)
         {
             var existingDebt = await _context.UnitDebts
                 .Include(d => d.BuildingUnit)
@@ -2596,6 +2614,10 @@ namespace GMK360.Web.Controllers
             if (debt != null)
             {
                 TempData["SuccessMessage"] = "Ödeme başarıyla kaydedildi ve dijital makbuz gönderildi.";
+                if (string.Equals(returnAction, "Aidatlar", StringComparison.OrdinalIgnoreCase))
+                {
+                    return RedirectToAction(nameof(Aidatlar), new { buildingId = debt.BuildingUnit.BuildingId });
+                }
                 return RedirectToAction(nameof(Detail), new { id = debt.BuildingUnit.BuildingId });
             }
             
@@ -2668,7 +2690,9 @@ namespace GMK360.Web.Controllers
             bool? isExemptFromElevator = null,
             bool? isExemptFromStairwell = null,
             decimal? cleaningParticipationPercent = null,
-            string? duesRuleNote = null)
+            string? duesRuleNote = null,
+            string? ownerQuickPin = null,
+            string? tenantQuickPin = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -2699,6 +2723,18 @@ namespace GMK360.Web.Controllers
             if (!string.IsNullOrWhiteSpace(residentQuickPin) && residentQuickPin.Trim().Length >= 4)
             {
                 unit.ResidentQuickPinHash = FacilityTaskDispatchService.HashQuickPin(residentQuickPin.Trim());
+            }
+            if (!string.IsNullOrWhiteSpace(ownerQuickPin) && ownerQuickPin.Trim().Length >= 4)
+            {
+                unit.OwnerQuickPinHash = FacilityTaskDispatchService.HashQuickPin(ownerQuickPin.Trim());
+            }
+            if (effectiveEmpty)
+            {
+                unit.TenantQuickPinHash = null;
+            }
+            else if (!string.IsNullOrWhiteSpace(tenantQuickPin) && tenantQuickPin.Trim().Length >= 4)
+            {
+                unit.TenantQuickPinHash = FacilityTaskDispatchService.HashQuickPin(tenantQuickPin.Trim());
             }
             await SyncResidentUsersAndPeriodsAsync(unit);
 
@@ -2839,18 +2875,22 @@ namespace GMK360.Web.Controllers
             int month,
             decimal defaultBaseDues = 0m,
             ExpenseScopeType scopeType = ExpenseScopeType.Building,
-            decimal? ownerSplitPercent = null)
+            decimal? ownerSplitPercent = null,
+            string mode = "FixedUnitDues",
+            bool includeStaffCosts = true)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
 
-            var result = await _governanceService.PreviewFixedUnitDuesAsync(
-                buildingId,
-                year,
-                month,
-                defaultBaseDues,
-                scopeType,
-                ownerSplitPercent);
+            var result = string.Equals(mode, "RecurringBudget", StringComparison.OrdinalIgnoreCase)
+                ? await _payrollService.PreviewAllRecurringBudgetAsync(buildingId, year, month, includeStaffCosts)
+                : await _governanceService.PreviewFixedUnitDuesAsync(
+                    buildingId,
+                    year,
+                    month,
+                    defaultBaseDues,
+                    scopeType,
+                    ownerSplitPercent);
 
             return Json(result);
         }
@@ -2898,70 +2938,10 @@ namespace GMK360.Web.Controllers
             return RedirectToAction(nameof(Aidatlar), new { buildingId });
         }
 
-        // 9. Sabit Giderler Ajandası + Satın Almalar & Fatura Takibi
-        public async Task<IActionResult> Giderler(int? buildingId)
+        // 9. Sabit Giderler Ajandası + Satın Almalar & Fatura Takibi (Birleşik Muhasebe, Gider & Kasa ekranına yönlendirir)
+        public IActionResult Giderler(int? buildingId)
         {
-            var buildings = await GetUserManagedRootBuildingsAsync();
-            var allowedIds = buildings.Select(b => b.Id).ToList();
-            if (buildingId.HasValue)
-            {
-                var target = await GetManagedBuildingAsync(buildingId.Value);
-                if (target == null) return Forbid();
-                allowedIds = new System.Collections.Generic.List<int> { target.Id };
-            }
-
-            var expenses = allowedIds.Any()
-                ? await _context.BuildingExpenses
-                    .Include(e => e.Building)
-                    .Where(e => e.BuildingId.HasValue && allowedIds.Contains(e.BuildingId.Value))
-                    .OrderByDescending(e => e.Date)
-                    .ToListAsync()
-                : new System.Collections.Generic.List<BuildingExpense>();
-
-            var recurringSchedules = allowedIds.Any()
-                ? await _context.SpaceFixtures
-                    .Include(f => f.UnitSpace).ThenInclude(s => s.BuildingUnit).ThenInclude(u => u.Building)
-                    .Where(f => allowedIds.Contains(f.UnitSpace.BuildingUnit.BuildingId)
-                        && (f.Category == "SabitGider" || f.Category == "SGK & Maaş"))
-                    .OrderBy(f => f.NextMaintenanceDate ?? DateTime.MaxValue)
-                    .ToListAsync()
-                : new System.Collections.Generic.List<SpaceFixture>();
-
-            var staffMembers = allowedIds.Any()
-                ? await _context.ManagementMembers
-                    .Include(m => m.Building)
-                    .Where(m => m.BuildingId.HasValue && allowedIds.Contains(m.BuildingId.Value) && m.IsActive)
-                    .ToListAsync()
-                : new System.Collections.Generic.List<ManagementMember>();
-
-            var buildingStaffs = allowedIds.Any()
-                ? await _context.BuildingStaffs
-                    .Include(s => s.Building)
-                    .Where(s => allowedIds.Contains(s.BuildingId) && s.IsActive && !s.IsDeleted)
-                    .OrderBy(s => s.FullName)
-                    .ToListAsync()
-                : new System.Collections.Generic.List<BuildingStaff>();
-
-            var fixedExpenses = allowedIds.Any()
-                ? await _context.BuildingFixedExpenses
-                    .Include(f => f.Building)
-                    .Where(f => allowedIds.Contains(f.BuildingId) && f.IsActive && !f.IsDeleted)
-                    .OrderBy(f => f.DueDayOfMonth)
-                    .ToListAsync()
-                : new System.Collections.Generic.List<BuildingFixedExpense>();
-
-            int budgetBuildingId = buildingId ?? allowedIds.FirstOrDefault();
-            ViewBag.BudgetSummary = budgetBuildingId > 0
-                ? await _payrollService.CalculateMonthlyBudgetSummaryAsync(budgetBuildingId)
-                : new BuildingMonthlyBudgetSummary();
-
-            ViewBag.Buildings = buildings;
-            ViewBag.SelectedBuildingId = buildingId;
-            ViewBag.RecurringSchedules = recurringSchedules;
-            ViewBag.StaffMembers = staffMembers;
-            ViewBag.BuildingStaffs = buildingStaffs;
-            ViewBag.FixedExpenses = fixedExpenses;
-            return View(expenses);
+            return RedirectToAction(nameof(Accounting), new { buildingId, tab = "giderler" });
         }
 
         [HttpPost]
@@ -2979,16 +2959,24 @@ namespace GMK360.Web.Controllers
             string expenseItemKey = "Genel",
             ExpenseScopeType scopeType = ExpenseScopeType.Building,
             decimal shopParticipationPercent = 100m,
-            decimal? ownerSplitPercent = null)
+            decimal? ownerSplitPercent = null,
+            string? expenseGroup = null,
+            string? returnAction = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
+
+            var resolvedType = string.Equals(expenseScope, "Demirbas", StringComparison.OrdinalIgnoreCase)
+                ? BuildingExpenseType.CapitalExpenditure
+                : BuildingExpenseType.Operational;
+            var resolvedGroup = FacilityGovernanceService.ResolveExpenseGroup(resolvedType, expenseItemKey, expenseGroup);
 
             _context.BuildingFixedExpenses.Add(new BuildingFixedExpense
             {
                 BuildingId = buildingId,
                 Title = title?.Trim() ?? "Sabit Gider",
                 ExpenseScope = string.Equals(expenseScope, "Demirbas", StringComparison.OrdinalIgnoreCase) ? "Demirbas" : "Isletme",
+                ExpenseGroup = resolvedGroup,
                 ExpenseItemKey = string.IsNullOrWhiteSpace(expenseItemKey) ? "Genel" : expenseItemKey.Trim(),
                 DistributionRule = string.IsNullOrWhiteSpace(distributionRule) ? "Esit" : distributionRule.Trim(),
                 ScopeType = scopeType,
@@ -3005,7 +2993,7 @@ namespace GMK360.Web.Controllers
             await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = $"'{title}' aylık sabit bina giderleri bütçesine eklendi.";
-            return RedirectToAction(nameof(Giderler), new { buildingId });
+            return RedirectToAction(nameof(Accounting), new { buildingId, tab = "giderler" });
         }
 
         [HttpPost]
@@ -3017,7 +3005,7 @@ namespace GMK360.Web.Controllers
 
             var res = await _payrollService.DistributeFixedExpenseAsync(fixedExpenseId, DateTime.Today.Year, DateTime.Today.Month, GetUserId() ?? "system");
             TempData[res.Success ? "SuccessMessage" : "ErrorMessage"] = res.Message;
-            return RedirectToAction(nameof(Giderler), new { buildingId });
+            return RedirectToAction(nameof(Accounting), new { buildingId, tab = "giderler" });
         }
 
         [HttpPost]
@@ -3126,8 +3114,29 @@ namespace GMK360.Web.Controllers
             return RedirectToAction(nameof(TicketManagement), new { buildingId = ticket.ContextId });
         }
 
-        // 10. Muhasebe, Banka Hesapları & Sabit Personel
-        public async Task<IActionResult> Accounting(int? buildingId)
+        private async Task<System.Collections.Generic.List<DefinitionValue>> GetFacilityExpenseGroupLookupsAsync()
+        {
+            var dbItems = await _context.DefinitionValues
+                .AsNoTracking()
+                .Include(v => v.Category)
+                .Where(v => v.Category != null && v.Category.SystemCode == "FACILITY_EXPENSE_GROUP" && !v.IsDeleted)
+                .OrderBy(v => v.Order)
+                .ToListAsync();
+
+            if (dbItems.Any()) return dbItems;
+
+            return new System.Collections.Generic.List<DefinitionValue>
+            {
+                new() { SystemCode = "Personel", Name = "Personel Giderleri (Maaş, SGK, Kıdem)", Order = 1 },
+                new() { SystemCode = "FaturaAbonelik", Name = "Faturalar & Abonelikler (Elektrik, Su, Gaz)", Order = 2 },
+                new() { SystemCode = "BakimOnarim", Name = "Bakım, Onarım & Sarf Giderleri", Order = 3 },
+                new() { SystemCode = "DemirbasYatirim", Name = "Demirbaş & Büyük Tadilat (Malik)", Order = 4 },
+                new() { SystemCode = "YonetimIdari", Name = "Yönetim, Sigorta & İdari Giderler", Order = 5 }
+            };
+        }
+
+        // 10. Birleşik Muhasebe, Gider Türleri, Kasa/Banka & Sabit Personel
+        public async Task<IActionResult> Accounting(int? buildingId, string? tab = null, string? expenseGroup = null)
         {
             var buildings = await GetUserManagedRootBuildingsAsync();
             if (!buildings.Any())
@@ -3176,6 +3185,26 @@ namespace GMK360.Web.Controllers
                     .ThenByDescending(p => p.Id)
                     .ToListAsync()
                 : new System.Collections.Generic.List<BuildingStaffMonthlyPayroll>();
+
+            ViewBag.Expenses = await _context.BuildingExpenses
+                .Include(e => e.Building)
+                .Where(e => e.BuildingId == building.Id)
+                .OrderByDescending(e => e.Date)
+                .ToListAsync();
+
+            ViewBag.FixedExpenses = await _context.BuildingFixedExpenses
+                .Include(f => f.Building)
+                .Where(f => f.BuildingId == building.Id && f.IsActive && !f.IsDeleted)
+                .OrderBy(f => f.DueDayOfMonth)
+                .ToListAsync();
+
+            ViewBag.TotalCollectedDues = await _context.UnitDebts
+                .Where(d => d.IsPaid && !d.IsArchived && d.BuildingUnit.BuildingId == building.Id)
+                .SumAsync(d => (decimal?)d.Amount) ?? 0m;
+
+            ViewBag.ExpenseGroups = await GetFacilityExpenseGroupLookupsAsync();
+            ViewBag.ActiveTab = string.IsNullOrWhiteSpace(tab) ? "giderler" : tab.Trim().ToLowerInvariant();
+            ViewBag.SelectedExpenseGroup = expenseGroup;
             ViewBag.BudgetSummary = await _payrollService.CalculateMonthlyBudgetSummaryAsync(building.Id);
             ViewBag.Holidays = GMK360.Web.Helpers.TurkishHolidayHelper.GetHolidaysForYear(DateTime.Today.Year);
             ViewBag.Buildings = buildings;
@@ -3204,7 +3233,7 @@ namespace GMK360.Web.Controllers
             await _context.SaveChangesAsync();
 
             TempData["Success"] = "Banka hesabı kaydedildi.";
-            return RedirectToAction(nameof(Accounting), new { buildingId });
+            return RedirectToAction(nameof(Accounting), new { buildingId, tab = "kasa" });
         }
 
         [HttpPost]
@@ -3330,7 +3359,7 @@ namespace GMK360.Web.Controllers
             await _context.SaveChangesAsync();
 
             TempData["Success"] = $"'{staff.FullName}' kadroya eklendi. Aylık işletme maliyeti: {staff.TotalMonthlyOperatingCost:N2} ₺, Kıdem fonu: {staff.MonthlySeveranceFund:N2} ₺.";
-            return RedirectToAction(nameof(Accounting), new { buildingId });
+            return RedirectToAction(nameof(Accounting), new { buildingId, tab = "personel" });
         }
 
         [HttpPost]
@@ -3356,7 +3385,7 @@ namespace GMK360.Web.Controllers
             {
                 TempData[res.Success ? "Success" : "ErrorMessage"] = res.Message;
             }
-            return RedirectToAction(nameof(Accounting), new { buildingId });
+            return RedirectToAction(nameof(Accounting), new { buildingId, tab = "personel" });
         }
 
         [HttpPost]
@@ -3389,7 +3418,7 @@ namespace GMK360.Web.Controllers
             {
                 TempData["Success"] = $"{payroll.Year}-{payroll.Month:00} puantajı hesaplandı (Ödenecek Net: {payroll.NetPayableToStaff:N2} ₺, Toplam Site Yükü: {payroll.TotalSiteCostForMonth:N2} ₺).";
             }
-            return RedirectToAction(nameof(Accounting), new { buildingId });
+            return RedirectToAction(nameof(Accounting), new { buildingId, tab = "personel" });
         }
 
         [HttpPost]
@@ -3414,7 +3443,7 @@ namespace GMK360.Web.Controllers
                 GetUserId() ?? "system");
 
             TempData[res.Success ? "Success" : "ErrorMessage"] = res.Message;
-            return RedirectToAction(nameof(Accounting), new { buildingId });
+            return RedirectToAction(nameof(Accounting), new { buildingId, tab = "personel" });
         }
 
         // 11. Toplantı & Karar Masası

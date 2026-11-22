@@ -29,6 +29,8 @@ namespace GMK360.Core.Entities
         public decimal CleaningParticipationPercent { get; set; } = 100.00m; // Çöp/temizlik katılımı (%0 muaf, %100 normal, %150+ yoğun kullanım)
         public string? DuesRuleNote { get; set; }
         public string? ResidentQuickPinHash { get; set; }
+        public string? OwnerQuickPinHash { get; set; }
+        public string? TenantQuickPinHash { get; set; }
         public string FacadeDirection { get; set; } = string.Empty;
         
         public string? RoomLayout { get; set; } // Eski UnitType - Örn: "3+1", "2+1"

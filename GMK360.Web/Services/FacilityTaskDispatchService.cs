@@ -214,31 +214,43 @@ namespace GMK360.Web.Services
                 };
             }
 
-            // 2. Kat Maliki / Kiracı eşleşmesi (yalnız aktif dönemli sakinlere izin ver - Dönemsel İzolasyon)
+            // 2. Kat Maliki / Kiracı ayrı PIN eşleşmesi (yalnız aktif dönemli sakinlere izin ver - Dönemsel İzolasyon)
             var unitsWithPin = await _context.BuildingUnits
-                .Where(u => u.ResidentQuickPinHash != null && (u.TenantPhone != null || u.OwnerPhone != null))
+                .Where(u => (u.OwnerQuickPinHash != null || u.TenantQuickPinHash != null || u.ResidentQuickPinHash != null)
+                    && (u.TenantPhone != null || u.OwnerPhone != null))
                 .ToListAsync();
 
             foreach (var u in unitsWithPin)
             {
-                bool phoneMatchesTenant = NormalizePhoneLast10(u.TenantPhone) == normPhone;
+                bool phoneMatchesTenant = !u.IsEmpty && NormalizePhoneLast10(u.TenantPhone) == normPhone;
                 bool phoneMatchesOwner = NormalizePhoneLast10(u.OwnerPhone) == normPhone;
                 if (!phoneMatchesTenant && !phoneMatchesOwner) continue;
-                if (!VerifyQuickPin(pin, u.ResidentQuickPinHash)) continue;
 
-                // Arşivlenmiş (taşınmış) eski sakin ise girişi engelle
-                string roleCheck = phoneMatchesTenant ? "Tenant" : "Owner";
-                bool hasArchivedPeriodOnly = await _context.ResidencyPeriods
-                    .AnyAsync(rp => rp.BuildingUnitId == u.Id && rp.RoleType == roleCheck && rp.Status == "ARCHIVED")
-                    && !await _context.ResidencyPeriods
-                        .AnyAsync(rp => rp.BuildingUnitId == u.Id && rp.RoleType == roleCheck && rp.Status == "ACTIVE" && rp.Phone != null);
+                string? matchedRole = null;
+                if (phoneMatchesTenant && VerifyQuickPin(pin, u.TenantQuickPinHash ?? u.ResidentQuickPinHash))
+                {
+                    bool tenantArchivedOnly = await IsRoleArchivedOnlyAsync(u.Id, "Tenant");
+                    if (!tenantArchivedOnly) matchedRole = "Tenant";
+                }
 
-                if (hasArchivedPeriodOnly) continue;
+                if (matchedRole == null && phoneMatchesOwner && VerifyQuickPin(pin, u.OwnerQuickPinHash ?? u.ResidentQuickPinHash))
+                {
+                    bool ownerArchivedOnly = await IsRoleArchivedOnlyAsync(u.Id, "Owner");
+                    if (!ownerArchivedOnly) matchedRole = "Owner";
+                }
 
-                string displayName = phoneMatchesTenant ? (u.TenantName ?? $"Daire {u.DoorNumber} Kiracı") : (u.OwnerName ?? $"Daire {u.DoorNumber} Malik");
-                string? existingUserId = phoneMatchesTenant ? u.TenantUserId : u.OwnerUserId;
-                string? preferredEmail = phoneMatchesTenant ? u.TenantEmail : u.OwnerEmail;
-                string fallbackEmail = $"sakin_{normPhone}@gmk360.local";
+                if (matchedRole == null) continue;
+
+                bool isTenantLogin = matchedRole == "Tenant";
+                string displayName = isTenantLogin
+                    ? (u.TenantName ?? $"Daire {u.DoorNumber} Kiracı")
+                    : (u.OwnerName ?? $"Daire {u.DoorNumber} Malik");
+                string? existingUserId = isTenantLogin ? u.TenantUserId : u.OwnerUserId;
+                string? preferredEmail = isTenantLogin ? u.TenantEmail : u.OwnerEmail;
+                string fallbackEmail = isTenantLogin
+                    ? $"kiraci_{normPhone}@gmk360.local"
+                    : $"malik_{normPhone}@gmk360.local";
+
                 var user = await EnsurePortalUserAsync(
                     existingUserId,
                     !string.IsNullOrWhiteSpace(preferredEmail) ? preferredEmail.Trim() : fallbackEmail,
@@ -247,20 +259,28 @@ namespace GMK360.Web.Services
                     "Sakin",
                     "facility_resident");
 
-                if (phoneMatchesTenant && u.TenantUserId != user.Id) u.TenantUserId = user.Id;
-                if (phoneMatchesOwner && u.OwnerUserId != user.Id) u.OwnerUserId = user.Id;
+                if (isTenantLogin && u.TenantUserId != user.Id) u.TenantUserId = user.Id;
+                if (!isTenantLogin && u.OwnerUserId != user.Id) u.OwnerUserId = user.Id;
                 await _context.SaveChangesAsync();
 
                 return new QuickPinLoginResult
                 {
                     Success = true,
                     User = user,
-                    RoleKind = "Resident",
-                    Message = $"Hoş geldiniz {displayName}."
+                    RoleKind = matchedRole,
+                    Message = $"Hoş geldiniz {displayName} ({(isTenantLogin ? "Kiracı" : "Malik")})."
                 };
             }
 
             return new QuickPinLoginResult { Success = false, Message = "Telefon numarası veya PIN eşleşmedi." };
+        }
+
+        private async Task<bool> IsRoleArchivedOnlyAsync(int buildingUnitId, string roleType)
+        {
+            return await _context.ResidencyPeriods
+                .AnyAsync(rp => rp.BuildingUnitId == buildingUnitId && rp.RoleType == roleType && rp.Status == "ARCHIVED")
+                && !await _context.ResidencyPeriods
+                    .AnyAsync(rp => rp.BuildingUnitId == buildingUnitId && rp.RoleType == roleType && rp.Status == "ACTIVE" && rp.Phone != null);
         }
 
         private async Task<ApplicationUser> EnsurePortalUserAsync(

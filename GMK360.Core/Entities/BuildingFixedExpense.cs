@@ -21,6 +21,9 @@ namespace GMK360.Core.Entities
         public string ExpenseScope { get; set; } = "Isletme"; // "Isletme" | "Demirbas"
 
         [Required, MaxLength(40)]
+        public string ExpenseGroup { get; set; } = "FaturaAbonelik"; // "Personel" | "FaturaAbonelik" | "BakimOnarim" | "DemirbasYatirim" | "YonetimIdari"
+
+        [Required, MaxLength(40)]
         public string ExpenseItemKey { get; set; } = "Genel"; // "Genel" | "Personel" | "Asansor" | "Merdiven" | "CopTemizlik" | "Isinma" | "Demirbas"
 
         [Required, MaxLength(30)]
