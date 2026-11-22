@@ -1834,8 +1834,21 @@ namespace GMK360.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("BillingCycleMonths")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("BillingMonth")
+                        .HasColumnType("int");
+
                     b.Property<int>("BuildingId")
                         .HasColumnType("int");
+
+                    b.Property<string>("ContractDocumentUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ContractEndDate")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -1877,6 +1890,10 @@ namespace GMK360.Data.Migrations
 
                     b.Property<decimal?>("OwnerSplitPercent")
                         .HasColumnType("decimal(6,2)");
+
+                    b.Property<string>("PhysicalArchiveLocation")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
 
                     b.Property<string>("ProviderName")
                         .HasMaxLength(150)

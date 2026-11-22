@@ -242,10 +242,10 @@
                         <table class="table table-hover align-middle mb-0">
                             <thead class="table-light small">
                                 <tr>
-                                    <th class="ps-3">Ödeme Günü</th>
+                                    <th class="ps-3">Periyot &amp; Gün</th>
                                     <th>Gider Türü</th>
                                     <th>Kurum / Abonelik</th>
-                                    <th>Gider Kapsamı</th>
+                                    <th>Sözleşme &amp; Fiziksel Arşiv</th>
                                     <th>Tutar Şekli</th>
                                     <th class="pe-3 text-end">Fatura / Ödeme</th>
                                 </tr>
@@ -255,7 +255,7 @@
                                 {
                                     <tr>
                                         <td colspan="6" class="text-center py-4 text-muted small">
-                                            Henüz abone veya sabit ödeme kurumu eklenmemiş. Yukarıdan <strong>+ Abonelik / Sabit Kalem Ekle</strong> ile Enerjisa, İSKİ, Doğalgaz veya Mali Müşavir ekleyin.
+                                            Henüz abone veya sözleşme eklenmemiş. Yukarıdan <strong>+ Abonelik / Sabit Kalem Ekle</strong> ile Enerjisa, İSKİ, Doğalgaz, Ortak Alan Sigortası veya GMK360 Aboneliği ekleyin.
                                         </td>
                                     </tr>
                                 }
@@ -263,20 +263,51 @@
                                 {
                                     bool isDemirbas = fx.ExpenseScope == "Demirbas";
                                     bool isVariable = fx.MonthlyAmount <= 0m;
+                                    string cycleLabel = fx.BillingCycleMonths switch
+                                    {
+                                        12 => "Yıllık (Yılda 1)",
+                                        6 => "6 Aylık",
+                                        3 => "3 Aylık",
+                                        _ => "Aylık"
+                                    };
+                                    bool contractExpiring = fx.ContractEndDate.HasValue && fx.ContractEndDate.Value.Date <= DateTime.Today.AddDays(30);
                                     <tr>
-                                        <td class="ps-3 small fw-bold">Ayın @(fx.DueDayOfMonth). Günü</td>
+                                        <td class="ps-3 small">
+                                            <span class="badge @(fx.BillingCycleMonths == 12 ? "bg-purple text-white" : "bg-light text-dark border")" style="@(fx.BillingCycleMonths == 12 ? "background-color:#6f42c1;" : "")">@cycleLabel</span>
+                                            <div class="fw-bold mt-1">@(fx.BillingCycleMonths > 1 && fx.BillingMonth.HasValue ? $"{fx.BillingMonth}. Ay • " : "")@fx.DueDayOfMonth. Gün</div>
+                                        </td>
                                         <td><span class="badge bg-light text-dark border">@GetGroupDisplayName(fx.ExpenseGroup)</span></td>
                                         <td>
                                             <strong>@fx.Title</strong>
                                             @if (!string.IsNullOrWhiteSpace(fx.ProviderName))
                                             {
-                                                <small class="d-block text-muted">@fx.ProviderName @(!string.IsNullOrWhiteSpace(fx.SubscriberNo) ? $"(Abone: {fx.SubscriberNo})" : "")</small>
+                                                <small class="d-block text-muted">@fx.ProviderName @(!string.IsNullOrWhiteSpace(fx.SubscriberNo) ? $"(No: {fx.SubscriberNo})" : "")</small>
                                             }
-                                        </td>
-                                        <td>
-                                            <span class="badge @(isDemirbas ? "bg-danger" : "bg-primary")">
-                                                @(isDemirbas ? "Demirbaş (Malik)" : "İşletme (Aidat Kasası)")
+                                            <span class="badge @(isDemirbas ? "bg-danger-subtle text-danger" : "bg-primary-subtle text-primary") mt-1">
+                                                @(isDemirbas ? "Demirbaş" : "İşletme")
                                             </span>
+                                        </td>
+                                        <td class="small">
+                                            @if (!string.IsNullOrWhiteSpace(fx.ContractDocumentUrl))
+                                            {
+                                                <a href="@fx.ContractDocumentUrl" target="_blank" class="btn btn-sm btn-outline-info rounded-pill px-2 py-0 mb-1">
+                                                    <i class="bi bi-file-earmark-text me-1"></i>Sözleşme
+                                                </a>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(fx.PhysicalArchiveLocation))
+                                            {
+                                                <div class="text-muted"><i class="bi bi-folder2 me-1"></i>@fx.PhysicalArchiveLocation</div>
+                                            }
+                                            @if (fx.ContractEndDate.HasValue)
+                                            {
+                                                <div class="@(contractExpiring ? "text-danger fw-bold" : "text-muted")">
+                                                    Bitiş: @fx.ContractEndDate.Value.ToString("dd.MM.yyyy")
+                                                </div>
+                                            }
+                                            @if (string.IsNullOrWhiteSpace(fx.ContractDocumentUrl) && string.IsNullOrWhiteSpace(fx.PhysicalArchiveLocation) && !fx.ContractEndDate.HasValue)
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
                                         </td>
                                         <td>
                                             @if (isVariable)
@@ -285,13 +316,14 @@
                                             }
                                             else
                                             {
-                                                <strong class="text-dark">@fx.MonthlyAmount.ToString("N2") ₺ / ay</strong>
+                                                <strong class="text-dark">@fx.MonthlyAmount.ToString("N2") ₺</strong>
+                                                <small class="d-block text-muted">@(fx.BillingCycleMonths == 12 ? "/ yıl" : (fx.BillingCycleMonths > 1 ? $"/ {fx.BillingCycleMonths} ay" : "/ ay"))</small>
                                             }
                                         </td>
                                         <td class="pe-3 text-end">
                                             <button type="button" class="btn btn-sm @(isVariable ? "btn-primary" : "btn-outline-danger") rounded-pill px-3 fw-semibold"
                                                     onclick="openInvoiceFromSubscription('@System.Web.HttpUtility.JavaScriptStringEncode(fx.Title)', '@System.Web.HttpUtility.JavaScriptStringEncode(fx.ProviderName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(fx.ExpenseGroup)', '@(isDemirbas ? "1" : "2")', @fx.MonthlyAmount.ToString(System.Globalization.CultureInfo.InvariantCulture))">
-                                                <i class="bi bi-receipt me-1"></i> + Bu Ayın Faturasını Gir
+                                                <i class="bi bi-receipt me-1"></i> + Fatura / Ödeme İşle
                                             </button>
                                         </td>
                                     </tr>
@@ -673,26 +705,28 @@
     </div>
 </div>
 
-<!-- 1. Abonelik / Sabit Ödeme Kurumu Ekle Modalı -->
+<!-- 1. Abonelik / Sabit Ödeme Kurumu & Sözleşme Ekle Modalı -->
 <div class="modal fade" id="addFixedExpenseModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-        <form class="modal-content rounded-4 border-0 shadow" asp-action="AddBuildingFixedExpense" asp-controller="BuildingManager" method="post">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="AddBuildingFixedExpense" asp-controller="BuildingManager" method="post" enctype="multipart/form-data">
             @Html.AntiForgeryToken()
             <input type="hidden" name="buildingId" value="@Model.Id" />
             <input type="hidden" name="returnAction" value="Accounting" />
             <div class="modal-header bg-success text-white border-0">
-                <h5 class="modal-title fw-bold">Düzenli Abonelik / Sabit Ödeme Tanımla</h5>
+                <h5 class="modal-title fw-bold">Düzenli Abonelik / Sözleşme Tanımla</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4 row g-3">
                 <div class="col-12">
                     <div class="d-flex flex-wrap gap-1 align-items-center bg-light p-2 rounded-3 border">
                         <small class="fw-bold text-muted me-1">Hızlı Hazır Şablon:</small>
-                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Ortak Elektrik Faturası', 'FaturaAbonelik', 'Isletme', 'Genel', 'Esit', true, 'Enerjisa')">⚡ Elektrik</button>
-                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Ortak Su Faturası', 'FaturaAbonelik', 'Isletme', 'Isinma', 'Esit', true, 'İSKİ')">💧 Su</button>
-                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Merkezi Doğalgaz / Isınma', 'FaturaAbonelik', 'Isletme', 'Isinma', 'Metrekare', true, 'İGDAŞ')">🔥 Doğalgaz</button>
-                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Asansör Aylık Bakımı', 'BakimOnarim', 'Isletme', 'Asansor', 'Esit', false, 'Asansör Firması')">🛗 Asansör Bakım</button>
-                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Mali Müşavir / Yönetim', 'YonetimIdari', 'Isletme', 'Genel', 'Esit', false, 'Mali Müşavir')">📋 Mali Müşavir</button>
+                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Ortak Elektrik Faturası', 'FaturaAbonelik', 'Isletme', 'Genel', 'Esit', true, 'Enerjisa', 1)">⚡ Elektrik</button>
+                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Ortak Su Faturası', 'FaturaAbonelik', 'Isletme', 'Isinma', 'Esit', true, 'İSKİ', 1)">💧 Su</button>
+                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Merkezi Doğalgaz / Isınma', 'FaturaAbonelik', 'Isletme', 'Isinma', 'Metrekare', true, 'İGDAŞ', 1)">🔥 Doğalgaz</button>
+                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Asansör Bakım Sözleşmesi', 'BakimOnarim', 'Isletme', 'Asansor', 'Esit', false, 'Asansör Firması', 1)">🛗 Asansör Bakım</button>
+                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Mali Müşavir / Yönetim', 'YonetimIdari', 'Isletme', 'Genel', 'Esit', false, 'Mali Müşavir', 1)">📋 Mali Müşavir</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" onclick="applyFixedPreset('Ortak Alan Yangın & Bina Sigortası', 'YonetimIdari', 'Isletme', 'Genel', 'Esit', false, 'Sigorta Acentesi', 12)">🛡️ Ortak Alan Sigortası (Yıllık)</button>
+                        <button type="button" class="btn btn-sm btn-outline-success rounded-pill" onclick="applyFixedPreset('GMK360 Bina Yönetim Aboneliği', 'YonetimIdari', 'Isletme', 'Genel', 'Esit', false, 'GMK360', 12)">💻 GMK360 (Yıllık)</button>
                     </div>
                 </div>
                 <div class="col-md-6">
@@ -706,7 +740,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-bold small">Kalem Başlığı (Boşsa Kurum Adı Kullanılır)</label>
-                    <input type="text" name="title" id="fxTitle" class="form-control" placeholder="Örn: Ortak Elektrik, Su Faturası" />
+                    <input type="text" name="title" id="fxTitle" class="form-control" placeholder="Örn: Ortak Elektrik, GMK360 Aboneliği" />
                 </div>
                 <div class="col-12">
                     <label class="form-label fw-bold small">Fatura Tutarı Şekli *</label>
@@ -714,39 +748,74 @@
                         <div class="form-check mb-0">
                             <input class="form-check-input" type="radio" name="isVariableAmount" id="fxVarYes" value="true" checked onchange="toggleFixedAmountInput()">
                             <label class="form-check-label small fw-bold text-primary" for="fxVarYes">
-                                Değişken Fatura (Elektrik, Su, Gaz — Her ay fatura gelince girilir)
+                                Değişken Fatura (Elektrik, Su, Gaz — Fatura gelince girilir)
                             </label>
                         </div>
                         <div class="form-check mb-0">
                             <input class="form-check-input" type="radio" name="isVariableAmount" id="fxVarNo" value="false" onchange="toggleFixedAmountInput()">
                             <label class="form-check-label small fw-bold" for="fxVarNo">
-                                Her Ay Sabit Tutar (Asansör Bakım, Mali Müşavir)
+                                Sabit Tutarlı Sözleşme / Abonelik (Aylık veya Yıllık)
                             </label>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-4" id="fxAmountBox" style="display:none;">
-                    <label class="form-label fw-bold small">Sabit Aylık Tutar (₺)</label>
-                    <input type="number" step="0.01" min="0" name="monthlyAmount" id="fxAmount" class="form-control" value="0" placeholder="Örn: 3000" />
+                    <label class="form-label fw-bold small">Sözleşme / Abonelik Tutarı (₺)</label>
+                    <input type="number" step="0.01" min="0" name="monthlyAmount" id="fxAmount" class="form-control" value="0" placeholder="Örn: 1250 veya 6000" />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-bold small">Kurum / Firma *</label>
-                    <input type="text" name="providerName" id="fxProvider" class="form-control" placeholder="Enerjisa, İSKİ, İGDAŞ vb." />
+                    <input type="text" name="providerName" id="fxProvider" class="form-control" placeholder="Enerjisa, İSKİ, GMK360 vb." />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-bold small">Abone / Sözleşme No</label>
                     <input type="text" name="subscriberNo" class="form-control" placeholder="Opsiyonel" />
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Ödeme Periyodu</label>
+                    <select name="billingCycleMonths" id="fxCycle" class="form-select fw-semibold" onchange="toggleBillingCycleFields()">
+                        <option value="1">Aylık (Her Ay)</option>
+                        <option value="3">3 Aylık (Üç Ayda Bir)</option>
+                        <option value="6">6 Aylık (Altı Ayda Bir)</option>
+                        <option value="12">Yıllık (Yılda 1 Kez)</option>
+                    </select>
+                </div>
+                <div class="col-md-4" id="fxBillingMonthBox" style="display:none;">
+                    <label class="form-label fw-bold small">Yenileme / Ödeme Ayı</label>
+                    <select name="billingMonth" id="fxBillingMonth" class="form-select">
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            <option value="@m" selected="@(m == DateTime.Today.Month ? "selected" : null)">@m. Ay (@System.Globalization.CultureInfo.GetCultureInfo("tr-TR").DateTimeFormat.GetMonthName(m))</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
                     <label class="form-label fw-bold small">Ödeme Günü (Ayın Kaçı?)</label>
                     <input type="number" min="1" max="31" name="dueDayOfMonth" class="form-control" value="15" required />
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <label class="form-label fw-bold small">Gider Kapsamı</label>
                     <select name="expenseScope" id="fxScope" class="form-select fw-semibold">
                         <option value="Isletme">İşletme (Aidat Kasasından Ödenir)</option>
                         <option value="Demirbas">Demirbaş / Büyük Tadilat</option>
                     </select>
+                </div>
+                <div class="col-12 border-top pt-2">
+                    <div class="fw-bold small text-dark mb-2"><i class="bi bi-file-earmark-lock text-primary me-1"></i> Sözleşme Belgesi &amp; Fiziksel Arşiv Adresi (Opsiyonel)</div>
+                    <div class="row g-2">
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold small mb-1">Sözleşme PDF / Taranmış Fotoğraf</label>
+                            <input type="file" name="contractFile" class="form-control form-control-sm" accept=".pdf,image/*" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small mb-1">Islak İmzalı Fiziksel Klasör / Raf</label>
+                            <input type="text" name="physicalArchiveLocation" class="form-control form-control-sm" placeholder="Örn: Yönetim Dolabı - Mavi Klasör 2" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small mb-1">Sözleşme Bitiş Tarihi</label>
+                            <input type="date" name="contractEndDate" class="form-control form-control-sm" />
+                        </div>
+                    </div>
                 </div>
                 <input type="hidden" name="expenseItemKey" id="fxItemKey" value="Genel" />
                 <input type="hidden" name="distributionRule" id="fxRule" value="Esit" />
@@ -755,12 +824,12 @@
                 <div class="col-12" id="fxAutoBox" style="display:none;">
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" name="isAutoRecurring" value="true" id="autoRecSw" checked>
-                        <label class="form-check-label small fw-bold" for="autoRecSw">Aylık bütçe hesabında sabit kalem olarak göster</label>
+                        <label class="form-check-label small fw-bold" for="autoRecSw">Bütçe özetine dahil et (Yıllık kalemler aylık 1/12 pay olarak hesaplanır)</label>
                     </div>
                 </div>
             </div>
             <div class="modal-footer border-0 bg-light">
-                <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold w-100">Aboneliği / Kalemi Kaydet</button>
+                <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold w-100">Aboneliği / Sözleşmeyi Kaydet</button>
             </div>
         </form>
     </div>
@@ -1096,16 +1165,23 @@
 <script>
     let currentDailyRate = 0;
 
-    function applyFixedPreset(title, group, scope, itemKey, rule, isVariable, provider) {
+    function applyFixedPreset(title, group, scope, itemKey, rule, isVariable, provider, cycleMonths) {
         document.getElementById('fxTitle').value = title;
         document.getElementById('fxGroup').value = group;
         document.getElementById('fxScope').value = scope;
         document.getElementById('fxItemKey').value = itemKey;
         document.getElementById('fxRule').value = rule;
         document.getElementById('fxProvider').value = provider || '';
+        document.getElementById('fxCycle').value = String(cycleMonths || 1);
         document.getElementById('fxVarYes').checked = !!isVariable;
         document.getElementById('fxVarNo').checked = !isVariable;
         toggleFixedAmountInput();
+        toggleBillingCycleFields();
+    }
+
+    function toggleBillingCycleFields() {
+        const cycle = parseInt(document.getElementById('fxCycle').value || '1', 10);
+        document.getElementById('fxBillingMonthBox').style.display = cycle > 1 ? '' : 'none';
     }
 
     function toggleFixedAmountInput() {

@@ -2970,10 +2970,44 @@ namespace GMK360.Web.Controllers
             decimal? ownerSplitPercent = null,
             string? expenseGroup = null,
             string? returnAction = null,
-            bool isVariableAmount = false)
+            bool isVariableAmount = false,
+            int billingCycleMonths = 1,
+            int? billingMonth = null,
+            DateTime? contractEndDate = null,
+            string? physicalArchiveLocation = null,
+            Microsoft.AspNetCore.Http.IFormFile? contractFile = null,
+            [FromServices] Microsoft.AspNetCore.Hosting.IWebHostEnvironment? env = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
+
+            string? contractUrl = null;
+            if (contractFile != null && contractFile.Length > 0)
+            {
+                var ext = System.IO.Path.GetExtension(contractFile.FileName)?.ToLowerInvariant() ?? "";
+                var allowed = new[] { ".pdf", ".jpg", ".jpeg", ".png", ".webp" };
+                if (!allowed.Contains(ext))
+                {
+                    TempData["ErrorMessage"] = "Sözleşme dosyası yalnızca PDF veya görsel (.jpg/.png/.webp) olabilir.";
+                    return RedirectToAction(nameof(Accounting), new { buildingId, tab = "giderler" });
+                }
+
+                var webRoot = env?.WebRootPath ?? System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot");
+                var folder = System.IO.Path.Combine(webRoot, "uploads", "buildings", buildingId.ToString(), "contracts");
+                System.IO.Directory.CreateDirectory(folder);
+                var fileName = $"sozlesme_{buildingId}_{Guid.NewGuid():N}{ext}";
+                var fullPath = System.IO.Path.Combine(folder, fileName);
+                using (var stream = new System.IO.FileStream(fullPath, System.IO.FileMode.Create))
+                {
+                    await contractFile.CopyToAsync(stream);
+                }
+                contractUrl = $"/uploads/buildings/{buildingId}/contracts/{fileName}";
+            }
+
+            int normalizedCycle = billingCycleMonths is 3 or 6 or 12 ? billingCycleMonths : 1;
+            int? normalizedBillingMonth = normalizedCycle > 1 && billingMonth.HasValue
+                ? Math.Clamp(billingMonth.Value, 1, 12)
+                : (normalizedCycle > 1 ? DateTime.Today.Month : null);
 
             var resolvedType = string.Equals(expenseScope, "Demirbas", StringComparison.OrdinalIgnoreCase)
                 ? BuildingExpenseType.CapitalExpenditure
@@ -2997,6 +3031,11 @@ namespace GMK360.Web.Controllers
                 OwnerSplitPercent = ownerSplitPercent.HasValue ? Math.Clamp(ownerSplitPercent.Value, 0m, 100m) : null,
                 DueDayOfMonth = Math.Clamp(dueDayOfMonth, 1, 31),
                 MonthlyAmount = finalAmount,
+                BillingCycleMonths = normalizedCycle,
+                BillingMonth = normalizedBillingMonth,
+                ContractDocumentUrl = contractUrl,
+                PhysicalArchiveLocation = string.IsNullOrWhiteSpace(physicalArchiveLocation) ? null : physicalArchiveLocation.Trim(),
+                ContractEndDate = contractEndDate,
                 ProviderName = providerName?.Trim(),
                 SubscriberNo = subscriberNo?.Trim(),
                 IsAutoRecurring = !isVariableAmount && isAutoRecurring && finalAmount > 0m,
@@ -3007,7 +3046,7 @@ namespace GMK360.Web.Controllers
 
             TempData["SuccessMessage"] = isVariableAmount
                 ? $"'{resolvedTitle}' değişken faturalı abonelik olarak kaydedildi. Ay geldiğinde yanındaki '+ Bu Ayın Faturasını Gir' butonundan fatura işleyebilirsiniz."
-                : $"'{resolvedTitle}' aylık sabit gider bütçesine eklendi.";
+                : $"'{resolvedTitle}' düzenli abonelik/sözleşme listesine eklendi.";
             return RedirectToAction(nameof(Accounting), new { buildingId, tab = "giderler" });
         }
 

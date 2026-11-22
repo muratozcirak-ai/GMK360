@@ -65,14 +65,21 @@ namespace GMK360.Web.Services
                 .Where(f => f.BuildingId == buildingId && f.IsActive && f.IsAutoRecurring && !f.IsDeleted)
                 .ToListAsync();
 
+            decimal monthlyFixedOp = fixedExpenses
+                .Where(f => f.ExpenseScope != "Demirbas")
+                .Sum(f => f.BillingCycleMonths > 1 ? Math.Round(f.MonthlyAmount / f.BillingCycleMonths, 2) : f.MonthlyAmount);
+            decimal monthlyFixedCap = fixedExpenses
+                .Where(f => f.ExpenseScope == "Demirbas")
+                .Sum(f => f.BillingCycleMonths > 1 ? Math.Round(f.MonthlyAmount / f.BillingCycleMonths, 2) : f.MonthlyAmount);
+
             return new BuildingMonthlyBudgetSummary
             {
                 BuildingId = buildingId,
                 ActiveUnitCount = activeUnitCount,
                 MonthlyStaffOperatingCost = staffs.Sum(s => s.TotalMonthlyOperatingCost),
                 MonthlySeveranceFundTotal = staffs.Sum(s => s.MonthlySeveranceFund),
-                MonthlyFixedOperatingCost = fixedExpenses.Where(f => f.ExpenseScope != "Demirbas").Sum(f => f.MonthlyAmount),
-                MonthlyFixedCapitalCost = fixedExpenses.Where(f => f.ExpenseScope == "Demirbas").Sum(f => f.MonthlyAmount)
+                MonthlyFixedOperatingCost = monthlyFixedOp,
+                MonthlyFixedCapitalCost = monthlyFixedCap
             };
         }
 
@@ -338,7 +345,8 @@ namespace GMK360.Web.Services
         {
             var fixedItems = await _context.BuildingFixedExpenses
                 .AsNoTracking()
-                .Where(f => f.BuildingId == buildingId && f.IsActive && f.IsAutoRecurring && !f.IsDeleted && f.MonthlyAmount > 0m)
+                .Where(f => f.BuildingId == buildingId && f.IsActive && f.IsAutoRecurring && !f.IsDeleted && f.MonthlyAmount > 0m
+                    && (f.BillingCycleMonths <= 1 || f.BillingMonth == month))
                 .OrderBy(f => f.DueDayOfMonth)
                 .ToListAsync();
 
@@ -491,7 +499,8 @@ namespace GMK360.Web.Services
         public async Task<GovernanceActionResult> DistributeAllRecurringBudgetAsync(int buildingId, int year, int month, bool includeStaffCosts, string actorUserId)
         {
             var fixedItems = await _context.BuildingFixedExpenses
-                .Where(f => f.BuildingId == buildingId && f.IsActive && f.IsAutoRecurring && !f.IsDeleted && f.MonthlyAmount > 0m)
+                .Where(f => f.BuildingId == buildingId && f.IsActive && f.IsAutoRecurring && !f.IsDeleted && f.MonthlyAmount > 0m
+                    && (f.BillingCycleMonths <= 1 || f.BillingMonth == month))
                 .OrderBy(f => f.DueDayOfMonth)
                 .ToListAsync();
 

@@ -49,6 +49,15 @@ namespace GMK360.Core.Entities
         [Column(TypeName = "decimal(18,2)")]
         public decimal MonthlyAmount { get; set; }
 
+        public int BillingCycleMonths { get; set; } = 1; // 1: Aylik, 3: 3 Aylik, 6: 6 Aylik, 12: Yillik
+        [Range(1, 12)]
+        public int? BillingMonth { get; set; } // Yillik/donemsel odemede hangi ay (1-12)
+        [MaxLength(500)]
+        public string? ContractDocumentUrl { get; set; } // Sozlesme PDF veya taranmis foto
+        [MaxLength(250)]
+        public string? PhysicalArchiveLocation { get; set; } // Islak imzali fiziksel klasor/raf adresi
+        public DateTime? ContractEndDate { get; set; }
+
         public bool IsAutoRecurring { get; set; } = true;
         public bool IsActive { get; set; } = true;
     }
