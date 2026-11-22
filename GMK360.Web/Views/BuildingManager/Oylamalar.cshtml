@@ -5,6 +5,10 @@
     var buildings = ViewBag.Buildings as List<GMK360.Core.Entities.Building> ?? new List<GMK360.Core.Entities.Building>();
     int? selectedBuildingId = ViewBag.SelectedBuildingId as int?;
     var approvals = ViewBag.Approvals as List<GMK360.Core.Entities.ApprovalRequest> ?? new List<GMK360.Core.Entities.ApprovalRequest>();
+    var buildingMap = ViewBag.BuildingMap as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var quotesByMeeting = ViewBag.QuotesByMeeting as Dictionary<int, List<GMK360.Core.Entities.B2B.B2BQuoteRequest>> ?? new Dictionary<int, List<GMK360.Core.Entities.B2B.B2BQuoteRequest>>();
+    var jobsByMeeting = ViewBag.JobsByMeeting as Dictionary<int, List<GMK360.Core.Entities.Marketplace.MarketplaceJob>> ?? new Dictionary<int, List<GMK360.Core.Entities.Marketplace.MarketplaceJob>>();
+    var staffsByMeeting = ViewBag.StaffsByMeeting as Dictionary<int, List<GMK360.Core.Entities.BuildingStaff>> ?? new Dictionary<int, List<GMK360.Core.Entities.BuildingStaff>>();
 }
 
 <div class="container-fluid py-3 px-1">
@@ -22,6 +26,13 @@
     {
         <div class="alert alert-success alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
             @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
+            @TempData["ErrorMessage"]
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     }
@@ -99,10 +110,15 @@
             {
                 foreach (var m in Model)
                 {
+                    var bName = buildingMap.ContainsKey(m.ContextId) ? buildingMap[m.ContextId] : ("Bina #" + m.ContextId);
+                    var linkedQuotes = quotesByMeeting.ContainsKey(m.Id) ? quotesByMeeting[m.Id] : new List<GMK360.Core.Entities.B2B.B2BQuoteRequest>();
+                    var linkedJobs = jobsByMeeting.ContainsKey(m.Id) ? jobsByMeeting[m.Id] : new List<GMK360.Core.Entities.Marketplace.MarketplaceJob>();
+                    var linkedStaffs = staffsByMeeting.ContainsKey(m.Id) ? staffsByMeeting[m.Id] : new List<GMK360.Core.Entities.BuildingStaff>();
                     <div class="border rounded-4 p-3 bg-light mb-3">
                         <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
                             <div>
-                                <span class="badge bg-dark rounded-pill me-2">Karar #@m.Id</span>
+                                <span class="badge bg-dark rounded-pill me-1">Karar #@m.Id</span>
+                                <span class="badge bg-secondary bg-opacity-25 text-dark rounded-pill me-2">@bName</span>
                                 <span class="fw-bold text-dark fs-5">@m.AgendaTitle</span>
                                 <div class="small text-muted mt-1"><i class="bi bi-calendar3 me-1"></i>@m.MeetingDate.ToString("dd MMMM yyyy")</div>
                             </div>
@@ -112,13 +128,97 @@
                         </div>
                         @if (m.Decisions != null && m.Decisions.Any())
                         {
-                            <div class="bg-white rounded-3 border p-3 small">
+                            <div class="bg-white rounded-3 border p-3 small mb-2">
                                 @foreach (var dec in m.Decisions)
                                 {
                                     <div class="mb-1"><i class="bi bi-check2-circle text-success me-1"></i>@dec.DecisionText</div>
                                 }
                             </div>
                         }
+
+                        @* Bağlı Pazar Yeri, B2B Teklif ve PIN Yetkileri *@
+                        @if (linkedJobs.Any() || linkedQuotes.Any() || linkedStaffs.Any())
+                        {
+                            <div class="bg-white rounded-3 border p-2 px-3 mb-2 small d-flex flex-column gap-2">
+                                @foreach (var job in linkedJobs)
+                                {
+                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                        <div>
+                                            <span class="badge bg-warning text-dark rounded-pill me-1">📢 Pazar Yeri İlanı #@job.Id</span>
+                                            <span class="fw-semibold">@job.Title</span>
+                                            <span class="text-muted ms-2">(@(job.Bids?.Count ?? 0) teklif@(job.EstimatedBudget.HasValue ? $" • Bütçe: {job.EstimatedBudget.Value:N0} ₺" : ""))</span>
+                                        </div>
+                                        <a href="/Marketplace/Detail/@job.Id" class="btn btn-sm btn-outline-warning text-dark fw-bold rounded-pill px-3">
+                                            İlana Git &amp; Teklifleri Gör <i class="bi bi-arrow-right ms-1"></i>
+                                        </a>
+                                    </div>
+                                }
+                                @foreach (var quote in linkedQuotes)
+                                {
+                                    var inviteCount = quote.Invites?.Count ?? 0;
+                                    var pricedCount = quote.Invites?.Count(i => i.OfferedPrice.HasValue && i.OfferedPrice.Value > 0) ?? 0;
+                                    var acceptedInvite = quote.Invites?.FirstOrDefault(i => i.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Accepted);
+                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                        <div>
+                                            <span class="badge bg-primary rounded-pill me-1">📊 B2B Teklif Masası #@quote.Id</span>
+                                            <span class="text-muted">@inviteCount firma daveti • <strong>@pricedCount fiyat geldi</strong></span>
+                                            @if (acceptedInvite != null)
+                                            {
+                                                <span class="badge bg-success ms-1">✅ Onaylı: @(acceptedInvite.NetworkContact?.CompanyName ?? "Firma") (@(acceptedInvite.OfferedPrice?.ToString("N0") ?? "0") ₺)</span>
+                                            }
+                                        </div>
+                                        <a href="/B2BPurchasing/Details/@quote.Id" class="btn btn-sm btn-outline-primary fw-bold rounded-pill px-3">
+                                            Teklif Kıyasla &amp; Dış Link Paylaş <i class="bi bi-arrow-right ms-1"></i>
+                                        </a>
+                                    </div>
+                                }
+                                @foreach (var st in linkedStaffs)
+                                {
+                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                        <div>
+                                            <span class="badge bg-info text-dark rounded-pill me-1">🔑 PIN Yetkilisi</span>
+                                            <span class="fw-semibold">@st.FullName</span>
+                                            <span class="text-muted ms-1">(@st.RoleType)</span>
+                                            <span class="badge bg-light text-dark border ms-1">@st.PhoneNumber</span>
+                                        </div>
+                                        <span class="text-success small fw-semibold">/FacilityPortal girişi aktif</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @* Karar Sonrası Satınalma & Yetkilendirme Aksiyonları *@
+                        <div class="d-flex flex-wrap align-items-center gap-2 pt-1">
+                            <button type="button"
+                                    class="btn btn-sm btn-warning text-dark fw-bold rounded-pill px-3"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#marketplaceJobModal"
+                                    data-meeting-id="@m.Id"
+                                    data-building-id="@m.ContextId"
+                                    data-title="@($"{bName} — {m.AgendaTitle}")">
+                                <i class="bi bi-megaphone me-1"></i> Pazar Yerinde İlan Aç
+                            </button>
+
+                            <form asp-action="OpenB2BQuoteFromMeeting" asp-controller="BuildingManager" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="meetingId" value="@m.Id" />
+                                <input type="hidden" name="buildingId" value="@m.ContextId" />
+                                <input type="hidden" name="title" value="@($"{bName} — {m.AgendaTitle}")" />
+                                <button type="submit" class="btn btn-sm btn-primary fw-bold rounded-pill px-3">
+                                    <i class="bi bi-diagram-3 me-1"></i> @(linkedQuotes.Any() ? "B2B Teklif & Kıyas Masasını Aç" : "Teklif Topla & Kıyasla (B2B / Dış Link)")
+                                </button>
+                            </form>
+
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-info text-dark fw-bold rounded-pill px-3"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#decisionPinModal"
+                                    data-meeting-id="@m.Id"
+                                    data-building-id="@m.ContextId"
+                                    data-title="@m.AgendaTitle">
+                                <i class="bi bi-key me-1"></i> Yetkili / Usta PIN Aç
+                            </button>
+                        </div>
                     </div>
                 }
             }
@@ -132,6 +232,7 @@
         <div class="modal-dialog modal-dialog-centered">
             <form class="modal-content rounded-4 border-0 shadow" asp-action="CreateMeeting" asp-controller="BuildingManager" method="post">
                 @Html.AntiForgeryToken()
+                <input type="hidden" name="returnTo" value="Oylamalar" />
                 <div class="modal-header bg-success text-white border-0">
                     <h5 class="modal-title fw-bold">Yeni Toplantı &amp; Karar Kaydı</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -166,4 +267,116 @@
             </form>
         </div>
     </div>
+
+    @* Pazar Yeri İlan Açma Modalı *@
+    <div class="modal fade" id="marketplaceJobModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content rounded-4 border-0 shadow" asp-action="OpenMarketplaceJobFromMeeting" asp-controller="BuildingManager" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="meetingId" id="mpMeetingId" />
+                <input type="hidden" name="buildingId" id="mpBuildingId" />
+                <div class="modal-header bg-warning text-dark border-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-megaphone me-2"></i>Pazar Yerinde İş İlanı Aç</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">İlan Başlığı *</label>
+                        <input type="text" name="title" id="mpTitle" class="form-control" required />
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">İş / Sektör Türü *</label>
+                            <select name="jobType" class="form-select" required>
+                                <option value="Taşeron / Usta">Taşeron / Usta</option>
+                                <option value="Tadilat & Onarım">Tadilat &amp; Onarım</option>
+                                <option value="Tedarik / Malzeme">Tedarik / Malzeme</option>
+                                <option value="Hizmet / Bakım">Hizmet / Bakım</option>
+                                <option value="Teknik Servis">Teknik Servis</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Tahmini Bütçe (₺)</label>
+                            <input type="number" name="estimatedBudget" class="form-control" step="100" min="0" placeholder="Opsiyonel" />
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-bold small">Keşif / İş Kapsamı Notu</label>
+                        <textarea name="extraNote" class="form-control" rows="3" placeholder="Metraj, malzeme tercihi veya saha keşif saati gibi ek detayları yazabilirsiniz..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-warning text-dark rounded-pill px-4 fw-bold">İlanı Pazar Yerinde Yayınla</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    @* Karar Sonrası Yetkili / Usta PIN Hesabı Açma Modalı *@
+    <div class="modal fade" id="decisionPinModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content rounded-4 border-0 shadow" asp-action="GrantDecisionPinAccess" asp-controller="BuildingManager" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="meetingId" id="dpMeetingId" />
+                <input type="hidden" name="buildingId" id="dpBuildingId" />
+                <div class="modal-header bg-info text-dark border-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-key me-2"></i>Karar Yetkilisi / Usta PIN Hesabı Aç</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-light border small mb-3">
+                        <strong id="dpAgendaLabel"></strong> kararı kapsamında saha takibi veya yüklenici yetkisi verilecek kişi <code class="mx-1">/FacilityPortal</code> üzerinden Telefon + PIN ile giriş yapabilir.
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Ad Soyad *</label>
+                            <input type="text" name="fullName" class="form-control" required placeholder="Örn: Ahmet Yılmaz" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Yetki / Görev *</label>
+                            <select name="roleTitle" class="form-select" required>
+                                <option value="Yüklenici / Usta Yetkilisi">Yüklenici / Usta Yetkilisi</option>
+                                <option value="Kat Maliki Karar Denetçisi">Kat Maliki Karar Denetçisi</option>
+                                <option value="Teknik Kontrol / Şef">Teknik Kontrol / Şef</option>
+                                <option value="Satınalma Yetkilisi">Satınalma Yetkilisi</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-7">
+                            <label class="form-label fw-bold small">Telefon Numarası *</label>
+                            <input type="text" name="phoneNumber" class="form-control" required placeholder="05XX XXX XX XX" />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold small">Giriş PIN (4-6 Hane) *</label>
+                            <input type="text" name="quickPin" class="form-control" required minlength="4" maxlength="6" placeholder="Örn: 4821" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-info text-dark rounded-pill px-4 fw-bold">Yetki &amp; PIN Oluştur</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('marketplaceJobModal')?.addEventListener('show.bs.modal', function (event) {
+            const btn = event.relatedTarget;
+            if (!btn) return;
+            document.getElementById('mpMeetingId').value = btn.getAttribute('data-meeting-id') || '';
+            document.getElementById('mpBuildingId').value = btn.getAttribute('data-building-id') || '';
+            document.getElementById('mpTitle').value = btn.getAttribute('data-title') || '';
+        });
+
+        document.getElementById('decisionPinModal')?.addEventListener('show.bs.modal', function (event) {
+            const btn = event.relatedTarget;
+            if (!btn) return;
+            document.getElementById('dpMeetingId').value = btn.getAttribute('data-meeting-id') || '';
+            document.getElementById('dpBuildingId').value = btn.getAttribute('data-building-id') || '';
+            document.getElementById('dpAgendaLabel').textContent = btn.getAttribute('data-title') || '';
+        });
+    </script>
 }

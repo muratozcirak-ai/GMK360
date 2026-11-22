@@ -2178,7 +2178,7 @@ namespace GMK360.Web.Controllers
 
         // 3.1 Noter Karar Defteri - Yeni Toplantı ve Karar Ekle
         [HttpPost]
-        public async Task<IActionResult> CreateMeeting(int buildingId, string agendaTitle, DateTime meetingDate, string decisionText)
+        public async Task<IActionResult> CreateMeeting(int buildingId, string agendaTitle, DateTime meetingDate, string decisionText, string? returnTo = null)
         {
             var userId = GetUserId();
             var building = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == buildingId && (b.ManagerUserId == userId || b.CreatedByUserId == userId || User.IsInRole("Admin") || User.IsInRole("SuperAdmin")));
@@ -2208,7 +2208,11 @@ namespace GMK360.Web.Controllers
                 await _context.SaveChangesAsync();
             }
 
-            TempData["SuccessMessage"] = "🎉 Genel Kurul Kararı başarıyla kaydedildi. Noter Defteri Baskı Şablonunu indirebilirsiniz.";
+            TempData["SuccessMessage"] = "🎉 Genel Kurul Kararı başarıyla kaydedildi. Noter Defteri Baskı Şablonunu indirebilir, Pazar Yeri / B2B üzerinden teklif toplayabilirsiniz.";
+            if (string.Equals(returnTo, "Oylamalar", StringComparison.OrdinalIgnoreCase))
+            {
+                return RedirectToAction(nameof(Oylamalar), new { buildingId });
+            }
             return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
 
@@ -3561,10 +3565,261 @@ namespace GMK360.Web.Controllers
                     .ToListAsync()
                 : new System.Collections.Generic.List<ApprovalRequest>();
 
+            var meetingIds = meetings.Select(m => m.Id).ToList();
+
+            var meetingQuotes = meetingIds.Any()
+                ? await _context.B2BQuoteRequests
+                    .Include(q => q.Invites).ThenInclude(i => i.NetworkContact)
+                    .Where(q => q.SourceModule == "BuildingMeeting" && meetingIds.Contains(q.SourceReferenceId))
+                    .OrderByDescending(q => q.Id)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<GMK360.Core.Entities.B2B.B2BQuoteRequest>();
+
+            var candidateJobs = meetingIds.Any()
+                ? await _context.MarketplaceJobs
+                    .Include(j => j.Bids)
+                    .Where(j => j.IsActive && j.Description != null && j.Description.Contains("[Karar #"))
+                    .OrderByDescending(j => j.Id)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<GMK360.Core.Entities.Marketplace.MarketplaceJob>();
+
+            var jobsByMeeting = new System.Collections.Generic.Dictionary<int, System.Collections.Generic.List<GMK360.Core.Entities.Marketplace.MarketplaceJob>>();
+            foreach (var mId in meetingIds)
+            {
+                var tag = $"[Karar #{mId}]";
+                var matched = candidateJobs.Where(j => j.Description != null && j.Description.Contains(tag)).ToList();
+                if (matched.Any()) jobsByMeeting[mId] = matched;
+            }
+
+            var decisionStaffs = allowedIds.Any()
+                ? await _context.BuildingStaffs
+                    .Where(s => allowedIds.Contains(s.BuildingId) && !s.IsDeleted && s.IsActive && s.QuickPinHash != null && s.RoleType != null && s.RoleType.Contains("[Karar #"))
+                    .OrderByDescending(s => s.Id)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<BuildingStaff>();
+
+            var staffsByMeeting = new System.Collections.Generic.Dictionary<int, System.Collections.Generic.List<BuildingStaff>>();
+            foreach (var mId in meetingIds)
+            {
+                var tag = $"[Karar #{mId}]";
+                var matched = decisionStaffs.Where(s => s.RoleType != null && s.RoleType.Contains(tag)).ToList();
+                if (matched.Any()) staffsByMeeting[mId] = matched;
+            }
+
             ViewBag.Buildings = buildings;
+            ViewBag.BuildingMap = buildings.ToDictionary(b => b.Id, b => b.Name);
             ViewBag.SelectedBuildingId = buildingId;
             ViewBag.Approvals = approvals;
+            ViewBag.QuotesByMeeting = meetingQuotes.GroupBy(q => q.SourceReferenceId).ToDictionary(g => g.Key, g => g.ToList());
+            ViewBag.JobsByMeeting = jobsByMeeting;
+            ViewBag.StaffsByMeeting = staffsByMeeting;
             return View(meetings);
+        }
+
+        private async Task<int?> ResolvePurchasingAgencyIdForBuildingAsync(Building building)
+        {
+            var userId = GetUserId();
+            if (!string.IsNullOrEmpty(userId))
+            {
+                var consultant = await _context.Set<AgencyConsultant>()
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(a => a.UserId == userId && a.AgencyId > 0);
+                if (consultant != null) return consultant.AgencyId;
+            }
+
+            var agencyClaim = User.FindFirst("AgencyId")?.Value;
+            if (int.TryParse(agencyClaim, out int parsedAgencyId) && parsedAgencyId > 0)
+                return parsedAgencyId;
+
+            if (building.ConstructionProjectId.HasValue)
+            {
+                var projAgency = await _context.ConstructionProjects
+                    .AsNoTracking()
+                    .Where(p => p.Id == building.ConstructionProjectId.Value && p.AgencyId > 0)
+                    .Select(p => (int?)p.AgencyId)
+                    .FirstOrDefaultAsync();
+                if (projAgency.HasValue) return projAgency.Value;
+            }
+
+            var activeProjAgency = await _context.ConstructionProjects
+                .AsNoTracking()
+                .Where(p => !p.IsDeleted && p.AgencyId > 0)
+                .OrderByDescending(p => p.Id)
+                .Select(p => (int?)p.AgencyId)
+                .FirstOrDefaultAsync();
+            if (activeProjAgency.HasValue) return activeProjAgency.Value;
+
+            return await _context.Agencies
+                .AsNoTracking()
+                .OrderBy(a => a.Id)
+                .Select(a => (int?)a.Id)
+                .FirstOrDefaultAsync();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> OpenMarketplaceJobFromMeeting(
+            int meetingId,
+            int buildingId,
+            string title,
+            string jobType,
+            decimal? estimatedBudget,
+            string? extraNote)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var meeting = await _context.SystemMeetings
+                .Include(m => m.Decisions)
+                .FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && m.ContextId == buildingId);
+            if (meeting == null) return NotFound();
+
+            var buildingFull = await _context.Buildings
+                .Include(b => b.City)
+                .Include(b => b.District)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(b => b.Id == buildingId);
+
+            var locParts = new[] { buildingFull?.City?.Name, buildingFull?.District?.Name, building.Name }
+                .Where(x => !string.IsNullOrWhiteSpace(x));
+            var locationText = string.Join(" / ", locParts);
+
+            var decisionSummary = meeting.Decisions != null && meeting.Decisions.Any()
+                ? string.Join("\n", meeting.Decisions.Select(d => "• " + d.DecisionText))
+                : meeting.AgendaTitle;
+
+            var desc = $"[Karar #{meeting.Id}] {building.Name} — {meeting.AgendaTitle} ({meeting.MeetingDate:dd.MM.yyyy})\n\nKarar Detayı:\n{decisionSummary}";
+            if (!string.IsNullOrWhiteSpace(extraNote))
+            {
+                desc += $"\n\nKeşif / İş Kapsamı Notu:\n{extraNote.Trim()}";
+            }
+
+            var job = new GMK360.Core.Entities.Marketplace.MarketplaceJob
+            {
+                Title = string.IsNullOrWhiteSpace(title) ? $"{building.Name} — {meeting.AgendaTitle}" : title.Trim(),
+                Description = desc,
+                Location = string.IsNullOrWhiteSpace(locationText) ? building.Name : locationText,
+                JobType = string.IsNullOrWhiteSpace(jobType) ? "Taşeron / Usta" : jobType.Trim(),
+                EstimatedBudget = estimatedBudget.HasValue && estimatedBudget.Value > 0 ? estimatedBudget : null,
+                CreatedByUserId = GetUserId() ?? "",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.MarketplaceJobs.Add(job);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"📢 Pazar Yeri ilanı (#{job.Id}) yayına alındı! Ustalar ve firmalar artık bu karar için teklif verebilir.";
+            return RedirectToAction(nameof(Oylamalar), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> OpenB2BQuoteFromMeeting(
+            int meetingId,
+            int buildingId,
+            string? title,
+            DateTime? deadline,
+            string? extraNote)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var meeting = await _context.SystemMeetings
+                .Include(m => m.Decisions)
+                .FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && m.ContextId == buildingId);
+            if (meeting == null) return NotFound();
+
+            var existingQuote = await _context.B2BQuoteRequests
+                .OrderByDescending(q => q.Id)
+                .FirstOrDefaultAsync(q => q.SourceModule == "BuildingMeeting" && q.SourceReferenceId == meetingId);
+            if (existingQuote != null)
+            {
+                return RedirectToAction("Details", "B2BPurchasing", new { id = existingQuote.Id });
+            }
+
+            var agencyId = await ResolvePurchasingAgencyIdForBuildingAsync(building);
+            if (!agencyId.HasValue || agencyId.Value <= 0)
+            {
+                TempData["ErrorMessage"] = "Sistemde teklif talebi açmak için tanımlı bir ajans profili bulunamadı.";
+                return RedirectToAction(nameof(Oylamalar), new { buildingId });
+            }
+
+            var decisionSummary = meeting.Decisions != null && meeting.Decisions.Any()
+                ? string.Join(" | ", meeting.Decisions.Select(d => d.DecisionText))
+                : meeting.AgendaTitle;
+
+            var desc = $"[Karar #{meeting.Id} - {building.Name}] {decisionSummary}";
+            if (!string.IsNullOrWhiteSpace(extraNote))
+            {
+                desc += $" | Not: {extraNote.Trim()}";
+            }
+
+            var quote = new GMK360.Core.Entities.B2B.B2BQuoteRequest
+            {
+                RequesterAgencyId = agencyId.Value,
+                RequesterUserId = GetUserId() ?? "",
+                SourceModule = "BuildingMeeting",
+                SourceReferenceId = meeting.Id,
+                Title = string.IsNullOrWhiteSpace(title) ? $"{building.Name} — {meeting.AgendaTitle}" : title.Trim(),
+                Description = desc,
+                Deadline = deadline ?? DateTime.UtcNow.AddDays(10),
+                Status = "Draft",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.B2BQuoteRequests.Add(quote);
+            await _context.SaveChangesAsync();
+
+            return RedirectToAction("Details", "B2BPurchasing", new { id = quote.Id });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> GrantDecisionPinAccess(
+            int meetingId,
+            int buildingId,
+            string fullName,
+            string phoneNumber,
+            string roleTitle,
+            string quickPin)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var meeting = await _context.SystemMeetings
+                .FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && m.ContextId == buildingId);
+            if (meeting == null) return NotFound();
+
+            if (string.IsNullOrWhiteSpace(fullName) || string.IsNullOrWhiteSpace(phoneNumber) || string.IsNullOrWhiteSpace(quickPin) || quickPin.Trim().Length < 4)
+            {
+                TempData["ErrorMessage"] = "Yetkili hesabı açmak için ad soyad, telefon numarası ve en az 4 haneli PIN zorunludur.";
+                return RedirectToAction(nameof(Oylamalar), new { buildingId });
+            }
+
+            var cleanRole = string.IsNullOrWhiteSpace(roleTitle) ? "Karar Yetkilisi / Usta" : roleTitle.Trim();
+            var staff = new BuildingStaff
+            {
+                BuildingId = buildingId,
+                FullName = fullName.Trim(),
+                PhoneNumber = phoneNumber.Trim(),
+                QuickPinHash = FacilityTaskDispatchService.HashQuickPin(quickPin.Trim()),
+                RoleType = $"{cleanRole} [Karar #{meeting.Id}]",
+                NetSalary = 0m,
+                SgkEmployerShare = 0m,
+                IncomeAndStampTax = 0m,
+                FringeBenefits = 0m,
+                MonthlySeveranceFund = 0m,
+                HireDate = DateTime.Today,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.BuildingStaffs.Add(staff);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"🔑 '{staff.FullName}' için Karar #{meeting.Id} kapsamında Telefon + PIN giriş yetkisi açıldı (/FacilityPortal).";
+            return RedirectToAction(nameof(Oylamalar), new { buildingId });
         }
 
         // 12. Usta & Tedarikçi Rehberi (Tesis Özel + Onaylı Platform Rehberi)

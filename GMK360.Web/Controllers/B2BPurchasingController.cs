@@ -53,6 +53,34 @@ namespace GMK360.Web.Controllers
             return null;
         }
 
+        private async Task<bool> CanManageQuoteAsync(B2BQuoteRequest? quote)
+        {
+            if (quote == null) return false;
+            if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin")) return true;
+
+            var agencyId = await GetUserAgencyIdAsync();
+            if (agencyId.HasValue && quote.RequesterAgencyId == agencyId.Value) return true;
+
+            var currentUserId = _userManager.GetUserId(User);
+            if (!string.IsNullOrEmpty(currentUserId) && quote.RequesterUserId == currentUserId)
+                return true;
+
+            if (quote.SourceModule == "BuildingMeeting" && quote.SourceReferenceId > 0 && !string.IsNullOrEmpty(currentUserId))
+            {
+                var meeting = await _context.SystemMeetings
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(m => m.Id == quote.SourceReferenceId && m.ContextType == "Building");
+                if (meeting != null)
+                {
+                    return await _context.Buildings.AnyAsync(b =>
+                        b.Id == meeting.ContextId &&
+                        (b.ManagerUserId == currentUserId || b.CreatedByUserId == currentUserId));
+                }
+            }
+
+            return false;
+        }
+
         public async Task<IActionResult> Index()
         {
             if (!await GMK360.Web.Helpers.StaffPermissionHelper.HasUserPermissionAsync(_context, User, Request, GMK360.Web.Helpers.StaffPermissionHelper.PermPurchasing))
@@ -160,8 +188,7 @@ namespace GMK360.Web.Controllers
             var quote = await _context.B2BQuoteRequests.FirstOrDefaultAsync(q => q.Id == quoteRequestId);
             if (quote == null) return NotFound();
 
-            var agencyId = await GetUserAgencyIdAsync();
-            if (quote.RequesterAgencyId != agencyId && !User.IsInRole("Admin")) return Unauthorized();
+            if (!await CanManageQuoteAsync(quote)) return Unauthorized();
 
             var item = new B2BQuoteItem
             {
@@ -185,8 +212,7 @@ namespace GMK360.Web.Controllers
             var item = await _context.B2BQuoteItems.Include(i => i.QuoteRequest).FirstOrDefaultAsync(i => i.Id == itemId);
             if (item == null) return NotFound();
             
-            var agencyId = await GetUserAgencyIdAsync();
-            if (item.QuoteRequest.RequesterAgencyId != agencyId && !User.IsInRole("Admin")) return Unauthorized();
+            if (!await CanManageQuoteAsync(item.QuoteRequest)) return Unauthorized();
 
             _context.B2BQuoteItems.Remove(item);
             await _context.SaveChangesAsync();
@@ -199,17 +225,14 @@ namespace GMK360.Web.Controllers
         {
             try 
             {
-                var agencyId = await GetUserAgencyIdAsync();
-                if (agencyId == null && !User.IsInRole("Admin")) return Unauthorized();
-
                 var quote = await _context.B2BQuoteRequests
                     .Include(q => q.Invites).ThenInclude(i => i.NetworkContact)
                     .Include(q => q.Invites).ThenInclude(i => i.InviteItems).ThenInclude(ii => ii.QuoteItem).ThenInclude(qi => qi.MaterialCatalog)
                     .Include(q => q.Items).ThenInclude(i => i.MaterialCatalog)
                     .FirstOrDefaultAsync(q => q.Id == id);
                     
-                if (quote == null || (!User.IsInRole("Admin") && quote.RequesterAgencyId != agencyId)) 
-                    return NotFound();
+                if (quote == null) return NotFound();
+                if (!await CanManageQuoteAsync(quote)) return Unauthorized();
 
                 var currentUserId = _userManager.GetUserId(User) ?? "";
                 await _supplierSyncService.AutoSyncExistingNetworkContactsAsync(quote.RequesterAgencyId, currentUserId);
@@ -225,6 +248,15 @@ namespace GMK360.Web.Controllers
                 else if (quote.SourceModule == "ConstructionProject" && quote.SourceReferenceId > 0)
                 {
                     project = await _context.ConstructionProjects.FindAsync(quote.SourceReferenceId);
+                }
+                else if (quote.SourceModule == "BuildingMeeting" && quote.SourceReferenceId > 0)
+                {
+                    var meeting = await _context.SystemMeetings.AsNoTracking().FirstOrDefaultAsync(m => m.Id == quote.SourceReferenceId && m.ContextType == "Building");
+                    ViewBag.Meeting = meeting;
+                    if (meeting != null)
+                    {
+                        ViewBag.Building = await _context.Buildings.AsNoTracking().FirstOrDefaultAsync(b => b.Id == meeting.ContextId);
+                    }
                 }
                 ViewBag.Project = project;
                 if (quote.SourceModule == "PhaseZeroDocument") { ViewBag.LegalDocument = await _context.ProjectLegalDocuments.FirstOrDefaultAsync(d => d.Id == quote.SourceReferenceId); }
@@ -290,15 +322,14 @@ namespace GMK360.Web.Controllers
         {
             try 
             {
-                var agencyId = await GetUserAgencyIdAsync();
-                if (agencyId == null) return Unauthorized();
-
                 var quote = await _context.B2BQuoteRequests
                     .Include(q => q.Items)
                     .ThenInclude(i => i.MaterialCatalog)
                     .FirstOrDefaultAsync(q => q.Id == quoteRequestId);
                     
-                if (quote == null || quote.RequesterAgencyId != agencyId) return NotFound();
+                if (quote == null) return NotFound();
+                if (!await CanManageQuoteAsync(quote)) return Unauthorized();
+                var effectiveAgencyId = quote.RequesterAgencyId;
 
                 var invite = await _context.B2BQuoteInvites
                     .Include(i => i.NetworkContact)
@@ -312,7 +343,7 @@ namespace GMK360.Web.Controllers
 
                 var receipt = new InventoryReceipt
                 {
-                    AgencyId = agencyId.Value,
+                    AgencyId = effectiveAgencyId,
                     WarehouseId = warehouseId ?? 0,
                     B2BQuoteRequestId = quote.Id,
                     SupplierName = invite.NetworkContact?.CompanyName ?? "Bilinmiyor",
@@ -382,7 +413,7 @@ namespace GMK360.Web.Controllers
                     }
 
                     var syncResult = await _supplierSyncService.EnsureSupplierSynchronizedAsync(
-                        agencyId.Value,
+                        effectiveAgencyId,
                         _userManager.GetUserId(User) ?? "",
                         invite.NetworkContact.CompanyName,
                         invite.NetworkContact.ContactPerson,
@@ -391,7 +422,7 @@ namespace GMK360.Web.Controllers
                         quote.Title);
 
                     var currentAccount = await _supplierSyncService.EnsureSupplierCurrentAccountOnlyAsync(
-                        agencyId.Value,
+                        effectiveAgencyId,
                         syncResult.PhonebookContact.Id);
                     openedCurrentAccountId = currentAccount.Id;
 
@@ -440,14 +471,14 @@ namespace GMK360.Web.Controllers
                         }
                     }
 
-                    var allContracts = _supplierSyncService.LoadAgencySupplierContracts(agencyId.Value);
+                    var allContracts = _supplierSyncService.LoadAgencySupplierContracts(effectiveAgencyId);
                     var existingContract = allContracts.FirstOrDefault(c => c.QuoteRequestId == quote.Id && c.InviteId == invite.Id);
                     if (existingContract == null)
                     {
                         existingContract = new GMK360.Web.Services.SupplierContractPackageDto
                         {
                             ContractId = Guid.NewGuid().ToString("N"),
-                            AgencyId = agencyId.Value,
+                            AgencyId = effectiveAgencyId,
                             SupplierCurrentAccountId = currentAccount.Id,
                             PhonebookContactId = syncResult.PhonebookContact.Id,
                             SupplierName = invite.NetworkContact.CompanyName ?? "",
@@ -472,12 +503,12 @@ namespace GMK360.Web.Controllers
                         existingContract.OrderedTotalAmount = isContractOnlyMode ? 0m : actualInvoiceAmount;
                         existingContract.Items = contractItems;
                     }
-                    _supplierSyncService.SaveAgencySupplierContracts(agencyId.Value, allContracts);
+                    _supplierSyncService.SaveAgencySupplierContracts(effectiveAgencyId, allContracts);
 
                     if (!isContractOnlyMode)
                     {
                         await _supplierSyncService.OpenOrUpdateCurrentAccountAsync(
-                            agencyId.Value,
+                            effectiveAgencyId,
                             syncResult.PhonebookContact.Id,
                             projId,
                             actualInvoiceAmount,
@@ -491,7 +522,7 @@ namespace GMK360.Web.Controllers
                         var targetDeliveryDate = dueDate ?? DateTime.UtcNow.AddDays(7);
                         var paymentTermsText = isPaidUpfront ? "Peşin Ödendi" : $"Vadeli (Vade: {targetDeliveryDate:dd.MM.yyyy})";
                         await _supplierSyncService.CreateDeliveryAgendaRecordAsync(
-                            agencyId.Value,
+                            effectiveAgencyId,
                             projId,
                             syncResult.PhonebookContact.Id,
                             invite.NetworkContact.CompanyName,
@@ -503,6 +534,12 @@ namespace GMK360.Web.Controllers
                 }
                 
                 await _context.SaveChangesAsync();
+
+                if (quote.SourceModule == "BuildingMeeting")
+                {
+                    TempData["SuccessMessage"] = $"✅ {invite.NetworkContact?.CompanyName} firmasının {actualInvoiceAmount:N2} ₺ tutarlı teklifi onaylandı! Şimdi Toplantı & Karar Masası üzerinden yetkili / usta PIN erişimi tanımlayabilir ve harcamayı Bina Muhasebesine işleyebilirsiniz.";
+                    return RedirectToAction("Details", new { id = quote.Id });
+                }
 
                 if (openedCurrentAccountId.HasValue && quote.SourceModule != "PhaseZeroDocument")
                 {
@@ -530,16 +567,15 @@ namespace GMK360.Web.Controllers
         {
             try
             {
-                var agencyId = await GetUserAgencyIdAsync();
-                if (agencyId == null) return Unauthorized();
-
                 var quote = await _context.B2BQuoteRequests.FirstOrDefaultAsync(q => q.Id == quoteId);
-                if (quote == null || quote.RequesterAgencyId != agencyId) return NotFound();
+                if (quote == null) return NotFound();
+                if (!await CanManageQuoteAsync(quote)) return Unauthorized();
+                var effectiveAgencyId = quote.RequesterAgencyId;
 
                 var user = await _userManager.GetUserAsync(User);
 
                 var syncResult = await _supplierSyncService.EnsureSupplierSynchronizedAsync(
-                    agencyId.Value,
+                    effectiveAgencyId,
                     user?.Id ?? "",
                     companyName,
                     contactPerson,
@@ -579,18 +615,17 @@ namespace GMK360.Web.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> InviteExistingB2bCompany(int quoteId, int b2bCompanyId)
         {
-            var agencyId = await GetUserAgencyIdAsync();
-            if (agencyId == null) return Unauthorized();
-
             var quote = await _context.B2BQuoteRequests.FirstOrDefaultAsync(q => q.Id == quoteId);
-            if (quote == null || quote.RequesterAgencyId != agencyId) return NotFound();
+            if (quote == null) return NotFound();
+            if (!await CanManageQuoteAsync(quote)) return Unauthorized();
+            var effectiveAgencyId = quote.RequesterAgencyId;
 
             var company = await _context.B2bCompanies.Include(c => c.Contacts).FirstOrDefaultAsync(c => c.Id == b2bCompanyId);
             if (company == null) return NotFound();
 
             var primaryContact = company.Contacts.FirstOrDefault();
             var syncResult = await _supplierSyncService.EnsureSupplierSynchronizedAsync(
-                agencyId.Value,
+                effectiveAgencyId,
                 _userManager.GetUserId(User) ?? "",
                 company.Name,
                 primaryContact?.FullName ?? company.Name,
@@ -623,14 +658,12 @@ namespace GMK360.Web.Controllers
             string? appointmentTime, 
             string? managerNotes)
         {
-            var agencyId = await GetUserAgencyIdAsync();
-            if (agencyId == null) return Unauthorized();
-
             var invite = await _context.B2BQuoteInvites
                 .Include(i => i.NetworkContact)
                 .Include(i => i.QuoteRequest)
                 .FirstOrDefaultAsync(i => i.Id == inviteId);
-            if (invite == null || invite.QuoteRequest.RequesterAgencyId != agencyId) return NotFound();
+            if (invite == null) return NotFound();
+            if (!await CanManageQuoteAsync(invite.QuoteRequest)) return Unauthorized();
 
             // Tarih ve saat birleştirme
             DateTime finalDate = confirmedDate ?? DateTime.Today.AddDays(1).AddHours(10);
@@ -668,13 +701,12 @@ namespace GMK360.Web.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> BroadcastQuoteToMarketplace(int quoteId)
         {
-            var agencyId = await GetUserAgencyIdAsync();
-            if (agencyId == null) return Unauthorized();
-
             var quote = await _context.B2BQuoteRequests
                 .Include(q => q.Invites).ThenInclude(i => i.NetworkContact)
                 .FirstOrDefaultAsync(q => q.Id == quoteId);
-            if (quote == null || quote.RequesterAgencyId != agencyId) return NotFound();
+            if (quote == null) return NotFound();
+            if (!await CanManageQuoteAsync(quote)) return Unauthorized();
+            var effectiveAgencyId = quote.RequesterAgencyId;
 
             byte contactType = _supplierSyncService.DetermineContactType(quote.Title);
             var query = _context.B2bCompanies
@@ -717,7 +749,7 @@ namespace GMK360.Web.Controllers
             {
                 var primaryContact = company.Contacts.FirstOrDefault();
                 var syncResult = await _supplierSyncService.EnsureSupplierSynchronizedAsync(
-                    agencyId.Value,
+                    effectiveAgencyId,
                     currentUserId,
                     company.Name,
                     primaryContact?.FullName ?? company.Name,
