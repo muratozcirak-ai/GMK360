@@ -1523,6 +1523,10 @@ namespace GMK360.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("Subdomain")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("TaxNumber")
                         .HasColumnType("nvarchar(max)");
 
@@ -9850,6 +9854,9 @@ namespace GMK360.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsIndependentSite")
+                        .HasColumnType("bit");
+
                     b.Property<int?>("ManagementCompanyId")
                         .HasColumnType("int");
 
@@ -9862,6 +9869,10 @@ namespace GMK360.Data.Migrations
 
                     b.Property<int?>("StreetId")
                         .HasColumnType("int");
+
+                    b.Property<string>("Subdomain")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<int>("TotalBlocks")
                         .HasColumnType("int");

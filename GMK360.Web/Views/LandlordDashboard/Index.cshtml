@@ -77,12 +77,39 @@
 
     @if (quota != null)
     {
-        if (quota.RequiresPaidUpgradeForMultiUnit)
+        if (!quota.HasPropertySubscriptionStarted)
+        {
+            <div class="alert alert-warning rounded-4 border-warning shadow-sm mb-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <div>
+                    <div class="fw-bold text-dark"><i class="bi bi-hourglass-split text-warning-emphasis me-1"></i> Evim &amp; Mülk Kokpiti — İsteğe Bağlı 15 Gün Ücretsiz Demo</div>
+                    <div class="small text-muted">Sınırsız trafik/depolama yükünü önlemek için 1 daire yönetimi ömür boyu ücretsiz değil, <strong>15 Gün Tam Özellikli Demo</strong> ile başlar; ardından cüzi <strong>Tek Mülk (490 ₺/yıl)</strong> veya <strong>Çoklu Mülk (2+ daire: 1.500 ₺/yıl)</strong> paketine geçilir.</div>
+                </div>
+                <form asp-action="StartPropertyDemo" asp-controller="Dashboard" method="post" class="m-0">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="isMultiUnit" value="@(quota.DistinctOwnedUnitCount >= 2 ? "true" : "false")" />
+                    <input type="hidden" name="returnUrl" value="/Landlord/Dashboard" />
+                    <button type="submit" class="btn btn-dark btn-sm rounded-pill px-4 fw-bold">
+                        ⏳ 15 Gün Ücretsiz Demo Başlat
+                    </button>
+                </form>
+            </div>
+        }
+        else if (quota.IsPropertyDemoExpired && !quota.HasPaidPropertyPlan)
+        {
+            <div class="alert alert-danger rounded-4 border-danger shadow-sm mb-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <div>
+                    <div class="fw-bold text-danger"><i class="bi bi-lock-fill me-1"></i> 15 Günlük Demo Süreniz Doldu (Salt-Okunur Mod)</div>
+                    <div class="small text-dark">Mevcut kayıtlarınızı görüntüleyebilirsiniz. Yeni fotoğraf, demirbaş veya ilan yayınlamak için Tek Mülk (490 ₺/yıl) ya da Çoklu Mülk (1.500 ₺/yıl) paketini aktifleştirin.</div>
+                </div>
+                <a href="/Subscription" class="btn btn-danger btn-sm rounded-pill px-4 fw-bold">Paketleri İncele &rarr;</a>
+            </div>
+        }
+        else if (quota.RequiresPaidUpgradeForMultiUnit && !quota.IsPropertyDemoActive)
         {
             <div class="alert alert-warning rounded-4 border-warning shadow-sm mb-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
                 <div>
                     <div class="fw-bold text-dark"><i class="bi bi-stars text-warning-emphasis me-1"></i> Çoklu Mülk &amp; Kiracı Takibi Tarifesi Gerekli (@quota.DistinctOwnedUnitCount Bağımsız Bölüm)</div>
-                    <div class="small text-muted">İlk 1 dairenizde sabit gider, fatura, demirbaş ve ilan işlemleri ücretsizdir. 2 ve üzeri daire / kiracı takibi için Çoklu Mülk paketine geçebilir veya 15 gün ücretsiz deneyebilirsiniz.</div>
+                    <div class="small text-muted">2 ve üzeri daire / kiracı takibi için Çoklu Mülk paketine geçebilir veya henüz kullanmadıysanız 15 gün ücretsiz deneyebilirsiniz.</div>
                 </div>
                 <form asp-action="StartMultiUnitTrial" asp-controller="LandlordDashboard" method="post" class="m-0">
                     @Html.AntiForgeryToken()
@@ -96,15 +123,15 @@
         {
             <div class="alert alert-light border rounded-4 shadow-xs mb-4 d-flex flex-wrap justify-content-between align-items-center gap-2 small">
                 <div>
-                    @if (quota.HasActiveMultiUnitSubscription)
+                    @if (quota.HasPaidPropertyPlan)
                     {
-                        <span class="badge bg-success me-2">Çoklu Mülk Paketi Aktif</span>
-                        <span class="text-dark">Sınırsız bağımsız bölüm, kiracı kontratı, TÜFE ve GMSİ raporu kullanabilirsiniz.</span>
+                        <span class="badge bg-success me-2">@quota.PropertyPlanStatusLabel</span>
+                        <span class="text-dark">Bağımsız bölüm fotoğrafları, demirbaş, fatura takibi ve ilan yayınlama tam yetkiyle açık.</span>
                     }
                     else
                     {
-                        <span class="badge bg-primary me-2">1 Daire Ücretsiz Kapsamı</span>
-                        <span class="text-dark">İlk 1 dairenizin elektrik/su/doğalgaz faturaları, sabit giderleri, demirbaşı ve satış/kiralama ilanı ücretsizdir (2+ dairede Çoklu Mülk tarifesi geçerlidir).</span>
+                        <span class="badge bg-primary me-2">@quota.PropertyPlanStatusLabel</span>
+                        <span class="text-dark">15 günlük ücretsiz demonuz aktif. Süre sonunda Tek Mülk (490 ₺/yıl) veya 2+ daire için Çoklu Mülk (1.500 ₺/yıl) tarifesi geçerlidir.</span>
                     }
                     @if (!quota.HasTcIdentity)
                     {

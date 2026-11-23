@@ -72,7 +72,7 @@ namespace GMK360.Web.Helpers
             bool hasRealEstate = modules.Contains("realestate") || await userManager.IsInRoleAsync(user, "Emlakci");
             bool hasStaff = await userManager.IsInRoleAsync(user, "Personel") || await context.BuildingStaffs.AnyAsync(s => s.UserId == user.Id && s.IsActive && !s.IsDeleted);
             bool hasResidentOrBoard = await userManager.IsInRoleAsync(user, "Sakin")
-                || await context.BuildingManagers.AnyAsync(m => m.UserId == user.Id && m.IsActive)
+                || await context.BuildingManagers.AnyAsync(m => m.UserId == user.Id && m.IsActive && m.Role != GMK360.Core.Entities.BuildingManagerRole.HeadManager)
                 || await context.BuildingUnits.AnyAsync(u => !(u.Category ?? "").StartsWith("OrtakAlan")
                     && (u.OwnerUserId == user.Id || u.TenantUserId == user.Id
                         || (!string.IsNullOrEmpty(user.Email) && (u.OwnerEmail == user.Email || u.TenantEmail == user.Email))));

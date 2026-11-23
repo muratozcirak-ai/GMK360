@@ -162,14 +162,45 @@ namespace GMK360.Web.Controllers
                 if (user != null)
                 {
                     var subdomain = HttpContext.Items["Subdomain"] as string;
-                    if (!string.IsNullOrEmpty(subdomain))
+                    var tenantType = HttpContext.Items["TenantType"] as string;
+                    if (!string.IsNullOrEmpty(subdomain) && !await _userManager.IsInRoleAsync(user, "Admin") && !await _userManager.IsInRoleAsync(user, "SuperAdmin"))
                     {
-                        var hasAccess = await _context.AgencyConsultants
-                            .AnyAsync(ac => ac.UserId == user.Id && ac.Agency.Subdomain == subdomain && ac.IsActive);
-                        
-                        if (!hasAccess && !await _userManager.IsInRoleAsync(user, "Admin"))
+                        bool hasAccess = false;
+                        if (tenantType == "Site")
                         {
-                            ModelState.AddModelError(string.Empty, "Bu kurumsal panele giriş yetkiniz bulunmuyor.");
+                            var tcId = HttpContext.Items["TenantComplexId"] as int?;
+                            var tbId = HttpContext.Items["TenantBuildingId"] as int?;
+                            var siteBlockIds = tcId.HasValue
+                                ? await _context.Buildings.Where(b => b.HousingComplexId == tcId.Value).Select(b => b.Id).ToListAsync()
+                                : (tbId.HasValue ? new List<int> { tbId.Value } : new List<int>());
+
+                            hasAccess = siteBlockIds.Any() && (
+                                await _context.BuildingManagers.AnyAsync(m => siteBlockIds.Contains(m.BuildingId) && m.UserId == user.Id && m.IsActive)
+                                || await _context.Buildings.AnyAsync(b => siteBlockIds.Contains(b.Id) && (b.ManagerUserId == user.Id || b.CreatedByUserId == user.Id))
+                                || await _context.BuildingStaffs.AnyAsync(s => siteBlockIds.Contains(s.BuildingId) && s.UserId == user.Id && s.IsActive && !s.IsDeleted)
+                                || await _context.BuildingUnits.AnyAsync(u => siteBlockIds.Contains(u.BuildingId)
+                                    && (u.OwnerUserId == user.Id || u.TenantUserId == user.Id
+                                        || (!string.IsNullOrEmpty(user.Email) && (u.OwnerEmail == user.Email || u.TenantEmail == user.Email))))
+                            );
+                        }
+                        else if (tenantType == "ManagementCompany")
+                        {
+                            var mgmtId = HttpContext.Items["TenantManagementCompanyId"] as int?;
+                            hasAccess = mgmtId.HasValue && (
+                                await _context.ManagementCompanies.AnyAsync(m => m.Id == mgmtId.Value && m.ContactEmail == user.Email)
+                                || await _context.Buildings.AnyAsync(b => b.HousingComplex != null && b.HousingComplex.ManagementCompanyId == mgmtId.Value
+                                    && (b.ManagerUserId == user.Id || b.BuildingManagers.Any(m => m.UserId == user.Id && m.IsActive)))
+                            );
+                        }
+                        else
+                        {
+                            hasAccess = await _context.AgencyConsultants
+                                .AnyAsync(ac => ac.UserId == user.Id && ac.Agency.Subdomain == subdomain && ac.IsActive);
+                        }
+
+                        if (!hasAccess)
+                        {
+                            ModelState.AddModelError(string.Empty, "Bu kurumsal panele / site adresine giriş yetkiniz bulunmuyor.");
                             return View(model);
                         }
                     }
@@ -219,6 +250,19 @@ namespace GMK360.Web.Controllers
                         if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl) && !isStaleConstructionReturn)
                         {
                             return Redirect(returnUrl);
+                        }
+
+                        if (tenantType == "Site")
+                        {
+                            return RedirectToAction("EnterSite", "TenantPortal");
+                        }
+                        if (tenantType == "ManagementCompany")
+                        {
+                            return RedirectToAction("Index", "BuildingManager");
+                        }
+                        if (tenantType == "Construction" && hasCompletedAgency)
+                        {
+                            return RedirectToAction("Index", "ConstructionProject");
                         }
 
                         return LocalRedirect(landingUrl);

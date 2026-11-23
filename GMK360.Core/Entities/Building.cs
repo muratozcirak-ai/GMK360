@@ -98,6 +98,9 @@ namespace GMK360.Core.Entities
         // 4: Karar defteri okundu
         // 5: İhale/Usta kurgusu tamamlandı (Tamamen aktif)
         public int OnboardingStep { get; set; } = 1;
+
+        [System.ComponentModel.DataAnnotations.MaxLength(100)]
+        public string? Subdomain { get; set; } // Müstakil apartman alt domaini (Örn: "gunesapt" -> gunesapt.gmk360.com)
     }
 }
 

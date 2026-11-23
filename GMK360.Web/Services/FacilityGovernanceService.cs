@@ -996,7 +996,98 @@ namespace GMK360.Web.Services
             };
         }
 
-        public async Task<GovernanceActionResult> SubmitApprovalDecisionAsync(int requestId, string approverUserId, string approverEmail, bool approve, bool isAdmin)
+        public sealed class ManagerTransferPayload
+        {
+            public string NewManagerEmail { get; set; } = string.Empty;
+            public string? NewManagerFullName { get; set; }
+            public string? NewManagerPhone { get; set; }
+            public string? NewManagerTcNo { get; set; }
+            public string HandoverPin { get; set; } = string.Empty;
+            public int? HousingComplexId { get; set; }
+        }
+
+        public async Task<GovernanceActionResult> InitiateManagerTransferRequestAsync(
+            int buildingId,
+            string actorUserId,
+            string newManagerEmail,
+            string? newManagerFullName,
+            string? newManagerPhone,
+            string? newManagerTcNo,
+            string? reason)
+        {
+            var building = await _context.Buildings.Include(b => b.HousingComplex).FirstOrDefaultAsync(b => b.Id == buildingId);
+            if (building == null)
+                return new GovernanceActionResult { Success = false, Message = "Bina / site bulunamadı." };
+
+            int rootId = building.ParentBuildingId ?? building.Id;
+            if (string.IsNullOrWhiteSpace(newManagerEmail))
+                return new GovernanceActionResult { Success = false, Message = "Yeni yöneticinin e-posta adresi zorunludur." };
+
+            bool alreadyPending = await _context.ApprovalRequests.AnyAsync(a =>
+                a.BuildingId == rootId && a.RequestType == "MANAGER_TRANSFER" && a.Status == "PENDING");
+            if (alreadyPending)
+                return new GovernanceActionResult { Success = false, Message = "Bu site için zaten kurul/PIN onayı bekleyen bir yönetici devri talebi var." };
+
+            var relatedRootIds = building.HousingComplexId.HasValue
+                ? await _context.Buildings.Where(b => b.HousingComplexId == building.HousingComplexId && b.ParentBuildingId == null).Select(b => b.Id).ToListAsync()
+                : new List<int> { rootId };
+            if (!relatedRootIds.Contains(rootId)) relatedRootIds.Add(rootId);
+
+            int boardAndAuditorCount = await _context.BuildingManagers
+                .Where(m => relatedRootIds.Contains(m.BuildingId) && m.IsActive
+                    && (m.Role == BuildingManagerRole.BoardMember || m.Role == BuildingManagerRole.Auditor))
+                .Select(m => m.UserId)
+                .Distinct()
+                .CountAsync();
+
+            if (boardAndAuditorCount <= 0)
+            {
+                return new GovernanceActionResult
+                {
+                    Success = false,
+                    Message = "Kurul onayı ile devir için sitede en az 1 aktif Aza veya Denetçi tanımlı olmalıdır."
+                };
+            }
+
+            string handoverPin = Random.Shared.Next(100000, 999999).ToString();
+            int requiredApprovals = Math.Min(2, boardAndAuditorCount);
+
+            var payload = new ManagerTransferPayload
+            {
+                NewManagerEmail = newManagerEmail.Trim().ToLowerInvariant(),
+                NewManagerFullName = newManagerFullName?.Trim(),
+                NewManagerPhone = newManagerPhone?.Trim(),
+                NewManagerTcNo = GMK360.Web.Helpers.TcknHelper.Normalize(newManagerTcNo),
+                HandoverPin = handoverPin,
+                HousingComplexId = building.HousingComplexId
+            };
+
+            string siteName = building.HousingComplex?.Name ?? building.Name;
+            _context.ApprovalRequests.Add(new ApprovalRequest
+            {
+                BuildingId = rootId,
+                RequestedByUserId = actorUserId,
+                RequestType = "MANAGER_TRANSFER",
+                TargetEntityName = building.HousingComplexId.HasValue ? "HousingComplex" : "Building",
+                TargetEntityId = building.HousingComplexId ?? rootId,
+                PayloadJson = JsonSerializer.Serialize(payload),
+                Reason = string.IsNullOrWhiteSpace(reason)
+                    ? $"{siteName} yönetici devri → {payload.NewManagerEmail}"
+                    : $"{reason.Trim()} (Yeni Yönetici: {payload.NewManagerEmail})",
+                Status = "PENDING",
+                RequiredApprovals = requiredApprovals
+            });
+
+            await _context.SaveChangesAsync();
+            return new GovernanceActionResult
+            {
+                Success = true,
+                PendingApproval = true,
+                Message = $"Yönetici devir talebi oluşturuldu! Onay verecek {requiredApprovals} kurul üyesine şu 6 haneli Devir Onay PIN kodunu iletin: {handoverPin}"
+            };
+        }
+
+        public async Task<GovernanceActionResult> SubmitApprovalDecisionAsync(int requestId, string approverUserId, string approverEmail, bool approve, bool isAdmin, string? confirmationPin = null)
         {
             var req = await _context.ApprovalRequests.FirstOrDefaultAsync(r => r.Id == requestId);
             if (req == null)
@@ -1004,10 +1095,12 @@ namespace GMK360.Web.Services
             if (req.Status != "PENDING")
                 return new GovernanceActionResult { Success = false, Message = "Bu talep zaten sonuçlanmış." };
 
+            bool allowAuditor = req.RequestType == "MANAGER_TRANSFER";
             bool isBoardOrAdmin = isAdmin || await _context.BuildingManagers.AnyAsync(m =>
-                m.BuildingId == req.BuildingId && m.UserId == approverUserId && m.IsActive && m.Role == BuildingManagerRole.BoardMember);
+                m.BuildingId == req.BuildingId && m.UserId == approverUserId && m.IsActive
+                && (m.Role == BuildingManagerRole.BoardMember || (allowAuditor && m.Role == BuildingManagerRole.Auditor)));
             if (!isBoardOrAdmin)
-                return new GovernanceActionResult { Success = false, Message = "Bu işlem için aktif Aza (Yönetim Kurulu Üyesi) yetkisi gerekir." };
+                return new GovernanceActionResult { Success = false, Message = allowAuditor ? "Bu işlem için aktif Aza veya Denetçi yetkisi gerekir." : "Bu işlem için aktif Aza (Yönetim Kurulu Üyesi) yetkisi gerekir." };
 
             if (!approve)
             {
@@ -1018,6 +1111,15 @@ namespace GMK360.Web.Services
                 return new GovernanceActionResult { Success = true, Message = "Talep reddedildi." };
             }
 
+            if (req.RequestType == "MANAGER_TRANSFER")
+            {
+                var payload = JsonSerializer.Deserialize<ManagerTransferPayload>(req.PayloadJson ?? "{}");
+                if (payload == null || string.IsNullOrWhiteSpace(payload.HandoverPin) || !string.Equals(confirmationPin?.Trim(), payload.HandoverPin, StringComparison.Ordinal))
+                {
+                    return new GovernanceActionResult { Success = false, Message = "Geçersiz Onay PIN kodu. Devir işlemini onaylamak için 6 haneli kurul PIN kodunu doğru giriniz." };
+                }
+            }
+
             var sigs = JsonSerializer.Deserialize<List<ApprovalSignatureItem>>(req.ApprovedByJson) ?? new List<ApprovalSignatureItem>();
             if (sigs.Any(s => s.UserId == approverUserId))
                 return new GovernanceActionResult { Success = false, Message = "Bu talep için zaten onay verdiniz." };
@@ -1026,6 +1128,7 @@ namespace GMK360.Web.Services
             req.ApprovedByJson = JsonSerializer.Serialize(sigs);
             req.ApprovalCount = sigs.Count;
 
+            string? extraMsg = null;
             if (req.ApprovalCount >= req.RequiredApprovals)
             {
                 if (req.RequestType == "REVERSE_EXPENSE")
@@ -1035,6 +1138,10 @@ namespace GMK360.Web.Services
                     {
                         await ExecuteExpenseReversalInternalAsync(expense, req.Reason, approverUserId);
                     }
+                }
+                else if (req.RequestType == "MANAGER_TRANSFER")
+                {
+                    extraMsg = await ExecuteManagerTransferInternalAsync(req, approverUserId);
                 }
                 req.Status = "EXECUTED";
                 req.ExecutedAt = DateTime.UtcNow;
@@ -1048,9 +1155,125 @@ namespace GMK360.Web.Services
                 Success = true,
                 PendingApproval = req.Status == "PENDING",
                 Message = req.Status == "EXECUTED"
-                    ? "Gerekli Aza onayları tamamlandı ve işlem yürütüldü."
+                    ? (extraMsg ?? "Gerekli Aza onayları tamamlandı ve işlem yürütüldü.")
                     : $"Onayınız kaydedildi ({req.ApprovalCount}/{req.RequiredApprovals})."
             };
+        }
+
+        private async Task<string> ExecuteManagerTransferInternalAsync(ApprovalRequest req, string actorUserId)
+        {
+            var payload = JsonSerializer.Deserialize<ManagerTransferPayload>(req.PayloadJson ?? "{}");
+            if (payload == null || string.IsNullOrWhiteSpace(payload.NewManagerEmail))
+                return "Yeni yönetici e-posta bilgisi bulunamadı.";
+
+            var email = payload.NewManagerEmail.Trim();
+            var newUser = await _userManager.FindByEmailAsync(email);
+            if (newUser == null)
+            {
+                var names = (payload.NewManagerFullName ?? "Site Yöneticisi").Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+                newUser = new ApplicationUser
+                {
+                    UserName = email,
+                    Email = email,
+                    EmailConfirmed = true,
+                    FirstName = names.Length > 0 ? names[0] : "Site",
+                    LastName = names.Length > 1 ? names[1] : "Yöneticisi",
+                    PhoneNumber = payload.NewManagerPhone,
+                    TcIdentityNo = GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(payload.NewManagerTcNo) ? payload.NewManagerTcNo : null,
+                    UserType = UserType.Corporate,
+                    ActiveModules = "facility",
+                    ActivationToken = Guid.NewGuid().ToString("N")
+                };
+                var createRes = await _userManager.CreateAsync(newUser, $"Gmk!{Guid.NewGuid():N}".Substring(0, 14));
+                if (!createRes.Succeeded)
+                    return "Yeni yönetici hesabı oluşturulamadı: " + string.Join(", ", createRes.Errors.Select(e => e.Description));
+            }
+            else
+            {
+                if (!GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(newUser.TcIdentityNo) && GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(payload.NewManagerTcNo))
+                {
+                    newUser.TcIdentityNo = payload.NewManagerTcNo;
+                }
+                var mods = (newUser.ActiveModules ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+                if (!mods.Contains("facility", StringComparer.OrdinalIgnoreCase))
+                {
+                    mods.Add("facility");
+                    newUser.ActiveModules = string.Join(",", mods);
+                }
+                await _userManager.UpdateAsync(newUser);
+            }
+
+            if (!await _userManager.IsInRoleAsync(newUser, "BinaYoneticisi"))
+            {
+                await _userManager.AddToRoleAsync(newUser, "BinaYoneticisi");
+            }
+
+            var rootBuilding = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == req.BuildingId);
+            var complexId = payload.HousingComplexId ?? rootBuilding?.HousingComplexId;
+            var scopeBuildings = await _context.Buildings
+                .Where(b => b.Id == req.BuildingId || b.ParentBuildingId == req.BuildingId || (complexId.HasValue && b.HousingComplexId == complexId.Value))
+                .ToListAsync();
+            var scopeIds = scopeBuildings.Select(b => b.Id).ToList();
+
+            var oldHeadManagers = await _context.BuildingManagers
+                .Where(m => scopeIds.Contains(m.BuildingId) && m.IsActive && m.Role == BuildingManagerRole.HeadManager)
+                .ToListAsync();
+            var oldManagerIds = oldHeadManagers.Select(m => m.UserId).Distinct().ToList();
+
+            foreach (var oldMgr in oldHeadManagers)
+            {
+                oldMgr.IsActive = false;
+                oldMgr.UpdatedAt = DateTime.UtcNow;
+            }
+
+            foreach (var b in scopeBuildings)
+            {
+                b.ManagerUserId = newUser.Id;
+                if (b.ParentBuildingId == null)
+                {
+                    _context.BuildingManagers.Add(new BuildingManager
+                    {
+                        BuildingId = b.Id,
+                        UserId = newUser.Id,
+                        Role = BuildingManagerRole.HeadManager,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+            await _context.SaveChangesAsync();
+
+            // Eski yöneticinin kişisel hesabına ve kendi dairesine DOKUNULMAZ; yalnızca başka sitede yöneticiliği kalmadıysa 'facility' modülü temizlenir
+            foreach (var oldUid in oldManagerIds.Where(id => id != newUser.Id))
+            {
+                bool stillManagesElsewhere = await _context.BuildingManagers
+                    .AnyAsync(m => m.UserId == oldUid && m.IsActive && m.Role == BuildingManagerRole.HeadManager);
+                if (!stillManagesElsewhere)
+                {
+                    var oldUser = await _userManager.FindByIdAsync(oldUid);
+                    if (oldUser != null && !string.IsNullOrWhiteSpace(oldUser.ActiveModules))
+                    {
+                        var remainingMods = oldUser.ActiveModules
+                            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                            .Where(x => !x.Equals("facility", StringComparison.OrdinalIgnoreCase))
+                            .ToArray();
+                        oldUser.ActiveModules = string.Join(",", remainingMods);
+                        await _userManager.UpdateAsync(oldUser);
+                    }
+                }
+            }
+
+            WriteAuditLog(actorUserId, "HEAD_MANAGER_PIN_HANDOVER", req.TargetEntityName, req.TargetEntityId.ToString(), new
+            {
+                PreviousManagers = oldManagerIds,
+                NewHeadManagerUserId = newUser.Id,
+                NewHeadManagerEmail = newUser.Email
+            });
+            await _context.SaveChangesAsync();
+
+            return !string.IsNullOrWhiteSpace(newUser.ActivationToken)
+                ? $"Kurul PIN onayı tamamlandı! Eski yöneticinin yetkisi kapatıldı. Yeni yönetici ({newUser.Email}) aktivasyon linki: /Account/ActivateResident?token={newUser.ActivationToken}"
+                : $"Kurul PIN onayı tamamlandı! Eski yöneticinin site yetkisi kapatıldı (kişisel hesabı korundu) ve yönetim {newUser.Email} hesabına devredildi.";
         }
 
         private async Task ExecuteExpenseReversalInternalAsync(BuildingExpense original, string reason, string actorUserId)

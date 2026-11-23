@@ -470,10 +470,13 @@ namespace GMK360.Web.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DecideBoardApproval(
-            int requestId,
+        public async Task<IActionResult> InitiateManagerTransfer(
             int buildingId,
-            bool approve,
+            string newManagerEmail,
+            string? newManagerFullName,
+            string? newManagerPhone,
+            string? newManagerTcNo,
+            string? reason,
             [FromServices] FacilityGovernanceService governanceService,
             string? previewRole = null)
         {
@@ -485,8 +488,33 @@ namespace GMK360.Web.Controllers
             bool isBoardMember = IsManagerOrAdmin() || await _context.BuildingManagers.AnyAsync(m => m.BuildingId == rootId && m.UserId == userId && m.IsActive);
             if (!isBoardMember) return Forbid();
 
+            var res = await governanceService.InitiateManagerTransferRequestAsync(
+                buildingId, userId, newManagerEmail, newManagerFullName, newManagerPhone, newManagerTcNo, reason);
+            TempData[res.Success ? "SuccessMessage" : "ErrorMessage"] = res.Message;
+
+            return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DecideBoardApproval(
+            int requestId,
+            int buildingId,
+            bool approve,
+            [FromServices] FacilityGovernanceService governanceService,
+            string? confirmationPin = null,
+            string? previewRole = null)
+        {
+            var userId = GetUserId();
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+            var building = await _context.Buildings.AsNoTracking().FirstOrDefaultAsync(b => b.Id == buildingId);
+            int rootId = building?.ParentBuildingId ?? buildingId;
+            bool isBoardMember = IsManagerOrAdmin() || await _context.BuildingManagers.AnyAsync(m => m.BuildingId == rootId && m.UserId == userId && m.IsActive);
+            if (!isBoardMember) return Forbid();
+
             var email = User.Identity?.Name ?? User.FindFirstValue(ClaimTypes.Email) ?? "aza@gmk360.com";
-            var result = await governanceService.SubmitApprovalDecisionAsync(requestId, userId, email, approve, IsManagerOrAdmin());
+            var result = await governanceService.SubmitApprovalDecisionAsync(requestId, userId, email, approve, IsManagerOrAdmin(), confirmationPin);
             TempData[result.Success ? "SuccessMessage" : "ErrorMessage"] = result.Message;
 
             return RedirectToAction(nameof(Index), new { previewRole, buildingId });

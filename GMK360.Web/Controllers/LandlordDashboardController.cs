@@ -221,6 +221,15 @@ namespace GMK360.Web.Controllers
             return View(viewModel);
         }
 
+        private async Task<bool> CheckPropertyWriteAccessAsync(ApplicationUser user)
+        {
+            if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin")) return true;
+            var quotaSvc = HttpContext.RequestServices.GetService<GMK360.Web.Services.SaasSubscriptionService>();
+            if (quotaSvc == null) return true;
+            var q = await quotaSvc.GetLandlordFreeQuotaSummaryAsync(user);
+            return q.CanWritePropertyData;
+        }
+
         [HttpPost("StartMultiUnitTrial")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> StartMultiUnitTrial()
@@ -231,8 +240,8 @@ namespace GMK360.Web.Controllers
             var quotaSvc = HttpContext.RequestServices.GetService<GMK360.Web.Services.SaasSubscriptionService>();
             if (quotaSvc != null)
             {
-                await quotaSvc.AssignTrialSubscriptionAsync(user, "multi_property", trialDays: 15);
-                TempData["SuccessMessage"] = "🎉 15 Günlük Çoklu Mülk & Kiracı Takibi denemeniz başlatıldı! Sürenizi Süper Admin CRM üzerinden de takip edebilirsiniz.";
+                var res = await quotaSvc.StartOnDemandPropertyDemoAsync(user, isMultiUnit: true);
+                TempData[res.Success ? "SuccessMessage" : "ErrorMessage"] = res.Message;
             }
 
             return RedirectToAction(nameof(Index));
@@ -418,6 +427,11 @@ namespace GMK360.Web.Controllers
 
             var unit = await _context.BuildingUnits.Include(u => u.Building).FirstOrDefaultAsync(u => u.Id == unitId);
             if (!await CanOwnerAccessUnitAsync(unit, user)) return Forbid();
+            if (!await CheckPropertyWriteAccessAsync(user))
+            {
+                TempData["ErrorMessage"] = "Daire bilgisi ve fotoğraf yüklemek için yukarıdaki '15 Gün Ücretsiz Demo Başlat' butonundan deneme sürenizi başlatın veya paketinizi aktifleştirin.";
+                return RedirectToAction(nameof(Index));
+            }
 
             if (!string.IsNullOrWhiteSpace(roomLayout)) unit!.RoomLayout = roomLayout.Trim();
             if (grossSquareMeters.HasValue && grossSquareMeters.Value >= 0) unit!.GrossSquareMeters = grossSquareMeters.Value;
@@ -489,6 +503,11 @@ namespace GMK360.Web.Controllers
                 .Include(u => u.Spaces)
                 .FirstOrDefaultAsync(u => u.Id == unitId);
             if (!await CanOwnerAccessUnitAsync(unit, user)) return Forbid();
+            if (!await CheckPropertyWriteAccessAsync(user))
+            {
+                TempData["ErrorMessage"] = "Demirbaş/eşya kaydı için önce '15 Gün Ücretsiz Demo Başlat' butonundan deneme sürenizi başlatın.";
+                return RedirectToAction(nameof(Index));
+            }
             if (string.IsNullOrWhiteSpace(itemName))
             {
                 TempData["ErrorMessage"] = "Lütfen eşya/demirbaş adını yazınız.";
@@ -631,6 +650,11 @@ namespace GMK360.Web.Controllers
                 .Include(u => u.Spaces).ThenInclude(s => s.Fixtures)
                 .FirstOrDefaultAsync(u => u.Id == unitId);
             if (!await CanOwnerAccessUnitAsync(unit, user)) return Forbid();
+            if (!await CheckPropertyWriteAccessAsync(user))
+            {
+                TempData["ErrorMessage"] = "İlan yayınlamak için önce 15 günlük demo başlatmalı veya Tek/Çoklu Mülk paketinizi aktifleştirmelisiniz.";
+                return RedirectToAction(nameof(Index));
+            }
 
             bool isSale = string.Equals(listingType, "Satılık", StringComparison.OrdinalIgnoreCase);
             var statusKeyword = isSale ? "Satılık" : "Kiralık";

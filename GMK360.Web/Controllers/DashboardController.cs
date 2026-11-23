@@ -22,6 +22,17 @@ namespace GMK360.Web.Controllers
         public string RoleSummary { get; set; } = string.Empty;
     }
 
+    public class ManagedSiteLink
+    {
+        public int? HousingComplexId { get; set; }
+        public int PrimaryBuildingId { get; set; }
+        public string SiteName { get; set; } = string.Empty;
+        public string BlocksSummary { get; set; } = string.Empty;
+        public int BlockCount { get; set; }
+        public int OpenTicketCount { get; set; }
+        public string? Subdomain { get; set; }
+    }
+
     [RequireOnboarding] public class DashboardController : Controller
     {
         private readonly UserManager<ApplicationUser> _userManager;
@@ -56,7 +67,7 @@ namespace GMK360.Web.Controllers
             var userUnits = user != null
                 ? await _context.BuildingUnits
                     .AsNoTracking()
-                    .Include(u => u.Building)
+                    .Include(u => u.Building).ThenInclude(b => b.HousingComplex)
                     .Where(u => !(u.Category ?? "").StartsWith("OrtakAlan")
                         && (u.OwnerUserId == user.Id || u.TenantUserId == user.Id
                             || (!string.IsNullOrEmpty(user.Email) && (u.OwnerEmail == user.Email || u.TenantEmail == user.Email))))
@@ -66,18 +77,71 @@ namespace GMK360.Web.Controllers
             var boardMemberships = user != null
                 ? await _context.BuildingManagers
                     .AsNoTracking()
-                    .Include(m => m.Building)
+                    .Include(m => m.Building).ThenInclude(b => b.HousingComplex)
                     .Where(m => m.UserId == user.Id && m.IsActive)
                     .ToListAsync()
                 : new List<BuildingManager>();
 
+            // Yönetici olduğu siteler / binalar: Site (HousingComplex) veya bağımsız bina bazında TEKİL grupla (bloklara bölme)
+            var managedBuildingsQuery = user != null
+                ? await _context.Buildings
+                    .AsNoTracking()
+                    .Include(b => b.HousingComplex)
+                    .Where(b => b.ParentBuildingId == null && (
+                        b.BuildingManagers.Any(m => m.UserId == user.Id && m.IsActive && m.Role == BuildingManagerRole.HeadManager)
+                        || (!b.BuildingManagers.Any(m => m.IsActive) && (b.ManagerUserId == user.Id || b.CreatedByUserId == user.Id))))
+                    .ToListAsync()
+                : new List<Building>();
+
+            var managedBuildingIds = managedBuildingsQuery.Select(b => b.Id).ToList();
+            var openTaskCounts = managedBuildingIds.Any()
+                ? await _context.BuildingTaskTickets.AsNoTracking()
+                    .Where(t => !t.IsDeleted && managedBuildingIds.Contains(t.BuildingId)
+                        && t.Status != "Tamamlandı" && t.Status != "Çözüldü" && t.Status != "Kapandı")
+                    .GroupBy(t => t.BuildingId)
+                    .Select(g => new { BuildingId = g.Key, Count = g.Count() })
+                    .ToDictionaryAsync(x => x.BuildingId, x => x.Count)
+                : new Dictionary<int, int>();
+
+            var openSupportCounts = managedBuildingIds.Any()
+                ? await _context.SupportTickets.AsNoTracking()
+                    .Where(t => !t.IsDeleted && t.ContextType == "Building" && t.ContextId.HasValue && managedBuildingIds.Contains(t.ContextId.Value)
+                        && t.Status != "Resolved" && t.Status != "Cancelled" && t.Status != "Çözüldü" && t.Status != "Kapandı")
+                    .GroupBy(t => t.ContextId!.Value)
+                    .Select(g => new { BuildingId = g.Key, Count = g.Count() })
+                    .ToDictionaryAsync(x => x.BuildingId, x => x.Count)
+                : new Dictionary<int, int>();
+
+            var managedSiteLinks = managedBuildingsQuery
+                .GroupBy(b => b.HousingComplexId.HasValue ? $"C:{b.HousingComplexId.Value}" : $"B:{b.Id}")
+                .Select(g =>
+                {
+                    var first = g.OrderBy(b => b.Id).First();
+                    var complex = first.HousingComplex;
+                    var blockNames = g.Select(b => string.IsNullOrWhiteSpace(b.BlockName) ? b.Name : b.BlockName).Distinct().ToList();
+                    int openCnt = g.Sum(b => (openTaskCounts.TryGetValue(b.Id, out var tc) ? tc : 0) + (openSupportCounts.TryGetValue(b.Id, out var sc) ? sc : 0));
+                    return new ManagedSiteLink
+                    {
+                        HousingComplexId = complex?.Id,
+                        PrimaryBuildingId = first.Id,
+                        SiteName = !string.IsNullOrWhiteSpace(complex?.Name) ? complex.Name : first.Name,
+                        BlockCount = g.Count(),
+                        BlocksSummary = g.Count() > 1
+                            ? $"{g.Count()} Blok ({string.Join(", ", blockNames.Take(4))}{(blockNames.Count > 4 ? "..." : "")})"
+                            : (!string.IsNullOrWhiteSpace(first.BlockName) ? first.BlockName : "Müstakil Bina"),
+                        OpenTicketCount = openCnt
+                    };
+                })
+                .ToList();
+
+            // Sakin / Kurul Portalı yalnızca daire sahibi/kiracısı veya Aza/Denetçi olduğu yerleri içerir (HeadManager hariç)
             var portalGroups = userUnits
                 .Where(u => u.Building != null)
                 .GroupBy(u => u.BuildingId)
                 .Select(g => new PortalBuildingLink
                 {
                     BuildingId = g.Key,
-                    BuildingName = g.First().Building.Name,
+                    BuildingName = g.First().Building.HousingComplex?.Name ?? g.First().Building.Name,
                     BlockName = g.First().Building.BlockName,
                     DoorsSummary = string.Join(", ", g.Select(x => $"No:{x.DoorNumber}")),
                     RoleSummary = g.Any(x => x.OwnerUserId == user!.Id || (!string.IsNullOrEmpty(user.Email) && x.OwnerEmail == user.Email))
@@ -86,10 +150,10 @@ namespace GMK360.Web.Controllers
                 })
                 .ToList();
 
-            foreach (var bm in boardMemberships.Where(m => m.Building != null))
+            foreach (var bm in boardMemberships.Where(m => m.Building != null && m.Role != BuildingManagerRole.HeadManager))
             {
                 var existing = portalGroups.FirstOrDefault(p => p.BuildingId == bm.BuildingId);
-                var bRole = bm.Role == BuildingManagerRole.HeadManager ? "Yönetici" : (bm.Role == BuildingManagerRole.BoardMember ? "Aza" : "Denetçi");
+                var bRole = bm.Role == BuildingManagerRole.BoardMember ? "Aza" : "Denetçi";
                 if (existing != null)
                 {
                     existing.RoleSummary = $"{existing.RoleSummary} + {bRole}";
@@ -99,7 +163,7 @@ namespace GMK360.Web.Controllers
                     portalGroups.Add(new PortalBuildingLink
                     {
                         BuildingId = bm.BuildingId,
-                        BuildingName = bm.Building.Name,
+                        BuildingName = bm.Building.HousingComplex?.Name ?? bm.Building.Name,
                         BlockName = bm.Building.BlockName,
                         DoorsSummary = "Yönetim Kurulu",
                         RoleSummary = bRole
@@ -119,8 +183,9 @@ namespace GMK360.Web.Controllers
             ViewBag.ActiveModules = user?.ActiveModules ?? "";
             ViewBag.ResidentUnitCount = userUnits.Count;
             ViewBag.OwnerUnitCount = userUnits.Count(u => u.OwnerUserId == user!.Id || (!string.IsNullOrEmpty(user!.Email) && u.OwnerEmail == user.Email));
-            ViewBag.BoardMembershipCount = boardMemberships.Count;
+            ViewBag.BoardMembershipCount = boardMemberships.Count(m => m.Role != BuildingManagerRole.HeadManager);
             ViewBag.PortalBuildingLinks = portalGroups;
+            ViewBag.ManagedSiteLinks = managedSiteLinks;
             ViewBag.QuotaSummary = quotaSummary;
             ViewBag.AgencyCompanyName = agencyConsultant?.Agency?.CompanyName;
             ViewBag.HasCompletedAgency = agencyConsultant?.Agency != null && !string.IsNullOrWhiteSpace(agencyConsultant.Agency.CompanyName);
@@ -138,6 +203,27 @@ namespace GMK360.Web.Controllers
                 return Ok();
             }
             return BadRequest();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> StartPropertyDemo(bool isMultiUnit = false, string? returnUrl = null)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+
+            var quotaSvc = HttpContext.RequestServices.GetService<GMK360.Web.Services.SaasSubscriptionService>();
+            if (quotaSvc != null)
+            {
+                var res = await quotaSvc.StartOnDemandPropertyDemoAsync(user, isMultiUnit);
+                TempData[res.Success ? "SuccessMessage" : "ErrorMessage"] = res.Message;
+            }
+
+            if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+            return RedirectToAction(nameof(Hub));
         }
 
         // Yönlendirici

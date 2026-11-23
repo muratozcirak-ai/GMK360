@@ -1,0 +1,100 @@
+@using GMK360.Core.Entities
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    string siteTitle = ViewBag.SiteTitle as string ?? "Site Yönetimi";
+    string subdomain = ViewBag.Subdomain as string ?? "";
+    string locationLabel = ViewBag.LocationLabel as string ?? "";
+    bool isIndependent = ViewBag.IsIndependentSite is bool ind && ind;
+    var blocks = ViewBag.Blocks as List<Building> ?? new List<Building>();
+    int totalUnits = ViewBag.TotalLivingUnits is int tu ? tu : 0;
+    int? primaryBuildingId = ViewBag.PrimaryBuildingId as int?;
+    bool isManagerUser = ViewBag.IsManagerUser is bool imu && imu;
+    bool isResidentOrBoard = ViewBag.IsResidentOrBoardUser is bool irb && irb;
+    var mgmt = ViewBag.ManagementCompany as ManagementCompany;
+    ViewData["Title"] = $"{siteTitle} • Dijital Site Kapısı";
+}
+
+<div class="container py-5 mt-3">
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+        <div class="bg-success bg-gradient text-white p-4 p-md-5">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <div>
+                    <span class="badge bg-white text-success rounded-pill px-3 py-1 mb-2 fw-semibold">
+                        @(isIndependent ? "Bağımsız Site / Apartman Kimliği" : "Profesyonel Yönetim Portföyü")
+                    </span>
+                    <h1 class="fw-bold h2 mb-1">@siteTitle</h1>
+                    <p class="mb-0 opacity-75">
+                        <i class="bi bi-geo-alt-fill me-1"></i>@locationLabel
+                        @if (!string.IsNullOrWhiteSpace(subdomain))
+                        {
+                            <span class="ms-2 badge bg-dark bg-opacity-25">@($"{subdomain}.gmk360.com")</span>
+                        }
+                    </p>
+                </div>
+                <div class="text-md-end">
+                    @if (User.Identity != null && User.Identity.IsAuthenticated)
+                    {
+                        <div class="d-flex flex-wrap gap-2">
+                            @if (isManagerUser)
+                            {
+                                <a href="/BuildingManager/Index" class="btn btn-light text-success fw-bold rounded-pill px-4 shadow-sm">
+                                    <i class="bi bi-shield-check me-1"></i> Site Yönetim Paneli &rarr;
+                                </a>
+                            }
+                            @if (isResidentOrBoard || !isManagerUser)
+                            {
+                                <a href="@(primaryBuildingId.HasValue ? $"/FacilityPortal/Index?buildingId={primaryBuildingId}" : "/FacilityPortal/Index")"
+                                   class="btn btn-warning text-dark fw-bold rounded-pill px-4 shadow-sm">
+                                    <i class="bi bi-house-heart-fill me-1"></i> Sakin / Kurul Portalı &rarr;
+                                </a>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <a href="/Account/Login?ReturnUrl=%2FTenantPortal%2FEnterSite" class="btn btn-light text-success fw-bold rounded-pill px-4 py-2 shadow-sm">
+                            <i class="bi bi-box-arrow-in-right me-1"></i> Site Sakini / Yönetici Girişi &rarr;
+                        </a>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="card-body bg-white p-4">
+            <div class="row g-3 text-center">
+                <div class="col-md-4">
+                    <div class="p-3 bg-light rounded-3 h-100">
+                        <div class="text-muted small">Toplam Yapı / Blok</div>
+                        <div class="fs-4 fw-bold text-dark">@(mgmt != null ? mgmt.ManagedComplexes.Count : Math.Max(1, blocks.Count))</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="p-3 bg-light rounded-3 h-100">
+                        <div class="text-muted small">Kayıtlı Bağımsız Bölüm</div>
+                        <div class="fs-4 fw-bold text-success">@totalUnits</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="p-3 bg-light rounded-3 h-100">
+                        <div class="text-muted small">Dijital Hizmetler</div>
+                        <div class="fw-semibold text-dark small mt-1">Aidat &amp; IBAN, Arıza Fotoğrafı, KMK Toplantı &amp; Karar Şeffaflığı</div>
+                    </div>
+                </div>
+            </div>
+
+            @if (blocks.Any())
+            {
+                <div class="mt-4">
+                    <h6 class="fw-bold text-muted mb-2">Site Blokları</h6>
+                    <div class="d-flex flex-wrap gap-2">
+                        @foreach (var b in blocks)
+                        {
+                            <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3 py-2">
+                                <i class="bi bi-building me-1"></i>@b.Name @(!string.IsNullOrWhiteSpace(b.BlockName) && b.BlockName != b.Name ? $"({b.BlockName})" : "")
+                            </span>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>

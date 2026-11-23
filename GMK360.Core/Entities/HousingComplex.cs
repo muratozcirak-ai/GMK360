@@ -11,6 +11,13 @@ namespace GMK360.Core.Entities
         public ManagementCompany ManagementCompany { get; set; }
         
         public string Name { get; set; } // Örn: "Mavi Akdeniz Evleri"
+
+        // Bağımsız Site Alt Domaini (Örn: "yesilvadi" -> yesilvadi.gmk360.com)
+        [System.ComponentModel.DataAnnotations.MaxLength(100)]
+        public string? Subdomain { get; set; }
+
+        // Bağımsız Site/Apartman Yönetimi (true) vs Profesyonel Yönetim Firması portföyü (false)
+        public bool IsIndependentSite { get; set; } = true;
         
         // 5'li Konum Hiyerarşisi (Sitenin ana adresi)
         public int CityId { get; set; }

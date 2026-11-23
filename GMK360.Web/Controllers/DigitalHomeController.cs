@@ -385,7 +385,7 @@ namespace GMK360.Web.Controllers
 
                     if (!isSameBuilding)
                     {
-                        return Ok(new { success = false, requiresPro = true, message = "Ücretsiz planda (aynı T.C. Kimlik No altında) yalnızca 1 daire yönetebilirsiniz. 2. daire ve kiracı takibi için Çoklu Mülk Tarifesine geçmeniz gerekir." });
+                        return Ok(new { success = false, requiresPro = true, message = "Demo / Tek Mülk planında (aynı T.C. Kimlik No altında) yalnızca 1 daire yönetebilirsiniz. 2. daire ve kiracı takibi için Çoklu Mülk Tarifesine geçmeniz gerekir." });
                     }
                 }
                 // --- KONTROL BİTİŞİ ---

@@ -2288,6 +2288,55 @@ namespace GMK360.Web.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SetSiteIdentity(int buildingId, string? subdomain, bool isIndependentSite = true)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var cleanSub = System.Text.RegularExpressions.Regex
+                .Replace((subdomain ?? "").Trim().ToLowerInvariant(), @"[^a-z0-9\-]", "")
+                .Trim('-');
+
+            if (!string.IsNullOrEmpty(cleanSub))
+            {
+                if (cleanSub.Length < 3 || cleanSub == "www" || cleanSub == "api" || cleanSub == "admin")
+                {
+                    TempData["ErrorMessage"] = "Alt domain en az 3 karakterli olmalı (örn: yesilvadi).";
+                    return RedirectToAction(nameof(Detail), new { id = buildingId });
+                }
+
+                bool taken = await _context.HousingComplexes.AnyAsync(c => c.Subdomain == cleanSub && (!building.HousingComplexId.HasValue || c.Id != building.HousingComplexId.Value))
+                    || await _context.Buildings.AnyAsync(b => b.Subdomain == cleanSub && b.Id != building.Id && (!building.HousingComplexId.HasValue || b.HousingComplexId != building.HousingComplexId.Value))
+                    || await _context.Agencies.AnyAsync(a => a.Subdomain == cleanSub)
+                    || await _context.ManagementCompanies.AnyAsync(m => m.Subdomain == cleanSub);
+
+                if (taken)
+                {
+                    TempData["ErrorMessage"] = $"'{cleanSub}.gmk360.com' adresi başka bir kurum/site tarafından kullanılıyor.";
+                    return RedirectToAction(nameof(Detail), new { id = buildingId });
+                }
+            }
+
+            if (building.HousingComplexId.HasValue)
+            {
+                var complex = await _context.HousingComplexes.FirstOrDefaultAsync(c => c.Id == building.HousingComplexId.Value);
+                if (complex != null)
+                {
+                    complex.Subdomain = string.IsNullOrEmpty(cleanSub) ? null : cleanSub;
+                    complex.IsIndependentSite = isIndependentSite;
+                }
+            }
+            building.Subdomain = string.IsNullOrEmpty(cleanSub) ? null : cleanSub;
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = string.IsNullOrEmpty(cleanSub)
+                ? "Site / bina yönetim kimliği güncellendi."
+                : $"Kurumsal site adresi güncellendi: https://{cleanSub}.gmk360.com";
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> TransferHeadManager(int buildingId, string newManagerEmail)
         {
             var building = await GetManagedBuildingAsync(buildingId);

@@ -35,6 +35,13 @@ namespace GMK360.Web.Services
         public int DistinctOwnedUnitCount { get; set; }
         public int DistinctBuildingCount { get; set; }
         public bool HasActiveMultiUnitSubscription { get; set; }
+        public bool HasPropertySubscriptionStarted { get; set; }
+        public bool IsPropertyDemoActive { get; set; }
+        public bool IsPropertyDemoExpired { get; set; }
+        public int? PropertyDemoDaysRemaining { get; set; }
+        public bool HasPaidPropertyPlan { get; set; }
+        public string PropertyPlanStatusLabel { get; set; } = "Demo Başlatılmadı";
+        public bool CanWritePropertyData => HasPaidPropertyPlan || IsPropertyDemoActive;
         public bool IsWithinFreeSingleUnitQuota => DistinctOwnedUnitCount <= 1;
         public bool RequiresPaidUpgradeForMultiUnit => DistinctOwnedUnitCount >= 2 && !HasActiveMultiUnitSubscription;
     }
@@ -87,7 +94,7 @@ namespace GMK360.Web.Services
                 "supplier" => ("Tedarikçi & B2B Pazaryeri — Yıllık Abonelik", 4000m, PackagePeriod.Yearly, UserType.Corporate),
                 "service" => ("Usta & Taşeron — Yıllık Abonelik", 1500m, PackagePeriod.Yearly, UserType.ServiceProvider),
                 "multi_property" => ("Çoklu Mülk & Kiracı Kokpiti — Yıllık Abonelik", 1500m, PackagePeriod.Yearly, UserType.PropertyOwner),
-                _ => ("Dijital Evim — Başlangıç Paketi", 0m, PackagePeriod.Free, UserType.Individual)
+                _ => ("Dijital Evim & Tek Mülk — Yıllık Abonelik", 490m, PackagePeriod.Yearly, UserType.Individual)
             };
 
             var pkg = await _context.SubscriptionPackages.FirstOrDefaultAsync(p => p.Name == name);
@@ -238,8 +245,8 @@ namespace GMK360.Web.Services
         }
 
         /// <summary>
-        /// TCKN bazlı tekil "1 Daire Ücretsiz / 2+ Daire & Kiracı Takibi Ücretli" kota değerlendirmesi.
-        /// Aynı TCKN'ye sahip tüm hesaplardaki sahiplikleri birleştirerek ikinci ücretsiz daire suistimalini önler.
+        /// TCKN bazlı tekil "15 Gün Demo -> Tek Mülk (490 TL/Yıl) / 2+ Daire Çoklu Mülk (1.500 TL/Yıl)" kota değerlendirmesi.
+        /// Aynı TCKN'ye sahip tüm hesaplardaki sahiplikleri ve deneme kullanımını birleştirir.
         /// </summary>
         public async Task<SingleUnitQuotaResult> GetLandlordFreeQuotaSummaryAsync(ApplicationUser user)
         {
@@ -255,11 +262,44 @@ namespace GMK360.Web.Services
 
             if (!relatedUserIds.Contains(user.Id)) relatedUserIds.Add(user.Id);
 
-            bool hasActiveSub = await _context.UserSubscriptions.AsNoTracking()
-                .AnyAsync(s => relatedUserIds.Contains(s.UserId)
-                    && s.IsActive
-                    && (s.PaymentStatus == "Paid" || s.PaymentStatus == "Exempt" || (s.PaymentStatus == "Trial" && (!s.EndDate.HasValue || s.EndDate >= DateTime.UtcNow)))
-                    && (!s.EndDate.HasValue || s.EndDate >= DateTime.UtcNow));
+            var now = DateTime.UtcNow;
+            var allSubs = await _context.UserSubscriptions
+                .AsNoTracking()
+                .Include(s => s.Package)
+                .Where(s => relatedUserIds.Contains(s.UserId))
+                .OrderByDescending(s => s.IsActive)
+                .ThenByDescending(s => s.Id)
+                .ToListAsync();
+
+            bool IsPropertyPkg(UserSubscription s) =>
+                s.Package != null && (s.Package.TargetUserType == UserType.Individual
+                    || s.Package.TargetUserType == UserType.PropertyOwner
+                    || s.Package.Name.Contains("Evim", StringComparison.OrdinalIgnoreCase)
+                    || s.Package.Name.Contains("Mülk", StringComparison.OrdinalIgnoreCase));
+
+            var propertySubs = allSubs.Where(IsPropertyPkg).ToList();
+            bool hasPaidProperty = propertySubs.Any(s => s.IsActive
+                && (string.Equals(s.PaymentStatus, "Paid", StringComparison.OrdinalIgnoreCase) || string.Equals(s.PaymentStatus, "Exempt", StringComparison.OrdinalIgnoreCase))
+                && (!s.EndDate.HasValue || s.EndDate >= now));
+
+            var activeTrialSub = propertySubs.FirstOrDefault(s => s.IsActive
+                && string.Equals(s.PaymentStatus, "Trial", StringComparison.OrdinalIgnoreCase)
+                && (!s.EndDate.HasValue || s.EndDate >= now));
+
+            bool hasUsedAnyPropertyTrial = propertySubs.Any(s => string.Equals(s.PaymentStatus, "Trial", StringComparison.OrdinalIgnoreCase));
+            bool isDemoActive = activeTrialSub != null;
+            bool isDemoExpired = !hasPaidProperty && !isDemoActive && hasUsedAnyPropertyTrial;
+            int? demoDaysRemaining = activeTrialSub?.EndDate.HasValue == true
+                ? Math.Max(0, (int)Math.Ceiling((activeTrialSub.EndDate.Value.Date - now.Date).TotalDays))
+                : null;
+
+            bool hasActiveMultiUnit = propertySubs.Any(s => s.IsActive
+                && s.Package != null
+                && (s.Package.TargetUserType == UserType.PropertyOwner || s.Package.Name.Contains("Çoklu", StringComparison.OrdinalIgnoreCase))
+                && (string.Equals(s.PaymentStatus, "Paid", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(s.PaymentStatus, "Exempt", StringComparison.OrdinalIgnoreCase)
+                    || (string.Equals(s.PaymentStatus, "Trial", StringComparison.OrdinalIgnoreCase) && (!s.EndDate.HasValue || s.EndDate >= now)))
+                && (!s.EndDate.HasValue || s.EndDate >= now));
 
             var ownedProps = await _context.Properties.AsNoTracking()
                 .Where(p => !p.IsDeleted && (relatedUserIds.Contains(p.UserId) || (p.OwnerUserId != null && relatedUserIds.Contains(p.OwnerUserId))))
@@ -273,18 +313,59 @@ namespace GMK360.Web.Services
                 .Select(u => new { u.Id, u.BuildingId, u.PropertyId })
                 .ToListAsync();
 
-            // Property + BuildingUnit çakışmasını düşerek gerçek tekil mülk sayısını hesapla
-            int linkedPropCount = ownedUnitLinks.Count(u => u.PropertyId.HasValue);
             int totalDistinctUnits = ownedUnitLinks.Count + ownedProps.Count(p => !ownedUnitLinks.Any(u => u.PropertyId == p.Id));
             int distinctBuildings = ownedUnitLinks.Select(u => u.BuildingId).Concat(ownedProps.Select(p => p.BuildingId)).Where(id => id > 0).Distinct().Count();
+
+            string statusLabel = hasPaidProperty
+                ? (hasActiveMultiUnit ? "Çoklu Mülk Paketi Aktif" : "Tek Mülk Paketi Aktif")
+                : (isDemoActive
+                    ? $"15 Günlük Demo ({demoDaysRemaining ?? 15} gün kaldı)"
+                    : (isDemoExpired ? "Demo Süresi Doldu" : "İsteğe Bağlı 15 Gün Demo"));
 
             return new SingleUnitQuotaResult
             {
                 HasTcIdentity = hasTc,
                 DistinctOwnedUnitCount = totalDistinctUnits,
                 DistinctBuildingCount = distinctBuildings,
-                HasActiveMultiUnitSubscription = hasActiveSub
+                HasActiveMultiUnitSubscription = hasActiveMultiUnit,
+                HasPropertySubscriptionStarted = propertySubs.Any(),
+                IsPropertyDemoActive = isDemoActive,
+                IsPropertyDemoExpired = isDemoExpired,
+                PropertyDemoDaysRemaining = demoDaysRemaining,
+                HasPaidPropertyPlan = hasPaidProperty,
+                PropertyPlanStatusLabel = statusLabel
             };
+        }
+
+        public async Task<(bool Success, string Message)> StartOnDemandPropertyDemoAsync(ApplicationUser user, bool isMultiUnit = false)
+        {
+            var quota = await GetLandlordFreeQuotaSummaryAsync(user);
+            if (quota.HasPaidPropertyPlan)
+                return (true, "Aktif ücretli mülk paketiniz zaten tanımlı.");
+            if (quota.IsPropertyDemoActive)
+                return (true, $"15 günlük ücretsiz demonuz zaten aktif ({quota.PropertyDemoDaysRemaining ?? 15} gün kaldı).");
+            if (quota.IsPropertyDemoExpired)
+                return (false, "Bu T.C. Kimlik / hesap için 15 günlük ücretsiz demo hakkı daha önce kullanılmış. Devam etmek için Tek Mülk veya Çoklu Mülk paketi seçebilirsiniz.");
+
+            var moduleKey = (isMultiUnit || quota.DistinctOwnedUnitCount >= 2) ? "multi_property" : "individual";
+            var pkg = await EnsureDefaultPackageForModuleAsync(moduleKey);
+            var now = DateTime.UtcNow;
+
+            _context.UserSubscriptions.Add(new UserSubscription
+            {
+                UserId = user.Id,
+                PackageId = pkg.Id,
+                StartDate = now,
+                EndDate = now.AddDays(15),
+                IsActive = true,
+                PricePaid = 0m,
+                PaymentStatus = "Trial",
+                AdminNotes = $"İsteğe bağlı 15 günlük {(moduleKey == "multi_property" ? "Çoklu Mülk" : "Tek Mülk / Evim")} demosu başlatıldı.",
+                CreatedAt = now
+            });
+            await _context.SaveChangesAsync();
+
+            return (true, $"15 günlük ücretsiz {(moduleKey == "multi_property" ? "Çoklu Mülk" : "Evim & Tek Mülk")} demonuz başlatıldı!");
         }
     }
 }
