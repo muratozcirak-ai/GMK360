@@ -2227,9 +2227,12 @@ namespace GMK360.Web.Controllers
             if (!string.IsNullOrWhiteSpace(targetUser.ActivationToken))
             {
                 var inviteUrl = $"{Request.Scheme}://{Request.Host}/Account/ActivateResident?token={targetUser.ActivationToken}";
+                bool mailSent = await TrySendActivationEmailAsync(targetUser, roleText, building.Name);
                 TempData["LastActivationUrl"] = inviteUrl;
                 TempData["LastActivationLabel"] = $"{displayName} ({roleText})";
-                TempData["SuccessMessage"] = $"{displayName} ({roleText}) kadroya eklendi ve kişisel profil aktivasyon bağlantısı hazırlandı. 'Kurul / Aza' penceresinden bağlantıyı kopyalayıp iletebilirsiniz.";
+                TempData["SuccessMessage"] = mailSent
+                    ? $"{displayName} ({roleText}) kadroya eklendi ve {targetUser.Email} adresine aktivasyon e-postası gönderildi."
+                    : $"{displayName} ({roleText}) kadroya eklendi ve kişisel profil aktivasyon bağlantısı hazırlandı. Bağlantıyı kopyalayıp iletebilirsiniz.";
             }
             else
             {
@@ -2573,6 +2576,88 @@ namespace GMK360.Web.Controllers
 
             TempData["SuccessMessage"] = "Noter onaylı ve ıslak imzalı karar sayfası dijital arşive kaydedildi.";
             return RedirectToAction(nameof(Detail), new { id = building.Id });
+        }
+
+        private async Task<bool> TrySendActivationEmailAsync(
+            GMK360.Core.Entities.Identity.ApplicationUser? targetUser,
+            string roleTitle,
+            string buildingName)
+        {
+            if (targetUser == null
+                || string.IsNullOrWhiteSpace(targetUser.ActivationToken)
+                || string.IsNullOrWhiteSpace(targetUser.Email)
+                || targetUser.Email.EndsWith("@gmk360.local", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var emailSvc = HttpContext.RequestServices.GetService<IEmailService>();
+            if (emailSvc == null) return false;
+
+            var activateUrl = $"{Request.Scheme}://{Request.Host}/Account/ActivateResident?token={Uri.EscapeDataString(targetUser.ActivationToken)}";
+            var fullName = $"{targetUser.FirstName} {targetUser.LastName}".Trim();
+            if (string.IsNullOrWhiteSpace(fullName)) fullName = targetUser.Email;
+
+            var subject = $"GMK360 | {buildingName} ({roleTitle}) Profil Aktivasyonu";
+            var body = $@"
+<div style=""font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px;border:1px solid #e2e8f0;border-radius:12px;"">
+  <h2 style=""color:#15803d;margin-top:0;"">GMK360 Bina &amp; Site Portalı Daveti</h2>
+  <p>Merhaba <strong>{System.Net.WebUtility.HtmlEncode(fullName)}</strong>,</p>
+  <p><strong>{System.Net.WebUtility.HtmlEncode(buildingName)}</strong> yönetiminde <strong>{System.Net.WebUtility.HtmlEncode(roleTitle)}</strong> olarak profiliniz oluşturuldu.</p>
+  <p>E-postanızı doğrulamak, kendi şifrenizi ve kişisel 4–6 haneli onay/PWA PIN kodunuzu belirlemek için aşağıdaki butona tıklayın:</p>
+  <p style=""margin:24px 0;"">
+    <a href=""{activateUrl}"" style=""background:#15803d;color:#fff;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:bold;display:inline-block;"">Profilimi Doğrula &amp; Şifre/PIN Belirle</a>
+  </p>
+  <p style=""font-size:12px;color:#64748b;"">Buton çalışmazsa bağlantıyı kopyalayıp tarayıcınıza yapıştırın:<br/><a href=""{activateUrl}"">{activateUrl}</a></p>
+</div>";
+
+            try
+            {
+                await emailSvc.SendEmailAsync(targetUser.Email, subject, body);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SendResidentActivationEmail(int unitId, int buildingId, string roleType, int? selectedBuildingFilter = null)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var unit = await _context.BuildingUnits.FirstOrDefaultAsync(u => u.Id == unitId && u.BuildingId == buildingId);
+            if (unit == null) return NotFound();
+
+            string? targetUserId = string.Equals(roleType, "Tenant", StringComparison.OrdinalIgnoreCase)
+                ? unit.TenantUserId
+                : unit.OwnerUserId;
+            if (string.IsNullOrWhiteSpace(targetUserId))
+            {
+                TempData["ErrorMessage"] = "Önce ilgili malik/kiracı için iletişim bilgisini kaydedin.";
+                return RedirectToAction(nameof(Sakinler), new { buildingId = selectedBuildingFilter });
+            }
+
+            var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.Id == targetUserId);
+            if (targetUser == null || string.IsNullOrWhiteSpace(targetUser.ActivationToken))
+            {
+                TempData["ErrorMessage"] = "Bu kullanıcı profilini zaten aktifleştirmiş veya aktivasyon bağlantısı yok.";
+                return RedirectToAction(nameof(Sakinler), new { buildingId = selectedBuildingFilter });
+            }
+
+            string roleTitle = string.Equals(roleType, "Tenant", StringComparison.OrdinalIgnoreCase)
+                ? $"Daire {unit.DoorNumber} Kiracısı"
+                : $"Daire {unit.DoorNumber} Kat Maliki";
+
+            bool sent = await TrySendActivationEmailAsync(targetUser, roleTitle, building.Name);
+            TempData[sent ? "SuccessMessage" : "ErrorMessage"] = sent
+                ? $"✉️ {targetUser.Email} adresine aktivasyon e-postası gönderildi."
+                : "Geçerli bir kişisel e-posta adresi kayıtlı değil veya SMTP ayarları eksik.";
+
+            return RedirectToAction(nameof(Sakinler), new { buildingId = selectedBuildingFilter });
         }
 
         private async Task SyncResidentUsersAndPeriodsAsync(BuildingUnit unit)
@@ -2994,7 +3079,21 @@ namespace GMK360.Web.Controllers
             }
             await SyncResidentUsersAndPeriodsAsync(unit);
 
-            TempData["SuccessMessage"] = $"'{unit.DoorNumber}' bağımsız bölümü malik/kiracı, arsa payı, aidat muafiyet/katsayı ve PWA PIN bilgileri güncellendi.";
+            bool ownerInvited = false;
+            bool tenantInvited = false;
+            if (!string.IsNullOrWhiteSpace(unit.OwnerUserId) && !string.IsNullOrWhiteSpace(unit.OwnerEmail))
+            {
+                var ow = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == unit.OwnerUserId);
+                ownerInvited = await TrySendActivationEmailAsync(ow, $"Daire {unit.DoorNumber} Kat Maliki", building.Name);
+            }
+            if (!unit.IsEmpty && !string.IsNullOrWhiteSpace(unit.TenantUserId) && !string.IsNullOrWhiteSpace(unit.TenantEmail))
+            {
+                var tn = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == unit.TenantUserId);
+                tenantInvited = await TrySendActivationEmailAsync(tn, $"Daire {unit.DoorNumber} Kiracısı", building.Name);
+            }
+
+            var mailNote = (ownerInvited || tenantInvited) ? " E-posta adresi olanlara aktivasyon daveti de gönderildi." : "";
+            TempData["SuccessMessage"] = $"'{unit.DoorNumber}' bağımsız bölümü malik/kiracı, arsa payı, aidat muafiyet/katsayı ve PWA PIN bilgileri güncellendi.{mailNote}";
             return RedirectToAction(nameof(Sakinler), new { buildingId = selectedBuildingFilter });
         }
 

@@ -152,7 +152,11 @@
                                         @if (!string.IsNullOrWhiteSpace(unit.OwnerName))
                                         {
                                             <div class="fw-semibold text-dark">@unit.OwnerName</div>
-                                            <small class="text-muted">@(unit.OwnerPhone ?? unit.OwnerEmail ?? "-")</small>
+                                            <small class="text-muted d-block">@(unit.OwnerPhone ?? "-")</small>
+                                            @if (!string.IsNullOrWhiteSpace(unit.OwnerEmail))
+                                            {
+                                                <small class="text-primary d-block">@unit.OwnerEmail</small>
+                                            }
                                         }
                                         else
                                         {
@@ -163,7 +167,11 @@
                                         @if (!string.IsNullOrWhiteSpace(unit.TenantName))
                                         {
                                             <div class="fw-semibold text-info">@unit.TenantName</div>
-                                            <small class="text-muted">@(unit.TenantPhone ?? unit.TenantEmail ?? "-")</small>
+                                            <small class="text-muted d-block">@(unit.TenantPhone ?? "-")</small>
+                                            @if (!string.IsNullOrWhiteSpace(unit.TenantEmail))
+                                            {
+                                                <small class="text-primary d-block">@unit.TenantEmail</small>
+                                            }
                                         }
                                         else
                                         {
@@ -194,10 +202,27 @@
                                         }
                                         else if (ownerProfile != null && !string.IsNullOrEmpty(ownerToken))
                                         {
-                                            <button type="button" class="btn btn-xs btn-outline-warning text-dark border mt-1 w-100 fw-semibold" style="font-size:.72rem;"
-                                                    onclick="copyActivationUrl('@ownerToken', 'Malik (@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerName ?? unit.DoorNumber))')">
-                                                🔗 Malik Davet Linkini Kopyala
-                                            </button>
+                                            <div class="d-flex flex-wrap gap-1 mt-1">
+                                                <button type="button" class="btn btn-xs btn-outline-warning text-dark border flex-grow-1 fw-semibold" style="font-size:.72rem;"
+                                                        onclick="copyActivationUrl('@ownerToken')">
+                                                    🔗 Malik Linki Kopyala
+                                                </button>
+                                                <button type="button" class="btn btn-xs btn-outline-success border fw-semibold" style="font-size:.72rem;" title="WhatsApp Daveti Kopyala / Aç"
+                                                        onclick="sendWhatsAppActivation('@ownerToken', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerPhone ?? "")', 'Malik (@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerName ?? unit.DoorNumber))')">
+                                                    💬
+                                                </button>
+                                                @if (!string.IsNullOrWhiteSpace(unit.OwnerEmail))
+                                                {
+                                                    <form asp-action="SendResidentActivationEmail" method="post" class="d-inline">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="unitId" value="@unit.Id" />
+                                                        <input type="hidden" name="buildingId" value="@unit.BuildingId" />
+                                                        <input type="hidden" name="roleType" value="Owner" />
+                                                        <input type="hidden" name="selectedBuildingFilter" value="@selectedBuildingId" />
+                                                        <button type="submit" class="btn btn-xs btn-outline-primary border fw-semibold" style="font-size:.72rem;" title="E-posta İle Davet Gönder">✉️</button>
+                                                    </form>
+                                                }
+                                            </div>
                                         }
                                         else if (hasOwnerPin)
                                         {
@@ -215,10 +240,27 @@
                                             }
                                             else if (tenantProfile != null && !string.IsNullOrEmpty(tenantToken))
                                             {
-                                                <button type="button" class="btn btn-xs btn-outline-primary border mt-1 w-100 fw-semibold" style="font-size:.72rem;"
-                                                        onclick="copyActivationUrl('@tenantToken', 'Kiracı (@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantName ?? unit.DoorNumber))')">
-                                                    🔗 Kiracı Davet Linkini Kopyala
-                                                </button>
+                                                <div class="d-flex flex-wrap gap-1 mt-1">
+                                                    <button type="button" class="btn btn-xs btn-outline-primary border flex-grow-1 fw-semibold" style="font-size:.72rem;"
+                                                            onclick="copyActivationUrl('@tenantToken')">
+                                                        🔗 Kiracı Linki Kopyala
+                                                    </button>
+                                                    <button type="button" class="btn btn-xs btn-outline-success border fw-semibold" style="font-size:.72rem;" title="WhatsApp Daveti Kopyala / Aç"
+                                                            onclick="sendWhatsAppActivation('@tenantToken', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantPhone ?? "")', 'Kiracı (@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantName ?? unit.DoorNumber))')">
+                                                        💬
+                                                    </button>
+                                                    @if (!string.IsNullOrWhiteSpace(unit.TenantEmail))
+                                                    {
+                                                        <form asp-action="SendResidentActivationEmail" method="post" class="d-inline">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="unitId" value="@unit.Id" />
+                                                            <input type="hidden" name="buildingId" value="@unit.BuildingId" />
+                                                            <input type="hidden" name="roleType" value="Tenant" />
+                                                            <input type="hidden" name="selectedBuildingFilter" value="@selectedBuildingId" />
+                                                            <button type="submit" class="btn btn-xs btn-outline-primary border fw-semibold" style="font-size:.72rem;" title="E-posta İle Davet Gönder">✉️</button>
+                                                        </form>
+                                                    }
+                                                </div>
                                             }
                                             else if (hasTenantPin)
                                             {
@@ -607,13 +649,26 @@
         document.getElementById('euRuleNote').value = note || '';
     }
 
-    function copyActivationUrl(token, label) {
+    function copyActivationUrl(token) {
         const url = window.location.origin + '/Account/ActivateResident?token=' + encodeURIComponent(token);
-        const text = `Merhaba ${label},\nGMK360 Bina Portalı profilinizi doğrulamak, kendi şifrenizi ve onay PIN'inizi belirlemek için bağlantıya tıklayın:\n${url}`;
-        if (navigator.clipboard) {
-            navigator.clipboard.writeText(text).then(() => alert('Davet bağlantısı panoya kopyalandı:\n\n' + text));
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(() => alert('Aktivasyon linki panoya kopyalandı (doğrudan tarayıcı adres çubuğuna yapıştırabilirsiniz):\n\n' + url));
         } else {
-            prompt('Davet bağlantısını kopyalayın:', text);
+            prompt('Aktivasyon linkini kopyalayın:', url);
+        }
+    }
+
+    function sendWhatsAppActivation(token, phone, label) {
+        const url = window.location.origin + '/Account/ActivateResident?token=' + encodeURIComponent(token);
+        const text = `Merhaba ${label}, GMK360 Bina Portalı profilinizi doğrulamak, kendi şifrenizi ve onay PIN'inizi belirlemek için bağlantıya tıklayın: ${url}`;
+        const digits = (phone || '').replace(/\D/g, '');
+        if (digits.length >= 10) {
+            const intl = digits.length === 10 ? '90' + digits : (digits.startsWith('0') ? '9' + digits : digits);
+            window.open('https://wa.me/' + intl + '?text=' + encodeURIComponent(text), '_blank');
+        } else if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => alert('WhatsApp davet mesajı panoya kopyalandı:\n\n' + text));
+        } else {
+            prompt('WhatsApp davet mesajı:', text);
         }
     }
 
@@ -623,7 +678,7 @@
         const roleLabel = isOwner ? 'Malik (Ev Sahibi)' : 'Kiracı (Sakin)';
         const token = isOwner ? _euOwnerToken : _euTenantToken;
         if (token) {
-            copyActivationUrl(token, `${title} - ${roleLabel}`);
+            copyActivationUrl(token);
             return;
         }
         const phone = isOwner
