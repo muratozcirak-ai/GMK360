@@ -212,7 +212,30 @@ namespace GMK360.Web.Controllers
             viewModel.TotalBuildingDebts = viewModel.UnitCards.Sum(c => c.BuildingDebtAmount);
             viewModel.TotalCapExPaidForTaxDeduction = viewModel.UnitCards.Sum(c => c.PaidCapExAmount);
 
+            var quotaSvc = HttpContext.RequestServices.GetService<GMK360.Web.Services.SaasSubscriptionService>();
+            if (quotaSvc != null)
+            {
+                ViewBag.QuotaSummary = await quotaSvc.GetLandlordFreeQuotaSummaryAsync(user);
+            }
+
             return View(viewModel);
+        }
+
+        [HttpPost("StartMultiUnitTrial")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> StartMultiUnitTrial()
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+
+            var quotaSvc = HttpContext.RequestServices.GetService<GMK360.Web.Services.SaasSubscriptionService>();
+            if (quotaSvc != null)
+            {
+                await quotaSvc.AssignTrialSubscriptionAsync(user, "multi_property", trialDays: 15);
+                TempData["SuccessMessage"] = "🎉 15 Günlük Çoklu Mülk & Kiracı Takibi denemeniz başlatıldı! Sürenizi Süper Admin CRM üzerinden de takip edebilirsiniz.";
+            }
+
+            return RedirectToAction(nameof(Index));
         }
 
         // Tek Tıkla Örnek Yatırımcı Portföyü Yükle (3 Farklı Binada Daireler + Cadde Dükkan)

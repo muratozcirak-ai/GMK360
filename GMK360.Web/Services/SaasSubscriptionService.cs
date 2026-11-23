@@ -29,6 +29,16 @@ namespace GMK360.Web.Services
         public string? AdminNotes { get; set; }
     }
 
+    public sealed class SingleUnitQuotaResult
+    {
+        public bool HasTcIdentity { get; set; }
+        public int DistinctOwnedUnitCount { get; set; }
+        public int DistinctBuildingCount { get; set; }
+        public bool HasActiveMultiUnitSubscription { get; set; }
+        public bool IsWithinFreeSingleUnitQuota => DistinctOwnedUnitCount <= 1;
+        public bool RequiresPaidUpgradeForMultiUnit => DistinctOwnedUnitCount >= 2 && !HasActiveMultiUnitSubscription;
+    }
+
     public class SaasSubscriptionService
     {
         private readonly ApplicationDbContext _context;
@@ -76,6 +86,7 @@ namespace GMK360.Web.Services
                 "demolition" => ("Yıkım & Hafriyat Operasyon — Yıllık Abonelik", 12000m, PackagePeriod.Yearly, UserType.Corporate),
                 "supplier" => ("Tedarikçi & B2B Pazaryeri — Yıllık Abonelik", 4000m, PackagePeriod.Yearly, UserType.Corporate),
                 "service" => ("Usta & Taşeron — Yıllık Abonelik", 1500m, PackagePeriod.Yearly, UserType.ServiceProvider),
+                "multi_property" => ("Çoklu Mülk & Kiracı Kokpiti — Yıllık Abonelik", 1500m, PackagePeriod.Yearly, UserType.PropertyOwner),
                 _ => ("Dijital Evim — Başlangıç Paketi", 0m, PackagePeriod.Free, UserType.Individual)
             };
 
@@ -223,6 +234,56 @@ namespace GMK360.Web.Services
                 CampaignName = sub.DiscountPolicy?.Name,
                 DiscountPercentage = sub.DiscountPolicy?.DiscountPercentage ?? 0m,
                 AdminNotes = sub.AdminNotes
+            };
+        }
+
+        /// <summary>
+        /// TCKN bazlı tekil "1 Daire Ücretsiz / 2+ Daire & Kiracı Takibi Ücretli" kota değerlendirmesi.
+        /// Aynı TCKN'ye sahip tüm hesaplardaki sahiplikleri birleştirerek ikinci ücretsiz daire suistimalini önler.
+        /// </summary>
+        public async Task<SingleUnitQuotaResult> GetLandlordFreeQuotaSummaryAsync(ApplicationUser user)
+        {
+            var cleanTc = GMK360.Web.Helpers.TcknHelper.Normalize(user.TcIdentityNo);
+            bool hasTc = GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(cleanTc);
+
+            var relatedUserIds = hasTc
+                ? await _context.Users.AsNoTracking()
+                    .Where(u => u.TcIdentityNo == cleanTc)
+                    .Select(u => u.Id)
+                    .ToListAsync()
+                : new List<string> { user.Id };
+
+            if (!relatedUserIds.Contains(user.Id)) relatedUserIds.Add(user.Id);
+
+            bool hasActiveSub = await _context.UserSubscriptions.AsNoTracking()
+                .AnyAsync(s => relatedUserIds.Contains(s.UserId)
+                    && s.IsActive
+                    && (s.PaymentStatus == "Paid" || s.PaymentStatus == "Exempt" || (s.PaymentStatus == "Trial" && (!s.EndDate.HasValue || s.EndDate >= DateTime.UtcNow)))
+                    && (!s.EndDate.HasValue || s.EndDate >= DateTime.UtcNow));
+
+            var ownedProps = await _context.Properties.AsNoTracking()
+                .Where(p => !p.IsDeleted && (relatedUserIds.Contains(p.UserId) || (p.OwnerUserId != null && relatedUserIds.Contains(p.OwnerUserId))))
+                .Select(p => new { p.Id, p.BuildingId })
+                .ToListAsync();
+
+            var ownedUnitLinks = await _context.BuildingUnits.AsNoTracking()
+                .Where(u => !(u.Category ?? "").StartsWith("OrtakAlan")
+                    && ((u.OwnerUserId != null && relatedUserIds.Contains(u.OwnerUserId))
+                        || (!string.IsNullOrEmpty(user.Email) && u.OwnerEmail == user.Email)))
+                .Select(u => new { u.Id, u.BuildingId, u.PropertyId })
+                .ToListAsync();
+
+            // Property + BuildingUnit çakışmasını düşerek gerçek tekil mülk sayısını hesapla
+            int linkedPropCount = ownedUnitLinks.Count(u => u.PropertyId.HasValue);
+            int totalDistinctUnits = ownedUnitLinks.Count + ownedProps.Count(p => !ownedUnitLinks.Any(u => u.PropertyId == p.Id));
+            int distinctBuildings = ownedUnitLinks.Select(u => u.BuildingId).Concat(ownedProps.Select(p => p.BuildingId)).Where(id => id > 0).Distinct().Count();
+
+            return new SingleUnitQuotaResult
+            {
+                HasTcIdentity = hasTc,
+                DistinctOwnedUnitCount = totalDistinctUnits,
+                DistinctBuildingCount = distinctBuildings,
+                HasActiveMultiUnitSubscription = hasActiveSub
             };
         }
     }

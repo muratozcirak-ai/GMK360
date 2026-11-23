@@ -3,6 +3,7 @@
     ViewData["Title"] = "Ultra Pro Mülk Sahibi & Portföy Kokpiti";
     Layout = "~/Views/Shared/_Layout.cshtml";
     string currentMonth = DateTime.Now.ToString("MMMM yyyy");
+    var quota = ViewBag.QuotaSummary as GMK360.Web.Services.SingleUnitQuotaResult;
 }
 
 <div class="container-fluid py-4 px-lg-4" style="margin-top: 72px;">
@@ -64,6 +65,57 @@
             </div>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
+    }
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-4 shadow-sm border-0 mb-4" role="alert">
+            <div class="fw-bold">@TempData["ErrorMessage"]</div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (quota != null)
+    {
+        if (quota.RequiresPaidUpgradeForMultiUnit)
+        {
+            <div class="alert alert-warning rounded-4 border-warning shadow-sm mb-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <div>
+                    <div class="fw-bold text-dark"><i class="bi bi-stars text-warning-emphasis me-1"></i> Çoklu Mülk &amp; Kiracı Takibi Tarifesi Gerekli (@quota.DistinctOwnedUnitCount Bağımsız Bölüm)</div>
+                    <div class="small text-muted">İlk 1 dairenizde sabit gider, fatura, demirbaş ve ilan işlemleri ücretsizdir. 2 ve üzeri daire / kiracı takibi için Çoklu Mülk paketine geçebilir veya 15 gün ücretsiz deneyebilirsiniz.</div>
+                </div>
+                <form asp-action="StartMultiUnitTrial" asp-controller="LandlordDashboard" method="post" class="m-0">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-dark btn-sm rounded-pill px-4 fw-bold">
+                        ⏳ 15 Gün Ücretsiz Çoklu Mülk Dene
+                    </button>
+                </form>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-light border rounded-4 shadow-xs mb-4 d-flex flex-wrap justify-content-between align-items-center gap-2 small">
+                <div>
+                    @if (quota.HasActiveMultiUnitSubscription)
+                    {
+                        <span class="badge bg-success me-2">Çoklu Mülk Paketi Aktif</span>
+                        <span class="text-dark">Sınırsız bağımsız bölüm, kiracı kontratı, TÜFE ve GMSİ raporu kullanabilirsiniz.</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-primary me-2">1 Daire Ücretsiz Kapsamı</span>
+                        <span class="text-dark">İlk 1 dairenizin elektrik/su/doğalgaz faturaları, sabit giderleri, demirbaşı ve satış/kiralama ilanı ücretsizdir (2+ dairede Çoklu Mülk tarifesi geçerlidir).</span>
+                    }
+                    @if (!quota.HasTcIdentity)
+                    {
+                        <a href="/Profile" class="badge bg-warning text-dark text-decoration-none ms-1">⚠️ T.C. Kimlik Doğrulamanızı Tamamlayın &rarr;</a>
+                    }
+                </div>
+                <a href="/DigitalHome/Index" class="btn btn-sm btn-outline-success rounded-pill px-3 fw-semibold">
+                    <i class="bi bi-receipt me-1"></i> Dairem &amp; Faturalarım (Sabit Gider)
+                </a>
+            </div>
+        }
     }
 
     <!-- 4 BÜYÜK PORTFÖY METRİK KARTI -->

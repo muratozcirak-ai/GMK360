@@ -107,11 +107,23 @@ namespace GMK360.Web.Controllers
                 }
             }
 
+            var quotaSvc = HttpContext.RequestServices.GetService<GMK360.Web.Services.SaasSubscriptionService>();
+            var quotaSummary = (user != null && quotaSvc != null)
+                ? await quotaSvc.GetLandlordFreeQuotaSummaryAsync(user)
+                : new GMK360.Web.Services.SingleUnitQuotaResult();
+
+            var agencyConsultant = user != null
+                ? await _context.AgencyConsultants.AsNoTracking().Include(c => c.Agency).FirstOrDefaultAsync(c => c.UserId == user.Id && c.IsActive)
+                : null;
+
             ViewBag.ActiveModules = user?.ActiveModules ?? "";
             ViewBag.ResidentUnitCount = userUnits.Count;
             ViewBag.OwnerUnitCount = userUnits.Count(u => u.OwnerUserId == user!.Id || (!string.IsNullOrEmpty(user!.Email) && u.OwnerEmail == user.Email));
             ViewBag.BoardMembershipCount = boardMemberships.Count;
             ViewBag.PortalBuildingLinks = portalGroups;
+            ViewBag.QuotaSummary = quotaSummary;
+            ViewBag.AgencyCompanyName = agencyConsultant?.Agency?.CompanyName;
+            ViewBag.HasCompletedAgency = agencyConsultant?.Agency != null && !string.IsNullOrWhiteSpace(agencyConsultant.Agency.CompanyName);
             return View();
         }
 

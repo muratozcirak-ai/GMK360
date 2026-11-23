@@ -144,13 +144,33 @@ namespace GMK360.Web.Controllers
         [Authorize]
         [HttpPost("Profile/UpdateBasicInfo")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateBasicInfo(string firstName, string lastName, string? email, string? phoneNumber)
+        public async Task<IActionResult> UpdateBasicInfo(string firstName, string lastName, string? email, string? phoneNumber, string? tcIdentityNo = null, int? birthYear = null)
         {
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return RedirectToAction("Login", "Account");
 
             if (!string.IsNullOrWhiteSpace(firstName)) user.FirstName = firstName.Trim();
             if (!string.IsNullOrWhiteSpace(lastName)) user.LastName = lastName.Trim();
+
+            if (string.IsNullOrWhiteSpace(user.TcIdentityNo) && !string.IsNullOrWhiteSpace(tcIdentityNo))
+            {
+                var cleanTc = GMK360.Web.Helpers.TcknHelper.Normalize(tcIdentityNo);
+                if (!GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(cleanTc))
+                {
+                    TempData["ErrorMessage"] = "Geçersiz T.C. Kimlik Numarası (11 haneli algoritma doğrulamasından geçemedi).";
+                    return RedirectToAction(nameof(Index));
+                }
+                if (await _context.Users.AnyAsync(u => u.Id != user.Id && u.TcIdentityNo == cleanTc))
+                {
+                    TempData["ErrorMessage"] = "Bu T.C. Kimlik Numarası başka bir GMK360 hesabında zaten kayıtlı.";
+                    return RedirectToAction(nameof(Index));
+                }
+                user.TcIdentityNo = cleanTc;
+            }
+            if (!user.BirthYear.HasValue && birthYear.HasValue && birthYear.Value >= 1920 && birthYear.Value <= System.DateTime.UtcNow.Year)
+            {
+                user.BirthYear = birthYear.Value;
+            }
 
             if (!string.IsNullOrWhiteSpace(email))
             {

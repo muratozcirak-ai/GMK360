@@ -333,11 +333,27 @@ namespace GMK360.Web.Controllers
                     return BadRequest("Geçersiz konum bilgisi.");
                 }
 
-                // --- PRO PAKET KONTROLÜ (İkinci Bina Kısıtlaması) ---
-                bool isPro = await _context.UserSubscriptions.AnyAsync(s => s.UserId == user.Id && s.IsActive && (s.EndDate == null || s.EndDate >= DateTime.UtcNow));
-                var userBuildingIds = await _context.Properties.Where(p => p.UserId == user.Id).Select(p => p.BuildingId).Distinct().ToListAsync();
+                // --- TCKN & 1 ÜCRETSİZ DAİRE KOTASI KONTROLÜ ---
+                var quotaSvc = HttpContext.RequestServices.GetService<GMK360.Web.Services.SaasSubscriptionService>();
+                var quota = quotaSvc != null ? await quotaSvc.GetLandlordFreeQuotaSummaryAsync(user) : null;
+                bool isPro = quota != null
+                    ? quota.HasActiveMultiUnitSubscription
+                    : await _context.UserSubscriptions.AnyAsync(s => s.UserId == user.Id && s.IsActive && (s.EndDate == null || s.EndDate >= DateTime.UtcNow));
 
-                if (!isPro && userBuildingIds.Count > 0)
+                var cleanUserTc = GMK360.Web.Helpers.TcknHelper.Normalize(user.TcIdentityNo);
+                var sameIdentityUserIds = GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(cleanUserTc)
+                    ? await _context.Users.Where(u => u.TcIdentityNo == cleanUserTc).Select(u => u.Id).ToListAsync()
+                    : new System.Collections.Generic.List<string> { user.Id };
+                if (!sameIdentityUserIds.Contains(user.Id)) sameIdentityUserIds.Add(user.Id);
+
+                var userBuildingIds = await _context.Properties
+                    .Where(p => !p.IsDeleted && sameIdentityUserIds.Contains(p.UserId))
+                    .Select(p => p.BuildingId)
+                    .Distinct()
+                    .ToListAsync();
+
+                int totalExistingOwned = quota?.DistinctOwnedUnitCount ?? userBuildingIds.Count;
+                if (!isPro && totalExistingOwned >= 1 && userBuildingIds.Count > 0)
                 {
                     bool isSameBuilding = false;
                     
@@ -369,7 +385,7 @@ namespace GMK360.Web.Controllers
 
                     if (!isSameBuilding)
                     {
-                        return Ok(new { success = false, requiresPro = true, message = "Ücretsiz planda sadece tek bir bina/lokasyonda mülk yönetebilirsiniz." });
+                        return Ok(new { success = false, requiresPro = true, message = "Ücretsiz planda (aynı T.C. Kimlik No altında) yalnızca 1 daire yönetebilirsiniz. 2. daire ve kiracı takibi için Çoklu Mülk Tarifesine geçmeniz gerekir." });
                     }
                 }
                 // --- KONTROL BİTİŞİ ---

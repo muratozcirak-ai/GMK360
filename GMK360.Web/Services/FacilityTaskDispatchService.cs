@@ -383,11 +383,15 @@ namespace GMK360.Web.Services
             string? email,
             string? phone,
             string roleType,
-            string creatorUserId)
+            string creatorUserId,
+            string? tcIdentityNo = null)
         {
             var cleanEmail = email?.Trim();
             var normPhone = NormalizePhoneLast10(phone);
-            if (string.IsNullOrWhiteSpace(cleanEmail) && normPhone.Length < 10)
+            var cleanTc = GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(tcIdentityNo)
+                ? GMK360.Web.Helpers.TcknHelper.Normalize(tcIdentityNo)
+                : null;
+            if (string.IsNullOrWhiteSpace(cleanEmail) && normPhone.Length < 10 && string.IsNullOrWhiteSpace(cleanTc))
             {
                 return null;
             }
@@ -396,6 +400,10 @@ namespace GMK360.Web.Services
             if (!string.IsNullOrWhiteSpace(currentLinkedUserId))
             {
                 user = await _userManager.FindByIdAsync(currentLinkedUserId);
+            }
+            if (user == null && !string.IsNullOrWhiteSpace(cleanTc))
+            {
+                user = await _context.Users.FirstOrDefaultAsync(u => u.TcIdentityNo == cleanTc);
             }
             if (user == null && !string.IsNullOrWhiteSpace(cleanEmail))
             {
@@ -432,6 +440,7 @@ namespace GMK360.Web.Services
                     FirstName = names.Length > 0 ? names[0] : "Sakin",
                     LastName = names.Length > 1 ? names[1] : "",
                     DisplayName = !string.IsNullOrWhiteSpace(fullName) ? fullName.Trim() : null,
+                    TcIdentityNo = cleanTc,
                     UserType = roleType == "Owner" ? UserType.PropertyOwner : UserType.Individual,
                     ActiveModules = "facility_resident",
                     IsShadowAccount = true,
@@ -464,6 +473,10 @@ namespace GMK360.Web.Services
                 if (!string.IsNullOrWhiteSpace(phone) && string.IsNullOrWhiteSpace(user.PhoneNumber))
                 {
                     user.PhoneNumber = phone.Trim();
+                }
+                if (!string.IsNullOrWhiteSpace(cleanTc) && string.IsNullOrWhiteSpace(user.TcIdentityNo))
+                {
+                    user.TcIdentityNo = cleanTc;
                 }
                 if ((user.IsShadowAccount || !user.IsTransactionPinSet || user.MustChangePassword) && string.IsNullOrWhiteSpace(user.ActivationToken))
                 {

@@ -6,8 +6,11 @@
     int ownerUnitCount = ViewBag.OwnerUnitCount is int ouc ? ouc : 0;
     int boardCount = ViewBag.BoardMembershipCount is int bmc ? bmc : 0;
     var portalBuildingLinks = ViewBag.PortalBuildingLinks as List<GMK360.Web.Controllers.PortalBuildingLink> ?? new List<GMK360.Web.Controllers.PortalBuildingLink>();
+    var quotaSummary = ViewBag.QuotaSummary as GMK360.Web.Services.SingleUnitQuotaResult ?? new GMK360.Web.Services.SingleUnitQuotaResult();
+    string? agencyCompanyName = ViewBag.AgencyCompanyName as string;
+    bool hasCompletedAgency = ViewBag.HasCompletedAgency is bool hca && hca;
     bool hasResidentPortal = residentUnitCount > 0 || boardCount > 0 || portalBuildingLinks.Any() || User.IsInRole("Sakin") || User.IsInRole("Personel");
-    bool hasLandlordPortal = ownerUnitCount > 0 || activeModules.Contains("owner") || User.IsInRole("PropertyOwner");
+    bool hasLandlordPortal = ownerUnitCount > 0 || quotaSummary.DistinctOwnedUnitCount > 0 || activeModules.Contains("owner") || User.IsInRole("PropertyOwner") || User.IsInRole("Individual");
     bool hasModules = !string.IsNullOrEmpty(activeModules) || hasResidentPortal || hasLandlordPortal;
 }
 
@@ -125,7 +128,15 @@
                     <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden hub-card">
                         <div class="bg-primary text-white p-4 text-center"><i class="bi bi-cone-striped display-4"></i></div>
                         <div class="card-body p-4 text-center">
-                            <h5 class="fw-bold text-dark mb-2">Şantiye & İnşaat</h5>
+                            @if (!hasCompletedAgency)
+                            {
+                                <span class="badge bg-warning text-dark rounded-pill mb-1">Profil Eksik (Tamamla)</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-primary-subtle text-primary rounded-pill mb-1">İnşaat ERP</span>
+                            }
+                            <h5 class="fw-bold text-dark mb-2">@(string.IsNullOrWhiteSpace(agencyCompanyName) ? "Şantiye & İnşaat" : agencyCompanyName)</h5>
                             <p class="text-muted small mb-0">Bloklar, daireler, CAD planları, imalat ve taşeron.</p>
                         </div>
                     </div>
@@ -183,16 +194,31 @@
             </div>
         }
 
-        <!-- 2C. Mülk Sahibi & Yatırımcı Portföyü -->
+        <!-- 2C. 1 Daire Ücretsiz / Çoklu Mülk Yönetimi -->
         @if (hasLandlordPortal)
         {
+            <div class="col-md-6 col-lg-3">
+                <a href="/DigitalHome/Index" class="text-decoration-none">
+                    <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden hub-card border border-info border-opacity-25">
+                        <div class="bg-info text-white p-4 text-center"><i class="bi bi-receipt-cutoff display-4"></i></div>
+                        <div class="card-body p-4 text-center">
+                            <span class="badge bg-success text-white rounded-pill mb-1">1 Daire Ücretsiz</span>
+                            <h5 class="fw-bold text-dark mb-1">Evim &amp; Sabit Giderler</h5>
+                            <p class="text-muted small mb-0">Elektrik, su, doğalgaz faturaları ve 1 daire yönetimi.</p>
+                        </div>
+                    </div>
+                </a>
+            </div>
             <div class="col-md-6 col-lg-3">
                 <a href="/Landlord/Dashboard" class="text-decoration-none">
                     <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden hub-card border border-primary border-opacity-25">
                         <div class="bg-dark text-white p-4 text-center"><i class="bi bi-person-workspace display-4 text-warning"></i></div>
                         <div class="card-body p-4 text-center">
-                            <h5 class="fw-bold text-dark mb-2">Mülk Sahibi Kokpiti</h5>
-                            <p class="text-muted small mb-0">Daire içi foto, demirbaş, kira takibi, bölge analizi ve ilan hazırlığı.</p>
+                            <span class="badge @(quotaSummary.RequiresPaidUpgradeForMultiUnit ? "bg-warning text-dark" : "bg-primary") rounded-pill mb-1">
+                                @(quotaSummary.DistinctOwnedUnitCount >= 2 ? "Çoklu Mülk (2+ Daire)" : "1 Daire Ücretsiz • Çoklu Mülk")
+                            </span>
+                            <h5 class="fw-bold text-dark mb-1">Mülk &amp; Kiracı Kokpiti</h5>
+                            <p class="text-muted small mb-0">Daire içi foto, demirbaş, kira takibi, bölge analizi ve ilan.</p>
                         </div>
                     </div>
                 </a>

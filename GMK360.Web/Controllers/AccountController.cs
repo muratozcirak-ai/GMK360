@@ -897,7 +897,9 @@ namespace GMK360.Web.Controllers
             string newPassword,
             string confirmPassword,
             string personalPin,
-            bool confirmPhoneDeclaration = false)
+            bool confirmPhoneDeclaration = false,
+            string? tcIdentityNo = null,
+            int? birthYear = null)
         {
             if (string.IsNullOrWhiteSpace(token))
             {
@@ -918,6 +920,20 @@ namespace GMK360.Web.Controllers
             ViewBag.LinkedUnits = await _context.BuildingUnits.Include(u => u.Building)
                 .Where(u => u.OwnerUserId == user.Id || u.TenantUserId == user.Id).ToListAsync();
             ViewBag.Token = token.Trim();
+
+            var effectiveTc = GMK360.Web.Helpers.TcknHelper.Normalize(!string.IsNullOrWhiteSpace(tcIdentityNo) ? tcIdentityNo : user.TcIdentityNo);
+            if (!GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(effectiveTc))
+            {
+                ViewBag.ActivationError = "Lütfen geçerli 11 haneli T.C. Kimlik Numaranızı giriniz.";
+                return View(user);
+            }
+
+            bool tcUsedByOther = await _context.Users.AnyAsync(u => u.Id != user.Id && u.TcIdentityNo == effectiveTc);
+            if (tcUsedByOther)
+            {
+                ViewBag.ActivationError = "Bu T.C. Kimlik Numarası başka bir GMK360 hesabında zaten kayıtlı. Lütfen yöneticinizden mevcut hesabınızı bağlamasını isteyiniz.";
+                return View(user);
+            }
 
             if (string.IsNullOrWhiteSpace(email) || !email.Contains("@") || email.EndsWith("@gmk360.local", StringComparison.OrdinalIgnoreCase))
             {
@@ -962,6 +978,11 @@ namespace GMK360.Web.Controllers
             if (!string.IsNullOrWhiteSpace(firstName)) user.FirstName = firstName.Trim();
             if (!string.IsNullOrWhiteSpace(lastName)) user.LastName = lastName.Trim();
             if (!string.IsNullOrWhiteSpace(phoneNumber)) user.PhoneNumber = phoneNumber.Trim();
+            user.TcIdentityNo = effectiveTc;
+            if (birthYear.HasValue && birthYear.Value >= 1920 && birthYear.Value <= DateTime.UtcNow.Year)
+            {
+                user.BirthYear = birthYear.Value;
+            }
 
             user.EmailConfirmed = true; // Tekil davet bağlantısı üzerinden doğrulandı
             if (confirmPhoneDeclaration && !string.IsNullOrWhiteSpace(user.PhoneNumber))

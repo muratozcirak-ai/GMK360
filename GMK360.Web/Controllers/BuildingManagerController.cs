@@ -2137,7 +2137,8 @@ namespace GMK360.Web.Controllers
             BuildingManagerRole role,
             [FromServices] FacilityTaskDispatchService taskDispatch,
             string? fullName = null,
-            string? phoneNumber = null)
+            string? phoneNumber = null,
+            string? tcIdentityNo = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -2145,16 +2146,23 @@ namespace GMK360.Web.Controllers
             var cleanEmail = email?.Trim();
             var cleanPhone = phoneNumber?.Trim();
             var cleanName = fullName?.Trim();
-            if (string.IsNullOrWhiteSpace(cleanEmail) && FacilityTaskDispatchService.NormalizePhoneLast10(cleanPhone).Length < 10)
+            var cleanTc = GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(tcIdentityNo)
+                ? GMK360.Web.Helpers.TcknHelper.Normalize(tcIdentityNo)
+                : null;
+            if (string.IsNullOrWhiteSpace(cleanEmail) && FacilityTaskDispatchService.NormalizePhoneLast10(cleanPhone).Length < 10 && string.IsNullOrWhiteSpace(cleanTc))
             {
-                TempData["ErrorMessage"] = "Lütfen kurul üyesi / aza için geçerli bir e-posta veya 10 haneli telefon giriniz.";
+                TempData["ErrorMessage"] = "Lütfen kurul üyesi / aza için geçerli bir e-posta, 10 haneli telefon veya TCKN giriniz.";
                 return RedirectToAction(nameof(Detail), new { id = buildingId });
             }
 
             int rootId = building.ParentBuildingId ?? building.Id;
             GMK360.Core.Entities.Identity.ApplicationUser? targetUser = null;
 
-            if (!string.IsNullOrWhiteSpace(cleanEmail))
+            if (!string.IsNullOrWhiteSpace(cleanTc))
+            {
+                targetUser = await _context.Users.FirstOrDefaultAsync(u => u.TcIdentityNo == cleanTc);
+            }
+            if (targetUser == null && !string.IsNullOrWhiteSpace(cleanEmail))
             {
                 targetUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == cleanEmail || u.UserName == cleanEmail);
             }
@@ -2176,7 +2184,8 @@ namespace GMK360.Web.Controllers
                     cleanEmail,
                     cleanPhone,
                     "Owner",
-                    GetUserId() ?? "system");
+                    GetUserId() ?? "system",
+                    cleanTc);
 
                 if (targetUser == null)
                 {
@@ -2660,12 +2669,12 @@ namespace GMK360.Web.Controllers
             return RedirectToAction(nameof(Sakinler), new { buildingId = selectedBuildingFilter });
         }
 
-        private async Task SyncResidentUsersAndPeriodsAsync(BuildingUnit unit)
+        private async Task SyncResidentUsersAndPeriodsAsync(BuildingUnit unit, string? ownerTcNo = null, string? tenantTcNo = null)
         {
             var dispatchSvc = HttpContext.RequestServices.GetService<FacilityTaskDispatchService>();
             var creatorId = GetUserId() ?? "system";
 
-            if (dispatchSvc != null && (!string.IsNullOrWhiteSpace(unit.OwnerEmail) || !string.IsNullOrWhiteSpace(unit.OwnerPhone)))
+            if (dispatchSvc != null && (!string.IsNullOrWhiteSpace(unit.OwnerEmail) || !string.IsNullOrWhiteSpace(unit.OwnerPhone) || !string.IsNullOrWhiteSpace(ownerTcNo)))
             {
                 var ownerUser = await dispatchSvc.ProvisionResidentProfileAsync(
                     unit.OwnerUserId,
@@ -2673,7 +2682,8 @@ namespace GMK360.Web.Controllers
                     unit.OwnerEmail,
                     unit.OwnerPhone,
                     "Owner",
-                    creatorId);
+                    creatorId,
+                    ownerTcNo);
                 if (ownerUser != null) unit.OwnerUserId = ownerUser.Id;
             }
             else if (!string.IsNullOrWhiteSpace(unit.OwnerEmail))
@@ -2685,7 +2695,7 @@ namespace GMK360.Web.Controllers
 
             if (!unit.IsEmpty && (!string.IsNullOrWhiteSpace(unit.TenantEmail) || !string.IsNullOrWhiteSpace(unit.TenantPhone) || !string.IsNullOrWhiteSpace(unit.TenantName)))
             {
-                if (dispatchSvc != null && (!string.IsNullOrWhiteSpace(unit.TenantEmail) || !string.IsNullOrWhiteSpace(unit.TenantPhone)))
+                if (dispatchSvc != null && (!string.IsNullOrWhiteSpace(unit.TenantEmail) || !string.IsNullOrWhiteSpace(unit.TenantPhone) || !string.IsNullOrWhiteSpace(tenantTcNo)))
                 {
                     var tenantUser = await dispatchSvc.ProvisionResidentProfileAsync(
                         unit.TenantUserId,
@@ -2693,7 +2703,8 @@ namespace GMK360.Web.Controllers
                         unit.TenantEmail,
                         unit.TenantPhone,
                         "Tenant",
-                        creatorId);
+                        creatorId,
+                        tenantTcNo);
                     if (tenantUser != null) unit.TenantUserId = tenantUser.Id;
                 }
                 else if (!string.IsNullOrWhiteSpace(unit.TenantEmail))
@@ -2736,7 +2747,9 @@ namespace GMK360.Web.Controllers
             double? grossSquareMeters = null,
             string? returnAction = null,
             string? ownerQuickPin = null,
-            string? tenantQuickPin = null)
+            string? tenantQuickPin = null,
+            string? ownerTcNo = null,
+            string? tenantTcNo = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -2787,7 +2800,7 @@ namespace GMK360.Web.Controllers
             _context.BuildingUnits.Add(unit);
             building.TotalUnits += 1;
             await _context.SaveChangesAsync();
-            await SyncResidentUsersAndPeriodsAsync(unit);
+            await SyncResidentUsersAndPeriodsAsync(unit, ownerTcNo, tenantTcNo);
 
             TempData["SuccessMessage"] = $"'{unitNumber}' bağımsız bölümü sakin/iletişim bilgileriyle eklendi.";
             if (string.Equals(returnAction, "Sakinler", StringComparison.OrdinalIgnoreCase))
@@ -3033,7 +3046,9 @@ namespace GMK360.Web.Controllers
             decimal? cleaningParticipationPercent = null,
             string? duesRuleNote = null,
             string? ownerQuickPin = null,
-            string? tenantQuickPin = null)
+            string? tenantQuickPin = null,
+            string? ownerTcNo = null,
+            string? tenantTcNo = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -3077,7 +3092,7 @@ namespace GMK360.Web.Controllers
             {
                 unit.TenantQuickPinHash = FacilityTaskDispatchService.HashQuickPin(tenantQuickPin.Trim());
             }
-            await SyncResidentUsersAndPeriodsAsync(unit);
+            await SyncResidentUsersAndPeriodsAsync(unit, ownerTcNo, tenantTcNo);
 
             bool ownerInvited = false;
             bool tenantInvited = false;
