@@ -133,6 +133,93 @@ namespace GMK360.Web.Controllers
 
 
 
+        [HttpGet("/KurumsalGiris")]
+        [AllowAnonymous]
+        public IActionResult CorporateLogin(string? returnUrl = null)
+        {
+            ViewData["ReturnUrl"] = returnUrl;
+            ViewBag.IsCorporateGate = true;
+            return View("Login");
+        }
+
+        [HttpPost("/Account/CorporateGatewayLogin")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CorporateGatewayLogin(string? companySubdomain, string email, string password, bool rememberMe = true)
+        {
+            ViewBag.IsCorporateGate = true;
+            var model = new LoginViewModel { Email = email, Password = password, RememberMe = rememberMe };
+            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+            {
+                ModelState.AddModelError(string.Empty, "Lütfen kurumsal e-posta adresinizi ve şifrenizi giriniz.");
+                return View("Login", model);
+            }
+
+            var input = email.Trim();
+            var user = await _userManager.FindByEmailAsync(input) ?? await _userManager.FindByNameAsync(input);
+            if (user == null)
+            {
+                ModelState.AddModelError(string.Empty, "Geçersiz kurumsal giriş bilgileri.");
+                return View("Login", model);
+            }
+
+            var cleanSub = System.Text.RegularExpressions.Regex
+                .Replace((companySubdomain ?? "").Trim().ToLowerInvariant(), @"[^a-z0-9\-]", "")
+                .Trim('-');
+
+            if (!string.IsNullOrEmpty(cleanSub) && !await _userManager.IsInRoleAsync(user, "Admin") && !await _userManager.IsInRoleAsync(user, "SuperAdmin"))
+            {
+                var complex = await _context.HousingComplexes.AsNoTracking().FirstOrDefaultAsync(c => !c.IsDeleted && c.Subdomain == cleanSub);
+                var bld = complex == null ? await _context.Buildings.AsNoTracking().FirstOrDefaultAsync(b => b.Subdomain == cleanSub) : null;
+                var agency = (complex == null && bld == null) ? await _context.Agencies.AsNoTracking().FirstOrDefaultAsync(a => !a.IsDeleted && a.Subdomain == cleanSub) : null;
+                var mgmt = (complex == null && bld == null && agency == null) ? await _context.ManagementCompanies.AsNoTracking().FirstOrDefaultAsync(m => !m.IsDeleted && m.Subdomain == cleanSub) : null;
+
+                bool authorized = false;
+                if (complex != null || bld != null)
+                {
+                    var bIds = complex != null
+                        ? await _context.Buildings.Where(b => b.HousingComplexId == complex.Id).Select(b => b.Id).ToListAsync()
+                        : new List<int> { bld!.Id };
+                    authorized = bIds.Any() && (
+                        await _context.BuildingManagers.AnyAsync(m => bIds.Contains(m.BuildingId) && m.UserId == user.Id && m.IsActive)
+                        || await _context.Buildings.AnyAsync(b => bIds.Contains(b.Id) && (b.ManagerUserId == user.Id || b.CreatedByUserId == user.Id))
+                        || await _context.BuildingStaffs.AnyAsync(s => bIds.Contains(s.BuildingId) && s.UserId == user.Id && s.IsActive && !s.IsDeleted)
+                        || await _context.BuildingUnits.AnyAsync(u => bIds.Contains(u.BuildingId) && (u.OwnerUserId == user.Id || u.TenantUserId == user.Id || u.OwnerEmail == user.Email || u.TenantEmail == user.Email)));
+                }
+                else if (agency != null)
+                {
+                    authorized = await _context.AgencyConsultants.AnyAsync(ac => ac.AgencyId == agency.Id && ac.UserId == user.Id && ac.IsActive);
+                }
+                else if (mgmt != null)
+                {
+                    authorized = string.Equals(mgmt.ContactEmail, user.Email, StringComparison.OrdinalIgnoreCase)
+                        || await _context.Buildings.AnyAsync(b => b.HousingComplex != null && b.HousingComplex.ManagementCompanyId == mgmt.Id && (b.ManagerUserId == user.Id || b.BuildingManagers.Any(m => m.UserId == user.Id && m.IsActive)));
+                }
+
+                if (!authorized)
+                {
+                    ModelState.AddModelError(string.Empty, $"'{cleanSub}' alt domaini için yetkiniz bulunmuyor.");
+                    return View("Login", model);
+                }
+            }
+
+            await GMK360.Web.Helpers.RoleLandingHelper.NormalizeCorporateRolesAsync(_userManager, user);
+            var result = await _signInManager.PasswordSignInAsync(user.UserName!, password, rememberMe, lockoutOnFailure: true);
+            if (!result.Succeeded)
+            {
+                ModelState.AddModelError(string.Empty, result.IsNotAllowed ? "Hesap aktivasyonu tamamlanmamış." : "E-posta veya şifre hatalı.");
+                return View("Login", model);
+            }
+
+            // Canlı gmk360.com üzerinde subdomain girilmişse doğrudan o subdomainin adresine geç
+            if (!string.IsNullOrEmpty(cleanSub) && Request.Host.Host.EndsWith("gmk360.com", StringComparison.OrdinalIgnoreCase))
+            {
+                return Redirect($"https://{cleanSub}.gmk360.com/TenantPortal/EnterSite");
+            }
+
+            var landingUrl = await GMK360.Web.Helpers.RoleLandingHelper.ResolveLandingUrlAsync(_userManager, _context, user);
+            return LocalRedirect(landingUrl);
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Login(LoginViewModel model, string returnUrl = null)

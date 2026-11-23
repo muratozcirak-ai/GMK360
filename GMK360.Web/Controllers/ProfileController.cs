@@ -32,6 +32,13 @@ namespace GMK360.Web.Controllers
             if (user == null) return RedirectToAction("Login", "Account");
             
             var currentUser = user;
+            var pureOp = await GMK360.Web.Helpers.RoleLandingHelper.IsPureCorporateOperatorAsync(_userManager, _context, currentUser);
+            if (pureOp.IsPureCorporate)
+            {
+                TempData["SuccessMessage"] = "Kurumsal / modül hesaplarında kişisel profil yerine doğrudan çalışma paneliniz açılır.";
+                return LocalRedirect(pureOp.DirectPanelUrl);
+            }
+
             user = await _context.Users
                 .Include(u => u.Subscriptions).ThenInclude(s => s.Package)
                 .Include(u => u.Subscriptions).ThenInclude(s => s.DiscountPolicy)

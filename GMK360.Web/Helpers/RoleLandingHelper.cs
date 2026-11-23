@@ -127,5 +127,61 @@ namespace GMK360.Web.Helpers
 
             return "/Dashboard/PropertyOwner";
         }
+
+        /// <summary>
+        /// Kişisel daire/üyelik bağlantısı olmayan, tek bir operasyonel kurum modülüne bağlı hesapları tespit eder.
+        /// Bu hesaplarda kişisel /Profile veya Hub yerine doğrudan kendi iş paneli açılır.
+        /// </summary>
+        public static async Task<(bool IsPureCorporate, string DirectPanelUrl)> IsPureCorporateOperatorAsync(
+            UserManager<ApplicationUser> userManager,
+            ApplicationDbContext context,
+            ApplicationUser user)
+        {
+            if (await userManager.IsInRoleAsync(user, "SuperAdmin") || await userManager.IsInRoleAsync(user, "Admin"))
+            {
+                return (false, "/Admin");
+            }
+
+            bool hasPersonalLinks = await context.BuildingUnits.AnyAsync(u => !(u.Category ?? "").StartsWith("OrtakAlan")
+                    && (u.OwnerUserId == user.Id || u.TenantUserId == user.Id
+                        || (!string.IsNullOrEmpty(user.Email) && (u.OwnerEmail == user.Email || u.TenantEmail == user.Email))))
+                || await context.BuildingManagers.AnyAsync(m => m.UserId == user.Id && m.IsActive && m.Role != GMK360.Core.Entities.BuildingManagerRole.HeadManager)
+                || await context.Properties.AnyAsync(p => !p.IsDeleted && (p.UserId == user.Id || p.OwnerUserId == user.Id));
+
+            if (hasPersonalLinks)
+            {
+                return (false, "/Dashboard/Hub");
+            }
+
+            var modules = ParseModules(user.ActiveModules);
+            bool hasConstruction = HasConstructionModule(user.ActiveModules) || await userManager.IsInRoleAsync(user, "InsaatFirmasi");
+            bool hasFacility = modules.Contains("facility") || await userManager.IsInRoleAsync(user, "BinaYoneticisi")
+                || await context.BuildingManagers.AnyAsync(m => m.UserId == user.Id && m.IsActive && m.Role == GMK360.Core.Entities.BuildingManagerRole.HeadManager);
+            bool hasSupplier = modules.Contains("supplier") || modules.Contains("b2b");
+            bool hasService = modules.Contains("service") || modules.Contains("subcontractor");
+            bool hasRealEstate = modules.Contains("realestate") || await userManager.IsInRoleAsync(user, "Emlakci");
+
+            int streamCount = (hasConstruction ? 1 : 0)
+                + (hasFacility ? 1 : 0)
+                + (hasSupplier ? 1 : 0)
+                + (hasService ? 1 : 0)
+                + (hasRealEstate ? 1 : 0);
+
+            if (user.UserType != UserType.Corporate && streamCount == 0)
+            {
+                return (false, "/Dashboard/Hub");
+            }
+
+            if (streamCount == 1)
+            {
+                if (hasFacility) return (true, "/BuildingManager/Index");
+                if (hasConstruction) return (true, "/ConstructionProject");
+                if (hasRealEstate) return (true, "/Dashboard/Corporate");
+                if (hasSupplier) return (true, "/B2BPurchasing");
+                if (hasService) return (true, "/SubcontractorContract");
+            }
+
+            return (false, "/Dashboard/Hub");
+        }
     }
 }

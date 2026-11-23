@@ -47,7 +47,7 @@ namespace GMK360.Web.Controllers
         }
 
         // Uygulama Merkezi (App Hub)
-        public async Task<IActionResult> Hub()
+        public async Task<IActionResult> Hub(bool hub = false)
         {
             var user = await _userManager.GetUserAsync(User);
             if (user != null && user.UserType == UserType.Corporate && (!User.IsInRole("Corporate") || (User.IsInRole("InsaatFirmasi") && !GMK360.Web.Helpers.RoleLandingHelper.HasConstructionModule(user.ActiveModules))))
@@ -62,6 +62,15 @@ namespace GMK360.Web.Controllers
                     await _userManager.AddToRoleAsync(user, "InsaatFirmasi");
                 }
                 await _signInManager.RefreshSignInAsync(user);
+            }
+
+            if (user != null && !hub)
+            {
+                var pureOp = await GMK360.Web.Helpers.RoleLandingHelper.IsPureCorporateOperatorAsync(_userManager, _context, user);
+                if (pureOp.IsPureCorporate)
+                {
+                    return LocalRedirect(pureOp.DirectPanelUrl);
+                }
             }
 
             var userUnits = user != null
