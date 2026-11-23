@@ -16,6 +16,11 @@
     var facilityModules = GMK360.Web.Helpers.RoleLandingHelper.ParseModules(currentUser?.ActiveModules);
     bool showFacilityHub = facilityModules.Length > 1 || User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
     GMK360.Web.Services.SubscriptionStatusSummary? facilityTrialSummary = null;
+    var sidebarBuildings = new List<GMK360.Core.Entities.Building>();
+    int activeLayoutBuildingId = 0;
+    if (int.TryParse(ViewContext.RouteData.Values["id"]?.ToString(), out int rBid)) activeLayoutBuildingId = rBid;
+    else if (int.TryParse(Context.Request.Query["buildingId"].FirstOrDefault(), out int qBid)) activeLayoutBuildingId = qBid;
+
     if (currentUser != null)
     {
         var userWithSub = await DbContext.Users
@@ -27,6 +32,18 @@
         {
             facilityTrialSummary = GMK360.Web.Services.SaasSubscriptionService.BuildStatusSummary(userWithSub);
         }
+
+        bool isGlobalAdmin = User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
+        sidebarBuildings = await DbContext.Buildings
+            .AsNoTracking()
+            .Where(b => isGlobalAdmin
+                ? b.Id == activeLayoutBuildingId || (activeLayoutBuildingId > 0 && b.HousingComplexId != null && DbContext.Buildings.Any(x => x.Id == activeLayoutBuildingId && x.HousingComplexId == b.HousingComplexId))
+                : (b.BuildingManagers.Any(m => m.IsActive)
+                    ? b.BuildingManagers.Any(m => m.UserId == currentUser.Id && m.IsActive)
+                    : (b.ManagerUserId == currentUser.Id || b.CreatedByUserId == currentUser.Id)))
+            .OrderBy(b => b.Id)
+            .Take(20)
+            .ToListAsync();
     }
 }
 
@@ -149,6 +166,22 @@
                                 <a href="/BuildingManager/Index" class="list-group-item list-group-item-action facility-nav-item @(currentController == "BuildingManager" && currentAction == "Index" ? "active" : "")">
                                     <i class="bi bi-speedometer2 me-2"></i>Genel Bakış & Bloklar
                                 </a>
+                                @if (sidebarBuildings.Count > 1)
+                                {
+                                    <div class="mx-1 mb-2 p-2 rounded-3 bg-light border">
+                                        <div class="text-muted fw-bold mb-1" style="font-size:.68rem;letter-spacing:.03em;">YAPILAR / BLOKLAR (@sidebarBuildings.Count)</div>
+                                        <div class="d-flex flex-column gap-1">
+                                            @foreach (var sbItem in sidebarBuildings)
+                                            {
+                                                bool isActiveBlk = activeLayoutBuildingId == sbItem.Id;
+                                                var blkText = !string.IsNullOrWhiteSpace(sbItem.BlockName) ? sbItem.BlockName : sbItem.Name;
+                                                <a href="/BuildingManager/Detail/@sbItem.Id" class="btn btn-xs text-start text-truncate rounded-2 px-2 py-1 @(isActiveBlk ? "btn-success text-white fw-bold" : "btn-outline-secondary border-0 text-dark")" style="font-size:.76rem;" title="@sbItem.Name (@blkText)">
+                                                    <i class="bi bi-building me-1"></i>@blkText
+                                                </a>
+                                            }
+                                        </div>
+                                    </div>
+                                }
                                 <a href="/BuildingManager/Sakinler" class="list-group-item list-group-item-action facility-nav-item @(currentController == "BuildingManager" && currentAction == "Sakinler" ? "active" : "")">
                                     <i class="bi bi-people me-2"></i>Mal Sahibi & Kiracılar
                                 </a>

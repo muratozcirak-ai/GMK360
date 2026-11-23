@@ -2109,6 +2109,21 @@ namespace GMK360.Web.Controllers
                     }
                 }
             }
+
+            if (siteBlocks.Count <= 1)
+            {
+                var allManagedRoots = await GetUserManagedRootBuildingsAsync();
+                if (allManagedRoots.Count > 1)
+                {
+                    var rootIds = allManagedRoots.Select(r => r.Id).ToList();
+                    var withUnits = await _context.Buildings
+                        .Include(b => b.Units)
+                        .Where(b => rootIds.Contains(b.Id) || (b.ParentBuildingId.HasValue && rootIds.Contains(b.ParentBuildingId.Value)))
+                        .OrderBy(b => b.Id)
+                        .ToListAsync();
+                    siteBlocks = withUnits;
+                }
+            }
             ViewBag.SiteBlocks = siteBlocks.GroupBy(b => b.Id).Select(g => g.First()).ToList();
 
             return View(building);
