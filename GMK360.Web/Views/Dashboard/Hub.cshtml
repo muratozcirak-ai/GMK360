@@ -5,7 +5,8 @@
     int residentUnitCount = ViewBag.ResidentUnitCount is int ruc ? ruc : 0;
     int ownerUnitCount = ViewBag.OwnerUnitCount is int ouc ? ouc : 0;
     int boardCount = ViewBag.BoardMembershipCount is int bmc ? bmc : 0;
-    bool hasResidentPortal = residentUnitCount > 0 || boardCount > 0 || User.IsInRole("Sakin") || User.IsInRole("Personel");
+    var portalBuildingLinks = ViewBag.PortalBuildingLinks as List<GMK360.Web.Controllers.PortalBuildingLink> ?? new List<GMK360.Web.Controllers.PortalBuildingLink>();
+    bool hasResidentPortal = residentUnitCount > 0 || boardCount > 0 || portalBuildingLinks.Any() || User.IsInRole("Sakin") || User.IsInRole("Personel");
     bool hasLandlordPortal = ownerUnitCount > 0 || activeModules.Contains("owner") || User.IsInRole("PropertyOwner");
     bool hasModules = !string.IsNullOrEmpty(activeModules) || hasResidentPortal || hasLandlordPortal;
 }
@@ -60,16 +61,36 @@
                                     </div>
                                 </div>
                             }
-                            @if (hasResidentPortal)
+                            @if (portalBuildingLinks.Any())
+                            {
+                                @foreach (var pb in portalBuildingLinks)
+                                {
+                                    <div class="col-md-6 col-lg-4">
+                                        <div class="p-3 bg-white rounded-3 shadow-sm border-start border-4 border-success h-100 d-flex flex-column justify-content-between">
+                                            <div>
+                                                <small class="text-success fw-bold d-block mb-1">
+                                                    <i class="bi bi-building-check me-1"></i> @pb.BuildingName @(!string.IsNullOrWhiteSpace(pb.BlockName) ? $"({pb.BlockName})" : "")
+                                                </small>
+                                                <div class="fw-semibold text-dark small">@pb.DoorsSummary • @pb.RoleSummary</div>
+                                                <div class="text-muted" style="font-size:.78rem;">Arıza bildirimi, yaklaşan toplantılar ve aidat durumu.</div>
+                                            </div>
+                                            <div class="mt-2 text-end">
+                                                <a href="/FacilityPortal/Index?buildingId=@pb.BuildingId" class="btn btn-sm btn-success rounded-pill py-0 px-3 fw-semibold">@pb.BuildingName Portalına Gir &rarr;</a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else if (hasResidentPortal)
                             {
                                 <div class="col-md-6 col-lg-4">
                                     <div class="p-3 bg-white rounded-3 shadow-sm border-start border-4 border-success h-100 d-flex flex-column justify-content-between">
                                         <div>
-                                            <small class="text-success fw-bold d-block mb-1"><i class="bi bi-wrench-adjustable-circle me-1"></i> Sitem &amp; Daire Portalım</small>
+                                            <small class="text-success fw-bold d-block mb-1"><i class="bi bi-wrench-adjustable-circle me-1"></i> Bina &amp; Daire Portalım</small>
                                             <div class="text-muted small">@residentUnitCount bağımsız bölüm bağlantınız var. Arıza bildirimi, toplantılar ve aidat takibi.</div>
                                         </div>
                                         <div class="mt-2 text-end">
-                                            <a href="/FacilityPortal/Index" class="btn btn-sm btn-success rounded-pill py-0 px-3 fw-semibold">Site Portalıma Git &rarr;</a>
+                                            <a href="/FacilityPortal/Index" class="btn btn-sm btn-success rounded-pill py-0 px-3 fw-semibold">Portala Git &rarr;</a>
                                         </div>
                                     </div>
                                 </div>
@@ -128,15 +149,33 @@
             </div>
         }
 
-        <!-- 2B. Site Sakin / Malik / Kiracı / Aza Portalı -->
-        @if (hasResidentPortal)
+        <!-- 2B. Üye Olunan Bina / Site Portal(lar)ı (Gerçek Bina Adlarıyla) -->
+        @if (portalBuildingLinks.Any())
+        {
+            @foreach (var pb in portalBuildingLinks)
+            {
+                <div class="col-md-6 col-lg-3">
+                    <a href="/FacilityPortal/Index?buildingId=@pb.BuildingId" class="text-decoration-none">
+                        <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden hub-card border border-success border-opacity-25">
+                            <div class="bg-success bg-gradient text-white p-4 text-center"><i class="bi bi-house-heart-fill display-4"></i></div>
+                            <div class="card-body p-4 text-center">
+                                <span class="badge bg-success-subtle text-success rounded-pill mb-1">@pb.RoleSummary</span>
+                                <h5 class="fw-bold text-dark mb-1">@pb.BuildingName</h5>
+                                <p class="text-muted small mb-0">@pb.DoorsSummary — Arıza, toplantı, karar ve aidatlar.</p>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            }
+        }
+        else if (hasResidentPortal)
         {
             <div class="col-md-6 col-lg-3">
                 <a href="/FacilityPortal/Index" class="text-decoration-none">
                     <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden hub-card border border-success border-opacity-25">
                         <div class="bg-success bg-gradient text-white p-4 text-center"><i class="bi bi-house-heart-fill display-4"></i></div>
                         <div class="card-body p-4 text-center">
-                            <h5 class="fw-bold text-dark mb-2">Site &amp; Daire Portalım</h5>
+                            <h5 class="fw-bold text-dark mb-2">Bina &amp; Daire Portalım</h5>
                             <p class="text-muted small mb-0">Arıza bildir, toplantı/karar gör, gündem öner, aidat takip et.</p>
                         </div>
                     </div>

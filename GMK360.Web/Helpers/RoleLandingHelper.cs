@@ -65,24 +65,36 @@ namespace GMK360.Web.Helpers
 
             var modules = ParseModules(user.ActiveModules);
             bool hasConstruction = HasConstructionModule(user.ActiveModules);
+            bool hasConstructionRole = hasConstruction || await userManager.IsInRoleAsync(user, "InsaatFirmasi");
             bool hasFacility = modules.Contains("facility") || await userManager.IsInRoleAsync(user, "BinaYoneticisi");
             bool hasSupplier = modules.Contains("supplier") || modules.Contains("b2b");
             bool hasService = modules.Contains("service") || modules.Contains("subcontractor") || await userManager.IsInRoleAsync(user, "Usta");
             bool hasRealEstate = modules.Contains("realestate") || await userManager.IsInRoleAsync(user, "Emlakci");
+            bool hasStaff = await userManager.IsInRoleAsync(user, "Personel") || await context.BuildingStaffs.AnyAsync(s => s.UserId == user.Id && s.IsActive && !s.IsDeleted);
+            bool hasResidentOrBoard = await userManager.IsInRoleAsync(user, "Sakin")
+                || await context.BuildingManagers.AnyAsync(m => m.UserId == user.Id && m.IsActive)
+                || await context.BuildingUnits.AnyAsync(u => !(u.Category ?? "").StartsWith("OrtakAlan")
+                    && (u.OwnerUserId == user.Id || u.TenantUserId == user.Id
+                        || (!string.IsNullOrEmpty(user.Email) && (u.OwnerEmail == user.Email || u.TenantEmail == user.Email))));
 
-            // Birden fazla ana is kolu aktifse calisma alani seciciye (Hub) gonder
-            int activeStreamCount = (hasConstruction ? 1 : 0) + (hasFacility ? 1 : 0) + (hasSupplier ? 1 : 0) + (hasService ? 1 : 0) + (hasRealEstate ? 1 : 0);
-            if (activeStreamCount > 1 && !hasConstruction)
+            // Birden fazla is kolu / rolu olan her kullanici kendi ana sayfasina (Hub) dusup alanini secer
+            int activeStreamCount = (hasConstructionRole ? 1 : 0)
+                + (hasFacility ? 1 : 0)
+                + (hasSupplier ? 1 : 0)
+                + (hasService ? 1 : 0)
+                + (hasRealEstate ? 1 : 0)
+                + ((hasResidentOrBoard || hasStaff) ? 1 : 0);
+            if (activeStreamCount > 1)
             {
                 return "/Dashboard/Hub";
             }
 
-            if (hasFacility && !hasConstruction)
+            if (hasFacility)
             {
                 return "/BuildingManager/Index";
             }
 
-            if (hasConstruction || await userManager.IsInRoleAsync(user, "InsaatFirmasi"))
+            if (hasConstructionRole)
             {
                 return "/ConstructionProject";
             }
@@ -97,12 +109,7 @@ namespace GMK360.Web.Helpers
                 return "/SubcontractorContract";
             }
 
-            if (await userManager.IsInRoleAsync(user, "Personel") || await context.BuildingStaffs.AnyAsync(s => s.UserId == user.Id && s.IsActive))
-            {
-                return "/FacilityPortal/Index";
-            }
-
-            if (await userManager.IsInRoleAsync(user, "Sakin"))
+            if (hasStaff || hasResidentOrBoard)
             {
                 return "/FacilityPortal/Index";
             }

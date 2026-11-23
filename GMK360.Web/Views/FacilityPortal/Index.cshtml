@@ -3,7 +3,12 @@
     string activeRole = ViewBag.ActiveRole as string ?? "Resident";
     bool canSwitch = ViewBag.CanSwitchPreview is bool cs && cs;
     var managedBuildings = ViewBag.ManagedBuildings as List<GMK360.Core.Entities.Building> ?? new List<GMK360.Core.Entities.Building>();
+    var portalBuildings = ViewBag.PortalBuildings as List<GMK360.Core.Entities.Building> ?? new List<GMK360.Core.Entities.Building>();
+    var selectedBuilding = ViewBag.SelectedBuilding as GMK360.Core.Entities.Building;
     int buildingId = ViewBag.SelectedBuildingId is int sb ? sb : 0;
+    string activeSiteName = selectedBuilding != null
+        ? $"{selectedBuilding.Name}{(!string.IsNullOrWhiteSpace(selectedBuilding.BlockName) ? " • " + selectedBuilding.BlockName : "")}"
+        : "GMK360 Bina & Yaşam Portalı";
     var staffProfile = ViewBag.StaffProfile as GMK360.Core.Entities.BuildingStaff;
     var staffList = ViewBag.BuildingStaffList as List<GMK360.Core.Entities.BuildingStaff> ?? new List<GMK360.Core.Entities.BuildingStaff>();
     var residentUnits = ViewBag.ResidentUnits as List<GMK360.Core.Entities.BuildingUnit> ?? new List<GMK360.Core.Entities.BuildingUnit>();
@@ -49,11 +54,14 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <span class="badge bg-warning text-dark rounded-pill px-2 py-1 small fw-bold">
-                        @(activeRole == "Manager" ? "Yönetici PWA" : activeRole == "Staff" ? "Görevli PWA" : activeRole == "Tenant" ? "Kiracı PWA" : "Kat Maliki PWA")
+                        @(activeRole == "Manager" ? "Yönetici" : activeRole == "Staff" ? "Görevli" : activeRole == "Tenant" ? "Kiracı" : "Kat Maliki")
                     </span>
-                    <div class="fw-bold fs-5 mt-1">GMK360 Mobil Saha</div>
+                    <div class="fw-bold fs-5 mt-1">@activeSiteName</div>
                 </div>
                 <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <a href="/Dashboard/Hub" class="btn btn-sm btn-outline-light rounded-pill px-3" title="Ana Sayfa / Çalışma Alanlarım">
+                        <i class="bi bi-grid-fill me-1"></i>Panellerim
+                    </a>
                     @if (!string.IsNullOrEmpty(boardRoleLabel))
                     {
                         <span class="badge bg-info text-dark rounded-pill px-2 py-1 fw-semibold">@boardRoleLabel</span>
@@ -71,6 +79,21 @@
                     </form>
                 </div>
             </div>
+
+            @if (portalBuildings.Count > 1)
+            {
+                <div class="d-flex flex-wrap gap-1 mt-2 pt-2 border-top border-white border-opacity-25">
+                    <small class="text-white-50 me-2 align-self-center">Yerleşke / Bina:</small>
+                    @foreach (var pb in portalBuildings)
+                    {
+                        var pbTitle = !string.IsNullOrWhiteSpace(pb.BlockName) ? $"{pb.Name} ({pb.BlockName})" : pb.Name;
+                        <a href="/FacilityPortal/Index?buildingId=@pb.Id@(canSwitch ? "&previewRole=" + activeRole : "")"
+                           class="btn btn-sm @(pb.Id == buildingId ? "btn-light text-dark fw-bold" : "btn-outline-light") rounded-pill px-2 py-0">
+                            @pbTitle
+                        </a>
+                    }
+                </div>
+            }
 
             @if (canSwitch)
             {

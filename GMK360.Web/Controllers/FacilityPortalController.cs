@@ -118,6 +118,18 @@ namespace GMK360.Web.Controllers
                 ?? boardMembership?.BuildingId
                 ?? 0;
 
+            var portalBuildingsMap = new Dictionary<int, GMK360.Core.Entities.Building>();
+            foreach (var b in managedBuildings) portalBuildingsMap[b.Id] = b;
+            foreach (var u in residentUnits.Where(x => x.Building != null)) portalBuildingsMap[u.BuildingId] = u.Building;
+            if (staffProfile?.Building != null) portalBuildingsMap[staffProfile.BuildingId] = staffProfile.Building;
+            if (boardMembership?.Building != null) portalBuildingsMap[boardMembership.BuildingId] = boardMembership.Building;
+            var portalBuildings = portalBuildingsMap.Values.OrderBy(b => b.Name).ThenBy(b => b.Id).ToList();
+
+            if (targetBuildingId > 0 && !portalBuildingsMap.ContainsKey(targetBuildingId) && !isManager)
+            {
+                targetBuildingId = portalBuildings.FirstOrDefault()?.Id ?? 0;
+            }
+
             var staffList = targetBuildingId > 0
                 ? await _context.BuildingStaffs
                     .Include(s => s.Leaves)
@@ -131,14 +143,26 @@ namespace GMK360.Web.Controllers
                 staffProfile = staffList.FirstOrDefault();
             }
 
-            var buildingUnitsForPreview = targetBuildingId > 0 && isManager && !residentUnits.Any()
+            var scopedResidentUnits = targetBuildingId > 0
+                ? residentUnits.Where(u => u.BuildingId == targetBuildingId).ToList()
+                : residentUnits;
+
+            var buildingUnitsForPreview = targetBuildingId > 0 && isManager && !scopedResidentUnits.Any()
                 ? await _context.BuildingUnits
                     .Include(u => u.Building)
                     .Include(u => u.Debts).ThenInclude(d => d.BuildingExpense)
                     .Where(u => u.BuildingId == targetBuildingId && !(u.Category ?? "").StartsWith("OrtakAlan"))
                     .Take(5)
                     .ToListAsync()
-                : residentUnits;
+                : scopedResidentUnits;
+
+            // Eğer birden fazla binada rolü varsa seçili binaya göre Owner/Tenant ayrımını netleştir
+            if (!isManager && activeRole != "Staff" && scopedResidentUnits.Any())
+            {
+                bool isTenantHere = scopedResidentUnits.Any(u => u.TenantUserId == userId || (!string.IsNullOrEmpty(userEmail) && u.TenantEmail == userEmail));
+                bool isOwnerHere = scopedResidentUnits.Any(u => u.OwnerUserId == userId || (!string.IsNullOrEmpty(userEmail) && u.OwnerEmail == userEmail));
+                activeRole = isOwnerHere ? "Owner" : (isTenantHere ? "Tenant" : activeRole);
+            }
 
             var ticketsQuery = _context.BuildingTaskTickets
                 .Include(t => t.Building)
@@ -158,7 +182,7 @@ namespace GMK360.Web.Controllers
             }
             else if ((activeRole == "Owner" || activeRole == "Tenant") && !isManager)
             {
-                var myUnitIds = residentUnits.Select(u => u.Id).ToList();
+                var myUnitIds = buildingUnitsForPreview.Select(u => u.Id).ToList();
                 tickets = tickets.Where(t => t.CreatedByUserId == userId || (t.BuildingUnitId.HasValue && myUnitIds.Contains(t.BuildingUnitId.Value))).ToList();
             }
 
@@ -194,6 +218,8 @@ namespace GMK360.Web.Controllers
             ViewBag.ActiveRole = activeRole;
             ViewBag.CanSwitchPreview = isManager;
             ViewBag.ManagedBuildings = managedBuildings;
+            ViewBag.PortalBuildings = portalBuildings;
+            ViewBag.SelectedBuilding = targetBuilding;
             ViewBag.SelectedBuildingId = targetBuildingId;
             ViewBag.RootBuildingId = rootBuildingId;
             ViewBag.StaffProfile = staffProfile;

@@ -13,6 +13,15 @@ using GMK360.Web.Filters;
 namespace GMK360.Web.Controllers
 {
     [Authorize]
+    public class PortalBuildingLink
+    {
+        public int BuildingId { get; set; }
+        public string BuildingName { get; set; } = string.Empty;
+        public string? BlockName { get; set; }
+        public string DoorsSummary { get; set; } = string.Empty;
+        public string RoleSummary { get; set; } = string.Empty;
+    }
+
     [RequireOnboarding] public class DashboardController : Controller
     {
         private readonly UserManager<ApplicationUser> _userManager;
@@ -44,18 +53,65 @@ namespace GMK360.Web.Controllers
                 await _signInManager.RefreshSignInAsync(user);
             }
 
+            var userUnits = user != null
+                ? await _context.BuildingUnits
+                    .AsNoTracking()
+                    .Include(u => u.Building)
+                    .Where(u => !(u.Category ?? "").StartsWith("OrtakAlan")
+                        && (u.OwnerUserId == user.Id || u.TenantUserId == user.Id
+                            || (!string.IsNullOrEmpty(user.Email) && (u.OwnerEmail == user.Email || u.TenantEmail == user.Email))))
+                    .ToListAsync()
+                : new List<BuildingUnit>();
+
+            var boardMemberships = user != null
+                ? await _context.BuildingManagers
+                    .AsNoTracking()
+                    .Include(m => m.Building)
+                    .Where(m => m.UserId == user.Id && m.IsActive)
+                    .ToListAsync()
+                : new List<BuildingManager>();
+
+            var portalGroups = userUnits
+                .Where(u => u.Building != null)
+                .GroupBy(u => u.BuildingId)
+                .Select(g => new PortalBuildingLink
+                {
+                    BuildingId = g.Key,
+                    BuildingName = g.First().Building.Name,
+                    BlockName = g.First().Building.BlockName,
+                    DoorsSummary = string.Join(", ", g.Select(x => $"No:{x.DoorNumber}")),
+                    RoleSummary = g.Any(x => x.OwnerUserId == user!.Id || (!string.IsNullOrEmpty(user.Email) && x.OwnerEmail == user.Email))
+                        ? (g.Any(x => x.TenantUserId == user!.Id) ? "Malik & Kiracı" : "Kat Maliki")
+                        : "Kiracı"
+                })
+                .ToList();
+
+            foreach (var bm in boardMemberships.Where(m => m.Building != null))
+            {
+                var existing = portalGroups.FirstOrDefault(p => p.BuildingId == bm.BuildingId);
+                var bRole = bm.Role == BuildingManagerRole.HeadManager ? "Yönetici" : (bm.Role == BuildingManagerRole.BoardMember ? "Aza" : "Denetçi");
+                if (existing != null)
+                {
+                    existing.RoleSummary = $"{existing.RoleSummary} + {bRole}";
+                }
+                else
+                {
+                    portalGroups.Add(new PortalBuildingLink
+                    {
+                        BuildingId = bm.BuildingId,
+                        BuildingName = bm.Building.Name,
+                        BlockName = bm.Building.BlockName,
+                        DoorsSummary = "Yönetim Kurulu",
+                        RoleSummary = bRole
+                    });
+                }
+            }
+
             ViewBag.ActiveModules = user?.ActiveModules ?? "";
-            ViewBag.ResidentUnitCount = user != null
-                ? await _context.BuildingUnits.CountAsync(u => !(u.Category ?? "").StartsWith("OrtakAlan")
-                    && (u.OwnerUserId == user.Id || u.TenantUserId == user.Id || (!string.IsNullOrEmpty(user.Email) && (u.OwnerEmail == user.Email || u.TenantEmail == user.Email))))
-                : 0;
-            ViewBag.OwnerUnitCount = user != null
-                ? await _context.BuildingUnits.CountAsync(u => !(u.Category ?? "").StartsWith("OrtakAlan")
-                    && (u.OwnerUserId == user.Id || (!string.IsNullOrEmpty(user.Email) && u.OwnerEmail == user.Email)))
-                : 0;
-            ViewBag.BoardMembershipCount = user != null
-                ? await _context.BuildingManagers.CountAsync(m => m.UserId == user.Id && m.IsActive)
-                : 0;
+            ViewBag.ResidentUnitCount = userUnits.Count;
+            ViewBag.OwnerUnitCount = userUnits.Count(u => u.OwnerUserId == user!.Id || (!string.IsNullOrEmpty(user!.Email) && u.OwnerEmail == user.Email));
+            ViewBag.BoardMembershipCount = boardMemberships.Count;
+            ViewBag.PortalBuildingLinks = portalGroups;
             return View();
         }
 

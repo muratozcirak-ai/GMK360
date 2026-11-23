@@ -981,7 +981,8 @@ namespace GMK360.Web.Controllers
             await _signInManager.SignInAsync(user, isPersistent: true);
 
             TempData["SuccessMessage"] = "🎉 Profiliniz doğrulandı, şifreniz ve kişisel gizli PIN'iniz kaydedildi!";
-            return RedirectToAction("Index", "Profile");
+            var landingUrl = await GMK360.Web.Helpers.RoleLandingHelper.ResolveLandingUrlAsync(_userManager, _context, user);
+            return LocalRedirect(landingUrl);
         }
         [HttpGet]
         public async Task<IActionResult> VerifyDevice(string returnUrl = null)
