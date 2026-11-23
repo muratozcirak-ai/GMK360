@@ -4,11 +4,13 @@ using GMK360.Core.Entities.Identity;
 using GMK360.Data.Contexts;
 using GMK360.Web.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -27,6 +29,16 @@ namespace GMK360.Web.Controllers
             _userManager = userManager;
         }
 
+        private async Task<bool> CanOwnerAccessUnitAsync(BuildingUnit? unit, ApplicationUser user)
+        {
+            if (unit == null) return false;
+            if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin")) return true;
+            if (unit.OwnerUserId == user.Id) return true;
+            if (!string.IsNullOrWhiteSpace(user.Email) && string.Equals(unit.OwnerEmail, user.Email, StringComparison.OrdinalIgnoreCase)) return true;
+            if (!string.IsNullOrWhiteSpace(user.PhoneNumber) && string.Equals(unit.OwnerPhone, user.PhoneNumber, StringComparison.OrdinalIgnoreCase)) return true;
+            return await _context.Buildings.AnyAsync(b => b.Id == unit.BuildingId && (b.ManagerUserId == user.Id || b.CreatedByUserId == user.Id));
+        }
+
         [HttpGet("Dashboard")]
         public async Task<IActionResult> Index()
         {
@@ -39,6 +51,7 @@ namespace GMK360.Web.Controllers
             // 1. Kullanıcının Emlak Mülkleri (Properties)
             var myProperties = await _context.Properties
                 .Include(p => p.Building)
+                .Include(p => p.Images)
                 .Where(p => p.UserId == user.Id || p.OwnerUserId == user.Id)
                 .ToListAsync();
 
@@ -46,19 +59,31 @@ namespace GMK360.Web.Controllers
 
             // 2. Kullanıcının Sahip Olduğu Bağımsız Bölümler (BuildingUnits)
             var myUnits = await _context.BuildingUnits
-                .Include(u => u.Building)
-                .Include(u => u.Debts)
-                    .ThenInclude(d => d.BuildingExpense)
-                .Include(u => u.Spaces)
-                    .ThenInclude(s => s.Fixtures)
-                .Where(u => u.OwnerUserId == user.Id || 
-                            (u.OwnerPhone != null && u.OwnerPhone == user.PhoneNumber) || 
-                            (!string.IsNullOrEmpty(userFullName) && u.OwnerName != null && u.OwnerName.Contains(userFullName)) ||
-                            (u.OwnerName != null && u.OwnerName.Contains("Murat Akın")))
-                .Where(u => u.Category != "OrtakAlan_Blok")
+                .Include(u => u.Building).ThenInclude(b => b.District)
+                .Include(u => u.Building).ThenInclude(b => b.Neighborhood)
+                .Include(u => u.Debts).ThenInclude(d => d.BuildingExpense)
+                .Include(u => u.Spaces).ThenInclude(s => s.Fixtures)
+                .Where(u => u.OwnerUserId == user.Id
+                            || (!string.IsNullOrEmpty(user.Email) && u.OwnerEmail == user.Email)
+                            || (!string.IsNullOrEmpty(user.PhoneNumber) && u.OwnerPhone == user.PhoneNumber))
+                .Where(u => !(u.Category ?? "").StartsWith("OrtakAlan"))
                 .ToListAsync();
 
             viewModel.Units = myUnits;
+
+            var unitIds = myUnits.Select(u => u.Id).ToList();
+            var unitPhotoDocs = unitIds.Any()
+                ? await _context.DocumentArchives
+                    .Where(d => !d.IsDeleted && d.SourceModule == "LandlordUnitPhoto" && d.SourceRecordId.HasValue && unitIds.Contains(d.SourceRecordId.Value))
+                    .OrderByDescending(d => d.Id)
+                    .ToListAsync()
+                : new List<DocumentArchive>();
+
+            var managedBoardBuildingIds = await _context.BuildingManagers
+                .Where(m => m.UserId == user.Id && m.IsActive)
+                .Select(m => m.BuildingId)
+                .ToListAsync();
+            bool isGlobalAdmin = User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
 
             // Kartları Oluştur
             var distinctBuildingIds = new HashSet<int>();
@@ -68,41 +93,75 @@ namespace GMK360.Web.Controllers
             {
                 distinctBuildingIds.Add(unit.BuildingId);
                 var unitDebts = unit.Debts?.ToList() ?? new List<UnitDebt>();
-                var unpaidDebts = unitDebts.Where(d => !d.IsPaid).ToList();
-                var paidCapEx = unitDebts.Where(d => d.IsPaid && d.BuildingExpense?.ExpenseType == BuildingExpenseType.CapitalExpenditure).Sum(d => d.Amount);
+                var unpaidDebts = unitDebts.Where(d => !d.IsPaid && !d.IsArchived).ToList();
+                var paidCapEx = unitDebts.Where(d => d.IsPaid && !d.IsArchived && d.BuildingExpense?.ExpenseType == BuildingExpenseType.CapitalExpenditure).Sum(d => d.Amount);
 
-                bool hasTenant = !string.IsNullOrEmpty(unit.TenantName);
-                decimal rent = unit.ListPrice ?? (unit.Category == "Dukkan" ? 60000m : 25000m);
-                bool rentPaid = (unit.Id % 2 == 0); // Simülasyon
-                int overdue = rentPaid ? 0 : 4;
+                bool hasTenant = !unit.IsEmpty && !string.IsNullOrEmpty(unit.TenantName);
+                decimal rent = unit.ListPrice ?? 0m;
+                var fixtures = unit.Spaces?
+                    .SelectMany(s => s.Fixtures ?? new List<SpaceFixture>())
+                    .Where(f => !f.IsDeleted)
+                    .OrderByDescending(f => f.Id)
+                    .ToList() ?? new List<SpaceFixture>();
+
+                var photoList = unitPhotoDocs
+                    .Where(d => d.SourceRecordId == unit.Id && !string.IsNullOrWhiteSpace(d.DocumentUrl))
+                    .Select(d => d.DocumentUrl)
+                    .ToList();
+                if (unit.PropertyId.HasValue)
+                {
+                    var linkedProp = myProperties.FirstOrDefault(p => p.Id == unit.PropertyId.Value);
+                    if (linkedProp?.Images != null)
+                    {
+                        foreach (var img in linkedProp.Images.Where(i => !i.IsDeleted && !string.IsNullOrWhiteSpace(i.ImageUrl)))
+                        {
+                            if (!photoList.Contains(img.ImageUrl)) photoList.Add(img.ImageUrl);
+                        }
+                    }
+                }
+
+                int rootBid = unit.Building?.ParentBuildingId ?? unit.BuildingId;
+                bool canManage = isGlobalAdmin
+                    || unit.Building?.ManagerUserId == user.Id
+                    || unit.Building?.CreatedByUserId == user.Id
+                    || managedBoardBuildingIds.Contains(rootBid);
+
+                var meterElec = fixtures.FirstOrDefault(f => f.Category == "Sayac" && (f.ItemName.Contains("Elektrik", StringComparison.OrdinalIgnoreCase) || f.ItemName.Contains("Elk", StringComparison.OrdinalIgnoreCase)))?.StandardModel;
+                var meterWater = fixtures.FirstOrDefault(f => f.Category == "Sayac" && f.ItemName.Contains("Su", StringComparison.OrdinalIgnoreCase))?.StandardModel;
+                var meterGas = fixtures.FirstOrDefault(f => f.Category == "Sayac" && (f.ItemName.Contains("Gaz", StringComparison.OrdinalIgnoreCase) || f.ItemName.Contains("Doğalgaz", StringComparison.OrdinalIgnoreCase)))?.StandardModel;
 
                 var card = new LandlordUnitCardViewModel
                 {
                     UnitId = unit.Id,
                     BuildingId = unit.BuildingId,
                     Title = $"{unit.Building?.Name ?? "Bina"} - {unit.DoorNumber}",
-                    BuildingName = unit.Building?.Name ?? "Kardelen Konutları",
-                    BuildingAddress = unit.Building?.Address ?? "Bağdat Cad. Kadıköy",
-                    BlockAndDoor = $"{(unit.Building?.BlockName != null ? unit.Building.BlockName + " " : "")}{unit.DoorNumber}",
+                    BuildingName = unit.Building?.Name ?? "Bina / Site",
+                    BuildingAddress = unit.Building?.Address ?? "-",
+                    BlockAndDoor = $"{(!string.IsNullOrWhiteSpace(unit.Building?.BlockName) ? unit.Building.BlockName + " • " : "")}{unit.DoorNumber}",
                     Category = unit.Category ?? "Daire",
-                    Layout = unit.RoomLayout ?? "3+1",
-                    SquareMeters = unit.GrossSquareMeters ?? 125,
+                    Layout = !string.IsNullOrWhiteSpace(unit.RoomLayout) ? unit.RoomLayout : "Belirtilmedi",
+                    SquareMeters = unit.GrossSquareMeters ?? 0,
+                    NetSquareMeters = unit.NetSquareMeters ?? 0,
+                    FacadeDirection = unit.FacadeDirection,
+                    FloorName = unit.FloorName,
+                    DistrictName = unit.Building?.District?.Name,
+                    NeighborhoodName = unit.Building?.Neighborhood?.Name,
+                    CanManageBuilding = canManage,
+                    PhotoUrls = photoList,
                     IsRented = hasTenant,
                     TenantName = unit.TenantName,
                     TenantPhone = unit.TenantPhone,
                     MonthlyRent = rent,
                     RentDueDay = 5,
-                    IsRentPaidThisMonth = rentPaid,
-                    OverdueDays = overdue,
-                    ContractStartDate = DateTime.Today.AddMonths(-6),
-                    ContractEndDate = DateTime.Today.AddMonths(6),
+                    IsRentPaidThisMonth = true,
+                    OverdueDays = 0,
                     BuildingDebtAmount = unpaidDebts.Sum(d => d.Amount),
                     BuildingDebtDescription = unpaidDebts.Any() ? string.Join(", ", unpaidDebts.Select(d => d.BuildingExpense?.Description ?? "Aidat")) : "Borcu Yok",
                     PaidCapExAmount = paidCapEx,
-                    PrivateFixtures = unit.Spaces?.SelectMany(s => s.Fixtures ?? new List<SpaceFixture>()).ToList() ?? new List<SpaceFixture>(),
-                    MeterElectric = "00412891 / 1.450 kWh",
-                    MeterWater = "082194 / 320 m³",
-                    MeterGas = "009812 / 850 m³",
+                    PrivateFixtures = fixtures,
+                    MeterElectric = string.IsNullOrWhiteSpace(meterElec) ? "Girilmedi" : meterElec,
+                    MeterWater = string.IsNullOrWhiteSpace(meterWater) ? "Girilmedi" : meterWater,
+                    MeterGas = string.IsNullOrWhiteSpace(meterGas) ? "Girilmedi" : meterGas,
                     HasActiveListing = unit.PropertyId.HasValue,
                     LinkedPropertyId = unit.PropertyId
                 };
@@ -319,31 +378,266 @@ namespace GMK360.Web.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-        // Kiracı Tahliye Ettiğinde -> Tek Tıkla GMK360 Emlak Portalı'nda Kiralık İlanı Ver
-        [HttpPost("ConvertToPropertyListing")]
-        public async Task<IActionResult> ConvertToPropertyListing(int unitId)
+        // Mal Sahibi Daire Özellikleri & Fotoğraf Güncelleme
+        [HttpPost("UpdateUnitDetails")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateUnitDetails(
+            int unitId,
+            string? roomLayout,
+            double? grossSquareMeters,
+            double? netSquareMeters,
+            string? facadeDirection,
+            decimal? listPrice,
+            List<IFormFile>? unitPhotos)
         {
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Unauthorized();
 
             var unit = await _context.BuildingUnits.Include(u => u.Building).FirstOrDefaultAsync(u => u.Id == unitId);
-            if (unit == null) return NotFound("Bağımsız bölüm bulunamadı.");
+            if (!await CanOwnerAccessUnitAsync(unit, user)) return Forbid();
 
-            // İlan tipi ve durumu
-            var rentStatus = await _context.DefinitionValues.FirstOrDefaultAsync(v => v.SystemCode == "RENT") 
-                          ?? await _context.DefinitionValues.FirstOrDefaultAsync(v => v.Name.Contains("Kiralık"));
-            var resType = await _context.DefinitionValues.FirstOrDefaultAsync(v => v.SystemCode == "RESIDENTIAL") 
+            if (!string.IsNullOrWhiteSpace(roomLayout)) unit!.RoomLayout = roomLayout.Trim();
+            if (grossSquareMeters.HasValue && grossSquareMeters.Value >= 0) unit!.GrossSquareMeters = grossSquareMeters.Value;
+            if (netSquareMeters.HasValue && netSquareMeters.Value >= 0) unit!.NetSquareMeters = netSquareMeters.Value;
+            if (facadeDirection != null) unit!.FacadeDirection = facadeDirection.Trim();
+            if (listPrice.HasValue && listPrice.Value >= 0) unit!.ListPrice = listPrice.Value;
+
+            int uploadedCount = 0;
+            if (unitPhotos != null && unitPhotos.Any())
+            {
+                var relDir = Path.Combine("uploads", "landlord-units", unit!.Id.ToString());
+                var absDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relDir);
+                Directory.CreateDirectory(absDir);
+
+                foreach (var file in unitPhotos.Take(10))
+                {
+                    if (file == null || file.Length <= 0 || file.Length > 10 * 1024 * 1024) continue;
+                    var ext = Path.GetExtension(file.FileName)?.ToLowerInvariant();
+                    if (ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".webp") continue;
+
+                    var safeName = $"{Guid.NewGuid():N}{ext}";
+                    var absPath = Path.Combine(absDir, safeName);
+                    using (var fs = new FileStream(absPath, FileMode.Create))
+                    {
+                        await file.CopyToAsync(fs);
+                    }
+
+                    var url = $"/uploads/landlord-units/{unit.Id}/{safeName}";
+                    _context.DocumentArchives.Add(new DocumentArchive
+                    {
+                        BuildingId = unit.BuildingId,
+                        Title = $"{unit.Building?.Name ?? "Daire"} No:{unit.DoorNumber} Fotoğrafı",
+                        DocumentUrl = url,
+                        UploadDate = DateTime.UtcNow,
+                        FileName = file.FileName ?? safeName,
+                        FileExtension = ext,
+                        Category = "DaireFoto",
+                        Year = DateTime.UtcNow.Year,
+                        SourceModule = "LandlordUnitPhoto",
+                        SourceRecordId = unit.Id,
+                        Status = "Tamamlandı",
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    uploadedCount++;
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"Daire {unit!.DoorNumber} bilgileri güncellendi" + (uploadedCount > 0 ? $" ve {uploadedCount} fotoğraf eklendi." : ".");
+            return RedirectToAction(nameof(Index));
+        }
+
+        // Daire İçi Demirbaş / Eşya / Sayaç Ekle
+        [HttpPost("AddUnitFixture")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddUnitFixture(
+            int unitId,
+            string category,
+            string itemName,
+            string? standardBrand,
+            string? standardModel,
+            double quantity = 1,
+            string? maintenanceNotes = null)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+
+            var unit = await _context.BuildingUnits
+                .Include(u => u.Spaces)
+                .FirstOrDefaultAsync(u => u.Id == unitId);
+            if (!await CanOwnerAccessUnitAsync(unit, user)) return Forbid();
+            if (string.IsNullOrWhiteSpace(itemName))
+            {
+                TempData["ErrorMessage"] = "Lütfen eşya/demirbaş adını yazınız.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var space = unit!.Spaces.FirstOrDefault(s => s.Name == "Daire İçi Alan") ?? unit.Spaces.FirstOrDefault();
+            if (space == null)
+            {
+                space = new UnitSpace
+                {
+                    BuildingUnitId = unit.Id,
+                    Name = "Daire İçi Alan",
+                    Type = "Konut İçi"
+                };
+                _context.UnitSpaces.Add(space);
+                await _context.SaveChangesAsync();
+            }
+
+            _context.SpaceFixtures.Add(new SpaceFixture
+            {
+                UnitSpaceId = space.Id,
+                Category = string.IsNullOrWhiteSpace(category) ? "Genel" : category.Trim(),
+                ItemName = itemName.Trim(),
+                Quantity = quantity > 0 ? quantity : 1,
+                Unit = "Adet",
+                StandardBrand = string.IsNullOrWhiteSpace(standardBrand) ? null : standardBrand.Trim(),
+                StandardModel = string.IsNullOrWhiteSpace(standardModel) ? null : standardModel.Trim(),
+                MaintenanceNotes = string.IsNullOrWhiteSpace(maintenanceNotes) ? null : maintenanceNotes.Trim(),
+                IsCustomizable = true,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"'{itemName.Trim()}' Daire {unit.DoorNumber} zimmet/demirbaş listesine eklendi.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        [HttpPost("DeleteUnitFixture")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteUnitFixture(int fixtureId, int unitId)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+
+            var unit = await _context.BuildingUnits.FirstOrDefaultAsync(u => u.Id == unitId);
+            if (!await CanOwnerAccessUnitAsync(unit, user)) return Forbid();
+
+            var fixture = await _context.SpaceFixtures
+                .Include(f => f.UnitSpace)
+                .FirstOrDefaultAsync(f => f.Id == fixtureId && f.UnitSpace != null && f.UnitSpace.BuildingUnitId == unitId && !f.IsDeleted);
+            if (fixture != null)
+            {
+                fixture.IsDeleted = true;
+                fixture.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = $"'{fixture.ItemName}' listeden kaldırıldı.";
+            }
+            return RedirectToAction(nameof(Index));
+        }
+
+        // Bölge / Mahalle Emsal Analizi (İlan Öncesi)
+        [HttpGet("GetUnitNeighborhoodAnalysis")]
+        public async Task<IActionResult> GetUnitNeighborhoodAnalysis(int unitId)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+
+            var unit = await _context.BuildingUnits
+                .Include(u => u.Building).ThenInclude(b => b.District)
+                .Include(u => u.Building).ThenInclude(b => b.Neighborhood)
+                .Include(u => u.Building).ThenInclude(b => b.City)
+                .FirstOrDefaultAsync(u => u.Id == unitId);
+            if (!await CanOwnerAccessUnitAsync(unit, user)) return Forbid();
+
+            var b = unit!.Building;
+            string locationTitle = string.Join(" / ", new[] { b?.City?.Name, b?.District?.Name, b?.Neighborhood?.Name }.Where(x => !string.IsNullOrWhiteSpace(x)));
+            if (string.IsNullOrWhiteSpace(locationTitle)) locationTitle = b?.Address ?? "Konum tanımlanmamış";
+
+            string? aiReport = b?.Neighborhood?.AiAnalysisReport;
+            if (string.IsNullOrWhiteSpace(aiReport) && b?.Neighborhood != null && b?.District != null)
+            {
+                var gemini = HttpContext.RequestServices.GetService<GMK360.Core.Interfaces.IGeminiAiService>();
+                if (gemini != null)
+                {
+                    try
+                    {
+                        aiReport = await gemini.AnalyzeNeighborhoodAsync(b.District.Name, b.Neighborhood.Name);
+                        b.Neighborhood.AiAnalysisReport = aiReport;
+                        b.Neighborhood.AiAnalysisUpdatedAt = DateTime.UtcNow;
+                        await _context.SaveChangesAsync();
+                    }
+                    catch { }
+                }
+            }
+
+            var districtProps = b?.DistrictId > 0
+                ? await _context.Properties
+                    .Where(p => !p.IsDeleted && p.State == ListingState.Active && p.Building != null && p.Building.DistrictId == b.DistrictId && p.Price > 0)
+                    .Select(p => new { p.Price, p.GrossArea })
+                    .Take(50)
+                    .ToListAsync()
+                : new();
+
+            decimal? avgPrice = districtProps.Any() ? Math.Round(districtProps.Average(x => x.Price), 0) : null;
+            int buildingUnitCount = b != null ? await _context.BuildingUnits.CountAsync(u => u.BuildingId == b.Id && !(u.Category ?? "").StartsWith("OrtakAlan")) : 0;
+
+            return Json(new
+            {
+                success = true,
+                location = locationTitle,
+                unitSummary = $"{b?.Name} • No:{unit.DoorNumber} ({unit.RoomLayout ?? "Belirtilmedi"}, {unit.GrossSquareMeters ?? 0} m²)",
+                comparableCount = districtProps.Count,
+                avgListingPrice = avgPrice,
+                buildingUnitCount,
+                reportHtml = !string.IsNullOrWhiteSpace(aiReport)
+                    ? aiReport
+                    : $"Bu bölgede sistemde kayıtlı {districtProps.Count} aktif emsal ilan ve binanızda {buildingUnitCount} bağımsız bölüm bulunuyor. Kiralık/satılık fiyatını belirlerken daire fotoğraflarınızı ve demirbaş listesini tamamlamanız ilanın dönüşümünü artırır."
+            });
+        }
+
+        // Daire İçi & Fotoğraf Hazırlığı Sonrası Kontrollü Emlak Portalı İlanı Yayınlama
+        [HttpPost("ConvertToPropertyListing")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ConvertToPropertyListing(
+            int unitId,
+            string? title = null,
+            string? description = null,
+            decimal? price = null,
+            string? listingType = "Kiralık",
+            string? roomCount = null,
+            int? grossArea = null,
+            int? netArea = null)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+
+            var unit = await _context.BuildingUnits
+                .Include(u => u.Building)
+                .Include(u => u.Spaces).ThenInclude(s => s.Fixtures)
+                .FirstOrDefaultAsync(u => u.Id == unitId);
+            if (!await CanOwnerAccessUnitAsync(unit, user)) return Forbid();
+
+            bool isSale = string.Equals(listingType, "Satılık", StringComparison.OrdinalIgnoreCase);
+            var statusKeyword = isSale ? "Satılık" : "Kiralık";
+            var rentStatus = await _context.DefinitionValues.FirstOrDefaultAsync(v => v.SystemCode == (isSale ? "SALE" : "RENT"))
+                          ?? await _context.DefinitionValues.FirstOrDefaultAsync(v => v.Name.Contains(statusKeyword));
+            var resType = await _context.DefinitionValues.FirstOrDefaultAsync(v => v.SystemCode == "RESIDENTIAL")
                        ?? await _context.DefinitionValues.FirstOrDefaultAsync(v => v.Name.Contains("Konut"));
+
+            var effectiveRoom = !string.IsNullOrWhiteSpace(roomCount) ? roomCount.Trim() : (unit!.RoomLayout ?? "3+1");
+            var effectiveGross = grossArea.HasValue && grossArea.Value > 0 ? grossArea.Value : (int)(unit!.GrossSquareMeters ?? 110);
+            var effectiveNet = netArea.HasValue && netArea.Value > 0 ? netArea.Value : (int)(unit!.NetSquareMeters ?? Math.Round(effectiveGross * 0.85));
+            var effectivePrice = price.HasValue && price.Value > 0 ? price.Value : (unit!.ListPrice ?? 25000m);
+
+            var fixtureText = string.Join(", ", (unit!.Spaces ?? new List<UnitSpace>())
+                .SelectMany(s => s.Fixtures ?? new List<SpaceFixture>())
+                .Where(f => !f.IsDeleted && f.Category != "Sayac")
+                .Select(f => string.IsNullOrWhiteSpace(f.StandardBrand) ? f.ItemName : $"{f.StandardBrand} {f.ItemName}"));
+
+            var defaultDesc = $"{unit.Building?.Name ?? "Sitede"} {statusKeyword.ToLower()} {effectiveRoom} ({effectiveGross} m²). "
+                + (!string.IsNullOrWhiteSpace(fixtureText) ? $"Daire içi demirbaşlar: {fixtureText}." : "");
 
             var prop = new Property
             {
-                Title = $"{unit.Building?.Name ?? "Merkezi"} - Kiralık {unit.RoomLayout ?? "Daire"} ({unit.DoorNumber})",
-                Description = $"{unit.Building?.Name ?? "Sitede"} kiralık {unit.RoomLayout ?? "3+1"} daire. Asansörlü, kombili, bakımlı bağımsız bölüm.",
-                Price = unit.ListPrice ?? 25000m,
+                Title = !string.IsNullOrWhiteSpace(title) ? title.Trim() : $"{unit.Building?.Name ?? "Merkezi"} - {statusKeyword} {effectiveRoom} ({unit.DoorNumber})",
+                Description = !string.IsNullOrWhiteSpace(description) ? description.Trim() : defaultDesc,
+                Price = effectivePrice,
                 Currency = "TRY",
-                GrossArea = (int)(unit.GrossSquareMeters ?? 120),
-                NetArea = (int)(unit.NetSquareMeters ?? 100),
-                RoomCount = unit.RoomLayout ?? "3+1",
+                GrossArea = effectiveGross,
+                NetArea = effectiveNet,
+                RoomCount = effectiveRoom,
                 State = ListingState.Active,
                 BuildingId = unit.BuildingId,
                 UserId = user.Id,
@@ -356,13 +650,31 @@ namespace GMK360.Web.Controllers
             _context.Properties.Add(prop);
             await _context.SaveChangesAsync();
 
+            var photos = await _context.DocumentArchives
+                .Where(d => !d.IsDeleted && d.SourceModule == "LandlordUnitPhoto" && d.SourceRecordId == unit.Id && !string.IsNullOrWhiteSpace(d.DocumentUrl))
+                .OrderBy(d => d.Id)
+                .ToListAsync();
+            int order = 0;
+            foreach (var ph in photos)
+            {
+                _context.PropertyImages.Add(new PropertyImage
+                {
+                    PropertyId = prop.Id,
+                    ImageUrl = ph.DocumentUrl,
+                    IsCover = order == 0,
+                    SortOrder = order++,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
             unit.PropertyId = prop.Id;
-            unit.IsEmpty = true;
-            unit.TenantName = null;
-            unit.TenantPhone = null;
+            unit.RoomLayout = effectiveRoom;
+            unit.GrossSquareMeters = effectiveGross;
+            unit.NetSquareMeters = effectiveNet;
+            unit.ListPrice = effectivePrice;
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = $"🎉 '{unit.DoorNumber}' için GMK360 Emlak Portalı'nda kiralık ilanı oluşturuldu ve yayına hazırlandı!";
+            TempData["SuccessMessage"] = $"🎉 '{unit.DoorNumber}' için Emlak Portalı {statusKeyword} ilanı ({photos.Count} fotoğrafla) oluşturuldu!";
             return RedirectToAction(nameof(Index));
         }
 

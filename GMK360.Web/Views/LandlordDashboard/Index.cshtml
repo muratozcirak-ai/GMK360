@@ -5,7 +5,7 @@
     string currentMonth = DateTime.Now.ToString("MMMM yyyy");
 }
 
-<div class="container-fluid py-4 px-lg-4">
+<div class="container-fluid py-4 px-lg-4" style="margin-top: 72px;">
     <!-- ÜST BAŞLIK VE HIZLI AKSİYONLAR -->
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 bg-white p-4 rounded-4 shadow-sm">
         <div>
@@ -42,9 +42,15 @@
             <a href="/Landlord/PrintLandlordGmsiTaxReport" target="_blank" class="btn btn-dark fw-bold rounded-pill px-3 shadow-sm">
                 <i class="bi bi-file-earmark-spreadsheet me-1 text-warning"></i> Konsolide GMSİ Vergi Raporu (PDF)
             </a>
-            <a href="/BuildingManager/Index" class="btn btn-outline-secondary fw-bold rounded-pill px-3 shadow-sm">
-                <i class="bi bi-building me-1"></i> Bina Yönetimi Masası'na Geç
+            <a href="/FacilityPortal/Index" class="btn btn-success fw-bold rounded-pill px-3 shadow-sm">
+                <i class="bi bi-wrench-adjustable-circle me-1"></i> Site Portalım (Arıza &amp; Toplantı)
             </a>
+            @if (Model.UnitCards.Any(c => c.CanManageBuilding))
+            {
+                <a href="/BuildingManager/Index" class="btn btn-outline-secondary fw-bold rounded-pill px-3 shadow-sm">
+                    <i class="bi bi-building me-1"></i> Yönetici Masası
+                </a>
+            }
         </div>
     </div>
 
@@ -263,57 +269,120 @@
                                 <div class="small text-muted mb-2">
                                     @(card.BuildingDebtDescription ?? "Çatı İzolasyon Payı: 3.000 TL ödendi (GMSİ Gerçek Gider İndirimine dahil edildi)")
                                 </div>
-                                <div class="d-flex justify-content-between align-items-center small">
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 small">
                                     <span class="text-success fw-bold">
                                         <i class="bi bi-shield-check me-1"></i> GMSİ Vergi İndirimi Kaydı: Hazır
                                     </span>
-                                    <a href="/BuildingManager/Detail/@card.BuildingId" class="text-primary text-decoration-none fw-bold">
-                                        Bina Yönetim Masası <i class="bi bi-arrow-right"></i>
-                                    </a>
+                                    <div class="d-flex gap-2">
+                                        <a href="/FacilityPortal/Index?buildingId=@card.BuildingId" class="btn btn-xs btn-outline-success rounded-pill px-2 fw-bold">
+                                            Arıza Bildir &amp; Toplantılar &rarr;
+                                        </a>
+                                        @if (card.CanManageBuilding)
+                                        {
+                                            <a href="/BuildingManager/Detail/@card.BuildingId" class="btn btn-xs btn-outline-primary rounded-pill px-2 fw-bold">
+                                                Yönetici Masası
+                                            </a>
+                                        }
+                                    </div>
                                 </div>
                             </div>
 
-                            <!-- 3. DAİRE İÇİ DEMİRBAŞ & SAYAÇ ZİMMETİ -->
+                            <!-- 3. DAİRE İÇİ FOTOĞRAFLAR, ÖZELLİK & DEMİRBAŞ ZİMMETİ -->
                             <div class="p-3 border rounded-4 bg-white mb-3">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                                     <div class="small fw-bold text-dark">
-                                        <i class="bi bi-shield-lock-fill text-secondary me-1"></i> Daire İçi Eşya & Sayaç Zimmeti:
+                                        <i class="bi bi-shield-lock-fill text-secondary me-1"></i> Daire İçi Fotoğraflar, Demirbaş &amp; Sayaçlar
                                     </div>
-                                    <span class="badge bg-light text-dark border">Mülk Sahibi Özel Alanı</span>
+                                    @if (card.UnitId.HasValue)
+                                    {
+                                        <div class="d-flex gap-1">
+                                            <button type="button" class="btn btn-xs btn-outline-primary rounded-pill px-2 fw-semibold"
+                                                    onclick="openUnitEditModal(@card.UnitId.Value, '@System.Web.HttpUtility.JavaScriptStringEncode(card.BuildingName + " - " + card.BlockAndDoor)', '@System.Web.HttpUtility.JavaScriptStringEncode(card.Layout)', @card.SquareMeters.ToString(System.Globalization.CultureInfo.InvariantCulture), @card.NetSquareMeters.ToString(System.Globalization.CultureInfo.InvariantCulture), '@System.Web.HttpUtility.JavaScriptStringEncode(card.FacadeDirection ?? "")', @card.MonthlyRent.ToString(System.Globalization.CultureInfo.InvariantCulture))">
+                                                ✏️ Daire / Foto Düzenle
+                                            </button>
+                                            <button type="button" class="btn btn-xs btn-outline-dark rounded-pill px-2 fw-semibold"
+                                                    onclick="openAddFixtureModal(@card.UnitId.Value, '@System.Web.HttpUtility.JavaScriptStringEncode(card.BlockAndDoor)')">
+                                                + Demirbaş / Sayaç
+                                            </button>
+                                        </div>
+                                    }
                                 </div>
-                                <div class="row g-2 small text-muted mb-2">
-                                    <div class="col-6">
-                                        <i class="bi bi-fire text-danger me-1"></i> Kombi: <b>Demirdöküm Nitromix</b>
+
+                                @if (card.PhotoUrls.Any())
+                                {
+                                    <div class="d-flex gap-2 overflow-auto pb-2 mb-2">
+                                        @foreach (var pUrl in card.PhotoUrls)
+                                        {
+                                            <a href="@pUrl" target="_blank">
+                                                <img src="@pUrl" alt="Daire Fotoğrafı" class="rounded-3 border" style="width:78px;height:58px;object-fit:cover;" />
+                                            </a>
+                                        }
                                     </div>
-                                    <div class="col-6">
-                                        <i class="bi bi-snow text-info me-1"></i> Klima: <b>Daikin 12.000 BTU</b>
+                                }
+
+                                @if (card.PrivateFixtures.Any())
+                                {
+                                    <div class="d-flex flex-column gap-1 mb-2">
+                                        @foreach (var fx in card.PrivateFixtures)
+                                        {
+                                            <div class="d-flex justify-content-between align-items-center small bg-light rounded-2 px-2 py-1">
+                                                <div>
+                                                    <span class="badge bg-secondary-subtle text-dark me-1">@fx.Category</span>
+                                                    <strong>@fx.ItemName</strong>
+                                                    @if (!string.IsNullOrWhiteSpace(fx.StandardBrand) || !string.IsNullOrWhiteSpace(fx.StandardModel))
+                                                    {
+                                                        <span class="text-muted">— @fx.StandardBrand @fx.StandardModel</span>
+                                                    }
+                                                </div>
+                                                @if (card.UnitId.HasValue)
+                                                {
+                                                    <form asp-action="DeleteUnitFixture" asp-controller="LandlordDashboard" method="post" class="d-inline m-0">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="fixtureId" value="@fx.Id" />
+                                                        <input type="hidden" name="unitId" value="@card.UnitId.Value" />
+                                                        <button type="submit" class="btn btn-link btn-sm text-danger p-0" title="Sil"><i class="bi bi-trash"></i></button>
+                                                    </form>
+                                                }
+                                            </div>
+                                        }
                                     </div>
-                                    <div class="col-6">
-                                        <i class="bi bi-lightning text-warning me-1"></i> Elk Sayaç: <b>@card.MeterElectric</b>
+                                }
+                                else
+                                {
+                                    <div class="small text-muted fst-italic bg-light rounded-3 p-2 mb-2">
+                                        Henüz kombi, klima, ankastre, sayaç veya fotoğraf girilmedi. Yukarıdaki butonlarla kendi dairenizi doldurabilirsiniz.
                                     </div>
-                                    <div class="col-6">
-                                        <i class="bi bi-droplet text-primary me-1"></i> Su Sayaç: <b>@card.MeterWater</b>
-                                    </div>
-                                </div>
+                                }
+
                                 @if (card.UnitId.HasValue)
                                 {
                                     <a href="/Landlord/PrintDeliveryProtocol?unitId=@card.UnitId.Value" target="_blank" class="btn btn-outline-dark btn-sm rounded-pill w-100 fw-bold">
-                                        <i class="bi bi-printer me-1"></i> Teslim-Tesellüm & Sayaç Protokolü Yazdır (A4)
+                                        <i class="bi bi-printer me-1"></i> Teslim-Tesellüm &amp; Sayaç Protokolü Yazdır (A4)
                                     </a>
                                 }
                             </div>
 
-                            <!-- 4. KİRACI TAHLİYESİNDE EMLAK PORTALI KÖPRÜSÜ -->
+                            <!-- 4. BÖLGE ANALİZİ & İLAN ÖN HAZIRLIK KÖPRÜSÜ -->
                             @if (card.UnitId.HasValue)
                             {
-                                <div class="pt-2 border-top d-flex justify-content-between align-items-center">
-                                    <small class="text-muted">Kiracı çıktığında portala ilan verin:</small>
-                                    <form asp-action="ConvertToPropertyListing" asp-controller="LandlordDashboard" method="post" class="d-inline" onsubmit="return confirm('Bu mülk GMK360 Emlak Portalı üzerinde kiralık ilanı olarak yayına açılacak. Onaylıyor musunuz?');">
-                                        <input type="hidden" name="unitId" value="@card.UnitId.Value" />
-                                        <button type="submit" class="btn btn-outline-warning text-dark btn-sm fw-bold rounded-pill px-3 shadow-sm">
-                                            <i class="bi bi-megaphone me-1"></i> Emlak Portalı'nda Kiralık İlanı Ver
+                                <div class="pt-2 border-top d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                    <button type="button" class="btn btn-outline-info text-dark btn-sm fw-bold rounded-pill px-3"
+                                            onclick="loadUnitAnalysis(@card.UnitId.Value, '@System.Web.HttpUtility.JavaScriptStringEncode(card.BuildingName + " • " + card.BlockAndDoor)')">
+                                        <i class="bi bi-graph-up-arrow me-1"></i> Bölge &amp; Emsal Analizi
+                                    </button>
+                                    @if (card.HasActiveListing && card.LinkedPropertyId.HasValue)
+                                    {
+                                        <a href="/Property/Detail/@card.LinkedPropertyId.Value" class="btn btn-success btn-sm fw-bold rounded-pill px-3">
+                                            <i class="bi bi-check-circle me-1"></i> İlan Yayında (Görüntüle)
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-warning text-dark btn-sm fw-bold rounded-pill px-3 shadow-sm"
+                                                onclick="openPrepareListingModal(@card.UnitId.Value, '@System.Web.HttpUtility.JavaScriptStringEncode(card.BuildingName + " - " + card.BlockAndDoor)', '@System.Web.HttpUtility.JavaScriptStringEncode(card.Layout)', @card.SquareMeters.ToString(System.Globalization.CultureInfo.InvariantCulture), @card.NetSquareMeters.ToString(System.Globalization.CultureInfo.InvariantCulture), @card.MonthlyRent.ToString(System.Globalization.CultureInfo.InvariantCulture), @card.PhotoUrls.Count, @card.PrivateFixtures.Count)">
+                                            <i class="bi bi-megaphone me-1"></i> İlanı Hazırla &amp; Yayınla
                                         </button>
-                                    </form>
+                                    }
                                 </div>
                             }
                         </div>
@@ -393,4 +462,235 @@
 
         document.getElementById('calcResultBox').style.display = 'block';
     }
+
+    function openUnitEditModal(unitId, title, layout, grossSqm, netSqm, facade, rentPrice) {
+        document.getElementById('ueUnitId').value = unitId;
+        document.getElementById('ueTitle').innerText = title;
+        document.getElementById('ueRoomLayout').value = (layout && layout !== 'Belirtilmedi') ? layout : '3+1';
+        document.getElementById('ueGrossSqm').value = grossSqm > 0 ? grossSqm : '';
+        document.getElementById('ueNetSqm').value = netSqm > 0 ? netSqm : '';
+        document.getElementById('ueFacade').value = facade || '';
+        document.getElementById('ueListPrice').value = rentPrice > 0 ? rentPrice : '';
+        new bootstrap.Modal(document.getElementById('unitEditModal')).show();
+    }
+
+    function openAddFixtureModal(unitId, doorLabel) {
+        document.getElementById('fxUnitId').value = unitId;
+        document.getElementById('fxDoorLabel').innerText = doorLabel;
+        new bootstrap.Modal(document.getElementById('unitFixtureModal')).show();
+    }
+
+    async function loadUnitAnalysis(unitId, title) {
+        const modal = new bootstrap.Modal(document.getElementById('neighborhoodAnalysisModal'));
+        document.getElementById('naTitle').innerText = title;
+        document.getElementById('naBody').innerHTML = '<div class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Bölge ve emsal verileri yükleniyor...</div>';
+        modal.show();
+        try {
+            const res = await fetch('/Landlord/GetUnitNeighborhoodAnalysis?unitId=' + unitId);
+            const data = await res.json();
+            if (!data.success) {
+                document.getElementById('naBody').innerHTML = '<div class="alert alert-warning mb-0">Bölge analizi alınamadı.</div>';
+                return;
+            }
+            const avgText = data.avgListingPrice ? Number(data.avgListingPrice).toLocaleString('tr-TR') + ' ₺' : 'Yeterli emsal yok';
+            document.getElementById('naBody').innerHTML = `
+                <div class="p-3 bg-light rounded-3 border mb-3 small">
+                    <div><strong>Konum:</strong> ${data.location}</div>
+                    <div><strong>Bağımsız Bölüm:</strong> ${data.unitSummary}</div>
+                    <div><strong>İlçe Aktif İlan:</strong> ${data.comparableCount} adet • <strong>Ortalama Emsal:</strong> ${avgText}</div>
+                </div>
+                <div class="small text-dark" style="white-space: pre-line;">${data.reportHtml}</div>`;
+        } catch (e) {
+            document.getElementById('naBody').innerHTML = '<div class="alert alert-danger mb-0">Analiz sırasında bağlantı hatası oluştu.</div>';
+        }
+    }
+
+    function openPrepareListingModal(unitId, title, layout, grossSqm, netSqm, price, photoCount, fixtureCount) {
+        document.getElementById('plUnitId').value = unitId;
+        document.getElementById('plTitle').value = title + ' - Kiralık';
+        document.getElementById('plRoomCount').value = (layout && layout !== 'Belirtilmedi') ? layout : '3+1';
+        document.getElementById('plGrossArea').value = grossSqm > 0 ? Math.round(grossSqm) : '';
+        document.getElementById('plNetArea').value = netSqm > 0 ? Math.round(netSqm) : '';
+        document.getElementById('plPrice').value = price > 0 ? Math.round(price) : '';
+        document.getElementById('plChecklistWarning').style.display = (photoCount === 0 || layout === 'Belirtilmedi') ? 'block' : 'none';
+        new bootstrap.Modal(document.getElementById('prepareListingModal')).show();
+    }
 </script>
+
+<!-- Daire Bilgi & Fotoğraf Düzenleme Modalı -->
+<div class="modal fade" id="unitEditModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="UpdateUnitDetails" asp-controller="LandlordDashboard" method="post" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="unitId" id="ueUnitId" />
+            <div class="modal-header bg-primary text-white border-0">
+                <h6 class="modal-title fw-bold"><i class="bi bi-pencil-square me-2"></i>Daire Bilgisi &amp; Fotoğraf — <span id="ueTitle"></span></h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Oda Sayısı / Plan</label>
+                    <select name="roomLayout" id="ueRoomLayout" class="form-select form-select-sm">
+                        <option value="1+0">1+0 Stüdyo</option>
+                        <option value="1+1">1+1</option>
+                        <option value="2+1">2+1</option>
+                        <option value="3+1">3+1</option>
+                        <option value="4+1">4+1</option>
+                        <option value="Dubleks">Dubleks</option>
+                        <option value="Dükkan">Dükkan / Ticari</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Brüt m²</label>
+                    <input type="number" step="0.5" min="0" name="grossSquareMeters" id="ueGrossSqm" class="form-control form-control-sm" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Net m²</label>
+                    <input type="number" step="0.5" min="0" name="netSquareMeters" id="ueNetSqm" class="form-control form-control-sm" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Cephe</label>
+                    <input type="text" name="facadeDirection" id="ueFacade" class="form-control form-control-sm" placeholder="Örn: Güney - Batı" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Aylık Kira / Değer (₺)</label>
+                    <input type="number" step="100" min="0" name="listPrice" id="ueListPrice" class="form-control form-control-sm" placeholder="Örn: 25000" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-bold">Daire İçi Fotoğraflar Ekle (JPG/PNG/WEBP)</label>
+                    <input type="file" name="unitPhotos" class="form-control form-control-sm" accept="image/*" multiple />
+                    <small class="text-muted">İlan vermeden önce daire içi, salon, mutfak, banyo fotoğraflarını yükleyebilirsiniz.</small>
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="button" class="btn btn-sm btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-sm btn-primary rounded-pill px-4 fw-bold">Bilgileri &amp; Fotoğrafları Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Daire İçi Demirbaş / Sayaç Ekleme Modalı -->
+<div class="modal fade" id="unitFixtureModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="AddUnitFixture" asp-controller="LandlordDashboard" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="unitId" id="fxUnitId" />
+            <div class="modal-header bg-dark text-white border-0">
+                <h6 class="modal-title fw-bold"><i class="bi bi-tools me-2 text-warning"></i>Demirbaş / Sayaç Ekle — <span id="fxDoorLabel"></span></h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Kategori</label>
+                    <select name="category" class="form-select form-select-sm">
+                        <option value="Isıtma">Isıtma (Kombi / Petek)</option>
+                        <option value="İklimlendirme">Klima / Havalandırma</option>
+                        <option value="Mutfak">Mutfak / Ankastre</option>
+                        <option value="Eşya">Mobilya / Beyaz Eşya</option>
+                        <option value="Sayac">Sayac (Elektrik / Su / Doğalgaz)</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Eşya / Sayaç Adı <span class="text-danger">*</span></label>
+                    <input type="text" name="itemName" class="form-control form-control-sm" required placeholder="Örn: Kombi / Elektrik Sayacı" />
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label small fw-bold">Marka</label>
+                    <input type="text" name="standardBrand" class="form-control form-control-sm" placeholder="Örn: Vaillant / Bosch" />
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label small fw-bold">Model / Seri / Sayaç No</label>
+                    <input type="text" name="standardModel" class="form-control form-control-sm" placeholder="Örn: EcoTEC / 00412891" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">Adet</label>
+                    <input type="number" name="quantity" class="form-control form-control-sm" value="1" min="1" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-bold">Durum / Bakım Notu</label>
+                    <input type="text" name="maintenanceNotes" class="form-control form-control-sm" placeholder="Örn: Çalışır durumda kiracıya teslim edildi" />
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="button" class="btn btn-sm btn-light rounded-pill" data-bs-dismiss="modal">Vazgeç</button>
+                <button type="submit" class="btn btn-sm btn-dark rounded-pill px-4 fw-bold">Demirbaşı Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Bölge Analizi Modalı -->
+<div class="modal fade" id="neighborhoodAnalysisModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-info bg-opacity-10 border-0">
+                <h6 class="modal-title fw-bold text-dark"><i class="bi bi-graph-up-arrow me-2 text-primary"></i>Bölge &amp; Emsal Analizi — <span id="naTitle"></span></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4" id="naBody"></div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="button" class="btn btn-sm btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- İlan Hazırlık & Yayınlama Modalı -->
+<div class="modal fade" id="prepareListingModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="ConvertToPropertyListing" asp-controller="LandlordDashboard" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="unitId" id="plUnitId" />
+            <div class="modal-header bg-warning text-dark border-0">
+                <h6 class="modal-title fw-bold"><i class="bi bi-megaphone me-2"></i>İlan Öncesi Son Kontrol &amp; Yayınlama</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 row g-3">
+                <div class="col-12" id="plChecklistWarning" style="display:none;">
+                    <div class="alert alert-warning small rounded-3 py-2 mb-0">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Daire fotoğrafı veya oda bilgisi henüz eksik görünüyor. İsterseniz önce <strong>Daire / Foto Düzenle</strong>'den tamamlayın, isterseniz bilgileri aşağıda girerek yayınlayın.
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-bold">İlan Başlığı <span class="text-danger">*</span></label>
+                    <input type="text" name="title" id="plTitle" class="form-control form-control-sm" required />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">İlan Türü</label>
+                    <select name="listingType" class="form-select form-select-sm">
+                        <option value="Kiralık">Kiralık</option>
+                        <option value="Satılık">Satılık</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">Oda Sayısı</label>
+                    <input type="text" name="roomCount" id="plRoomCount" class="form-control form-control-sm" required />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">Fiyat / Aylık Kira (₺)</label>
+                    <input type="number" step="100" min="1" name="price" id="plPrice" class="form-control form-control-sm" required />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Brüt m²</label>
+                    <input type="number" min="1" name="grossArea" id="plGrossArea" class="form-control form-control-sm" required />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Net m²</label>
+                    <input type="number" min="1" name="netArea" id="plNetArea" class="form-control form-control-sm" required />
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-bold">İlan Açıklaması (Demirbaşlar otomatik eklenebilir)</label>
+                    <textarea name="description" class="form-control form-control-sm" rows="3" placeholder="Boş bırakırsanız daire içi demirbaş listeniz otomatik açıklamaya eklenir..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="button" class="btn btn-sm btn-light rounded-pill" data-bs-dismiss="modal">Vazgeç</button>
+                <button type="submit" class="btn btn-sm btn-warning text-dark rounded-pill px-4 fw-bold">Emlak Portalında Yayınla</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@{ ViewData["FeedbackModule"] = "SakinPortal"; }
+<partial name="_FeedbackWidgetPartial" />

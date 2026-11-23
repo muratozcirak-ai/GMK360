@@ -45,6 +45,17 @@ namespace GMK360.Web.Controllers
             }
 
             ViewBag.ActiveModules = user?.ActiveModules ?? "";
+            ViewBag.ResidentUnitCount = user != null
+                ? await _context.BuildingUnits.CountAsync(u => !(u.Category ?? "").StartsWith("OrtakAlan")
+                    && (u.OwnerUserId == user.Id || u.TenantUserId == user.Id || (!string.IsNullOrEmpty(user.Email) && (u.OwnerEmail == user.Email || u.TenantEmail == user.Email))))
+                : 0;
+            ViewBag.OwnerUnitCount = user != null
+                ? await _context.BuildingUnits.CountAsync(u => !(u.Category ?? "").StartsWith("OrtakAlan")
+                    && (u.OwnerUserId == user.Id || (!string.IsNullOrEmpty(user.Email) && u.OwnerEmail == user.Email)))
+                : 0;
+            ViewBag.BoardMembershipCount = user != null
+                ? await _context.BuildingManagers.CountAsync(m => m.UserId == user.Id && m.IsActive)
+                : 0;
             return View();
         }
 

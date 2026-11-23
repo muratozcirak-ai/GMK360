@@ -38,6 +38,13 @@ namespace GMK360.Web.Models
         public string Category { get; set; } // Daire, Dukkan
         public string Layout { get; set; } // 3+1, 2+1
         public double SquareMeters { get; set; }
+        public double NetSquareMeters { get; set; }
+        public string? FacadeDirection { get; set; }
+        public string? FloorName { get; set; }
+        public string? DistrictName { get; set; }
+        public string? NeighborhoodName { get; set; }
+        public bool CanManageBuilding { get; set; }
+        public List<string> PhotoUrls { get; set; } = new List<string>();
         
         // Kiracı Bilgileri
         public bool IsRented { get; set; }
