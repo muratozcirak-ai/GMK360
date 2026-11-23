@@ -6,11 +6,6 @@
 
 @{
     var currentUser = await UserManager.GetUserAsync(User);
-    var currentConsultant = currentUser != null
-        ? await DbContext.AgencyConsultants.Include(c => c.Agency).FirstOrDefaultAsync(c => c.UserId == currentUser.Id && c.IsActive)
-        : null;
-    var currentAgency = currentConsultant?.Agency;
-    var currentCompanyName = currentAgency?.CompanyName ?? currentUser?.DisplayName ?? "Bina & Site Yönetimi";
     var currentController = ViewContext.RouteData.Values["Controller"]?.ToString() ?? "";
     var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
     var facilityModules = GMK360.Web.Helpers.RoleLandingHelper.ParseModules(currentUser?.ActiveModules);
@@ -35,6 +30,7 @@
 
         bool isGlobalAdmin = User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
         sidebarBuildings = await DbContext.Buildings
+            .Include(b => b.HousingComplex)
             .AsNoTracking()
             .Where(b => isGlobalAdmin
                 ? b.Id == activeLayoutBuildingId || (activeLayoutBuildingId > 0 && b.HousingComplexId != null && DbContext.Buildings.Any(x => x.Id == activeLayoutBuildingId && x.HousingComplexId == b.HousingComplexId))
@@ -45,6 +41,15 @@
             .Take(20)
             .ToListAsync();
     }
+
+    var activeHeaderBuilding = activeLayoutBuildingId > 0
+        ? (sidebarBuildings.FirstOrDefault(b => b.Id == activeLayoutBuildingId)
+            ?? await DbContext.Buildings.Include(b => b.HousingComplex).AsNoTracking().FirstOrDefaultAsync(b => b.Id == activeLayoutBuildingId))
+        : sidebarBuildings.FirstOrDefault();
+
+    var currentSiteTitle = activeHeaderBuilding?.HousingComplex?.Name
+        ?? activeHeaderBuilding?.Name
+        ?? "Site & Apartman Yönetim Masası";
 }
 
 <!DOCTYPE html>
@@ -99,7 +104,7 @@
                 <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-2 py-1 d-none d-md-inline-flex align-items-center gap-1">
                     <i class="bi bi-building-gear"></i> Bina & Site Yönetimi
                 </span>
-                <span class="fw-bold text-dark text-truncate" style="font-size: 0.9rem; max-width: 260px;">@currentCompanyName</span>
+                <span class="fw-bold text-dark text-truncate" style="font-size: 0.9rem; max-width: 260px;">@currentSiteTitle</span>
             </div>
 
             <div class="d-flex align-items-center gap-2">
@@ -128,7 +133,7 @@
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2" style="border-radius: 12px; min-width: 210px;">
                             <li class="px-3 py-2 border-bottom bg-light rounded-top-3">
-                                <div class="fw-bold text-dark small">@currentCompanyName</div>
+                                <div class="fw-bold text-dark small">@currentSiteTitle</div>
                                 <small class="text-muted">@User.Identity?.Name</small>
                             </li>
                             <li><a class="dropdown-item small py-2" href="/BuildingManager/Index"><i class="bi bi-speedometer2 me-2 text-success"></i>Yönetim Merkezi</a></li>

@@ -461,6 +461,124 @@ namespace GMK360.Web.Controllers
             return RedirectToAction(nameof(Tenants));
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ArchiveAgency(int agencyId)
+        {
+            var agency = await _context.Agencies.FirstOrDefaultAsync(a => a.Id == agencyId);
+            if (agency == null)
+            {
+                TempData["ErrorMessage"] = "Firma kaydı bulunamadı.";
+                return RedirectToAction(nameof(Tenants));
+            }
+
+            bool hasActiveProjects = await _context.ConstructionProjects.AnyAsync(p => !p.IsDeleted && p.AgencyId == agencyId);
+            if (hasActiveProjects)
+            {
+                TempData["ErrorMessage"] = $"'{agency.CompanyName}' üzerinde aktif inşaat projesi bulunduğu için arşivlenemedi.";
+                return RedirectToAction(nameof(Tenants));
+            }
+
+            agency.IsDeleted = true;
+            agency.IsActive = false;
+            agency.Subdomain = $"archived-{agency.Id}";
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"'{agency.CompanyName}' firması arşivlendi/kaldırıldı.";
+            return RedirectToAction(nameof(Tenants));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteSiteOrBuilding(int? complexId, int? buildingId)
+        {
+            try
+            {
+                var targetBuildingIds = new List<int>();
+                string targetLabel = "Kayıt";
+
+                if (complexId.HasValue && complexId.Value > 0)
+                {
+                    var complex = await _context.HousingComplexes.FirstOrDefaultAsync(c => c.Id == complexId.Value);
+                    if (complex == null)
+                    {
+                        TempData["ErrorMessage"] = "Site kaydı bulunamadı.";
+                        return RedirectToAction(nameof(Tenants));
+                    }
+                    targetLabel = complex.Name;
+                    targetBuildingIds = await _context.Buildings
+                        .Where(b => b.HousingComplexId == complex.Id)
+                        .Select(b => b.Id)
+                        .ToListAsync();
+                }
+                else if (buildingId.HasValue && buildingId.Value > 0)
+                {
+                    var rootBld = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == buildingId.Value);
+                    if (rootBld == null)
+                    {
+                        TempData["ErrorMessage"] = "Bina kaydı bulunamadı.";
+                        return RedirectToAction(nameof(Tenants));
+                    }
+                    targetLabel = rootBld.Name;
+                    targetBuildingIds = await _context.Buildings
+                        .Where(b => b.Id == rootBld.Id || b.ParentBuildingId == rootBld.Id)
+                        .Select(b => b.Id)
+                        .ToListAsync();
+                }
+
+                if (targetBuildingIds.Any())
+                {
+                    if (await _context.Properties.AnyAsync(p => !p.IsDeleted && targetBuildingIds.Contains(p.BuildingId)))
+                    {
+                        TempData["ErrorMessage"] = $"'{targetLabel}' altında aktif emlak ilanı/mülk kaydı bulunduğu için silinemedi.";
+                        return RedirectToAction(nameof(Tenants));
+                    }
+
+                    var unitIds = await _context.BuildingUnits.Where(u => targetBuildingIds.Contains(u.BuildingId)).Select(u => u.Id).ToListAsync();
+                    if (unitIds.Any())
+                    {
+                        var spaceIds = await _context.UnitSpaces.Where(s => unitIds.Contains(s.BuildingUnitId)).Select(s => s.Id).ToListAsync();
+                        if (spaceIds.Any())
+                        {
+                            _context.SpaceFixtures.RemoveRange(_context.SpaceFixtures.Where(f => spaceIds.Contains(f.UnitSpaceId)));
+                        }
+                        _context.UnitSpaces.RemoveRange(_context.UnitSpaces.Where(s => unitIds.Contains(s.BuildingUnitId)));
+                        _context.UnitDebts.RemoveRange(_context.UnitDebts.Where(d => unitIds.Contains(d.BuildingUnitId)));
+                        _context.ResidencyPeriods.RemoveRange(_context.ResidencyPeriods.Where(rp => unitIds.Contains(rp.BuildingUnitId)));
+                    }
+
+                    _context.BuildingTaskTickets.RemoveRange(_context.BuildingTaskTickets.Where(t => targetBuildingIds.Contains(t.BuildingId)));
+                    _context.BuildingFixedExpenses.RemoveRange(_context.BuildingFixedExpenses.Where(e => targetBuildingIds.Contains(e.BuildingId)));
+                    _context.BuildingExpenses.RemoveRange(_context.BuildingExpenses.Where(e => e.BuildingId.HasValue && targetBuildingIds.Contains(e.BuildingId.Value)));
+                    _context.BuildingManagers.RemoveRange(_context.BuildingManagers.Where(m => targetBuildingIds.Contains(m.BuildingId)));
+                    _context.BuildingStaffs.RemoveRange(_context.BuildingStaffs.Where(s => targetBuildingIds.Contains(s.BuildingId)));
+                    _context.ApprovalRequests.RemoveRange(_context.ApprovalRequests.Where(a => targetBuildingIds.Contains(a.BuildingId)));
+                    _context.DocumentArchives.RemoveRange(_context.DocumentArchives.Where(d => d.BuildingId.HasValue && targetBuildingIds.Contains(d.BuildingId.Value)));
+                    _context.ManagementMembers.RemoveRange(_context.ManagementMembers.Where(m => m.BuildingId.HasValue && targetBuildingIds.Contains(m.BuildingId.Value)));
+                    _context.BuildingUnits.RemoveRange(_context.BuildingUnits.Where(u => targetBuildingIds.Contains(u.BuildingId)));
+                    _context.Buildings.RemoveRange(_context.Buildings.Where(b => targetBuildingIds.Contains(b.Id)));
+                }
+
+                if (complexId.HasValue && complexId.Value > 0)
+                {
+                    var complex = await _context.HousingComplexes.FirstOrDefaultAsync(c => c.Id == complexId.Value);
+                    if (complex != null)
+                    {
+                        _context.HousingComplexes.Remove(complex);
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = $"'{targetLabel}' ve bağlı deneme bina/bölüm kayıtları temizlendi.";
+            }
+            catch (Exception ex)
+            {
+                TempData["ErrorMessage"] = $"Kayıt üzerinde bağlı başka işlem olduğu için silinemedi: {ex.GetBaseException().Message}";
+            }
+
+            return RedirectToAction(nameof(Tenants));
+        }
+
         // --- Kapsamlı Profil ve İlişkiler Ekranı ---
         public async Task<IActionResult> UserDetails(string id)
         {
