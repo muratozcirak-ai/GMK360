@@ -24,6 +24,9 @@ namespace GMK360.Web.Services.BackgroundTasks
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            await Task.Yield();
+            try { await Task.Delay(TimeSpan.FromSeconds(20), stoppingToken); } catch (OperationCanceledException) { return; }
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 try

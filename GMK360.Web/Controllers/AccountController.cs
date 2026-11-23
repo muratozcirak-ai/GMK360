@@ -583,6 +583,8 @@ namespace GMK360.Web.Controllers
                 return View(model);
             }
 
+            try
+            {
             string cleanEmail = model.Email.Trim().ToLowerInvariant();
             string cleanPhone = model.PhoneNumber?.Trim() ?? "";
 
@@ -755,10 +757,24 @@ namespace GMK360.Web.Controllers
 
             await _context.SaveChangesAsync();
 
-            var saasService = HttpContext.RequestServices.GetService<GMK360.Web.Services.SaasSubscriptionService>();
-            if (saasService != null)
+            try
             {
-                await saasService.AssignTrialSubscriptionAsync(user, activeModules, trialDays: 15);
+                var saasService = HttpContext.RequestServices.GetService<GMK360.Web.Services.SaasSubscriptionService>();
+                if (saasService != null)
+                {
+                    await saasService.AssignTrialSubscriptionAsync(user, activeModules, trialDays: 15);
+                }
+            }
+            catch (Exception subEx)
+            {
+                try
+                {
+                    var logDir = System.IO.Path.Combine(AppContext.BaseDirectory, "App_Data", "logs");
+                    System.IO.Directory.CreateDirectory(logDir);
+                    await System.IO.File.AppendAllTextAsync(System.IO.Path.Combine(logDir, "last_error.txt"),
+                        $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] QuickRegister Trial Warning: {subEx.GetBaseException().Message}{Environment.NewLine}");
+                }
+                catch { }
             }
 
             // Oturum Aç
@@ -786,6 +802,21 @@ namespace GMK360.Web.Controllers
                         return RedirectToAction("Index", "DemolitionSalvage");
                     }
                     return RedirectToAction("Construction", "Dashboard");
+            }
+            }
+            catch (Exception ex)
+            {
+                var baseMsg = ex.GetBaseException().Message;
+                try
+                {
+                    var logDir = System.IO.Path.Combine(AppContext.BaseDirectory, "App_Data", "logs");
+                    System.IO.Directory.CreateDirectory(logDir);
+                    await System.IO.File.AppendAllTextAsync(System.IO.Path.Combine(logDir, "last_error.txt"),
+                        $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] QuickRegister ERROR: {ex.GetBaseException().GetType().Name} - {baseMsg}{Environment.NewLine}{ex}{Environment.NewLine}---{Environment.NewLine}");
+                }
+                catch { }
+                ModelState.AddModelError(string.Empty, $"Kayıt işlemi tamamlanamadı ({ex.GetBaseException().GetType().Name}): {baseMsg}");
+                return View(model);
             }
         }
 

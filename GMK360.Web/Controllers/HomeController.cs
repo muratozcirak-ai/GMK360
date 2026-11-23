@@ -216,6 +216,23 @@ public class HomeController : Controller
     [Route("Home/Error/{statusCode?}")]
     public IActionResult Error(int? statusCode = null)
     {
+        var exFeature = HttpContext.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerPathFeature>();
+        if (exFeature?.Error != null)
+        {
+            var baseEx = exFeature.Error.GetBaseException();
+            ViewBag.ErrorPath = exFeature.Path;
+            ViewBag.ErrorType = baseEx.GetType().Name;
+            ViewBag.ErrorDetail = baseEx.Message;
+            try
+            {
+                var logDir = System.IO.Path.Combine(AppContext.BaseDirectory, "App_Data", "logs");
+                System.IO.Directory.CreateDirectory(logDir);
+                System.IO.File.AppendAllText(System.IO.Path.Combine(logDir, "last_error.txt"),
+                    $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Path={exFeature.Path} | {baseEx.GetType().Name}: {baseEx.Message}{Environment.NewLine}{exFeature.Error}{Environment.NewLine}---{Environment.NewLine}");
+            }
+            catch { }
+        }
+
         if (statusCode.HasValue)
         {
             if (statusCode.Value == 404)

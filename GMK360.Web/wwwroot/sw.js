@@ -1,4 +1,4 @@
-const CACHE_NAME = "gmk360-pwa-v4";
+const CACHE_NAME = "gmk360-pwa-v5";
 const PRECACHE_ASSETS = [
   "/manifest.json",
   "/icons/icon-192.png",
