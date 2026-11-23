@@ -343,6 +343,53 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("RunStar
     }
 }
 
+// Production dahil tüm ortamlarda sadece eksik kalan yeni kolon/tabloları güvenli ve idempotent (veri kayıpsız) tamamla
+using (var schemaScope = app.Services.CreateScope())
+{
+    var schemaLogger = schemaScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var schemaDb = schemaScope.ServiceProvider.GetRequiredService<GMK360.Data.Contexts.ApplicationDbContext>();
+    try
+    {
+        schemaDb.Database.ExecuteSqlRaw(@"
+            IF COL_LENGTH(N'dbo.HousingComplexes', N'IsIndependentSite') IS NULL
+                ALTER TABLE [dbo].[HousingComplexes] ADD [IsIndependentSite] bit NOT NULL CONSTRAINT [DF_HousingComplexes_IsIndependentSite] DEFAULT (1);
+            IF COL_LENGTH(N'dbo.HousingComplexes', N'Subdomain') IS NULL
+                ALTER TABLE [dbo].[HousingComplexes] ADD [Subdomain] nvarchar(100) NULL;
+            IF COL_LENGTH(N'dbo.Buildings', N'Subdomain') IS NULL
+                ALTER TABLE [dbo].[Buildings] ADD [Subdomain] nvarchar(100) NULL;
+            IF OBJECT_ID(N'dbo.PlatformFeedbacks', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[PlatformFeedbacks] (
+                    [Id] int IDENTITY(1,1) NOT NULL,
+                    [ModuleArea] nvarchar(60) NOT NULL,
+                    [FeedbackType] nvarchar(40) NOT NULL,
+                    [Subject] nvarchar(200) NOT NULL,
+                    [Message] nvarchar(4000) NOT NULL,
+                    [PageUrl] nvarchar(500) NULL,
+                    [DeviceInfo] nvarchar(300) NULL,
+                    [UserId] nvarchar(450) NULL,
+                    [UserFullName] nvarchar(150) NULL,
+                    [UserEmail] nvarchar(200) NULL,
+                    [UserRoleLabel] nvarchar(100) NULL,
+                    [ReferenceEntityId] int NULL,
+                    [Status] nvarchar(30) NOT NULL,
+                    [AdminNote] nvarchar(2000) NULL,
+                    [ResolvedAt] datetime2 NULL,
+                    [CreatedAt] datetime2 NOT NULL,
+                    [UpdatedAt] datetime2 NULL,
+                    [IsDeleted] bit NOT NULL,
+                    CONSTRAINT [PK_PlatformFeedbacks] PRIMARY KEY ([Id]),
+                    CONSTRAINT [FK_PlatformFeedbacks_AspNetUsers_UserId] FOREIGN KEY ([UserId]) REFERENCES [dbo].[AspNetUsers] ([Id])
+                );
+            END
+        ");
+    }
+    catch (Exception schemaEx)
+    {
+        schemaLogger.LogWarning(schemaEx, "Startup idempotent schema kontrolü uyarısı.");
+    }
+}
+
 
 // SEO Dostu Yönlendirmeler (Slug tabanlı)
 

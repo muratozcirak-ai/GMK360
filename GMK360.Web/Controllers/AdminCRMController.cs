@@ -234,6 +234,233 @@ namespace GMK360.Web.Controllers
             return View(user);
         }
 
+        [HttpGet]
+        public async Task<IActionResult> Tenants()
+        {
+            var agencies = await _context.Agencies
+                .AsNoTracking()
+                .Where(a => !a.IsDeleted)
+                .OrderBy(a => a.Id)
+                .ToListAsync();
+
+            var agencyIds = agencies.Select(a => a.Id).ToList();
+            var projectCounts = agencyIds.Any()
+                ? await _context.ConstructionProjects.AsNoTracking()
+                    .Where(p => !p.IsDeleted && agencyIds.Contains(p.AgencyId))
+                    .GroupBy(p => p.AgencyId)
+                    .Select(g => new { AgencyId = g.Key, Count = g.Count() })
+                    .ToDictionaryAsync(x => x.AgencyId, x => x.Count)
+                : new Dictionary<int, int>();
+
+            var agencyOwners = agencyIds.Any()
+                ? await _context.AgencyConsultants.AsNoTracking()
+                    .Include(c => c.User)
+                    .Where(c => agencyIds.Contains(c.AgencyId) && c.IsActive)
+                    .GroupBy(c => c.AgencyId)
+                    .Select(g => new { AgencyId = g.Key, Email = g.First().User != null ? g.First().User.Email : "" })
+                    .ToDictionaryAsync(x => x.AgencyId, x => x.Email ?? "")
+                : new Dictionary<int, string>();
+
+            var complexes = await _context.HousingComplexes
+                .AsNoTracking()
+                .Include(c => c.City)
+                .Include(c => c.District)
+                .Where(c => !c.IsDeleted)
+                .OrderBy(c => c.Id)
+                .ToListAsync();
+
+            var allBuildings = await _context.Buildings
+                .AsNoTracking()
+                .Include(b => b.ManagerUser)
+                .Include(b => b.City)
+                .Include(b => b.District)
+                .Where(b => b.ParentBuildingId == null)
+                .OrderBy(b => b.Id)
+                .ToListAsync();
+
+            var unitCountsByBuilding = await _context.BuildingUnits.AsNoTracking()
+                .Where(u => !(u.Category ?? "").StartsWith("OrtakAlan"))
+                .GroupBy(u => u.BuildingId)
+                .Select(g => new { BuildingId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.BuildingId, x => x.Count);
+
+            var standaloneBuildings = allBuildings.Where(b => !b.HousingComplexId.HasValue).ToList();
+
+            ViewBag.Agencies = agencies;
+            ViewBag.ProjectCounts = projectCounts;
+            ViewBag.AgencyOwners = agencyOwners;
+            ViewBag.Complexes = complexes;
+            ViewBag.AllRootBuildings = allBuildings;
+            ViewBag.StandaloneBuildings = standaloneBuildings;
+            ViewBag.UnitCountsByBuilding = unitCountsByBuilding;
+            return View();
+        }
+
+        private static string NormalizeSubdomainSlug(string? raw, string fallbackPrefix)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) raw = fallbackPrefix;
+            var s = raw.Trim().ToLowerInvariant()
+                .Replace("ç", "c").Replace("ğ", "g").Replace("ı", "i")
+                .Replace("ö", "o").Replace("ş", "s").Replace("ü", "u")
+                .Replace(" ", "-");
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"[^a-z0-9\-]", "");
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"-{2,}", "-").Trim('-');
+            if (s.Length > 35) s = s.Substring(0, 35).Trim('-');
+            return string.IsNullOrWhiteSpace(s) ? fallbackPrefix : s;
+        }
+
+        private async Task<bool> IsSubdomainTakenAsync(string slug, int? excludeAgencyId = null, int? excludeComplexId = null, int? excludeBuildingId = null)
+        {
+            return await _context.Agencies.AnyAsync(a => !a.IsDeleted && a.Subdomain == slug && (!excludeAgencyId.HasValue || a.Id != excludeAgencyId.Value))
+                || await _context.HousingComplexes.AnyAsync(c => !c.IsDeleted && c.Subdomain == slug && (!excludeComplexId.HasValue || c.Id != excludeComplexId.Value))
+                || await _context.Buildings.AnyAsync(b => b.Subdomain == slug && (!excludeBuildingId.HasValue || b.Id != excludeBuildingId.Value) && (!excludeComplexId.HasValue || b.HousingComplexId != excludeComplexId.Value))
+                || await _context.ManagementCompanies.AnyAsync(m => !m.IsDeleted && m.Subdomain == slug);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveAgencyBranding(
+            int agencyId,
+            string companyName,
+            string? subdomain,
+            string? customDomain,
+            string? whatsAppNumber,
+            string? taxNumber,
+            string? address,
+            string? themePrimaryColor,
+            string? themeAccentColor,
+            string? bannerUrl,
+            Microsoft.AspNetCore.Http.IFormFile? logoFile)
+        {
+            var agency = await _context.Agencies.FirstOrDefaultAsync(a => a.Id == agencyId && !a.IsDeleted);
+            if (agency == null)
+            {
+                TempData["ErrorMessage"] = "Firma kaydı bulunamadı.";
+                return RedirectToAction(nameof(Tenants));
+            }
+
+            string cleanSub = NormalizeSubdomainSlug(subdomain, $"firma{agency.Id}");
+            if (await IsSubdomainTakenAsync(cleanSub, excludeAgencyId: agency.Id))
+            {
+                TempData["ErrorMessage"] = $"'{cleanSub}.gmk360.com' adresi başka bir kurum/site tarafından kullanılıyor.";
+                return RedirectToAction(nameof(Tenants));
+            }
+
+            if (!string.IsNullOrWhiteSpace(companyName)) agency.CompanyName = companyName.Trim();
+            agency.Subdomain = cleanSub;
+            agency.CustomDomain = string.IsNullOrWhiteSpace(customDomain) ? "-" : customDomain.Trim().ToLowerInvariant();
+            agency.WhatsAppNumber = string.IsNullOrWhiteSpace(whatsAppNumber) ? "-" : whatsAppNumber.Trim();
+            agency.TaxNumber = string.IsNullOrWhiteSpace(taxNumber) ? "-" : taxNumber.Trim();
+            agency.Address = string.IsNullOrWhiteSpace(address) ? "-" : address.Trim();
+            if (!string.IsNullOrWhiteSpace(themePrimaryColor)) agency.ThemePrimaryColor = themePrimaryColor.Trim();
+            if (!string.IsNullOrWhiteSpace(themeAccentColor)) agency.ThemeAccentColor = themeAccentColor.Trim();
+            if (!string.IsNullOrWhiteSpace(bannerUrl)) agency.BannerUrl = bannerUrl.Trim();
+
+            if (logoFile != null && logoFile.Length > 0 && logoFile.Length <= 5 * 1024 * 1024)
+            {
+                var ext = System.IO.Path.GetExtension(logoFile.FileName)?.ToLowerInvariant();
+                if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" || ext == ".svg")
+                {
+                    var relDir = System.IO.Path.Combine("uploads", "agencies");
+                    var absDir = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot", relDir);
+                    System.IO.Directory.CreateDirectory(absDir);
+                    var fileName = $"agency-{agency.Id}-{Guid.NewGuid():N}{ext}";
+                    using (var fs = new System.IO.FileStream(System.IO.Path.Combine(absDir, fileName), System.IO.FileMode.Create))
+                    {
+                        await logoFile.CopyToAsync(fs);
+                    }
+                    agency.LogoUrl = $"/uploads/agencies/{fileName}";
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"'{agency.CompanyName}' marka ve alt domain (https://{cleanSub}.gmk360.com) ayarları güncellendi.";
+            return RedirectToAction(nameof(Tenants));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveSiteBranding(
+            int? complexId,
+            int? buildingId,
+            string siteName,
+            string? subdomain,
+            bool isIndependentSite = true)
+        {
+            string cleanSub = string.IsNullOrWhiteSpace(subdomain) ? "" : NormalizeSubdomainSlug(subdomain, "site");
+            if (!string.IsNullOrEmpty(cleanSub) && await IsSubdomainTakenAsync(cleanSub, excludeComplexId: complexId, excludeBuildingId: buildingId))
+            {
+                TempData["ErrorMessage"] = $"'{cleanSub}.gmk360.com' adresi başka bir kurum/site tarafından kullanılıyor.";
+                return RedirectToAction(nameof(Tenants));
+            }
+
+            if (complexId.HasValue && complexId.Value > 0)
+            {
+                var complex = await _context.HousingComplexes.FirstOrDefaultAsync(c => c.Id == complexId.Value);
+                if (complex != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(siteName)) complex.Name = siteName.Trim();
+                    complex.Subdomain = string.IsNullOrEmpty(cleanSub) ? null : cleanSub;
+                    complex.IsIndependentSite = isIndependentSite;
+                    var blocks = await _context.Buildings.Where(b => b.HousingComplexId == complex.Id && b.ParentBuildingId == null).ToListAsync();
+                    foreach (var b in blocks) b.Subdomain = complex.Subdomain;
+                }
+            }
+            else if (buildingId.HasValue && buildingId.Value > 0)
+            {
+                var bld = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == buildingId.Value);
+                if (bld != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(siteName)) bld.Name = siteName.Trim();
+                    bld.Subdomain = string.IsNullOrEmpty(cleanSub) ? null : cleanSub;
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"Site kimliği güncellendi" + (!string.IsNullOrEmpty(cleanSub) ? $" (https://{cleanSub}.gmk360.com)." : ".");
+            return RedirectToAction(nameof(Tenants));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AutoAssignMissingSubdomains()
+        {
+            int updatedCount = 0;
+
+            var complexes = await _context.HousingComplexes.Where(c => !c.IsDeleted && string.IsNullOrEmpty(c.Subdomain)).ToListAsync();
+            foreach (var c in complexes)
+            {
+                string slug = NormalizeSubdomainSlug(c.Name, $"site{c.Id}");
+                if (await IsSubdomainTakenAsync(slug, excludeComplexId: c.Id)) slug = $"{slug}-{c.Id}";
+                c.Subdomain = slug;
+                updatedCount++;
+            }
+
+            var standalone = await _context.Buildings.Where(b => b.HousingComplexId == null && b.ParentBuildingId == null && string.IsNullOrEmpty(b.Subdomain)).ToListAsync();
+            foreach (var b in standalone)
+            {
+                string slug = NormalizeSubdomainSlug(b.Name, $"bina{b.Id}");
+                if (await IsSubdomainTakenAsync(slug, excludeBuildingId: b.Id)) slug = $"{slug}-{b.Id}";
+                b.Subdomain = slug;
+                updatedCount++;
+            }
+
+            var agencies = await _context.Agencies.Where(a => !a.IsDeleted && (string.IsNullOrEmpty(a.Subdomain) || a.Subdomain == "-")).ToListAsync();
+            foreach (var a in agencies)
+            {
+                string slug = NormalizeSubdomainSlug(a.CompanyName, $"firma{a.Id}");
+                if (await IsSubdomainTakenAsync(slug, excludeAgencyId: a.Id)) slug = $"{slug}-{a.Id}";
+                a.Subdomain = slug;
+                updatedCount++;
+            }
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = updatedCount > 0
+                ? $"Eksik alt domaini olan {updatedCount} kurum/site için temiz alt domain otomatik atandı."
+                : "Tüm mevcut kurum ve sitelerin alt domaini zaten tanımlı.";
+            return RedirectToAction(nameof(Tenants));
+        }
+
         // --- Kapsamlı Profil ve İlişkiler Ekranı ---
         public async Task<IActionResult> UserDetails(string id)
         {

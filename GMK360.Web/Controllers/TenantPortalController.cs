@@ -74,12 +74,19 @@ namespace GMK360.Web.Controllers
             if (complex != null)
             {
                 blocks = await _context.Buildings.AsNoTracking()
+                    .Include(b => b.ManagerUser)
                     .Where(b => b.HousingComplexId == complex.Id && b.ParentBuildingId == null)
                     .OrderBy(b => b.Id)
                     .ToListAsync();
             }
             else if (standaloneBuilding != null)
             {
+                standaloneBuilding = await _context.Buildings.AsNoTracking()
+                    .Include(b => b.City)
+                    .Include(b => b.District)
+                    .Include(b => b.Neighborhood)
+                    .Include(b => b.ManagerUser)
+                    .FirstOrDefaultAsync(b => b.Id == standaloneBuilding.Id) ?? standaloneBuilding;
                 blocks.Add(standaloneBuilding);
             }
 
@@ -98,6 +105,21 @@ namespace GMK360.Web.Controllers
                 ? await _context.BuildingUnits.AsNoTracking()
                     .CountAsync(u => blockIds.Contains(u.BuildingId) && !(u.Category ?? "").StartsWith("OrtakAlan"))
                 : 0;
+
+            var publicDecisions = blockIds.Any()
+                ? await _context.SystemMeetings.AsNoTracking()
+                    .Where(m => m.ContextType == "Building" && blockIds.Contains(m.ContextId) && !m.IsDeleted && m.IsConcluded)
+                    .OrderByDescending(m => m.MeetingDate)
+                    .Take(3)
+                    .ToListAsync()
+                : new List<SystemMeeting>();
+
+            var managerUser = blocks.Select(b => b.ManagerUser).FirstOrDefault(u => u != null);
+            ViewBag.PublicDecisions = publicDecisions;
+            ViewBag.SiteManagerDisplay = managerUser != null
+                ? (!string.IsNullOrWhiteSpace(managerUser.FirstName) ? $"{managerUser.FirstName} {managerUser.LastName}".Trim() : managerUser.Email)
+                : (mgmtCompany?.CompanyName ?? "Site Yönetimi");
+            ViewBag.SiteManagerContact = managerUser?.PhoneNumber ?? mgmtCompany?.ContactPhone ?? managerUser?.Email;
 
             bool isManagerUser = false;
             bool isResidentOrBoardUser = false;
