@@ -18,6 +18,11 @@
     var boardMembership = ViewBag.BoardMembership as GMK360.Core.Entities.BuildingManager;
     var pendingApprovals = ViewBag.PendingApprovals as List<GMK360.Core.Entities.ApprovalRequest> ?? new List<GMK360.Core.Entities.ApprovalRequest>();
     var currentUserProfile = ViewBag.CurrentUserProfile as GMK360.Core.Entities.Identity.ApplicationUser;
+    var bankAccounts = ViewBag.BuildingBankAccounts as List<GMK360.Core.Entities.BankAccount> ?? new List<GMK360.Core.Entities.BankAccount>();
+    var fixedExpenses = ViewBag.FixedExpenses as List<GMK360.Core.Entities.BuildingFixedExpense> ?? new List<GMK360.Core.Entities.BuildingFixedExpense>();
+    var plannedMaintenances = ViewBag.PlannedMaintenances as List<GMK360.Core.Entities.SpaceFixture> ?? new List<GMK360.Core.Entities.SpaceFixture>();
+    var recentExpenses = ViewBag.RecentBuildingExpenses as List<GMK360.Core.Entities.BuildingExpense> ?? new List<GMK360.Core.Entities.BuildingExpense>();
+    var meetingProposals = ViewBag.MeetingProposals as List<GMK360.Core.Entities.SupportTicket> ?? new List<GMK360.Core.Entities.SupportTicket>();
     int rootBuildingId = ViewBag.RootBuildingId is int rbid ? rbid : buildingId;
 
     var allDebts = residentUnits.SelectMany(u => u.Debts ?? new List<GMK360.Core.Entities.UnitDebt>()).Where(d => !d.IsArchived).ToList();
@@ -262,30 +267,87 @@
         else if (activeRole == "Owner" || activeRole == "Tenant")
         {
             <!-- ==================== ROL 2: KAT MALİKİ / KİRACI PWA ==================== -->
-            var relevantDebts = activeRole == "Owner" ? ownerDebts : tenantDebts;
+            var firstUnit = residentUnits.FirstOrDefault();
+            bool ownerLivesInUnit = activeRole == "Owner" && firstUnit != null && (firstUnit.IsEmpty || string.IsNullOrWhiteSpace(firstUnit.TenantName));
+            var relevantDebts = activeRole == "Tenant"
+                ? tenantDebts
+                : (ownerLivesInUnit ? allDebts : ownerDebts);
             decimal unpaidSum = Math.Max(0m, relevantDebts.Where(d => !d.IsPaid).Sum(d => d.Amount));
             decimal paidSum = relevantDebts.Where(d => d.IsPaid).Sum(d => d.Amount);
-            var firstUnit = residentUnits.FirstOrDefault();
+            var openDebtItems = relevantDebts.Where(d => !d.IsPaid).OrderByDescending(d => d.Id).ToList();
+            decimal? unitFixedDues = firstUnit?.FixedMonthlyDues;
+            int dueDayOfMonth = fixedExpenses.FirstOrDefault()?.DueDayOfMonth ?? 5;
+            decimal payDefaultAmount = unpaidSum > 0 ? unpaidSum : (unitFixedDues ?? 0m);
 
             <div class="card pwa-card bg-white p-3 mb-3">
-                <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="d-flex justify-content-between align-items-start mb-2">
                     <div>
                         <span class="badge @(activeRole == "Owner" ? "bg-danger" : "bg-primary") mb-1">
-                            @(activeRole == "Owner" ? "Kat Maliki (Demirbaş & Kıdem Fonu)" : "Kiracı (Aylık İşletme Aidatı)")
+                            @(activeRole == "Owner" ? (ownerLivesInUnit ? "Kat Maliki (Oturan / Aidat & Demirbaş)" : "Kat Maliki (Demirbaş & Kıdem Fonu)") : "Kiracı (Aylık İşletme Aidatı)")
                         </span>
-                        <h6 class="fw-bold mb-0">@(firstUnit != null ? $"{firstUnit.Building?.Name} • Daire {firstUnit.DoorNumber}" : "Daire Özeti")</h6>
+                        <h6 class="fw-bold mb-0">@(firstUnit != null ? $"{firstUnit.Building?.Name} • Daire {firstUnit.DoorNumber}" : activeSiteName)</h6>
                     </div>
                     <div class="text-end">
-                        <small class="text-muted d-block">Kalan Borç</small>
+                        <small class="text-muted d-block">Açık Borç / Bakiye</small>
                         <strong class="fs-5 @(unpaidSum > 0 ? "text-danger" : "text-success")">@unpaidSum.ToString("N2") ₺</strong>
                     </div>
                 </div>
-                <div class="d-flex justify-content-between small text-muted pt-2 border-top">
-                    <span>Ödenen Toplam: <b class="text-success">@paidSum.ToString("N2") ₺</b></span>
-                    @if (activeRole == "Owner" && firstUnit != null)
-                    {
-                        <span>Kiracı Durumu: <b>@(string.IsNullOrWhiteSpace(firstUnit.TenantName) ? "Yok / Boş" : firstUnit.TenantName)</b></span>
-                    }
+
+                <div class="row g-2 bg-light rounded-3 p-2 mb-2 small">
+                    <div class="col-4">
+                        <span class="text-muted d-block">Tanımlı Aidat</span>
+                        <strong>@(unitFixedDues.HasValue && unitFixedDues.Value > 0 ? $"{unitFixedDues.Value:N0} ₺/ay" : "Dağıtıma Göre")</strong>
+                    </div>
+                    <div class="col-4">
+                        <span class="text-muted d-block">Ödeme Günü</span>
+                        <strong>Her ayın @dueDayOfMonth. günü</strong>
+                    </div>
+                    <div class="col-4 text-end">
+                        <span class="text-muted d-block">Ödenen Toplam</span>
+                        <strong class="text-success">@paidSum.ToString("N2") ₺</strong>
+                    </div>
+                </div>
+
+                @if (openDebtItems.Any())
+                {
+                    <div class="border rounded-3 p-2 mb-2 bg-white small">
+                        <div class="fw-bold text-dark mb-1">Bekleyen Aidat &amp; Pay Kalemleri (@openDebtItems.Count)</div>
+                        @foreach (var od in openDebtItems.Take(5))
+                        {
+                            <div class="d-flex justify-content-between align-items-center py-1 border-bottom">
+                                <div>
+                                    <span class="text-dark fw-semibold">@(od.BuildingExpense?.Description ?? "Aidat / Gider Payı")</span>
+                                    <span class="text-muted ms-1">(@(od.BuildingExpense?.Date.ToString("dd.MM.yyyy") ?? "-") • @(od.PayerRole == "Owner" ? "Malik" : "İşletme"))</span>
+                                </div>
+                                <strong class="text-danger">@od.Amount.ToString("N2") ₺</strong>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pt-2 border-top">
+                    <div class="small text-muted">
+                        @if (activeRole == "Owner" && firstUnit != null)
+                        {
+                            <span>Kiracı Durumu: <b>@(string.IsNullOrWhiteSpace(firstUnit.TenantName) ? "Yok / Boş" : firstUnit.TenantName)</b></span>
+                        }
+                        else
+                        {
+                            <span>Dönem Aidat Ödeme Kanalları:</span>
+                        }
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#payDuesModal">
+                            <i class="bi bi-bank me-1"></i> Öde (IBAN / Havale Bildir)
+                        </button>
+                        @if (payDefaultAmount > 0)
+                        {
+                            <a href="/Payment/Checkout?amount=@payDefaultAmount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)&subMerchantKey=SITE_@buildingId&description=@System.Net.WebUtility.UrlEncode($"{activeSiteName} Aidat/Borç Ödemesi")"
+                               class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-semibold" title="iyzico Kart Ödeme Altyapısı (Test / Sandbox)">
+                                <i class="bi bi-credit-card me-1"></i> Kartla Öde (iyzico)
+                            </a>
+                        }
+                    </div>
                 </div>
             </div>
 
@@ -440,11 +502,11 @@
                 </div>
             }
 
-            <!-- TOPLANTILAR & KARAR DEFTERİ + GÜNDEM ÖNERİSİ -->
+            <!-- TOPLANTILAR & KARAR DEFTERİ (MALİK KONU AÇABİLİR / KİRACI YALNIZCA İZLER) -->
             <div class="card pwa-card bg-white p-3 mt-3 mb-3">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h6 class="fw-bold text-dark mb-0"><i class="bi bi-journal-bookmark text-primary me-1"></i> Toplantılar &amp; Karar Defteri</h6>
-                    <span class="badge bg-light text-dark border">@meetings.Count Kayıt</span>
+                    <span class="badge bg-light text-dark border">@meetings.Count Toplantı / Karar</span>
                 </div>
                 @if (!meetings.Any())
                 {
@@ -456,9 +518,9 @@
                     {
                         <div class="border rounded-3 p-2 mb-2 @(m.IsConcluded ? "bg-light" : "bg-warning bg-opacity-10 border-warning")">
                             <div class="d-flex justify-content-between align-items-center gap-2">
-                                <strong class="small text-dark">@m.AgendaTitle</strong>
+                                <strong class="small text-dark">#@m.Id — @m.AgendaTitle</strong>
                                 <span class="badge @(m.IsConcluded ? "bg-success" : "bg-warning text-dark")">
-                                    @(m.IsConcluded ? "Karara Bağlandı" : "📅 Yaklaşan Toplantı")
+                                    @(m.IsConcluded ? "Karara Bağlandı" : "📅 Planlanan Toplantı")
                                 </span>
                             </div>
                             <div class="text-muted" style="font-size:.75rem;">
@@ -473,25 +535,129 @@
                                     }
                                 </div>
                             }
+                            @if (activeRole == "Owner" && !m.IsConcluded)
+                            {
+                                <form asp-action="ProposeMeetingAgenda" method="post" class="mt-2 pt-2 border-top d-flex gap-1">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="buildingId" value="@buildingId" />
+                                    <input type="hidden" name="meetingId" value="@m.Id" />
+                                    <input type="hidden" name="previewRole" value="@(canSwitch ? activeRole : "")" />
+                                    <input type="text" name="agendaSubject" class="form-control form-control-sm" required placeholder="Bu toplantıya eklenecek gündem konunuzu yazın..." />
+                                    <button type="submit" class="btn btn-xs btn-warning text-dark fw-bold rounded-pill px-2 text-nowrap">Konu Ekle</button>
+                                </form>
+                            }
                         </div>
                     }
                 }
 
-                <form asp-action="ProposeMeetingAgenda" method="post" class="border-top pt-2 mt-2 row g-2">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="buildingId" value="@buildingId" />
-                    <input type="hidden" name="previewRole" value="@(canSwitch ? activeRole : "")" />
-                    <div class="col-12">
-                        <label class="form-label small fw-bold mb-1">Toplantı / Gündem Talebi İlet</label>
+                @if (activeRole == "Owner")
+                {
+                    @if (meetingProposals.Any())
+                    {
+                        <div class="bg-light rounded-3 p-2 mb-2 small border">
+                            <div class="fw-bold text-dark mb-1">Kat Maliklerinden İletilen Gündem Konuları (@meetingProposals.Count)</div>
+                            @foreach (var mp in meetingProposals.Take(4))
+                            {
+                                <div class="py-1 border-bottom d-flex justify-content-between gap-2">
+                                    <span>@mp.Title</span>
+                                    <span class="badge bg-secondary">@mp.Status</span>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <form asp-action="ProposeMeetingAgenda" method="post" class="border-top pt-2 mt-2 row g-2">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="buildingId" value="@buildingId" />
+                        <input type="hidden" name="previewRole" value="@(canSwitch ? activeRole : "")" />
+                        <div class="col-12">
+                            <label class="form-label small fw-bold mb-1">Yeni Toplantı / Genel Kurul Gündem Konusu Aç (Kat Maliki)</label>
+                        </div>
+                        <div class="col-8">
+                            <input type="text" name="agendaSubject" class="form-control form-control-sm" required placeholder="Örn: Otopark bariyeri veya çatı yalıtımı gündeme alınsın..." />
+                        </div>
+                        <div class="col-4">
+                            <button type="submit" class="btn btn-sm btn-primary w-100 rounded-pill fw-semibold">Konu Aç</button>
+                        </div>
+                    </form>
+                }
+                else
+                {
+                    <div class="small text-muted border-top pt-2 mt-1">
+                        <i class="bi bi-info-circle me-1"></i>Kiracı hesabında genel kurul toplantı kararları yalnızca bilgilendirme amaçlı görüntülenir; toplantı konusu açma yetkisi Kat Maliklerine aittir.
                     </div>
-                    <div class="col-8">
-                        <input type="text" name="agendaSubject" class="form-control form-control-sm" required placeholder="Örn: Otopark aydınlatması için toplantı gündemi..." />
-                    </div>
-                    <div class="col-4">
-                        <button type="submit" class="btn btn-sm btn-outline-primary w-100 rounded-pill fw-semibold">Talep Et</button>
-                    </div>
-                </form>
+                }
             </div>
+
+            @if (activeRole == "Owner")
+            {
+                <!-- MALİK ŞEFFAFLIK ALANI (SALT OKUNUR: PLANLI İŞLER & BİNA GİDER ÖZETİ) -->
+                <div class="card pwa-card bg-white p-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-calendar2-check text-success me-1"></i> Planlı İşler &amp; Bakım Takvimi</h6>
+                        <span class="badge bg-light text-muted border">Salt Okunur</span>
+                    </div>
+                    @if (!plannedMaintenances.Any())
+                    {
+                        <p class="small text-muted mb-0">Yönetim tarafından henüz ileri tarihli planlı bakım kaydı girilmemiş.</p>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-column gap-1 small">
+                            @foreach (var pm in plannedMaintenances)
+                            {
+                                <div class="bg-light rounded-3 px-2 py-2 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong class="text-dark">@pm.ItemName</strong>
+                                        <span class="text-muted ms-1">(@pm.Category @(!string.IsNullOrWhiteSpace(pm.TechnicalServiceName) ? $"• {pm.TechnicalServiceName}" : ""))</span>
+                                    </div>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                        @pm.NextMaintenanceDate?.ToString("dd.MM.yyyy")
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="card pwa-card bg-white p-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-wallet2 text-primary me-1"></i> Bina Kasa &amp; Gider Şeffaflığı</h6>
+                        <span class="badge bg-light text-muted border">@(boardMembership != null ? "Kurul İzleme" : "Salt Okunur (İşlem Yetkisi Yok)")</span>
+                    </div>
+                    <div class="row g-2 mb-2 small">
+                        <div class="col-6">
+                            <div class="bg-light rounded-3 p-2">
+                                <span class="text-muted d-block">Aylık İşletme Bütçesi</span>
+                                <strong class="text-success">@budget.TotalMonthlyOperatingBudget.ToString("N0") ₺</strong>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="bg-light rounded-3 p-2">
+                                <span class="text-muted d-block">Kıdem / Demirbaş Fonu</span>
+                                <strong class="text-danger">@budget.TotalMonthlyCapitalBudget.ToString("N0") ₺</strong>
+                            </div>
+                        </div>
+                    </div>
+                    @if (recentExpenses.Any())
+                    {
+                        <div class="small border rounded-3 p-2 bg-white">
+                            <div class="fw-bold text-muted mb-1">Son Kesilen Bina Giderleri</div>
+                            @foreach (var ex in recentExpenses)
+                            {
+                                <div class="d-flex justify-content-between py-1 border-bottom">
+                                    <span class="text-dark">@ex.Description <small class="text-muted">(@ex.Date.ToString("dd.MM.yyyy"))</small></span>
+                                    <strong>@ex.TotalAmount.ToString("N2") ₺</strong>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="small text-muted mb-0">Henüz yayınlanmış fatura / gider kaydı bulunmuyor.</p>
+                    }
+                </div>
+            }
         }
         else
         {
@@ -579,6 +745,79 @@
                 </div>
             }
         }
+    </div>
+
+    <!-- IBAN / AİDAT ÖDEME BİLDİRİM MODALI -->
+    <div class="modal fade" id="payDuesModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content rounded-4 border-0 shadow" asp-action="SubmitBankPaymentNotice" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="buildingId" value="@buildingId" />
+                <input type="hidden" name="buildingUnitId" value="@(residentUnits.FirstOrDefault()?.Id)" />
+                <input type="hidden" name="previewRole" value="@(canSwitch ? activeRole : "")" />
+                <div class="modal-header bg-success text-white border-0">
+                    <h6 class="modal-title fw-bold"><i class="bi bi-bank me-2"></i>IBAN ile Aidat / Borç Öde &amp; Bildir</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 row g-3">
+                    <div class="col-12">
+                        @if (bankAccounts.Any())
+                        {
+                            <div class="small fw-bold text-dark mb-2">Yönetimin Resmi Banka / IBAN Hesapları:</div>
+                            @foreach (var ba in bankAccounts)
+                            {
+                                <div class="border rounded-3 p-2 mb-2 bg-light d-flex justify-content-between align-items-center gap-2 small">
+                                    <div>
+                                        <div class="fw-bold text-dark">@ba.BankName — @ba.AccountName</div>
+                                        <code class="text-primary">@ba.IBAN</code>
+                                    </div>
+                                    <button type="button" class="btn btn-xs btn-outline-dark rounded-pill px-2 fw-semibold"
+                                            onclick="navigator.clipboard.writeText('@ba.IBAN').then(() => alert('IBAN kopyalandı:\n@ba.IBAN'))">
+                                        Kopyala
+                                    </button>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning small rounded-3 py-2 mb-0">
+                                Yönetim henüz Muhasebe ekranından IBAN tanımlamamış; ancak havale/elden ödeme yaptıysanız tutarı aşağıdan yönetime bildirebilirsiniz.
+                            </div>
+                        }
+                    </div>
+                    @if (bankAccounts.Any())
+                    {
+                        <div class="col-12">
+                            <label class="form-label small fw-bold">Gönderim Yapılan Hesap</label>
+                            <select name="bankAccountId" class="form-select form-select-sm">
+                                @foreach (var ba in bankAccounts)
+                                {
+                                    <option value="@ba.Id">@ba.BankName — @ba.IBAN</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">Ödenen Tutar (₺) *</label>
+                        @{
+                            var firstU = residentUnits.FirstOrDefault();
+                            var modalDebts = activeRole == "Tenant" ? tenantDebts : ownerDebts;
+                            var modalOpenSum = Math.Max(0m, modalDebts.Where(d => !d.IsPaid).Sum(d => d.Amount));
+                            var suggestedPay = modalOpenSum > 0 ? modalOpenSum : (firstU?.FixedMonthlyDues ?? 0m);
+                        }
+                        <input type="number" step="0.01" min="1" name="amount" class="form-control form-control-sm" value="@(suggestedPay > 0 ? suggestedPay.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) : "")" required placeholder="Örn: 1500" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">Gönderen / Dekont Notu</label>
+                        <input type="text" name="senderInfo" class="form-control form-control-sm" placeholder="Ad Soyad / Daire No" />
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-sm btn-light rounded-pill" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-sm btn-success rounded-pill px-4 fw-bold">Ödeme Bildirimini Yönetime İlet</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

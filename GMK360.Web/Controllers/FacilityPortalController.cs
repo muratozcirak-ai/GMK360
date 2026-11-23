@@ -215,6 +215,56 @@ namespace GMK360.Web.Controllers
                     .ToListAsync()
                 : new List<ApprovalRequest>();
 
+            var buildingBankAccounts = targetBuildingId > 0
+                ? await _context.BankAccounts
+                    .AsNoTracking()
+                    .Where(a => !a.IsDeleted && a.IsActive
+                        && ((a.OwnerType == OwnerType.Building && (a.OwnerId == targetBuildingId || a.OwnerId == rootBuildingId))
+                            || (targetBuilding != null && targetBuilding.HousingComplexId.HasValue && a.OwnerType == OwnerType.HousingComplex && a.OwnerId == targetBuilding.HousingComplexId.Value)))
+                    .OrderByDescending(a => a.Id)
+                    .ToListAsync()
+                : new List<BankAccount>();
+
+            var fixedExpenses = targetBuildingId > 0
+                ? await _context.BuildingFixedExpenses
+                    .AsNoTracking()
+                    .Where(e => !e.IsDeleted && e.IsActive && (e.BuildingId == targetBuildingId || e.BuildingId == rootBuildingId))
+                    .OrderBy(e => e.DueDayOfMonth)
+                    .ToListAsync()
+                : new List<BuildingFixedExpense>();
+
+            var plannedMaintenances = targetBuildingId > 0
+                ? await _context.SpaceFixtures
+                    .AsNoTracking()
+                    .Include(f => f.UnitSpace).ThenInclude(s => s.BuildingUnit)
+                    .Where(f => !f.IsDeleted && f.NextMaintenanceDate.HasValue
+                        && (f.UnitSpace.BuildingUnit.BuildingId == targetBuildingId || f.UnitSpace.BuildingUnit.BuildingId == rootBuildingId))
+                    .OrderBy(f => f.NextMaintenanceDate)
+                    .Take(12)
+                    .ToListAsync()
+                : new List<SpaceFixture>();
+
+            var recentBuildingExpenses = targetBuildingId > 0
+                ? await _context.BuildingExpenses
+                    .AsNoTracking()
+                    .Where(e => !e.IsDeleted && !e.IsArchived && (e.BuildingId == targetBuildingId || e.BuildingId == rootBuildingId))
+                    .OrderByDescending(e => e.Date)
+                    .Take(8)
+                    .ToListAsync()
+                : new List<BuildingExpense>();
+
+            var meetingProposals = targetBuildingId > 0
+                ? await _context.SupportTickets
+                    .AsNoTracking()
+                    .Include(t => t.CreatorUser)
+                    .Where(t => !t.IsDeleted && t.ContextType == "Building"
+                        && (t.ContextId == targetBuildingId || t.ContextId == rootBuildingId)
+                        && t.Category == "MeetingRequest")
+                    .OrderByDescending(t => t.CreatedAt)
+                    .Take(10)
+                    .ToListAsync()
+                : new List<SupportTicket>();
+
             ViewBag.ActiveRole = activeRole;
             ViewBag.CanSwitchPreview = isManager;
             ViewBag.ManagedBuildings = managedBuildings;
@@ -231,6 +281,11 @@ namespace GMK360.Web.Controllers
             ViewBag.BoardMembership = boardMembership;
             ViewBag.PendingApprovals = pendingApprovals;
             ViewBag.CurrentUserProfile = user;
+            ViewBag.BuildingBankAccounts = buildingBankAccounts;
+            ViewBag.FixedExpenses = fixedExpenses;
+            ViewBag.PlannedMaintenances = plannedMaintenances;
+            ViewBag.RecentBuildingExpenses = recentBuildingExpenses;
+            ViewBag.MeetingProposals = meetingProposals;
 
             return View();
         }
@@ -320,10 +375,22 @@ namespace GMK360.Web.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ProposeMeetingAgenda(int buildingId, string agendaSubject, string? details, string? previewRole = null)
+        public async Task<IActionResult> ProposeMeetingAgenda(int buildingId, string agendaSubject, string? details, int? meetingId = null, string? previewRole = null)
         {
             var userId = GetUserId();
             if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+            // Kiracı KMK toplantı gündemi açamaz; yalnızca Kat Maliki / Kurul Üyesi / Yönetici açabilir
+            if (!IsManagerOrAdmin())
+            {
+                bool isOwnerOrBoard = await _context.BuildingManagers.AnyAsync(m => m.UserId == userId && m.IsActive)
+                    || await _context.BuildingUnits.AnyAsync(u => u.BuildingId == buildingId && u.OwnerUserId == userId);
+                if (!isOwnerOrBoard)
+                {
+                    TempData["ErrorMessage"] = "Toplantı gündem konusu açma yetkisi yalnızca Kat Malikleri ve Yönetim Kuruluna aittir.";
+                    return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+                }
+            }
 
             if (buildingId <= 0 || string.IsNullOrWhiteSpace(agendaSubject))
             {
@@ -333,10 +400,11 @@ namespace GMK360.Web.Controllers
 
             var building = await _context.Buildings.AsNoTracking().FirstOrDefaultAsync(b => b.Id == buildingId);
             string assigneeId = !string.IsNullOrWhiteSpace(building?.ManagerUserId) ? building.ManagerUserId : userId;
+            string prefix = meetingId.HasValue && meetingId.Value > 0 ? $"[Toplantı #{meetingId.Value} Gündem Maddesi]" : "[Kat Maliki Toplantı Konusu]";
 
             _context.SupportTickets.Add(new SupportTicket
             {
-                Title = $"[Toplantı / Gündem Talebi] {agendaSubject.Trim()}",
+                Title = $"{prefix} {agendaSubject.Trim()}",
                 Description = string.IsNullOrWhiteSpace(details) ? agendaSubject.Trim() : details.Trim(),
                 Category = "MeetingRequest",
                 Status = "Open",
@@ -345,12 +413,58 @@ namespace GMK360.Web.Controllers
                 AssignedToUserId = assigneeId,
                 ContextType = "Building",
                 ContextId = buildingId,
-                ContextInfo = "Sakin / Aza Toplantı Önerisi",
+                ContextInfo = meetingId.HasValue ? $"Toplantı #{meetingId.Value}" : "Kat Maliki Gündem Önerisi",
                 CreatedAt = DateTime.UtcNow
             });
 
             await _context.SaveChangesAsync();
-            TempData["SuccessMessage"] = "Toplantı / gündem öneriniz site yönetimine iletildi.";
+            TempData["SuccessMessage"] = "Gündem konunuz yönetime ve toplantı listesine eklendi.";
+            return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SubmitBankPaymentNotice(
+            int buildingId,
+            int? buildingUnitId,
+            decimal amount,
+            int? bankAccountId,
+            string? senderInfo,
+            string? previewRole = null)
+        {
+            var userId = GetUserId();
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+            if (buildingId <= 0 || amount <= 0)
+            {
+                TempData["ErrorMessage"] = "Geçerli bir tutar ve bina bilgisi seçiniz.";
+                return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+            }
+
+            var building = await _context.Buildings.AsNoTracking().FirstOrDefaultAsync(b => b.Id == buildingId);
+            var bank = bankAccountId.HasValue ? await _context.BankAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.Id == bankAccountId.Value) : null;
+            var unit = buildingUnitId.HasValue ? await _context.BuildingUnits.AsNoTracking().FirstOrDefaultAsync(u => u.Id == buildingUnitId.Value) : null;
+            string assigneeId = !string.IsNullOrWhiteSpace(building?.ManagerUserId) ? building.ManagerUserId : userId;
+
+            string bankSummary = bank != null ? $"{bank.BankName} ({bank.IBAN})" : "Bina Banka Hesabı";
+            string unitLabel = unit != null ? $"Daire {unit.DoorNumber}" : "Daire";
+
+            _context.SupportTickets.Add(new SupportTicket
+            {
+                Title = $"[IBAN Ödeme Bildirimi] {unitLabel} — {amount:N2} ₺",
+                Description = $"Gönderen / Açıklama: {(string.IsNullOrWhiteSpace(senderInfo) ? User.Identity?.Name : senderInfo.Trim())}\nAlıcı Hesap: {bankSummary}\nTutar: {amount:N2} ₺\nNot: Yönetici tahsilat onayı sonrası borçtan düşülür.",
+                Category = "PaymentNotice",
+                Status = "Open",
+                Priority = "Normal",
+                CreatorUserId = userId,
+                AssignedToUserId = assigneeId,
+                ContextType = "Building",
+                ContextId = buildingId,
+                ContextInfo = unitLabel,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"💳 {amount:N2} ₺ tutarındaki IBAN havale/EFT bildiriminiz site yönetimine iletildi. Yönetici onayı sonrası bakiyenize işlenecektir.";
             return RedirectToAction(nameof(Index), new { previewRole, buildingId });
         }
 
