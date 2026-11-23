@@ -23,6 +23,9 @@ namespace GMK360.Core.Entities
         public decimal DuesMultiplier { get; set; } = 1.00m; // Genel aidat katsayısı (1+1: 0.8, 3+1: 1.0, Dubleks: 1.5, Yoğun Dükkan: 2.0)
         [Column(TypeName = "decimal(18,2)")]
         public decimal? FixedMonthlyDues { get; set; } // İşletme Projesi sabit aylık aidatı
+        public bool IsDuesExempt { get; set; } = false; // Aidattan tam muaf (0 TL - ör. kapıcı/yönetici muafiyeti)
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal DuesAdjustmentAmount { get; set; } = 0m; // Baz aidat üzerine kişiye/bölüme özel +/- TL indirim veya ek fark
         public bool IsExemptFromElevator { get; set; } = false; // Yönetim planı asansör gideri muafiyeti
         public bool IsExemptFromStairwell { get; set; } = false; // Merdiven aydınlatma/temizlik muafiyeti
         [Column(TypeName = "decimal(6,2)")]

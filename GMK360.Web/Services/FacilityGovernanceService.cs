@@ -650,6 +650,38 @@ namespace GMK360.Web.Services
             };
         }
 
+        public static (decimal Amount, string BreakdownNote, bool IsExempt) ComputeUnitEffectiveMonthlyDues(BuildingUnit? u, decimal overrideBaseDues = 0m)
+        {
+            if (u == null) return (0m, "Tanımsız", false);
+
+            if (u.IsDuesExempt || u.DuesMultiplier <= 0m || (u.FixedMonthlyDues.HasValue && u.FixedMonthlyDues.Value == 0m))
+            {
+                return (0m, "Aidattan Tam Muaf (0,00 ₺)", true);
+            }
+
+            decimal adj = u.DuesAdjustmentAmount;
+            string adjText = adj == 0m ? "" : (adj > 0m ? $" + {adj:N0} ₺ fark" : $" - {Math.Abs(adj):N0} ₺ indirim");
+
+            if (u.FixedMonthlyDues.HasValue && u.FixedMonthlyDues.Value > 0m)
+            {
+                decimal netFixed = Math.Max(0m, Math.Round(u.FixedMonthlyDues.Value + adj, 2, MidpointRounding.AwayFromZero));
+                string note = adj == 0m ? "Sabit Özel Aidat" : $"Özel {u.FixedMonthlyDues.Value:N0} ₺{adjText}";
+                return (netFixed, note, netFixed <= 0m);
+            }
+
+            decimal effectiveBase = overrideBaseDues > 0m ? overrideBaseDues : (u.Building?.DefaultBaseMonthlyDues ?? 0m);
+            if (effectiveBase <= 0m)
+            {
+                return (0m, "Baz Aidat Tanımlı Değil", false);
+            }
+
+            decimal mult = u.DuesMultiplier;
+            decimal basePart = Math.Round(effectiveBase * mult, 2, MidpointRounding.AwayFromZero);
+            decimal netAmt = Math.Max(0m, Math.Round(basePart + adj, 2, MidpointRounding.AwayFromZero));
+            string multText = mult == 1.00m ? $"Baz {effectiveBase:N0} ₺" : $"Baz {effectiveBase:N0} ₺ × {mult:0.##}";
+            return (netAmt, $"{multText}{adjText}", netAmt <= 0m);
+        }
+
         public async Task<ExpenseDistributionPreviewResult> PreviewFixedUnitDuesAsync(
             int buildingId,
             int year,
@@ -668,35 +700,34 @@ namespace GMK360.Web.Services
 
             foreach (var u in units)
             {
-                decimal mult = u.DuesMultiplier > 0m ? u.DuesMultiplier : 1.00m;
-                decimal share = u.FixedMonthlyDues.HasValue && u.FixedMonthlyDues.Value >= 0m
-                    ? Math.Round(u.FixedMonthlyDues.Value, 2, MidpointRounding.AwayFromZero)
-                    : Math.Round(Math.Max(0m, defaultBaseDues) * mult, 2, MidpointRounding.AwayFromZero);
+                decimal mult = Math.Max(0m, u.DuesMultiplier);
+                var calc = ComputeUnitEffectiveMonthlyDues(u, defaultBaseDues);
+                decimal share = calc.Amount;
 
                 bool hasTenant = !u.IsEmpty && !string.IsNullOrWhiteSpace(u.TenantName);
                 decimal ownerAmt = 0m;
                 decimal tenantAmt = 0m;
                 string note;
 
-                if (share <= 0m)
+                if (calc.IsExempt || share <= 0m)
                 {
-                    note = "Sabit Aidat = 0 ₺ (Muaf / Tanımsız)";
+                    note = calc.IsExempt ? calc.BreakdownNote : "Sabit / Baz Aidat = 0 ₺";
                 }
                 else if (!hasTenant || ownerPct >= 100m)
                 {
                     ownerAmt = share;
-                    note = hasTenant && ownerPct >= 100m ? "Kiracı Muaf → Malik %100" : "Malik (Oturan / Boş)";
+                    note = (hasTenant && ownerPct >= 100m ? "Kiracı Muaf → Malik %100 • " : "Malik • ") + calc.BreakdownNote;
                 }
                 else if (ownerPct <= 0m)
                 {
                     tenantAmt = share;
-                    note = u.FixedMonthlyDues.HasValue ? "Tanımlı Sabit Aidat (Kiracı)" : $"Baz × {mult:0.##}x (Kiracı)";
+                    note = "Kiracı • " + calc.BreakdownNote;
                 }
                 else
                 {
                     ownerAmt = Math.Round(share * (ownerPct / 100m), 2, MidpointRounding.AwayFromZero);
                     tenantAmt = share - ownerAmt;
-                    note = $"%{ownerPct:0.##} Malik / %{(100m - ownerPct):0.##} Kiracı";
+                    note = $"%{ownerPct:0.##} Malik / %{(100m - ownerPct):0.##} Kiracı • {calc.BreakdownNote}";
                 }
 
                 grandTotal += share;

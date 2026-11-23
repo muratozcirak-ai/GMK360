@@ -3097,7 +3097,9 @@ namespace GMK360.Web.Controllers
             string? ownerQuickPin = null,
             string? tenantQuickPin = null,
             string? ownerTcNo = null,
-            string? tenantTcNo = null)
+            string? tenantTcNo = null,
+            bool isDuesExempt = false,
+            decimal? duesAdjustmentAmount = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -3120,7 +3122,12 @@ namespace GMK360.Web.Controllers
             if (landShare.HasValue) unit.LandShare = Math.Max(0m, landShare.Value);
             if (grossSquareMeters.HasValue) unit.GrossSquareMeters = Math.Max(0, grossSquareMeters.Value);
             if (duesMultiplier.HasValue) unit.DuesMultiplier = Math.Clamp(duesMultiplier.Value, 0m, 10m);
-            if (fixedMonthlyDues.HasValue) unit.FixedMonthlyDues = fixedMonthlyDues.Value > 0m ? Math.Round(fixedMonthlyDues.Value, 2) : null;
+            if (fixedMonthlyDues.HasValue)
+                unit.FixedMonthlyDues = Math.Max(0m, Math.Round(fixedMonthlyDues.Value, 2));
+            else if (Request.Form.ContainsKey("fixedMonthlyDues") && string.IsNullOrWhiteSpace(Request.Form["fixedMonthlyDues"]))
+                unit.FixedMonthlyDues = null;
+            unit.IsDuesExempt = isDuesExempt;
+            if (duesAdjustmentAmount.HasValue) unit.DuesAdjustmentAmount = Math.Round(duesAdjustmentAmount.Value, 2);
             if (isExemptFromElevator.HasValue) unit.IsExemptFromElevator = isExemptFromElevator.Value;
             if (isExemptFromStairwell.HasValue) unit.IsExemptFromStairwell = isExemptFromStairwell.Value;
             if (cleaningParticipationPercent.HasValue) unit.CleaningParticipationPercent = Math.Clamp(cleaningParticipationPercent.Value, 0m, 500m);
@@ -3173,7 +3180,9 @@ namespace GMK360.Web.Controllers
             bool isExemptFromStairwell,
             decimal cleaningParticipationPercent,
             string? duesRuleNote,
-            string? returnAction = null)
+            string? returnAction = null,
+            bool isDuesExempt = false,
+            decimal? duesAdjustmentAmount = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -3201,7 +3210,10 @@ namespace GMK360.Web.Controllers
             {
                 u.DuesMultiplier = Math.Clamp(duesMultiplier, 0m, 10m);
                 if (fixedMonthlyDues.HasValue)
-                    u.FixedMonthlyDues = fixedMonthlyDues.Value > 0m ? Math.Round(fixedMonthlyDues.Value, 2) : null;
+                    u.FixedMonthlyDues = Math.Max(0m, Math.Round(fixedMonthlyDues.Value, 2));
+                u.IsDuesExempt = isDuesExempt;
+                if (duesAdjustmentAmount.HasValue)
+                    u.DuesAdjustmentAmount = Math.Round(duesAdjustmentAmount.Value, 2);
                 u.IsExemptFromElevator = isExemptFromElevator;
                 u.IsExemptFromStairwell = isExemptFromStairwell;
                 u.CleaningParticipationPercent = Math.Clamp(cleaningParticipationPercent, 0m, 500m);
@@ -3209,8 +3221,41 @@ namespace GMK360.Web.Controllers
             }
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = $"{filtered.Count} adet bağımsız bölüme aidat katsayısı ({duesMultiplier:0.##}x) ve muafiyet profili topluca uygulandı.";
+            TempData["SuccessMessage"] = $"{filtered.Count} adet bağımsız bölüme aidat katsayısı ({duesMultiplier:0.##}x) ve muafiyet/fark profili topluca uygulandı.";
             return RedirectToAction(returnAction == "Sakinler" ? nameof(Sakinler) : nameof(Aidatlar), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveBuildingBaseDues(
+            int buildingId,
+            decimal? defaultBaseMonthlyDues,
+            int? duesPaymentDay,
+            bool applyToAllSiteBlocks = true)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            decimal? cleanDues = defaultBaseMonthlyDues.HasValue && defaultBaseMonthlyDues.Value >= 0m
+                ? Math.Round(defaultBaseMonthlyDues.Value, 2)
+                : null;
+            int? cleanDay = duesPaymentDay.HasValue
+                ? Math.Clamp(duesPaymentDay.Value, 1, 31)
+                : null;
+
+            var targets = (applyToAllSiteBlocks && building.HousingComplexId.HasValue)
+                ? await _context.Buildings.Where(b => b.HousingComplexId == building.HousingComplexId && b.ParentBuildingId == null).ToListAsync()
+                : new System.Collections.Generic.List<Building> { building };
+
+            foreach (var b in targets)
+            {
+                b.DefaultBaseMonthlyDues = cleanDues;
+                if (cleanDay.HasValue) b.DuesPaymentDay = cleanDay.Value;
+            }
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"Sabit baz aylık aidat ({(cleanDues ?? 0m):N2} ₺) ve ödeme günü (Her ayın {cleanDay ?? building.DuesPaymentDay ?? 5}. günü) {targets.Count} yapı için kaydedildi.";
+            return RedirectToAction(nameof(Aidatlar), new { buildingId });
         }
 
         // 8. Aidat ve Borç Takibi

@@ -1445,10 +1445,16 @@ namespace GMK360.Data.Migrations
                     b.Property<string>("CreatedByUserId")
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<decimal?>("DefaultBaseMonthlyDues")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("DistrictId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DuesPaymentDay")
                         .HasColumnType("int");
 
                     b.Property<int?>("ElevatorCount")
@@ -2355,6 +2361,9 @@ namespace GMK360.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<decimal>("DuesAdjustmentAmount")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal>("DuesMultiplier")
                         .HasColumnType("decimal(8,2)");
 
@@ -2384,6 +2393,9 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsCustomizable")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDuesExempt")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsEmpty")

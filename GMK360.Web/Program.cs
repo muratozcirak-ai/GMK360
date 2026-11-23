@@ -357,6 +357,14 @@ using (var schemaScope = app.Services.CreateScope())
                 ALTER TABLE [dbo].[HousingComplexes] ADD [Subdomain] nvarchar(100) NULL;
             IF COL_LENGTH(N'dbo.Buildings', N'Subdomain') IS NULL
                 ALTER TABLE [dbo].[Buildings] ADD [Subdomain] nvarchar(100) NULL;
+            IF COL_LENGTH(N'dbo.Buildings', N'DefaultBaseMonthlyDues') IS NULL
+                ALTER TABLE [dbo].[Buildings] ADD [DefaultBaseMonthlyDues] decimal(18,2) NULL;
+            IF COL_LENGTH(N'dbo.Buildings', N'DuesPaymentDay') IS NULL
+                ALTER TABLE [dbo].[Buildings] ADD [DuesPaymentDay] int NULL;
+            IF COL_LENGTH(N'dbo.BuildingUnits', N'IsDuesExempt') IS NULL
+                ALTER TABLE [dbo].[BuildingUnits] ADD [IsDuesExempt] bit NOT NULL CONSTRAINT [DF_BuildingUnits_IsDuesExempt] DEFAULT (0);
+            IF COL_LENGTH(N'dbo.BuildingUnits', N'DuesAdjustmentAmount') IS NULL
+                ALTER TABLE [dbo].[BuildingUnits] ADD [DuesAdjustmentAmount] decimal(18,2) NOT NULL CONSTRAINT [DF_BuildingUnits_DuesAdjustmentAmount] DEFAULT (0);
             IF OBJECT_ID(N'dbo.PlatformFeedbacks', N'U') IS NULL
             BEGIN
                 CREATE TABLE [dbo].[PlatformFeedbacks] (

@@ -101,6 +101,10 @@ namespace GMK360.Core.Entities
 
         [System.ComponentModel.DataAnnotations.MaxLength(100)]
         public string? Subdomain { get; set; } // Müstakil apartman alt domaini (Örn: "gunesapt" -> gunesapt.gmk360.com)
+
+        [System.ComponentModel.DataAnnotations.Schema.Column(TypeName = "decimal(18,2)")]
+        public decimal? DefaultBaseMonthlyDues { get; set; } // Sitenin / binanın kalıcı sabit baz aylık aidatı (₺)
+        public int? DuesPaymentDay { get; set; } // Aylık aidat ödeme günü (1-31)
     }
 }
 

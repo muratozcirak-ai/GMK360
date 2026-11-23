@@ -276,8 +276,9 @@
             decimal paidSum = relevantDebts.Where(d => d.IsPaid).Sum(d => d.Amount);
             var openDebtItems = relevantDebts.Where(d => !d.IsPaid).OrderByDescending(d => d.Id).ToList();
             decimal? unitFixedDues = firstUnit?.FixedMonthlyDues;
-            int dueDayOfMonth = fixedExpenses.FirstOrDefault()?.DueDayOfMonth ?? 5;
-            decimal payDefaultAmount = unpaidSum > 0 ? unpaidSum : (unitFixedDues ?? 0m);
+            var duesCalc = GMK360.Web.Services.FacilityGovernanceService.ComputeUnitEffectiveMonthlyDues(firstUnit, firstUnit?.Building?.DefaultBaseMonthlyDues ?? 0m);
+            int dueDayOfMonth = firstUnit?.Building?.DuesPaymentDay ?? fixedExpenses.FirstOrDefault()?.DueDayOfMonth ?? 5;
+            decimal payDefaultAmount = unpaidSum > 0 ? unpaidSum : duesCalc.Amount;
 
             <div class="card pwa-card bg-white p-3 mb-3">
                 <div class="d-flex justify-content-between align-items-start mb-2">
@@ -294,16 +295,17 @@
                 </div>
 
                 <div class="row g-2 bg-light rounded-3 p-2 mb-2 small">
-                    <div class="col-4">
+                    <div class="col-5">
                         <span class="text-muted d-block">Tanımlı Aidat</span>
-                        <strong>@(unitFixedDues.HasValue && unitFixedDues.Value > 0 ? $"{unitFixedDues.Value:N0} ₺/ay" : "Dağıtıma Göre")</strong>
+                        <strong>@(duesCalc.IsExempt ? "Tam Muaf (0,00 ₺)" : (duesCalc.Amount > 0 ? $"{duesCalc.Amount:N0} ₺/ay" : "Dağıtıma Göre"))</strong>
+                        <small class="d-block text-muted" style="font-size:.7rem;">@duesCalc.BreakdownNote</small>
                     </div>
                     <div class="col-4">
                         <span class="text-muted d-block">Ödeme Günü</span>
                         <strong>Her ayın @dueDayOfMonth. günü</strong>
                     </div>
-                    <div class="col-4 text-end">
-                        <span class="text-muted d-block">Ödenen Toplam</span>
+                    <div class="col-3 text-end">
+                        <span class="text-muted d-block">Ödenen</span>
                         <strong class="text-success">@paidSum.ToString("N2") ₺</strong>
                     </div>
                 </div>
