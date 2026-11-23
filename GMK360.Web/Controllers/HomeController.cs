@@ -19,19 +19,7 @@ public class HomeController : Controller
         public IActionResult Index() {
             if (User.Identity != null && User.Identity.IsAuthenticated && Request.Query["landing"] != "true")
             {
-                if (User.IsInRole("SuperAdmin") || User.IsInRole("Admin"))
-                {
-                    return RedirectToAction("Index", "Admin");
-                }
-                if (User.IsInRole("InsaatFirmasi"))
-                {
-                    return RedirectToAction("Construction", "Dashboard");
-                }
-                if (User.IsInRole("Corporate"))
-                {
-                    return RedirectToAction("Corporate", "Dashboard");
-                }
-                return RedirectToAction("Index", "CustomerDashboard");
+                return RedirectToAction("Start", "Account");
             }
             return View();
         }

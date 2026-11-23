@@ -283,7 +283,7 @@ namespace GMK360.Web.Controllers
 
 
 
-                if (User.IsInRole("Admin"))
+                if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin"))
 
 
 
