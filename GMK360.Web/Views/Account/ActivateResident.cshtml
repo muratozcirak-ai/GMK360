@@ -1,0 +1,96 @@
+@model GMK360.Core.Entities.Identity.ApplicationUser
+@{
+    ViewData["Title"] = "Hesap Doğrulama, Şifre & Kişisel PIN Kurulumu";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var units = ViewBag.LinkedUnits as List<GMK360.Core.Entities.BuildingUnit> ?? new List<GMK360.Core.Entities.BuildingUnit>();
+    string token = ViewBag.Token as string ?? "";
+}
+
+<div class="container py-5 mt-4" style="max-width: 680px;">
+    <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+        <div class="card-header bg-success text-white p-4 border-0">
+            <h4 class="fw-bold mb-1"><i class="bi bi-shield-lock-fill me-2"></i>Kişisel Profil &amp; Güvenlik Aktivasyonu</h4>
+            <p class="small mb-0 opacity-75">E-posta doğrulamanızı tamamlayın, kendi giriş şifrenizi ve yalnızca sizin bileceğiniz onay PIN'inizi belirleyin.</p>
+        </div>
+        <div class="card-body p-4">
+            @if (units.Any())
+            {
+                <div class="alert alert-light border rounded-3 small mb-4">
+                    <strong>Bağlı Olduğunuz Bağımsız Bölümler:</strong>
+                    <div class="mt-1 d-flex flex-wrap gap-1">
+                        @foreach (var u in units)
+                        {
+                            <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                @(u.Building?.Name ?? "Bina") — No: @u.DoorNumber (@(u.OwnerUserId == Model.Id ? "Malik" : "Kiracı"))
+                            </span>
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (ViewBag.ActivationError != null)
+            {
+                <div class="alert alert-danger rounded-3 small">@ViewBag.ActivationError</div>
+            }
+
+            <form asp-action="ActivateResident" asp-controller="Account" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="token" value="@token" />
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Ad *</label>
+                        <input type="text" name="firstName" class="form-control" value="@Model.FirstName" required />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Soyad *</label>
+                        <input type="text" name="lastName" class="form-control" value="@Model.LastName" required />
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Doğrulanacak E-Posta Adresiniz *</label>
+                        <input type="email" name="email" class="form-control" value="@(Model.Email != null && !Model.Email.EndsWith("@gmk360.local") ? Model.Email : "")" required placeholder="ornek@mail.com" />
+                        <small class="text-success" style="font-size:.72rem;"><i class="bi bi-envelope-check me-1"></i>Kayıt sonrası e-postanız doğrulanmış sayılır.</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Telefon Numaranız *</label>
+                        <input type="text" name="phoneNumber" class="form-control" value="@Model.PhoneNumber" required placeholder="05XX XXX XX XX" />
+                        <div class="form-check mt-1">
+                            <input class="form-check-input" type="checkbox" name="confirmPhoneDeclaration" value="true" id="chkPhone" checked />
+                            <label class="form-check-label text-muted" for="chkPhone" style="font-size:.72rem;">
+                                Numaram bana aittir (SMS doğrulama sistemi eklendiğinde OTP ile tekrar teyit edilecek)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-3" />
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Kişisel Giriş Şifreniz *</label>
+                        <input type="password" name="newPassword" class="form-control" required minlength="8" placeholder="En az 8 karakter, Büyük/küçük harf, rakam, sembol" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Şifre Tekrar *</label>
+                        <input type="password" name="confirmPassword" class="form-control" required minlength="8" />
+                    </div>
+                </div>
+
+                <div class="p-3 rounded-3 bg-warning bg-opacity-10 border border-warning-subtle mb-4">
+                    <label class="form-label fw-bold small text-dark mb-1">
+                        <i class="bi bi-key-fill text-warning me-1"></i>Kişisel Onay &amp; Hızlı Giriş PIN'iniz (4-6 Haneli Rakam) *
+                    </label>
+                    <input type="password" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" name="personalPin" class="form-control form-control-lg text-center fw-bold" required placeholder="••••" />
+                    <small class="text-muted d-block mt-1">Bu PIN'i <strong>yalnızca siz bilirsiniz</strong>; yönetici dahil kimse göremez. Karar oylamaları ve <code>/FacilityPortal</code> hızlı girişinde kullanılır.</small>
+                </div>
+
+                <button type="submit" class="btn btn-success btn-lg w-100 rounded-pill fw-bold shadow-sm">
+                    Profilimi Doğrula ve Hesabımı Aktifleştir
+                </button>
+            </form>
+        </div>
+    </div>
+</div>

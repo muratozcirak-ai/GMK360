@@ -15,6 +15,19 @@
     var currentAction = ViewContext.RouteData.Values["Action"]?.ToString() ?? "";
     var facilityModules = GMK360.Web.Helpers.RoleLandingHelper.ParseModules(currentUser?.ActiveModules);
     bool showFacilityHub = facilityModules.Length > 1 || User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
+    GMK360.Web.Services.SubscriptionStatusSummary? facilityTrialSummary = null;
+    if (currentUser != null)
+    {
+        var userWithSub = await DbContext.Users
+            .Include(u => u.Subscriptions).ThenInclude(s => s.Package)
+            .Include(u => u.Subscriptions).ThenInclude(s => s.DiscountPolicy)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == currentUser.Id);
+        if (userWithSub != null)
+        {
+            facilityTrialSummary = GMK360.Web.Services.SaasSubscriptionService.BuildStatusSummary(userWithSub);
+        }
+    }
 }
 
 <!DOCTYPE html>
@@ -168,6 +181,38 @@
                                     <i class="bi bi-calendar-check me-2"></i>Planlı İşler &amp; Bakım Takvimi
                                 </a>
                             </div>
+                            @if (facilityTrialSummary != null && facilityTrialSummary.HasSubscription)
+                            {
+                                var isPaid = facilityTrialSummary.PaymentStatus == "Paid" || facilityTrialSummary.PaymentStatus == "Exempt";
+                                var isExpired = facilityTrialSummary.PaymentStatus == "Expired" || facilityTrialSummary.IsExpired;
+                                var boxCls = isPaid
+                                    ? "bg-success-subtle border-success-subtle text-success-emphasis"
+                                    : isExpired
+                                        ? "bg-danger-subtle border-danger-subtle text-danger-emphasis"
+                                        : "bg-warning-subtle border-warning-subtle text-dark";
+                                <div class="mt-3 p-2 rounded-3 border small @boxCls">
+                                    <div class="fw-bold d-flex align-items-center justify-content-between" style="font-size:.76rem;">
+                                        <span>@(isPaid ? "✅ Aktif Abonelik" : isExpired ? "⚠️ Ödeme Zamanı" : "⏳ Ücretsiz Deneme")</span>
+                                        @if (facilityTrialSummary.DaysRemaining.HasValue && !isPaid)
+                                        {
+                                            <span class="badge @(isExpired ? "bg-danger" : "bg-dark text-white") rounded-pill">
+                                                @(facilityTrialSummary.DaysRemaining.Value >= 0 ? $"{facilityTrialSummary.DaysRemaining.Value} gün" : $"{Math.Abs(facilityTrialSummary.DaysRemaining.Value)}g geçti")
+                                            </span>
+                                        }
+                                    </div>
+                                    <div class="text-muted mt-1" style="font-size:.7rem;">
+                                        @facilityTrialSummary.PackageName
+                                        @if (facilityTrialSummary.EndDate.HasValue)
+                                        {
+                                            <span class="d-block">Ödeme Tarihi: <strong>@facilityTrialSummary.EndDate.Value.ToString("dd.MM.yyyy")</strong></span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(facilityTrialSummary.CampaignName))
+                                        {
+                                            <span class="badge bg-primary mt-1">🎁 @facilityTrialSummary.CampaignName (@("%" + facilityTrialSummary.DiscountPercentage.ToString("0")))</span>
+                                        }
+                                    </div>
+                                </div>
+                            }
                         </div>
                     </div>
                 </div>

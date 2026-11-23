@@ -5,6 +5,9 @@
     
     var projects = ViewBag.Projects as IEnumerable<GMK360.Core.Entities.Construction.ProjectStakeholder>;
     var agencyRoles = ViewBag.AgencyRoles as IEnumerable<GMK360.Core.Entities.AgencyConsultant>;
+    var managedBuildings = ViewBag.ManagedBuildings as IEnumerable<GMK360.Core.Entities.Building> ?? Enumerable.Empty<GMK360.Core.Entities.Building>();
+    var campaigns = ViewBag.Campaigns as List<GMK360.Core.Entities.Marketing.DiscountPolicy> ?? new List<GMK360.Core.Entities.Marketing.DiscountPolicy>();
+    var summary = GMK360.Web.Services.SaasSubscriptionService.BuildStatusSummary(Model);
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -115,6 +118,110 @@
                         <i class="bi bi-building-slash fs-1 text-light mb-2 d-block"></i>
                         Henüz hiçbir şantiye veya projeye paydaş olarak eklenmemiş.
                     </div>
+                }
+            </div>
+        </div>
+
+        <!-- B2B / FİRMA BAĞLANTILARI -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-award text-warning me-2"></i>Modül Aboneliği, 15 Gün Deneme &amp; Kampanya</h5>
+                <span class="badge @(summary.PaymentStatus == "Paid" ? "bg-success" : summary.IsExpired ? "bg-danger" : "bg-warning text-dark") rounded-pill px-3">
+                    @(summary.HasSubscription ? summary.PaymentStatus : "Paket Yok")
+                </span>
+            </div>
+            <div class="card-body">
+                @if (!summary.HasSubscription)
+                {
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <span class="text-muted">Bu üye için aktif abonelik / deneme kaydı henüz yok.</span>
+                        <form asp-action="StartTrialForUser" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="userId" value="@Model.Id" />
+                            <input type="hidden" name="returnUserId" value="@Model.Id" />
+                            <input type="hidden" name="trialDays" value="15" />
+                            <button type="submit" class="btn btn-success btn-sm rounded-pill px-3 fw-bold">15 Gün Deneme Başlat</button>
+                        </form>
+                    </div>
+                }
+                else
+                {
+                    <div class="row g-3 small mb-3">
+                        <div class="col-md-4"><strong>Paket:</strong> @summary.PackageName</div>
+                        <div class="col-md-4"><strong>Başlangıç / Bitiş:</strong> @(summary.StartDate?.ToString("dd.MM.yyyy") ?? "-") → @(summary.EndDate?.ToString("dd.MM.yyyy") ?? "Süresiz")</div>
+                        <div class="col-md-4"><strong>Kalan Gün:</strong> @(summary.DaysRemaining.HasValue ? $"{summary.DaysRemaining.Value} gün" : "-")</div>
+                    </div>
+                    <form asp-action="UpdateSubscriptionPayment" method="post" class="row g-2 align-items-end">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="subscriptionId" value="@summary.SubscriptionId" />
+                        <input type="hidden" name="returnUserId" value="@Model.Id" />
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold mb-1">Ödeme Durumu</label>
+                            <select name="paymentStatus" class="form-select form-select-sm">
+                                <option value="Trial" selected="@(summary.PaymentStatus == "Trial" ? "selected" : null)">Deneme (Trial)</option>
+                                <option value="PendingPayment" selected="@(summary.PaymentStatus == "PendingPayment" ? "selected" : null)">Ödeme Bekliyor</option>
+                                <option value="Paid" selected="@(summary.PaymentStatus == "Paid" ? "selected" : null)">Ödendi (+1 Yıl)</option>
+                                <option value="Expired" selected="@(summary.PaymentStatus == "Expired" ? "selected" : null)">Süresi Doldu</option>
+                                <option value="Exempt" selected="@(summary.PaymentStatus == "Exempt" ? "selected" : null)">Muaf</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold mb-1">Tutar (₺)</label>
+                            <input type="number" step="0.01" name="pricePaid" class="form-control form-control-sm" value="@(summary.PricePaid > 0 ? summary.PricePaid.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : summary.PackagePrice.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold mb-1">Kampanya</label>
+                            <select name="discountPolicyId" class="form-select form-select-sm">
+                                <option value="">-- Yok --</option>
+                                @foreach (var c in campaigns)
+                                {
+                                    <option value="@c.Id" selected="@(summary.DiscountPolicyId == c.Id ? "selected" : null)">@c.Name (%@c.DiscountPercentage.ToString("0"))</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold">Güncelle</button>
+                        </div>
+                    </form>
+                }
+            </div>
+        </div>
+
+        <!-- YÖNETTİĞİ BİNALAR / SİTELER -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white border-bottom py-3">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-buildings text-success me-2"></i>Yönettiği Binalar &amp; Siteler (@managedBuildings.Count())</h5>
+            </div>
+            <div class="card-body p-0">
+                @if (managedBuildings.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light text-secondary">
+                                <tr>
+                                    <th class="ps-4">Yapı / Site Adı</th>
+                                    <th>Blok</th>
+                                    <th>Adres</th>
+                                    <th>Bağımsız Bölüm</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var b in managedBuildings)
+                                {
+                                    <tr>
+                                        <td class="ps-4 fw-bold">@b.Name @(b.HousingComplex != null ? $"({b.HousingComplex.Name})" : "")</td>
+                                        <td>@(b.BlockName ?? "-")</td>
+                                        <td class="small text-muted">@b.StreetName No:@b.BuildingNumber</td>
+                                        <td>@b.TotalUnits</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="p-3 text-center text-muted small">Henüz tanımlı bina / site kaydı yok.</div>
                 }
             </div>
         </div>

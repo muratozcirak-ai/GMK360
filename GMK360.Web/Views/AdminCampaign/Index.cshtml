@@ -1,0 +1,204 @@
+@model IEnumerable<GMK360.Core.Entities.Marketing.DiscountPolicy>
+@{
+    ViewData["Title"] = "Kampanya & İskonto Motoru";
+    Layout = "~/Views/Shared/_AdminLayout.cshtml";
+    var subCounts = ViewBag.ActiveSubscriptionCounts as Dictionary<int, int> ?? new Dictionary<int, int>();
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <h2 class="fw-bold mb-1 text-navy"><i class="ph ph-tag text-orange me-2"></i>Kampanya &amp; İskonto Motoru</h2>
+            <p class="text-muted mb-0">Modül bazlı indirimler, promosyon kodları ve ekstra ücretsiz deneme günlerini tanımlayın.</p>
+        </div>
+        <button class="btn btn-orange rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#newCampaignModal">
+            <i class="ph ph-plus-circle me-1"></i> Yeni Kampanya Tanımla
+        </button>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
+            @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
+            @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Kampanya Adı</th>
+                            <th>Hedef Modül</th>
+                            <th>İndirim</th>
+                            <th>Ekstra Deneme</th>
+                            <th>Promo Kodu</th>
+                            <th>Geçerlilik</th>
+                            <th>Kullanıcı</th>
+                            <th>Durum</th>
+                            <th class="text-end pe-4">İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!Model.Any())
+                        {
+                            <tr>
+                                <td colspan="9" class="text-center py-5 text-muted">
+                                    Henüz tanımlanmış kampanya yok. Sağ üstteki butondan açılış veya modül kampanyası oluşturabilirsiniz.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var p in Model)
+                            {
+                                var activeSubs = subCounts.ContainsKey(p.Id) ? subCounts[p.Id] : 0;
+                                <tr>
+                                    <td class="ps-4">
+                                        <div class="fw-bold text-dark">@p.Name</div>
+                                        @if (!string.IsNullOrWhiteSpace(p.Description))
+                                        {
+                                            <small class="text-muted">@p.Description</small>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle rounded-pill">
+                                            @(p.TargetModule == "facility" ? "Bina & Site" : p.TargetModule == "construction" ? "İnşaat" : p.TargetModule == "demolition" ? "Yıkım" : p.TargetModule == "supplier" ? "Tedarik & B2B" : "Tüm Modüller")
+                                        </span>
+                                    </td>
+                                    <td class="fw-bold text-success">
+                                        %@p.DiscountPercentage.ToString("0")
+                                        @if (p.FixedDiscountAmount.HasValue && p.FixedDiscountAmount.Value > 0)
+                                        {
+                                            <span class="text-muted small ms-1">+ @p.FixedDiscountAmount.Value.ToString("N0") ₺</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (p.ExtraTrialDays > 0)
+                                        {
+                                            <span class="badge bg-warning text-dark">+@p.ExtraTrialDays Gün</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(p.PromoCode))
+                                        {
+                                            <code class="fw-bold">@p.PromoCode</code>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small">Otomatik</span>
+                                        }
+                                    </td>
+                                    <td class="small text-muted">
+                                        @(p.ValidFrom?.ToString("dd.MM.yyyy") ?? "Başlangıçsız") - @(p.ValidUntil?.ToString("dd.MM.yyyy") ?? "Süresiz")
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-dark rounded-pill">@activeSubs Abone</span>
+                                    </td>
+                                    <td>
+                                        @if (p.IsActive)
+                                        {
+                                            <span class="badge bg-success rounded-pill">Aktif</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary rounded-pill">Pasif</span>
+                                        }
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        <form asp-action="TogglePolicy" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@p.Id" />
+                                            <button type="submit" class="btn btn-sm @(p.IsActive ? "btn-outline-secondary" : "btn-outline-success") rounded-pill px-3">
+                                                @(p.IsActive ? "Pasife Al" : "Aktifleştir")
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="newCampaignModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="CreatePolicy" method="post">
+            @Html.AntiForgeryToken()
+            <div class="modal-header bg-navy text-white border-0" style="background:#1e3a8a;">
+                <h5 class="modal-title fw-bold">Yeni Kampanya / İskonto Tanımla</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label fw-bold small">Kampanya Adı *</label>
+                    <input type="text" name="name" class="form-control" required placeholder="Örn: Site Yönetimi Kurucu Üye %20 İndirimi" />
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Hedef Modül</label>
+                        <select name="targetModule" class="form-select">
+                            <option value="All">Tüm Modüller</option>
+                            <option value="facility">Bina &amp; Site Yönetimi</option>
+                            <option value="construction">İnşaat &amp; Şantiye</option>
+                            <option value="demolition">Yıkım &amp; Hafriyat</option>
+                            <option value="supplier">Tedarik &amp; B2B</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Promo Kodu (Opsiyonel)</label>
+                        <input type="text" name="promoCode" class="form-control text-uppercase" placeholder="Örn: SITE2026" />
+                    </div>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">İndirim (%)</label>
+                        <input type="number" name="discountPercentage" class="form-control" value="20" min="0" max="100" step="1" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Ek İndirim (₺)</label>
+                        <input type="number" name="fixedDiscountAmount" class="form-control" min="0" step="50" placeholder="0" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">+Deneme Günü</label>
+                        <input type="number" name="extraTrialDays" class="form-control" value="0" min="0" max="90" />
+                    </div>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Başlangıç Tarihi</label>
+                        <input type="date" name="validFrom" class="form-control" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Bitiş Tarihi</label>
+                        <input type="date" name="validUntil" class="form-control" />
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-bold small">Açıklama / Şartlar</label>
+                    <textarea name="description" class="form-control" rows="2" placeholder="Kampanya detayları..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-orange rounded-pill px-4 fw-bold">Kampanyayı Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>

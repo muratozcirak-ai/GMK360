@@ -132,6 +132,7 @@ builder.Services.AddScoped<IBuildingManagementService, GMK360.Web.Services.Build
 builder.Services.AddScoped<GMK360.Web.Services.FacilityGovernanceService>();
 builder.Services.AddScoped<GMK360.Web.Services.FacilityPayrollAndBudgetService>();
 builder.Services.AddScoped<GMK360.Web.Services.FacilityTaskDispatchService>();
+builder.Services.AddScoped<GMK360.Web.Services.SaasSubscriptionService>();
 
 // Register newly created B2B and Rental Services
 builder.Services.AddScoped<GMK360.Core.Interfaces.ITradesmanService, GMK360.Core.Services.TradesmanService>();

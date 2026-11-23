@@ -214,7 +214,43 @@ namespace GMK360.Web.Services
                 };
             }
 
-            // 2. Kat Maliki / Kiracı ayrı PIN eşleşmesi (yalnız aktif dönemli sakinlere izin ver - Dönemsel İzolasyon)
+            // 2. Kişisel Profil Onay PIN'i eşleşmesi (Kullanıcının kendi profilinden belirlediği gizli PIN)
+            var usersWithPersonalPin = await _context.Users
+                .Where(u => u.IsTransactionPinSet && u.TransactionPinHash != null && u.PhoneNumber != null)
+                .ToListAsync();
+
+            var personalMatch = usersWithPersonalPin.FirstOrDefault(u =>
+                NormalizePhoneLast10(u.PhoneNumber) == normPhone && VerifyQuickPin(pin, u.TransactionPinHash));
+
+            if (personalMatch != null)
+            {
+                var relatedUnits = await _context.BuildingUnits
+                    .Where(bu => bu.OwnerUserId == personalMatch.Id
+                              || bu.TenantUserId == personalMatch.Id
+                              || bu.OwnerPhone != null
+                              || bu.TenantPhone != null)
+                    .ToListAsync();
+
+                var tenantUnit = relatedUnits.FirstOrDefault(bu =>
+                    !bu.IsEmpty && (bu.TenantUserId == personalMatch.Id || NormalizePhoneLast10(bu.TenantPhone) == normPhone));
+                var ownerUnit = relatedUnits.FirstOrDefault(bu =>
+                    bu.OwnerUserId == personalMatch.Id || NormalizePhoneLast10(bu.OwnerPhone) == normPhone);
+
+                string resolvedRole = tenantUnit != null ? "Tenant" : "Owner";
+                var checkUnit = tenantUnit ?? ownerUnit;
+                if (checkUnit == null || !await IsRoleArchivedOnlyAsync(checkUnit.Id, resolvedRole))
+                {
+                    return new QuickPinLoginResult
+                    {
+                        Success = true,
+                        User = personalMatch,
+                        RoleKind = resolvedRole,
+                        Message = $"Hoş geldiniz {personalMatch.FullName} ({(resolvedRole == "Tenant" ? "Kiracı" : "Malik")})."
+                    };
+                }
+            }
+
+            // 3. Eski daire bazlı Kat Maliki / Kiracı ayrı PIN eşleşmesi (Geriye dönük uyumluluk)
             var unitsWithPin = await _context.BuildingUnits
                 .Where(u => (u.OwnerQuickPinHash != null || u.TenantQuickPinHash != null || u.ResidentQuickPinHash != null)
                     && (u.TenantPhone != null || u.OwnerPhone != null))
@@ -336,6 +372,114 @@ namespace GMK360.Web.Services
             if (!await _userManager.IsInRoleAsync(user, roleName))
             {
                 await _userManager.AddToRoleAsync(user, roleName);
+            }
+
+            return user;
+        }
+
+        public async Task<ApplicationUser?> ProvisionResidentProfileAsync(
+            string? currentLinkedUserId,
+            string? fullName,
+            string? email,
+            string? phone,
+            string roleType,
+            string creatorUserId)
+        {
+            var cleanEmail = email?.Trim();
+            var normPhone = NormalizePhoneLast10(phone);
+            if (string.IsNullOrWhiteSpace(cleanEmail) && normPhone.Length < 10)
+            {
+                return null;
+            }
+
+            ApplicationUser? user = null;
+            if (!string.IsNullOrWhiteSpace(currentLinkedUserId))
+            {
+                user = await _userManager.FindByIdAsync(currentLinkedUserId);
+            }
+            if (user == null && !string.IsNullOrWhiteSpace(cleanEmail))
+            {
+                user = await _userManager.FindByEmailAsync(cleanEmail);
+            }
+            if (user == null && normPhone.Length >= 10)
+            {
+                var candidates = await _context.Users
+                    .Where(u => u.PhoneNumber != null)
+                    .ToListAsync();
+                user = candidates.FirstOrDefault(u => NormalizePhoneLast10(u.PhoneNumber) == normPhone);
+            }
+
+            if (!await _roleManager.RoleExistsAsync("Sakin"))
+            {
+                await _roleManager.CreateAsync(new ApplicationRole { Name = "Sakin" });
+            }
+
+            if (user == null)
+            {
+                var names = (fullName ?? "Daire Sakini").Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+                var effectiveEmail = !string.IsNullOrWhiteSpace(cleanEmail)
+                    ? cleanEmail
+                    : $"sakin_{normPhone}@gmk360.local";
+
+                user = new ApplicationUser
+                {
+                    UserName = effectiveEmail,
+                    Email = effectiveEmail,
+                    EmailConfirmed = false,
+                    PhoneNumber = !string.IsNullOrWhiteSpace(phone) ? phone.Trim() : null,
+                    PhoneNumberConfirmed = false,
+                    PhoneVerifiedAt = null,
+                    FirstName = names.Length > 0 ? names[0] : "Sakin",
+                    LastName = names.Length > 1 ? names[1] : "",
+                    DisplayName = !string.IsNullOrWhiteSpace(fullName) ? fullName.Trim() : null,
+                    UserType = roleType == "Owner" ? UserType.PropertyOwner : UserType.Individual,
+                    ActiveModules = "facility_resident",
+                    IsShadowAccount = true,
+                    MustChangePassword = true,
+                    ShadowCreatorId = creatorUserId,
+                    ActivationToken = Guid.NewGuid().ToString("N"),
+                    ActivationTokenExpiresAt = DateTime.UtcNow.AddDays(14)
+                };
+
+                var createRes = await _userManager.CreateAsync(user, $"Gmk!{Guid.NewGuid():N}9a");
+                if (!createRes.Succeeded)
+                {
+                    return null;
+                }
+            }
+            else
+            {
+                if (!string.IsNullOrWhiteSpace(cleanEmail) && (string.IsNullOrWhiteSpace(user.Email) || user.Email.EndsWith("@gmk360.local", StringComparison.OrdinalIgnoreCase)))
+                {
+                    var dup = await _userManager.FindByEmailAsync(cleanEmail);
+                    if (dup == null || dup.Id == user.Id)
+                    {
+                        user.Email = cleanEmail;
+                        user.UserName = cleanEmail;
+                        user.NormalizedEmail = _userManager.NormalizeEmail(cleanEmail);
+                        user.NormalizedUserName = _userManager.NormalizeName(cleanEmail);
+                        user.EmailConfirmed = false;
+                    }
+                }
+                if (!string.IsNullOrWhiteSpace(phone) && string.IsNullOrWhiteSpace(user.PhoneNumber))
+                {
+                    user.PhoneNumber = phone.Trim();
+                }
+                if ((user.IsShadowAccount || !user.IsTransactionPinSet || user.MustChangePassword) && string.IsNullOrWhiteSpace(user.ActivationToken))
+                {
+                    user.ActivationToken = Guid.NewGuid().ToString("N");
+                    user.ActivationTokenExpiresAt = DateTime.UtcNow.AddDays(14);
+                }
+                if (string.IsNullOrWhiteSpace(user.ActiveModules))
+                {
+                    user.ActiveModules = "facility_resident";
+                }
+                await _userManager.UpdateAsync(user);
+            }
+
+            if (!await _userManager.IsInRoleAsync(user, "Sakin"))
+            {
+                await _userManager.AddToRoleAsync(user, "Sakin");
             }
 
             return user;

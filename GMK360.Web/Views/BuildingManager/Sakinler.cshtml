@@ -6,6 +6,7 @@
     var selectedBuildingId = ViewBag.SelectedBuildingId as int?;
     int targetWizardId = selectedBuildingId ?? buildings.FirstOrDefault()?.Id ?? 0;
     bool hasAuthorityDoc = ViewBag.HasAuthorityDoc is bool ha && ha;
+    var residentProfiles = ViewBag.ResidentProfiles as Dictionary<string, GMK360.Core.Entities.Identity.ApplicationUser> ?? new Dictionary<string, GMK360.Core.Entities.Identity.ApplicationUser>();
 
     int aptCount = Model.Count(u => u.Category != "Dukkan" && u.Category != "Dükkan");
     int shopCount = Model.Count(u => u.Category == "Dukkan" || u.Category == "Dükkan");
@@ -180,32 +181,58 @@
                                         }
                                         @{
                                             bool hasOwnerPin = !string.IsNullOrWhiteSpace(unit.OwnerQuickPinHash) || !string.IsNullOrWhiteSpace(unit.ResidentQuickPinHash);
-                                            bool hasTenant = !unit.IsEmpty && (!string.IsNullOrWhiteSpace(unit.TenantName) || !string.IsNullOrWhiteSpace(unit.TenantPhone));
+                                            bool hasTenant = !unit.IsEmpty && (!string.IsNullOrWhiteSpace(unit.TenantName) || !string.IsNullOrWhiteSpace(unit.TenantPhone) || !string.IsNullOrWhiteSpace(unit.TenantEmail));
                                             bool hasTenantPin = !string.IsNullOrWhiteSpace(unit.TenantQuickPinHash) || !string.IsNullOrWhiteSpace(unit.ResidentQuickPinHash);
+                                            var ownerProfile = (!string.IsNullOrEmpty(unit.OwnerUserId) && residentProfiles.ContainsKey(unit.OwnerUserId)) ? residentProfiles[unit.OwnerUserId] : null;
+                                            var tenantProfile = (!string.IsNullOrEmpty(unit.TenantUserId) && residentProfiles.ContainsKey(unit.TenantUserId)) ? residentProfiles[unit.TenantUserId] : null;
+                                            string ownerToken = ownerProfile?.ActivationToken ?? "";
+                                            string tenantToken = tenantProfile?.ActivationToken ?? "";
                                         }
-                                        @if (hasOwnerPin)
+                                        @if (ownerProfile != null && ownerProfile.IsTransactionPinSet)
                                         {
-                                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle d-block mt-1">🔑 Malik PIN Hazır</span>
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle d-block mt-1">🔐 Malik Profil &amp; Kişisel PIN Hazır</span>
+                                        }
+                                        else if (ownerProfile != null && !string.IsNullOrEmpty(ownerToken))
+                                        {
+                                            <button type="button" class="btn btn-xs btn-outline-warning text-dark border mt-1 w-100 fw-semibold" style="font-size:.72rem;"
+                                                    onclick="copyActivationUrl('@ownerToken', 'Malik (@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerName ?? unit.DoorNumber))')">
+                                                🔗 Malik Davet Linkini Kopyala
+                                            </button>
+                                        }
+                                        else if (hasOwnerPin)
+                                        {
+                                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle d-block mt-1">🔑 Eski Daire PIN Aktif</span>
                                         }
                                         else
                                         {
-                                            <span class="badge bg-light text-muted border d-block mt-1">Malik PIN Yok</span>
+                                            <span class="badge bg-light text-muted border d-block mt-1">Malik Profili Yok</span>
                                         }
                                         @if (hasTenant)
                                         {
-                                            if (hasTenantPin)
+                                            if (tenantProfile != null && tenantProfile.IsTransactionPinSet)
                                             {
-                                                <span class="badge bg-success-subtle text-success border border-success-subtle d-block mt-1">🔑 Kiracı PIN Hazır</span>
+                                                <span class="badge bg-success-subtle text-success border border-success-subtle d-block mt-1">🔐 Kiracı Profil &amp; Kişisel PIN Hazır</span>
+                                            }
+                                            else if (tenantProfile != null && !string.IsNullOrEmpty(tenantToken))
+                                            {
+                                                <button type="button" class="btn btn-xs btn-outline-primary border mt-1 w-100 fw-semibold" style="font-size:.72rem;"
+                                                        onclick="copyActivationUrl('@tenantToken', 'Kiracı (@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantName ?? unit.DoorNumber))')">
+                                                    🔗 Kiracı Davet Linkini Kopyala
+                                                </button>
+                                            }
+                                            else if (hasTenantPin)
+                                            {
+                                                <span class="badge bg-success-subtle text-success border border-success-subtle d-block mt-1">🔑 Eski Kiracı PIN Aktif</span>
                                             }
                                             else
                                             {
-                                                <span class="badge bg-light text-danger border d-block mt-1">Kiracı PIN Yok</span>
+                                                <span class="badge bg-light text-danger border d-block mt-1">Kiracı Profili Bekliyor</span>
                                             }
                                         }
                                     </td>
                                     <td class="pe-3 text-end">
                                         <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold"
-                                                onclick="openEditUnitModal(@unit.Id, @unit.BuildingId, '@System.Web.HttpUtility.JavaScriptStringEncode(unit.DoorNumber)', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerEmail ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantEmail ?? "")', @(unit.IsEmpty ? "true" : "false"), '@unit.LandShare.ToString(System.Globalization.CultureInfo.InvariantCulture)', '@((unit.GrossSquareMeters ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture))', '@unit.DuesMultiplier.ToString(System.Globalization.CultureInfo.InvariantCulture)', '@((unit.FixedMonthlyDues ?? 0m).ToString(System.Globalization.CultureInfo.InvariantCulture))', @(unit.IsExemptFromElevator ? "true" : "false"), @(unit.IsExemptFromStairwell ? "true" : "false"), '@unit.CleaningParticipationPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.DuesRuleNote ?? "")')">
+                                                onclick="openEditUnitModal(@unit.Id, @unit.BuildingId, '@System.Web.HttpUtility.JavaScriptStringEncode(unit.DoorNumber)', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerEmail ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantEmail ?? "")', @(unit.IsEmpty ? "true" : "false"), '@unit.LandShare.ToString(System.Globalization.CultureInfo.InvariantCulture)', '@((unit.GrossSquareMeters ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture))', '@unit.DuesMultiplier.ToString(System.Globalization.CultureInfo.InvariantCulture)', '@((unit.FixedMonthlyDues ?? 0m).ToString(System.Globalization.CultureInfo.InvariantCulture))', @(unit.IsExemptFromElevator ? "true" : "false"), @(unit.IsExemptFromStairwell ? "true" : "false"), '@unit.CleaningParticipationPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.DuesRuleNote ?? "")', '@ownerToken', '@tenantToken')">
                                             <i class="bi bi-pencil-square me-1"></i> Bilgi Gir / Düzenle
                                         </button>
                                         <a href="/BuildingManager/Detail/@unit.BuildingId" class="btn btn-sm btn-outline-secondary rounded-pill" title="Bina Masası">
@@ -271,19 +298,15 @@
                                     <label class="form-label fw-semibold small mb-1">Malik E-Posta</label>
                                     <input type="email" name="ownerEmail" id="euOwnerEmail" class="form-control form-control-sm" placeholder="malik@ornek.com" />
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="form-label fw-semibold small mb-1">Malik PWA PIN (4-6 Hane)</label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="text" maxlength="6" name="ownerQuickPin" id="euOwnerQuickPin" class="form-control" placeholder="Değişmeyecekse boş bırakın" />
-                                        <button type="button" class="btn btn-outline-secondary" onclick="generatePinForInput('euOwnerQuickPin')" title="Rastgele PIN Üret">🎲</button>
-                                    </div>
+                                <div class="col-md-6 d-flex align-items-end">
+                                    <small class="text-muted" style="font-size:.73rem;"><i class="bi bi-shield-lock text-success me-1"></i>Malik kendi şifresini ve gizli PIN'ini davet linkiyle belirler (Yönetici PIN göremez).</small>
                                 </div>
                             </div>
                         </div>
 
                         <div class="border rounded-4 p-3 mb-3 bg-info bg-opacity-10 border-info-subtle">
                             <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="fw-bold small text-dark"><i class="bi bi-key me-1 text-info-emphasis"></i> Kiracı (Varsa) &amp; Kiracı PWA Girişi</span>
+                                <span class="fw-bold small text-dark"><i class="bi bi-key me-1 text-info-emphasis"></i> Kiracı (Varsa) &amp; Profil Aktivasyonu</span>
                                 <button type="button" class="btn btn-sm btn-outline-primary rounded-pill fw-semibold" onclick="copyResidentInviteByRole('Tenant')">
                                     <i class="bi bi-whatsapp me-1"></i> Kiracı Daveti Kopyala
                                 </button>
@@ -301,12 +324,8 @@
                                     <label class="form-label fw-semibold small mb-1">Kiracı E-Posta</label>
                                     <input type="email" name="tenantEmail" id="euTenantEmail" class="form-control form-control-sm" placeholder="kiraci@ornek.com" />
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="form-label fw-semibold small mb-1">Kiracı PWA PIN (4-6 Hane)</label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="text" maxlength="6" name="tenantQuickPin" id="euTenantQuickPin" class="form-control" placeholder="Değişmeyecekse boş bırakın" />
-                                        <button type="button" class="btn btn-outline-secondary" onclick="generatePinForInput('euTenantQuickPin')" title="Rastgele PIN Üret">🎲</button>
-                                    </div>
+                                <div class="col-md-6 d-flex align-items-end">
+                                    <small class="text-muted" style="font-size:.73rem;"><i class="bi bi-shield-lock text-primary me-1"></i>Kiracı kendi şifresini ve kişisel PIN'ini aktivasyon linkiyle kendi belirler.</small>
                                 </div>
                             </div>
                         </div>
@@ -497,20 +516,13 @@
                         <label class="form-label fw-semibold small">Ev Sahibi Adı</label>
                         <input type="text" name="ownerName" class="form-control" placeholder="Örn: Ahmet Yılmaz" />
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <label class="form-label fw-semibold small">Malik Telefon (PWA)</label>
                         <input type="text" name="ownerPhone" class="form-control" placeholder="05XX XXX XX XX" />
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold small">Malik E-Posta</label>
+                    <div class="col-md-5">
+                        <label class="form-label fw-semibold small">Malik E-Posta (Profil Aktivasyonu İçin)</label>
                         <input type="email" name="ownerEmail" class="form-control" placeholder="malik@ornek.com" />
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold small">Malik PWA PIN</label>
-                        <div class="input-group">
-                            <input type="text" maxlength="6" name="ownerQuickPin" id="addOwnerPin" class="form-control" placeholder="4-6 hane" />
-                            <button type="button" class="btn btn-outline-secondary" onclick="generatePinForInput('addOwnerPin')" title="Rastgele PIN Üret">🎲</button>
-                        </div>
                     </div>
 
                     <div class="col-12 border-top pt-2">
@@ -520,19 +532,17 @@
                         <label class="form-label fw-semibold small">Kiracı Adı</label>
                         <input type="text" name="tenantName" class="form-control" placeholder="Örn: Mehmet Kaya" />
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <label class="form-label fw-semibold small">Kiracı Telefon (PWA)</label>
                         <input type="text" name="tenantPhone" class="form-control" placeholder="05XX XXX XX XX" />
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold small">Kiracı E-Posta</label>
+                    <div class="col-md-5">
+                        <label class="form-label fw-semibold small">Kiracı E-Posta (Profil Aktivasyonu İçin)</label>
                         <input type="email" name="tenantEmail" class="form-control" placeholder="kiraci@ornek.com" />
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold small">Kiracı PWA PIN</label>
-                        <div class="input-group">
-                            <input type="text" maxlength="6" name="tenantQuickPin" id="addTenantPin" class="form-control" placeholder="4-6 hane" />
-                            <button type="button" class="btn btn-outline-secondary" onclick="generatePinForInput('addTenantPin')" title="Rastgele PIN Üret">🎲</button>
+                    <div class="col-12">
+                        <div class="alert alert-light border small text-muted mb-0 py-2">
+                            <i class="bi bi-shield-check text-success me-1"></i> Kayıt sonrasında malik ve kiracıya otomatik <strong>profil aktivasyon davet linki</strong> oluşur; şifre ve kişisel onay PIN'ini kullanıcı kendi profilinden belirler.
                         </div>
                     </div>
 
@@ -560,7 +570,12 @@
 }
 
 <script>
-    function openEditUnitModal(unitId, buildingId, doorNo, oName, oPhone, oEmail, tName, tPhone, tEmail, isEmpty, landShare, grossSqm, mult, fixedDues, exElev, exStair, cleanPct, ruleNote) {
+    let _euOwnerToken = '';
+    let _euTenantToken = '';
+
+    function openEditUnitModal(unitId, buildingId, doorNo, oName, oPhone, oEmail, tName, tPhone, tEmail, isEmpty, landShare, grossSqm, mult, fixedDues, exElev, exStair, cleanPct, ruleNote, ownerToken, tenantToken) {
+        _euOwnerToken = ownerToken || '';
+        _euTenantToken = tenantToken || '';
         document.getElementById('euUnitId').value = unitId;
         document.getElementById('euBuildingId').value = buildingId;
         document.getElementById('euTitle').innerText = 'Kapı No: ' + doorNo + ' - Sakinler & Kurallar';
@@ -578,8 +593,6 @@
         document.getElementById('euExemptElev').checked = !!exElev;
         document.getElementById('euExemptStair').checked = !!exStair;
         document.getElementById('euRuleNote').value = ruleNote || '';
-        document.getElementById('euOwnerQuickPin').value = '';
-        document.getElementById('euTenantQuickPin').value = '';
         document.getElementById('euIsEmpty').checked = !!isEmpty;
         const firstTabEl = document.getElementById('euTabResidentsBtn');
         if (firstTabEl) bootstrap.Tab.getOrCreateInstance(firstTabEl).show();
@@ -594,23 +607,30 @@
         document.getElementById('euRuleNote').value = note || '';
     }
 
-    function generatePinForInput(inputId) {
-        const pin = Math.floor(1000 + Math.random() * 9000).toString();
-        document.getElementById(inputId).value = pin;
+    function copyActivationUrl(token, label) {
+        const url = window.location.origin + '/Account/ActivateResident?token=' + encodeURIComponent(token);
+        const text = `Merhaba ${label},\nGMK360 Bina Portalı profilinizi doğrulamak, kendi şifrenizi ve onay PIN'inizi belirlemek için bağlantıya tıklayın:\n${url}`;
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(text).then(() => alert('Davet bağlantısı panoya kopyalandı:\n\n' + text));
+        } else {
+            prompt('Davet bağlantısını kopyalayın:', text);
+        }
     }
 
     function copyResidentInviteByRole(role) {
         const title = document.getElementById('euTitle').innerText;
         const isOwner = role === 'Owner';
         const roleLabel = isOwner ? 'Malik (Ev Sahibi)' : 'Kiracı (Sakin)';
+        const token = isOwner ? _euOwnerToken : _euTenantToken;
+        if (token) {
+            copyActivationUrl(token, `${title} - ${roleLabel}`);
+            return;
+        }
         const phone = isOwner
-            ? (document.getElementById('euOwnerPhone').value || '(Malik telefonu giriniz)')
-            : (document.getElementById('euTenantPhone').value || '(Kiracı telefonu giriniz)');
-        const pin = isOwner
-            ? (document.getElementById('euOwnerQuickPin').value || '(Malik PIN)')
-            : (document.getElementById('euTenantQuickPin').value || '(Kiracı PIN)');
+            ? (document.getElementById('euOwnerPhone').value || '(Telefon giriniz)')
+            : (document.getElementById('euTenantPhone').value || '(Telefon giriniz)');
         const loginUrl = window.location.origin + '/Account/Login';
-        const text = `Merhaba, GMK360 Bina Portalı (${roleLabel}) üzerinden aidat, duyuru ve taleplerinizi takip edebilirsiniz.\nBölüm: ${title}\nGiriş Adresi: ${loginUrl}\nTelefon: ${phone}\nHızlı PWA PIN: ${pin}`;
+        const text = `Merhaba, GMK360 Bina Portalı (${roleLabel}) üzerinden aidat, duyuru ve karar süreçlerinizi takip edebilirsiniz.\nBölüm: ${title}\nGiriş Adresi: ${loginUrl}\nTelefon: ${phone}\nNot: İlk girişte profilinizden kendi şifrenizi ve kişisel PIN'inizi belirleyebilirsiniz.`;
         if (navigator.clipboard) {
             navigator.clipboard.writeText(text).then(() => alert(roleLabel + ' giriş daveti panoya kopyalandı:\n\n' + text));
         } else {

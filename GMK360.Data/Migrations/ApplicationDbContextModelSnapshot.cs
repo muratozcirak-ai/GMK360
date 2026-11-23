@@ -9919,6 +9919,12 @@ namespace GMK360.Data.Migrations
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("int");
 
+                    b.Property<string>("ActivationToken")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ActivationTokenExpiresAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("ActiveModules")
                         .HasColumnType("nvarchar(max)");
 
@@ -9975,6 +9981,9 @@ namespace GMK360.Data.Migrations
                     b.Property<DateTime?>("MapConsentDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("MustChangePassword")
+                        .HasColumnType("bit");
+
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
@@ -9991,6 +10000,9 @@ namespace GMK360.Data.Migrations
 
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("bit");
+
+                    b.Property<DateTime?>("PhoneVerifiedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("ProfileImageUrl")
                         .HasColumnType("nvarchar(max)");
@@ -11181,11 +11193,13 @@ namespace GMK360.Data.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Description")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal>("DiscountPercentage")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("ExtraTrialDays")
+                        .HasColumnType("int");
 
                     b.Property<decimal?>("FixedDiscountAmount")
                         .HasColumnType("decimal(18,2)");
@@ -11200,6 +11214,13 @@ namespace GMK360.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("PromoCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("TargetModule")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("ValidFrom")
                         .HasColumnType("datetime2");
@@ -15605,8 +15626,14 @@ namespace GMK360.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AdminNotes")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<int?>("DiscountPolicyId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime?>("EndDate")
                         .HasColumnType("datetime2");
@@ -15617,8 +15644,15 @@ namespace GMK360.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<DateTime?>("LastPaymentDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("PackageId")
                         .HasColumnType("int");
+
+                    b.Property<string>("PaymentStatus")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal>("PricePaid")
                         .HasColumnType("decimal(18,2)");
@@ -15634,6 +15668,8 @@ namespace GMK360.Data.Migrations
                         .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DiscountPolicyId");
 
                     b.HasIndex("PackageId");
 
@@ -19467,6 +19503,11 @@ namespace GMK360.Data.Migrations
 
             modelBuilder.Entity("GMK360.Core.Entities.UserSubscription", b =>
                 {
+                    b.HasOne("GMK360.Core.Entities.Marketing.DiscountPolicy", "DiscountPolicy")
+                        .WithMany()
+                        .HasForeignKey("DiscountPolicyId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("GMK360.Core.Entities.SubscriptionPackage", "Package")
                         .WithMany("UserSubscriptions")
                         .HasForeignKey("PackageId")
@@ -19478,6 +19519,8 @@ namespace GMK360.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("DiscountPolicy");
 
                     b.Navigation("Package");
 

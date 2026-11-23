@@ -3,6 +3,7 @@
     ViewData["Title"] = "Apartman / Site Kurulum Sihirbazı";
     Layout = "~/Views/Shared/_FacilityLayout.cshtml";
     bool isSite = string.Equals(Model.ManagementMode, "Site", StringComparison.OrdinalIgnoreCase);
+    int requestedCount = ViewBag.RequestedStructureCount is int rc ? rc : 1;
     var initialStructuresJson = System.Text.Json.JsonSerializer.Serialize(Model.InitialStructures ?? new List<GMK360.Web.Models.FacilityStep2StructureDto>());
 }
 
@@ -83,9 +84,9 @@
 
                 <!-- Yapı Türü & Temel Kimlik -->
                 <div class="row g-3 mb-3">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label fw-bold text-dark">Yönetim Türü *</label>
-                        <select id="managementModeInput" class="form-select rounded-3" @(Model.BuildingId > 0 ? "disabled" : "")>
+                        <select id="managementModeInput" class="form-select rounded-3">
                             @if (isSite)
                             {
                                 <option value="Apartman">Apartman (Tek Bağımsız Bina)</option>
@@ -97,8 +98,16 @@
                                 <option value="Site">Site / Çoklu Blok (Sınırsız Yapı)</option>
                             }
                         </select>
+                        @if (Model.BuildingId > 0)
+                        {
+                            <small class="text-muted d-block mt-1" style="font-size:.72rem;">Sonradan <strong>Site / Çoklu Blok</strong> seçerek yeni blok ekleyebilirsiniz.</small>
+                        }
                     </div>
-                    <div class="col-md-5">
+                    <div class="col-md-2 @(isSite ? "" : "d-none")" id="step1StructureCountWrap">
+                        <label class="form-label fw-bold text-primary">Blok / Yapı Sayısı *</label>
+                        <input type="number" id="step1StructureCountInput" class="form-control rounded-3 fw-bold text-center border-primary" min="1" max="30" value="@(Model.InitialStructures?.Count > 1 ? Model.InitialStructures.Count : Math.Max(isSite ? 2 : 1, requestedCount))" />
+                    </div>
+                    <div class="@(isSite ? "col-md-4" : "col-md-6")" id="step1NameCol">
                         <label class="form-label fw-bold text-dark" id="step1NameLabel">@(isSite ? "Site / Yerleşke Adı *" : "Apartman / Bina Adı *")</label>
                         <input type="text" id="nameInput" class="form-control rounded-3" value="@Model.Name" placeholder="Örn: Aydemir Apartmanı" required />
                     </div>
@@ -441,11 +450,22 @@
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // Yönetim türü etiketi
+        // Yönetim türü etiketi ve Adım 1 yapı sayısı görünürlüğü
         document.getElementById('managementModeInput').addEventListener('change', function () {
             var isSite = this.value === 'Site';
             document.getElementById('step1NameLabel').innerText = isSite ? 'Site / Yerleşke Adı *' : 'Apartman / Bina Adı *';
             document.getElementById('nameInput').placeholder = isSite ? 'Örn: Çamlıca Konakları Sitesi' : 'Örn: Aydemir Apartmanı';
+            var wrap = document.getElementById('step1StructureCountWrap');
+            var nameCol = document.getElementById('step1NameCol');
+            var cntEl = document.getElementById('step1StructureCountInput');
+            if (wrap) wrap.classList.toggle('d-none', !isSite);
+            if (nameCol) {
+                nameCol.classList.toggle('col-md-4', isSite);
+                nameCol.classList.toggle('col-md-6', !isSite);
+            }
+            if (cntEl && isSite && parseInt(cntEl.value || '1', 10) < 2) {
+                cntEl.value = '2';
+            }
         });
 
         // Serbest sokak geçişi
@@ -748,7 +768,6 @@
             }
 
             document.getElementById('buildingIdInput').value = data.buildingId;
-            document.getElementById('managementModeInput').disabled = true;
             return true;
         }
 
@@ -972,8 +991,13 @@
                 stateStructures = [stateStructures[0]];
                 countInput.value = 1;
                 countInput.readOnly = true;
-                hintEl.innerText = 'Apartman modunda tek bağımsız yapı tanımlanır. Birden fazla blok için Site türünü seçin.';
+                hintEl.innerText = 'Apartman modunda tek bağımsız yapı tanımlanır. Birden fazla blok için Adım 1\'den Site türünü seçin.';
             } else {
+                var step1Cnt = parseInt(document.getElementById('step1StructureCountInput')?.value || '1', 10);
+                var desiredCount = Math.max(stateStructures.length, isNaN(step1Cnt) ? 1 : Math.min(30, step1Cnt));
+                while (stateStructures.length < desiredCount) {
+                    stateStructures.push(createDefaultStructure(stateStructures.length));
+                }
                 countInput.readOnly = false;
                 countInput.value = stateStructures.length;
                 hintEl.innerText = 'Aynı temel/podyum veya ayrı temellerdeki sınırsız yapıyı ekleyebilirsiniz (Ortak Baza + Kuleler, Tekil, Bitişik Nizam).';

@@ -13,7 +13,7 @@ namespace GMK360.Core.Entities.Marketing
         [MaxLength(100)]
         public string Name { get; set; } // Örn: "2. Aboneliğe %25 İndirim" VEYA "Yaz Kampanyası"
         
-        public string Description { get; set; }
+        public string? Description { get; set; }
         
         [Range(0, 100)]
         public decimal DiscountPercentage { get; set; } // % Kaç indirim?
@@ -23,6 +23,11 @@ namespace GMK360.Core.Entities.Marketing
         // Otomatik Çapraz Satış Kuralı
         public int MinimumActiveSubscriptionsRequired { get; set; } = 0; // Eğer 1 ise, kullanıcının en az 1 aktif aboneliği varsa bu indirim devreye girer.
         
+        public string? TargetModule { get; set; } // All, facility, construction, demolition, supplier
+        public int ExtraTrialDays { get; set; } = 0; // Kampanya ile eklenen ekstra ücretsiz deneme günü
+        [MaxLength(50)]
+        public string? PromoCode { get; set; }
+
         public bool IsActive { get; set; } = true;
         
         public DateTime? ValidFrom { get; set; }

@@ -1,164 +1,266 @@
 ﻿@model IEnumerable<GMK360.Core.Entities.Identity.ApplicationUser>
 @{
-    ViewData["Title"] = "Kullanıcılar & CRM";
+    ViewData["Title"] = "Platform Üyeleri, Modüller, Deneme & Ödemeler";
     Layout = "~/Views/Shared/_AdminLayout.cshtml";
+    var buildingCounts = ViewBag.BuildingCounts as Dictionary<string, int> ?? new Dictionary<string, int>();
+    var projectCounts = ViewBag.ProjectCounts as Dictionary<string, int> ?? new Dictionary<string, int>();
+    var packages = ViewBag.Packages as List<GMK360.Core.Entities.SubscriptionPackage> ?? new List<GMK360.Core.Entities.SubscriptionPackage>();
+    var campaigns = ViewBag.Campaigns as List<GMK360.Core.Entities.Marketing.DiscountPolicy> ?? new List<GMK360.Core.Entities.Marketing.DiscountPolicy>();
+    string selectedModule = ViewBag.SelectedModule as string ?? "all";
+    string selectedPay = ViewBag.SelectedPaymentStatus as string ?? "all";
+    string q = ViewBag.Query as string ?? "";
 }
 
 <div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>
-            <h2 class="fw-bold mb-0 text-primary">Kullanıcılar & CRM</h2>
-            <p class="text-muted">Platformdaki tüm kullanıcıları, abonelik paketlerini ve aktif durumlarını buradan takip edin. (Üye Yönetimi ve CRM Birleştirilmiştir)</p>
+            <h2 class="fw-bold mb-0 text-navy"><i class="ph ph-users-three text-orange me-2"></i>Platform Üye, Modül &amp; Abonelik Merkezi</h2>
+            <p class="text-muted mb-0">Bina/Site yöneticileri, inşaat/yıkım firmaları, tedarikçiler ve sakinlerin modül, 15 günlük deneme, ödeme ve kampanya yönetimi.</p>
+        </div>
+        <a href="/AdminCampaign/Index" class="btn btn-orange rounded-pill px-4 shadow-sm">
+            <i class="ph ph-tag me-1"></i> Kampanya &amp; İskonto Motoru
+        </a>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
+            @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
+            @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- KPI ÖZET -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+                <small class="text-muted fw-bold text-uppercase">Listelenen Üye</small>
+                <div class="fs-3 fw-bold text-dark mt-1">@(ViewBag.TotalMembers ?? Model.Count())</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+                <small class="text-muted fw-bold text-uppercase">Bina &amp; Site Yönetimi</small>
+                <div class="fs-3 fw-bold text-success mt-1">@(ViewBag.FacilityMembers ?? 0)</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+                <small class="text-muted fw-bold text-uppercase">15 Gün Deneme Sürecinde</small>
+                <div class="fs-3 fw-bold text-warning-emphasis mt-1">
+                    @(ViewBag.ActiveTrialCount ?? 0)
+                    @if ((int)(ViewBag.ExpiringSoonCount ?? 0) > 0)
+                    {
+                        <span class="badge bg-danger ms-1 fs-6">@ViewBag.ExpiringSoonCount Kritik (≤3g)</span>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+                <small class="text-muted fw-bold text-uppercase">Ödeme Alınan / Aktif</small>
+                <div class="fs-3 fw-bold text-primary mt-1">@(ViewBag.PaidCount ?? 0)</div>
+            </div>
         </div>
     </div>
 
+    <!-- FİLTRE ÇUBUĞU -->
     <div class="card border-0 shadow-sm rounded-4 mb-4">
         <div class="card-body">
-            <form method="get" asp-action="Index">
-                <div class="input-group input-group-lg">
-                    <input type="text" name="query" class="form-control border-end-0 bg-light" placeholder="İsim, soyisim veya e-posta ile ara...">
-                    <button class="btn btn-primary border-0" type="submit"><i class="bi bi-search"></i></button>
+            <form method="get" asp-action="Index" class="row g-2 align-items-center">
+                <div class="col-md-5">
+                    <input type="text" name="query" value="@q" class="form-control bg-light" placeholder="Ad, soyad, firma adı, e-posta veya telefon ile ara..." />
+                </div>
+                <div class="col-md-3">
+                    <select name="module" class="form-select bg-light">
+                        <option value="all" selected="@(selectedModule == "all" ? "selected" : null)">Tüm Modüller</option>
+                        <option value="facility" selected="@(selectedModule == "facility" ? "selected" : null)">Bina &amp; Site Yönetimi</option>
+                        <option value="construction" selected="@(selectedModule == "construction" ? "selected" : null)">İnşaat &amp; Şantiye</option>
+                        <option value="demolition" selected="@(selectedModule == "demolition" ? "selected" : null)">Yıkım &amp; Hafriyat</option>
+                        <option value="supplier" selected="@(selectedModule == "supplier" ? "selected" : null)">Tedarik &amp; B2B</option>
+                        <option value="service" selected="@(selectedModule == "service" ? "selected" : null)">Usta &amp; Taşeron</option>
+                        <option value="shadow" selected="@(selectedModule == "shadow" ? "selected" : null)">Gölge / Sakin Hesaplar</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="paymentStatus" class="form-select bg-light">
+                        <option value="all" selected="@(selectedPay == "all" ? "selected" : null)">Tüm Ödemeler</option>
+                        <option value="Trial" selected="@(selectedPay == "Trial" ? "selected" : null)">Deneme (Trial)</option>
+                        <option value="Paid" selected="@(selectedPay == "Paid" ? "selected" : null)">Ödendi (Paid)</option>
+                        <option value="PendingPayment" selected="@(selectedPay == "PendingPayment" ? "selected" : null)">Ödeme Bekliyor</option>
+                        <option value="Expired" selected="@(selectedPay == "Expired" ? "selected" : null)">Süresi Doldu</option>
+                        <option value="None" selected="@(selectedPay == "None" ? "selected" : null)">Paketi Yok</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex gap-1">
+                    <button class="btn btn-primary w-100 fw-bold" type="submit">Filtrele</button>
+                    <a href="/AdminCRM/Index" class="btn btn-light border">Sıfırla</a>
                 </div>
             </form>
         </div>
     </div>
 
+    <!-- ÜYE TABLOSU -->
     <div class="card border-0 shadow-sm rounded-4">
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th class="ps-4" style="width: 40px;"></th>
-                            <th>Müşteri</th>
-                            <th>İletişim</th>
-                            <th>Rol / Hesap Tipi</th>
-                            <th>Abonelikler</th>
-                            <th>Doğrulama</th>
-                            <th class="text-end pe-4">İşlemler</th>
+                            <th class="ps-4">Üye / Firma</th>
+                            <th>İletişim &amp; Doğrulama</th>
+                            <th>Modüller &amp; Varlıklar</th>
+                            <th>Deneme / Ödeme &amp; Kalan Gün</th>
+                            <th>Kampanya</th>
+                            <th class="text-end pe-4">Yönetim İşlemleri</th>
                         </tr>
                     </thead>
-                                        <tbody>
-                        @foreach(var u in Model)
+                    <tbody>
+                        @foreach (var u in Model)
                         {
-                            var subs = u.Subscriptions?.ToList() ?? new List<GMK360.Core.Entities.UserSubscription>();
-                            var activeCount = subs.Count(s => s.IsActive && (s.EndDate == null || s.EndDate > DateTime.UtcNow));
-                            
-                            <tr data-bs-toggle="collapse" data-bs-target="#collapse-@u.Id" class="cursor-pointer hover-lift">
-                                <td class="ps-4 text-primary">
-                                    <i class="ph ph-caret-down"></i>
+                            var summary = GMK360.Web.Services.SaasSubscriptionService.BuildStatusSummary(u);
+                            int bCount = buildingCounts.ContainsKey(u.Id) ? buildingCounts[u.Id] : 0;
+                            int pCount = projectCounts.ContainsKey(u.Id) ? projectCounts[u.Id] : 0;
+                            var modules = (u.ActiveModules ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="fw-bold text-dark">@(!string.IsNullOrWhiteSpace(u.DisplayName) ? u.DisplayName : u.FullName)</div>
+                                    <small class="text-muted d-block">@u.FirstName @u.LastName • <span class="badge bg-light text-dark border">@u.UserType</span></small>
                                 </td>
-                                <td>
-                                    <h6 class="mb-0 fw-bold">@(string.IsNullOrEmpty(u.FirstName) ? "İsimsiz" : u.FirstName) @u.LastName</h6>
-                                    <small class="text-muted">Kayıt: @u.Id.Substring(0,6)</small>
-                                    @if (!string.IsNullOrEmpty(u.ReferredByUserId))
-                                    {
-                                        <br><small class="text-success"><i class="bi bi-person-heart"></i> Davetle Geldi</small>
-                                    }
-                                    else
-                                    {
-                                        <br><small class="text-muted"><i class="bi bi-globe"></i> Doğrudan Kayıt</small>
-                                    }
-                                </td>
-                                <td>
-                                    <div class="mb-1"><i class="bi bi-envelope me-2 text-muted"></i>@u.Email</div>
-                                    <div><i class="bi bi-telephone me-2 text-muted"></i>@(u.PhoneNumber ?? "-")</div>
-                                </td>
-                                <td>
-                                    <span class="badge bg-light text-dark border d-inline-block">@u.UserType.ToString()</span>
-                                    @if(u.IsShadowAccount)
-                                    {
-                                        <span class="badge bg-secondary rounded-pill ms-1" style="font-size:0.7rem;"><i class="bi bi-cloud me-1"></i>Gölge Hesap</span>
-                                    }
-                                </td>
-                                <td>
-                                    @if(subs.Any())
-                                    {
-                                        <span class="badge bg-primary rounded-pill">@activeCount Aktif Paket</span>
-                                        <span class="text-muted small ms-1">(@subs.Count() Toplam)</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted small">Paket Yok</span>
-                                    }
-                                </td>
-                                <td>
-                                    @if(u.IsEDevletVerified)
-                                    {
-                                        <span class="text-primary fw-bold"><i class="bi bi-patch-check-fill me-1"></i>e-Devlet Onaylı</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">Beyan Esası</span>
-                                    }
-                                </td>
-                                <td class="text-end pe-4">
-                                    <a href="/AdminCRM/UserDetails/@u.Id" class="btn btn-sm btn-outline-primary rounded-pill" onclick="event.stopPropagation();">
-                                        Detay Gör
-                                    </a>
-                                </td>
-                            </tr>
-                            <tr id="collapse-@u.Id" class="collapse bg-light border-bottom">
-                                <td colspan="7" class="p-0">
-                                    <div class="p-4">
-                                        <h6 class="fw-bold mb-3 text-navy"><i class="ph ph-stack me-2"></i>Abonelik ve Paket Geçmişi</h6>
-                                        @if(subs.Any())
+                                <td class="small">
+                                    <div>
+                                        <i class="bi bi-envelope me-1 text-muted"></i>@u.Email
+                                        @if (u.EmailConfirmed)
                                         {
-                                            <div class="table-responsive bg-white rounded border">
-                                                <table class="table table-sm table-hover mb-0 align-middle">
-                                                    <thead class="table-light">
-                                                        <tr>
-                                                            <th class="ps-3">Paket Adı</th>
-                                                            <th>Başlangıç</th>
-                                                            <th>Bitiş</th>
-                                                            <th>Durum</th>
-                                                            <th>Tutar</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        @foreach(var sub in subs.OrderByDescending(s => s.StartDate))
-                                                        {
-                                                            <tr>
-                                                                <td class="ps-3 fw-medium">
-                                                                    <i class="bi bi-box text-primary me-2"></i>@(sub.Package?.Name ?? "Bilinmeyen Paket")
-                                                                </td>
-                                                                <td class="text-muted small">@sub.StartDate.ToString("dd.MM.yyyy")</td>
-                                                                <td class="text-muted small">
-                                                                    @(sub.EndDate.HasValue ? sub.EndDate.Value.ToString("dd.MM.yyyy") : "Süresiz")
-                                                                </td>
-                                                                <td>
-                                                                    @if(sub.IsActive)
-                                                                    {
-                                                                        if(sub.EndDate.HasValue && sub.EndDate.Value > DateTime.UtcNow)
-                                                                        {
-                                                                            var kalanGun = (sub.EndDate.Value - DateTime.UtcNow).Days;
-                                                                            <span class="badge bg-warning text-dark"><i class="bi bi-clock-history me-1"></i>Deneme Sürecinde (Kalan: @kalanGun Gün)</span>
-                                                                        }
-                                                                        else if(sub.EndDate.HasValue && sub.EndDate.Value <= DateTime.UtcNow)
-                                                                        {
-                                                                            <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Süresi Doldu</span>
-                                                                        }
-                                                                        else
-                                                                        {
-                                                                            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Aktif</span>
-                                                                        }
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        <span class="badge bg-secondary"><i class="bi bi-pause-circle me-1"></i>Pasif / İptal</span>
-                                                                    }
-                                                                </td>
-                                                                <td class="fw-bold text-success">@sub.PricePaid.ToString("C")</td>
-                                                            </tr>
-                                                        }
-                                                    </tbody>
-                                                </table>
-                                            </div>
+                                            <span class="badge bg-success-subtle text-success ms-1">Onaylı</span>
                                         }
                                         else
                                         {
-                                            <div class="alert alert-secondary mb-0 py-2 text-center">Bu kullanıcıya ait herhangi bir paket veya abonelik kaydı bulunmuyor.</div>
+                                            <span class="badge bg-warning-subtle text-warning-emphasis ms-1">Onay Bekliyor</span>
                                         }
+                                    </div>
+                                    <div class="mt-1">
+                                        <i class="bi bi-telephone me-1 text-muted"></i>@(u.PhoneNumber ?? "-")
+                                        @if (u.PhoneVerifiedAt.HasValue)
+                                        {
+                                            <span class="badge bg-success-subtle text-success ms-1">Tel Onaylı</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-wrap gap-1 mb-1">
+                                        @if (modules.Length == 0)
+                                        {
+                                            <span class="badge bg-secondary-subtle text-secondary">Modül Atanmamış</span>
+                                        }
+                                        else
+                                        {
+                                            foreach (var m in modules)
+                                            {
+                                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">@GMK360.Web.Services.SaasSubscriptionService.GetModuleDisplayName(m)</span>
+                                            }
+                                        }
+                                    </div>
+                                    <small class="text-muted">
+                                        @if (bCount > 0) { <span class="me-2">🏢 <strong>@bCount</strong> Bina/Site</span> }
+                                        @if (pCount > 0) { <span>🏗️ <strong>@pCount</strong> Proje</span> }
+                                    </small>
+                                </td>
+                                <td>
+                                    @if (!summary.HasSubscription)
+                                    {
+                                        <span class="badge bg-light text-muted border">Paketi Yok</span>
+                                    }
+                                    else
+                                    {
+                                        var badgeCls = summary.PaymentStatus switch
+                                        {
+                                            "Paid" => "bg-success",
+                                            "Exempt" => "bg-info text-dark",
+                                            "PendingPayment" => "bg-warning text-dark",
+                                            "Expired" => "bg-danger",
+                                            _ => "bg-warning text-dark"
+                                        };
+                                        var statusText = summary.PaymentStatus switch
+                                        {
+                                            "Paid" => "✅ Ödendi / Aktif",
+                                            "Exempt" => "⭐ Muaf / Sponsor",
+                                            "PendingPayment" => "💳 Ödeme Bekliyor",
+                                            "Expired" => "🔴 Süresi Doldu",
+                                            _ => "⏳ Deneme"
+                                        };
+                                        <div class="fw-semibold small text-dark">@summary.PackageName</div>
+                                        <div class="d-flex flex-wrap align-items-center gap-1 mt-1">
+                                            <span class="badge @badgeCls rounded-pill">@statusText</span>
+                                            @if (summary.DaysRemaining.HasValue && summary.PaymentStatus != "Paid")
+                                            {
+                                                <span class="badge @(summary.DaysRemaining.Value <= 3 ? "bg-danger" : "bg-dark") rounded-pill">
+                                                    @(summary.DaysRemaining.Value >= 0 ? $"Kalan: {summary.DaysRemaining.Value} gün" : $"{Math.Abs(summary.DaysRemaining.Value)} gün gecikti")
+                                                </span>
+                                            }
+                                        </div>
+                                        <small class="text-muted d-block mt-1">
+                                            @(summary.EndDate.HasValue ? $"Son gün: {summary.EndDate.Value:dd.MM.yyyy}" : "Süresiz")
+                                            @(summary.PricePaid > 0 ? $" • Ödenen: {summary.PricePaid:N0} ₺" : "")
+                                        </small>
+                                    }
+                                </td>
+                                <td class="small">
+                                    @if (!string.IsNullOrWhiteSpace(summary.CampaignName))
+                                    {
+                                        <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle rounded-pill">
+                                            🎁 @summary.CampaignName (@("%" + summary.DiscountPercentage.ToString("0")))
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td class="text-end pe-4">
+                                    <div class="d-flex justify-content-end flex-wrap gap-1">
+                                        @if (!summary.HasSubscription)
+                                        {
+                                            <form asp-action="StartTrialForUser" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="userId" value="@u.Id" />
+                                                <input type="hidden" name="trialDays" value="15" />
+                                                <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 fw-bold">
+                                                    +15 Gün Deneme Başlat
+                                                </button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <form asp-action="ExtendSubscriptionDays" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="subscriptionId" value="@summary.SubscriptionId" />
+                                                <input type="hidden" name="extraDays" value="15" />
+                                                <button type="submit" class="btn btn-sm btn-outline-warning text-dark rounded-pill fw-semibold" title="Mevcut bitişe +15 gün ekle">
+                                                    +15 Gün
+                                                </button>
+                                            </form>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-primary rounded-pill fw-semibold"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#paymentModal"
+                                                    data-sub-id="@summary.SubscriptionId"
+                                                    data-user-name="@(!string.IsNullOrWhiteSpace(u.DisplayName) ? u.DisplayName : u.FullName)"
+                                                    data-status="@summary.PaymentStatus"
+                                                    data-price="@summary.PackagePrice.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)"
+                                                    data-policy-id="@(summary.DiscountPolicyId?.ToString() ?? "")"
+                                                    data-notes="@(summary.AdminNotes ?? "")">
+                                                Ödeme / Kampanya
+                                            </button>
+                                        }
+                                        <a href="/AdminCRM/UserDetails/@u.Id" class="btn btn-sm btn-light border rounded-pill">Detay</a>
                                     </div>
                                 </td>
                             </tr>
@@ -170,10 +272,67 @@
     </div>
 </div>
 
-@section Styles {
-    <style>
-        .cursor-pointer { cursor: pointer; }
-        .hover-lift { transition: all 0.2s ease-in-out; }
-        .hover-lift:hover { background-color: #f8f9fa; transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-    </style>
+<!-- Ödeme & Kampanya Yönetim Modalı -->
+<div class="modal fade" id="paymentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="UpdateSubscriptionPayment" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="subscriptionId" id="pmSubId" />
+            <div class="modal-header bg-primary text-white border-0">
+                <h5 class="modal-title fw-bold">Ödeme &amp; Kampanya Yönetimi (<span id="pmUserName"></span>)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label fw-bold small">Ödeme / Abonelik Durumu</label>
+                    <select name="paymentStatus" id="pmStatus" class="form-select">
+                        <option value="Trial">⏳ Deneme Süreci (Trial)</option>
+                        <option value="PendingPayment">💳 Ödeme Bekliyor</option>
+                        <option value="Paid">✅ Ödendi / Yıllık Aktif (+1 Yıl)</option>
+                        <option value="Expired">🔴 Süresi Doldu</option>
+                        <option value="Exempt">⭐ Muaf / Sponsor</option>
+                    </select>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Tahsil Edilen Tutar (₺)</label>
+                        <input type="number" step="0.01" min="0" name="pricePaid" id="pmPrice" class="form-control" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Uygulanan Kampanya</label>
+                        <select name="discountPolicyId" id="pmPolicy" class="form-select">
+                            <option value="">-- Kampanya Yok --</option>
+                            @foreach (var c in campaigns)
+                            {
+                                <option value="@c.Id">@c.Name (%@c.DiscountPercentage.ToString("0"))</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-bold small">Yönetici / Muhasebe Notu</label>
+                    <textarea name="adminNotes" id="pmNotes" class="form-control" rows="2" placeholder="Havale/EFT dekont no veya özel not..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.getElementById('paymentModal')?.addEventListener('show.bs.modal', function (event) {
+            const btn = event.relatedTarget;
+            if (!btn) return;
+            document.getElementById('pmSubId').value = btn.getAttribute('data-sub-id') || '';
+            document.getElementById('pmUserName').textContent = btn.getAttribute('data-user-name') || '';
+            document.getElementById('pmStatus').value = btn.getAttribute('data-status') || 'Trial';
+            document.getElementById('pmPrice').value = btn.getAttribute('data-price') || '0';
+            document.getElementById('pmPolicy').value = btn.getAttribute('data-policy-id') || '';
+            document.getElementById('pmNotes').value = btn.getAttribute('data-notes') || '';
+        });
+    </script>
 }

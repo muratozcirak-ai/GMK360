@@ -1258,6 +1258,12 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
                 .HasForeignKey(us => us.PackageId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            builder.Entity<UserSubscription>()
+                .HasOne(us => us.DiscountPolicy)
+                .WithMany()
+                .HasForeignKey(us => us.DiscountPolicyId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             // Dijital S?zle?meler
             builder.Entity<DigitalContract>().ToTable("tbl_gmk_DijitalSozlesmeler");
             

@@ -755,6 +755,12 @@ namespace GMK360.Web.Controllers
 
             await _context.SaveChangesAsync();
 
+            var saasService = HttpContext.RequestServices.GetService<GMK360.Web.Services.SaasSubscriptionService>();
+            if (saasService != null)
+            {
+                await saasService.AssignTrialSubscriptionAsync(user, activeModules, trialDays: 15);
+            }
+
             // Oturum Aç
             await _signInManager.SignInAsync(user, isPersistent: true);
 
@@ -813,8 +819,138 @@ namespace GMK360.Web.Controllers
                 return RedirectToAction("Login", "Account");
             }
 
-            TempData["ErrorMessage"] = "E-posta doÄŸrulama iÅŸlemi baÅŸarÄ±sÄ±z oldu.";
+            TempData["ErrorMessage"] = "E-posta doğrulama işlemi başarısız oldu.";
             return RedirectToAction("Index", "Home");
+        }
+
+        [AllowAnonymous]
+        [HttpGet]
+        public async Task<IActionResult> ActivateResident(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                TempData["ErrorMessage"] = "Geçersiz aktivasyon bağlantısı.";
+                return RedirectToAction("Login", "Account");
+            }
+
+            var user = await _context.Users.FirstOrDefaultAsync(u =>
+                u.ActivationToken == token.Trim() &&
+                u.ActivationTokenExpiresAt.HasValue &&
+                u.ActivationTokenExpiresAt.Value >= DateTime.UtcNow);
+
+            if (user == null)
+            {
+                TempData["ErrorMessage"] = "Aktivasyon bağlantısı geçersiz veya süresi dolmuş. Yöneticinizden yeni davet isteyebilirsiniz.";
+                return RedirectToAction("Login", "Account");
+            }
+
+            var units = await _context.BuildingUnits
+                .Include(u => u.Building)
+                .Where(u => u.OwnerUserId == user.Id || u.TenantUserId == user.Id)
+                .ToListAsync();
+
+            ViewBag.LinkedUnits = units;
+            ViewBag.Token = token.Trim();
+            return View(user);
+        }
+
+        [AllowAnonymous]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ActivateResident(
+            string token,
+            string? firstName,
+            string? lastName,
+            string email,
+            string? phoneNumber,
+            string newPassword,
+            string confirmPassword,
+            string personalPin,
+            bool confirmPhoneDeclaration = false)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return RedirectToAction("Login", "Account");
+            }
+
+            var user = await _context.Users.FirstOrDefaultAsync(u =>
+                u.ActivationToken == token.Trim() &&
+                u.ActivationTokenExpiresAt.HasValue &&
+                u.ActivationTokenExpiresAt.Value >= DateTime.UtcNow);
+
+            if (user == null)
+            {
+                TempData["ErrorMessage"] = "Aktivasyon bağlantısı geçersiz veya süresi dolmuş.";
+                return RedirectToAction("Login", "Account");
+            }
+
+            ViewBag.LinkedUnits = await _context.BuildingUnits.Include(u => u.Building)
+                .Where(u => u.OwnerUserId == user.Id || u.TenantUserId == user.Id).ToListAsync();
+            ViewBag.Token = token.Trim();
+
+            if (string.IsNullOrWhiteSpace(email) || !email.Contains("@") || email.EndsWith("@gmk360.local", StringComparison.OrdinalIgnoreCase))
+            {
+                ViewBag.ActivationError = "Lütfen doğrulama için geçerli kişisel e-posta adresinizi giriniz.";
+                return View(user);
+            }
+
+            if (string.IsNullOrWhiteSpace(newPassword) || newPassword != confirmPassword)
+            {
+                ViewBag.ActivationError = "Şifre ve şifre tekrarı uyuşmuyor.";
+                return View(user);
+            }
+
+            var cleanPin = (personalPin ?? "").Trim();
+            if (cleanPin.Length < 4 || cleanPin.Length > 6 || !cleanPin.All(char.IsDigit))
+            {
+                ViewBag.ActivationError = "Kişisel Onay ve PWA PIN kodunuz 4 ila 6 haneli rakamlardan oluşmalıdır.";
+                return View(user);
+            }
+
+            var cleanEmail = email.Trim();
+            if (!string.Equals(user.Email, cleanEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                var dup = await _userManager.FindByEmailAsync(cleanEmail);
+                if (dup != null && dup.Id != user.Id)
+                {
+                    ViewBag.ActivationError = "Bu e-posta adresi başka bir hesapta kayıtlı.";
+                    return View(user);
+                }
+                await _userManager.SetEmailAsync(user, cleanEmail);
+                await _userManager.SetUserNameAsync(user, cleanEmail);
+            }
+
+            await _userManager.RemovePasswordAsync(user);
+            var pwRes = await _userManager.AddPasswordAsync(user, newPassword);
+            if (!pwRes.Succeeded)
+            {
+                ViewBag.ActivationError = string.Join(" ", pwRes.Errors.Select(e => e.Description));
+                return View(user);
+            }
+
+            if (!string.IsNullOrWhiteSpace(firstName)) user.FirstName = firstName.Trim();
+            if (!string.IsNullOrWhiteSpace(lastName)) user.LastName = lastName.Trim();
+            if (!string.IsNullOrWhiteSpace(phoneNumber)) user.PhoneNumber = phoneNumber.Trim();
+
+            user.EmailConfirmed = true; // Tekil davet bağlantısı üzerinden doğrulandı
+            if (confirmPhoneDeclaration && !string.IsNullOrWhiteSpace(user.PhoneNumber))
+            {
+                user.PhoneVerifiedAt = DateTime.UtcNow;
+                // SMS OTP henüz bağlı olmadığı için PhoneNumberConfirmed=false bırakılır, PhoneVerifiedAt beyan tarihini tutar
+            }
+
+            user.TransactionPinHash = GMK360.Web.Services.FacilityTaskDispatchService.HashQuickPin(cleanPin);
+            user.IsTransactionPinSet = true;
+            user.IsShadowAccount = false;
+            user.MustChangePassword = false;
+            user.ActivationToken = null;
+            user.ActivationTokenExpiresAt = null;
+
+            await _userManager.UpdateAsync(user);
+            await _signInManager.SignInAsync(user, isPersistent: true);
+
+            TempData["SuccessMessage"] = "🎉 Profiliniz doğrulandı, şifreniz ve kişisel gizli PIN'iniz kaydedildi!";
+            return RedirectToAction("Index", "Profile");
         }
         [HttpGet]
         public async Task<IActionResult> VerifyDevice(string returnUrl = null)

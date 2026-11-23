@@ -401,9 +401,10 @@ namespace GMK360.Web.Controllers
         }
 
         // 2. Yeni Bina / Site Açılış & 3 Adımlı Sihirbaz
-        public async Task<IActionResult> Onboarding(int? id, string? mode = null, string? name = null)
+        public async Task<IActionResult> Onboarding(int? id, string? mode = null, string? name = null, int count = 1)
         {
             var userId = GetUserId();
+            ViewBag.RequestedStructureCount = Math.Clamp(count, 1, 30);
             var vm = new GMK360.Web.Models.FacilityWizardPageViewModel
             {
                 ManagementMode = string.Equals(mode, "Site", StringComparison.OrdinalIgnoreCase) ? "Site" : "Apartman",
@@ -867,6 +868,22 @@ namespace GMK360.Web.Controllers
                     {
                         _context.Buildings.Add(sibling);
                         await _context.SaveChangesAsync();
+                    }
+                    if (!string.IsNullOrEmpty(userId))
+                    {
+                        bool siblingHasHead = await _context.BuildingManagers.AnyAsync(m =>
+                            m.BuildingId == sibling.Id && m.UserId == userId && m.IsActive);
+                        if (!siblingHasHead)
+                        {
+                            _context.BuildingManagers.Add(new BuildingManager
+                            {
+                                BuildingId = sibling.Id,
+                                UserId = userId,
+                                Role = BuildingManagerRole.HeadManager,
+                                IsActive = true,
+                                CreatedAt = DateTime.UtcNow
+                            });
+                        }
                     }
                     await SyncRootStructureAsync(sibling, s, isPrimary: false);
                 }
@@ -2059,6 +2076,41 @@ namespace GMK360.Web.Controllers
             ViewBag.PricingTier = GMK360.Web.Helpers.FacilityPricingHelper.Calculate(isSite, blockCount, livingUnitCount);
             ViewBag.RootBuildingId = rootId;
 
+            var siteBlocks = new System.Collections.Generic.List<Building>();
+            if (building.HousingComplexId.HasValue)
+            {
+                var complexRoots = await _context.Buildings
+                    .Include(b => b.Units)
+                    .Include(b => b.ChildBuildings).ThenInclude(cb => cb.Units)
+                    .Where(b => b.HousingComplexId == building.HousingComplexId && b.ParentBuildingId == null)
+                    .OrderBy(b => b.Id)
+                    .ToListAsync();
+                foreach (var cr in complexRoots)
+                {
+                    siteBlocks.Add(cr);
+                    if (cr.ChildBuildings != null && cr.ChildBuildings.Any())
+                    {
+                        siteBlocks.AddRange(cr.ChildBuildings.OrderBy(cb => cb.Id));
+                    }
+                }
+            }
+            else
+            {
+                var rootWithChildren = await _context.Buildings
+                    .Include(b => b.Units)
+                    .Include(b => b.ChildBuildings).ThenInclude(cb => cb.Units)
+                    .FirstOrDefaultAsync(b => b.Id == rootId);
+                if (rootWithChildren != null)
+                {
+                    siteBlocks.Add(rootWithChildren);
+                    if (rootWithChildren.ChildBuildings != null && rootWithChildren.ChildBuildings.Any())
+                    {
+                        siteBlocks.AddRange(rootWithChildren.ChildBuildings.OrderBy(cb => cb.Id));
+                    }
+                }
+            }
+            ViewBag.SiteBlocks = siteBlocks.GroupBy(b => b.Id).Select(g => g.First()).ToList();
+
             return View(building);
         }
 
@@ -2374,17 +2426,46 @@ namespace GMK360.Web.Controllers
 
         private async Task SyncResidentUsersAndPeriodsAsync(BuildingUnit unit)
         {
-            if (!string.IsNullOrWhiteSpace(unit.OwnerEmail))
+            var dispatchSvc = HttpContext.RequestServices.GetService<FacilityTaskDispatchService>();
+            var creatorId = GetUserId() ?? "system";
+
+            if (dispatchSvc != null && (!string.IsNullOrWhiteSpace(unit.OwnerEmail) || !string.IsNullOrWhiteSpace(unit.OwnerPhone)))
+            {
+                var ownerUser = await dispatchSvc.ProvisionResidentProfileAsync(
+                    unit.OwnerUserId,
+                    unit.OwnerName,
+                    unit.OwnerEmail,
+                    unit.OwnerPhone,
+                    "Owner",
+                    creatorId);
+                if (ownerUser != null) unit.OwnerUserId = ownerUser.Id;
+            }
+            else if (!string.IsNullOrWhiteSpace(unit.OwnerEmail))
             {
                 var ownerUser = await _context.Users.AsNoTracking()
                     .FirstOrDefaultAsync(u => u.Email == unit.OwnerEmail || u.NormalizedEmail == unit.OwnerEmail.ToUpper());
                 if (ownerUser != null) unit.OwnerUserId = ownerUser.Id;
             }
-            if (!unit.IsEmpty && !string.IsNullOrWhiteSpace(unit.TenantEmail))
+
+            if (!unit.IsEmpty && (!string.IsNullOrWhiteSpace(unit.TenantEmail) || !string.IsNullOrWhiteSpace(unit.TenantPhone) || !string.IsNullOrWhiteSpace(unit.TenantName)))
             {
-                var tenantUser = await _context.Users.AsNoTracking()
-                    .FirstOrDefaultAsync(u => u.Email == unit.TenantEmail || u.NormalizedEmail == unit.TenantEmail.ToUpper());
-                if (tenantUser != null) unit.TenantUserId = tenantUser.Id;
+                if (dispatchSvc != null && (!string.IsNullOrWhiteSpace(unit.TenantEmail) || !string.IsNullOrWhiteSpace(unit.TenantPhone)))
+                {
+                    var tenantUser = await dispatchSvc.ProvisionResidentProfileAsync(
+                        unit.TenantUserId,
+                        unit.TenantName,
+                        unit.TenantEmail,
+                        unit.TenantPhone,
+                        "Tenant",
+                        creatorId);
+                    if (tenantUser != null) unit.TenantUserId = tenantUser.Id;
+                }
+                else if (!string.IsNullOrWhiteSpace(unit.TenantEmail))
+                {
+                    var tenantUser = await _context.Users.AsNoTracking()
+                        .FirstOrDefaultAsync(u => u.Email == unit.TenantEmail || u.NormalizedEmail == unit.TenantEmail.ToUpper());
+                    if (tenantUser != null) unit.TenantUserId = tenantUser.Id;
+                }
             }
             else if (unit.IsEmpty || string.IsNullOrWhiteSpace(unit.TenantName))
             {
@@ -2675,9 +2756,21 @@ namespace GMK360.Web.Controllers
                 : new System.Collections.Generic.List<BuildingUnit>();
 
             int checkBuildingId = buildingId ?? buildings.FirstOrDefault()?.Id ?? 0;
+            var linkedUserIds = units
+                .SelectMany(u => new[] { u.OwnerUserId, u.TenantUserId })
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Distinct()
+                .ToList();
+            var residentProfiles = linkedUserIds.Any()
+                ? await _context.Users.AsNoTracking()
+                    .Where(u => linkedUserIds.Contains(u.Id!))
+                    .ToDictionaryAsync(u => u.Id, u => u)
+                : new System.Collections.Generic.Dictionary<string, GMK360.Core.Entities.Identity.ApplicationUser>();
+
             ViewBag.Buildings = buildings;
             ViewBag.SelectedBuildingId = buildingId;
             ViewBag.HasAuthorityDoc = checkBuildingId > 0 && await HasDecisionAuthorityAsync(checkBuildingId);
+            ViewBag.ResidentProfiles = residentProfiles;
             return View(units);
         }
 

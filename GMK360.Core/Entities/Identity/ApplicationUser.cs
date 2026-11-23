@@ -71,6 +71,12 @@ namespace GMK360.Core.Entities.Identity
 
         // Kullanıcının yönetici, denetçi veya aza olduğu binalar
         
+        // --- KİŞİSEL AKTİVASYON & DOĞRULAMA (SAKIN / MALİK GÜVENLİĞİ) ---
+        public bool MustChangePassword { get; set; } = false;
+        public System.DateTime? PhoneVerifiedAt { get; set; }
+        public string? ActivationToken { get; set; }
+        public System.DateTime? ActivationTokenExpiresAt { get; set; }
+
         public virtual ICollection<UserSubscription> Subscriptions { get; set; } = new List<UserSubscription>();
         public virtual ICollection<BuildingManager> ManagedBuildings { get; set; } = new List<BuildingManager>();
         

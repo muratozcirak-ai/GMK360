@@ -16,7 +16,12 @@ namespace GMK360.Core.Entities
 
         public bool IsActive { get; set; } = true;
 
-        // Ödeme takibi için (Opsiyonel, ayrı tabloda da tutulabilir)
+        // Ödeme & Kampanya Takibi (SuperAdmin SaaS Yönetimi)
         public decimal PricePaid { get; set; }
+        public int? DiscountPolicyId { get; set; }
+        public virtual GMK360.Core.Entities.Marketing.DiscountPolicy? DiscountPolicy { get; set; }
+        public string PaymentStatus { get; set; } = "Trial"; // Trial (15 Gün Deneme), Paid, PendingPayment, Expired, Exempt
+        public DateTime? LastPaymentDate { get; set; }
+        public string? AdminNotes { get; set; }
     }
 }
