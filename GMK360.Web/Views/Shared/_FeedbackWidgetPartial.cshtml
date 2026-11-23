@@ -1,0 +1,133 @@
+@{
+    var defaultModule = ViewData["FeedbackModule"] as string ?? "Genel";
+    var refEntityId = ViewData["FeedbackRefId"]?.ToString() ?? "";
+}
+@if (User?.Identity?.IsAuthenticated == true)
+{
+    <button type="button"
+            class="btn btn-dark btn-sm rounded-pill shadow-lg px-3 py-2 d-inline-flex align-items-center gap-2 position-fixed"
+            style="right: 18px; bottom: 18px; z-index: 1055; border: 1px solid rgba(255,255,255,0.22);"
+            data-bs-toggle="modal"
+            data-bs-target="#gmkFeedbackModal"
+            title="Hata, öneri veya görüş bildirin">
+        <i class="bi bi-chat-square-heart-fill text-warning"></i>
+        <span class="fw-semibold">Geri Bildirim</span>
+    </button>
+
+    <div class="modal fade" id="gmkFeedbackModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content rounded-4 border-0 shadow-lg" id="gmkFeedbackForm">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="pageUrl" id="gmkFeedbackPageUrl" />
+                <input type="hidden" name="deviceInfo" id="gmkFeedbackDeviceInfo" />
+                <input type="hidden" name="referenceEntityId" value="@refEntityId" />
+                <div class="modal-header bg-dark text-white border-0 py-3">
+                    <div>
+                        <h6 class="modal-title fw-bold mb-0"><i class="bi bi-chat-square-heart-fill text-warning me-2"></i>Pilot / Canlı Geri Bildirim Gönder</h6>
+                        <small class="text-white-50">Mesajınız bulunduğunuz sayfa adresiyle doğrudan Süper Admin'e düşer.</small>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Modül / Bölüm</label>
+                        <select name="moduleArea" class="form-select form-select-sm" id="gmkFeedbackModuleSelect">
+                            <option value="SiteYonetimi" selected="@(defaultModule == "SiteYonetimi")">Site &amp; Bina Yönetimi</option>
+                            <option value="SakinPortal" selected="@(defaultModule == "SakinPortal")">Kiracı / Malik / Aza Portalı</option>
+                            <option value="InsaatYonetimi" selected="@(defaultModule == "InsaatYonetimi")">İnşaat &amp; Şantiye Yönetimi</option>
+                            <option value="Genel" selected="@(defaultModule == "Genel")">Genel Sistem / Hesap</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Bildirim Türü</label>
+                        <select name="feedbackType" class="form-select form-select-sm">
+                            <option value="Hata">🐞 Hata / Çalışmayan Alan</option>
+                            <option value="Oneri">💡 Öneri / Eksik Özellik</option>
+                            <option value="Soru">❓ Kullanım Sorusu</option>
+                            <option value="Degerlendirme">⭐ Genel Değerlendirme</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">Kısa Konu <span class="text-danger">*</span></label>
+                        <input type="text" name="subject" class="form-control form-control-sm" required maxlength="200" placeholder="Örn: A blok zemin kat görünmüyor / Toplantı açarken..." />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">Detaylı Açıklama <span class="text-danger">*</span></label>
+                        <textarea name="message" class="form-control form-control-sm" rows="4" required maxlength="4000" placeholder="Ne yapmak istediniz, ne oldu veya nasıl olmasını beklersiniz?"></textarea>
+                    </div>
+                    <div class="col-12">
+                        <div class="small text-muted bg-light rounded-3 px-3 py-2 border">
+                            <i class="bi bi-link-45deg me-1"></i>Sayfa: <code id="gmkFeedbackUrlPreview" class="text-break"></code>
+                        </div>
+                    </div>
+                    <div class="col-12 d-none" id="gmkFeedbackAlert"></div>
+                </div>
+                <div class="modal-footer border-0 bg-light py-2">
+                    <button type="button" class="btn btn-sm btn-light rounded-pill px-3" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-sm btn-dark rounded-pill px-4 fw-bold" id="gmkFeedbackSubmitBtn">
+                        <i class="bi bi-send-fill me-1 text-warning"></i> Süper Admin'e Gönder
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var modalEl = document.getElementById('gmkFeedbackModal');
+            var formEl = document.getElementById('gmkFeedbackForm');
+            if (!modalEl || !formEl) return;
+
+            modalEl.addEventListener('show.bs.modal', function () {
+                var urlInput = document.getElementById('gmkFeedbackPageUrl');
+                var devInput = document.getElementById('gmkFeedbackDeviceInfo');
+                var preview = document.getElementById('gmkFeedbackUrlPreview');
+                var alertBox = document.getElementById('gmkFeedbackAlert');
+                if (urlInput) urlInput.value = window.location.pathname + window.location.search;
+                if (preview) preview.textContent = window.location.pathname + window.location.search;
+                if (devInput) devInput.value = window.innerWidth + 'x' + window.innerHeight + ' | ' + (navigator.platform || '') + ' | ' + (navigator.userAgent || '').slice(0, 120);
+                if (alertBox) { alertBox.className = 'col-12 d-none'; alertBox.innerHTML = ''; }
+            });
+
+            formEl.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                var btn = document.getElementById('gmkFeedbackSubmitBtn');
+                var alertBox = document.getElementById('gmkFeedbackAlert');
+                if (btn) btn.disabled = true;
+
+                try {
+                    var res = await fetch('/Feedback/Submit', {
+                        method: 'POST',
+                        body: new FormData(formEl),
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    var data = await res.json();
+                    if (res.ok && data.success) {
+                        if (alertBox) {
+                            alertBox.className = 'col-12 alert alert-success rounded-3 py-2 mb-0 small';
+                            alertBox.textContent = data.message || 'Geri bildiriminiz iletildi.';
+                        }
+                        formEl.querySelector('input[name="subject"]').value = '';
+                        formEl.querySelector('textarea[name="message"]').value = '';
+                        setTimeout(function () {
+                            var instance = bootstrap.Modal.getInstance(modalEl);
+                            if (instance) instance.hide();
+                        }, 1300);
+                    } else {
+                        if (alertBox) {
+                            alertBox.className = 'col-12 alert alert-danger rounded-3 py-2 mb-0 small';
+                            alertBox.textContent = (data && data.error) || 'Gönderim sırasında hata oluştu.';
+                        }
+                    }
+                } catch (err) {
+                    if (alertBox) {
+                        alertBox.className = 'col-12 alert alert-danger rounded-3 py-2 mb-0 small';
+                        alertBox.textContent = 'Bağlantı hatası oluştu, lütfen tekrar deneyin.';
+                    }
+                } finally {
+                    if (btn) btn.disabled = false;
+                }
+            });
+        })();
+    </script>
+}

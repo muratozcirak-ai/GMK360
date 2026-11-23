@@ -1,91 +1,226 @@
-﻿@{
-    ViewData["Title"] = "Gelen Talepler (Helpdesk)";
+﻿@model IEnumerable<GMK360.Core.Entities.PlatformFeedback>
+@{
+    ViewData["Title"] = "Geri Dönüşler & Pilot Geri Bildirimleri";
     Layout = "~/Views/Shared/_AdminLayout.cshtml";
+
+    string filterModule = ViewBag.FilterModule as string ?? "";
+    string filterStatus = ViewBag.FilterStatus as string ?? "";
+    string filterType = ViewBag.FilterType as string ?? "";
+
+    int totalCount = ViewBag.TotalCount is int tc ? tc : 0;
+    int newCount = ViewBag.NewCount is int nc ? nc : 0;
+    int siteCount = ViewBag.SiteCount is int sc ? sc : 0;
+    int constructionCount = ViewBag.ConstructionCount is int cc ? cc : 0;
+    int bugCount = ViewBag.BugCount is int bc ? bc : 0;
 }
 
-<div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="container-fluid">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>
-            <h2 class="fw-bold text-dark mb-0">Gelen Talepler (Helpdesk)</h2>
-            <p class="text-muted">Kullanıcılardan gelen destek talepleri, vergi asistanı soruları ve yasal evrak uyuşmazlıkları.</p>
+            <h2 class="fw-bold text-dark mb-1">
+                <i class="bi bi-chat-square-heart-fill text-primary me-2"></i>Geri Dönüşler &amp; Pilot Bildirimleri
+            </h2>
+            <p class="text-muted small mb-0">
+                Site Yönetimi, Kiracı/Malik/Aza Portalı ve İnşaat Yönetimi ekranlarından gelen tüm canlı kullanıcı geri dönüşleri.
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="/AdminRequests/Index?module=SiteGroup" class="btn btn-sm @(filterModule == "SiteGroup" ? "btn-success" : "btn-outline-success") rounded-pill px-3 fw-semibold">
+                🏢 Site Yönetimi (@siteCount)
+            </a>
+            <a href="/AdminRequests/Index?module=InsaatYonetimi" class="btn btn-sm @(filterModule == "InsaatYonetimi" ? "btn-warning text-dark" : "btn-outline-warning text-dark") rounded-pill px-3 fw-semibold">
+                🏗️ İnşaat Yönetimi (@constructionCount)
+            </a>
+            <a href="/Admin/ContactLeads" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
+                İletişim Formu Mesajları &rarr;
+            </a>
         </div>
     </div>
 
-    <div class="row g-4 mb-4">
-        <div class="col-md-3">
-            <div class="card shadow-sm border-0 border-start border-warning border-4">
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-3 border-0 shadow-sm mb-3">
+            @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-3 border-0 shadow-sm mb-3">
+            @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm rounded-3 border-start border-warning border-4">
                 <div class="card-body">
-                    <h6 class="text-muted mb-2">Bekleyen Talepler</h6>
-                    <h3 class="fw-bold mb-0">12</h3>
+                    <small class="text-muted fw-semibold d-block">Yeni / Bekleyen</small>
+                    <h3 class="fw-bold mb-0 text-dark">@newCount</h3>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card shadow-sm border-0 border-start border-danger border-4">
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm rounded-3 border-start border-danger border-4">
                 <div class="card-body">
-                    <h6 class="text-muted mb-2">Acil (Yasal/Vergi)</h6>
-                    <h3 class="fw-bold mb-0">3</h3>
+                    <small class="text-muted fw-semibold d-block">Açık Hata (Bug)</small>
+                    <h3 class="fw-bold mb-0 text-danger">@bugCount</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm rounded-3 border-start border-success border-4">
+                <div class="card-body">
+                    <small class="text-muted fw-semibold d-block">Site Yönetimi &amp; Sakin</small>
+                    <h3 class="fw-bold mb-0 text-success">@siteCount</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm rounded-3 border-start border-primary border-4">
+                <div class="card-body">
+                    <small class="text-muted fw-semibold d-block">İnşaat Yönetimi (Toplam: @totalCount)</small>
+                    <h3 class="fw-bold mb-0 text-primary">@constructionCount</h3>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="card shadow-sm border-0">
-        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-            <h5 class="mb-0 fw-bold">Ticket Listesi</h5>
-            <div class="d-flex gap-2">
-                <select class="form-select form-select-sm" style="width: auto;">
-                    <option>Tüm Kategoriler</option>
-                    <option>Teknik Hata (Bug)</option>
-                    <option>Vergi / Mevzuat Sorunu</option>
-                    <option>Ödeme İtirazı</option>
-                </select>
-            </div>
-        </div>
-        <div class="card-body p-0">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th class="ps-4">Talep No</th>
-                        <th>Kullanıcı / Firma</th>
-                        <th>Kategori</th>
-                        <th>Konu</th>
-                        <th>Durum</th>
-                        <th>Tarih</th>
-                        <th class="text-end pe-4">İşlem</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td class="ps-4 text-muted">#TK-1042</td>
-                        <td>
-                            <div class="fw-bold">Dengehan İnşaat</div>
-                            <small class="text-muted">Şantiye Modülü</small>
-                        </td>
-                        <td><span class="badge bg-danger bg-opacity-10 text-danger border border-danger">Vergi Mevzuatı</span></td>
-                        <td>SGK Stopaj Kesintisi Hk.</td>
-                        <td><span class="badge bg-warning text-dark">Bekliyor</span></td>
-                        <td>Bugün, 10:45</td>
-                        <td class="text-end pe-4">
-                            <button class="btn btn-sm btn-outline-primary">Yanıtla</button>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="ps-4 text-muted">#TK-1041</td>
-                        <td>
-                            <div class="fw-bold">Ahmet Yılmaz</div>
-                            <small class="text-muted">Bireysel Üye</small>
-                        </td>
-                        <td><span class="badge bg-info bg-opacity-10 text-info border border-info">Teknik Hata</span></td>
-                        <td>IBAN kaydederken hata alıyorum</td>
-                        <td><span class="badge bg-success bg-opacity-10 text-success border border-success">Çözüldü</span></td>
-                        <td>Dün, 15:30</td>
-                        <td class="text-end pe-4">
-                            <button class="btn btn-sm btn-outline-secondary">Görüntüle</button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+    <div class="card border-0 shadow-sm rounded-3 mb-4">
+        <div class="card-body p-3">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold mb-1">Modül</label>
+                    <select name="module" class="form-select form-select-sm">
+                        <option value="">Tüm Modüller</option>
+                        <option value="SiteGroup" selected="@(filterModule == "SiteGroup")">Site Yönetimi (Tümü)</option>
+                        <option value="SiteYonetimi" selected="@(filterModule == "SiteYonetimi")">— Yönetici Paneli</option>
+                        <option value="SakinPortal" selected="@(filterModule == "SakinPortal")">— Kiracı / Malik / Aza</option>
+                        <option value="InsaatYonetimi" selected="@(filterModule == "InsaatYonetimi")">İnşaat &amp; Şantiye Yönetimi</option>
+                        <option value="Genel" selected="@(filterModule == "Genel")">Genel Sistem</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold mb-1">Bildirim Türü</label>
+                    <select name="type" class="form-select form-select-sm">
+                        <option value="">Tümü</option>
+                        <option value="Hata" selected="@(filterType == "Hata")">Hata (Bug)</option>
+                        <option value="Oneri" selected="@(filterType == "Oneri")">Öneri / Özellik</option>
+                        <option value="Soru" selected="@(filterType == "Soru")">Soru</option>
+                        <option value="Degerlendirme" selected="@(filterType == "Degerlendirme")">Değerlendirme</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold mb-1">Durum</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">Tüm Durumlar</option>
+                        <option value="Yeni" selected="@(filterStatus == "Yeni")">Yeni</option>
+                        <option value="Inceleniyor" selected="@(filterStatus == "Inceleniyor")">İnceleniyor</option>
+                        <option value="Cozuldu" selected="@(filterStatus == "Cozuldu")">Çözüldü</option>
+                        <option value="Kapandi" selected="@(filterStatus == "Kapandi")">Kapandı</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-sm btn-primary flex-grow-1 fw-semibold">Filtrele</button>
+                    <a href="/AdminRequests/Index" class="btn btn-sm btn-outline-secondary">Sıfırla</a>
+                </div>
+            </form>
         </div>
     </div>
+
+    @if (!Model.Any())
+    {
+        <div class="card border-0 shadow-sm rounded-4 text-center py-5">
+            <div class="card-body text-muted">
+                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                <h5>Henüz eşleşen geri bildirim bulunmuyor.</h5>
+                <p class="small mb-0">Kullanıcılar Site Yönetimi veya İnşaat Yönetimi sağ alt köşesindeki <strong>Geri Bildirim</strong> butonundan mesaj gönderdiğinde burada listelenir.</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="d-flex flex-column gap-3">
+            @foreach (var item in Model)
+            {
+                var moduleBadgeCls = item.ModuleArea == "InsaatYonetimi"
+                    ? "bg-warning text-dark"
+                    : item.ModuleArea == "SakinPortal"
+                        ? "bg-info text-dark"
+                        : item.ModuleArea == "SiteYonetimi"
+                            ? "bg-success text-white"
+                            : "bg-secondary text-white";
+                var moduleTitle = item.ModuleArea == "InsaatYonetimi"
+                    ? "İnşaat Yönetimi"
+                    : item.ModuleArea == "SakinPortal"
+                        ? "Sakin / Aza Portalı"
+                        : item.ModuleArea == "SiteYonetimi"
+                            ? "Site Yönetimi"
+                            : "Genel";
+                var statusBadgeCls = item.Status == "Yeni"
+                    ? "bg-danger"
+                    : item.Status == "Inceleniyor"
+                        ? "bg-warning text-dark"
+                        : item.Status == "Cozuldu"
+                            ? "bg-success"
+                            : "bg-secondary";
+
+                <div class="card border-0 shadow-sm rounded-3 border-start border-4 @(item.Status == "Yeni" ? "border-danger" : item.Status == "Cozuldu" ? "border-success" : "border-primary")">
+                    <div class="card-body p-3">
+                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+                            <div>
+                                <span class="badge @statusBadgeCls me-1">@item.Status</span>
+                                <span class="badge @moduleBadgeCls me-1">@moduleTitle</span>
+                                <span class="badge bg-light text-dark border me-1">@item.FeedbackType</span>
+                                <strong class="text-dark">#@item.Id — @item.Subject</strong>
+                            </div>
+                            <small class="text-muted">
+                                @item.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                            </small>
+                        </div>
+
+                        <p class="text-dark mb-2" style="white-space: pre-line;">@item.Message</p>
+
+                        <div class="d-flex flex-wrap gap-3 small text-muted bg-light rounded-3 px-3 py-2 mb-3">
+                            <span><i class="bi bi-person-fill me-1"></i><strong>@(string.IsNullOrWhiteSpace(item.UserFullName) ? "Kullanıcı" : item.UserFullName)</strong> (@item.UserEmail)</span>
+                            @if (!string.IsNullOrWhiteSpace(item.UserRoleLabel))
+                            {
+                                <span><i class="bi bi-shield-check me-1"></i>Rol: <code>@item.UserRoleLabel</code></span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(item.PageUrl))
+                            {
+                                <span><i class="bi bi-link-45deg me-1"></i>Sayfa: <a href="@item.PageUrl" target="_blank" class="text-decoration-none"><code>@item.PageUrl</code></a></span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(item.DeviceInfo))
+                            {
+                                <span class="text-truncate" style="max-width: 340px;" title="@item.DeviceInfo"><i class="bi bi-laptop me-1"></i>@item.DeviceInfo</span>
+                            }
+                        </div>
+
+                        <form asp-action="UpdateFeedback" method="post" class="row g-2 align-items-center">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@item.Id" />
+                            <input type="hidden" name="filterModule" value="@filterModule" />
+                            <input type="hidden" name="filterStatus" value="@filterStatus" />
+                            <div class="col-md-2">
+                                <select name="status" class="form-select form-select-sm fw-semibold">
+                                    <option value="Yeni" selected="@(item.Status == "Yeni")">Yeni</option>
+                                    <option value="Inceleniyor" selected="@(item.Status == "Inceleniyor")">İnceleniyor</option>
+                                    <option value="Cozuldu" selected="@(item.Status == "Cozuldu")">Çözüldü</option>
+                                    <option value="Kapandi" selected="@(item.Status == "Kapandi")">Kapandı</option>
+                                </select>
+                            </div>
+                            <div class="col-md-8">
+                                <input type="text" name="adminNote" value="@item.AdminNote" class="form-control form-control-sm" placeholder="Süper Admin notu / yapılan aksiyon (opsiyonel)..." />
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-sm btn-dark w-100 rounded-pill fw-semibold">Güncelle</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            }
+        </div>
+    }
 </div>

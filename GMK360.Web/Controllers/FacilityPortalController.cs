@@ -76,6 +76,15 @@ namespace GMK360.Web.Controllers
                         || (!string.IsNullOrEmpty(userEmail) && (u.OwnerEmail == userEmail || u.TenantEmail == userEmail))))
                 .ToListAsync();
 
+            // Kurul / Aza / Denetçi eşleşmesi
+            var boardMembership = userId != null
+                ? await _context.BuildingManagers
+                    .Include(m => m.Building)
+                    .Where(m => m.UserId == userId && m.IsActive)
+                    .OrderBy(m => m.Role)
+                    .FirstOrDefaultAsync()
+                : null;
+
             // Etkin görünüm rolü (Yönetici test etmek isterse previewRole ile 3 rolü de önizleyebilir)
             string activeRole = "Resident";
             if (isManager)
@@ -92,6 +101,10 @@ namespace GMK360.Web.Controllers
             {
                 activeRole = "Staff";
             }
+            else if (boardMembership != null && !residentUnits.Any())
+            {
+                activeRole = "Owner";
+            }
             else
             {
                 bool isTenantHere = residentUnits.Any(u => u.TenantUserId == userId || (!string.IsNullOrEmpty(userEmail) && u.TenantEmail == userEmail));
@@ -102,6 +115,7 @@ namespace GMK360.Web.Controllers
                 ?? managedBuildings.FirstOrDefault()?.Id
                 ?? staffProfile?.BuildingId
                 ?? residentUnits.FirstOrDefault()?.BuildingId
+                ?? boardMembership?.BuildingId
                 ?? 0;
 
             var staffList = targetBuildingId > 0
@@ -152,15 +166,45 @@ namespace GMK360.Web.Controllers
                 ? await _payrollService.CalculateMonthlyBudgetSummaryAsync(targetBuildingId)
                 : new BuildingMonthlyBudgetSummary();
 
+            var targetBuilding = targetBuildingId > 0
+                ? await _context.Buildings.AsNoTracking().FirstOrDefaultAsync(b => b.Id == targetBuildingId)
+                : null;
+            int rootBuildingId = targetBuilding?.ParentBuildingId ?? targetBuildingId;
+            var meetingBuildingIds = new List<int>();
+            if (targetBuildingId > 0) meetingBuildingIds.Add(targetBuildingId);
+            if (rootBuildingId > 0 && rootBuildingId != targetBuildingId) meetingBuildingIds.Add(rootBuildingId);
+
+            var meetings = meetingBuildingIds.Any()
+                ? await _context.SystemMeetings
+                    .Include(m => m.Decisions)
+                    .Where(m => m.ContextType == "Building" && meetingBuildingIds.Contains(m.ContextId) && !m.IsDeleted)
+                    .OrderBy(m => m.IsConcluded)
+                    .ThenByDescending(m => m.MeetingDate)
+                    .Take(20)
+                    .ToListAsync()
+                : new List<SystemMeeting>();
+
+            var pendingApprovals = (boardMembership != null || isManager) && rootBuildingId > 0
+                ? await _context.ApprovalRequests
+                    .Where(a => a.BuildingId == rootBuildingId && a.Status == "PENDING")
+                    .OrderByDescending(a => a.Id)
+                    .ToListAsync()
+                : new List<ApprovalRequest>();
+
             ViewBag.ActiveRole = activeRole;
             ViewBag.CanSwitchPreview = isManager;
             ViewBag.ManagedBuildings = managedBuildings;
             ViewBag.SelectedBuildingId = targetBuildingId;
+            ViewBag.RootBuildingId = rootBuildingId;
             ViewBag.StaffProfile = staffProfile;
             ViewBag.BuildingStaffList = staffList;
             ViewBag.ResidentUnits = buildingUnitsForPreview;
             ViewBag.Tickets = tickets;
             ViewBag.BudgetSummary = budgetSummary;
+            ViewBag.Meetings = meetings;
+            ViewBag.BoardMembership = boardMembership;
+            ViewBag.PendingApprovals = pendingApprovals;
+            ViewBag.CurrentUserProfile = user;
 
             return View();
         }
@@ -244,6 +288,66 @@ namespace GMK360.Web.Controllers
             var res = await _payrollService.PlanStaffLeaveAsync(buildingStaffId, leaveType, startDate, endDate, 0m, notes);
             if (res.OverlapWarning != null) TempData["WarningMessage"] = res.Message;
             else TempData[res.Success ? "SuccessMessage" : "ErrorMessage"] = res.Message;
+
+            return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ProposeMeetingAgenda(int buildingId, string agendaSubject, string? details, string? previewRole = null)
+        {
+            var userId = GetUserId();
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+            if (buildingId <= 0 || string.IsNullOrWhiteSpace(agendaSubject))
+            {
+                TempData["ErrorMessage"] = "Lütfen gündem başlığını yazınız.";
+                return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+            }
+
+            var building = await _context.Buildings.AsNoTracking().FirstOrDefaultAsync(b => b.Id == buildingId);
+            string assigneeId = !string.IsNullOrWhiteSpace(building?.ManagerUserId) ? building.ManagerUserId : userId;
+
+            _context.SupportTickets.Add(new SupportTicket
+            {
+                Title = $"[Toplantı / Gündem Talebi] {agendaSubject.Trim()}",
+                Description = string.IsNullOrWhiteSpace(details) ? agendaSubject.Trim() : details.Trim(),
+                Category = "MeetingRequest",
+                Status = "Open",
+                Priority = "Normal",
+                CreatorUserId = userId,
+                AssignedToUserId = assigneeId,
+                ContextType = "Building",
+                ContextId = buildingId,
+                ContextInfo = "Sakin / Aza Toplantı Önerisi",
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = "Toplantı / gündem öneriniz site yönetimine iletildi.";
+            return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DecideBoardApproval(
+            int requestId,
+            int buildingId,
+            bool approve,
+            [FromServices] FacilityGovernanceService governanceService,
+            string? previewRole = null)
+        {
+            var userId = GetUserId();
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+            var building = await _context.Buildings.AsNoTracking().FirstOrDefaultAsync(b => b.Id == buildingId);
+            int rootId = building?.ParentBuildingId ?? buildingId;
+            bool isBoardMember = IsManagerOrAdmin() || await _context.BuildingManagers.AnyAsync(m => m.BuildingId == rootId && m.UserId == userId && m.IsActive);
+            if (!isBoardMember) return Forbid();
+
+            var email = User.Identity?.Name ?? User.FindFirstValue(ClaimTypes.Email) ?? "aza@gmk360.com";
+            var result = await governanceService.SubmitApprovalDecisionAsync(requestId, userId, email, approve, IsManagerOrAdmin());
+            TempData[result.Success ? "SuccessMessage" : "ErrorMessage"] = result.Message;
 
             return RedirectToAction(nameof(Index), new { previewRole, buildingId });
         }

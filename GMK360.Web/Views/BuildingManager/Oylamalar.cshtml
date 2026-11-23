@@ -114,13 +114,21 @@
                     var linkedQuotes = quotesByMeeting.ContainsKey(m.Id) ? quotesByMeeting[m.Id] : new List<GMK360.Core.Entities.B2B.B2BQuoteRequest>();
                     var linkedJobs = jobsByMeeting.ContainsKey(m.Id) ? jobsByMeeting[m.Id] : new List<GMK360.Core.Entities.Marketplace.MarketplaceJob>();
                     var linkedStaffs = staffsByMeeting.ContainsKey(m.Id) ? staffsByMeeting[m.Id] : new List<GMK360.Core.Entities.BuildingStaff>();
-                    <div class="border rounded-4 p-3 bg-light mb-3">
+                    <div class="border rounded-4 p-3 @(m.IsConcluded ? "bg-light" : "bg-warning bg-opacity-10 border-warning") mb-3">
                         <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
                             <div>
-                                <span class="badge bg-dark rounded-pill me-1">Karar #@m.Id</span>
+                                <span class="badge bg-dark rounded-pill me-1">Toplantı #@m.Id</span>
+                                @if (!m.IsConcluded)
+                                {
+                                    <span class="badge bg-warning text-dark rounded-pill me-1">📅 Planlandı / Yaklaşan</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success rounded-pill me-1">✅ Karara Bağlandı</span>
+                                }
                                 <span class="badge bg-secondary bg-opacity-25 text-dark rounded-pill me-2">@bName</span>
                                 <span class="fw-bold text-dark fs-5">@m.AgendaTitle</span>
-                                <div class="small text-muted mt-1"><i class="bi bi-calendar3 me-1"></i>@m.MeetingDate.ToString("dd MMMM yyyy")</div>
+                                <div class="small text-muted mt-1"><i class="bi bi-calendar3 me-1"></i>@m.MeetingDate.ToString("dd MMMM yyyy HH:mm")</div>
                             </div>
                             <a href="/BuildingManager/PrintDecisionSheet?meetingId=@m.Id" target="_blank" class="btn btn-sm btn-outline-dark rounded-pill px-3">
                                 <i class="bi bi-printer me-1"></i> A4 Noter Şablonu
@@ -134,6 +142,19 @@
                                     <div class="mb-1"><i class="bi bi-check2-circle text-success me-1"></i>@dec.DecisionText</div>
                                 }
                             </div>
+                        }
+                        @if (!m.IsConcluded)
+                        {
+                            <form asp-action="ConcludeMeetingWithDecision" asp-controller="BuildingManager" method="post" class="bg-white rounded-3 border p-2 mb-2">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="meetingId" value="@m.Id" />
+                                <input type="hidden" name="buildingId" value="@m.ContextId" />
+                                <input type="hidden" name="returnTo" value="Oylamalar" />
+                                <div class="input-group input-group-sm">
+                                    <input type="text" name="decisionText" class="form-control" required placeholder="Toplantıda alınan kararı yazıp Noter Defterine kaydedin..." />
+                                    <button type="submit" class="btn btn-success fw-bold">Karara Bağla</button>
+                                </div>
+                            </form>
                         }
 
                         @* Bağlı Pazar Yeri, B2B Teklif ve PIN Yetkileri *@
@@ -251,13 +272,26 @@
                         <label class="form-label fw-bold small">Toplantı / Gündem Başlığı</label>
                         <input type="text" name="agendaTitle" class="form-control" required placeholder="Örn: 2026 Olağan Genel Kurul ve Aidat Bütçesi" />
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small">Toplantı Tarihi</label>
-                        <input type="date" name="meetingDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold small">Toplantı Tarihi</label>
+                            <input type="date" name="meetingDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small">Saat</label>
+                            <input type="time" name="meetingTime" class="form-control" value="20:00" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Durum</label>
+                            <select name="isPlannedOnly" class="form-select" id="oylMeetingPlanned" onchange="document.getElementById('oylDecisionText').required = (this.value !== 'true')">
+                                <option value="false">Kararı Hemen Yaz</option>
+                                <option value="true">📅 Toplantı Planla</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="mb-2">
-                        <label class="form-label fw-bold small">Alınan Karar Metni (KMK Md. 32)</label>
-                        <textarea name="decisionText" class="form-control" rows="3" required placeholder="Noter karar defterine geçecek karar metnini yazın..."></textarea>
+                        <label class="form-label fw-bold small">Gündem Notu / Alınan Karar Metni (KMK Md. 32)</label>
+                        <textarea name="decisionText" id="oylDecisionText" class="form-control" rows="3" required placeholder="Planlanan gündem maddelerini veya noter karar defterine geçecek kararı yazın..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer border-0 bg-light">

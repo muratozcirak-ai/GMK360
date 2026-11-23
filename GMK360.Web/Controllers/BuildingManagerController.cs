@@ -2131,22 +2131,58 @@ namespace GMK360.Web.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AssignGovernanceMember(int buildingId, string email, BuildingManagerRole role)
+        public async Task<IActionResult> AssignGovernanceMember(
+            int buildingId,
+            string? email,
+            BuildingManagerRole role,
+            [FromServices] FacilityTaskDispatchService taskDispatch,
+            string? fullName = null,
+            string? phoneNumber = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
-            if (string.IsNullOrWhiteSpace(email))
+
+            var cleanEmail = email?.Trim();
+            var cleanPhone = phoneNumber?.Trim();
+            var cleanName = fullName?.Trim();
+            if (string.IsNullOrWhiteSpace(cleanEmail) && FacilityTaskDispatchService.NormalizePhoneLast10(cleanPhone).Length < 10)
             {
-                TempData["ErrorMessage"] = "Lütfen kurul üyesi / aza e-posta adresini giriniz.";
+                TempData["ErrorMessage"] = "Lütfen kurul üyesi / aza için geçerli bir e-posta veya 10 haneli telefon giriniz.";
                 return RedirectToAction(nameof(Detail), new { id = buildingId });
             }
 
             int rootId = building.ParentBuildingId ?? building.Id;
-            var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == email.Trim() || u.UserName == email.Trim());
+            GMK360.Core.Entities.Identity.ApplicationUser? targetUser = null;
+
+            if (!string.IsNullOrWhiteSpace(cleanEmail))
+            {
+                targetUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == cleanEmail || u.UserName == cleanEmail);
+            }
+            if (targetUser == null && !string.IsNullOrWhiteSpace(cleanPhone))
+            {
+                var normPhone = FacilityTaskDispatchService.NormalizePhoneLast10(cleanPhone);
+                if (normPhone.Length >= 10)
+                {
+                    var phoneUsers = await _context.Users.Where(u => u.PhoneNumber != null).ToListAsync();
+                    targetUser = phoneUsers.FirstOrDefault(u => FacilityTaskDispatchService.NormalizePhoneLast10(u.PhoneNumber) == normPhone);
+                }
+            }
+
             if (targetUser == null)
             {
-                TempData["ErrorMessage"] = $"'{email}' adresine sahip kayıtlı bir GMK360 kullanıcısı bulunamadı. Önce üye olması gerekir.";
-                return RedirectToAction(nameof(Detail), new { id = buildingId });
+                targetUser = await taskDispatch.ProvisionResidentProfileAsync(
+                    null,
+                    string.IsNullOrWhiteSpace(cleanName) ? "Kurul Üyesi" : cleanName,
+                    cleanEmail,
+                    cleanPhone,
+                    "Owner",
+                    GetUserId() ?? "system");
+
+                if (targetUser == null)
+                {
+                    TempData["ErrorMessage"] = "Kurul üyesi / aza profili oluşturulamadı. E-posta veya telefon bilgisini kontrol ediniz.";
+                    return RedirectToAction(nameof(Detail), new { id = buildingId });
+                }
             }
 
             var existing = await _context.BuildingManagers
@@ -2154,6 +2190,7 @@ namespace GMK360.Web.Controllers
             if (existing != null)
             {
                 existing.Role = role;
+                existing.UpdatedAt = DateTime.UtcNow;
             }
             else
             {
@@ -2181,7 +2218,59 @@ namespace GMK360.Web.Controllers
             });
 
             await _context.SaveChangesAsync();
-            TempData["SuccessMessage"] = $"{targetUser.FirstName} {targetUser.LastName} ({role}) yönetim kadrosuna eklendi.";
+
+            var roleText = role == BuildingManagerRole.BoardMember ? "Aza (Yönetim Kurulu)" : (role == BuildingManagerRole.Auditor ? "Denetçi" : "Yönetici");
+            var displayName = !string.IsNullOrWhiteSpace(targetUser.FirstName)
+                ? $"{targetUser.FirstName} {targetUser.LastName}".Trim()
+                : (cleanName ?? targetUser.Email ?? "Üye");
+
+            if (!string.IsNullOrWhiteSpace(targetUser.ActivationToken))
+            {
+                var inviteUrl = $"{Request.Scheme}://{Request.Host}/Account/ActivateResident?token={targetUser.ActivationToken}";
+                TempData["LastActivationUrl"] = inviteUrl;
+                TempData["LastActivationLabel"] = $"{displayName} ({roleText})";
+                TempData["SuccessMessage"] = $"{displayName} ({roleText}) kadroya eklendi ve kişisel profil aktivasyon bağlantısı hazırlandı. 'Kurul / Aza' penceresinden bağlantıyı kopyalayıp iletebilirsiniz.";
+            }
+            else
+            {
+                TempData["SuccessMessage"] = $"{displayName} ({roleText}) yönetim kadrosuna eklendi.";
+            }
+
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RemoveGovernanceMember(int buildingId, int managerId)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            int rootId = building.ParentBuildingId ?? building.Id;
+            var member = await _context.BuildingManagers
+                .FirstOrDefaultAsync(m => m.Id == managerId && m.BuildingId == rootId && m.IsActive);
+
+            if (member == null)
+            {
+                TempData["ErrorMessage"] = "Kurul üyesi kaydı bulunamadı.";
+                return RedirectToAction(nameof(Detail), new { id = buildingId });
+            }
+
+            if (member.Role == BuildingManagerRole.HeadManager)
+            {
+                int headCount = await _context.BuildingManagers.CountAsync(m => m.BuildingId == rootId && m.IsActive && m.Role == BuildingManagerRole.HeadManager);
+                if (headCount <= 1)
+                {
+                    TempData["ErrorMessage"] = "Son aktif Ana Yönetici çıkarılamaz; bunun için Yetki Devri kullanın.";
+                    return RedirectToAction(nameof(Detail), new { id = buildingId });
+                }
+            }
+
+            member.IsActive = false;
+            member.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Kurul / aza üyesi pasife alındı (denetim geçmişi korundu).";
             return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
 
@@ -2245,19 +2334,32 @@ namespace GMK360.Web.Controllers
 
         // 3.1 Noter Karar Defteri - Yeni Toplantı ve Karar Ekle
         [HttpPost]
-        public async Task<IActionResult> CreateMeeting(int buildingId, string agendaTitle, DateTime meetingDate, string decisionText, string? returnTo = null)
+        public async Task<IActionResult> CreateMeeting(
+            int buildingId,
+            string agendaTitle,
+            DateTime meetingDate,
+            string? decisionText = null,
+            string? returnTo = null,
+            bool isPlannedOnly = false,
+            string? meetingTime = null)
         {
             var userId = GetUserId();
-            var building = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == buildingId && (b.ManagerUserId == userId || b.CreatedByUserId == userId || User.IsInRole("Admin") || User.IsInRole("SuperAdmin")));
+            var building = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == buildingId && (b.ManagerUserId == userId || b.CreatedByUserId == userId || User.IsInRole("Admin") || User.IsInRole("SuperAdmin") || _context.BuildingManagers.Any(m => m.BuildingId == (b.ParentBuildingId ?? b.Id) && m.UserId == userId && m.IsActive)));
             if (building == null) return Unauthorized();
+
+            DateTime effectiveDate = meetingDate;
+            if (!string.IsNullOrWhiteSpace(meetingTime) && TimeSpan.TryParse(meetingTime, out var parsedTime))
+            {
+                effectiveDate = meetingDate.Date.Add(parsedTime);
+            }
 
             var meeting = new SystemMeeting
             {
                 ContextType = "Building",
                 ContextId = buildingId,
                 AgendaTitle = agendaTitle,
-                MeetingDate = meetingDate,
-                IsConcluded = true,
+                MeetingDate = effectiveDate,
+                IsConcluded = !isPlannedOnly,
                 CreatedAt = DateTime.Now
             };
 
@@ -2269,13 +2371,47 @@ namespace GMK360.Web.Controllers
                 var decision = new SystemMeetingDecision
                 {
                     SystemMeetingId = meeting.Id,
-                    DecisionText = decisionText
+                    DecisionText = decisionText.Trim()
                 };
                 _context.SystemMeetingDecisions.Add(decision);
                 await _context.SaveChangesAsync();
             }
 
-            TempData["SuccessMessage"] = "🎉 Genel Kurul Kararı başarıyla kaydedildi. Noter Defteri Baskı Şablonunu indirebilir, Pazar Yeri / B2B üzerinden teklif toplayabilirsiniz.";
+            TempData["SuccessMessage"] = isPlannedOnly
+                ? $"📅 '{agendaTitle}' toplantısı planlandı ve Kiracı / Ev Sahibi / Aza ekranlarına yansıtıldı."
+                : "🎉 Genel Kurul Kararı başarıyla kaydedildi. Noter Defteri Baskı Şablonunu indirebilir, Pazar Yeri / B2B üzerinden teklif toplayabilirsiniz.";
+            if (string.Equals(returnTo, "Oylamalar", StringComparison.OrdinalIgnoreCase))
+            {
+                return RedirectToAction(nameof(Oylamalar), new { buildingId });
+            }
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ConcludeMeetingWithDecision(int meetingId, int buildingId, string decisionText, string? returnTo = null)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var meeting = await _context.SystemMeetings.FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && m.ContextId == buildingId);
+            if (meeting == null) return NotFound();
+
+            if (!string.IsNullOrWhiteSpace(decisionText))
+            {
+                _context.SystemMeetingDecisions.Add(new SystemMeetingDecision
+                {
+                    SystemMeetingId = meeting.Id,
+                    DecisionText = decisionText.Trim(),
+                    CreatedAt = DateTime.Now
+                });
+            }
+
+            meeting.IsConcluded = true;
+            meeting.UpdatedAt = DateTime.Now;
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"Toplantı #{meeting.Id} karara bağlandı ve Noter Karar Defterine işlendi.";
             if (string.Equals(returnTo, "Oylamalar", StringComparison.OrdinalIgnoreCase))
             {
                 return RedirectToAction(nameof(Oylamalar), new { buildingId });
@@ -3256,7 +3392,7 @@ namespace GMK360.Web.Controllers
             return RedirectToAction(nameof(Giderler), new { buildingId });
         }
 
-        // 7. İç Talepler (Ticket) Yönetimi
+        // 7. İç Talepler & Saha Arıza Bildirimleri Yönetimi
         public async Task<IActionResult> TicketManagement(int? buildingId)
         {
             var buildings = await GetUserManagedRootBuildingsAsync();
@@ -3266,7 +3402,13 @@ namespace GMK360.Web.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            var selectedIds = buildings.Select(b => b.Id).ToList();
+            var rootIds = buildings.Select(b => b.Id).ToList();
+            var childIds = await _context.Buildings
+                .Where(b => b.ParentBuildingId.HasValue && rootIds.Contains(b.ParentBuildingId.Value))
+                .Select(b => b.Id)
+                .ToListAsync();
+            var selectedIds = rootIds.Concat(childIds).Distinct().ToList();
+
             Building? selectedBuilding = null;
             if (buildingId.HasValue)
             {
@@ -3281,10 +3423,67 @@ namespace GMK360.Web.Controllers
                 .OrderByDescending(t => t.CreatedAt)
                 .ToListAsync();
 
+            var taskTickets = await _context.BuildingTaskTickets
+                .Include(t => t.Building)
+                .Include(t => t.BuildingUnit)
+                .Include(t => t.AssignedStaff)
+                .Where(t => !t.IsDeleted && selectedIds.Contains(t.BuildingId))
+                .OrderByDescending(t => t.Id)
+                .Take(100)
+                .ToListAsync();
+
+            var staffList = await _context.BuildingStaffs
+                .Where(s => !s.IsDeleted && s.IsActive && selectedIds.Contains(s.BuildingId))
+                .OrderBy(s => s.FullName)
+                .ToListAsync();
+
             ViewBag.Building = selectedBuilding ?? buildings.First();
             ViewBag.Buildings = buildings;
             ViewBag.SelectedBuildingId = buildingId;
+            ViewBag.TaskTickets = taskTickets;
+            ViewBag.StaffList = staffList;
             return View(tickets);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AssignOrCloseTaskTicket(
+            int ticketId,
+            int buildingId,
+            int? assignedStaffId,
+            string? status,
+            string? completionNote,
+            [FromServices] FacilityTaskDispatchService taskDispatch)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var tk = await _context.BuildingTaskTickets.FirstOrDefaultAsync(t => t.Id == ticketId && t.BuildingId == buildingId && !t.IsDeleted);
+            if (tk == null)
+            {
+                TempData["ErrorMessage"] = "Arıza / talep kaydı bulunamadı.";
+                return RedirectToAction(nameof(TicketManagement), new { buildingId });
+            }
+
+            if (status == "Tamamlandi")
+            {
+                await taskDispatch.CompleteTicketAsync(ticketId, string.IsNullOrWhiteSpace(completionNote) ? "Yönetim tarafından kapatıldı" : completionNote, null);
+                TempData["SuccessMessage"] = $"Arıza bildirimi #{ticketId} tamamlandı olarak kapatıldı.";
+            }
+            else if (assignedStaffId.HasValue && assignedStaffId.Value > 0)
+            {
+                await taskDispatch.AssignTicketAsync(ticketId, assignedStaffId.Value, tk.Priority);
+                TempData["SuccessMessage"] = $"Arıza bildirimi #{ticketId} görevliye atandı.";
+            }
+            else if (!string.IsNullOrWhiteSpace(status))
+            {
+                tk.Status = status;
+                tk.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                TempData["SuccessMessage"] = $"Arıza bildirimi #{ticketId} güncellendi.";
+            }
+
+            return RedirectToAction(nameof(TicketManagement), new { buildingId });
         }
 
         [HttpPost]

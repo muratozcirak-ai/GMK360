@@ -9,10 +9,22 @@
     var residentUnits = ViewBag.ResidentUnits as List<GMK360.Core.Entities.BuildingUnit> ?? new List<GMK360.Core.Entities.BuildingUnit>();
     var tickets = ViewBag.Tickets as List<GMK360.Core.Entities.BuildingTaskTicket> ?? new List<GMK360.Core.Entities.BuildingTaskTicket>();
     var budget = ViewBag.BudgetSummary as GMK360.Web.Services.BuildingMonthlyBudgetSummary ?? new GMK360.Web.Services.BuildingMonthlyBudgetSummary();
+    var meetings = ViewBag.Meetings as List<GMK360.Core.Entities.SystemMeeting> ?? new List<GMK360.Core.Entities.SystemMeeting>();
+    var boardMembership = ViewBag.BoardMembership as GMK360.Core.Entities.BuildingManager;
+    var pendingApprovals = ViewBag.PendingApprovals as List<GMK360.Core.Entities.ApprovalRequest> ?? new List<GMK360.Core.Entities.ApprovalRequest>();
+    var currentUserProfile = ViewBag.CurrentUserProfile as GMK360.Core.Entities.Identity.ApplicationUser;
+    int rootBuildingId = ViewBag.RootBuildingId is int rbid ? rbid : buildingId;
 
     var allDebts = residentUnits.SelectMany(u => u.Debts ?? new List<GMK360.Core.Entities.UnitDebt>()).Where(d => !d.IsArchived).ToList();
     var ownerDebts = allDebts.Where(d => d.PayerRole == "Owner").ToList();
     var tenantDebts = allDebts.Where(d => d.PayerRole != "Owner").ToList();
+    string boardRoleLabel = boardMembership?.Role == GMK360.Core.Entities.BuildingManagerRole.BoardMember
+        ? "Aza (Yönetim Kurulu)"
+        : boardMembership?.Role == GMK360.Core.Entities.BuildingManagerRole.Auditor
+            ? "Denetçi"
+            : boardMembership?.Role == GMK360.Core.Entities.BuildingManagerRole.HeadManager
+                ? "Yönetici"
+                : "";
 }
 <!DOCTYPE html>
 <html lang="tr">
@@ -41,7 +53,14 @@
                     </span>
                     <div class="fw-bold fs-5 mt-1">GMK360 Mobil Saha</div>
                 </div>
-                <div class="d-flex gap-2">
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    @if (!string.IsNullOrEmpty(boardRoleLabel))
+                    {
+                        <span class="badge bg-info text-dark rounded-pill px-2 py-1 fw-semibold">@boardRoleLabel</span>
+                    }
+                    <a href="/Profile" class="btn btn-sm btn-outline-light rounded-pill px-3" title="E-posta / Telefon Doğrulama &amp; Gizli PIN">
+                        <i class="bi bi-shield-lock me-1"></i>Profil &amp; PIN
+                    </a>
                     @if (canSwitch)
                     {
                         <a href="/BuildingManager/Index" class="btn btn-sm btn-light rounded-pill px-3 fw-semibold">Web Panele Dön</a>
@@ -247,15 +266,103 @@
                 </div>
             </div>
 
+            @if (boardMembership != null)
+            {
+                <div class="card pwa-card bg-white p-3 mb-3 border border-info border-opacity-50">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                        <div>
+                            <span class="badge bg-info text-dark rounded-pill">@boardRoleLabel Yetkisi</span>
+                            <h6 class="fw-bold mb-0 mt-1">Kurul &amp; Denetim Özeti — @(boardMembership.Building?.Name ?? "Site / Bina")</h6>
+                        </div>
+                        @if (rootBuildingId > 0)
+                        {
+                            <a href="/BuildingManager/Detail/@rootBuildingId" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-semibold">
+                                Bina Paneline Geç &rarr;
+                            </a>
+                        }
+                    </div>
+                    <div class="row g-2 mb-2 small">
+                        <div class="col-6">
+                            <div class="bg-light rounded-3 p-2">
+                                <span class="text-muted d-block">Aylık İşletme Bütçesi</span>
+                                <strong class="text-success">@budget.TotalMonthlyOperatingBudget.ToString("N0") ₺</strong>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="bg-light rounded-3 p-2">
+                                <span class="text-muted d-block">Kıdem / Demirbaş Fonu</span>
+                                <strong class="text-danger">@budget.TotalMonthlyCapitalBudget.ToString("N0") ₺</strong>
+                            </div>
+                        </div>
+                    </div>
+                    @if (pendingApprovals.Any())
+                    {
+                        <div class="border-top pt-2 mt-1">
+                            <div class="small fw-bold text-warning-emphasis mb-2">
+                                <i class="bi bi-shield-lock-fill me-1"></i>Onay Bekleyen İşlemler (@pendingApprovals.Count)
+                            </div>
+                            @foreach (var req in pendingApprovals)
+                            {
+                                <div class="bg-light rounded-3 p-2 mb-2 d-flex flex-wrap justify-content-between align-items-center gap-2 small">
+                                    <div>
+                                        <span class="badge bg-warning text-dark">@req.RequestType (@req.ApprovalCount/@req.RequiredApprovals)</span>
+                                        <div class="fw-semibold text-dark">@req.Reason</div>
+                                    </div>
+                                    @if (boardMembership.Role != GMK360.Core.Entities.BuildingManagerRole.Auditor)
+                                    {
+                                        <div class="d-flex gap-1">
+                                            <form asp-action="DecideBoardApproval" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="requestId" value="@req.Id" />
+                                                <input type="hidden" name="buildingId" value="@buildingId" />
+                                                <input type="hidden" name="approve" value="true" />
+                                                <input type="hidden" name="previewRole" value="@(canSwitch ? activeRole : "")" />
+                                                <button type="submit" class="btn btn-xs btn-success rounded-pill px-2 fw-bold">Onayla</button>
+                                            </form>
+                                            <form asp-action="DecideBoardApproval" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="requestId" value="@req.Id" />
+                                                <input type="hidden" name="buildingId" value="@buildingId" />
+                                                <input type="hidden" name="approve" value="false" />
+                                                <input type="hidden" name="previewRole" value="@(canSwitch ? activeRole : "")" />
+                                                <button type="submit" class="btn btn-xs btn-outline-danger rounded-pill px-2">Reddet</button>
+                                            </form>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="small text-muted">Şu an aza onayı bekleyen kritik bir kasa/iptal işlemi bulunmuyor.</div>
+                    }
+                </div>
+            }
+
             <!-- FOTOĞRAFLI TALEP GÖNDER KARTI -->
             <div class="card pwa-card bg-white p-3 mb-3 border border-success border-opacity-25">
-                <h6 class="fw-bold text-success mb-2"><i class="bi bi-camera-fill me-1"></i> Fotoğraflı Bildirim / Talep Gönder</h6>
+                <h6 class="fw-bold text-success mb-2"><i class="bi bi-camera-fill me-1"></i> Fotoğraflı Arıza / Talep Bildirimi Gönder</h6>
                 <form asp-action="CreateTaskTicket" method="post" enctype="multipart/form-data" class="row g-2 compressed-photo-form">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="buildingId" value="@buildingId" />
-                    <input type="hidden" name="buildingUnitId" value="@firstUnit?.Id" />
                     <input type="hidden" name="createdByRole" value="@(activeRole == "Owner" ? "MalSahibi" : "Kiraci")" />
                     <input type="hidden" name="previewRole" value="@(canSwitch ? activeRole : "")" />
+                    @if (residentUnits.Count > 1)
+                    {
+                        <div class="col-12">
+                            <select name="buildingUnitId" class="form-select form-select-sm">
+                                @foreach (var u in residentUnits)
+                                {
+                                    <option value="@u.Id">@u.Building?.Name — Daire @u.DoorNumber</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    else
+                    {
+                        <input type="hidden" name="buildingUnitId" value="@firstUnit?.Id" />
+                    }
                     <div class="col-6">
                         <select name="category" class="form-select form-select-sm" id="resCatSelect" onchange="toggleAutoCleanHint()">
                             <option value="Temizlik/Cop">Temizlik / Çöp (Oto Görevli)</option>
@@ -309,6 +416,59 @@
                     </div>
                 </div>
             }
+
+            <!-- TOPLANTILAR & KARAR DEFTERİ + GÜNDEM ÖNERİSİ -->
+            <div class="card pwa-card bg-white p-3 mt-3 mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold text-dark mb-0"><i class="bi bi-journal-bookmark text-primary me-1"></i> Toplantılar &amp; Karar Defteri</h6>
+                    <span class="badge bg-light text-dark border">@meetings.Count Kayıt</span>
+                </div>
+                @if (!meetings.Any())
+                {
+                    <p class="small text-muted mb-2">Henüz planlanmış toplantı veya yayınlanmış karar bulunmuyor.</p>
+                }
+                else
+                {
+                    @foreach (var m in meetings.Take(6))
+                    {
+                        <div class="border rounded-3 p-2 mb-2 @(m.IsConcluded ? "bg-light" : "bg-warning bg-opacity-10 border-warning")">
+                            <div class="d-flex justify-content-between align-items-center gap-2">
+                                <strong class="small text-dark">@m.AgendaTitle</strong>
+                                <span class="badge @(m.IsConcluded ? "bg-success" : "bg-warning text-dark")">
+                                    @(m.IsConcluded ? "Karara Bağlandı" : "📅 Yaklaşan Toplantı")
+                                </span>
+                            </div>
+                            <div class="text-muted" style="font-size:.75rem;">
+                                <i class="bi bi-calendar3 me-1"></i>@m.MeetingDate.ToString("dd.MM.yyyy HH:mm")
+                            </div>
+                            @if (m.Decisions != null && m.Decisions.Any())
+                            {
+                                <div class="mt-1 pt-1 border-top small">
+                                    @foreach (var dec in m.Decisions)
+                                    {
+                                        <div><i class="bi bi-check2-circle text-success me-1"></i>@dec.DecisionText</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+
+                <form asp-action="ProposeMeetingAgenda" method="post" class="border-top pt-2 mt-2 row g-2">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="buildingId" value="@buildingId" />
+                    <input type="hidden" name="previewRole" value="@(canSwitch ? activeRole : "")" />
+                    <div class="col-12">
+                        <label class="form-label small fw-bold mb-1">Toplantı / Gündem Talebi İlet</label>
+                    </div>
+                    <div class="col-8">
+                        <input type="text" name="agendaSubject" class="form-control form-control-sm" required placeholder="Örn: Otopark aydınlatması için toplantı gündemi..." />
+                    </div>
+                    <div class="col-4">
+                        <button type="submit" class="btn btn-sm btn-outline-primary w-100 rounded-pill fw-semibold">Talep Et</button>
+                    </div>
+                </form>
+            </div>
         }
         else
         {
@@ -399,6 +559,8 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    @{ ViewData["FeedbackModule"] = (activeRole == "Owner" || activeRole == "Tenant") ? "SakinPortal" : "SiteYonetimi"; }
+    <partial name="_FeedbackWidgetPartial" />
     <partial name="_PwaScriptsPartial" />
     <script>
         function toggleAutoCleanHint() {

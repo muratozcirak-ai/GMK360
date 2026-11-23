@@ -82,6 +82,7 @@ namespace GMK360.Data.Contexts
         // Sistem Hata/Uyar? Bildirimleri (Admin Onay? Gereken Durumlar)
         public DbSet<SystemIssueTicket> SystemIssueTickets { get; set; }
         public DbSet<SupportTicket> SupportTickets { get; set; }
+        public DbSet<PlatformFeedback> PlatformFeedbacks { get; set; }
         
         // Yeni Mimaride Eklenenler
         public DbSet<AgencyConsultant> AgencyConsultants { get; set; }

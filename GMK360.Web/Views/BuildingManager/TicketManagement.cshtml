@@ -1,21 +1,157 @@
 @model IEnumerable<GMK360.Core.Entities.SupportTicket>
 @{
-    ViewData["Title"] = "İç Talepler Yönetimi";
+    ViewData["Title"] = "İç Talepler & Arıza Yönetimi";
     Layout = "~/Views/Shared/_FacilityLayout.cshtml";
     var building = ViewBag.Building as GMK360.Core.Entities.Building;
+    var buildings = ViewBag.Buildings as List<GMK360.Core.Entities.Building> ?? new List<GMK360.Core.Entities.Building>();
+    int? selectedBuildingId = ViewBag.SelectedBuildingId as int?;
+    var taskTickets = ViewBag.TaskTickets as List<GMK360.Core.Entities.BuildingTaskTicket> ?? new List<GMK360.Core.Entities.BuildingTaskTicket>();
+    var staffList = ViewBag.StaffList as List<GMK360.Core.Entities.BuildingStaff> ?? new List<GMK360.Core.Entities.BuildingStaff>();
 }
 
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <div>
-        <h1 class="h2"><i class="bi bi-headset text-primary me-2"></i> İç Talepler (Ticket)</h1>
-        <p class="text-muted">@building?.Name binasına ait tüm teknik, şikayet ve toplantı talepleri</p>
+        <h1 class="h2 fw-bold"><i class="bi bi-wrench-adjustable-circle text-primary me-2"></i> Sakin Talepleri &amp; Arıza Bildirimleri</h1>
+        <p class="text-muted mb-0">@building?.Name için kiracı, kat maliki, aza ve görevlilerden gelen tüm fotoğraflı arızalar, gündem önerileri ve talepler.</p>
     </div>
-    <div class="btn-toolbar mb-2 mb-md-0">
-        <a href="/BuildingManager/Detail/@building?.Id" class="btn btn-sm btn-outline-secondary">
+    <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+        <a href="/FacilityPortal/Index?buildingId=@building?.Id" class="btn btn-sm btn-success rounded-pill px-3">
+            <i class="bi bi-phone me-1"></i> Saha PWA Görünümü
+        </a>
+        <a href="/BuildingManager/Detail/@building?.Id" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
             <i class="bi bi-arrow-left me-1"></i> Binaya Dön
         </a>
     </div>
 </div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show rounded-3 border-0 shadow-sm mb-3">
+        @TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show rounded-3 border-0 shadow-sm mb-3">
+        @TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (buildings.Count > 1)
+{
+    <div class="card border-0 shadow-sm rounded-3 mb-3">
+        <div class="card-body py-2 px-3">
+            <form method="get" class="row g-2 align-items-center">
+                <div class="col-md-5">
+                    <select name="buildingId" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Tüm Binalarım / Bloklar</option>
+                        @foreach (var b in buildings)
+                        {
+                            <option value="@b.Id" selected="@(selectedBuildingId == b.Id)">@b.Name</option>
+                        }
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+<h5 class="fw-bold text-dark mb-2"><i class="bi bi-camera-fill text-success me-1"></i> Saha Fotoğraflı Arıza &amp; Temizlik Bildirimleri (@taskTickets.Count)</h5>
+<div class="row mb-4">
+    @if (!taskTickets.Any())
+    {
+        <div class="col-12">
+            <div class="card border-0 shadow-sm text-center py-4 bg-white">
+                <div class="card-body text-muted small">
+                    Kiracı veya Kat Maliki portalından henüz fotoğraflı arıza/temizlik bildirimi gönderilmedi.
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        @foreach (var tk in taskTickets)
+        {
+            <div class="col-md-6 mb-3">
+                <div class="card h-100 border-0 shadow-sm border-start border-4 @(tk.Status == "Tamamlandi" ? "border-success" : tk.Status == "Atandi" ? "border-primary" : "border-warning")">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <span class="badge @(tk.Priority == "Acil" ? "bg-danger" : "bg-secondary")">@tk.Priority</span>
+                                <span class="badge bg-light text-dark border">@tk.Category</span>
+                                <strong class="ms-1">#@tk.Id</strong>
+                                <div class="small text-muted mt-1">
+                                    @(tk.Building?.Name ?? "") • @(tk.BuildingUnit != null ? $"Daire {tk.BuildingUnit.DoorNumber}" : "Ortak Alan") • @tk.CreatedByRole • @tk.LocationNote
+                                </div>
+                            </div>
+                            <span class="badge @(tk.Status == "Tamamlandi" ? "bg-success" : tk.Status == "Atandi" ? "bg-primary" : "bg-warning text-dark")">@tk.Status</span>
+                        </div>
+                        <p class="small text-dark mb-2">@tk.Description</p>
+                        @if (!string.IsNullOrEmpty(tk.BeforePhotoUrl) || !string.IsNullOrEmpty(tk.AfterPhotoUrl))
+                        {
+                            <div class="row g-2 mb-2">
+                                @if (!string.IsNullOrEmpty(tk.BeforePhotoUrl))
+                                {
+                                    <div class="col-6">
+                                        <small class="text-muted d-block">Bildirim Fotoğrafı</small>
+                                        <img src="@tk.BeforePhotoUrl" class="img-fluid rounded-2 border" style="max-height:130px;object-fit:cover;width:100%;" alt="Bildirim" />
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(tk.AfterPhotoUrl))
+                                {
+                                    <div class="col-6">
+                                        <small class="text-success fw-bold d-block">Çözüm Kanıtı</small>
+                                        <img src="@tk.AfterPhotoUrl" class="img-fluid rounded-2 border" style="max-height:130px;object-fit:cover;width:100%;" alt="Çözüm" />
+                                    </div>
+                                }
+                            </div>
+                        }
+                        @if (tk.Status != "Tamamlandi")
+                        {
+                            <form asp-action="AssignOrCloseTaskTicket" method="post" class="row g-2 align-items-center pt-2 border-top mt-2">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="ticketId" value="@tk.Id" />
+                                <input type="hidden" name="buildingId" value="@tk.BuildingId" />
+                                @if (staffList.Any())
+                                {
+                                    <div class="col-6">
+                                        <select name="assignedStaffId" class="form-select form-select-sm">
+                                            <option value="">Görevli Seç...</option>
+                                            @foreach (var st in staffList.Where(s => s.BuildingId == tk.BuildingId || s.BuildingId == (tk.Building?.ParentBuildingId ?? tk.BuildingId)))
+                                            {
+                                                <option value="@st.Id" selected="@(tk.AssignedStaffId == st.Id)">@st.FullName (@st.RoleType)</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-3">
+                                        <button type="submit" name="status" value="Atandi" class="btn btn-sm btn-primary w-100">Ata</button>
+                                    </div>
+                                    <div class="col-3">
+                                        <button type="submit" name="status" value="Tamamlandi" class="btn btn-sm btn-success w-100">Kapat</button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="col-12 text-end">
+                                        <button type="submit" name="status" value="Tamamlandi" class="btn btn-sm btn-success rounded-pill px-3">Tamamlandı İşaretle</button>
+                                    </div>
+                                }
+                            </form>
+                        }
+                        else if (tk.AssignedStaff != null)
+                        {
+                            <div class="small text-muted pt-2 border-top">Çözen Görevli: <strong>@tk.AssignedStaff.FullName</strong> @(!string.IsNullOrEmpty(tk.StaffCompletionNote) ? $"— {tk.StaffCompletionNote}" : "")</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<h5 class="fw-bold text-dark mb-2"><i class="bi bi-chat-left-text text-primary me-1"></i> Toplantı / Gündem Önerileri &amp; İç Talepler (@Model.Count())</h5>
 
 <div class="row">
     @if (!Model.Any())
