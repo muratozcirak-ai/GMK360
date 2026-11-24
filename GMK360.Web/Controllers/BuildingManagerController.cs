@@ -3072,6 +3072,28 @@ namespace GMK360.Web.Controllers
             return View(units);
         }
 
+        private static decimal? ParseFlexibleDecimal(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            var s = raw.Trim().Replace(" ", "");
+            int lastComma = s.LastIndexOf(',');
+            int lastDot = s.LastIndexOf('.');
+            if (lastComma >= 0 && lastDot >= 0)
+            {
+                s = lastComma > lastDot
+                    ? s.Replace(".", "").Replace(',', '.')
+                    : s.Replace(",", "");
+            }
+            else if (lastComma >= 0)
+            {
+                s = s.Replace(',', '.');
+            }
+            return decimal.TryParse(s, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+                ? parsed
+                : null;
+        }
+
+        // 7. Bölüm Malik / Kiracı & Aidat Kuralı Güncelleme
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateUnitContacts(
@@ -3084,22 +3106,22 @@ namespace GMK360.Web.Controllers
             string? tenantPhone,
             string? tenantEmail,
             bool isEmpty,
-            decimal? landShare,
-            double? grossSquareMeters,
+            string? landShare,
+            string? grossSquareMeters,
             string? residentQuickPin,
             int? selectedBuildingFilter,
-            decimal? duesMultiplier = null,
-            decimal? fixedMonthlyDues = null,
+            string? duesMultiplier = null,
+            string? fixedMonthlyDues = null,
             bool? isExemptFromElevator = null,
             bool? isExemptFromStairwell = null,
-            decimal? cleaningParticipationPercent = null,
+            string? cleaningParticipationPercent = null,
             string? duesRuleNote = null,
             string? ownerQuickPin = null,
             string? tenantQuickPin = null,
             string? ownerTcNo = null,
             string? tenantTcNo = null,
             bool isDuesExempt = false,
-            decimal? duesAdjustmentAmount = null)
+            string? duesAdjustmentAmount = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -3112,6 +3134,13 @@ namespace GMK360.Web.Controllers
                 || !string.IsNullOrWhiteSpace(tenantEmail);
             bool effectiveEmpty = isEmpty && !hasTenantInfo;
 
+            var parsedLandShare = ParseFlexibleDecimal(landShare);
+            var parsedGrossSqm = ParseFlexibleDecimal(grossSquareMeters);
+            var parsedDuesMultiplier = ParseFlexibleDecimal(duesMultiplier);
+            var parsedFixedDues = ParseFlexibleDecimal(fixedMonthlyDues);
+            var parsedDuesAdj = ParseFlexibleDecimal(duesAdjustmentAmount);
+            var parsedCleaningPct = ParseFlexibleDecimal(cleaningParticipationPercent);
+
             unit.OwnerName = ownerName?.Trim();
             unit.OwnerPhone = ownerPhone?.Trim();
             unit.OwnerEmail = ownerEmail?.Trim();
@@ -3119,18 +3148,18 @@ namespace GMK360.Web.Controllers
             unit.TenantPhone = effectiveEmpty ? null : tenantPhone?.Trim();
             unit.TenantEmail = effectiveEmpty ? null : tenantEmail?.Trim();
             unit.IsEmpty = effectiveEmpty;
-            if (landShare.HasValue) unit.LandShare = Math.Max(0m, landShare.Value);
-            if (grossSquareMeters.HasValue) unit.GrossSquareMeters = Math.Max(0, grossSquareMeters.Value);
-            if (duesMultiplier.HasValue) unit.DuesMultiplier = Math.Clamp(duesMultiplier.Value, 0m, 10m);
-            if (fixedMonthlyDues.HasValue)
-                unit.FixedMonthlyDues = Math.Max(0m, Math.Round(fixedMonthlyDues.Value, 2));
+            if (parsedLandShare.HasValue) unit.LandShare = Math.Max(0m, parsedLandShare.Value);
+            if (parsedGrossSqm.HasValue) unit.GrossSquareMeters = Math.Max(0, (double)parsedGrossSqm.Value);
+            if (parsedDuesMultiplier.HasValue) unit.DuesMultiplier = Math.Clamp(parsedDuesMultiplier.Value, 0m, 10m);
+            if (parsedFixedDues.HasValue)
+                unit.FixedMonthlyDues = Math.Max(0m, Math.Round(parsedFixedDues.Value, 2));
             else if (Request.Form.ContainsKey("fixedMonthlyDues") && string.IsNullOrWhiteSpace(Request.Form["fixedMonthlyDues"]))
                 unit.FixedMonthlyDues = null;
             unit.IsDuesExempt = isDuesExempt;
-            if (duesAdjustmentAmount.HasValue) unit.DuesAdjustmentAmount = Math.Round(duesAdjustmentAmount.Value, 2);
+            if (parsedDuesAdj.HasValue) unit.DuesAdjustmentAmount = Math.Round(parsedDuesAdj.Value, 2);
             if (isExemptFromElevator.HasValue) unit.IsExemptFromElevator = isExemptFromElevator.Value;
             if (isExemptFromStairwell.HasValue) unit.IsExemptFromStairwell = isExemptFromStairwell.Value;
-            if (cleaningParticipationPercent.HasValue) unit.CleaningParticipationPercent = Math.Clamp(cleaningParticipationPercent.Value, 0m, 500m);
+            if (parsedCleaningPct.HasValue) unit.CleaningParticipationPercent = Math.Clamp(parsedCleaningPct.Value, 0m, 500m);
             if (duesRuleNote != null) unit.DuesRuleNote = string.IsNullOrWhiteSpace(duesRuleNote) ? null : duesRuleNote.Trim();
             if (!string.IsNullOrWhiteSpace(residentQuickPin) && residentQuickPin.Trim().Length >= 4)
             {
@@ -3174,15 +3203,15 @@ namespace GMK360.Web.Controllers
         public async Task<IActionResult> BulkApplyUnitDuesProfile(
             int buildingId,
             string targetCategory,
-            decimal duesMultiplier,
-            decimal? fixedMonthlyDues,
+            string? duesMultiplier,
+            string? fixedMonthlyDues,
             bool isExemptFromElevator,
             bool isExemptFromStairwell,
-            decimal cleaningParticipationPercent,
+            string? cleaningParticipationPercent,
             string? duesRuleNote,
             string? returnAction = null,
             bool isDuesExempt = false,
-            decimal? duesAdjustmentAmount = null)
+            string? duesAdjustmentAmount = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -3206,22 +3235,27 @@ namespace GMK360.Web.Controllers
                 return RedirectToAction(returnAction == "Sakinler" ? nameof(Sakinler) : nameof(Aidatlar), new { buildingId });
             }
 
+            decimal parsedMultiplier = Math.Clamp(ParseFlexibleDecimal(duesMultiplier) ?? 1m, 0m, 10m);
+            decimal? parsedFixedDues = ParseFlexibleDecimal(fixedMonthlyDues);
+            decimal? parsedDuesAdj = ParseFlexibleDecimal(duesAdjustmentAmount);
+            decimal parsedCleanPct = Math.Clamp(ParseFlexibleDecimal(cleaningParticipationPercent) ?? 100m, 0m, 500m);
+
             foreach (var u in filtered)
             {
-                u.DuesMultiplier = Math.Clamp(duesMultiplier, 0m, 10m);
-                if (fixedMonthlyDues.HasValue)
-                    u.FixedMonthlyDues = Math.Max(0m, Math.Round(fixedMonthlyDues.Value, 2));
+                u.DuesMultiplier = parsedMultiplier;
+                if (parsedFixedDues.HasValue)
+                    u.FixedMonthlyDues = Math.Max(0m, Math.Round(parsedFixedDues.Value, 2));
                 u.IsDuesExempt = isDuesExempt;
-                if (duesAdjustmentAmount.HasValue)
-                    u.DuesAdjustmentAmount = Math.Round(duesAdjustmentAmount.Value, 2);
+                if (parsedDuesAdj.HasValue)
+                    u.DuesAdjustmentAmount = Math.Round(parsedDuesAdj.Value, 2);
                 u.IsExemptFromElevator = isExemptFromElevator;
                 u.IsExemptFromStairwell = isExemptFromStairwell;
-                u.CleaningParticipationPercent = Math.Clamp(cleaningParticipationPercent, 0m, 500m);
+                u.CleaningParticipationPercent = parsedCleanPct;
                 if (!string.IsNullOrWhiteSpace(duesRuleNote)) u.DuesRuleNote = duesRuleNote.Trim();
             }
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = $"{filtered.Count} adet bağımsız bölüme aidat katsayısı ({duesMultiplier:0.##}x) ve muafiyet/fark profili topluca uygulandı.";
+            TempData["SuccessMessage"] = $"{filtered.Count} adet bağımsız bölüme aidat katsayısı ({parsedMultiplier:0.##}x) ve muafiyet/fark profili topluca uygulandı.";
             return RedirectToAction(returnAction == "Sakinler" ? nameof(Sakinler) : nameof(Aidatlar), new { buildingId });
         }
 
@@ -3229,15 +3263,16 @@ namespace GMK360.Web.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SaveBuildingBaseDues(
             int buildingId,
-            decimal? defaultBaseMonthlyDues,
+            string? defaultBaseMonthlyDues,
             int? duesPaymentDay,
             bool applyToAllSiteBlocks = true)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
 
-            decimal? cleanDues = defaultBaseMonthlyDues.HasValue && defaultBaseMonthlyDues.Value >= 0m
-                ? Math.Round(defaultBaseMonthlyDues.Value, 2)
+            decimal? parsedBaseDues = ParseFlexibleDecimal(defaultBaseMonthlyDues);
+            decimal? cleanDues = parsedBaseDues.HasValue && parsedBaseDues.Value >= 0m
+                ? Math.Round(parsedBaseDues.Value, 2)
                 : null;
             int? cleanDay = duesPaymentDay.HasValue
                 ? Math.Clamp(duesPaymentDay.Value, 1, 31)

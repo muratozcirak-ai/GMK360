@@ -414,8 +414,9 @@ namespace GMK360.Web.Controllers
             return RedirectToAction("Index", "FacilityPortal");
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken] public async Task<IActionResult> Logout()
+        [AcceptVerbs("GET", "POST")]
+        [IgnoreAntiforgeryToken]
+        public async Task<IActionResult> Logout()
         {
             await _signInManager.SignOutAsync();
             return RedirectToAction("Index", "Home");
