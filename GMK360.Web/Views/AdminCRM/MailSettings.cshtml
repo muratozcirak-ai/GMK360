@@ -1,0 +1,141 @@
+@model GMK360.Core.Entities.SystemEmailSetting
+@{
+    ViewData["Title"] = "Sistem E-Posta (SMTP) Ayarları & Canlı Test";
+    Layout = "~/Views/Shared/_AdminLayout.cshtml";
+    bool hasPwd = ViewBag.HasSavedPassword is bool hp && hp;
+    bool usingDb = ViewBag.UsingDatabaseConfig is bool udb && udb;
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <h2 class="fw-bold mb-0 text-navy"><i class="ph ph-envelope-simple-open text-orange me-2"></i>Sistem E-Posta (SMTP) Ayarları &amp; Canlı Test</h2>
+            <p class="text-muted mb-0">Aktivasyon davetleri, yeni cihaz doğrulama kodları ve sistem bildirimleri için kurumsal giden e-posta sunucusunu yönetin.</p>
+        </div>
+        <a href="/AdminCRM/Tenants" class="btn btn-outline-secondary rounded-pill px-4 fw-semibold">
+            <i class="ph ph-buildings me-1"></i> Kurumlar &amp; Siteler
+        </a>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
+            <i class="ph-bold ph-check-circle me-1"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
+            <i class="ph-bold ph-warning-circle me-1"></i> @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                <div class="card-header bg-navy text-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0"><i class="ph ph-gear me-2"></i>SMTP Sunucu Yapılandırması</h5>
+                    <span class="badge @(usingDb ? "bg-success" : "bg-warning text-dark") rounded-pill px-3">
+                        @(usingDb ? "Veritabanından Aktif" : "Varsayılan / Henüz Kaydedilmedi")
+                    </span>
+                </div>
+                <form asp-action="SaveMailSettings" asp-controller="AdminCRM" method="post" class="card-body p-4 row g-3">
+                    @Html.AntiForgeryToken()
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold small">SMTP Sunucu Adresi (Host) *</label>
+                        <input type="text" name="host" id="smtpHost" class="form-control" value="@Model.Host" required placeholder="mail.gmk360.com" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Port *</label>
+                        <select name="port" id="smtpPort" class="form-select fw-semibold">
+                            <option value="587" selected="@(Model.Port == 587 ? "selected" : null)">587 (STARTTLS · Önerilen)</option>
+                            <option value="465" selected="@(Model.Port == 465 ? "selected" : null)">465 (SSL/TLS)</option>
+                            <option value="25" selected="@(Model.Port == 25 ? "selected" : null)">25 (Standart SMTP)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Gönderici E-Posta Adresi *</label>
+                        <input type="email" name="mail" class="form-control fw-semibold" value="@Model.Mail" required placeholder="iletisim@gmk360.com" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">E-Posta Şifresi</label>
+                        <input type="password" name="password" class="form-control" autocomplete="new-password"
+                               placeholder="@(hasPwd ? "Kayıtlı şifre mevcut (değiştirmek için yazın)" : "E-posta hesap şifresini girin")" />
+                        @if (hasPwd)
+                        {
+                            <small class="text-success fw-semibold"><i class="ph ph-lock-key me-1"></i>Kayıtlı şifre korunuyor</small>
+                        }
+                        else
+                        {
+                            <small class="text-danger fw-semibold"><i class="ph ph-warning me-1"></i>Şifre girilmeden mail gönderilemez</small>
+                        }
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold small">Gönderici Görünen Adı</label>
+                        <input type="text" name="senderName" class="form-control" value="@Model.SenderName" placeholder="GMK360 Platform" />
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="enableSsl" value="true" id="smtpSslSw" checked="@(Model.EnableSsl ? "checked" : null)">
+                            <input type="hidden" name="enableSsl" value="false" />
+                            <label class="form-check-label small fw-bold" for="smtpSslSw">SSL / TLS Güvenli Bağlantı Kullan</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="ignoreCertificateErrors" value="true" id="smtpCertSw" checked="@(Model.IgnoreCertificateErrors ? "checked" : null)">
+                            <input type="hidden" name="ignoreCertificateErrors" value="false" />
+                            <label class="form-check-label small fw-semibold text-muted" for="smtpCertSw">Plesk Paylaşımlı Sertifika Uyarısını Yoksay</label>
+                        </div>
+                        <small class="text-muted d-block" style="font-size:.72rem;">`mail.gmk360.com` sertifika adı uyuşmazlığı verirse bunu açın.</small>
+                    </div>
+                    <div class="col-12 pt-2">
+                        <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold w-100">
+                            <i class="ph ph-floppy-disk me-1"></i> SMTP Ayarlarını Kaydet
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="col-lg-5 d-flex flex-column gap-4">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                <div class="card-header bg-success text-white py-3">
+                    <h5 class="fw-bold mb-0"><i class="ph ph-paper-plane-tilt me-2"></i>Canlı Test Maili Gönder</h5>
+                </div>
+                <form asp-action="SendTestEmail" asp-controller="AdminCRM" method="post" class="card-body p-4">
+                    @Html.AntiForgeryToken()
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Test Alıcı E-Posta Adresi *</label>
+                        <input type="email" name="testToEmail" class="form-control" required value="@Model.Mail" placeholder="ornek@gmail.com veya iletisim@gmk360.com" />
+                        <small class="text-muted">Önce sol taraftan şifreyi kaydedin, ardından buradan test edin.</small>
+                    </div>
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold w-100">
+                        <i class="ph ph-envelope me-1"></i> Şimdi Test Maili Gönder
+                    </button>
+
+                    @if (Model.LastTestAt.HasValue)
+                    {
+                        <div class="mt-3 p-3 rounded-3 bg-light border small">
+                            <div class="fw-bold text-dark">Son Test: @Model.LastTestAt.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</div>
+                            <div class="text-muted mt-1">@Model.LastTestStatus</div>
+                        </div>
+                    }
+                </form>
+            </div>
+
+            <div class="card border-0 shadow-sm rounded-4 bg-light p-4">
+                <h6 class="fw-bold text-navy mb-2"><i class="ph ph-info text-orange me-1"></i> Çoklu Firma Hesabı İçin Tek Gelen Kutusu İpucu</h6>
+                <p class="small text-muted mb-2">
+                    Onlarca ayrı e-posta hesabı açmadan tüm firma ve site denemelerinizin aktivasyon maillerini tek kutuda toplamak için 2 pratik yöntem:
+                </p>
+                <ul class="small text-muted mb-0 ps-3">
+                    <li class="mb-1"><strong>Plesk Catch-All / Yönlendirme:</strong> Plesk Mail ayarlarından var olmayan adresleri <code>iletisim@gmk360.com</code>'a yönlendirin veya <code>bayraktar@gmk360.com</code>, <code>tepe@gmk360.com</code> alias'ı açın — tüm mailler <strong>iletisim@gmk360.com</strong>'a düşer.</li>
+                    <li><strong><code>+</code> Takma Adı:</strong> <code>adres+bayraktar@gmail.com</code>, <code>adres+tepe@gmail.com</code> yazdığınızda sistem bunları ayrı firma kullanıcısı sayar ama mailler tek kutuya gelir.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>

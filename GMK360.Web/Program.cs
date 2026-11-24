@@ -127,7 +127,7 @@ builder.Services.AddScoped<IPropertyService, PropertyService>();
 builder.Services.AddHttpClient();
 
 builder.Services.AddScoped<ILocationService, LocationService>();
-builder.Services.AddScoped<IEmailService, GMK360.Core.Services.EmailService>();
+builder.Services.AddScoped<IEmailService, GMK360.Web.Services.DbAwareEmailService>();
 builder.Services.AddScoped<IBuildingManagementService, GMK360.Web.Services.BuildingManagementService>();
 builder.Services.AddScoped<GMK360.Web.Services.FacilityGovernanceService>();
 builder.Services.AddScoped<GMK360.Web.Services.FacilityPayrollAndBudgetService>();
@@ -388,6 +388,26 @@ using (var schemaScope = app.Services.CreateScope())
                     [IsDeleted] bit NOT NULL,
                     CONSTRAINT [PK_PlatformFeedbacks] PRIMARY KEY ([Id]),
                     CONSTRAINT [FK_PlatformFeedbacks_AspNetUsers_UserId] FOREIGN KEY ([UserId]) REFERENCES [dbo].[AspNetUsers] ([Id])
+                );
+            END
+            IF OBJECT_ID(N'dbo.SystemEmailSettings', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[SystemEmailSettings] (
+                    [Id] int IDENTITY(1,1) NOT NULL,
+                    [Host] nvarchar(150) NOT NULL,
+                    [Port] int NOT NULL,
+                    [Mail] nvarchar(200) NOT NULL,
+                    [Password] nvarchar(500) NOT NULL,
+                    [SenderName] nvarchar(150) NOT NULL,
+                    [EnableSsl] bit NOT NULL,
+                    [IgnoreCertificateErrors] bit NOT NULL,
+                    [IsActive] bit NOT NULL,
+                    [LastTestAt] datetime2 NULL,
+                    [LastTestStatus] nvarchar(500) NULL,
+                    [CreatedAt] datetime2 NOT NULL,
+                    [UpdatedAt] datetime2 NULL,
+                    [IsDeleted] bit NOT NULL,
+                    CONSTRAINT [PK_SystemEmailSettings] PRIMARY KEY ([Id])
                 );
             END
         ");

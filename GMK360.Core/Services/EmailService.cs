@@ -1,10 +1,12 @@
-using System.Net;
-using System.Net.Mail;
+using System;
 using System.Threading.Tasks;
 using GMK360.Core.Interfaces;
 using GMK360.Core.Settings;
+using MailKit.Net.Smtp;
+using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using MimeKit;
 
 namespace GMK360.Core.Services
 {
@@ -21,36 +23,78 @@ namespace GMK360.Core.Services
 
         public async Task SendEmailAsync(string to, string subject, string body)
         {
-            if (string.IsNullOrWhiteSpace(_mailSettings.Host))
+            await SendEmailWithResultAsync(to, subject, body, null);
+        }
+
+        public Task<EmailSendResult> SendEmailWithResultAsync(string to, string subject, string body, MailSettings? overrideSettings = null)
+        {
+            var effective = overrideSettings ?? _mailSettings;
+            return SendWithSettingsAsync(effective, to, subject, body, _logger);
+        }
+
+        public static async Task<EmailSendResult> SendWithSettingsAsync(
+            MailSettings settings,
+            string to,
+            string subject,
+            string body,
+            ILogger logger)
+        {
+            if (string.IsNullOrWhiteSpace(to))
             {
-                _logger.LogWarning("MailSettings is not configured. Simulating email to {To}", to);
-                return;
+                return new EmailSendResult { Success = false, Message = "Alıcı e-posta adresi boş olamaz." };
+            }
+
+            if (settings == null || string.IsNullOrWhiteSpace(settings.Host) || string.IsNullOrWhiteSpace(settings.Mail))
+            {
+                logger.LogWarning("MailSettings eksik. Simülasyon: {To}", to);
+                return new EmailSendResult { Success = false, Message = "SMTP sunucu adresi veya gönderici e-posta yapılandırılmamış." };
+            }
+
+            if (string.IsNullOrWhiteSpace(settings.Password))
+            {
+                logger.LogWarning("MailSettings şifresi boş. E-posta gönderilemedi: {To}", to);
+                return new EmailSendResult { Success = false, Message = "SMTP e-posta şifresi girilmemiş (Admin > E-Posta Ayarları bölümünden kaydedin)." };
             }
 
             try
             {
-                using var client = new SmtpClient(_mailSettings.Host, _mailSettings.Port)
-                {
-                    Credentials = new NetworkCredential(_mailSettings.Mail, _mailSettings.Password),
-                    EnableSsl = true
-                };
+                var message = new MimeMessage();
+                var senderDisplay = string.IsNullOrWhiteSpace(settings.SenderName) ? "GMK360 Platform" : settings.SenderName.Trim();
+                message.From.Add(new MailboxAddress(senderDisplay, settings.Mail.Trim()));
+                message.To.Add(MailboxAddress.Parse(to.Trim()));
+                message.Subject = subject ?? string.Empty;
+                message.Body = new BodyBuilder { HtmlBody = body ?? string.Empty }.ToMessageBody();
 
-                using var mailMessage = new MailMessage
-                {
-                    From = new MailAddress(_mailSettings.Mail),
-                    Subject = subject,
-                    Body = body,
-                    IsBodyHtml = true,
-                };
-                mailMessage.To.Add(to);
+                var socketOption = settings.Port == 465
+                    ? SecureSocketOptions.SslOnConnect
+                    : (settings.EnableSsl ? SecureSocketOptions.StartTlsWhenAvailable : SecureSocketOptions.None);
 
-                await client.SendMailAsync(mailMessage);
-                _logger.LogInformation("Email successfully sent to {To} with subject {Subject}", to, subject);
+                using var client = new SmtpClient { Timeout = 15000 };
+                if (settings.IgnoreCertificateErrors)
+                {
+                    client.ServerCertificateValidationCallback = (_, _, _, _) => true;
+                }
+
+                await client.ConnectAsync(settings.Host.Trim(), settings.Port > 0 ? settings.Port : 587, socketOption);
+                await client.AuthenticateAsync(settings.Mail.Trim(), settings.Password);
+                await client.SendAsync(message);
+                await client.DisconnectAsync(true);
+
+                logger.LogInformation("Email successfully sent to {To} with subject {Subject}", to, subject);
+                return new EmailSendResult
+                {
+                    Success = true,
+                    Message = $"E-posta '{to.Trim()}' adresine başarıyla gönderildi ({settings.Host}:{settings.Port})."
+                };
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
-                _logger.LogError(ex, "An error occurred while sending email to {To}", to);
-                // Geliştirme aşamasında patlamaması için hatayı yutuyoruz (Anayasa kuralı 2: Asla patlama)
+                logger.LogError(ex, "An error occurred while sending email to {To} via {Host}:{Port}", to, settings.Host, settings.Port);
+                return new EmailSendResult
+                {
+                    Success = false,
+                    Message = $"SMTP hatası ({settings.Host}:{settings.Port}): {ex.Message}"
+                };
             }
         }
     }

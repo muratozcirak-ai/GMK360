@@ -223,10 +223,28 @@ namespace GMK360.Web.Controllers
 
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
             var verifyUrl = Url.Action("ConfirmEmail", "Account", new { userId = user.Id, token }, Request.Scheme);
-            var emailSender = HttpContext.RequestServices.GetService(typeof(Microsoft.AspNetCore.Identity.UI.Services.IEmailSender)) as Microsoft.AspNetCore.Identity.UI.Services.IEmailSender;
-            if (emailSender != null && !string.IsNullOrWhiteSpace(verifyUrl))
+            var emailSvc = HttpContext.RequestServices.GetService(typeof(GMK360.Core.Interfaces.IEmailService)) as GMK360.Core.Interfaces.IEmailService;
+            if (emailSvc != null && !string.IsNullOrWhiteSpace(verifyUrl))
             {
-                await emailSender.SendEmailAsync(user.Email, "GMK360 E-Posta Doğrulama", $"Hesabınızı doğrulamak için tıklayın: <a href='{verifyUrl}'>Doğrula</a>");
+                var body = $@"
+<div style=""font-family:Arial,sans-serif;max-width:540px;margin:0 auto;padding:20px;border:1px solid #e2e8f0;border-radius:12px;"">
+  <h2 style=""color:#1e3a8a;margin-top:0;"">GMK360 E-Posta Doğrulama</h2>
+  <p>Merhaba <strong>{System.Net.WebUtility.HtmlEncode(user.DisplayName ?? user.Email)}</strong>,</p>
+  <p>E-posta adresinizi doğrulamak için aşağıdaki butona tıklayın:</p>
+  <p style=""margin:22px 0;""><a href=""{verifyUrl}"" style=""background:#1e3a8a;color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-weight:bold;display:inline-block;"">E-Postamı Doğrula</a></p>
+  <p style=""font-size:12px;color:#64748b;"">Bağlantı: <a href=""{verifyUrl}"">{verifyUrl}</a></p>
+</div>";
+                var res = await emailSvc.SendEmailWithResultAsync(user.Email, "GMK360 E-Posta Doğrulama", body);
+                TempData["EmailVerifyLink"] = verifyUrl;
+                if (res.Success)
+                {
+                    TempData["SuccessMessage"] = $"Doğrulama e-postası '{user.Email}' adresine gönderildi.";
+                }
+                else
+                {
+                    TempData["ErrorMessage"] = $"E-posta sunucusundan gönderilemedi ({res.Message}). Yedek doğrulama bağlantısı aşağıda hazırlandı.";
+                }
+                return RedirectToAction(nameof(Index));
             }
             TempData["EmailVerifyLink"] = verifyUrl;
             TempData["SuccessMessage"] = "E-posta doğrulama bağlantısı hazırlandı.";

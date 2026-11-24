@@ -627,5 +627,133 @@ namespace GMK360.Web.Controllers
                 return RedirectToAction("Index");
             }
         }
+
+        [Authorize(Roles = "SuperAdmin,Admin")]
+        [HttpGet]
+        public async Task<IActionResult> MailSettings(
+            [FromServices] Microsoft.Extensions.Options.IOptions<GMK360.Core.Settings.MailSettings> fallbackOptions)
+        {
+            var fallback = fallbackOptions.Value ?? new GMK360.Core.Settings.MailSettings();
+            var dbSetting = await _context.SystemEmailSettings
+                .AsNoTracking()
+                .Where(s => s.IsActive && !s.IsDeleted)
+                .OrderByDescending(s => s.Id)
+                .FirstOrDefaultAsync();
+
+            var vm = dbSetting ?? new GMK360.Core.Entities.SystemEmailSetting
+            {
+                Host = string.IsNullOrWhiteSpace(fallback.Host) ? "mail.gmk360.com" : fallback.Host,
+                Port = fallback.Port > 0 ? fallback.Port : 587,
+                Mail = string.IsNullOrWhiteSpace(fallback.Mail) ? "iletisim@gmk360.com" : fallback.Mail,
+                SenderName = string.IsNullOrWhiteSpace(fallback.SenderName) ? "GMK360 Platform" : fallback.SenderName,
+                EnableSsl = fallback.EnableSsl,
+                IgnoreCertificateErrors = fallback.IgnoreCertificateErrors
+            };
+
+            ViewBag.HasSavedPassword = !string.IsNullOrWhiteSpace(dbSetting?.Password) || !string.IsNullOrWhiteSpace(fallback.Password);
+            ViewBag.UsingDatabaseConfig = dbSetting != null;
+            return View(vm);
+        }
+
+        [Authorize(Roles = "SuperAdmin,Admin")]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveMailSettings(
+            string host,
+            int port,
+            string mail,
+            string? password,
+            string? senderName,
+            bool enableSsl = true,
+            bool ignoreCertificateErrors = false,
+            [FromServices] Microsoft.Extensions.Options.IOptions<GMK360.Core.Settings.MailSettings>? fallbackOptions = null)
+        {
+            if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(mail))
+            {
+                TempData["ErrorMessage"] = "SMTP sunucu adresi ve gönderici e-posta zorunludur.";
+                return RedirectToAction(nameof(MailSettings));
+            }
+
+            var existing = await _context.SystemEmailSettings
+                .Where(s => s.IsActive && !s.IsDeleted)
+                .OrderByDescending(s => s.Id)
+                .FirstOrDefaultAsync();
+
+            if (existing == null)
+            {
+                var fallbackPwd = fallbackOptions?.Value?.Password ?? "";
+                existing = new GMK360.Core.Entities.SystemEmailSetting
+                {
+                    Host = host.Trim(),
+                    Port = port > 0 ? port : 587,
+                    Mail = mail.Trim(),
+                    Password = !string.IsNullOrWhiteSpace(password) ? password.Trim() : fallbackPwd,
+                    SenderName = string.IsNullOrWhiteSpace(senderName) ? "GMK360 Platform" : senderName.Trim(),
+                    EnableSsl = enableSsl,
+                    IgnoreCertificateErrors = ignoreCertificateErrors,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.SystemEmailSettings.Add(existing);
+            }
+            else
+            {
+                existing.Host = host.Trim();
+                existing.Port = port > 0 ? port : 587;
+                existing.Mail = mail.Trim();
+                if (!string.IsNullOrWhiteSpace(password))
+                {
+                    existing.Password = password.Trim();
+                }
+                existing.SenderName = string.IsNullOrWhiteSpace(senderName) ? "GMK360 Platform" : senderName.Trim();
+                existing.EnableSsl = enableSsl;
+                existing.IgnoreCertificateErrors = ignoreCertificateErrors;
+                existing.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = "SMTP e-posta ayarları kaydedildi. Şimdi sağdaki kutudan 'Test Maili Gönder' ile canlı doğrulama yapabilirsiniz.";
+            return RedirectToAction(nameof(MailSettings));
+        }
+
+        [Authorize(Roles = "SuperAdmin,Admin")]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SendTestEmail(
+            string testToEmail,
+            [FromServices] GMK360.Core.Interfaces.IEmailService emailService)
+        {
+            if (string.IsNullOrWhiteSpace(testToEmail))
+            {
+                TempData["ErrorMessage"] = "Lütfen test mailinin gönderileceği hedef e-posta adresini yazın.";
+                return RedirectToAction(nameof(MailSettings));
+            }
+
+            var html = $@"
+<div style=""font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px;border:1px solid #e2e8f0;border-radius:12px;"">
+  <h2 style=""color:#1e3a8a;margin-top:0;"">GMK360 SMTP Canlı Test Başarılı</h2>
+  <p>Bu e-posta, GMK360 Platform SüperAdmin SMTP test panelinden <strong>{DateTime.Now:dd.MM.yyyy HH:mm:ss}</strong> tarihinde gönderilmiştir.</p>
+  <p style=""color:#15803d;font-weight:bold;"">Aktivasyon linkleri, şifre sıfırlama ve doğrulama kodları artık aktif olarak gönderilebilir.</p>
+</div>";
+
+            var result = await emailService.SendEmailWithResultAsync(
+                testToEmail.Trim(),
+                "GMK360 SMTP Test E-Postası",
+                html);
+
+            var dbSetting = await _context.SystemEmailSettings
+                .Where(s => s.IsActive && !s.IsDeleted)
+                .OrderByDescending(s => s.Id)
+                .FirstOrDefaultAsync();
+            if (dbSetting != null)
+            {
+                dbSetting.LastTestAt = DateTime.UtcNow;
+                dbSetting.LastTestStatus = result.Message.Length > 490 ? result.Message[..490] : result.Message;
+                await _context.SaveChangesAsync();
+            }
+
+            TempData[result.Success ? "SuccessMessage" : "ErrorMessage"] = result.Message;
+            return RedirectToAction(nameof(MailSettings));
+        }
     }
 }

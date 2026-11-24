@@ -2671,8 +2671,8 @@ namespace GMK360.Web.Controllers
 
             try
             {
-                await emailSvc.SendEmailAsync(targetUser.Email, subject, body);
-                return true;
+                var res = await emailSvc.SendEmailWithResultAsync(targetUser.Email, subject, body);
+                return res.Success;
             }
             catch
             {

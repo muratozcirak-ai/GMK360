@@ -1171,14 +1171,33 @@ namespace GMK360.Web.Controllers
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null) return RedirectToAction("Login");
 
-            // Test ortamÄ± iÃ§in kodu her zaman 123456 yapÄ±yoruz. GerÃ§ekte Random kullanÄ±lmalÄ±.
-            var code = "123456"; // new Random().Next(100000, 999999).ToString();
+            var code = provider == "Email"
+                ? System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 999999).ToString()
+                : "123456";
             TempData["GeneratedDeviceCode"] = code;
 
             if (provider == "Email")
             {
-                await _emailSender.SendEmailAsync(user.Email, "GMK360 - Yeni Cihaz DoÄŸrulama Kodu", $"GÃ¼venlik kodunuz: {code}");
-                TempData["VerificationMessage"] = "DoÄŸrulama kodu e-posta adresinize gÃ¶nderildi.";
+                var emailSvc = HttpContext.RequestServices.GetService(typeof(GMK360.Core.Interfaces.IEmailService)) as GMK360.Core.Interfaces.IEmailService;
+                var htmlBody = $@"
+<div style=""font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:20px;border:1px solid #e2e8f0;border-radius:12px;"">
+  <h3 style=""color:#1e3a8a;margin-top:0;"">GMK360 Yeni Cihaz Doğrulama Kodu</h3>
+  <p>Hesabınıza giriş yapmak için 6 haneli tek kullanımlık güvenlik kodunuz:</p>
+  <div style=""font-size:28px;font-weight:bold;letter-spacing:6px;color:#15803d;background:#f0fdf4;padding:14px;text-align:center;border-radius:8px;margin:16px 0;"">{code}</div>
+  <p style=""font-size:12px;color:#64748b;"">Bu işlemi siz yapmadıysanız hemen şifrenizi yenileyin.</p>
+</div>";
+                if (emailSvc != null)
+                {
+                    var res = await emailSvc.SendEmailWithResultAsync(user.Email!, "GMK360 - Yeni Cihaz Doğrulama Kodu", htmlBody);
+                    TempData["VerificationMessage"] = res.Success
+                        ? $"6 haneli doğrulama kodu {user.Email} adresine gönderildi."
+                        : $"E-posta gönderilemedi ({res.Message}).";
+                }
+                else
+                {
+                    await _emailSender.SendEmailAsync(user.Email!, "GMK360 - Yeni Cihaz Doğrulama Kodu", htmlBody);
+                    TempData["VerificationMessage"] = "Doğrulama kodu e-posta adresinize gönderildi.";
+                }
             }
             else if (provider == "SMS")
             {
