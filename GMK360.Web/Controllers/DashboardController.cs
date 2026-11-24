@@ -208,7 +208,11 @@ namespace GMK360.Web.Controllers
                 : new GMK360.Web.Services.SingleUnitQuotaResult();
 
             var agencyConsultant = user != null
-                ? await _context.AgencyConsultants.AsNoTracking().Include(c => c.Agency).FirstOrDefaultAsync(c => c.UserId == user.Id && c.IsActive)
+                ? await _context.AgencyConsultants.AsNoTracking()
+                    .Include(c => c.Agency)
+                    .Where(c => c.UserId == user.Id && c.IsActive && !c.IsDeleted && c.Agency != null && !c.Agency.IsDeleted)
+                    .OrderByDescending(c => c.Id)
+                    .FirstOrDefaultAsync()
                 : null;
 
             ViewBag.ActiveModules = user?.ActiveModules ?? "";
@@ -338,14 +342,19 @@ namespace GMK360.Web.Controllers
 
             var userId = user.Id;
             ViewBag.CurrentUser = user;
-            var consultant = await _context.AgencyConsultants.Include(c => c.Agency).FirstOrDefaultAsync(c => c.UserId == userId && c.IsActive);
+            var consultant = await _context.AgencyConsultants
+                .Include(c => c.Agency)
+                .Where(c => c.UserId == userId && c.IsActive && !c.IsDeleted && c.Agency != null && !c.Agency.IsDeleted)
+                .OrderByDescending(c => c.Id)
+                .FirstOrDefaultAsync();
             var previewCookie = Request.Cookies["gmk360_role_preview"];
             var effectivePerms = GMK360.Web.Helpers.StaffPermissionHelper.GetEffectivePermissions(consultant?.Role, user.ActiveModules, previewCookie);
             bool hasStrategyPerm = effectivePerms.Contains(GMK360.Web.Helpers.StaffPermissionHelper.PermStrategy);
 
             if (consultant == null)
             {
-                var fallbackAgency = await _context.Agencies.FirstOrDefaultAsync();
+                bool isAdminUser = User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
+                var fallbackAgency = isAdminUser ? await _context.Agencies.FirstOrDefaultAsync(a => !a.IsDeleted) : null;
                 ViewBag.Agency = fallbackAgency;
                 ViewBag.UserRoleTitle = previewCookie == "engineer" ? "2. Rol: Teknik Ofis / Mühendis (Ön İzleme)" :
                                         previewCookie == "formen" ? "3. Rol: Saha Sorumlusu / Formen (Ön İzleme)" : "1. Rol: Patron / Firma Sahibi";
@@ -741,10 +750,72 @@ namespace GMK360.Web.Controllers
         {
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Unauthorized();
-            var consultant = await _context.AgencyConsultants.FirstOrDefaultAsync(c => c.UserId == user.Id);
+            var consultant = await _context.AgencyConsultants
+                .Where(c => c.UserId == user.Id && c.IsActive && !c.IsDeleted)
+                .OrderByDescending(c => c.Id)
+                .FirstOrDefaultAsync();
             var agency = consultant != null
-                ? await _context.Agencies.FirstOrDefaultAsync(a => a.Id == consultant.AgencyId)
-                : await _context.Agencies.FirstOrDefaultAsync();
+                ? await _context.Agencies.FirstOrDefaultAsync(a => a.Id == consultant.AgencyId && !a.IsDeleted)
+                : null;
+            if (agency == null)
+            {
+                var cleanName = !string.IsNullOrWhiteSpace(companyName) ? companyName.Trim() : (!string.IsNullOrWhiteSpace(user.FullName) ? user.FullName : "Yeni İnşaat Firmam");
+                var baseSlug = System.Text.RegularExpressions.Regex.Replace(
+                    cleanName.ToLowerInvariant().Replace("ç", "c").Replace("ğ", "g").Replace("ı", "i").Replace("ö", "o").Replace("ş", "s").Replace("ü", "u"),
+                    @"[^a-z0-9]", "");
+                if (string.IsNullOrWhiteSpace(baseSlug)) baseSlug = "firma";
+                if (baseSlug.Length > 20) baseSlug = baseSlug.Substring(0, 20);
+                var genSub = !string.IsNullOrWhiteSpace(subdomain) ? subdomain.Trim().ToLowerInvariant() : $"{baseSlug}-{Guid.NewGuid().ToString("N").Substring(0, 4)}";
+
+                agency = new Agency
+                {
+                    CompanyName = cleanName,
+                    TaxNumber = taxNumber?.Trim() ?? "",
+                    AuthCertificateNo = !string.IsNullOrWhiteSpace(authCertificateNo) ? authCertificateNo.Trim() : "-",
+                    Address = address?.Trim() ?? "",
+                    WhatsAppNumber = !string.IsNullOrWhiteSpace(whatsAppNumber) ? whatsAppNumber.Trim() : (user.PhoneNumber ?? "-"),
+                    Subdomain = genSub,
+                    CustomDomain = string.IsNullOrWhiteSpace(customDomain) ? "-" : customDomain.Trim().ToLowerInvariant(),
+                    ThemePrimaryColor = !string.IsNullOrWhiteSpace(themePrimaryColor) ? themePrimaryColor.Trim() : "#1d4ed8",
+                    ThemeSecondaryColor = "#0f172a",
+                    ThemeAccentColor = !string.IsNullOrWhiteSpace(themeAccentColor) ? themeAccentColor.Trim() : "#f97316",
+                    LogoUrl = "/uploads/agencies/default-logo.png",
+                    FontFamily = "Inter",
+                    BannerUrl = "-",
+                    FooterLogoUrl = "-",
+                    FaviconUrl = "-",
+                    PackageLimit = 100,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.Agencies.Add(agency);
+                await _context.SaveChangesAsync();
+
+                _context.AgencyConsultants.Add(new AgencyConsultant
+                {
+                    AgencyId = agency.Id,
+                    UserId = user.Id,
+                    IsActive = true,
+                    Role = AgencyRole.Owner,
+                    StartDate = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow
+                });
+                if (!await _userManager.IsInRoleAsync(user, "InsaatFirmasi"))
+                {
+                    await _userManager.AddToRoleAsync(user, "InsaatFirmasi");
+                }
+                if (!await _context.CorporateProfiles.AnyAsync(cp => cp.ApplicationUserId == user.Id))
+                {
+                    _context.CorporateProfiles.Add(new CorporateProfile
+                    {
+                        ApplicationUserId = user.Id,
+                        CompanyName = cleanName,
+                        TaxOffice = "Merkez",
+                        TaxNumber = !string.IsNullOrWhiteSpace(taxNumber) ? taxNumber.Trim() : "1111111111"
+                    });
+                }
+                await _context.SaveChangesAsync();
+            }
             if (agency != null)
             {
                 if (!string.IsNullOrWhiteSpace(subdomain)) agency.Subdomain = subdomain.Trim().ToLowerInvariant();
