@@ -121,23 +121,45 @@ namespace GMK360.Web.Controllers
                     .ToDictionaryAsync(x => x.BuildingId, x => x.Count)
                 : new Dictionary<int, int>();
 
+            static (string GroupKey, string SiteTitle, string BlockLabel) DescribeManagedBuilding(Building b)
+            {
+                if (b.HousingComplexId.HasValue)
+                {
+                    var cxName = !string.IsNullOrWhiteSpace(b.HousingComplex?.Name) ? b.HousingComplex!.Name : b.Name;
+                    var blk = !string.IsNullOrWhiteSpace(b.BlockName) ? b.BlockName : (b.Name.Contains(" - ") ? b.Name.Split(" - ", 2)[1].Trim() : b.Name);
+                    return ($"C:{b.HousingComplexId.Value}", cxName, blk);
+                }
+
+                if (!string.IsNullOrWhiteSpace(b.Name) && b.Name.Contains(" - "))
+                {
+                    var parts = b.Name.Split(" - ", 2, StringSplitOptions.TrimEntries);
+                    if (!string.IsNullOrWhiteSpace(parts[0]))
+                    {
+                        var blk = !string.IsNullOrWhiteSpace(b.BlockName) ? b.BlockName : parts[1];
+                        return ($"N:{parts[0].ToLowerInvariant()}", parts[0], blk);
+                    }
+                }
+
+                return ($"B:{b.Id}", b.Name, !string.IsNullOrWhiteSpace(b.BlockName) ? b.BlockName : "Müstakil Bina");
+            }
+
             var managedSiteLinks = managedBuildingsQuery
-                .GroupBy(b => b.HousingComplexId.HasValue ? $"C:{b.HousingComplexId.Value}" : $"B:{b.Id}")
+                .GroupBy(b => DescribeManagedBuilding(b).GroupKey)
                 .Select(g =>
                 {
                     var first = g.OrderBy(b => b.Id).First();
-                    var complex = first.HousingComplex;
-                    var blockNames = g.Select(b => string.IsNullOrWhiteSpace(b.BlockName) ? b.Name : b.BlockName).Distinct().ToList();
+                    var firstDesc = DescribeManagedBuilding(first);
+                    var blockNames = g.Select(b => DescribeManagedBuilding(b).BlockLabel).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
                     int openCnt = g.Sum(b => (openTaskCounts.TryGetValue(b.Id, out var tc) ? tc : 0) + (openSupportCounts.TryGetValue(b.Id, out var sc) ? sc : 0));
                     return new ManagedSiteLink
                     {
-                        HousingComplexId = complex?.Id,
+                        HousingComplexId = first.HousingComplex?.Id,
                         PrimaryBuildingId = first.Id,
-                        SiteName = !string.IsNullOrWhiteSpace(complex?.Name) ? complex.Name : first.Name,
+                        SiteName = firstDesc.SiteTitle,
                         BlockCount = g.Count(),
                         BlocksSummary = g.Count() > 1
-                            ? $"{g.Count()} Blok ({string.Join(", ", blockNames.Take(4))}{(blockNames.Count > 4 ? "..." : "")})"
-                            : (!string.IsNullOrWhiteSpace(first.BlockName) ? first.BlockName : "Müstakil Bina"),
+                            ? $"{g.Count()} Yapı / Blok ({string.Join(", ", blockNames.Take(4))}{(blockNames.Count > 4 ? "..." : "")})"
+                            : firstDesc.BlockLabel,
                         OpenTicketCount = openCnt
                     };
                 })
