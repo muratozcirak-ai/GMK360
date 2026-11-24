@@ -16,6 +16,9 @@
     decimal totalPendingDues = ViewBag.TotalPendingDues is decimal tpd ? tpd : 0m;
     string activeTab = (ViewBag.ActiveTab as string ?? "giderler").ToLowerInvariant();
     string? selectedGroup = ViewBag.SelectedExpenseGroup as string;
+    bool isSiteScope = ViewBag.IsSiteScope is bool iss && iss;
+    int scopeBuildingCount = ViewBag.ScopeBuildingCount is int sbc ? sbc : 1;
+    string siteTitleLabel = ViewBag.SiteTitleLabel as string ?? (Model.HousingComplex?.Name ?? Model.Name ?? "Site Geneli");
 
     var activeExpenses = expenses.Where(e => !e.IsArchived && e.ReversalOfExpenseId == null).ToList();
     decimal totalOperational = activeExpenses.Where(e => e.ExpenseType != GMK360.Core.Entities.BuildingExpenseType.CapitalExpenditure).Sum(e => e.TotalAmount);
@@ -43,28 +46,50 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 bg-white p-4 rounded-4 shadow-sm">
         <div>
             <h2 class="fw-bold text-dark mb-1"><i class="bi bi-wallet2 text-success me-2"></i>Muhasebe, Gider Türleri &amp; Kasa</h2>
-            <p class="text-muted small mb-0">@Model.Name — 5 dinamik gider türü (Personel, Abonelik/Fatura, Bakım, Demirbaş, İdari), banka/kasa özeti ve puantaj masası</p>
+            <p class="text-muted small mb-0">
+                @if (isSiteScope)
+                {
+                    <span class="badge bg-success-subtle text-success border border-success-subtle me-1">🌐 Site Geneli (Ortak Kasa · @scopeBuildingCount Blok)</span>
+                    <span>@siteTitleLabel — tüm ortak giderler, blok özel faturaları, kasa özeti ve personel puantajı</span>
+                }
+                else
+                {
+                    <span>@Model.Name — 5 dinamik gider türü (Enerji/Fatura, Temizlik/Personel, Asansör/Bakım, Demirbaş, İdari), kasa ve puantaj</span>
+                }
+            </p>
         </div>
         <div class="d-flex flex-wrap gap-2 align-items-center">
             @if (buildings.Count > 1)
             {
                 <form method="get" class="d-flex">
                     <input type="hidden" name="tab" value="@activeTab" />
-                    <select name="buildingId" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <select name="buildingId" class="form-select form-select-sm fw-semibold" onchange="this.form.submit()">
+                        @if (isSiteScope)
+                        {
+                            <option value="" selected>🌐 Site Geneli (Tüm Bloklar · @buildings.Count)</option>
+                        }
+                        else
+                        {
+                            <option value="">🌐 Site Geneli (Tüm Bloklar · @buildings.Count)</option>
+                        }
                         @foreach (var b in buildings)
                         {
-                            if (b.Id == Model.Id)
+                            var bOptLabel = !string.IsNullOrWhiteSpace(b.BlockName) ? b.BlockName : b.Name;
+                            if (!isSiteScope && b.Id == Model.Id)
                             {
-                                <option value="@b.Id" selected>@b.Name</option>
+                                <option value="@b.Id" selected>🏢 @bOptLabel (Tek Blok)</option>
                             }
                             else
                             {
-                                <option value="@b.Id">@b.Name</option>
+                                <option value="@b.Id">🏢 @bOptLabel (Tek Blok)</option>
                             }
                         }
                     </select>
                 </form>
             }
+            <a href="/BuildingManager/Aidatlar@(isSiteScope ? "" : $"?buildingId={Model.Id}")#annualBudgetWizard" class="btn btn-outline-primary rounded-pill px-3 fw-bold">
+                <i class="bi bi-calculator me-1"></i> Yıllık Bütçe &amp; Aidat Belirle
+            </a>
             <button class="btn btn-outline-success rounded-pill px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#addFixedExpenseModal">
                 <i class="bi bi-calendar-plus me-1"></i> + Sabit Gider / Abonelik
             </button>
@@ -162,7 +187,7 @@
                 .Sum(e => e.TotalAmount);
             bool isSelected = string.Equals(selectedGroup, grp.SystemCode, StringComparison.OrdinalIgnoreCase);
             <div class="col-lg col-md-4 col-6">
-                <a href="@Url.Action("Accounting", new { buildingId = Model.Id, tab = "giderler", expenseGroup = isSelected ? null : grp.SystemCode })"
+                <a href="@Url.Action("Accounting", new { buildingId = isSiteScope ? (int?)null : Model.Id, scope = isSiteScope ? "site" : null, tab = "giderler", expenseGroup = isSelected ? null : grp.SystemCode })"
                    class="card text-decoration-none border-0 shadow-sm rounded-4 p-3 h-100 @(isSelected ? "bg-primary text-white" : "bg-white text-dark")">
                     <div class="small fw-bold text-truncate @(isSelected ? "text-white-50" : "text-muted")">@grp.Name</div>
                     <div class="fs-5 fw-bold mt-1">@grpTotal.ToString("N2") ₺</div>
@@ -283,9 +308,28 @@
                                             {
                                                 <small class="d-block text-muted">@fx.ProviderName @(!string.IsNullOrWhiteSpace(fx.SubscriberNo) ? $"(No: {fx.SubscriberNo})" : "")</small>
                                             }
-                                            <span class="badge @(isDemirbas ? "bg-danger-subtle text-danger" : "bg-primary-subtle text-primary") mt-1">
-                                                @(isDemirbas ? "Demirbaş" : "İşletme")
-                                            </span>
+                                            <div class="d-flex flex-wrap gap-1 mt-1">
+                                                @if (fx.ScopeType == GMK360.Core.Entities.ExpenseScopeType.HousingComplex)
+                                                {
+                                                    <span class="badge bg-success-subtle text-success border border-success-subtle">🌐 Site Ortak</span>
+                                                }
+                                                else if (buildings.Count > 1)
+                                                {
+                                                    <span class="badge bg-light text-dark border">🏢 @(fx.Building?.BlockName ?? fx.Building?.Name ?? Model.Name)</span>
+                                                }
+                                                @if (isDemirbas || fx.OwnerSplitPercent >= 100m)
+                                                {
+                                                    <span class="badge bg-danger-subtle text-danger">🏠 Mal Sahibi (Demirbaş)</span>
+                                                }
+                                                else if (fx.OwnerSplitPercent.HasValue && fx.OwnerSplitPercent.Value > 0m)
+                                                {
+                                                    <span class="badge bg-warning-subtle text-warning-emphasis">⚖️ %@fx.OwnerSplitPercent.Value.ToString("0.##") Malik / %@((100m - fx.OwnerSplitPercent.Value).ToString("0.##")) Kiracı</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-primary-subtle text-primary">🔑 Kiracı / Oturan (İşletme)</span>
+                                                }
+                                            </div>
                                         </td>
                                         <td class="small">
                                             @if (!string.IsNullOrWhiteSpace(fx.ContractDocumentUrl))
@@ -322,7 +366,7 @@
                                         </td>
                                         <td class="pe-3 text-end">
                                             <button type="button" class="btn btn-sm @(isVariable ? "btn-primary" : "btn-outline-danger") rounded-pill px-3 fw-semibold"
-                                                    onclick="openInvoiceFromSubscription('@System.Web.HttpUtility.JavaScriptStringEncode(fx.Title)', '@System.Web.HttpUtility.JavaScriptStringEncode(fx.ProviderName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(fx.ExpenseGroup)', '@(isDemirbas ? "1" : "2")', @fx.MonthlyAmount.ToString(System.Globalization.CultureInfo.InvariantCulture))">
+                                                    onclick="openInvoiceFromSubscription('@System.Web.HttpUtility.JavaScriptStringEncode(fx.Title)', '@System.Web.HttpUtility.JavaScriptStringEncode(fx.ProviderName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(fx.ExpenseGroup)', '@(isDemirbas ? "1" : "2")', @fx.MonthlyAmount.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture), @((int)fx.ScopeType), @fx.BuildingId, '@System.Web.HttpUtility.JavaScriptStringEncode(fx.ExpenseItemKey ?? "Genel")')">
                                                 <i class="bi bi-receipt me-1"></i> + Fatura / Ödeme İşle
                                             </button>
                                         </td>
@@ -371,18 +415,32 @@
                                             <td><span class="badge bg-light text-dark border">@GetGroupDisplayName(exp.ExpenseGroup)</span></td>
                                             <td>
                                                 <strong>@exp.Description</strong>
-                                                <div class="small text-muted">@exp.DistributionRule • @exp.ExpenseItemKey</div>
+                                                <div class="small text-muted d-flex flex-wrap align-items-center gap-1 mt-1">
+                                                    @if (exp.ScopeType == GMK360.Core.Entities.ExpenseScopeType.HousingComplex)
+                                                    {
+                                                        <span class="badge bg-success-subtle text-success border border-success-subtle">🌐 Site Ortak</span>
+                                                    }
+                                                    else if (buildings.Count > 1)
+                                                    {
+                                                        <span class="badge bg-light text-dark border">🏢 @(exp.Building?.BlockName ?? exp.Building?.Name ?? Model.Name)</span>
+                                                    }
+                                                    <span>@exp.DistributionRule • @exp.ExpenseItemKey</span>
+                                                </div>
                                                 @if (isReversal) { <span class="badge bg-dark">TERS KAYIT</span> }
                                                 else if (exp.IsArchived) { <span class="badge bg-secondary">İPTAL (ARŞİV)</span> }
                                             </td>
                                             <td>
-                                                @if (isCapital)
+                                                @if (isCapital || exp.OwnerSplitPercent >= 100m)
                                                 {
-                                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">🔨 Demirbaş (Malik + GMSİ)</span>
+                                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">🏠 Mal Sahibi (Demirbaş / Karar)</span>
+                                                }
+                                                else if (exp.OwnerSplitPercent.HasValue && exp.OwnerSplitPercent.Value > 0m)
+                                                {
+                                                    <span class="badge bg-warning bg-opacity-10 text-warning-emphasis border border-warning">⚖️ %@exp.OwnerSplitPercent.Value.ToString("0.##") Malik / %@((100m - exp.OwnerSplitPercent.Value).ToString("0.##")) Kiracı</span>
                                                 }
                                                 else
                                                 {
-                                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary">💡 İşletme (Kiracı / Malik)</span>
+                                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary">🔑 Kiracı / Oturan (İşletme)</span>
                                                 }
                                             </td>
                                             <td><strong class="@(exp.TotalAmount < 0 ? "text-danger" : "text-dark")">@exp.TotalAmount.ToString("N2") ₺</strong></td>
@@ -710,25 +768,58 @@
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <form class="modal-content rounded-4 border-0 shadow" asp-action="AddBuildingFixedExpense" asp-controller="BuildingManager" method="post" enctype="multipart/form-data">
             @Html.AntiForgeryToken()
-            <input type="hidden" name="buildingId" value="@Model.Id" />
             <input type="hidden" name="returnAction" value="Accounting" />
+            <input type="hidden" name="returnScope" value="@(isSiteScope ? "site" : "block")" />
             <div class="modal-header bg-success text-white border-0">
-                <h5 class="modal-title fw-bold">Düzenli Abonelik / Sözleşme Tanımla</h5>
+                <h5 class="modal-title fw-bold">Düzenli Abonelik / Masraf Kalemi Tanımla</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4 row g-3">
                 <div class="col-12">
                     <div class="d-flex flex-wrap gap-1 align-items-center bg-light p-2 rounded-3 border">
-                        <small class="fw-bold text-muted me-1">Hızlı Hazır Şablon:</small>
-                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Ortak Elektrik Faturası', 'FaturaAbonelik', 'Isletme', 'Genel', 'Esit', true, 'Enerjisa', 1)">⚡ Elektrik</button>
-                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Ortak Su Faturası', 'FaturaAbonelik', 'Isletme', 'Isinma', 'Esit', true, 'İSKİ', 1)">💧 Su</button>
-                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Merkezi Doğalgaz / Isınma', 'FaturaAbonelik', 'Isletme', 'Isinma', 'Metrekare', true, 'İGDAŞ', 1)">🔥 Doğalgaz</button>
-                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Asansör Bakım Sözleşmesi', 'BakimOnarim', 'Isletme', 'Asansor', 'Esit', false, 'Asansör Firması', 1)">🛗 Asansör Bakım</button>
+                        <small class="fw-bold text-muted me-1">Hızlı Masraf Şablonu:</small>
+                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Ortak Elektrik (Enerji)', 'FaturaAbonelik', 'Isletme', 'Genel', 'Esit', true, 'Enerjisa', 1)">⚡ Ortak Elektrik</button>
+                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Ortak Su (Enerji)', 'FaturaAbonelik', 'Isletme', 'Isinma', 'Esit', true, 'İSKİ', 1)">💧 Ortak Su</button>
+                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Merkezi Doğalgaz / Isınma', 'FaturaAbonelik', 'Isletme', 'Isinma', 'Metrekare', true, 'İGDAŞ', 1)">🔥 Doğalgaz / Isınma</button>
+                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Temizlik & Deterjan / Sarf Malzemesi', 'BakimOnarim', 'Isletme', 'Temizlik', 'Esit', false, 'Temizlik / Tedarik', 1)">🧹 Temizlik &amp; Deterjan</button>
+                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Asansör Periyodik Bakım Sözleşmesi', 'BakimOnarim', 'Isletme', 'Asansor', 'Esit', false, 'Asansör Firması', 1)">🛗 Asansör Bakım</button>
                         <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="applyFixedPreset('Mali Müşavir / Yönetim', 'YonetimIdari', 'Isletme', 'Genel', 'Esit', false, 'Mali Müşavir', 1)">📋 Mali Müşavir</button>
                         <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" onclick="applyFixedPreset('Ortak Alan Yangın & Bina Sigortası', 'YonetimIdari', 'Isletme', 'Genel', 'Esit', false, 'Sigorta Acentesi', 12)">🛡️ Ortak Alan Sigortası (Yıllık)</button>
-                        <button type="button" class="btn btn-sm btn-outline-success rounded-pill" onclick="applyFixedPreset('GMK360 Bina Yönetim Aboneliği', 'YonetimIdari', 'Isletme', 'Genel', 'Esit', false, 'GMK360', 12)">💻 GMK360 (Yıllık)</button>
                     </div>
                 </div>
+                @if (buildings.Count > 1)
+                {
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Kapsam (Ortak Kasa / Tek Blok) *</label>
+                        <select name="scopeType" id="fxScopeType" class="form-select fw-semibold">
+                            @if (isSiteScope)
+                            {
+                                <option value="1" selected>🌐 Site Geneli (Tüm Bloklar · Ortak Kasa)</option>
+                                <option value="2">🏢 Sadece Seçili Blok</option>
+                            }
+                            else
+                            {
+                                <option value="1">🌐 Site Geneli (Tüm Bloklar · Ortak Kasa)</option>
+                                <option value="2" selected>🏢 Sadece Seçili Blok</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">İlgili Blok / Ana Kayıt</label>
+                        <select name="buildingId" id="fxBuildingId" class="form-select">
+                            @foreach (var b in buildings)
+                            {
+                                var bLbl = !string.IsNullOrWhiteSpace(b.BlockName) ? b.BlockName : b.Name;
+                                <option value="@b.Id" selected="@(b.Id == Model.Id ? "selected" : null)">@bLbl</option>
+                            }
+                        </select>
+                    </div>
+                }
+                else
+                {
+                    <input type="hidden" name="buildingId" value="@Model.Id" />
+                    <input type="hidden" name="scopeType" id="fxScopeType" value="2" />
+                }
                 <div class="col-md-6">
                     <label class="form-label fw-bold small">Gider Türü *</label>
                     <select name="expenseGroup" id="fxGroup" class="form-select fw-semibold" required>
@@ -786,11 +877,16 @@
                     <input type="number" min="1" max="31" name="dueDayOfMonth" class="form-control" value="15" />
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label fw-bold small">Gider Kapsamı</label>
-                    <select name="expenseScope" id="fxScope" class="form-select fw-semibold">
-                        <option value="Isletme">İşletme (Aidat Kasasından Ödenir)</option>
-                        <option value="Demirbas">Demirbaş / Büyük Tadilat</option>
+                    <label class="form-label fw-bold small">Yasal Sorumlu (Kime Yansır? - KMK)</label>
+                    <select name="expenseScope" id="fxScope" class="form-select fw-semibold" onchange="toggleFxOwnerSplit()">
+                        <option value="Isletme">🔑 Kiracı / Oturan (İşletme Aidatı)</option>
+                        <option value="Demirbas">🏠 Sadece Mal Sahibi (Demirbaş / Yatırım)</option>
                     </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Malik / Kiracı Özel Paylaşım (%)</label>
+                    <input type="number" step="5" min="0" max="100" name="ownerSplitPercent" id="fxOwnerSplit" class="form-control" placeholder="Boş=Standart KMK | 100=%100 Malik" />
+                    <small class="text-muted" style="font-size:.7rem;">Örn: 50 yazarsanız %50 Malik / %50 Kiracı paylaşır.</small>
                 </div>
                 <div class="col-12 border-top pt-2">
                     <div class="fw-bold small text-dark mb-2"><i class="bi bi-file-earmark-lock text-primary me-1"></i> Sözleşme, Yenileme Tarihi &amp; Fiziksel Arşiv Adresi</div>
@@ -812,7 +908,6 @@
                 <input type="hidden" name="expenseItemKey" id="fxItemKey" value="Genel" />
                 <input type="hidden" name="distributionRule" id="fxRule" value="Esit" />
                 <input type="hidden" name="shopParticipationPercent" value="100" />
-                <input type="hidden" name="scopeType" value="2" />
                 <div class="col-12" id="fxAutoBox" style="display:none;">
                     <div class="p-2 rounded-3 bg-light border">
                         <div class="form-check form-switch mb-1">
@@ -847,12 +942,11 @@
     <div class="modal-dialog modal-dialog-centered">
         <form class="modal-content rounded-4 border-0 shadow" asp-action="AddExpense" asp-controller="BuildingManager" method="post" enctype="multipart/form-data">
             @Html.AntiForgeryToken()
-            <input type="hidden" name="buildingId" value="@Model.Id" />
             <input type="hidden" name="returnAction" value="Accounting" />
+            <input type="hidden" name="returnScope" value="@(isSiteScope ? "site" : "block")" />
             <input type="hidden" name="chargeToUnits" value="false" />
-            <input type="hidden" name="expenseItemKey" value="Genel" />
+            <input type="hidden" name="expenseItemKey" id="neItemKey" value="Genel" />
             <input type="hidden" name="distributionRule" value="Esit" />
-            <input type="hidden" name="scopeType" value="2" />
             <input type="hidden" name="shopParticipationPercent" value="100" />
             <div class="modal-header bg-danger text-white border-0">
                 <h5 class="modal-title fw-bold">Fatura / Harcama Öde (Kasadan Düş)</h5>
@@ -862,9 +956,42 @@
                 <div class="col-12">
                     <div class="alert alert-light border small py-2 mb-0 text-muted">
                         <i class="bi bi-info-circle text-primary me-1"></i>
-                        Bu ödeme doğrudan <strong>bina kasasından / bankadan düşer</strong>; dairelere ikinci kez aidat borcu yazmaz.
+                        Bu ödeme doğrudan <strong>bina / site kasasından veya bankadan düşer</strong>; dairelere ikinci kez aidat borcu yazmaz.
                     </div>
                 </div>
+                @if (buildings.Count > 1)
+                {
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Gider Kapsamı (Site Geneli / Blok) *</label>
+                        <select name="scopeType" id="neScopeType" class="form-select fw-semibold">
+                            @if (isSiteScope)
+                            {
+                                <option value="1" selected>🌐 Site Geneli (Ortak Kasa · Tüm Bloklar)</option>
+                                <option value="2">🏢 Sadece Seçili Blok</option>
+                            }
+                            else
+                            {
+                                <option value="1">🌐 Site Geneli (Ortak Kasa · Tüm Bloklar)</option>
+                                <option value="2" selected>🏢 Sadece Seçili Blok</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small">Blok / Kasa Kaydı</label>
+                        <select name="buildingId" id="neBuildingId" class="form-select">
+                            @foreach (var b in buildings)
+                            {
+                                var bLbl = !string.IsNullOrWhiteSpace(b.BlockName) ? b.BlockName : b.Name;
+                                <option value="@b.Id" selected="@(b.Id == Model.Id ? "selected" : null)">@bLbl</option>
+                            }
+                        </select>
+                    </div>
+                }
+                else
+                {
+                    <input type="hidden" name="buildingId" id="neBuildingId" value="@Model.Id" />
+                    <input type="hidden" name="scopeType" id="neScopeType" value="2" />
+                }
                 <div class="col-md-6">
                     <label class="form-label fw-bold small">Gider Türü *</label>
                     <select name="expenseGroup" id="neGroup" class="form-select fw-semibold" required>
@@ -893,10 +1020,10 @@
                     </select>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-bold small">Gider Kapsamı</label>
+                    <label class="form-label fw-bold small">Yasal Sorumlu (KMK)</label>
                     <select name="expenseType" id="neExpType" class="form-select fw-semibold">
-                        <option value="2">💡 İşletme / Rutin Gider</option>
-                        <option value="1">🔨 Demirbaş / Büyük Tadilat</option>
+                        <option value="2">🔑 İşletme Gideri (Kiracı / Oturan)</option>
+                        <option value="1">🏠 Demirbaş / Büyük Tadilat (Sadece Malik)</option>
                     </select>
                 </div>
                 <div class="col-12">
@@ -1215,13 +1342,30 @@
         if (isVar) document.getElementById('fxAmount').value = '0';
     }
 
-    function openInvoiceFromSubscription(title, provider, group, expType, amount) {
+    function toggleFxOwnerSplit() {
+        const sc = document.getElementById('fxScope');
+        const sp = document.getElementById('fxOwnerSplit');
+        if (!sc || !sp) return;
+        if (sc.value === 'Demirbas' && !sp.value) {
+            sp.placeholder = 'Demirbaş = %100 Malik';
+        } else {
+            sp.placeholder = 'Boş=Standart KMK | 100=%100 Malik';
+        }
+    }
+
+    function openInvoiceFromSubscription(title, provider, group, expType, amount, scopeType, bldId, itemKey) {
         document.getElementById('neGroup').value = group || 'FaturaAbonelik';
         const now = new Date();
         const ym = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
         document.getElementById('neDesc').value = title + (provider && title !== provider ? ' (' + provider + ' - ' + ym + ')' : ' (' + ym + ')');
         document.getElementById('neAmount').value = amount && parseFloat(amount) > 0 ? amount : '';
         document.getElementById('neExpType').value = expType || '2';
+        const stEl = document.getElementById('neScopeType');
+        if (stEl && scopeType) stEl.value = String(scopeType);
+        const bEl = document.getElementById('neBuildingId');
+        if (bEl && bldId) bEl.value = String(bldId);
+        const ikEl = document.getElementById('neItemKey');
+        if (ikEl && itemKey) ikEl.value = itemKey;
         new bootstrap.Modal(document.getElementById('newExpenseDirectModal')).show();
     }
 

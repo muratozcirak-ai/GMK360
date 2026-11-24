@@ -160,9 +160,12 @@ namespace GMK360.Web.Services
             {
                 var current = await _context.Buildings.AsNoTracking().FirstOrDefaultAsync(b => b.Id == buildingId);
                 int rootId = current?.ParentBuildingId ?? buildingId;
+                int? complexId = current?.HousingComplexId;
                 targetBuildingIds = await _context.Buildings
                     .AsNoTracking()
-                    .Where(b => b.Id == rootId || b.ParentBuildingId == rootId)
+                    .Where(b => b.Id == rootId
+                        || b.ParentBuildingId == rootId
+                        || (complexId.HasValue && b.HousingComplexId == complexId.Value && b.ParentBuildingId == null))
                     .Select(b => b.Id)
                     .ToListAsync();
                 if (!targetBuildingIds.Any()) targetBuildingIds = new List<int> { buildingId };
@@ -229,21 +232,22 @@ namespace GMK360.Web.Services
                     factor = 0m;
                     note = "Merdiven/Aydınlatmadan Muaf (%0)";
                 }
-                else if (string.Equals(normalizedItem, "CopTemizlik", StringComparison.OrdinalIgnoreCase))
+                else if (string.Equals(normalizedItem, "CopTemizlik", StringComparison.OrdinalIgnoreCase)
+                      || string.Equals(normalizedItem, "Temizlik", StringComparison.OrdinalIgnoreCase))
                 {
                     if (u.CleaningParticipationPercent != 100m)
                     {
                         factor = Math.Max(0m, u.CleaningParticipationPercent) / 100m;
                         note = factor == 0m
-                            ? "Çöp/Temizlik Muaf (%0)"
-                            : $"Birim Çöp/Temizlik Oranı (%{u.CleaningParticipationPercent:0.##})";
+                            ? "Temizlik & Görevli Muaf (%0)"
+                            : $"Temizlik & Görevli Katılımı (%{u.CleaningParticipationPercent:0.##})";
                     }
                     else if (isShop && clampedShopPct != 100m)
                     {
                         factor = clampedShopPct / 100m;
                         note = factor == 0m
                             ? "Dükkan Muaf (%0)"
-                            : (factor > 1m ? $"Dükkan Yoğun Çöp/Temizlik (%{clampedShopPct:0.##})" : $"Dükkan İndirimli (%{clampedShopPct:0.##})");
+                            : (factor > 1m ? $"Dükkan Yoğun Temizlik Payı (%{clampedShopPct:0.##})" : $"Dükkan İndirimli (%{clampedShopPct:0.##})");
                     }
                 }
                 else if (isShop && clampedShopPct != 100m)
@@ -678,8 +682,15 @@ namespace GMK360.Web.Services
             decimal mult = u.DuesMultiplier;
             decimal basePart = Math.Round(effectiveBase * mult, 2, MidpointRounding.AwayFromZero);
             decimal netAmt = Math.Max(0m, Math.Round(basePart + adj, 2, MidpointRounding.AwayFromZero));
-            string multText = mult == 1.00m ? $"Baz {effectiveBase:N0} ₺" : $"Baz {effectiveBase:N0} ₺ × {mult:0.##}";
-            return (netAmt, $"{multText}{adjText}", netAmt <= 0m);
+            string multText = mult == 1.00m
+                ? $"Baz {effectiveBase:N0} ₺"
+                : (mult > 1.00m
+                    ? $"Baz {effectiveBase:N0} ₺ +%{((mult - 1m) * 100m):0.##}"
+                    : $"Baz {effectiveBase:N0} ₺ -%{((1m - mult) * 100m):0.##}");
+            string reasonSuffix = !string.IsNullOrWhiteSpace(u.DuesRuleNote) && mult != 1.00m
+                ? $" ({u.DuesRuleNote})"
+                : "";
+            return (netAmt, $"{multText}{adjText}{reasonSuffix}", netAmt <= 0m);
         }
 
         public async Task<ExpenseDistributionPreviewResult> PreviewFixedUnitDuesAsync(

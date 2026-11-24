@@ -2910,7 +2910,8 @@ namespace GMK360.Web.Controllers
             if (string.Equals(returnAction, "Accounting", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(returnAction, "Giderler", StringComparison.OrdinalIgnoreCase))
             {
-                return RedirectToAction(nameof(Accounting), new { buildingId, tab = "giderler" });
+                var returnScope = Request.Form["returnScope"].FirstOrDefault();
+                return RedirectToAction(nameof(Accounting), new { buildingId, scope = returnScope == "site" ? "site" : null, tab = "giderler" });
             }
             return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
@@ -3331,11 +3332,139 @@ namespace GMK360.Web.Controllers
                     .ToListAsync()
                 : new System.Collections.Generic.List<BuildingFixedExpense>();
 
+            var buildingStaffs = allowedIds.Any()
+                ? await _context.BuildingStaffs
+                    .AsNoTracking()
+                    .Where(s => allowedIds.Contains(s.BuildingId) && s.IsActive && !s.IsDeleted)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<BuildingStaff>();
+
             ViewBag.Buildings = buildings;
             ViewBag.SelectedBuildingId = buildingId;
             ViewBag.LivingUnits = livingUnits;
             ViewBag.FixedExpenses = fixedExpenses;
+            ViewBag.BuildingStaffs = buildingStaffs;
             return View(debts);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveAnnualBudgetEstimate(
+            int buildingId,
+            string? energyMonthly,
+            string? staffAndCleaningMonthly,
+            string? elevatorMonthly,
+            string? adminAndSecurityMonthly,
+            string? capitalReserveMonthly,
+            string? contingencyPercent,
+            bool applyToAllSiteBlocks = true,
+            bool applyCalculatedAsBaseDues = false,
+            string? recommendedBaseDues = null)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            decimal energy = Math.Max(0m, ParseFlexibleDecimal(energyMonthly) ?? 0m);
+            decimal staffClean = Math.Max(0m, ParseFlexibleDecimal(staffAndCleaningMonthly) ?? 0m);
+            decimal elevator = Math.Max(0m, ParseFlexibleDecimal(elevatorMonthly) ?? 0m);
+            decimal adminSec = Math.Max(0m, ParseFlexibleDecimal(adminAndSecurityMonthly) ?? 0m);
+            decimal capital = Math.Max(0m, ParseFlexibleDecimal(capitalReserveMonthly) ?? 0m);
+            decimal reservePct = Math.Clamp(ParseFlexibleDecimal(contingencyPercent) ?? 0m, 0m, 50m);
+
+            decimal operatingSubtotal = energy + staffClean + elevator + adminSec;
+            decimal reserveAmount = Math.Round(operatingSubtotal * (reservePct / 100m), 2, MidpointRounding.AwayFromZero);
+
+            bool isSiteWide = applyToAllSiteBlocks && building.HousingComplexId.HasValue;
+            var scopeType = isSiteWide ? ExpenseScopeType.HousingComplex : ExpenseScopeType.Building;
+
+            var planItems = new (string Code, string Title, string Group, string Scope, string ItemKey, decimal Amount)[]
+            {
+                ("BUDGET_ENERGY", "Bütçe: Enerji (Elektrik, Su, Doğalgaz)", "FaturaAbonelik", "Isletme", "Genel", energy),
+                ("BUDGET_CLEANING", "Bütçe: Bina Görevlisi & Temizlik/Deterjan", "BakimOnarim", "Isletme", "Temizlik", staffClean),
+                ("BUDGET_ELEVATOR", "Bütçe: Asansör Bakım & Kontrol", "BakimOnarim", "Isletme", "Asansor", elevator),
+                ("BUDGET_ADMIN", "Bütçe: Güvenlik, Bahçe, Sigorta & Yönetim", "YonetimIdari", "Isletme", "Genel", adminSec),
+                ("BUDGET_RESERVE", $"Bütçe: Beklenmedik Gider İhtiyat Payı (%{reservePct:0.##})", "YonetimIdari", "Isletme", "Genel", reserveAmount),
+                ("BUDGET_CAPITAL", "Bütçe: Demirbaş, Tadilat & Kıdem Fonu", "DemirbasYatirim", "Demirbas", "Demirbas", capital)
+            };
+
+            var existingPlans = await _context.BuildingFixedExpenses
+                .Where(f => f.BuildingId == buildingId
+                    && !f.IsDeleted
+                    && f.SubscriberNo != null
+                    && f.SubscriberNo.StartsWith("BUDGET_"))
+                .ToListAsync();
+
+            foreach (var p in planItems)
+            {
+                var match = existingPlans.FirstOrDefault(x => x.SubscriberNo == p.Code);
+                if (p.Amount <= 0m)
+                {
+                    if (match != null)
+                    {
+                        match.MonthlyAmount = 0m;
+                        match.IsAutoRecurring = false;
+                        match.IsActive = false;
+                    }
+                    continue;
+                }
+
+                if (match == null)
+                {
+                    _context.BuildingFixedExpenses.Add(new BuildingFixedExpense
+                    {
+                        BuildingId = buildingId,
+                        Title = p.Title,
+                        ExpenseScope = p.Scope,
+                        ExpenseGroup = p.Group,
+                        ExpenseItemKey = p.ItemKey,
+                        DistributionRule = p.Scope == "Demirbas" ? "ArsaPayi" : "Esit",
+                        ScopeType = scopeType,
+                        ShopParticipationPercent = 100m,
+                        OwnerSplitPercent = p.Scope == "Demirbas" ? 100m : null,
+                        DueDayOfMonth = building.DuesPaymentDay ?? 5,
+                        ProviderName = "KMK İşletme Projesi",
+                        SubscriberNo = p.Code,
+                        MonthlyAmount = Math.Round(p.Amount, 2),
+                        BillingCycleMonths = 1,
+                        IsAutoRecurring = true,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+                else
+                {
+                    match.Title = p.Title;
+                    match.ExpenseScope = p.Scope;
+                    match.ExpenseGroup = p.Group;
+                    match.ExpenseItemKey = p.ItemKey;
+                    match.ScopeType = scopeType;
+                    match.OwnerSplitPercent = p.Scope == "Demirbas" ? 100m : null;
+                    match.MonthlyAmount = Math.Round(p.Amount, 2);
+                    match.IsAutoRecurring = true;
+                    match.IsActive = true;
+                }
+            }
+
+            if (applyCalculatedAsBaseDues)
+            {
+                decimal? parsedRec = ParseFlexibleDecimal(recommendedBaseDues);
+                if (parsedRec.HasValue && parsedRec.Value > 0m)
+                {
+                    var targets = isSiteWide
+                        ? await _context.Buildings.Where(b => b.HousingComplexId == building.HousingComplexId && b.ParentBuildingId == null).ToListAsync()
+                        : new System.Collections.Generic.List<Building> { building };
+                    foreach (var b in targets)
+                    {
+                        b.DefaultBaseMonthlyDues = Math.Round(parsedRec.Value, 2);
+                    }
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            decimal monthlyTotal = operatingSubtotal + reserveAmount + capital;
+            decimal annualTotal = monthlyTotal * 12m;
+            TempData["SuccessMessage"] = $"📊 Yıllık İşletme Projesi bütçesi kaydedildi (Aylık {monthlyTotal:N2} ₺ · 12 Aylık Yıllık Bütçe {annualTotal:N2} ₺).";
+            return RedirectToAction(nameof(Aidatlar), new { buildingId = isSiteWide ? (int?)null : buildingId });
         }
 
         [HttpPost]
@@ -3561,13 +3690,15 @@ namespace GMK360.Web.Controllers
                     bankAccountId: firstPaymentBankAccountId);
 
                 TempData["SuccessMessage"] = $"✅ '{resolvedTitle}' sözleşmesi kaydedildi ve ilk ödemesi ({finalAmount:N2} ₺) bina kasasına gider olarak işlendi.";
-                return RedirectToAction(nameof(Accounting), new { buildingId, tab = "giderler" });
+                var rs1 = Request.Form["returnScope"].FirstOrDefault();
+                return RedirectToAction(nameof(Accounting), new { buildingId, scope = rs1 == "site" ? "site" : null, tab = "giderler" });
             }
 
             TempData["SuccessMessage"] = isVariableAmount
                 ? $"'{resolvedTitle}' değişken faturalı abonelik olarak kaydedildi. Ay geldiğinde yanındaki '+ Fatura / Ödeme İşle' butonundan fatura işleyebilirsiniz."
                 : $"'{resolvedTitle}' düzenli abonelik/sözleşme listesine eklendi.";
-            return RedirectToAction(nameof(Accounting), new { buildingId, tab = "giderler" });
+            var rs2 = Request.Form["returnScope"].FirstOrDefault();
+            return RedirectToAction(nameof(Accounting), new { buildingId, scope = rs2 == "site" ? "site" : null, tab = "giderler" });
         }
 
         [HttpPost]
@@ -3773,7 +3904,7 @@ namespace GMK360.Web.Controllers
         }
 
         // 10. Birleşik Muhasebe, Gider Türleri, Kasa/Banka & Sabit Personel
-        public async Task<IActionResult> Accounting(int? buildingId, string? tab = null, string? expenseGroup = null)
+        public async Task<IActionResult> Accounting(int? buildingId, string? tab = null, string? expenseGroup = null, string? scope = null)
         {
             var buildings = await GetUserManagedRootBuildingsAsync();
             if (!buildings.Any())
@@ -3782,20 +3913,38 @@ namespace GMK360.Web.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
+            bool isSiteScope = buildings.Count > 1 && (
+                string.Equals(scope, "site", StringComparison.OrdinalIgnoreCase)
+                || (!buildingId.HasValue && string.IsNullOrWhiteSpace(scope)));
+
             int targetId = buildingId ?? buildings.First().Id;
             var building = await _context.Buildings
+                .Include(b => b.HousingComplex)
                 .Include(b => b.ManagementMembers)
                 .FirstOrDefaultAsync(b => b.Id == targetId);
 
             if (building == null) return NotFound();
             if (!CanAccessBuilding(building, GetUserId())) return Forbid();
 
+            var scopeBuildings = isSiteScope
+                ? (building.HousingComplexId.HasValue
+                    ? buildings.Where(b => b.HousingComplexId == building.HousingComplexId).ToList()
+                    : buildings)
+                : new System.Collections.Generic.List<Building> { building };
+            if (!scopeBuildings.Any()) scopeBuildings = new System.Collections.Generic.List<Building> { building };
+            var scopeIds = scopeBuildings.Select(b => b.Id).ToList();
+
             ViewBag.BankAccounts = await _context.BankAccounts
-                .Where(a => a.OwnerType == OwnerType.Building && a.OwnerId == building.Id && a.IsActive)
+                .Where(a => a.OwnerType == OwnerType.Building && a.OwnerId.HasValue && scopeIds.Contains(a.OwnerId.Value) && a.IsActive)
                 .OrderByDescending(a => a.Id)
                 .ToListAsync();
 
-            var staffIds = (building.ManagementMembers ?? new System.Collections.Generic.List<ManagementMember>()).Select(m => m.Id).ToList();
+            var staffIds = isSiteScope
+                ? await _context.ManagementMembers
+                    .Where(m => m.BuildingId.HasValue && scopeIds.Contains(m.BuildingId.Value))
+                    .Select(m => m.Id)
+                    .ToListAsync()
+                : (building.ManagementMembers ?? new System.Collections.Generic.List<ManagementMember>()).Select(m => m.Id).ToList();
             ViewBag.Payrolls = staffIds.Any()
                 ? await _context.StaffPayrolls
                     .Include(p => p.ManagementMember)
@@ -3807,7 +3956,8 @@ namespace GMK360.Web.Controllers
 
             var buildingStaffs = await _context.BuildingStaffs
                 .Include(s => s.Leaves)
-                .Where(s => s.BuildingId == building.Id && s.IsActive && !s.IsDeleted)
+                .Include(s => s.Building)
+                .Where(s => scopeIds.Contains(s.BuildingId) && s.IsActive && !s.IsDeleted)
                 .OrderBy(s => s.FullName)
                 .ToListAsync();
             var bStaffIds = buildingStaffs.Select(s => s.Id).ToList();
@@ -3825,28 +3975,33 @@ namespace GMK360.Web.Controllers
 
             ViewBag.Expenses = await _context.BuildingExpenses
                 .Include(e => e.Building)
-                .Where(e => e.BuildingId == building.Id)
+                .Where(e => e.BuildingId.HasValue && scopeIds.Contains(e.BuildingId.Value))
                 .OrderByDescending(e => e.Date)
                 .ToListAsync();
 
             ViewBag.FixedExpenses = await _context.BuildingFixedExpenses
                 .Include(f => f.Building)
-                .Where(f => f.BuildingId == building.Id && f.IsActive && !f.IsDeleted)
+                .Where(f => scopeIds.Contains(f.BuildingId) && f.IsActive && !f.IsDeleted)
                 .OrderBy(f => f.DueDayOfMonth)
                 .ToListAsync();
 
             ViewBag.TotalCollectedDues = await _context.UnitDebts
-                .Where(d => d.IsPaid && !d.IsArchived && d.BuildingUnit.BuildingId == building.Id)
+                .Where(d => d.IsPaid && !d.IsArchived && scopeIds.Contains(d.BuildingUnit.BuildingId))
                 .SumAsync(d => (decimal?)d.Amount) ?? 0m;
 
             ViewBag.TotalPendingDues = await _context.UnitDebts
-                .Where(d => !d.IsPaid && !d.IsArchived && d.BuildingUnit.BuildingId == building.Id)
+                .Where(d => !d.IsPaid && !d.IsArchived && scopeIds.Contains(d.BuildingUnit.BuildingId))
                 .SumAsync(d => (decimal?)d.Amount) ?? 0m;
 
             ViewBag.ExpenseGroups = await GetFacilityExpenseGroupLookupsAsync();
             ViewBag.ActiveTab = string.IsNullOrWhiteSpace(tab) ? "giderler" : tab.Trim().ToLowerInvariant();
             ViewBag.SelectedExpenseGroup = expenseGroup;
-            ViewBag.BudgetSummary = await _payrollService.CalculateMonthlyBudgetSummaryAsync(building.Id);
+            ViewBag.IsSiteScope = isSiteScope;
+            ViewBag.ScopeBuildingCount = scopeIds.Count;
+            ViewBag.SiteTitleLabel = !string.IsNullOrWhiteSpace(building.HousingComplex?.Name)
+                ? building.HousingComplex!.Name
+                : (building.Name ?? "Site Geneli");
+            ViewBag.BudgetSummary = await _payrollService.CalculateMultiBuildingBudgetSummaryAsync(scopeIds, building.Id);
             ViewBag.Holidays = GMK360.Web.Helpers.TurkishHolidayHelper.GetHolidaysForYear(DateTime.Today.Year);
             ViewBag.Buildings = buildings;
 

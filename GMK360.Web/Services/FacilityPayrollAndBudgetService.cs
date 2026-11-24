@@ -49,20 +49,29 @@ namespace GMK360.Web.Services
         }
 
         public async Task<BuildingMonthlyBudgetSummary> CalculateMonthlyBudgetSummaryAsync(int buildingId)
+            => await CalculateMultiBuildingBudgetSummaryAsync(new[] { buildingId }, buildingId);
+
+        public async Task<BuildingMonthlyBudgetSummary> CalculateMultiBuildingBudgetSummaryAsync(IEnumerable<int> buildingIds, int primaryBuildingId = 0)
         {
+            var idList = buildingIds?.Distinct().ToList() ?? new List<int>();
+            if (!idList.Any())
+            {
+                return new BuildingMonthlyBudgetSummary { BuildingId = primaryBuildingId };
+            }
+
             int activeUnitCount = await _context.BuildingUnits.CountAsync(u =>
-                u.BuildingId == buildingId
+                idList.Contains(u.BuildingId)
                 && u.Category != "OrtakAlan_Blok"
                 && (u.Category == null || !u.Category.StartsWith("OrtakAlan")));
 
             var staffs = await _context.BuildingStaffs
                 .AsNoTracking()
-                .Where(s => s.BuildingId == buildingId && s.IsActive && !s.IsDeleted)
+                .Where(s => idList.Contains(s.BuildingId) && s.IsActive && !s.IsDeleted)
                 .ToListAsync();
 
             var fixedExpenses = await _context.BuildingFixedExpenses
                 .AsNoTracking()
-                .Where(f => f.BuildingId == buildingId && f.IsActive && f.IsAutoRecurring && !f.IsDeleted)
+                .Where(f => idList.Contains(f.BuildingId) && f.IsActive && f.IsAutoRecurring && !f.IsDeleted)
                 .ToListAsync();
 
             decimal monthlyFixedOp = fixedExpenses
@@ -74,7 +83,7 @@ namespace GMK360.Web.Services
 
             return new BuildingMonthlyBudgetSummary
             {
-                BuildingId = buildingId,
+                BuildingId = primaryBuildingId > 0 ? primaryBuildingId : idList.First(),
                 ActiveUnitCount = activeUnitCount,
                 MonthlyStaffOperatingCost = staffs.Sum(s => s.TotalMonthlyOperatingCost),
                 MonthlySeveranceFundTotal = staffs.Sum(s => s.MonthlySeveranceFund),
