@@ -42,6 +42,18 @@ namespace GMK360.Core.Entities
 
         public string? InvoiceDocumentUrl { get; set; } // Orijinal ana faturanın sisteme yüklenmiş URL'si
 
+        [MaxLength(250)]
+        public string? PhysicalArchiveLocation { get; set; } // Islak imzalı asıl faturanın fiziksel klasör / raf yeri
+
+        [MaxLength(40)]
+        public string? LinkedSourceType { get; set; } // "Abonelik" | "ArizaIs" | "BakimDemirbas" | "Genel"
+
+        public int? LinkedTaskTicketId { get; set; }
+        public int? LinkedFixedExpenseId { get; set; }
+
+        [MaxLength(250)]
+        public string? LinkedSourceLabel { get; set; } // Örn: "Talep #12: Asansör Kapı Tamiri" veya "Enerjisa Elektrik"
+
         // PayerType: Kim Ödemeli? "Tenant", "Owner", "All"
         // Yeni Mimaride BuildingExpenseType üzerinden yürüyecek ama geriye dönük uyum için tutulabilir
         public string? PayerType { get; set; } 

@@ -535,7 +535,12 @@ namespace GMK360.Web.Services
             decimal? ownerSplitPercent = null,
             string? expenseGroup = null,
             bool chargeToUnits = true,
-            int? bankAccountId = null)
+            int? bankAccountId = null,
+            string? physicalArchiveLocation = null,
+            string? linkedSourceType = null,
+            int? linkedTaskTicketId = null,
+            int? linkedFixedExpenseId = null,
+            string? linkedSourceLabel = null)
         {
             if (totalAmount <= 0)
                 return new GovernanceActionResult { Success = false, Message = "Gider tutarı sıfırdan büyük olmalıdır." };
@@ -600,6 +605,11 @@ namespace GMK360.Web.Services
                 Description = description.Trim(),
                 TotalAmount = totalAmount,
                 InvoiceDocumentUrl = invoiceUrl,
+                PhysicalArchiveLocation = string.IsNullOrWhiteSpace(physicalArchiveLocation) ? null : physicalArchiveLocation.Trim(),
+                LinkedSourceType = string.IsNullOrWhiteSpace(linkedSourceType) ? null : linkedSourceType.Trim(),
+                LinkedTaskTicketId = linkedTaskTicketId,
+                LinkedFixedExpenseId = linkedFixedExpenseId,
+                LinkedSourceLabel = string.IsNullOrWhiteSpace(linkedSourceLabel) ? null : linkedSourceLabel.Trim(),
                 Date = DateTime.Now
             };
             _context.BuildingExpenses.Add(expense);

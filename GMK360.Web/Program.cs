@@ -365,6 +365,16 @@ using (var schemaScope = app.Services.CreateScope())
                 ALTER TABLE [dbo].[BuildingUnits] ADD [IsDuesExempt] bit NOT NULL CONSTRAINT [DF_BuildingUnits_IsDuesExempt] DEFAULT (0);
             IF COL_LENGTH(N'dbo.BuildingUnits', N'DuesAdjustmentAmount') IS NULL
                 ALTER TABLE [dbo].[BuildingUnits] ADD [DuesAdjustmentAmount] decimal(18,2) NOT NULL CONSTRAINT [DF_BuildingUnits_DuesAdjustmentAmount] DEFAULT (0);
+            IF COL_LENGTH(N'dbo.BuildingExpenses', N'PhysicalArchiveLocation') IS NULL
+                ALTER TABLE [dbo].[BuildingExpenses] ADD [PhysicalArchiveLocation] nvarchar(250) NULL;
+            IF COL_LENGTH(N'dbo.BuildingExpenses', N'LinkedSourceType') IS NULL
+                ALTER TABLE [dbo].[BuildingExpenses] ADD [LinkedSourceType] nvarchar(40) NULL;
+            IF COL_LENGTH(N'dbo.BuildingExpenses', N'LinkedTaskTicketId') IS NULL
+                ALTER TABLE [dbo].[BuildingExpenses] ADD [LinkedTaskTicketId] int NULL;
+            IF COL_LENGTH(N'dbo.BuildingExpenses', N'LinkedFixedExpenseId') IS NULL
+                ALTER TABLE [dbo].[BuildingExpenses] ADD [LinkedFixedExpenseId] int NULL;
+            IF COL_LENGTH(N'dbo.BuildingExpenses', N'LinkedSourceLabel') IS NULL
+                ALTER TABLE [dbo].[BuildingExpenses] ADD [LinkedSourceLabel] nvarchar(250) NULL;
             IF OBJECT_ID(N'dbo.PlatformFeedbacks', N'U') IS NULL
             BEGIN
                 CREATE TABLE [dbo].[PlatformFeedbacks] (

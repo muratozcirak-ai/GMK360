@@ -2877,10 +2877,33 @@ namespace GMK360.Web.Controllers
             decimal? ownerSplitPercent = null,
             string? expenseGroup = null,
             bool chargeToUnits = true,
-            int? bankAccountId = null)
+            int? bankAccountId = null,
+            string? physicalArchiveLocation = null,
+            string? linkedSourceType = null,
+            int? linkedTaskTicketId = null,
+            int? linkedFixedExpenseId = null,
+            string? linkedSourceLabel = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
+
+            decimal parsedAmount = ParseFlexibleDecimal(Request.Form["totalAmount"].FirstOrDefault()) ?? totalAmount;
+            decimal? parsedOwnerSplit = ParseFlexibleDecimal(Request.Form["ownerSplitPercent"].FirstOrDefault()) ?? ownerSplitPercent;
+
+            string? resolvedSourceLabel = string.IsNullOrWhiteSpace(linkedSourceLabel) ? null : linkedSourceLabel.Trim();
+            if (string.IsNullOrWhiteSpace(resolvedSourceLabel))
+            {
+                if (linkedTaskTicketId.HasValue)
+                {
+                    var t = await _context.BuildingTaskTickets.AsNoTracking().FirstOrDefaultAsync(x => x.Id == linkedTaskTicketId.Value);
+                    if (t != null) resolvedSourceLabel = $"Arıza/İş #{t.Id}: {t.Category} ({(t.Description.Length > 45 ? t.Description[..45] + "..." : t.Description)})";
+                }
+                else if (linkedFixedExpenseId.HasValue)
+                {
+                    var f = await _context.BuildingFixedExpenses.AsNoTracking().FirstOrDefaultAsync(x => x.Id == linkedFixedExpenseId.Value);
+                    if (f != null) resolvedSourceLabel = $"Abonelik: {f.Title}";
+                }
+            }
 
             var resolvedType = expenseType ?? (string.Equals(payerType, "Owner", StringComparison.OrdinalIgnoreCase)
                 ? BuildingExpenseType.CapitalExpenditure
@@ -2889,7 +2912,7 @@ namespace GMK360.Web.Controllers
             var result = await _governanceService.DistributeExpenseAsync(
                 buildingId,
                 description,
-                totalAmount,
+                parsedAmount,
                 resolvedType,
                 invoiceFile,
                 GetUserId() ?? "system",
@@ -2897,10 +2920,15 @@ namespace GMK360.Web.Controllers
                 expenseItemKey,
                 scopeType,
                 shopParticipationPercent,
-                ownerSplitPercent,
+                parsedOwnerSplit,
                 expenseGroup,
                 chargeToUnits,
-                bankAccountId);
+                bankAccountId,
+                physicalArchiveLocation,
+                linkedSourceType,
+                linkedTaskTicketId,
+                linkedFixedExpenseId,
+                resolvedSourceLabel);
 
             TempData[result.Success ? "SuccessMessage" : "ErrorMessage"] = result.Message;
             if (string.Equals(returnAction, "Aidatlar", StringComparison.OrdinalIgnoreCase))
@@ -2911,7 +2939,7 @@ namespace GMK360.Web.Controllers
                 || string.Equals(returnAction, "Giderler", StringComparison.OrdinalIgnoreCase))
             {
                 var returnScope = Request.Form["returnScope"].FirstOrDefault();
-                return RedirectToAction(nameof(Accounting), new { buildingId, scope = returnScope == "site" ? "site" : null, tab = "giderler" });
+                return RedirectToAction(nameof(Accounting), new { buildingId = returnScope == "site" ? (int?)null : buildingId, scope = returnScope == "site" ? "site" : null, tab = "faturalar" });
             }
             return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
@@ -3691,14 +3719,14 @@ namespace GMK360.Web.Controllers
 
                 TempData["SuccessMessage"] = $"✅ '{resolvedTitle}' sözleşmesi kaydedildi ve ilk ödemesi ({finalAmount:N2} ₺) bina kasasına gider olarak işlendi.";
                 var rs1 = Request.Form["returnScope"].FirstOrDefault();
-                return RedirectToAction(nameof(Accounting), new { buildingId, scope = rs1 == "site" ? "site" : null, tab = "giderler" });
+                return RedirectToAction(nameof(Accounting), new { buildingId = rs1 == "site" ? (int?)null : buildingId, scope = rs1 == "site" ? "site" : null, tab = "abonelikler" });
             }
 
             TempData["SuccessMessage"] = isVariableAmount
                 ? $"'{resolvedTitle}' değişken faturalı abonelik olarak kaydedildi. Ay geldiğinde yanındaki '+ Fatura / Ödeme İşle' butonundan fatura işleyebilirsiniz."
                 : $"'{resolvedTitle}' düzenli abonelik/sözleşme listesine eklendi.";
             var rs2 = Request.Form["returnScope"].FirstOrDefault();
-            return RedirectToAction(nameof(Accounting), new { buildingId, scope = rs2 == "site" ? "site" : null, tab = "giderler" });
+            return RedirectToAction(nameof(Accounting), new { buildingId = rs2 == "site" ? (int?)null : buildingId, scope = rs2 == "site" ? "site" : null, tab = "abonelikler" });
         }
 
         [HttpPost]
@@ -3985,6 +4013,22 @@ namespace GMK360.Web.Controllers
                 .OrderBy(f => f.DueDayOfMonth)
                 .ToListAsync();
 
+            ViewBag.TaskTickets = await _context.BuildingTaskTickets
+                .Include(t => t.Building)
+                .Where(t => scopeIds.Contains(t.BuildingId) && !t.IsDeleted)
+                .OrderByDescending(t => t.Id)
+                .Take(60)
+                .ToListAsync();
+
+            ViewBag.CommonFixtures = await _context.SpaceFixtures
+                .Include(fx => fx.UnitSpace).ThenInclude(us => us.BuildingUnit).ThenInclude(u => u.Building)
+                .Where(fx => fx.UnitSpace.BuildingUnit != null
+                    && scopeIds.Contains(fx.UnitSpace.BuildingUnit.BuildingId)
+                    && (fx.UnitSpace.BuildingUnit.Category == "OrtakAlan_Blok" || (fx.UnitSpace.BuildingUnit.Category != null && fx.UnitSpace.BuildingUnit.Category.StartsWith("OrtakAlan"))))
+                .OrderBy(fx => fx.ItemName)
+                .Take(40)
+                .ToListAsync();
+
             ViewBag.TotalCollectedDues = await _context.UnitDebts
                 .Where(d => d.IsPaid && !d.IsArchived && scopeIds.Contains(d.BuildingUnit.BuildingId))
                 .SumAsync(d => (decimal?)d.Amount) ?? 0m;
@@ -3994,7 +4038,9 @@ namespace GMK360.Web.Controllers
                 .SumAsync(d => (decimal?)d.Amount) ?? 0m;
 
             ViewBag.ExpenseGroups = await GetFacilityExpenseGroupLookupsAsync();
-            ViewBag.ActiveTab = string.IsNullOrWhiteSpace(tab) ? "giderler" : tab.Trim().ToLowerInvariant();
+            var normalizedTab = string.IsNullOrWhiteSpace(tab) ? "faturalar" : tab.Trim().ToLowerInvariant();
+            if (normalizedTab == "giderler") normalizedTab = "faturalar";
+            ViewBag.ActiveTab = normalizedTab;
             ViewBag.SelectedExpenseGroup = expenseGroup;
             ViewBag.IsSiteScope = isSiteScope;
             ViewBag.ScopeBuildingCount = scopeIds.Count;
