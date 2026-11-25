@@ -1,5 +1,6 @@
-const CACHE_NAME = "gmk360-pwa-v5";
+const CACHE_NAME = "gmk360-pwa-v6";
 const PRECACHE_ASSETS = [
+  "/pwa-launch.html",
   "/manifest.json",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
@@ -28,6 +29,22 @@ self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
   const reqUrl = new URL(event.request.url);
   if (reqUrl.origin !== self.location.origin) return;
+
+  if (reqUrl.pathname === "/pwa-launch.html") {
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        const net = fetch(event.request).then(res => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then(c => c.put(event.request, copy));
+          }
+          return res;
+        }).catch(() => cached);
+        return cached || net;
+      })
+    );
+    return;
+  }
 
   if (event.request.mode === "navigate") {
     event.respondWith(
