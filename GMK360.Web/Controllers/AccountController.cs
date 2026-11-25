@@ -992,6 +992,134 @@ namespace GMK360.Web.Controllers
 
         [AllowAnonymous]
         [HttpGet]
+        public IActionResult ForgotPassword()
+        {
+            return View();
+        }
+
+        [AllowAnonymous]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ForgotPassword(string email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                ViewBag.ErrorMessage = "Lütfen kayıtlı e-posta adresinizi giriniz.";
+                return View();
+            }
+
+            var cleanEmail = email.Trim();
+            var user = await _userManager.FindByEmailAsync(cleanEmail);
+            if (user != null)
+            {
+                var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+                var resetUrl = Url.Action("ResetPassword", "Account", new { userId = user.Id, token }, Request.Scheme);
+                var emailSvc = HttpContext.RequestServices.GetService(typeof(GMK360.Core.Interfaces.IEmailService)) as GMK360.Core.Interfaces.IEmailService;
+                var displayName = !string.IsNullOrWhiteSpace(user.DisplayName) ? user.DisplayName : cleanEmail;
+
+                var body = $@"
+<div style=""font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:14px;"">
+  <h2 style=""color:#1e3a8a;margin-top:0;"">GMK360 Şifre Sıfırlama Talebi</h2>
+  <p>Merhaba <strong>{System.Net.WebUtility.HtmlEncode(displayName)}</strong>,</p>
+  <p>Hesabınız için şifre sıfırlama talebinde bulundunuz. Yeni şifrenizi belirlemek için aşağıdaki butona tıklayın:</p>
+  <p style=""margin:24px 0;"">
+    <a href=""{resetUrl}"" style=""background:#1e3a8a;color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-weight:bold;display:inline-block;"">Yeni Şifre Belirle</a>
+  </p>
+  <p style=""font-size:12px;color:#64748b;"">Buton çalışmazsa bağlantıyı kopyalayın:<br/><a href=""{resetUrl}"">{resetUrl}</a></p>
+  <p style=""font-size:12px;color:#94a3b8;margin-bottom:0;"">Bu talebi siz yapmadıysanız bu e-postayı görmezden gelebilirsiniz.</p>
+</div>";
+
+                if (emailSvc != null && !string.IsNullOrWhiteSpace(resetUrl))
+                {
+                    var sendRes = await emailSvc.SendEmailWithResultAsync(cleanEmail, "GMK360 | Şifre Sıfırlama Bağlantısı", body);
+                    if (!sendRes.Success)
+                    {
+                        ViewBag.ErrorMessage = $"E-posta sunucusundan gönderim yapılamadı ({sendRes.Message}).";
+                        return View();
+                    }
+                }
+            }
+
+            ViewBag.SuccessMessage = $"Eğer '{cleanEmail}' adresi sistemimizde kayıtlıysa, şifre sıfırlama bağlantısı e-posta kutunuza gönderildi (Spam/Gereksiz klasörünü de kontrol edin).";
+            return View();
+        }
+
+        [AllowAnonymous]
+        [HttpGet]
+        public async Task<IActionResult> ResetPassword(string userId, string token)
+        {
+            if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(token))
+            {
+                TempData["ErrorMessage"] = "Geçersiz veya eksik şifre sıfırlama bağlantısı.";
+                return RedirectToAction("Login");
+            }
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+            {
+                TempData["ErrorMessage"] = "Kullanıcı bulunamadı.";
+                return RedirectToAction("Login");
+            }
+
+            ViewBag.UserId = userId;
+            ViewBag.Token = token;
+            ViewBag.UserEmail = user.Email;
+            return View();
+        }
+
+        [AllowAnonymous]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ResetPassword(string userId, string token, string newPassword, string confirmPassword)
+        {
+            ViewBag.UserId = userId;
+            ViewBag.Token = token;
+
+            if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(token))
+            {
+                TempData["ErrorMessage"] = "Geçersiz sıfırlama talebi.";
+                return RedirectToAction("Login");
+            }
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+            {
+                TempData["ErrorMessage"] = "Kullanıcı bulunamadı.";
+                return RedirectToAction("Login");
+            }
+            ViewBag.UserEmail = user.Email;
+
+            if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 8)
+            {
+                ViewBag.ErrorMessage = "Yeni şifreniz en az 8 karakter olmalı ve büyük/küçük harf, rakam ile özel karakter içermelidir.";
+                return View();
+            }
+
+            if (newPassword != confirmPassword)
+            {
+                ViewBag.ErrorMessage = "Girilen şifreler birbiriyle eşleşmiyor.";
+                return View();
+            }
+
+            var resetResult = await _userManager.ResetPasswordAsync(user, token, newPassword);
+            if (!resetResult.Succeeded)
+            {
+                ViewBag.ErrorMessage = string.Join(" ", resetResult.Errors.Select(e => e.Description));
+                return View();
+            }
+
+            if (!user.EmailConfirmed)
+            {
+                user.EmailConfirmed = true;
+                await _userManager.UpdateAsync(user);
+            }
+
+            TempData["SuccessMessage"] = "Şifreniz başarıyla güncellendi! Yeni şifrenizle giriş yapabilirsiniz.";
+            return RedirectToAction("Login");
+        }
+
+        [AllowAnonymous]
+        [HttpGet]
         public async Task<IActionResult> ActivateResident(string token)
         {
             if (string.IsNullOrWhiteSpace(token))
