@@ -105,6 +105,15 @@ namespace GMK360.Core.Entities
         [System.ComponentModel.DataAnnotations.Schema.Column(TypeName = "decimal(18,2)")]
         public decimal? DefaultBaseMonthlyDues { get; set; } // Sitenin / binanın kalıcı sabit baz aylık aidatı (₺)
         public int? DuesPaymentDay { get; set; } // Aylık aidat ödeme günü (1-31)
+
+        // Fiziksel Noter Tasdikli Karar Defteri Künyesi
+        [System.ComponentModel.DataAnnotations.MaxLength(150)]
+        public string? DecisionBookNotaryName { get; set; }
+        [System.ComponentModel.DataAnnotations.MaxLength(80)]
+        public string? DecisionBookJournalNo { get; set; }
+        public DateTime? DecisionBookOpenDate { get; set; }
+        public DateTime? DecisionBookLastClosingDate { get; set; }
+        public int? DecisionBookTotalPages { get; set; }
     }
 }
 

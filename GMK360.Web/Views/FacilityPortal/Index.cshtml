@@ -560,17 +560,29 @@
                 }
                 else
                 {
+                    var allEligibleBuildingUnits = ViewBag.AllEligibleBuildingUnits as List<GMK360.Core.Entities.BuildingUnit> ?? new List<GMK360.Core.Entities.BuildingUnit>();
                     @foreach (var m in meetings.Take(6))
                     {
+                        var quorum = GMK360.Web.Helpers.KmkQuorumHelper.Compute(allEligibleBuildingUnits, m.Votes, m.QuorumType);
+                        var mVotes = (m.Votes ?? new List<GMK360.Core.Entities.BuildingDecisionVote>()).Where(v => !v.IsDeleted).ToList();
+                        var mAttachments = (m.Attachments ?? new List<GMK360.Core.Entities.BuildingDecisionAttachment>()).Where(a => !a.IsDeleted).OrderByDescending(a => a.CreatedAt).ToList();
+                        var proxyUnitIds = mVotes.Where(v => v.ParticipationType == "Vekil").Select(v => v.BuildingUnitId).ToHashSet();
+                        var eligibleUnitsForUser = activeRole == "Owner"
+                            ? residentUnits
+                            : residentUnits.Where(u => proxyUnitIds.Contains(u.Id)).ToList();
+
                         <div class="border rounded-3 p-2 mb-2 @(m.IsConcluded ? "bg-light" : "bg-warning bg-opacity-10 border-warning")">
                             <div class="d-flex justify-content-between align-items-center gap-2">
-                                <strong class="small text-dark">#@m.Id — @m.AgendaTitle</strong>
+                                <strong class="small text-dark">Karar #@(m.DecisionNumber ?? m.Id.ToString("D2")) — @m.AgendaTitle</strong>
                                 <span class="badge @(m.IsConcluded ? "bg-success" : "bg-warning text-dark")">
-                                    @(m.IsConcluded ? "Karara Bağlandı" : "📅 Planlanan Toplantı")
+                                    @(m.IsConcluded ? "Karara Bağlandı" : "📅 Ön Görüş & Onay")
                                 </span>
                             </div>
-                            <div class="text-muted" style="font-size:.75rem;">
-                                <i class="bi bi-calendar3 me-1"></i>@m.MeetingDate.ToString("dd.MM.yyyy HH:mm")
+                            <div class="text-muted d-flex flex-wrap justify-content-between align-items-center gap-1 mt-1" style="font-size:.75rem;">
+                                <span><i class="bi bi-calendar3 me-1"></i>@m.MeetingDate.ToString("dd.MM.yyyy HH:mm")</span>
+                                <span class="badge @(quorum.IsQuorumMet ? "bg-success-subtle text-success" : "bg-light text-dark border")">
+                                    Ön Onay: @quorum.ApprovedUnits/@quorum.TotalUnits Malik (%@quorum.ApprovalUnitPercent)
+                                </span>
                             </div>
                             @if (m.Decisions != null && m.Decisions.Any())
                             {
@@ -581,14 +593,97 @@
                                     }
                                 </div>
                             }
-                            @if (activeRole == "Owner" && !m.IsConcluded)
+                            @if (mAttachments.Any())
                             {
-                                <form asp-action="ProposeMeetingAgenda" method="post" class="mt-2 pt-2 border-top d-flex gap-1">
+                                <div class="mt-2 pt-1 border-top" style="font-size:.78rem;">
+                                    <div class="fw-bold text-muted mb-1">Belgeler &amp; Görüşler (@mAttachments.Count):</div>
+                                    @foreach (var att in mAttachments.Take(5))
+                                    {
+                                        <div class="bg-white rounded border px-2 py-1 mb-1">
+                                            <strong>@att.AuthorName</strong> <span class="text-muted">(@att.AuthorRoleLabel)</span>:
+                                            @if (!string.IsNullOrWhiteSpace(att.CommentText)) { <span>@att.CommentText</span> }
+                                            @if (!string.IsNullOrWhiteSpace(att.FileUrl))
+                                            {
+                                                <a href="@att.FileUrl" target="_blank" class="ms-1 fw-semibold"><i class="bi bi-paperclip"></i>@(att.DocumentTitle ?? "Belgeyi Aç")</a>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            @if (!m.IsConcluded && eligibleUnitsForUser.Any())
+                            {
+                                <div class="mt-2 pt-2 border-top bg-white rounded-3 p-2">
+                                    <div class="fw-bold mb-1" style="font-size:.78rem;">
+                                        <i class="bi bi-hand-thumbs-up text-success me-1"></i>Uzaktan Ön Onayınız (PIN Gerektirmez — İmza Deftere Yazılınca Alınır):
+                                    </div>
+                                    @foreach (var eu in eligibleUnitsForUser)
+                                    {
+                                        var myVote = mVotes.FirstOrDefault(v => v.BuildingUnitId == eu.Id);
+                                        <div class="border rounded-2 p-2 mb-1 bg-light">
+                                            <div class="d-flex justify-content-between align-items-center mb-1" style="font-size:.76rem;">
+                                                <strong>Daire @eu.DoorNumber (@(activeRole == "Owner" ? "Asil Malik" : "Yazılı Vekil"))</strong>
+                                                @if (myVote != null && myVote.VoteChoice != "Pending")
+                                                {
+                                                    <span class="badge @(myVote.VoteChoice == "Kabul" ? "bg-success" : "bg-danger")">
+                                                        Seçiminiz: @myVote.VoteChoice
+                                                    </span>
+                                                }
+                                            </div>
+                                            <div class="d-flex flex-wrap gap-1 align-items-center">
+                                                <form asp-action="SubmitRemoteDecisionVote" method="post" class="d-inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="buildingId" value="@buildingId" />
+                                                    <input type="hidden" name="meetingId" value="@m.Id" />
+                                                    <input type="hidden" name="buildingUnitId" value="@eu.Id" />
+                                                    <input type="hidden" name="voteChoice" value="Kabul" />
+                                                    <input type="hidden" name="previewRole" value="@(canSwitch ? activeRole : "")" />
+                                                    <button type="submit" class="btn btn-xs @(myVote?.VoteChoice == "Kabul" ? "btn-success" : "btn-outline-success") rounded-pill px-3 fw-bold">
+                                                        ✅ Katılıyorum (Ön Onay)
+                                                    </button>
+                                                </form>
+                                                <form asp-action="SubmitRemoteDecisionVote" method="post" class="d-flex gap-1 flex-grow-1">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="buildingId" value="@buildingId" />
+                                                    <input type="hidden" name="meetingId" value="@m.Id" />
+                                                    <input type="hidden" name="buildingUnitId" value="@eu.Id" />
+                                                    <input type="hidden" name="voteChoice" value="Ret" />
+                                                    <input type="hidden" name="previewRole" value="@(canSwitch ? activeRole : "")" />
+                                                    <input type="text" name="dissentNote" class="form-control form-control-sm" value="@myVote?.DissentNote" placeholder="Şerh / gerekçe (isteğe bağlı)" style="font-size:.74rem;" />
+                                                    <button type="submit" class="btn btn-xs @(myVote?.VoteChoice == "Ret" ? "btn-danger" : "btn-outline-danger") rounded-pill px-2 fw-bold text-nowrap">
+                                                        ❌ Katılmıyorum
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            @if (!m.IsConcluded)
+                            {
+                                <form asp-action="AddRemoteMeetingComment" method="post" enctype="multipart/form-data" class="mt-2 pt-2 border-top row g-1">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="buildingId" value="@buildingId" />
                                     <input type="hidden" name="meetingId" value="@m.Id" />
                                     <input type="hidden" name="previewRole" value="@(canSwitch ? activeRole : "")" />
-                                    <input type="text" name="agendaSubject" class="form-control form-control-sm" required placeholder="Bu toplantıya eklenecek gündem konunuzu yazın..." />
+                                    <div class="col-7">
+                                        <input type="text" name="commentText" class="form-control form-control-sm" placeholder="Görüş / öneri yazın..." />
+                                    </div>
+                                    <div class="col-3">
+                                        <input type="file" name="attachmentFile" class="form-control form-control-sm" title="Belge/Teklif Ekle" />
+                                    </div>
+                                    <div class="col-2">
+                                        <button type="submit" class="btn btn-xs btn-primary w-100 rounded-pill fw-bold">Gönder</button>
+                                    </div>
+                                </form>
+                            }
+                            @if (activeRole == "Owner" && !m.IsConcluded)
+                            {
+                                <form asp-action="ProposeMeetingAgenda" method="post" class="mt-1 d-flex gap-1">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="buildingId" value="@buildingId" />
+                                    <input type="hidden" name="meetingId" value="@m.Id" />
+                                    <input type="hidden" name="previewRole" value="@(canSwitch ? activeRole : "")" />
+                                    <input type="text" name="agendaSubject" class="form-control form-control-sm" required placeholder="Bu toplantıya eklenecek ek gündem konunuz..." />
                                     <button type="submit" class="btn btn-xs btn-warning text-dark fw-bold rounded-pill px-2 text-nowrap">Konu Ekle</button>
                                 </form>
                             }

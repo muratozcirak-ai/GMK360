@@ -2402,7 +2402,12 @@ namespace GMK360.Web.Controllers
             string? decisionText = null,
             string? returnTo = null,
             bool isPlannedOnly = false,
-            string? meetingTime = null)
+            string? meetingTime = null,
+            string? decisionNumber = null,
+            string? meetingLocation = null,
+            string? quorumType = "Standard",
+            Microsoft.AspNetCore.Http.IFormFile? attachmentFile = null,
+            string? attachmentTitle = null)
         {
             var userId = GetUserId();
             var building = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == buildingId && (b.ManagerUserId == userId || b.CreatedByUserId == userId || User.IsInRole("Admin") || User.IsInRole("SuperAdmin") || _context.BuildingManagers.Any(m => m.BuildingId == (b.ParentBuildingId ?? b.Id) && m.UserId == userId && m.IsActive)));
@@ -2414,11 +2419,19 @@ namespace GMK360.Web.Controllers
                 effectiveDate = meetingDate.Date.Add(parsedTime);
             }
 
+            string effectiveDecNo = !string.IsNullOrWhiteSpace(decisionNumber)
+                ? decisionNumber.Trim()
+                : $"{effectiveDate.Year}/{(await _context.SystemMeetings.CountAsync(m => m.ContextType == "Building" && m.ContextId == buildingId && m.MeetingDate.Year == effectiveDate.Year && !m.IsDeleted) + 1):D2}";
+
             var meeting = new SystemMeeting
             {
                 ContextType = "Building",
                 ContextId = buildingId,
                 AgendaTitle = agendaTitle,
+                DecisionNumber = effectiveDecNo,
+                MeetingLocation = string.IsNullOrWhiteSpace(meetingLocation) ? "Site Yönetim Odası / Ortak Alan" : meetingLocation.Trim(),
+                QuorumType = string.IsNullOrWhiteSpace(quorumType) ? "Standard" : quorumType.Trim(),
+                VerificationToken = Guid.NewGuid().ToString("N").Substring(0, 12).ToUpperInvariant(),
                 MeetingDate = effectiveDate,
                 IsConcluded = !isPlannedOnly,
                 CreatedAt = DateTime.Now
@@ -2438,14 +2451,184 @@ namespace GMK360.Web.Controllers
                 await _context.SaveChangesAsync();
             }
 
+            if (attachmentFile != null && attachmentFile.Length > 0)
+            {
+                var savedUrl = await SaveMeetingAttachmentFileAsync(buildingId, meeting.Id, attachmentFile);
+                if (!string.IsNullOrEmpty(savedUrl))
+                {
+                    _context.BuildingDecisionAttachments.Add(new BuildingDecisionAttachment
+                    {
+                        SystemMeetingId = meeting.Id,
+                        AuthorUserId = userId,
+                        AuthorName = User.Identity?.Name ?? "Yönetici",
+                        AuthorRoleLabel = "Yönetici",
+                        DocumentTitle = string.IsNullOrWhiteSpace(attachmentTitle) ? attachmentFile.FileName : attachmentTitle.Trim(),
+                        FileUrl = savedUrl,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    await _context.SaveChangesAsync();
+                }
+            }
+
             TempData["SuccessMessage"] = isPlannedOnly
-                ? $"📅 '{agendaTitle}' toplantısı planlandı ve Kiracı / Ev Sahibi / Aza ekranlarına yansıtıldı."
-                : "🎉 Genel Kurul Kararı başarıyla kaydedildi. Noter Defteri Baskı Şablonunu indirebilir, Pazar Yeri / B2B üzerinden teklif toplayabilirsiniz.";
+                ? $"📅 '{agendaTitle}' (Karar Taslağı #{meeting.DecisionNumber}) açıldı ve Kat Maliklerinin belge/görüş & ön onay ekranına yansıtıldı."
+                : $"🎉 Karar #{meeting.DecisionNumber} kaydedildi. A4/A5 Noter Defteri baskı şablonunu alabilirsiniz.";
             if (string.Equals(returnTo, "Oylamalar", StringComparison.OrdinalIgnoreCase))
             {
                 return RedirectToAction(nameof(Oylamalar), new { buildingId });
             }
             return RedirectToAction(nameof(Detail), new { id = buildingId });
+        }
+
+        private async Task<string?> SaveMeetingAttachmentFileAsync(int buildingId, int recordId, Microsoft.AspNetCore.Http.IFormFile? file)
+        {
+            if (file == null || file.Length == 0 || file.Length > 15 * 1024 * 1024) return null;
+            var ext = System.IO.Path.GetExtension(file.FileName)?.ToLowerInvariant() ?? "";
+            var allowedExts = new[] { ".pdf", ".jpg", ".jpeg", ".png", ".webp", ".doc", ".docx", ".xls", ".xlsx" };
+            if (!allowedExts.Contains(ext)) return null;
+
+            var env = HttpContext.RequestServices.GetService(typeof(Microsoft.AspNetCore.Hosting.IWebHostEnvironment)) as Microsoft.AspNetCore.Hosting.IWebHostEnvironment;
+            var webRoot = env?.WebRootPath ?? System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot");
+            var folder = System.IO.Path.Combine(webRoot, "uploads", "buildings", buildingId.ToString(), "meeting-docs");
+            System.IO.Directory.CreateDirectory(folder);
+
+            var uniqueName = $"m{recordId}_{DateTime.UtcNow:yyyyMMddHHmmss}_{Guid.NewGuid():N}".Substring(0, 32) + ext;
+            var fullPath = System.IO.Path.Combine(folder, uniqueName);
+            using (var stream = new System.IO.FileStream(fullPath, System.IO.FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+            return $"/uploads/buildings/{buildingId}/meeting-docs/{uniqueName}";
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveDecisionBookMetadata(
+            int buildingId,
+            string? notaryName,
+            string? journalNo,
+            DateTime? openDate,
+            DateTime? lastClosingDate,
+            int? totalPages)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            building.DecisionBookNotaryName = string.IsNullOrWhiteSpace(notaryName) ? null : notaryName.Trim();
+            building.DecisionBookJournalNo = string.IsNullOrWhiteSpace(journalNo) ? null : journalNo.Trim();
+            building.DecisionBookOpenDate = openDate;
+            building.DecisionBookLastClosingDate = lastClosingDate;
+            building.DecisionBookTotalPages = totalPages;
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"📒 '{building.Name}' fiziksel Noter Karar Defteri künyesi güncellendi.";
+            return RedirectToAction(nameof(Oylamalar), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddMeetingAttachment(
+            int buildingId,
+            int meetingId,
+            string? commentText,
+            string? documentTitle,
+            Microsoft.AspNetCore.Http.IFormFile? attachmentFile)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var meeting = await _context.SystemMeetings.FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && m.ContextId == buildingId);
+            if (meeting == null) return NotFound();
+
+            var fileUrl = await SaveMeetingAttachmentFileAsync(buildingId, meetingId, attachmentFile);
+            if (string.IsNullOrWhiteSpace(commentText) && string.IsNullOrWhiteSpace(fileUrl))
+            {
+                TempData["ErrorMessage"] = "Lütfen bir görüş notu yazın veya belge (PDF/görsel) yükleyin.";
+                return RedirectToAction(nameof(Oylamalar), new { buildingId });
+            }
+
+            _context.BuildingDecisionAttachments.Add(new BuildingDecisionAttachment
+            {
+                SystemMeetingId = meeting.Id,
+                AuthorUserId = GetUserId(),
+                AuthorName = User.Identity?.Name ?? "Site Yöneticisi",
+                AuthorRoleLabel = "Yönetici",
+                CommentText = string.IsNullOrWhiteSpace(commentText) ? null : commentText.Trim(),
+                DocumentTitle = !string.IsNullOrWhiteSpace(documentTitle) ? documentTitle.Trim() : attachmentFile?.FileName,
+                FileUrl = fileUrl,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "Belge / yönetim notu toplantı dosyasına eklendi ve malik ekranına yansıtıldı.";
+            return RedirectToAction(nameof(Oylamalar), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AssignUnitProxyVote(
+            int buildingId,
+            int meetingId,
+            int buildingUnitId,
+            string proxyPersonName,
+            string? participationType = "Vekil",
+            string? voteChoice = null,
+            Microsoft.AspNetCore.Http.IFormFile? proxyDocumentFile = null)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var meeting = await _context.SystemMeetings.FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && m.ContextId == buildingId);
+            var unit = await _context.BuildingUnits.FirstOrDefaultAsync(u => u.Id == buildingUnitId && u.BuildingId == buildingId);
+            if (meeting == null || unit == null) return NotFound();
+
+            var vote = await _context.BuildingDecisionVotes
+                .FirstOrDefaultAsync(v => v.SystemMeetingId == meetingId && v.BuildingUnitId == buildingUnitId && !v.IsDeleted);
+
+            string? proxyDocUrl = await SaveMeetingAttachmentFileAsync(buildingId, meetingId, proxyDocumentFile);
+            string partType = string.IsNullOrWhiteSpace(participationType) ? "Vekil" : participationType.Trim();
+
+            if (vote == null)
+            {
+                vote = new BuildingDecisionVote
+                {
+                    SystemMeetingId = meetingId,
+                    BuildingUnitId = buildingUnitId,
+                    VoterUserId = unit.OwnerUserId,
+                    VoterName = !string.IsNullOrWhiteSpace(unit.OwnerName) ? unit.OwnerName : $"Daire {unit.DoorNumber} Maliki",
+                    ParticipationType = partType,
+                    ProxyPersonName = string.IsNullOrWhiteSpace(proxyPersonName) ? null : proxyPersonName.Trim(),
+                    ProxyDocumentUrl = proxyDocUrl,
+                    VoteChoice = !string.IsNullOrWhiteSpace(voteChoice) ? voteChoice.Trim() : "Pending",
+                    UnitLandShareSnapshot = unit.LandShare,
+                    ApprovalTraceCode = !string.IsNullOrWhiteSpace(voteChoice) && voteChoice != "Pending"
+                        ? $"VEK-{Guid.NewGuid().ToString("N").Substring(0, 5).ToUpperInvariant()}"
+                        : null,
+                    VotedAt = !string.IsNullOrWhiteSpace(voteChoice) && voteChoice != "Pending" ? DateTime.UtcNow : null,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.BuildingDecisionVotes.Add(vote);
+            }
+            else
+            {
+                vote.ParticipationType = partType;
+                if (!string.IsNullOrWhiteSpace(proxyPersonName)) vote.ProxyPersonName = proxyPersonName.Trim();
+                if (!string.IsNullOrWhiteSpace(proxyDocUrl)) vote.ProxyDocumentUrl = proxyDocUrl;
+                if (!string.IsNullOrWhiteSpace(voteChoice))
+                {
+                    vote.VoteChoice = voteChoice.Trim();
+                    if (vote.VoteChoice != "Pending")
+                    {
+                        vote.VotedAt = DateTime.UtcNow;
+                        vote.ApprovalTraceCode ??= $"VEK-{Guid.NewGuid().ToString("N").Substring(0, 5).ToUpperInvariant()}";
+                    }
+                }
+                vote.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"Daire {unit.DoorNumber} için temsil/vekalet bilgisi güncellendi ({partType}).";
+            return RedirectToAction(nameof(Oylamalar), new { buildingId });
         }
 
         [HttpPost]
@@ -2480,24 +2663,69 @@ namespace GMK360.Web.Controllers
             return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
 
-        // 3.2 Noter Karar Defteri Baskı Şablonu (KMK Md. 32 A4 Islak İmza Tutanağı)
+        // 3.2 Noter Karar Defteri Baskı Şablonu (KMK Md. 32 A4 / A5 Islak İmza Tutanağı + QR)
         [HttpGet]
-        public async Task<IActionResult> PrintDecisionSheet(int meetingId)
+        public async Task<IActionResult> PrintDecisionSheet(int meetingId, string? format = "a4")
         {
             var meeting = await _context.SystemMeetings
                 .Include(m => m.Decisions)
+                .Include(m => m.Votes)
+                .Include(m => m.Attachments)
                 .FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building");
 
             if (meeting == null) return NotFound("Toplantı kaydı bulunamadı.");
 
             var building = await _context.Buildings
                 .Include(b => b.Units)
+                .Include(b => b.City)
+                .Include(b => b.District)
                 .FirstOrDefaultAsync(b => b.Id == meeting.ContextId);
 
             if (!CanAccessBuilding(building, GetUserId()))
                 return Forbid();
 
+            if (string.IsNullOrWhiteSpace(meeting.VerificationToken))
+            {
+                meeting.VerificationToken = Guid.NewGuid().ToString("N").Substring(0, 12).ToUpperInvariant();
+                await _context.SaveChangesAsync();
+            }
+
+            var eligibleUnits = (building?.Units ?? Enumerable.Empty<BuildingUnit>())
+                .Where(u => !(u.Category ?? "").StartsWith("OrtakAlan", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(u => u.FloorLevel)
+                .ThenBy(u => u.DoorNumber)
+                .ToList();
+
             ViewBag.Building = building;
+            ViewBag.Format = string.Equals(format, "a5", StringComparison.OrdinalIgnoreCase) ? "a5" : "a4";
+            ViewBag.QuorumSummary = GMK360.Web.Helpers.KmkQuorumHelper.Compute(eligibleUnits, meeting.Votes, meeting.QuorumType);
+            ViewBag.VerifyUrl = Url.Action("VerifyDecision", "BuildingManager", new { meetingId = meeting.Id, code = meeting.VerificationToken }, Request.Scheme);
+            return View(meeting);
+        }
+
+        [AllowAnonymous]
+        [HttpGet]
+        public async Task<IActionResult> VerifyDecision(int meetingId, string? code)
+        {
+            var meeting = await _context.SystemMeetings
+                .AsNoTracking()
+                .Include(m => m.Decisions)
+                .Include(m => m.Votes)
+                .Include(m => m.Attachments)
+                .FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && !m.IsDeleted);
+
+            if (meeting == null || string.IsNullOrWhiteSpace(code) || !string.Equals(meeting.VerificationToken, code.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound("Karar doğrulama kaydı bulunamadı veya doğrulama kodu geçersiz.");
+            }
+
+            var building = await _context.Buildings
+                .AsNoTracking()
+                .Include(b => b.Units)
+                .FirstOrDefaultAsync(b => b.Id == meeting.ContextId);
+
+            ViewBag.Building = building;
+            ViewBag.QuorumSummary = GMK360.Web.Helpers.KmkQuorumHelper.Compute(building?.Units, meeting.Votes, meeting.QuorumType);
             return View(meeting);
         }
 
@@ -4517,10 +4745,26 @@ namespace GMK360.Web.Controllers
             var meetings = allowedIds.Any()
                 ? await _context.SystemMeetings
                     .Include(m => m.Decisions)
-                    .Where(m => m.ContextType == "Building" && allowedIds.Contains(m.ContextId))
+                    .Include(m => m.Votes)
+                    .Include(m => m.Attachments)
+                    .Where(m => m.ContextType == "Building" && allowedIds.Contains(m.ContextId) && !m.IsDeleted)
                     .OrderByDescending(m => m.MeetingDate)
                     .ToListAsync()
                 : new System.Collections.Generic.List<SystemMeeting>();
+
+            var buildingUnitsMap = allowedIds.Any()
+                ? (await _context.BuildingUnits
+                    .AsNoTracking()
+                    .Where(u => allowedIds.Contains(u.BuildingId) && !(u.Category ?? "").StartsWith("OrtakAlan"))
+                    .OrderBy(u => u.FloorLevel).ThenBy(u => u.DoorNumber)
+                    .ToListAsync())
+                    .GroupBy(u => u.BuildingId)
+                    .ToDictionary(g => g.Key, g => g.ToList())
+                : new System.Collections.Generic.Dictionary<int, System.Collections.Generic.List<BuildingUnit>>();
+            ViewBag.UnitsByBuilding = buildingUnitsMap;
+            ViewBag.SelectedBuildingObj = buildingId.HasValue
+                ? buildings.FirstOrDefault(b => b.Id == buildingId.Value)
+                : buildings.FirstOrDefault();
 
             var approvals = allowedIds.Any()
                 ? await _context.ApprovalRequests

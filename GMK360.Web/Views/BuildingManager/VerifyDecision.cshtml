@@ -1,0 +1,94 @@
+@model GMK360.Core.Entities.SystemMeeting
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Karar Doğrulama Özeti";
+    var building = ViewBag.Building as GMK360.Core.Entities.Building;
+    var quorum = ViewBag.QuorumSummary as GMK360.Web.Helpers.KmkQuorumSummary ?? new GMK360.Web.Helpers.KmkQuorumSummary();
+    var votes = (Model.Votes ?? new List<GMK360.Core.Entities.BuildingDecisionVote>())
+        .Where(v => !v.IsDeleted && v.VoteChoice != "Pending")
+        .OrderBy(v => v.BuildingUnit?.DoorNumber)
+        .ToList();
+}
+
+<div class="container py-5" style="max-width: 720px;">
+    <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+        <div class="card-header bg-dark text-white p-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <span class="badge bg-success mb-1"><i class="bi bi-qr-code me-1"></i>GMK360 Dijital Karar Doğrulama</span>
+                    <h4 class="fw-bold mb-0">@(building?.Name ?? "Bina / Site") — Karar #@(Model.DecisionNumber ?? Model.Id.ToString("D2"))</h4>
+                </div>
+                <span class="badge @(Model.IsConcluded ? "bg-success" : "bg-warning text-dark") fs-6">
+                    @(Model.IsConcluded ? "✅ Karara Bağlandı" : "⏳ Ön Onay Aşamasında")
+                </span>
+            </div>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-2 small mb-3">
+                <div class="col-md-6"><strong>Gündem:</strong> @Model.AgendaTitle</div>
+                <div class="col-md-6"><strong>Tarih:</strong> @Model.MeetingDate.ToString("dd.MM.yyyy HH:mm")</div>
+                <div class="col-md-6"><strong>Yasal Çoğunluk Kuralı:</strong> @quorum.RuleLabel</div>
+                <div class="col-md-6"><strong>Doğrulama Kodu:</strong> <code>@Model.VerificationToken</code></div>
+            </div>
+
+            <div class="alert @(quorum.IsQuorumMet ? "alert-success" : "alert-warning") rounded-3 small mb-3">
+                <strong>Çoğunluk Durumu:</strong> @quorum.ApprovedUnits / @quorum.TotalUnits Kat Maliki Kabul (%@quorum.ApprovalUnitPercent) •
+                Arsa Payı: %@quorum.ApprovalSharePercent •
+                <strong>@(quorum.IsQuorumMet ? "Yasal Çoğunluk Sağlandı" : "Çoğunluk Bekleniyor")</strong>
+            </div>
+
+            @if (Model.Decisions != null && Model.Decisions.Any())
+            {
+                <div class="bg-light rounded-3 p-3 border small mb-3">
+                    <strong>Alınan Karar Özeti:</strong>
+                    @foreach (var d in Model.Decisions)
+                    {
+                        <div class="mt-1"><i class="bi bi-check2-circle text-success me-1"></i>@d.DecisionText</div>
+                    }
+                </div>
+            }
+
+            <h6 class="fw-bold small text-muted mb-2">Dijital Ön Onay Kayıtları (KVKK Korumalı Döküm)</h6>
+            @if (!votes.Any())
+            {
+                <p class="small text-muted mb-0">Henüz dijital ön onay kaydı girilmemiş.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered small mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Bağımsız Bölüm</th>
+                                <th>Katılım</th>
+                                <th>Karar</th>
+                                <th>Zaman Damgası &amp; İz</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var v in votes)
+                            {
+                                <tr>
+                                    <td>@(v.BuildingUnit?.DoorNumber ?? $"Bölüm #{v.BuildingUnitId}")</td>
+                                    <td>@v.ParticipationType</td>
+                                    <td>
+                                        <span class="badge @(v.VoteChoice == "Kabul" ? "bg-success" : "bg-danger")">@v.VoteChoice</span>
+                                        @if (!string.IsNullOrWhiteSpace(v.DissentNote))
+                                        {
+                                            <span class="text-muted ms-1">(@v.DissentNote)</span>
+                                        }
+                                    </td>
+                                    <td>@(v.VotedAt?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "-") • <code>@v.ApprovalTraceCode</code></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <div class="text-muted mt-3 pt-2 border-top" style="font-size: .75rem;">
+                Bu sayfa fiziki Noter Karar Defterine yapıştırılan tutanak üzerindeki QR kodun dijital log doğrulamasıdır. KMK uyarınca hukuki geçerlilik için fiziki defterdeki ıslak imzalar esastır.
+            </div>
+        </div>
+    </div>
+</div>

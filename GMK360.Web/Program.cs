@@ -447,6 +447,67 @@ using (var schemaScope = app.Services.CreateScope())
                     CONSTRAINT [FK_BuildingStaffDocuments_BuildingStaffs_BuildingStaffId] FOREIGN KEY ([BuildingStaffId]) REFERENCES [dbo].[BuildingStaffs] ([Id]) ON DELETE CASCADE
                 );
             END
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'DecisionNumber') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [DecisionNumber] nvarchar(40) NULL;
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'MeetingLocation') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [MeetingLocation] nvarchar(200) NULL;
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'QuorumType') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [QuorumType] nvarchar(30) NOT NULL CONSTRAINT [DF_SystemMeetings_QuorumType] DEFAULT (N'Standard');
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'VerificationToken') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [VerificationToken] nvarchar(40) NULL;
+            IF COL_LENGTH(N'dbo.Buildings', N'DecisionBookNotaryName') IS NULL
+                ALTER TABLE [dbo].[Buildings] ADD [DecisionBookNotaryName] nvarchar(150) NULL;
+            IF COL_LENGTH(N'dbo.Buildings', N'DecisionBookJournalNo') IS NULL
+                ALTER TABLE [dbo].[Buildings] ADD [DecisionBookJournalNo] nvarchar(80) NULL;
+            IF COL_LENGTH(N'dbo.Buildings', N'DecisionBookOpenDate') IS NULL
+                ALTER TABLE [dbo].[Buildings] ADD [DecisionBookOpenDate] datetime2 NULL;
+            IF COL_LENGTH(N'dbo.Buildings', N'DecisionBookLastClosingDate') IS NULL
+                ALTER TABLE [dbo].[Buildings] ADD [DecisionBookLastClosingDate] datetime2 NULL;
+            IF COL_LENGTH(N'dbo.Buildings', N'DecisionBookTotalPages') IS NULL
+                ALTER TABLE [dbo].[Buildings] ADD [DecisionBookTotalPages] int NULL;
+            IF OBJECT_ID(N'dbo.BuildingDecisionVotes', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[BuildingDecisionVotes] (
+                    [Id] int IDENTITY(1,1) NOT NULL,
+                    [SystemMeetingId] int NOT NULL,
+                    [BuildingUnitId] int NOT NULL,
+                    [VoterUserId] nvarchar(450) NULL,
+                    [VoterName] nvarchar(150) NOT NULL,
+                    [ParticipationType] nvarchar(25) NOT NULL,
+                    [ProxyPersonName] nvarchar(150) NULL,
+                    [ProxyDocumentUrl] nvarchar(500) NULL,
+                    [VoteChoice] nvarchar(20) NOT NULL,
+                    [DissentNote] nvarchar(1000) NULL,
+                    [UnitLandShareSnapshot] decimal(18,4) NOT NULL,
+                    [ApprovalTraceCode] nvarchar(40) NULL,
+                    [VotedAt] datetime2 NULL,
+                    [CreatedAt] datetime2 NOT NULL,
+                    [UpdatedAt] datetime2 NULL,
+                    [IsDeleted] bit NOT NULL,
+                    CONSTRAINT [PK_BuildingDecisionVotes] PRIMARY KEY ([Id]),
+                    CONSTRAINT [FK_BuildingDecisionVotes_SystemMeetings_SystemMeetingId] FOREIGN KEY ([SystemMeetingId]) REFERENCES [dbo].[SystemMeetings] ([Id]) ON DELETE CASCADE,
+                    CONSTRAINT [FK_BuildingDecisionVotes_BuildingUnits_BuildingUnitId] FOREIGN KEY ([BuildingUnitId]) REFERENCES [dbo].[BuildingUnits] ([Id]) ON DELETE CASCADE
+                );
+            END
+            IF OBJECT_ID(N'dbo.BuildingDecisionAttachments', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[BuildingDecisionAttachments] (
+                    [Id] int IDENTITY(1,1) NOT NULL,
+                    [SystemMeetingId] int NOT NULL,
+                    [BuildingUnitId] int NULL,
+                    [AuthorUserId] nvarchar(450) NULL,
+                    [AuthorName] nvarchar(150) NOT NULL,
+                    [AuthorRoleLabel] nvarchar(40) NOT NULL,
+                    [CommentText] nvarchar(2000) NULL,
+                    [DocumentTitle] nvarchar(200) NULL,
+                    [FileUrl] nvarchar(500) NULL,
+                    [CreatedAt] datetime2 NOT NULL,
+                    [UpdatedAt] datetime2 NULL,
+                    [IsDeleted] bit NOT NULL,
+                    CONSTRAINT [PK_BuildingDecisionAttachments] PRIMARY KEY ([Id]),
+                    CONSTRAINT [FK_BuildingDecisionAttachments_SystemMeetings_SystemMeetingId] FOREIGN KEY ([SystemMeetingId]) REFERENCES [dbo].[SystemMeetings] ([Id]) ON DELETE CASCADE
+                );
+            END
         ");
     }
     catch (Exception schemaEx)

@@ -201,12 +201,22 @@ namespace GMK360.Web.Controllers
             var meetings = meetingBuildingIds.Any()
                 ? await _context.SystemMeetings
                     .Include(m => m.Decisions)
+                    .Include(m => m.Votes)
+                    .Include(m => m.Attachments)
                     .Where(m => m.ContextType == "Building" && meetingBuildingIds.Contains(m.ContextId) && !m.IsDeleted)
                     .OrderBy(m => m.IsConcluded)
                     .ThenByDescending(m => m.MeetingDate)
                     .Take(20)
                     .ToListAsync()
                 : new List<SystemMeeting>();
+
+            var allEligibleUnitsForMeetings = targetBuildingId > 0
+                ? await _context.BuildingUnits
+                    .AsNoTracking()
+                    .Where(u => (u.BuildingId == targetBuildingId || u.BuildingId == rootBuildingId) && !(u.Category ?? "").StartsWith("OrtakAlan"))
+                    .ToListAsync()
+                : new List<BuildingUnit>();
+            ViewBag.AllEligibleBuildingUnits = allEligibleUnitsForMeetings;
 
             var pendingApprovals = (boardMembership != null || isManager) && rootBuildingId > 0
                 ? await _context.ApprovalRequests
@@ -517,6 +527,152 @@ namespace GMK360.Web.Controllers
             var result = await governanceService.SubmitApprovalDecisionAsync(requestId, userId, email, approve, IsManagerOrAdmin(), confirmationPin);
             TempData[result.Success ? "SuccessMessage" : "ErrorMessage"] = result.Message;
 
+            return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SubmitRemoteDecisionVote(
+            int buildingId,
+            int meetingId,
+            int buildingUnitId,
+            string voteChoice,
+            string? dissentNote = null,
+            string? previewRole = null)
+        {
+            var userId = GetUserId();
+            var userEmail = User.FindFirstValue(ClaimTypes.Email);
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+            var meeting = await _context.SystemMeetings.FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && !m.IsDeleted);
+            var unit = await _context.BuildingUnits.FirstOrDefaultAsync(u => u.Id == buildingUnitId && !u.IsEmpty);
+            if (meeting == null || unit == null) return NotFound();
+            if (meeting.IsConcluded)
+            {
+                TempData["ErrorMessage"] = "Bu toplantı karara bağlandığı için ön onay değiştirilemez.";
+                return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+            }
+
+            bool isOwner = unit.OwnerUserId == userId || (!string.IsNullOrWhiteSpace(userEmail) && string.Equals(unit.OwnerEmail, userEmail, StringComparison.OrdinalIgnoreCase));
+            var existingVote = await _context.BuildingDecisionVotes
+                .FirstOrDefaultAsync(v => v.SystemMeetingId == meetingId && v.BuildingUnitId == buildingUnitId && !v.IsDeleted);
+            bool hasProxy = existingVote != null && existingVote.ParticipationType == "Vekil"
+                && (unit.TenantUserId == userId || (!string.IsNullOrWhiteSpace(userEmail) && string.Equals(unit.TenantEmail, userEmail, StringComparison.OrdinalIgnoreCase)) || IsManagerOrAdmin());
+
+            if (!isOwner && !hasProxy && !IsManagerOrAdmin())
+            {
+                TempData["ErrorMessage"] = "634 sayılı KMK gereği yalnızca Kat Maliki (veya yazılı vekalet tanımlanmış temsilcisi) ön onay verebilir.";
+                return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+            }
+
+            string cleanChoice = string.Equals(voteChoice, "Ret", StringComparison.OrdinalIgnoreCase) ? "Ret" : "Kabul";
+            if (cleanChoice == "Ret" && string.IsNullOrWhiteSpace(dissentNote))
+            {
+                dissentNote = "Katılmıyorum (Şerh)";
+            }
+
+            string traceCode = $"ONAY-{Guid.NewGuid().ToString("N").Substring(0, 5).ToUpperInvariant()}";
+
+            if (existingVote == null)
+            {
+                existingVote = new BuildingDecisionVote
+                {
+                    SystemMeetingId = meetingId,
+                    BuildingUnitId = buildingUnitId,
+                    VoterUserId = userId,
+                    VoterName = !string.IsNullOrWhiteSpace(unit.OwnerName) ? unit.OwnerName : (User.Identity?.Name ?? "Kat Maliki"),
+                    ParticipationType = isOwner ? "Asil" : "Vekil",
+                    VoteChoice = cleanChoice,
+                    DissentNote = string.IsNullOrWhiteSpace(dissentNote) ? null : dissentNote.Trim(),
+                    UnitLandShareSnapshot = unit.LandShare,
+                    ApprovalTraceCode = traceCode,
+                    VotedAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.BuildingDecisionVotes.Add(existingVote);
+            }
+            else
+            {
+                existingVote.VoterUserId = userId;
+                existingVote.VoteChoice = cleanChoice;
+                existingVote.DissentNote = cleanChoice == "Ret"
+                    ? (string.IsNullOrWhiteSpace(dissentNote) ? "Katılmıyorum" : dissentNote.Trim())
+                    : (string.IsNullOrWhiteSpace(dissentNote) ? null : dissentNote.Trim());
+                existingVote.ApprovalTraceCode ??= traceCode;
+                existingVote.VotedAt = DateTime.UtcNow;
+                existingVote.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = cleanChoice == "Kabul"
+                ? $"✅ Daire {unit.DoorNumber} için ön onayınız (Kabul) kaydedildi."
+                : $"📝 Daire {unit.DoorNumber} için çekinceniz / şerhiniz kaydedildi.";
+            return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddRemoteMeetingComment(
+            int buildingId,
+            int meetingId,
+            string? commentText,
+            string? documentTitle,
+            IFormFile? attachmentFile,
+            string? previewRole = null)
+        {
+            var userId = GetUserId();
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+            var meeting = await _context.SystemMeetings.FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && !m.IsDeleted);
+            if (meeting == null) return NotFound();
+
+            string? savedUrl = null;
+            if (attachmentFile != null && attachmentFile.Length > 0 && attachmentFile.Length <= 15 * 1024 * 1024)
+            {
+                var ext = Path.GetExtension(attachmentFile.FileName)?.ToLowerInvariant() ?? "";
+                var allowed = new[] { ".pdf", ".jpg", ".jpeg", ".png", ".webp", ".doc", ".docx", ".xls", ".xlsx" };
+                if (allowed.Contains(ext))
+                {
+                    var env = HttpContext.RequestServices.GetService(typeof(Microsoft.AspNetCore.Hosting.IWebHostEnvironment)) as Microsoft.AspNetCore.Hosting.IWebHostEnvironment;
+                    var webRoot = env?.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+                    var folder = Path.Combine(webRoot, "uploads", "buildings", buildingId.ToString(), "meeting-docs");
+                    Directory.CreateDirectory(folder);
+                    var uniqueName = $"r{meetingId}_{DateTime.UtcNow:yyyyMMddHHmmss}_{Guid.NewGuid():N}".Substring(0, 32) + ext;
+                    using (var stream = new FileStream(Path.Combine(folder, uniqueName), FileMode.Create))
+                    {
+                        await attachmentFile.CopyToAsync(stream);
+                    }
+                    savedUrl = $"/uploads/buildings/{buildingId}/meeting-docs/{uniqueName}";
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(commentText) && string.IsNullOrWhiteSpace(savedUrl))
+            {
+                TempData["ErrorMessage"] = "Lütfen görüş notu yazın veya belge seçin.";
+                return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+            }
+
+            var currentUser = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
+            string displayName = !string.IsNullOrWhiteSpace(currentUser?.FullName)
+                ? currentUser.FullName
+                : (User.Identity?.Name ?? "Kat Maliki");
+            string roleLabel = string.Equals(previewRole, "Tenant", StringComparison.OrdinalIgnoreCase) ? "Kiracı"
+                : IsManagerOrAdmin() ? "Yönetici" : "Kat Maliki";
+
+            _context.BuildingDecisionAttachments.Add(new BuildingDecisionAttachment
+            {
+                SystemMeetingId = meeting.Id,
+                AuthorUserId = userId,
+                AuthorName = displayName,
+                AuthorRoleLabel = roleLabel,
+                CommentText = string.IsNullOrWhiteSpace(commentText) ? null : commentText.Trim(),
+                DocumentTitle = !string.IsNullOrWhiteSpace(documentTitle) ? documentTitle.Trim() : attachmentFile?.FileName,
+                FileUrl = savedUrl,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = "Görüşünüz / belgeniz toplantı dosyasına eklendi.";
             return RedirectToAction(nameof(Index), new { previewRole, buildingId });
         }
     }

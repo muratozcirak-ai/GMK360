@@ -317,6 +317,8 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         // --- PHASE 8 GENERIC MEETINGS & SURVEYS ---
         public DbSet<SystemMeeting> SystemMeetings { get; set; }
         public DbSet<SystemMeetingDecision> SystemMeetingDecisions { get; set; }
+        public DbSet<BuildingDecisionVote> BuildingDecisionVotes { get; set; }
+        public DbSet<BuildingDecisionAttachment> BuildingDecisionAttachments { get; set; }
         public DbSet<MeetingSurvey> MeetingSurveys { get; set; }
         public DbSet<SurveyOption> SurveyOptions { get; set; }
         public DbSet<SurveyVote> SurveyVotes { get; set; }
