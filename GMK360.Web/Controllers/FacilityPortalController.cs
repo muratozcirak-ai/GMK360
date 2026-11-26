@@ -59,7 +59,8 @@ namespace GMK360.Web.Controllers
             // Görevli eşleşmesi
             var normPhone = FacilityTaskDispatchService.NormalizePhoneLast10(user?.PhoneNumber);
             var staffProfile = await _context.BuildingStaffs
-                .Include(s => s.Building)
+                .Include(s => s.HousingComplex)
+                .Include(s => s.Building).ThenInclude(b => b.HousingComplex)
                 .Include(s => s.Leaves)
                 .Include(s => s.MonthlyPayrolls)
                 .FirstOrDefaultAsync(s => s.IsActive && !s.IsDeleted
@@ -191,29 +192,39 @@ namespace GMK360.Web.Controllers
                 : new BuildingMonthlyBudgetSummary();
 
             var targetBuilding = targetBuildingId > 0
-                ? await _context.Buildings.AsNoTracking().FirstOrDefaultAsync(b => b.Id == targetBuildingId)
+                ? await _context.Buildings.Include(b => b.HousingComplex).AsNoTracking().FirstOrDefaultAsync(b => b.Id == targetBuildingId)
                 : null;
             int rootBuildingId = targetBuilding?.ParentBuildingId ?? targetBuildingId;
+            int? targetComplexId = targetBuilding?.HousingComplexId;
+            var siteBlockIds = targetComplexId.HasValue
+                ? await _context.Buildings.AsNoTracking().Where(b => b.HousingComplexId == targetComplexId.Value && b.ParentBuildingId == null).Select(b => b.Id).ToListAsync()
+                : new List<int>();
             var meetingBuildingIds = new List<int>();
             if (targetBuildingId > 0) meetingBuildingIds.Add(targetBuildingId);
             if (rootBuildingId > 0 && rootBuildingId != targetBuildingId) meetingBuildingIds.Add(rootBuildingId);
+            foreach (var sbid in siteBlockIds)
+            {
+                if (!meetingBuildingIds.Contains(sbid)) meetingBuildingIds.Add(sbid);
+            }
 
-            var meetings = meetingBuildingIds.Any()
+            var meetings = (meetingBuildingIds.Any() || targetComplexId.HasValue)
                 ? await _context.SystemMeetings
                     .Include(m => m.Decisions)
                     .Include(m => m.Votes)
                     .Include(m => m.Attachments)
-                    .Where(m => m.ContextType == "Building" && meetingBuildingIds.Contains(m.ContextId) && !m.IsDeleted)
+                    .Where(m => m.ContextType == "Building" && !m.IsDeleted
+                        && (meetingBuildingIds.Contains(m.ContextId)
+                            || (m.IsSiteWide && m.HousingComplexId.HasValue && m.HousingComplexId == targetComplexId)))
                     .OrderBy(m => m.IsConcluded)
                     .ThenByDescending(m => m.MeetingDate)
                     .Take(20)
                     .ToListAsync()
                 : new List<SystemMeeting>();
 
-            var allEligibleUnitsForMeetings = targetBuildingId > 0
+            var allEligibleUnitsForMeetings = meetingBuildingIds.Any()
                 ? await _context.BuildingUnits
                     .AsNoTracking()
-                    .Where(u => (u.BuildingId == targetBuildingId || u.BuildingId == rootBuildingId) && !(u.Category ?? "").StartsWith("OrtakAlan"))
+                    .Where(u => meetingBuildingIds.Contains(u.BuildingId) && !(u.Category ?? "").StartsWith("OrtakAlan"))
                     .ToListAsync()
                 : new List<BuildingUnit>();
             ViewBag.AllEligibleBuildingUnits = allEligibleUnitsForMeetings;

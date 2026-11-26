@@ -6,17 +6,20 @@
     var linkedStaffs = ViewBag.LinkedStaffs as List<GMK360.Core.Entities.BuildingStaff> ?? new List<GMK360.Core.Entities.BuildingStaff>();
     bool isStaff = ViewBag.IsStaffActivation == true;
     string token = ViewBag.Token as string ?? "";
+    var primaryStaff = linkedStaffs.FirstOrDefault();
+    string? knownTc = !string.IsNullOrWhiteSpace(Model.TcIdentityNo) ? Model.TcIdentityNo : primaryStaff?.TcIdentityNo;
+    string? knownEmail = Model.Email != null && !Model.Email.EndsWith("@gmk360.local") ? Model.Email : null;
 }
 
-<div class="container py-5 mt-4" style="max-width: 680px;">
+<div class="container py-5 mt-4" style="max-width: 720px;">
     <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
         <div class="card-header @(isStaff ? "bg-primary" : "bg-success") text-white p-4 border-0">
-            <h4 class="fw-bold mb-1">
+            <h4 class="fw-bold mb-1 text-white">
                 <i class="bi bi-shield-lock-fill me-2"></i>@(isStaff ? "Personel İlk Giriş — Şifre, Gizli PIN & Adres Kurulumu" : "Kişisel Profil & Güvenlik Aktivasyonu")
             </h4>
             <p class="small mb-0 opacity-75">
                 @(isStaff
-                    ? "Geçici şifreniz yerine kalıcı giriş şifrenizi belirleyin, yalnızca sizin bileceğiniz saha PIN'inizi oluşturun ve ikametgah adresinizi kaydedin."
+                    ? "Kimlik bilgileriniz yönetim tarafından kaydedilmiştir. Lütfen ikametgah adresinizi seçin, kalıcı şifrenizi ve yalnızca sizin bileceğiniz PIN kodunuzu belirleyin."
                     : "E-posta doğrulamanızı tamamlayın, kendi giriş şifrenizi ve yalnızca sizin bileceğiniz onay PIN'inizi belirleyin.")
             </p>
         </div>
@@ -29,13 +32,22 @@
             {
                 <div class="alert alert-primary bg-opacity-10 border-primary-subtle rounded-3 small mb-3">
                     <strong>Bağlı Olduğunuz Görev / Kadrolar:</strong>
-                    <div class="mt-1 d-flex flex-wrap gap-1">
+                    <div class="mt-1 d-flex flex-wrap gap-1 mb-2">
                         @foreach (var st in linkedStaffs)
                         {
+                            string scopeLabel = st.IsSiteWide && (st.HousingComplex != null || st.Building?.HousingComplex != null)
+                                ? $"{(st.HousingComplex?.Name ?? st.Building?.HousingComplex?.Name)} (Site Geneli)"
+                                : (st.Building?.Name ?? "Tesis");
                             <span class="badge bg-primary text-white">
-                                🏢 @(st.Building?.Name ?? "Tesis") — @st.RoleType
+                                🏢 @scopeLabel — @st.RoleType@(!string.IsNullOrWhiteSpace(st.JobDescription) ? $" ({st.JobDescription})" : "")
                             </span>
                         }
+                    </div>
+                    <div class="border-top pt-2 text-dark">
+                        <strong>Kayıtlı Personel Bilgisi:</strong> @Model.FullName
+                        @if (!string.IsNullOrWhiteSpace(Model.PhoneNumber)) { <span> • Tel: <b>@Model.PhoneNumber</b></span> }
+                        @if (!string.IsNullOrWhiteSpace(knownTc)) { <span> • TC: <b>@knownTc</b></span> }
+                        @if (!string.IsNullOrWhiteSpace(knownEmail)) { <span> • E-Posta: <b>@knownEmail</b></span> }
                     </div>
                 </div>
             }
@@ -63,63 +75,77 @@
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="token" value="@token" />
 
-                <div class="row g-3 mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold small">Ad *</label>
-                        <input type="text" name="firstName" class="form-control" value="@Model.FirstName" required />
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold small">Soyad *</label>
-                        <input type="text" name="lastName" class="form-control" value="@Model.LastName" required />
-                    </div>
-                </div>
-
-                <div class="row g-3 mb-3">
-                    <div class="col-md-7">
-                        <label class="form-label fw-bold small">T.C. Kimlik Numaranız (11 Hane) *</label>
-                        <input type="text" inputmode="numeric" pattern="[1-9][0-9]{10}" maxlength="11" name="tcIdentityNo" class="form-control" value="@Model.TcIdentityNo" required placeholder="11 haneli T.C. Kimlik No" />
-                        <small class="text-muted" style="font-size:.72rem;"><i class="bi bi-shield-check text-success me-1"></i>Tekil kişi doğrulaması, 1 ücretsiz daire hakkı ve resmi işlemler için istenir.</small>
-                    </div>
-                    <div class="col-md-5">
-                        <label class="form-label fw-bold small">Doğum Yılı *</label>
-                        <input type="number" min="1920" max="2012" name="birthYear" class="form-control" value="@Model.BirthYear" required placeholder="Örn: 1985" />
-                    </div>
-                </div>
-
-                <div class="row g-3 mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold small">Doğrulanacak E-Posta Adresiniz *</label>
-                        <input type="email" name="email" class="form-control" value="@(Model.Email != null && !Model.Email.EndsWith("@gmk360.local") ? Model.Email : "")" required placeholder="ornek@mail.com" />
-                        <small class="text-success" style="font-size:.72rem;"><i class="bi bi-envelope-check me-1"></i>Kayıt sonrası e-postanız doğrulanmış sayılır.</small>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold small">Telefon Numaranız *</label>
-                        <input type="text" name="phoneNumber" class="form-control" value="@Model.PhoneNumber" required placeholder="05XX XXX XX XX" />
-                        <div class="form-check mt-1">
-                            <input class="form-check-input" type="checkbox" name="confirmPhoneDeclaration" value="true" id="chkPhone" checked />
-                            <label class="form-check-label text-muted" for="chkPhone" style="font-size:.72rem;">
-                                Numaram bana aittir (SMS doğrulama sistemi eklendiğinde OTP ile tekrar teyit edilecek)
-                            </label>
+                @if (!isStaff)
+                {
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Ad *</label>
+                            <input type="text" name="firstName" class="form-control" value="@Model.FirstName" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Soyad *</label>
+                            <input type="text" name="lastName" class="form-control" value="@Model.LastName" required />
                         </div>
                     </div>
-                </div>
 
-                <div class="mb-3">
-                    <label class="form-label fw-bold small">
-                        Açık İkametgah Adresiniz @(isStaff ? "*" : "(İsteğe Bağlı)")
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label fw-bold small">T.C. Kimlik Numaranız (11 Hane) *</label>
+                            <input type="text" inputmode="numeric" pattern="[1-9][0-9]{10}" maxlength="11" name="tcIdentityNo" class="form-control" value="@Model.TcIdentityNo" required placeholder="11 haneli T.C. Kimlik No" />
+                            <small class="text-muted" style="font-size:.72rem;"><i class="bi bi-shield-check text-success me-1"></i>Tekil kişi doğrulaması ve resmi işlemler için istenir.</small>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold small">Doğum Yılı *</label>
+                            <input type="number" min="1920" max="2012" name="birthYear" class="form-control" value="@Model.BirthYear" required placeholder="Örn: 1985" />
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Doğrulanacak E-Posta Adresiniz *</label>
+                            <input type="email" name="email" class="form-control" value="@(knownEmail ?? "")" required placeholder="ornek@mail.com" />
+                            <small class="text-success" style="font-size:.72rem;"><i class="bi bi-envelope-check me-1"></i>Kayıt sonrası e-postanız doğrulanmış sayılır.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Telefon Numaranız *</label>
+                            <input type="text" name="phoneNumber" class="form-control" value="@Model.PhoneNumber" required placeholder="05XX XXX XX XX" />
+                            <div class="form-check mt-1">
+                                <input class="form-check-input" type="checkbox" name="confirmPhoneDeclaration" value="true" id="chkPhone" checked />
+                                <label class="form-check-label text-muted" for="chkPhone" style="font-size:.72rem;">
+                                    Numaram bana aittir
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <div class="p-3 rounded-3 bg-light border mb-3">
+                    <label class="form-label fw-bold small text-dark mb-2">
+                        <i class="bi bi-geo-alt-fill text-danger me-1"></i>Yapılandırılmış Gerçek İkametgah Adresiniz @(isStaff ? "*" : "(Opsiyonel)")
                     </label>
-                    <textarea name="address" rows="2" class="form-control" @(isStaff ? "required" : "") placeholder="Mahalle, cadde/sokak, bina ve daire no, ilçe / il">@(Model.Address ?? linkedStaffs.FirstOrDefault()?.Address)</textarea>
-                    @if (isStaff)
-                    {
-                        <small class="text-muted" style="font-size:.72rem;">Özlük dosyanızda güncel ikametgah adresinizin kayıtlı olması yasal olarak gereklidir.</small>
+                    @{
+                        var actAddrVd = new ViewDataDictionary(ViewData)
+                        {
+                            ["AddressPrefix"] = "act",
+                            ["AddressRequired"] = isStaff,
+                            ["AddressCityId"] = Model.AddressCityId ?? primaryStaff?.AddressCityId,
+                            ["AddressDistrictId"] = Model.AddressDistrictId ?? primaryStaff?.AddressDistrictId,
+                            ["AddressNeighborhoodId"] = Model.AddressNeighborhoodId ?? primaryStaff?.AddressNeighborhoodId,
+                            ["AddressStreetId"] = Model.AddressStreetId ?? primaryStaff?.AddressStreetId,
+                            ["AddressStreetName"] = Model.AddressStreetName ?? primaryStaff?.AddressStreetName,
+                            ["AddressBuildingNo"] = Model.AddressBuildingNo ?? primaryStaff?.AddressBuildingNo,
+                            ["AddressApartmentNo"] = Model.AddressApartmentNo ?? primaryStaff?.AddressApartmentNo,
+                            ["AddressFormatted"] = Model.Address ?? primaryStaff?.Address
+                        };
                     }
+                    @await Html.PartialAsync("_StructuredAddressPartial", null, actAddrVd)
                 </div>
 
                 <hr class="my-3" />
 
                 <div class="row g-3 mb-3">
                     <div class="col-md-6">
-                        <label class="form-label fw-bold small">Kişisel Giriş Şifreniz *</label>
+                        <label class="form-label fw-bold small">Yeni Kalıcı Giriş Şifreniz *</label>
                         <input type="password" name="newPassword" class="form-control" required minlength="8" placeholder="En az 8 karakter, Büyük/küçük harf, rakam, sembol" />
                     </div>
                     <div class="col-md-6">
@@ -133,11 +159,11 @@
                         <i class="bi bi-key-fill text-warning me-1"></i>Kişisel Onay &amp; Hızlı Giriş PIN'iniz (4-6 Haneli Rakam) *
                     </label>
                     <input type="password" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" name="personalPin" class="form-control form-control-lg text-center fw-bold" required placeholder="••••" />
-                    <small class="text-muted d-block mt-1">Bu PIN'i <strong>yalnızca siz bilirsiniz</strong>; yönetici dahil kimse göremez. Karar oylamaları ve <code>/FacilityPortal</code> hızlı girişinde kullanılır.</small>
+                    <small class="text-muted d-block mt-1">Bu PIN'i <strong>yalnızca siz bilirsiniz</strong>; yönetici dahil kimse göremez. <code>/FacilityPortal</code> hızlı girişinde kullanılır.</small>
                 </div>
 
                 <button type="submit" class="btn btn-success btn-lg w-100 rounded-pill fw-bold shadow-sm">
-                    Profilimi Doğrula ve Hesabımı Aktifleştir
+                    @(isStaff ? "Şifre, PIN ve Adresi Kaydet → Giriş Yap" : "Profilimi Doğrula ve Hesabımı Aktifleştir")
                 </button>
             </form>
         </div>

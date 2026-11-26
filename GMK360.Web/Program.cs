@@ -422,10 +422,46 @@ using (var schemaScope = app.Services.CreateScope())
             END
             IF COL_LENGTH(N'dbo.AspNetUsers', N'Address') IS NULL
                 ALTER TABLE [dbo].[AspNetUsers] ADD [Address] nvarchar(500) NULL;
+            IF COL_LENGTH(N'dbo.AspNetUsers', N'AddressCityId') IS NULL
+                ALTER TABLE [dbo].[AspNetUsers] ADD [AddressCityId] int NULL;
+            IF COL_LENGTH(N'dbo.AspNetUsers', N'AddressDistrictId') IS NULL
+                ALTER TABLE [dbo].[AspNetUsers] ADD [AddressDistrictId] int NULL;
+            IF COL_LENGTH(N'dbo.AspNetUsers', N'AddressNeighborhoodId') IS NULL
+                ALTER TABLE [dbo].[AspNetUsers] ADD [AddressNeighborhoodId] int NULL;
+            IF COL_LENGTH(N'dbo.AspNetUsers', N'AddressStreetId') IS NULL
+                ALTER TABLE [dbo].[AspNetUsers] ADD [AddressStreetId] int NULL;
+            IF COL_LENGTH(N'dbo.AspNetUsers', N'AddressStreetName') IS NULL
+                ALTER TABLE [dbo].[AspNetUsers] ADD [AddressStreetName] nvarchar(200) NULL;
+            IF COL_LENGTH(N'dbo.AspNetUsers', N'AddressBuildingNo') IS NULL
+                ALTER TABLE [dbo].[AspNetUsers] ADD [AddressBuildingNo] nvarchar(40) NULL;
+            IF COL_LENGTH(N'dbo.AspNetUsers', N'AddressApartmentNo') IS NULL
+                ALTER TABLE [dbo].[AspNetUsers] ADD [AddressApartmentNo] nvarchar(30) NULL;
             IF COL_LENGTH(N'dbo.BuildingStaffs', N'Email') IS NULL
                 ALTER TABLE [dbo].[BuildingStaffs] ADD [Email] nvarchar(200) NULL;
             IF COL_LENGTH(N'dbo.BuildingStaffs', N'Address') IS NULL
                 ALTER TABLE [dbo].[BuildingStaffs] ADD [Address] nvarchar(500) NULL;
+            IF COL_LENGTH(N'dbo.BuildingStaffs', N'IsSiteWide') IS NULL
+                ALTER TABLE [dbo].[BuildingStaffs] ADD [IsSiteWide] bit NOT NULL CONSTRAINT [DF_BuildingStaffs_IsSiteWide] DEFAULT (0);
+            IF COL_LENGTH(N'dbo.BuildingStaffs', N'HousingComplexId') IS NULL
+                ALTER TABLE [dbo].[BuildingStaffs] ADD [HousingComplexId] int NULL;
+            IF COL_LENGTH(N'dbo.BuildingStaffs', N'AddressCityId') IS NULL
+                ALTER TABLE [dbo].[BuildingStaffs] ADD [AddressCityId] int NULL;
+            IF COL_LENGTH(N'dbo.BuildingStaffs', N'AddressDistrictId') IS NULL
+                ALTER TABLE [dbo].[BuildingStaffs] ADD [AddressDistrictId] int NULL;
+            IF COL_LENGTH(N'dbo.BuildingStaffs', N'AddressNeighborhoodId') IS NULL
+                ALTER TABLE [dbo].[BuildingStaffs] ADD [AddressNeighborhoodId] int NULL;
+            IF COL_LENGTH(N'dbo.BuildingStaffs', N'AddressStreetId') IS NULL
+                ALTER TABLE [dbo].[BuildingStaffs] ADD [AddressStreetId] int NULL;
+            IF COL_LENGTH(N'dbo.BuildingStaffs', N'AddressStreetName') IS NULL
+                ALTER TABLE [dbo].[BuildingStaffs] ADD [AddressStreetName] nvarchar(200) NULL;
+            IF COL_LENGTH(N'dbo.BuildingStaffs', N'AddressBuildingNo') IS NULL
+                ALTER TABLE [dbo].[BuildingStaffs] ADD [AddressBuildingNo] nvarchar(40) NULL;
+            IF COL_LENGTH(N'dbo.BuildingStaffs', N'AddressApartmentNo') IS NULL
+                ALTER TABLE [dbo].[BuildingStaffs] ADD [AddressApartmentNo] nvarchar(30) NULL;
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'IsSiteWide') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [IsSiteWide] bit NOT NULL CONSTRAINT [DF_SystemMeetings_IsSiteWide] DEFAULT (0);
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'HousingComplexId') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [HousingComplexId] int NULL;
             IF COL_LENGTH(N'dbo.BuildingStaffs', N'JobDescription') IS NULL
                 ALTER TABLE [dbo].[BuildingStaffs] ADD [JobDescription] nvarchar(300) NULL;
             IF COL_LENGTH(N'dbo.BuildingStaffs', N'TerminationReason') IS NULL

@@ -10,6 +10,8 @@ namespace GMK360.Core.Entities
         // Generic Context Fields (örneğin: "Building", "Agency")
         public string ContextType { get; set; } = "Building";
         public int ContextId { get; set; }
+        public bool IsSiteWide { get; set; } = false;
+        public int? HousingComplexId { get; set; }
 
         [Required]
         public DateTime MeetingDate { get; set; }

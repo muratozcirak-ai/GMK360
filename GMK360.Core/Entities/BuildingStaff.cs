@@ -15,6 +15,11 @@ namespace GMK360.Core.Entities
         [ForeignKey("BuildingId")]
         public virtual Building Building { get; set; } = null!;
 
+        public bool IsSiteWide { get; set; } = false;
+        public int? HousingComplexId { get; set; }
+        [ForeignKey("HousingComplexId")]
+        public virtual HousingComplex? HousingComplex { get; set; }
+
         [Required, MaxLength(150)]
         public string FullName { get; set; } = string.Empty;
 
@@ -32,6 +37,17 @@ namespace GMK360.Core.Entities
 
         [MaxLength(500)]
         public string? Address { get; set; }
+
+        public int? AddressCityId { get; set; }
+        public int? AddressDistrictId { get; set; }
+        public int? AddressNeighborhoodId { get; set; }
+        public int? AddressStreetId { get; set; }
+        [MaxLength(200)]
+        public string? AddressStreetName { get; set; }
+        [MaxLength(40)]
+        public string? AddressBuildingNo { get; set; }
+        [MaxLength(30)]
+        public string? AddressApartmentNo { get; set; }
 
         [MaxLength(256)]
         public string? QuickPinHash { get; set; }

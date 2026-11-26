@@ -557,6 +557,12 @@
                             <div class="border rounded-4 p-3 mb-3 bg-light">
                                 <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
                                     <div>
+                                        @{
+                                            string stScopeBadge = st.IsSiteWide && (st.HousingComplex != null || st.Building?.HousingComplex != null)
+                                                ? $"🌐 {(st.HousingComplex?.Name ?? st.Building?.HousingComplex?.Name)} (Site Geneli)"
+                                                : $"🏢 {(!string.IsNullOrWhiteSpace(st.Building?.BlockName) ? st.Building.BlockName : st.Building?.Name)}";
+                                        }
+                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1">@stScopeBadge</span>
                                         <span class="badge bg-dark me-1">@st.RoleType</span>
                                         <strong class="fs-5 text-dark">@st.FullName</strong>
                                         @if (!string.IsNullOrWhiteSpace(st.JobDescription))
@@ -612,6 +618,7 @@
                                                 data-jobdesc="@st.JobDescription"
                                                 data-tc="@st.TcIdentityNo"
                                                 data-sgk="@st.SgkNumber"
+                                                data-sitewide="@(st.IsSiteWide ? "true" : "false")"
                                                 data-phone="@st.PhoneNumber"
                                                 data-email="@displayEmail"
                                                 data-address="@displayAddress"
@@ -1499,12 +1506,30 @@
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <form class="modal-content rounded-4 border-0 shadow" asp-action="AddBuildingStaff" asp-controller="BuildingManager" method="post">
             @Html.AntiForgeryToken()
-            <input type="hidden" name="buildingId" value="@Model.Id" />
+            <input type="hidden" name="buildingId" id="addStaffBuildingIdHidden" value="@Model.Id" />
+            <input type="hidden" name="isSiteWide" id="addStaffIsSiteWideHidden" value="@((isSiteScope || buildings.Count > 1) && Model.HousingComplexId.HasValue ? "true" : "false")" />
             <div class="modal-header bg-success text-white border-0">
                 <h5 class="modal-title fw-bold text-white">Bina / Site Kadro Personeli Ekle (Tam SGK &amp; Kıdem Kurulumu)</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4 row g-3">
+                @if (buildings.Count > 1)
+                {
+                    <div class="col-12">
+                        <label class="form-label small fw-bold text-primary">Görev Kapsamı (Site Geneli / Tek Blok) *</label>
+                        <select id="addStaffScopeSelect" class="form-select form-select-sm fw-semibold border-primary-subtle" onchange="syncAddStaffScope()">
+                            @if (Model.HousingComplexId.HasValue)
+                            {
+                                <option value="SITE:@Model.Id" selected="@((isSiteScope || buildings.Count > 1) ? "selected" : null)">🌐 Site Geneli (@siteTitleLabel — Tüm Bloklar)</option>
+                            }
+                            @foreach (var b in buildings)
+                            {
+                                var bLbl = !string.IsNullOrWhiteSpace(b.BlockName) ? b.BlockName : b.Name;
+                                <option value="BLK:@b.Id" selected="@(!isSiteScope && !Model.HousingComplexId.HasValue && b.Id == Model.Id ? "selected" : null)">🏢 Sadece @bLbl</option>
+                            }
+                        </select>
+                    </div>
+                }
                 <div class="col-md-5">
                     <label class="form-label small fw-bold">Adı Soyadı *</label>
                     <input type="text" name="fullName" class="form-control" required placeholder="Örn: Ali Yılmaz" />
@@ -1654,9 +1679,26 @@
                     <label class="form-label small fw-bold">E-Posta</label>
                     <input type="email" name="email" id="editEmail" class="form-control" />
                 </div>
-                <div class="col-md-7">
-                    <label class="form-label small fw-bold">İkametgah / Adres</label>
-                    <input type="text" name="address" id="editAddress" class="form-control" />
+                <div class="col-md-7 d-flex align-items-end">
+                    @if (buildings.Count > 1 && Model.HousingComplexId.HasValue)
+                    {
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="isSiteWide" value="true" id="editIsSiteWide" />
+                            <label class="form-check-label small fw-bold text-primary" for="editIsSiteWide">🌐 Site Geneli Görevli (Tüm Bloklarda Yetkili)</label>
+                        </div>
+                    }
+                </div>
+                <div class="col-12 border-top pt-2">
+                    <label class="form-label small fw-bold text-dark"><i class="bi bi-geo-alt-fill text-danger me-1"></i>Yapılandırılmış İkametgah Adresi (Değiştirmek için seçin)</label>
+                    <input type="hidden" name="address" id="editAddress" />
+                    @{
+                        var editAddrVd = new ViewDataDictionary(ViewData)
+                        {
+                            ["AddressPrefix"] = "edst",
+                            ["AddressRequired"] = false
+                        };
+                    }
+                    @await Html.PartialAsync("_StructuredAddressPartial", null, editAddrVd)
                 </div>
 
                 <div class="col-12 bg-light rounded-3 p-2 px-3 border d-flex flex-wrap justify-content-between align-items-center gap-2 small">
@@ -2115,6 +2157,19 @@
         }
     }
 
+    function syncAddStaffScope() {
+        const sel = document.getElementById('addStaffScopeSelect');
+        const bEl = document.getElementById('addStaffBuildingIdHidden');
+        const swEl = document.getElementById('addStaffIsSiteWideHidden');
+        if (!sel || !bEl || !swEl) return;
+        const val = sel.value || '';
+        const parts = val.split(':');
+        if (parts.length === 2) {
+            bEl.value = parts[1];
+            swEl.value = parts[0] === 'SITE' ? 'true' : 'false';
+        }
+    }
+
     function openEditStaffModal(btn) {
         const d = btn.dataset;
         document.getElementById('editStaffId').value = d.id || '';
@@ -2127,6 +2182,8 @@
         document.getElementById('editPhone').value = d.phone || '';
         document.getElementById('editEmail').value = d.email || '';
         document.getElementById('editAddress').value = d.address || '';
+        const swChk = document.getElementById('editIsSiteWide');
+        if (swChk) swChk.checked = d.sitewide === 'true';
         document.getElementById('editHireDate').value = d.hiredate || '';
         document.getElementById('editNetSalary').value = d.net || '0';
         document.getElementById('editSgkShare').value = d.sgkamt || '0';

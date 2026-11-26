@@ -75,6 +75,13 @@ namespace GMK360.Core.Entities.Identity
         public bool MustChangePassword { get; set; } = false;
         public System.DateTime? PhoneVerifiedAt { get; set; }
         public string? Address { get; set; }
+        public int? AddressCityId { get; set; }
+        public int? AddressDistrictId { get; set; }
+        public int? AddressNeighborhoodId { get; set; }
+        public int? AddressStreetId { get; set; }
+        public string? AddressStreetName { get; set; }
+        public string? AddressBuildingNo { get; set; }
+        public string? AddressApartmentNo { get; set; }
         public string? ActivationToken { get; set; }
         public System.DateTime? ActivationTokenExpiresAt { get; set; }
 

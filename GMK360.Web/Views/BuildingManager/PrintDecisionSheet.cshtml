@@ -2,9 +2,14 @@
 @{
     Layout = null;
     var building = ViewBag.Building as GMK360.Core.Entities.Building;
-    var units = (building?.Units ?? new List<GMK360.Core.Entities.BuildingUnit>())
-        .Where(u => !(u.Category ?? "").StartsWith("OrtakAlan", StringComparison.OrdinalIgnoreCase))
-        .OrderBy(u => u.FloorLevel).ThenBy(u => u.DoorNumber).ToList();
+    var units = ViewBag.EligibleUnits as List<GMK360.Core.Entities.BuildingUnit>
+        ?? (building?.Units ?? new List<GMK360.Core.Entities.BuildingUnit>())
+            .Where(u => !(u.Category ?? "").StartsWith("OrtakAlan", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(u => u.FloorLevel).ThenBy(u => u.DoorNumber).ToList();
+    bool isSiteDecision = Model.IsSiteWide && building?.HousingComplex != null;
+    string propertyHeading = isSiteDecision
+        ? $"{building!.HousingComplex!.Name} (Site Geneli — Tüm Bloklar)"
+        : (building?.Name ?? "Apartman / Site Yönetimi");
     var decisions = (Model.Decisions ?? new List<GMK360.Core.Entities.SystemMeetingDecision>()).Where(d => !d.IsDeleted).ToList();
     var votesByUnit = (Model.Votes ?? new List<GMK360.Core.Entities.BuildingDecisionVote>())
         .Where(v => !v.IsDeleted)
@@ -150,7 +155,7 @@
 
     <div class="sheet-page">
         <div class="header-title">
-            <h4>@(building?.Name ?? "Apartman / Site Yönetimi") — YÖNETİM KARAR TUTANAĞI</h4>
+            <h4>@propertyHeading — YÖNETİM KARAR TUTANAĞI</h4>
             <h5>T.C. 634 Sayılı Kat Mülkiyeti Kanunu (KMK Md. 32) Uyarınca Düzenlenmiştir</h5>
             <small style="font-size: @(isA5 ? "8.5px" : "10.5px"); font-style: italic;">
                 (Noter Tasdikli Fiziki Karar Defteri sayfasına taşmayacak şekilde yapıştırılıp köşeleri mühürlenmelidir)
@@ -234,7 +239,7 @@
                     };
                     <tr>
                         <td style="text-align: center;">@(row++)</td>
-                        <td style="text-align: center; font-weight: bold;">@unit.DoorNumber</td>
+                        <td style="text-align: center; font-weight: bold;">@(isSiteDecision && unit.Building != null ? $"{unit.Building.BlockName ?? unit.Building.Name} • {unit.DoorNumber}" : unit.DoorNumber)</td>
                         <td>
                             @(unit.OwnerName ?? "Malik Girilmemiş")
                             @if (sumLandShare > 0)

@@ -671,6 +671,16 @@ namespace GMK360.Web.Services
                 {
                     s.Address = user.Address.Trim();
                 }
+                if (user.AddressCityId.HasValue)
+                {
+                    s.AddressCityId = user.AddressCityId;
+                    s.AddressDistrictId = user.AddressDistrictId;
+                    s.AddressNeighborhoodId = user.AddressNeighborhoodId;
+                    s.AddressStreetId = user.AddressStreetId;
+                    s.AddressStreetName = user.AddressStreetName;
+                    s.AddressBuildingNo = user.AddressBuildingNo;
+                    s.AddressApartmentNo = user.AddressApartmentNo;
+                }
                 if (!string.IsNullOrWhiteSpace(user.Email) && !user.Email.EndsWith("@gmk360.local", StringComparison.OrdinalIgnoreCase))
                 {
                     s.Email = user.Email.Trim();

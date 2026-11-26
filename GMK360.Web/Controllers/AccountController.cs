@@ -1178,7 +1178,8 @@ namespace GMK360.Web.Controllers
                 .ToListAsync();
 
             var linkedStaffs = await _context.BuildingStaffs
-                .Include(s => s.Building)
+                .Include(s => s.HousingComplex)
+                .Include(s => s.Building).ThenInclude(b => b.HousingComplex)
                 .Where(s => s.UserId == user.Id && s.IsActive && !s.IsDeleted)
                 .ToListAsync();
 
@@ -1196,7 +1197,7 @@ namespace GMK360.Web.Controllers
             string token,
             string? firstName,
             string? lastName,
-            string email,
+            string? email,
             string? phoneNumber,
             string newPassword,
             string confirmPassword,
@@ -1204,7 +1205,14 @@ namespace GMK360.Web.Controllers
             bool confirmPhoneDeclaration = false,
             string? tcIdentityNo = null,
             int? birthYear = null,
-            string? address = null)
+            string? address = null,
+            int? addressCityId = null,
+            int? addressDistrictId = null,
+            int? addressNeighborhoodId = null,
+            int? addressStreetId = null,
+            string? addressStreetName = null,
+            string? addressBuildingNo = null,
+            string? addressApartmentNo = null)
         {
             if (string.IsNullOrWhiteSpace(token))
             {
@@ -1223,7 +1231,8 @@ namespace GMK360.Web.Controllers
             }
 
             var linkedStaffs = await _context.BuildingStaffs
-                .Include(s => s.Building)
+                .Include(s => s.HousingComplex)
+                .Include(s => s.Building).ThenInclude(b => b.HousingComplex)
                 .Where(s => s.UserId == user.Id && s.IsActive && !s.IsDeleted)
                 .ToListAsync();
             bool isStaffActivation = linkedStaffs.Any() || await _userManager.IsInRoleAsync(user, "Personel");
@@ -1234,24 +1243,37 @@ namespace GMK360.Web.Controllers
             ViewBag.IsStaffActivation = isStaffActivation;
             ViewBag.Token = token.Trim();
 
-            var effectiveTc = GMK360.Web.Helpers.TcknHelper.Normalize(!string.IsNullOrWhiteSpace(tcIdentityNo) ? tcIdentityNo : user.TcIdentityNo);
-            if (!GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(effectiveTc))
+            string? effectiveTc = null;
+            if (!isStaffActivation)
             {
-                ViewBag.ActivationError = "Lütfen geçerli 11 haneli T.C. Kimlik Numaranızı giriniz.";
-                return View(user);
-            }
+                effectiveTc = GMK360.Web.Helpers.TcknHelper.Normalize(!string.IsNullOrWhiteSpace(tcIdentityNo) ? tcIdentityNo : user.TcIdentityNo);
+                if (!GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(effectiveTc))
+                {
+                    ViewBag.ActivationError = "Lütfen geçerli 11 haneli T.C. Kimlik Numaranızı giriniz.";
+                    return View(user);
+                }
 
-            bool tcUsedByOther = await _context.Users.AnyAsync(u => u.Id != user.Id && u.TcIdentityNo == effectiveTc);
-            if (tcUsedByOther)
-            {
-                ViewBag.ActivationError = "Bu T.C. Kimlik Numarası başka bir GMK360 hesabında zaten kayıtlı. Lütfen yöneticinizden mevcut hesabınızı bağlamasını isteyiniz.";
-                return View(user);
-            }
+                bool tcUsedByOther = await _context.Users.AnyAsync(u => u.Id != user.Id && u.TcIdentityNo == effectiveTc);
+                if (tcUsedByOther)
+                {
+                    ViewBag.ActivationError = "Bu T.C. Kimlik Numarası başka bir GMK360 hesabında zaten kayıtlı. Lütfen yöneticinizden mevcut hesabınızı bağlamasını isteyiniz.";
+                    return View(user);
+                }
 
-            if (string.IsNullOrWhiteSpace(email) || !email.Contains("@") || email.EndsWith("@gmk360.local", StringComparison.OrdinalIgnoreCase))
+                if (string.IsNullOrWhiteSpace(email) || !email.Contains("@") || email.EndsWith("@gmk360.local", StringComparison.OrdinalIgnoreCase))
+                {
+                    ViewBag.ActivationError = "Lütfen doğrulama için geçerli kişisel e-posta adresinizi giriniz.";
+                    return View(user);
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(tcIdentityNo))
             {
-                ViewBag.ActivationError = "Lütfen doğrulama için geçerli kişisel e-posta adresinizi giriniz.";
-                return View(user);
+                var normTc = GMK360.Web.Helpers.TcknHelper.Normalize(tcIdentityNo);
+                if (GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(normTc)
+                    && !await _context.Users.AnyAsync(u => u.Id != user.Id && u.TcIdentityNo == normTc))
+                {
+                    effectiveTc = normTc;
+                }
             }
 
             if (string.IsNullOrWhiteSpace(newPassword) || newPassword != confirmPassword)
@@ -1267,23 +1289,41 @@ namespace GMK360.Web.Controllers
                 return View(user);
             }
 
-            if (isStaffActivation && string.IsNullOrWhiteSpace(address))
+            GMK360.Web.Helpers.ResolvedAddressResult? resolvedAddress = null;
+            if (addressCityId.HasValue && addressCityId.Value > 0)
             {
-                ViewBag.ActivationError = "Personel özlük dosyası için lütfen ikametgah / açık adresinizi giriniz.";
+                resolvedAddress = await GMK360.Web.Helpers.AddressCaptureHelper.ResolveAndEnrichAsync(_context, new GMK360.Web.Helpers.StructuredAddressInput
+                {
+                    CityId = addressCityId,
+                    DistrictId = addressDistrictId,
+                    NeighborhoodId = addressNeighborhoodId,
+                    StreetId = addressStreetId,
+                    StreetName = addressStreetName,
+                    BuildingNo = addressBuildingNo,
+                    ApartmentNo = addressApartmentNo
+                });
+            }
+
+            if (isStaffActivation && (resolvedAddress == null || !resolvedAddress.IsValid))
+            {
+                ViewBag.ActivationError = "Lütfen özlük dosyanız ve merkezi adres kaydı için İl, İlçe, Mahalle, Sokak/Cadde ve Bina/Dış Kapı numaranızı eksiksiz seçiniz.";
                 return View(user);
             }
 
-            var cleanEmail = email.Trim();
-            if (!string.Equals(user.Email, cleanEmail, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(email) && !email.EndsWith("@gmk360.local", StringComparison.OrdinalIgnoreCase))
             {
-                var dup = await _userManager.FindByEmailAsync(cleanEmail);
-                if (dup != null && dup.Id != user.Id)
+                var cleanEmail = email.Trim();
+                if (!string.Equals(user.Email, cleanEmail, StringComparison.OrdinalIgnoreCase))
                 {
-                    ViewBag.ActivationError = "Bu e-posta adresi başka bir hesapta kayıtlı.";
-                    return View(user);
+                    var dup = await _userManager.FindByEmailAsync(cleanEmail);
+                    if (dup != null && dup.Id != user.Id)
+                    {
+                        ViewBag.ActivationError = "Bu e-posta adresi başka bir hesapta kayıtlı.";
+                        return View(user);
+                    }
+                    await _userManager.SetEmailAsync(user, cleanEmail);
+                    await _userManager.SetUserNameAsync(user, cleanEmail);
                 }
-                await _userManager.SetEmailAsync(user, cleanEmail);
-                await _userManager.SetUserNameAsync(user, cleanEmail);
             }
 
             await _userManager.RemovePasswordAsync(user);
@@ -1297,8 +1337,15 @@ namespace GMK360.Web.Controllers
             if (!string.IsNullOrWhiteSpace(firstName)) user.FirstName = firstName.Trim();
             if (!string.IsNullOrWhiteSpace(lastName)) user.LastName = lastName.Trim();
             if (!string.IsNullOrWhiteSpace(phoneNumber)) user.PhoneNumber = phoneNumber.Trim();
-            if (!string.IsNullOrWhiteSpace(address)) user.Address = address.Trim();
-            user.TcIdentityNo = effectiveTc;
+            if (resolvedAddress != null && resolvedAddress.IsValid)
+            {
+                GMK360.Web.Helpers.AddressCaptureHelper.ApplyToUser(user, resolvedAddress);
+            }
+            else if (!string.IsNullOrWhiteSpace(address))
+            {
+                user.Address = address.Trim();
+            }
+            if (!string.IsNullOrWhiteSpace(effectiveTc)) user.TcIdentityNo = effectiveTc;
             if (birthYear.HasValue && birthYear.Value >= 1920 && birthYear.Value <= DateTime.UtcNow.Year)
             {
                 user.BirthYear = birthYear.Value;

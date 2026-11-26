@@ -151,14 +151,50 @@ namespace GMK360.Web.Controllers
         [Authorize]
         [HttpPost("Profile/UpdateBasicInfo")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateBasicInfo(string firstName, string lastName, string? email, string? phoneNumber, string? tcIdentityNo = null, int? birthYear = null, string? address = null)
+        public async Task<IActionResult> UpdateBasicInfo(
+            string firstName,
+            string lastName,
+            string? email,
+            string? phoneNumber,
+            string? tcIdentityNo = null,
+            int? birthYear = null,
+            string? address = null,
+            int? addressCityId = null,
+            int? addressDistrictId = null,
+            int? addressNeighborhoodId = null,
+            int? addressStreetId = null,
+            string? addressStreetName = null,
+            string? addressBuildingNo = null,
+            string? addressApartmentNo = null)
         {
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return RedirectToAction("Login", "Account");
 
             if (!string.IsNullOrWhiteSpace(firstName)) user.FirstName = firstName.Trim();
             if (!string.IsNullOrWhiteSpace(lastName)) user.LastName = lastName.Trim();
-            if (address != null) user.Address = string.IsNullOrWhiteSpace(address) ? null : address.Trim();
+            if (addressCityId.HasValue && addressCityId.Value > 0)
+            {
+                var resolved = await GMK360.Web.Helpers.AddressCaptureHelper.ResolveAndEnrichAsync(_context, new GMK360.Web.Helpers.StructuredAddressInput
+                {
+                    CityId = addressCityId,
+                    DistrictId = addressDistrictId,
+                    NeighborhoodId = addressNeighborhoodId,
+                    StreetId = addressStreetId,
+                    StreetName = addressStreetName,
+                    BuildingNo = addressBuildingNo,
+                    ApartmentNo = addressApartmentNo
+                });
+                if (!resolved.IsValid)
+                {
+                    TempData["ErrorMessage"] = "Lütfen adres için İl, İlçe, Mahalle, Sokak/Cadde ve Bina/Kapı No alanlarını eksiksiz seçiniz.";
+                    return RedirectToAction(nameof(Index));
+                }
+                GMK360.Web.Helpers.AddressCaptureHelper.ApplyToUser(user, resolved);
+            }
+            else if (address != null)
+            {
+                user.Address = string.IsNullOrWhiteSpace(address) ? null : address.Trim();
+            }
 
             if (string.IsNullOrWhiteSpace(user.TcIdentityNo) && !string.IsNullOrWhiteSpace(tcIdentityNo))
             {

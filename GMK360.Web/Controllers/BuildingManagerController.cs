@@ -69,6 +69,7 @@ namespace GMK360.Web.Controllers
         {
             var userId = GetUserId();
             var query = _context.Buildings
+                .Include(b => b.HousingComplex)
                 .Where(b => b.ParentBuildingId == null)
                 .AsQueryable();
 
@@ -80,7 +81,7 @@ namespace GMK360.Web.Controllers
                         : (b.ManagerUserId == userId || b.CreatedByUserId == userId));
             }
 
-            return await query.OrderByDescending(b => b.Id).ToListAsync();
+            return await query.OrderBy(b => b.Id).ToListAsync();
         }
 
         private async Task<bool> HasDecisionAuthorityAsync(int buildingId)
@@ -2407,10 +2408,11 @@ namespace GMK360.Web.Controllers
             string? meetingLocation = null,
             string? quorumType = "Standard",
             Microsoft.AspNetCore.Http.IFormFile? attachmentFile = null,
-            string? attachmentTitle = null)
+            string? attachmentTitle = null,
+            bool isSiteWide = true)
         {
             var userId = GetUserId();
-            var building = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == buildingId && (b.ManagerUserId == userId || b.CreatedByUserId == userId || User.IsInRole("Admin") || User.IsInRole("SuperAdmin") || _context.BuildingManagers.Any(m => m.BuildingId == (b.ParentBuildingId ?? b.Id) && m.UserId == userId && m.IsActive)));
+            var building = await _context.Buildings.Include(b => b.HousingComplex).FirstOrDefaultAsync(b => b.Id == buildingId && (b.ManagerUserId == userId || b.CreatedByUserId == userId || User.IsInRole("Admin") || User.IsInRole("SuperAdmin") || _context.BuildingManagers.Any(m => m.BuildingId == (b.ParentBuildingId ?? b.Id) && m.UserId == userId && m.IsActive)));
             if (building == null) return Unauthorized();
 
             DateTime effectiveDate = meetingDate;
@@ -2427,6 +2429,8 @@ namespace GMK360.Web.Controllers
             {
                 ContextType = "Building",
                 ContextId = buildingId,
+                IsSiteWide = isSiteWide && building.HousingComplexId.HasValue,
+                HousingComplexId = building.HousingComplexId,
                 AgendaTitle = agendaTitle,
                 DecisionNumber = effectiveDecNo,
                 MeetingLocation = string.IsNullOrWhiteSpace(meetingLocation) ? "Site Yönetim Odası / Ortak Alan" : meetingLocation.Trim(),
@@ -2676,6 +2680,7 @@ namespace GMK360.Web.Controllers
             if (meeting == null) return NotFound("Toplantı kaydı bulunamadı.");
 
             var building = await _context.Buildings
+                .Include(b => b.HousingComplex)
                 .Include(b => b.Units)
                 .Include(b => b.City)
                 .Include(b => b.District)
@@ -2690,13 +2695,29 @@ namespace GMK360.Web.Controllers
                 await _context.SaveChangesAsync();
             }
 
-            var eligibleUnits = (building?.Units ?? Enumerable.Empty<BuildingUnit>())
-                .Where(u => !(u.Category ?? "").StartsWith("OrtakAlan", StringComparison.OrdinalIgnoreCase))
-                .OrderBy(u => u.FloorLevel)
+            List<BuildingUnit> rawUnits;
+            if (meeting.IsSiteWide && building?.HousingComplexId != null)
+            {
+                rawUnits = await _context.BuildingUnits
+                    .Include(u => u.Building)
+                    .Where(u => u.Building.HousingComplexId == building.HousingComplexId && !(u.Category ?? "").StartsWith("OrtakAlan"))
+                    .ToListAsync();
+            }
+            else
+            {
+                rawUnits = (building?.Units ?? Enumerable.Empty<BuildingUnit>())
+                    .Where(u => !(u.Category ?? "").StartsWith("OrtakAlan", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+
+            var eligibleUnits = rawUnits
+                .OrderBy(u => u.Building?.BlockName ?? u.Building?.Name)
+                .ThenBy(u => u.FloorLevel)
                 .ThenBy(u => u.DoorNumber)
                 .ToList();
 
             ViewBag.Building = building;
+            ViewBag.EligibleUnits = eligibleUnits;
             ViewBag.Format = string.Equals(format, "a5", StringComparison.OrdinalIgnoreCase) ? "a5" : "a4";
             ViewBag.QuorumSummary = GMK360.Web.Helpers.KmkQuorumHelper.Compute(eligibleUnits, meeting.Votes, meeting.QuorumType);
             ViewBag.VerifyUrl = Url.Action("VerifyDecision", "BuildingManager", new { meetingId = meeting.Id, code = meeting.VerificationToken }, Request.Scheme);
@@ -4214,8 +4235,11 @@ namespace GMK360.Web.Controllers
                 .Include(s => s.Leaves)
                 .Include(s => s.Documents)
                 .Include(s => s.User)
-                .Include(s => s.Building)
-                .Where(s => scopeIds.Contains(s.BuildingId) && s.IsActive && !s.IsDeleted)
+                .Include(s => s.HousingComplex)
+                .Include(s => s.Building).ThenInclude(b => b.HousingComplex)
+                .Where(s => s.IsActive && !s.IsDeleted
+                    && (scopeIds.Contains(s.BuildingId)
+                        || (s.IsSiteWide && s.HousingComplexId.HasValue && building.HousingComplexId == s.HousingComplexId)))
                 .OrderBy(s => s.FullName)
                 .ToListAsync();
             var bStaffIds = buildingStaffs.Select(s => s.Id).ToList();
@@ -4224,7 +4248,11 @@ namespace GMK360.Web.Controllers
             ViewBag.FormerBuildingStaffs = await _context.BuildingStaffs
                 .Include(s => s.Documents)
                 .Include(s => s.User)
-                .Where(s => scopeIds.Contains(s.BuildingId) && !s.IsActive && !s.IsDeleted)
+                .Include(s => s.HousingComplex)
+                .Include(s => s.Building).ThenInclude(b => b.HousingComplex)
+                .Where(s => !s.IsActive && !s.IsDeleted
+                    && (scopeIds.Contains(s.BuildingId)
+                        || (s.IsSiteWide && s.HousingComplexId.HasValue && building.HousingComplexId == s.HousingComplexId)))
                 .OrderByDescending(s => s.LeaveDate ?? s.UpdatedAt ?? s.CreatedAt)
                 .ToListAsync();
             ViewBag.MonthlyPayrolls = bStaffIds.Any()
@@ -4411,14 +4439,17 @@ namespace GMK360.Web.Controllers
             decimal fringeBenefits,
             decimal monthlySeveranceFund,
             DateTime hireDate,
-            bool sendActivationEmail = false)
+            bool sendActivationEmail = false,
+            bool isSiteWide = false)
         {
-            var building = await GetManagedBuildingAsync(buildingId);
-            if (building == null) return Forbid();
+            var building = await _context.Buildings.Include(b => b.HousingComplex).FirstOrDefaultAsync(b => b.Id == buildingId);
+            if (building == null || !CanAccessBuilding(building, GetUserId())) return Forbid();
 
             var staff = new BuildingStaff
             {
                 BuildingId = buildingId,
+                IsSiteWide = isSiteWide && building.HousingComplexId.HasValue,
+                HousingComplexId = building.HousingComplexId,
                 FullName = fullName?.Trim() ?? "Personel",
                 TcIdentityNo = tcIdentityNo?.Trim(),
                 SgkNumber = sgkNumber?.Trim(),
@@ -4480,16 +4511,26 @@ namespace GMK360.Web.Controllers
             decimal sgkEmployerShare,
             decimal incomeAndStampTax,
             decimal fringeBenefits,
-            decimal monthlySeveranceFund)
+            decimal monthlySeveranceFund,
+            bool isSiteWide = false,
+            int? addressCityId = null,
+            int? addressDistrictId = null,
+            int? addressNeighborhoodId = null,
+            int? addressStreetId = null,
+            string? addressStreetName = null,
+            string? addressBuildingNo = null,
+            string? addressApartmentNo = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
 
             var staff = await _context.BuildingStaffs
                 .Include(s => s.User)
+                .Include(s => s.Building)
                 .FirstOrDefaultAsync(s => s.Id == buildingStaffId && !s.IsDeleted);
             if (staff == null) return NotFound();
-            if (await GetManagedBuildingAsync(staff.BuildingId) == null) return Forbid();
+            var staffBld = await GetManagedBuildingAsync(staff.BuildingId);
+            if (staffBld == null) return Forbid();
 
             staff.FullName = string.IsNullOrWhiteSpace(fullName) ? staff.FullName : fullName.Trim();
             staff.RoleType = string.IsNullOrWhiteSpace(roleType) ? staff.RoleType : roleType.Trim();
@@ -4498,7 +4539,32 @@ namespace GMK360.Web.Controllers
             staff.SgkNumber = string.IsNullOrWhiteSpace(sgkNumber) ? null : sgkNumber.Trim();
             staff.PhoneNumber = string.IsNullOrWhiteSpace(phoneNumber) ? staff.PhoneNumber : phoneNumber.Trim();
             staff.Email = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
-            staff.Address = string.IsNullOrWhiteSpace(address) ? null : address.Trim();
+            staff.IsSiteWide = isSiteWide && staffBld.HousingComplexId.HasValue;
+            staff.HousingComplexId = staffBld.HousingComplexId;
+
+            if (addressCityId.HasValue && addressCityId.Value > 0)
+            {
+                var resolved = await GMK360.Web.Helpers.AddressCaptureHelper.ResolveAndEnrichAsync(_context, new GMK360.Web.Helpers.StructuredAddressInput
+                {
+                    CityId = addressCityId,
+                    DistrictId = addressDistrictId,
+                    NeighborhoodId = addressNeighborhoodId,
+                    StreetId = addressStreetId,
+                    StreetName = addressStreetName,
+                    BuildingNo = addressBuildingNo,
+                    ApartmentNo = addressApartmentNo
+                });
+                if (resolved.IsValid)
+                {
+                    GMK360.Web.Helpers.AddressCaptureHelper.ApplyToStaff(staff, resolved);
+                    if (staff.User != null) GMK360.Web.Helpers.AddressCaptureHelper.ApplyToUser(staff.User, resolved);
+                }
+            }
+            else if (address != null)
+            {
+                staff.Address = string.IsNullOrWhiteSpace(address) ? null : address.Trim();
+            }
+
             if (hireDate != default) staff.HireDate = hireDate;
             staff.NetSalary = Math.Max(0m, netSalary);
             staff.SgkEmployerShare = Math.Max(0m, sgkEmployerShare);
@@ -4846,33 +4912,49 @@ namespace GMK360.Web.Controllers
         {
             var buildings = await GetUserManagedRootBuildingsAsync();
             var allowedIds = buildings.Select(b => b.Id).ToList();
+            var complexIds = buildings.Where(b => b.HousingComplexId.HasValue).Select(b => b.HousingComplexId!.Value).Distinct().ToList();
             if (buildingId.HasValue)
             {
                 var b = await GetManagedBuildingAsync(buildingId.Value);
                 if (b == null) return Forbid();
-                allowedIds = new System.Collections.Generic.List<int> { b.Id };
+                allowedIds = b.HousingComplexId.HasValue
+                    ? buildings.Where(x => x.HousingComplexId == b.HousingComplexId).Select(x => x.Id).ToList()
+                    : new System.Collections.Generic.List<int> { b.Id };
+                complexIds = b.HousingComplexId.HasValue
+                    ? new System.Collections.Generic.List<int> { b.HousingComplexId.Value }
+                    : new System.Collections.Generic.List<int>();
             }
 
-            var meetings = allowedIds.Any()
+            var meetings = (allowedIds.Any() || complexIds.Any())
                 ? await _context.SystemMeetings
                     .Include(m => m.Decisions)
                     .Include(m => m.Votes)
                     .Include(m => m.Attachments)
-                    .Where(m => m.ContextType == "Building" && allowedIds.Contains(m.ContextId) && !m.IsDeleted)
+                    .Where(m => m.ContextType == "Building" && !m.IsDeleted
+                        && (allowedIds.Contains(m.ContextId)
+                            || (m.IsSiteWide && m.HousingComplexId.HasValue && complexIds.Contains(m.HousingComplexId.Value))))
                     .OrderByDescending(m => m.MeetingDate)
                     .ToListAsync()
                 : new System.Collections.Generic.List<SystemMeeting>();
 
-            var buildingUnitsMap = allowedIds.Any()
-                ? (await _context.BuildingUnits
+            var allUnitsLoaded = allowedIds.Any()
+                ? await _context.BuildingUnits
                     .AsNoTracking()
+                    .Include(u => u.Building)
                     .Where(u => allowedIds.Contains(u.BuildingId) && !(u.Category ?? "").StartsWith("OrtakAlan"))
-                    .OrderBy(u => u.FloorLevel).ThenBy(u => u.DoorNumber)
-                    .ToListAsync())
-                    .GroupBy(u => u.BuildingId)
-                    .ToDictionary(g => g.Key, g => g.ToList())
-                : new System.Collections.Generic.Dictionary<int, System.Collections.Generic.List<BuildingUnit>>();
+                    .OrderBy(u => u.Building.BlockName ?? u.Building.Name).ThenBy(u => u.FloorLevel).ThenBy(u => u.DoorNumber)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<BuildingUnit>();
+
+            var buildingUnitsMap = allUnitsLoaded
+                .GroupBy(u => u.BuildingId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+            var complexUnitsMap = allUnitsLoaded
+                .Where(u => u.Building?.HousingComplexId != null)
+                .GroupBy(u => u.Building!.HousingComplexId!.Value)
+                .ToDictionary(g => g.Key, g => g.ToList());
             ViewBag.UnitsByBuilding = buildingUnitsMap;
+            ViewBag.UnitsByComplex = complexUnitsMap;
             ViewBag.SelectedBuildingObj = buildingId.HasValue
                 ? buildings.FirstOrDefault(b => b.Id == buildingId.Value)
                 : buildings.FirstOrDefault();

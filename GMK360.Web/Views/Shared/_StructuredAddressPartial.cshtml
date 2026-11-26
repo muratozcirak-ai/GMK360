@@ -1,0 +1,160 @@
+@{
+    string prefix = ViewData["AddressPrefix"]?.ToString() ?? "sa";
+    bool isReq = ViewData["AddressRequired"] is bool br && br;
+    int? initCity = ViewData["AddressCityId"] as int?;
+    int? initDist = ViewData["AddressDistrictId"] as int?;
+    int? initNeigh = ViewData["AddressNeighborhoodId"] as int?;
+    int? initStreet = ViewData["AddressStreetId"] as int?;
+    string? initStreetName = ViewData["AddressStreetName"]?.ToString();
+    string? initBldNo = ViewData["AddressBuildingNo"]?.ToString();
+    string? initAptNo = ViewData["AddressApartmentNo"]?.ToString();
+    string? currentFormatted = ViewData["AddressFormatted"]?.ToString();
+}
+<div class="row g-2 structured-address-box" id="@(prefix)_Box"
+     data-init-city="@(initCity?.ToString() ?? "")"
+     data-init-dist="@(initDist?.ToString() ?? "")"
+     data-init-neigh="@(initNeigh?.ToString() ?? "")"
+     data-init-street="@(initStreet?.ToString() ?? "")"
+     data-init-streetname="@(initStreetName ?? "")">
+    @if (!string.IsNullOrWhiteSpace(currentFormatted))
+    {
+        <div class="col-12">
+            <div class="small text-muted bg-light border rounded-2 px-2 py-1">
+                <i class="bi bi-geo-alt-fill text-danger me-1"></i><strong>Kayıtlı Adres:</strong> @currentFormatted
+            </div>
+        </div>
+    }
+    <div class="col-md-4">
+        <label class="form-label fw-bold small">İl @(isReq ? "*" : "")</label>
+        <select name="addressCityId" id="@(prefix)_City" class="form-select form-select-sm" @(isReq ? "required" : "")>
+            <option value="">İl Seçiniz</option>
+        </select>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label fw-bold small">İlçe @(isReq ? "*" : "")</label>
+        <select name="addressDistrictId" id="@(prefix)_District" class="form-select form-select-sm" @(isReq ? "required" : "")>
+            <option value="">Önce İl Seçiniz</option>
+        </select>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label fw-bold small">Mahalle @(isReq ? "*" : "")</label>
+        <select name="addressNeighborhoodId" id="@(prefix)_Neighborhood" class="form-select form-select-sm" @(isReq ? "required" : "")>
+            <option value="">Önce İlçe Seçiniz</option>
+        </select>
+    </div>
+    <div class="col-md-6">
+        <div class="d-flex justify-content-between align-items-center">
+            <label class="form-label fw-bold small mb-1">Sokak / Cadde @(isReq ? "*" : "")</label>
+            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" style="font-size:.72rem;" id="@(prefix)_ToggleStreet">Listede yoksa yaz</button>
+        </div>
+        <select name="addressStreetId" id="@(prefix)_Street" class="form-select form-select-sm">
+            <option value="">Önce Mahalle Seçiniz</option>
+        </select>
+        <input type="text" name="addressStreetName" id="@(prefix)_StreetCustom" class="form-control form-control-sm d-none mt-1" value="@initStreetName" placeholder="Sokak / Cadde adını yazın" />
+    </div>
+    <div class="col-md-3">
+        <label class="form-label fw-bold small">Bina / Dış Kapı No @(isReq ? "*" : "")</label>
+        <input type="text" name="addressBuildingNo" id="@(prefix)_BldNo" class="form-control form-control-sm" value="@initBldNo" placeholder="Örn: 14/A" @(isReq ? "required" : "") />
+    </div>
+    <div class="col-md-3">
+        <label class="form-label fw-bold small">Daire / İç Kapı No</label>
+        <input type="text" name="addressApartmentNo" id="@(prefix)_AptNo" class="form-control form-control-sm" value="@initAptNo" placeholder="Örn: 3" />
+    </div>
+</div>
+
+<script>
+(function () {
+    const p = '@prefix';
+    const box = document.getElementById(p + '_Box');
+    if (!box) return;
+    const citySel = document.getElementById(p + '_City');
+    const distSel = document.getElementById(p + '_District');
+    const neighSel = document.getElementById(p + '_Neighborhood');
+    const streetSel = document.getElementById(p + '_Street');
+    const streetCustom = document.getElementById(p + '_StreetCustom');
+    const toggleBtn = document.getElementById(p + '_ToggleStreet');
+
+    function fill(sel, items, placeholder, selectedId) {
+        if (!sel) return;
+        sel.innerHTML = `<option value="">${placeholder}</option>`;
+        (items || []).forEach(it => {
+            const opt = document.createElement('option');
+            opt.value = it.id;
+            opt.textContent = it.name;
+            if (selectedId && String(it.id) === String(selectedId)) opt.selected = true;
+            sel.appendChild(opt);
+        });
+    }
+
+    function setCustomMode(on) {
+        if (on) {
+            streetSel.classList.add('d-none');
+            streetSel.value = '';
+            streetCustom.classList.remove('d-none');
+        } else {
+            streetCustom.classList.add('d-none');
+            streetSel.classList.remove('d-none');
+        }
+    }
+
+    toggleBtn?.addEventListener('click', () => {
+        const isCustomNow = !streetCustom.classList.contains('d-none');
+        setCustomMode(!isCustomNow);
+    });
+
+    async function loadCities() {
+        const r = await fetch('/api/Location/Cities');
+        if (!r.ok) return;
+        const data = await r.json();
+        const initC = box.dataset.initCity;
+        fill(citySel, data, 'İl Seçiniz', initC);
+        if (initC) await loadDistricts(initC, box.dataset.initDist);
+    }
+
+    async function loadDistricts(cityId, preselectDist) {
+        fill(distSel, [], 'İlçe Seçiniz');
+        fill(neighSel, [], 'Mahalle Seçiniz');
+        fill(streetSel, [], 'Sokak / Cadde Seçiniz');
+        if (!cityId) return;
+        const r = await fetch('/api/Location/Districts/' + cityId);
+        if (!r.ok) return;
+        const data = await r.json();
+        fill(distSel, data, 'İlçe Seçiniz', preselectDist);
+        if (preselectDist) await loadNeighborhoods(preselectDist, box.dataset.initNeigh);
+    }
+
+    async function loadNeighborhoods(distId, preselectNeigh) {
+        fill(neighSel, [], 'Mahalle Seçiniz');
+        fill(streetSel, [], 'Sokak / Cadde Seçiniz');
+        if (!distId) return;
+        const r = await fetch('/api/Location/Neighborhoods/' + distId);
+        if (!r.ok) return;
+        const data = await r.json();
+        fill(neighSel, data, 'Mahalle Seçiniz', preselectNeigh);
+        if (preselectNeigh) await loadStreets(preselectNeigh, box.dataset.initStreet);
+    }
+
+    async function loadStreets(neighId, preselectStreet) {
+        fill(streetSel, [], 'Sokak / Cadde Seçiniz');
+        if (!neighId) return;
+        const r = await fetch('/api/Location/Streets/' + neighId);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (!data || data.length === 0) {
+            setCustomMode(true);
+            return;
+        }
+        fill(streetSel, data, 'Sokak / Cadde Seçiniz', preselectStreet);
+        if (!preselectStreet && box.dataset.initStreetname) {
+            setCustomMode(true);
+        } else {
+            setCustomMode(false);
+        }
+    }
+
+    citySel?.addEventListener('change', () => loadDistricts(citySel.value, null));
+    distSel?.addEventListener('change', () => loadNeighborhoods(distSel.value, null));
+    neighSel?.addEventListener('change', () => loadStreets(neighSel.value, null));
+    loadCities();
+})();
+</script>

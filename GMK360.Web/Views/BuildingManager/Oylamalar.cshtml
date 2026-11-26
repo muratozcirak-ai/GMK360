@@ -10,7 +10,9 @@
     var jobsByMeeting = ViewBag.JobsByMeeting as Dictionary<int, List<GMK360.Core.Entities.Marketplace.MarketplaceJob>> ?? new Dictionary<int, List<GMK360.Core.Entities.Marketplace.MarketplaceJob>>();
     var staffsByMeeting = ViewBag.StaffsByMeeting as Dictionary<int, List<GMK360.Core.Entities.BuildingStaff>> ?? new Dictionary<int, List<GMK360.Core.Entities.BuildingStaff>>();
     var unitsByBuilding = ViewBag.UnitsByBuilding as Dictionary<int, List<GMK360.Core.Entities.BuildingUnit>> ?? new Dictionary<int, List<GMK360.Core.Entities.BuildingUnit>>();
+    var unitsByComplex = ViewBag.UnitsByComplex as Dictionary<int, List<GMK360.Core.Entities.BuildingUnit>> ?? new Dictionary<int, List<GMK360.Core.Entities.BuildingUnit>>();
     var selectedBldObj = ViewBag.SelectedBuildingObj as GMK360.Core.Entities.Building;
+    var firstSiteComplex = buildings.FirstOrDefault(b => b.HousingComplexId.HasValue);
 }
 
 <div class="container-fluid py-3 px-1">
@@ -144,7 +146,13 @@
                     var linkedQuotes = quotesByMeeting.ContainsKey(m.Id) ? quotesByMeeting[m.Id] : new List<GMK360.Core.Entities.B2B.B2BQuoteRequest>();
                     var linkedJobs = jobsByMeeting.ContainsKey(m.Id) ? jobsByMeeting[m.Id] : new List<GMK360.Core.Entities.Marketplace.MarketplaceJob>();
                     var linkedStaffs = staffsByMeeting.ContainsKey(m.Id) ? staffsByMeeting[m.Id] : new List<GMK360.Core.Entities.BuildingStaff>();
-                    var bUnits = unitsByBuilding.ContainsKey(m.ContextId) ? unitsByBuilding[m.ContextId] : new List<GMK360.Core.Entities.BuildingUnit>();
+                    var bUnits = (m.IsSiteWide && m.HousingComplexId.HasValue && unitsByComplex.ContainsKey(m.HousingComplexId.Value))
+                        ? unitsByComplex[m.HousingComplexId.Value]
+                        : (unitsByBuilding.ContainsKey(m.ContextId) ? unitsByBuilding[m.ContextId] : new List<GMK360.Core.Entities.BuildingUnit>());
+                    var meetingBld = buildings.FirstOrDefault(b => b.Id == m.ContextId);
+                    string scopeDisplayName = (m.IsSiteWide && meetingBld?.HousingComplex != null)
+                        ? $"🌐 {meetingBld.HousingComplex.Name} (Site Geneli)"
+                        : bName;
                     var quorum = GMK360.Web.Helpers.KmkQuorumHelper.Compute(bUnits, m.Votes, m.QuorumType);
                     var mVotes = (m.Votes ?? new List<GMK360.Core.Entities.BuildingDecisionVote>()).Where(v => !v.IsDeleted).ToDictionary(v => v.BuildingUnitId, v => v);
                     var mAttachments = (m.Attachments ?? new List<GMK360.Core.Entities.BuildingDecisionAttachment>()).Where(a => !a.IsDeleted).OrderByDescending(a => a.CreatedAt).ToList();
@@ -160,7 +168,7 @@
                                 {
                                     <span class="badge bg-success rounded-pill me-1">✅ Karara Bağlandı</span>
                                 }
-                                <span class="badge bg-secondary bg-opacity-25 text-dark rounded-pill me-2">@bName</span>
+                                <span class="badge bg-secondary bg-opacity-25 text-dark rounded-pill me-2">@scopeDisplayName</span>
                                 <span class="fw-bold text-dark fs-5">@m.AgendaTitle</span>
                                 <div class="small text-muted mt-1">
                                     <i class="bi bi-calendar3 me-1"></i>@m.MeetingDate.ToString("dd MMMM yyyy HH:mm")
@@ -440,11 +448,17 @@
                 <div class="modal-body p-4">
                     <div class="row g-2 mb-3">
                         <div class="col-md-8">
-                            <label class="form-label fw-bold small">Bina Seçin</label>
-                            <select name="buildingId" class="form-select" required>
+                            <label class="form-label fw-bold small">Kapsam (Site Geneli / Bina)</label>
+                            <input type="hidden" name="buildingId" id="newDecBuildingIdHidden" value="@(selectedBldObj?.Id ?? buildings.First().Id)" />
+                            <input type="hidden" name="isSiteWide" id="newDecIsSiteWideHidden" value="@(firstSiteComplex != null && buildings.Count > 1 ? "true" : "false")" />
+                            <select id="newDecScopeSelect" class="form-select" onchange="syncNewDecisionScope()">
+                                @if (firstSiteComplex != null && buildings.Count > 1)
+                                {
+                                    <option value="SITE:@firstSiteComplex.Id" selected>🌐 @(firstSiteComplex.HousingComplex?.Name ?? "Site Geneli") (Tüm Bloklar — Genel Karar)</option>
+                                }
                                 @foreach (var b in buildings)
                                 {
-                                    <option value="@b.Id">@b.Name</option>
+                                    <option value="BLK:@b.Id" selected="@(firstSiteComplex == null && buildings.Count == 1 ? "selected" : null)">🏢 @(buildings.Count > 1 ? $"Sadece {b.BlockName ?? b.Name}" : b.Name)</option>
                                 }
                             </select>
                         </div>
@@ -695,6 +709,18 @@
     </div>
 
     <script>
+        function syncNewDecisionScope() {
+            const sel = document.getElementById('newDecScopeSelect');
+            const bEl = document.getElementById('newDecBuildingIdHidden');
+            const swEl = document.getElementById('newDecIsSiteWideHidden');
+            if (!sel || !bEl || !swEl) return;
+            const parts = (sel.value || '').split(':');
+            if (parts.length === 2) {
+                bEl.value = parts[1];
+                swEl.value = parts[0] === 'SITE' ? 'true' : 'false';
+            }
+        }
+
         function openAssignProxyModal(bId, mId, uId, unitLabel, suggestedProxy) {
             document.getElementById('pxBuildingId').value = bId;
             document.getElementById('pxMeetingId').value = mId;
