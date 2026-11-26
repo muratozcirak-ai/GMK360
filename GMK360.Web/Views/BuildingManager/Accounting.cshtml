@@ -119,6 +119,41 @@
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     }
+    @if (TempData["StaffActivationLink"] != null)
+    {
+        var actLink = TempData["StaffActivationLink"]?.ToString() ?? "";
+        var tempPw = TempData["StaffTempPassword"]?.ToString() ?? "";
+        var invName = TempData["StaffInviteName"]?.ToString() ?? "Personel";
+        var invEmail = TempData["StaffInviteEmail"]?.ToString() ?? "";
+        var invPhone = TempData["StaffInvitePhone"]?.ToString() ?? "";
+        var waMsg = Uri.EscapeDataString($"Merhaba {invName}, GMK360 personel hesabınız açıldı. Kurulum ve ilk giriş için: {actLink}" + (!string.IsNullOrWhiteSpace(tempPw) ? $" | Geçici Şifreniz: {tempPw}" : ""));
+        <div class="alert alert-info alert-dismissible fade show rounded-4 border border-info-subtle shadow-sm mb-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                <div>
+                    <h6 class="fw-bold mb-1"><i class="bi bi-shield-lock me-2"></i>@invName — İlk Giriş Daveti &amp; Geçici Şifre Hazır</h6>
+                    <p class="small mb-2">Personel ilk giriş yaptığında kalıcı şifresini, yalnızca kendisinin bileceği 4-6 haneli PIN'ini ve adresini belirleyecektir.</p>
+                    <div class="d-flex flex-wrap gap-2 align-items-center small">
+                        @if (!string.IsNullOrWhiteSpace(invEmail))
+                        {
+                            <span class="badge bg-white text-dark border">Giriş (E-Posta): <b>@invEmail</b></span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(invPhone))
+                        {
+                            <span class="badge bg-white text-dark border">Telefon: <b>@invPhone</b></span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(tempPw))
+                        {
+                            <span class="badge bg-warning text-dark border">Geçici Şifre: <code id="staffTempPwCode" class="fw-bold text-dark">@tempPw</code></span>
+                            <button type="button" class="btn btn-xs btn-outline-dark rounded-pill" onclick="copyTextValue('@tempPw', this)">Şifreyi Kopyala</button>
+                        }
+                        <button type="button" class="btn btn-xs btn-primary rounded-pill" onclick="copyTextValue('@actLink', this)">Aktivasyon Linkini Kopyala</button>
+                        <a href="https://wa.me/?text=@waMsg" target="_blank" class="btn btn-xs btn-success rounded-pill"><i class="bi bi-whatsapp me-1"></i>WhatsApp ile İlet</a>
+                    </div>
+                </div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
     @if (TempData["ErrorMessage"] != null)
     {
         <div class="alert alert-danger alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
@@ -500,19 +535,63 @@
                                 .Sum(l => l.TotalDays);
                             int remainLeave = Math.Max(0, st.AnnualLeaveEntitlementDays - usedLeaveDays);
                             decimal dailyRate = st.NetSalary > 0 ? Math.Round(st.NetSalary / 30m, 2) : 0m;
+                            bool hasSelfPin = !string.IsNullOrEmpty(st.QuickPinHash) || (st.User?.IsTransactionPinSet ?? false);
+                            bool mustChangePwd = st.User == null || st.User.MustChangePassword;
+                            string? displayAddress = !string.IsNullOrWhiteSpace(st.Address) ? st.Address : st.User?.Address;
+                            string? displayEmail = !string.IsNullOrWhiteSpace(st.Email)
+                                ? st.Email
+                                : (st.User?.Email != null && !st.User.Email.EndsWith("@gmk360.local", StringComparison.OrdinalIgnoreCase) ? st.User.Email : null);
+                            var staffDocs = (st.Documents ?? new List<GMK360.Core.Entities.BuildingStaffDocument>())
+                                .Where(d => !d.IsDeleted)
+                                .OrderByDescending(d => d.CreatedAt)
+                                .ToList();
+                            var requiredDocItems = GMK360.Core.Entities.BuildingStaffDocument.StandardCatalog.Where(c => c.IsRequired).ToList();
+                            int requiredDoneCount = requiredDocItems.Count(rc => staffDocs.Any(d => string.Equals(d.DocumentType, rc.Code, StringComparison.OrdinalIgnoreCase)));
 
                             <div class="border rounded-4 p-3 mb-3 bg-light">
                                 <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
                                     <div>
                                         <span class="badge bg-dark me-1">@st.RoleType</span>
                                         <strong class="fs-5 text-dark">@st.FullName</strong>
+                                        @if (hasSelfPin && !mustChangePwd)
+                                        {
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle ms-1"><i class="bi bi-shield-check me-1"></i>Şifre &amp; Gizli PIN Aktif</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1"><i class="bi bi-hourglass-split me-1"></i>İlk Giriş / PIN Bekleniyor</span>
+                                        }
+                                        <span class="badge @(requiredDoneCount >= requiredDocItems.Count ? "bg-success" : "bg-secondary") ms-1">
+                                            📁 Özlük: @requiredDoneCount/@requiredDocItems.Count Zorunlu
+                                        </span>
                                         <div class="small text-muted mt-1">
                                             İşe Giriş: <b>@st.HireDate.ToString("dd.MM.yyyy")</b> |
                                             SGK Sicil: <b>@(st.SgkNumber ?? "-")</b> |
+                                            Tel: <b>@(st.PhoneNumber ?? "-")</b> |
+                                            E-Posta: <b>@(displayEmail ?? "-")</b> |
                                             Günlük Yevmiye: <b>@dailyRate.ToString("N2") ₺</b>
+                                        </div>
+                                        <div class="small text-muted mt-1">
+                                            <i class="bi bi-geo-alt me-1"></i>İkametgah / Adres:
+                                            @if (!string.IsNullOrWhiteSpace(displayAddress))
+                                            {
+                                                <b class="text-dark">@displayAddress</b>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-warning-emphasis">İlk girişte / profilinden personel tarafından doldurulacak</span>
+                                            }
                                         </div>
                                     </div>
                                     <div class="d-flex flex-wrap gap-1">
+                                        <button type="button" class="btn btn-sm btn-dark rounded-pill px-3 fw-semibold"
+                                                data-bs-toggle="modal" data-bs-target="#staffDossierModal_@st.Id">
+                                            <i class="bi bi-folder2-open me-1"></i> Özlük Dosyası (@staffDocs.Count)
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-info text-dark rounded-pill px-3 fw-semibold"
+                                                onclick="openStaffInviteModal(@st.Id, '@System.Web.HttpUtility.JavaScriptStringEncode(st.FullName)', '@System.Web.HttpUtility.JavaScriptStringEncode(displayEmail ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(st.PhoneNumber ?? "")')">
+                                            <i class="bi bi-key me-1"></i> @(hasSelfPin && !mustChangePwd ? "Davet Yenile" : "Geçici Şifre / Davet")
+                                        </button>
                                         <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold"
                                                 onclick="openPayrollModal(@st.Id, '@System.Web.HttpUtility.JavaScriptStringEncode(st.FullName)', @dailyRate.ToString(System.Globalization.CultureInfo.InvariantCulture))">
                                             <i class="bi bi-calculator me-1"></i> Puantaj &amp; Bayram Hesapla
@@ -1159,6 +1238,190 @@
     </div>
 </div>
 
+@* Personel Özlük Dosyası Modalları *@
+@foreach (var st in buildingStaffs)
+{
+    var sDocs = (st.Documents ?? new List<GMK360.Core.Entities.BuildingStaffDocument>())
+        .Where(d => !d.IsDeleted)
+        .OrderByDescending(d => d.CreatedAt)
+        .ToList();
+    string? sAddr = !string.IsNullOrWhiteSpace(st.Address) ? st.Address : st.User?.Address;
+    <div class="modal fade" id="staffDossierModal_@st.Id" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-xl">
+            <div class="modal-content rounded-4 border-0 shadow">
+                <div class="modal-header bg-dark text-white border-0">
+                    <div>
+                        <h5 class="modal-title fw-bold mb-0"><i class="bi bi-folder2-open me-2 text-warning"></i>@st.FullName — Personel Özlük Dosyası</h5>
+                        <small class="text-white-50">@st.RoleType | İşe Giriş: @st.HireDate.ToString("dd.MM.yyyy") | TC: @(st.TcIdentityNo ?? "-") | SGK: @(st.SgkNumber ?? "-")</small>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-light border rounded-3 small mb-3">
+                        <div class="d-flex flex-wrap justify-content-between gap-2">
+                            <span><i class="bi bi-geo-alt-fill text-danger me-1"></i><strong>İkametgah Adresi:</strong> @(string.IsNullOrWhiteSpace(sAddr) ? "Henüz girilmedi (personel ilk girişinde / profilinden kendisi girer)" : sAddr)</span>
+                            <span><i class="bi bi-telephone-fill text-success me-1"></i>@(st.PhoneNumber ?? "-")</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="small fw-bold text-muted mb-2">İşe Giriş Özlük Evrak Kontrol Listesi (4857 / 6331 Sayılı Kanun)</div>
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach (var item in GMK360.Core.Entities.BuildingStaffDocument.StandardCatalog.Where(c => c.IsRequired))
+                            {
+                                bool hasIt = sDocs.Any(d => string.Equals(d.DocumentType, item.Code, StringComparison.OrdinalIgnoreCase));
+                                <span class="badge rounded-pill px-3 py-2 @(hasIt ? "bg-success-subtle text-success border border-success-subtle" : "bg-danger-subtle text-danger border border-danger-subtle")">
+                                    @(hasIt ? "✅" : "⚠️ Eksik:") @item.Label
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="row g-4">
+                        <div class="col-lg-5">
+                            <form class="card border rounded-4 p-3 bg-light" asp-action="UploadBuildingStaffDocument" asp-controller="BuildingManager" method="post" enctype="multipart/form-data">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="buildingId" value="@Model.Id" />
+                                <input type="hidden" name="buildingStaffId" value="@st.Id" />
+                                <h6 class="fw-bold mb-3"><i class="bi bi-cloud-upload me-2 text-primary"></i>Yeni Özlük Belgesi Ekle</h6>
+
+                                <div class="mb-2">
+                                    <label class="form-label small fw-bold">Belge Türü *</label>
+                                    <select name="documentType" class="form-select form-select-sm" required>
+                                        @foreach (var item in GMK360.Core.Entities.BuildingStaffDocument.StandardCatalog)
+                                        {
+                                            <option value="@item.Code">@item.Label @(item.IsRequired ? "(Zorunlu)" : "")</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label small fw-bold">Belge Başlığı (Opsiyonel)</label>
+                                    <input type="text" name="title" class="form-control form-control-sm" placeholder="Boş bırakılırsa tür adı kullanılır" />
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label small fw-bold">Dosya Yükle (PDF / Görsel / Word)</label>
+                                    <input type="file" name="documentFile" class="form-control form-control-sm" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" />
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label small fw-bold">Fiziksel Klasör / Dolap Yeri</label>
+                                    <input type="text" name="physicalArchiveLocation" class="form-control form-control-sm" placeholder="Örn: Yönetim Ofisi • Personel Klasörü #1" />
+                                </div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <label class="form-label small fw-bold">Düzenleme Tarihi</label>
+                                        <input type="date" name="issueDate" class="form-control form-control-sm" />
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small fw-bold">Geçerlilik Bitiş</label>
+                                        <input type="date" name="expiryDate" class="form-control form-control-sm" />
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Not</label>
+                                    <input type="text" name="notes" class="form-control form-control-sm" placeholder="Örn: Islak imzalı aslı klasörde" />
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm rounded-pill fw-bold w-100">
+                                    <i class="bi bi-plus-circle me-1"></i> Özlük Dosyasına Kaydet
+                                </button>
+                            </form>
+                        </div>
+
+                        <div class="col-lg-7">
+                            <h6 class="fw-bold mb-2">Kayıtlı Özlük Belgeleri (@sDocs.Count)</h6>
+                            @if (!sDocs.Any())
+                            {
+                                <div class="text-center py-5 text-muted small border rounded-4 bg-light">
+                                    Bu personel için henüz özlük belgesi yüklenmemiş. Soldaki formdan belgeleri tarayıp veya klasör yerini yazarak ekleyebilirsiniz.
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="list-group">
+                                    @foreach (var doc in sDocs)
+                                    {
+                                        <div class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                            <div>
+                                                <div class="fw-bold small text-dark">
+                                                    @doc.Title
+                                                    @if (doc.IsExpired)
+                                                    {
+                                                        <span class="badge bg-danger ms-1">Süresi Dolmuş</span>
+                                                    }
+                                                </div>
+                                                <div class="small text-muted">
+                                                    Tür: @GMK360.Core.Entities.BuildingStaffDocument.GetLabel(doc.DocumentType)
+                                                    @if (!string.IsNullOrWhiteSpace(doc.PhysicalArchiveLocation))
+                                                    {
+                                                        <span> | 📁 Aslı: <b>@doc.PhysicalArchiveLocation</b></span>
+                                                    }
+                                                    @if (doc.ExpiryDate.HasValue)
+                                                    {
+                                                        <span> | Geçerlilik: @doc.ExpiryDate.Value.ToString("dd.MM.yyyy")</span>
+                                                    }
+                                                </div>
+                                                @if (!string.IsNullOrWhiteSpace(doc.Notes))
+                                                {
+                                                    <div class="small text-secondary fst-italic">@doc.Notes</div>
+                                                }
+                                            </div>
+                                            <div class="d-flex gap-1 align-items-center">
+                                                @if (!string.IsNullOrWhiteSpace(doc.FileUrl))
+                                                {
+                                                    <a href="@doc.FileUrl" target="_blank" class="btn btn-xs btn-outline-primary rounded-pill px-2">
+                                                        <i class="bi bi-file-earmark-arrow-down me-1"></i>Gör / İndir
+                                                    </a>
+                                                }
+                                                <form asp-action="DeleteBuildingStaffDocument" asp-controller="BuildingManager" method="post" onsubmit="return confirm('Bu belge özlük dosyasından kaldırılsın mı?');">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="buildingId" value="@Model.Id" />
+                                                    <input type="hidden" name="documentId" value="@doc.Id" />
+                                                    <button type="submit" class="btn btn-xs btn-outline-danger rounded-pill px-2"><i class="bi bi-trash"></i></button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Personel Geçici Şifre / İlk Giriş Davet Modal -->
+<div class="modal fade" id="staffInviteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="SendStaffActivationInvite" asp-controller="BuildingManager" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="buildingId" value="@Model.Id" />
+            <input type="hidden" name="buildingStaffId" id="siStaffId" />
+            <div class="modal-header bg-info text-dark border-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-key me-2"></i><span id="siStaffName">Personel</span> — Geçici Şifre &amp; Davet</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="alert alert-light border small mb-3">
+                    Personel adına yönetici PIN belirlemez. Bu işlem personele yeni bir <strong>tek seferlik geçici şifre</strong> ve aktivasyon bağlantısı üretir; personel giriş yapınca kalıcı şifresini, kendi gizli PIN kodunu ve adresini belirler.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">E-Posta Adresi (Varsa mail gönderilir)</label>
+                    <input type="email" name="email" id="siEmail" class="form-control" placeholder="ornek@mail.com" />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Telefon Numarası</label>
+                    <input type="tel" name="phoneNumber" id="siPhone" class="form-control" placeholder="05XX XXX XX XX" />
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Vazgeç</button>
+                <button type="submit" class="btn btn-info text-dark rounded-pill px-4 fw-bold">Geçici Şifre &amp; Link Üret</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- 5. Tam Bordrolu Kadro Personeli Ekle Modal -->
 <div class="modal fade" id="addBuildingStaffModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -1196,13 +1459,24 @@
                     <label class="form-label small fw-bold">İşe Giriş Tarihi *</label>
                     <input type="date" name="hireDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">Görevli Telefonu (Saha PWA Girişi)</label>
-                    <input type="tel" name="phoneNumber" class="form-control" placeholder="05XX XXX XX XX" />
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">Görevli Telefonu *</label>
+                    <input type="tel" name="phoneNumber" class="form-control" required placeholder="05XX XXX XX XX" />
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">Hızlı PWA PIN (4-6 Hane)</label>
-                    <input type="text" maxlength="6" name="quickPin" class="form-control" placeholder="Örn: 1234" />
+                <div class="col-md-5">
+                    <label class="form-label small fw-bold">Personel E-Postası (Davet &amp; İlk Giriş)</label>
+                    <input type="email" name="email" class="form-control" placeholder="ornek@mail.com (varsa mail atılır)" />
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="sendActivationEmail" value="true" id="chkSendStaffMail" checked />
+                        <label class="form-check-label small" for="chkSendStaffMail">E-posta daveti at</label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="alert alert-info bg-opacity-10 border-info-subtle rounded-3 py-2 px-3 small mb-0">
+                        <i class="bi bi-shield-lock me-1"></i><strong>Gizli PIN Güvenliği:</strong> Yönetici personel adına PIN belirlemez. Kaydettiğinizde sistem <strong>geçici şifre ve aktivasyon linki</strong> üretir; personel giriş yaptığında kendi şifresini, yalnızca kendisinin bileceği 4-6 haneli PIN kodunu ve ikametgah adresini girer.
+                    </div>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label small fw-bold">Net Maaş (₺) *</label>
@@ -1546,5 +1820,23 @@
         document.getElementById('pmOpAmt').innerText = Number(opAmt || 0).toFixed(2);
         document.getElementById('pmSevAmt').innerText = Number(sevAmt || 0).toFixed(2);
         new bootstrap.Modal(document.getElementById('payMonthlyPayrollModal')).show();
+    }
+
+    function openStaffInviteModal(staffId, name, email, phone) {
+        document.getElementById('siStaffId').value = staffId;
+        document.getElementById('siStaffName').innerText = name || 'Personel';
+        document.getElementById('siEmail').value = email || '';
+        document.getElementById('siPhone').value = phone || '';
+        new bootstrap.Modal(document.getElementById('staffInviteModal')).show();
+    }
+
+    function copyTextValue(val, btn) {
+        if (!val || !navigator.clipboard) return;
+        navigator.clipboard.writeText(val).then(() => {
+            if (!btn) return;
+            const prev = btn.innerText;
+            btn.innerText = 'Kopyalandı!';
+            setTimeout(() => { btn.innerText = prev; }, 1600);
+        });
     }
 </script>

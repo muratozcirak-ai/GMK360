@@ -151,13 +151,14 @@ namespace GMK360.Web.Controllers
         [Authorize]
         [HttpPost("Profile/UpdateBasicInfo")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateBasicInfo(string firstName, string lastName, string? email, string? phoneNumber, string? tcIdentityNo = null, int? birthYear = null)
+        public async Task<IActionResult> UpdateBasicInfo(string firstName, string lastName, string? email, string? phoneNumber, string? tcIdentityNo = null, int? birthYear = null, string? address = null)
         {
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return RedirectToAction("Login", "Account");
 
             if (!string.IsNullOrWhiteSpace(firstName)) user.FirstName = firstName.Trim();
             if (!string.IsNullOrWhiteSpace(lastName)) user.LastName = lastName.Trim();
+            if (address != null) user.Address = string.IsNullOrWhiteSpace(address) ? null : address.Trim();
 
             if (string.IsNullOrWhiteSpace(user.TcIdentityNo) && !string.IsNullOrWhiteSpace(tcIdentityNo))
             {
@@ -204,6 +205,8 @@ namespace GMK360.Web.Controllers
             }
 
             await _userManager.UpdateAsync(user);
+            var dispatchSvc = HttpContext.RequestServices.GetService(typeof(GMK360.Web.Services.FacilityTaskDispatchService)) as GMK360.Web.Services.FacilityTaskDispatchService;
+            if (dispatchSvc != null) await dispatchSvc.SyncStaffProfileFromUserAsync(user);
             TempData["SuccessMessage"] = "Profil bilgileriniz güncellendi.";
             return RedirectToAction(nameof(Index));
         }
@@ -326,6 +329,8 @@ namespace GMK360.Web.Controllers
             user.TransactionPinHash = GMK360.Web.Services.FacilityTaskDispatchService.HashQuickPin(clean);
             user.IsTransactionPinSet = true;
             await _userManager.UpdateAsync(user);
+            var dispatchSvc = HttpContext.RequestServices.GetService(typeof(GMK360.Web.Services.FacilityTaskDispatchService)) as GMK360.Web.Services.FacilityTaskDispatchService;
+            if (dispatchSvc != null) await dispatchSvc.SyncStaffProfileFromUserAsync(user);
 
             TempData["SuccessMessage"] = "🔐 Kişisel Onay ve PWA Giriş PIN'iniz güncellendi. Bu PIN yalnızca size özeldir ve yöneticiler dahil kimse tarafından görüntülenemez.";
             return RedirectToAction(nameof(Index));

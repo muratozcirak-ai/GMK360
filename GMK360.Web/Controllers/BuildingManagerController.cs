@@ -3984,6 +3984,8 @@ namespace GMK360.Web.Controllers
 
             var buildingStaffs = await _context.BuildingStaffs
                 .Include(s => s.Leaves)
+                .Include(s => s.Documents)
+                .Include(s => s.User)
                 .Include(s => s.Building)
                 .Where(s => scopeIds.Contains(s.BuildingId) && s.IsActive && !s.IsDeleted)
                 .OrderBy(s => s.FullName)
@@ -4165,14 +4167,16 @@ namespace GMK360.Web.Controllers
             string? tcIdentityNo,
             string? sgkNumber,
             string? phoneNumber,
-            string? quickPin,
+            string? email,
+            string? address,
             string roleType,
             decimal netSalary,
             decimal sgkEmployerShare,
             decimal incomeAndStampTax,
             decimal fringeBenefits,
             decimal monthlySeveranceFund,
-            DateTime hireDate)
+            DateTime hireDate,
+            bool sendActivationEmail = true)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -4184,9 +4188,9 @@ namespace GMK360.Web.Controllers
                 TcIdentityNo = tcIdentityNo?.Trim(),
                 SgkNumber = sgkNumber?.Trim(),
                 PhoneNumber = phoneNumber?.Trim(),
-                QuickPinHash = (!string.IsNullOrWhiteSpace(quickPin) && quickPin.Trim().Length >= 4)
-                    ? FacilityTaskDispatchService.HashQuickPin(quickPin.Trim())
-                    : null,
+                Email = string.IsNullOrWhiteSpace(email) ? null : email.Trim(),
+                Address = string.IsNullOrWhiteSpace(address) ? null : address.Trim(),
+                QuickPinHash = null, // Personel kendi gizli PIN'ini ilk girişte / profilinden belirler
                 RoleType = string.IsNullOrWhiteSpace(roleType) ? "Kapıcı (Vergi İstisnalı)" : roleType.Trim(),
                 NetSalary = Math.Max(0m, netSalary),
                 SgkEmployerShare = Math.Max(0m, sgkEmployerShare),
@@ -4200,7 +4204,217 @@ namespace GMK360.Web.Controllers
             _context.BuildingStaffs.Add(staff);
             await _context.SaveChangesAsync();
 
-            TempData["Success"] = $"'{staff.FullName}' kadroya eklendi. Aylık işletme maliyeti: {staff.TotalMonthlyOperatingCost:N2} ₺, Kıdem fonu: {staff.MonthlySeveranceFund:N2} ₺.";
+            var dispatchSvc = HttpContext.RequestServices.GetService(typeof(FacilityTaskDispatchService)) as FacilityTaskDispatchService;
+            string? inviteExtraMsg = null;
+            if (dispatchSvc != null)
+            {
+                var prov = await dispatchSvc.ProvisionStaffAccountAsync(staff, GetUserId(), resetTempPassword: true);
+                if (prov.User != null)
+                {
+                    bool mailed = await PrepareStaffInviteNotificationAsync(building, staff, prov.User, prov.TempPassword, sendActivationEmail);
+                    inviteExtraMsg = mailed
+                        ? $" Aktivasyon bağlantısı ve geçici şifre '{staff.Email}' adresine gönderildi."
+                        : " İlk giriş bağlantısı ve geçici şifre aşağıda oluşturuldu; personel giriş yaptığında yeni şifresini, gizli PIN'ini ve adresini kendisi belirleyecek.";
+                }
+                else if (!string.IsNullOrWhiteSpace(prov.ErrorMessage))
+                {
+                    TempData["WarningMessage"] = $"Personel eklendi ancak kullanıcı hesabı uyarısı: {prov.ErrorMessage}";
+                }
+            }
+
+            TempData["Success"] = $"'{staff.FullName}' kadroya eklendi. Aylık işletme maliyeti: {staff.TotalMonthlyOperatingCost:N2} ₺, Kıdem fonu: {staff.MonthlySeveranceFund:N2} ₺.{inviteExtraMsg}";
+            return RedirectToAction(nameof(Accounting), new { buildingId, tab = "personel" });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SendStaffActivationInvite(
+            int buildingId,
+            int buildingStaffId,
+            string? email,
+            string? phoneNumber)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var staff = await _context.BuildingStaffs.FirstOrDefaultAsync(s => s.Id == buildingStaffId && !s.IsDeleted);
+            if (staff == null) return NotFound();
+            var staffBld = await GetManagedBuildingAsync(staff.BuildingId);
+            if (staffBld == null) return Forbid();
+
+            if (!string.IsNullOrWhiteSpace(email)) staff.Email = email.Trim();
+            if (!string.IsNullOrWhiteSpace(phoneNumber)) staff.PhoneNumber = phoneNumber.Trim();
+            staff.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var dispatchSvc = HttpContext.RequestServices.GetService(typeof(FacilityTaskDispatchService)) as FacilityTaskDispatchService;
+            if (dispatchSvc == null)
+            {
+                TempData["ErrorMessage"] = "Hesap servisi başlatılamadı.";
+                return RedirectToAction(nameof(Accounting), new { buildingId, tab = "personel" });
+            }
+
+            var prov = await dispatchSvc.ProvisionStaffAccountAsync(staff, GetUserId(), resetTempPassword: true);
+            if (prov.User == null)
+            {
+                TempData["ErrorMessage"] = prov.ErrorMessage ?? "Davet bağlantısı üretilemedi.";
+                return RedirectToAction(nameof(Accounting), new { buildingId, tab = "personel" });
+            }
+
+            bool mailed = await PrepareStaffInviteNotificationAsync(staffBld, staff, prov.User, prov.TempPassword, sendEmail: true);
+            TempData["Success"] = mailed
+                ? $"'{staff.FullName}' için yeni aktivasyon linki ve geçici şifre '{staff.Email}' adresine gönderildi."
+                : $"'{staff.FullName}' için yeni ilk giriş daveti ve geçici şifre aşağıda oluşturuldu.";
+            return RedirectToAction(nameof(Accounting), new { buildingId, tab = "personel" });
+        }
+
+        private async Task<bool> PrepareStaffInviteNotificationAsync(
+            Building building,
+            BuildingStaff staff,
+            GMK360.Core.Entities.Identity.ApplicationUser user,
+            string? tempPassword,
+            bool sendEmail)
+        {
+            var activateUrl = Url.Action("ActivateResident", "Account", new { token = user.ActivationToken }, Request.Scheme) ?? "";
+            var loginUrl = Url.Action("Login", "Account", null, Request.Scheme) ?? "";
+
+            TempData["StaffActivationLink"] = activateUrl;
+            TempData["StaffTempPassword"] = tempPassword ?? "";
+            TempData["StaffInviteName"] = staff.FullName;
+            TempData["StaffInviteEmail"] = !string.IsNullOrWhiteSpace(staff.Email) ? staff.Email : (user.Email ?? "");
+            TempData["StaffInvitePhone"] = staff.PhoneNumber ?? user.PhoneNumber ?? "";
+
+            if (!sendEmail || string.IsNullOrWhiteSpace(staff.Email) || staff.Email.EndsWith("@gmk360.local", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var emailSvc = HttpContext.RequestServices.GetService(typeof(IEmailService)) as IEmailService;
+            if (emailSvc == null) return false;
+
+            var encodedName = System.Net.WebUtility.HtmlEncode(staff.FullName);
+            var encodedBuilding = System.Net.WebUtility.HtmlEncode(building.Name);
+            var encodedRole = System.Net.WebUtility.HtmlEncode(staff.RoleType);
+            var tempPwHtml = !string.IsNullOrWhiteSpace(tempPassword)
+                ? $@"<p><strong>Geçici İlk Giriş Şifreniz:</strong> <code style=""background:#f1f5f9;padding:4px 8px;border-radius:6px;font-size:15px;"">{System.Net.WebUtility.HtmlEncode(tempPassword)}</code></p>"
+                : "";
+
+            var html = $@"
+<div style=""font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px;border:1px solid #e2e8f0;border-radius:12px;"">
+  <h2 style=""color:#15803d;margin-top:0;"">GMK360 Personel İlk Giriş &amp; Özlük Kurulumu</h2>
+  <p>Merhaba <strong>{encodedName}</strong>,</p>
+  <p><strong>{encodedBuilding}</strong> yönetimi sizi <strong>{encodedRole}</strong> olarak GMK360 sistemine ekledi.</p>
+  <p>Güvenliğiniz gereği giriş şifrenizi, yalnızca sizin bileceğiniz 4-6 haneli saha PIN kodunuzu ve ikametgah adresinizi ilk girişte kendiniz belirlersiniz.</p>
+  {tempPwHtml}
+  <p style=""margin:22px 0;"">
+    <a href=""{activateUrl}"" style=""background:#15803d;color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-weight:bold;display:inline-block;"">Hesabımı Kur (Şifre, PIN &amp; Adres)</a>
+  </p>
+  <p style=""font-size:12px;color:#64748b;"">Dilerseniz <a href=""{loginUrl}"">{loginUrl}</a> üzerinden e-posta veya telefonunuz ve geçici şifrenizle giriş yaparak da kurulum ekranına geçebilirsiniz.</p>
+</div>";
+
+            var res = await emailSvc.SendEmailWithResultAsync(staff.Email, $"{building.Name} - GMK360 Personel İlk Giriş Daveti", html);
+            TempData["StaffEmailSent"] = res.Success ? "true" : "false";
+            return res.Success;
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UploadBuildingStaffDocument(
+            int buildingId,
+            int buildingStaffId,
+            string documentType,
+            string? title,
+            Microsoft.AspNetCore.Http.IFormFile? documentFile,
+            string? physicalArchiveLocation,
+            DateTime? issueDate,
+            DateTime? expiryDate,
+            string? notes)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var staff = await _context.BuildingStaffs.FirstOrDefaultAsync(s => s.Id == buildingStaffId && !s.IsDeleted);
+            if (staff == null) return NotFound();
+            if (await GetManagedBuildingAsync(staff.BuildingId) == null) return Forbid();
+
+            string? savedUrl = null;
+            if (documentFile != null && documentFile.Length > 0)
+            {
+                if (documentFile.Length > 15 * 1024 * 1024)
+                {
+                    TempData["ErrorMessage"] = "Özlük belgesi boyutu en fazla 15 MB olabilir.";
+                    return RedirectToAction(nameof(Accounting), new { buildingId, tab = "personel" });
+                }
+
+                var ext = System.IO.Path.GetExtension(documentFile.FileName)?.ToLowerInvariant() ?? "";
+                var allowedExts = new[] { ".pdf", ".jpg", ".jpeg", ".png", ".webp", ".doc", ".docx" };
+                if (!allowedExts.Contains(ext))
+                {
+                    TempData["ErrorMessage"] = "Sadece PDF, JPG, PNG, WEBP veya Word (.doc/.docx) dosyaları yüklenebilir.";
+                    return RedirectToAction(nameof(Accounting), new { buildingId, tab = "personel" });
+                }
+
+                var env = HttpContext.RequestServices.GetService(typeof(Microsoft.AspNetCore.Hosting.IWebHostEnvironment)) as Microsoft.AspNetCore.Hosting.IWebHostEnvironment;
+                var webRoot = env?.WebRootPath ?? System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot");
+                var folder = System.IO.Path.Combine(webRoot, "uploads", "buildings", staff.BuildingId.ToString(), "staff-docs", staff.Id.ToString());
+                System.IO.Directory.CreateDirectory(folder);
+
+                var fileName = $"{DateTime.UtcNow:yyyyMMddHHmmss}_{Guid.NewGuid():N}".Substring(0, 28) + ext;
+                var fullPath = System.IO.Path.Combine(folder, fileName);
+                using (var stream = new System.IO.FileStream(fullPath, System.IO.FileMode.Create))
+                {
+                    await documentFile.CopyToAsync(stream);
+                }
+                savedUrl = $"/uploads/buildings/{staff.BuildingId}/staff-docs/{staff.Id}/{fileName}";
+            }
+
+            if (string.IsNullOrWhiteSpace(savedUrl) && string.IsNullOrWhiteSpace(physicalArchiveLocation))
+            {
+                TempData["ErrorMessage"] = "Lütfen belge dosyası yükleyin veya fiziksel klasör / arşiv yerini belirtin.";
+                return RedirectToAction(nameof(Accounting), new { buildingId, tab = "personel" });
+            }
+
+            var cleanType = string.IsNullOrWhiteSpace(documentType) ? "Diger" : documentType.Trim();
+            var doc = new BuildingStaffDocument
+            {
+                BuildingStaffId = staff.Id,
+                DocumentType = cleanType,
+                Title = string.IsNullOrWhiteSpace(title) ? BuildingStaffDocument.GetLabel(cleanType) : title.Trim(),
+                FileUrl = savedUrl,
+                PhysicalArchiveLocation = string.IsNullOrWhiteSpace(physicalArchiveLocation) ? null : physicalArchiveLocation.Trim(),
+                IssueDate = issueDate,
+                ExpiryDate = expiryDate,
+                IsVerified = true,
+                Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
+                UploadedByUserId = GetUserId(),
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.BuildingStaffDocuments.Add(doc);
+            await _context.SaveChangesAsync();
+
+            TempData["Success"] = $"📁 '{staff.FullName}' özlük dosyasına '{doc.Title}' belgesi eklendi.";
+            return RedirectToAction(nameof(Accounting), new { buildingId, tab = "personel" });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteBuildingStaffDocument(int buildingId, int documentId)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var doc = await _context.BuildingStaffDocuments
+                .Include(d => d.Staff)
+                .FirstOrDefaultAsync(d => d.Id == documentId && !d.IsDeleted);
+            if (doc == null) return NotFound();
+            if (await GetManagedBuildingAsync(doc.Staff.BuildingId) == null) return Forbid();
+
+            doc.IsDeleted = true;
+            doc.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            TempData["Success"] = $"'{doc.Title}' özlük dosyasından kaldırıldı.";
             return RedirectToAction(nameof(Accounting), new { buildingId, tab = "personel" });
         }
 
@@ -4533,7 +4747,7 @@ namespace GMK360.Web.Controllers
             string fullName,
             string phoneNumber,
             string roleTitle,
-            string quickPin)
+            string? email = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -4542,9 +4756,9 @@ namespace GMK360.Web.Controllers
                 .FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && m.ContextId == buildingId);
             if (meeting == null) return NotFound();
 
-            if (string.IsNullOrWhiteSpace(fullName) || string.IsNullOrWhiteSpace(phoneNumber) || string.IsNullOrWhiteSpace(quickPin) || quickPin.Trim().Length < 4)
+            if (string.IsNullOrWhiteSpace(fullName) || string.IsNullOrWhiteSpace(phoneNumber))
             {
-                TempData["ErrorMessage"] = "Yetkili hesabı açmak için ad soyad, telefon numarası ve en az 4 haneli PIN zorunludur.";
+                TempData["ErrorMessage"] = "Yetkili hesabı açmak için ad soyad ve telefon numarası zorunludur.";
                 return RedirectToAction(nameof(Oylamalar), new { buildingId });
             }
 
@@ -4554,7 +4768,8 @@ namespace GMK360.Web.Controllers
                 BuildingId = buildingId,
                 FullName = fullName.Trim(),
                 PhoneNumber = phoneNumber.Trim(),
-                QuickPinHash = FacilityTaskDispatchService.HashQuickPin(quickPin.Trim()),
+                Email = string.IsNullOrWhiteSpace(email) ? null : email.Trim(),
+                QuickPinHash = null,
                 RoleType = $"{cleanRole} [Karar #{meeting.Id}]",
                 NetSalary = 0m,
                 SgkEmployerShare = 0m,
@@ -4569,7 +4784,17 @@ namespace GMK360.Web.Controllers
             _context.BuildingStaffs.Add(staff);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = $"🔑 '{staff.FullName}' için Karar #{meeting.Id} kapsamında Telefon + PIN giriş yetkisi açıldı (/FacilityPortal).";
+            var dispatchSvc = HttpContext.RequestServices.GetService(typeof(FacilityTaskDispatchService)) as FacilityTaskDispatchService;
+            if (dispatchSvc != null)
+            {
+                var prov = await dispatchSvc.ProvisionStaffAccountAsync(staff, GetUserId(), resetTempPassword: true);
+                if (prov.User != null)
+                {
+                    await PrepareStaffInviteNotificationAsync(building, staff, prov.User, prov.TempPassword, sendEmail: true);
+                }
+            }
+
+            TempData["SuccessMessage"] = $"🔑 '{staff.FullName}' için Karar #{meeting.Id} kapsamında geçici şifre / ilk giriş daveti oluşturuldu. Kendi şifresini ve PIN kodunu girişte belirleyecektir.";
             return RedirectToAction(nameof(Oylamalar), new { buildingId });
         }
 

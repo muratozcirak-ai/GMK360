@@ -21,8 +21,17 @@ namespace GMK360.Core.Entities
         [MaxLength(450)]
         public string? UserId { get; set; }
 
+        [ForeignKey("UserId")]
+        public virtual Identity.ApplicationUser? User { get; set; }
+
         [MaxLength(30)]
         public string? PhoneNumber { get; set; }
+
+        [MaxLength(200)]
+        public string? Email { get; set; }
+
+        [MaxLength(500)]
+        public string? Address { get; set; }
 
         [MaxLength(256)]
         public string? QuickPinHash { get; set; }
@@ -81,5 +90,6 @@ namespace GMK360.Core.Entities
 
         public virtual ICollection<BuildingStaffLeave> Leaves { get; set; } = new List<BuildingStaffLeave>();
         public virtual ICollection<BuildingStaffMonthlyPayroll> MonthlyPayrolls { get; set; } = new List<BuildingStaffMonthlyPayroll>();
+        public virtual ICollection<BuildingStaffDocument> Documents { get; set; } = new List<BuildingStaffDocument>();
     }
 }

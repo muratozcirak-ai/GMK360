@@ -210,6 +210,18 @@ namespace GMK360.Web.Controllers
                 return View("Login", model);
             }
 
+            if (user.MustChangePassword)
+            {
+                if (string.IsNullOrWhiteSpace(user.ActivationToken) || !user.ActivationTokenExpiresAt.HasValue || user.ActivationTokenExpiresAt.Value < DateTime.UtcNow)
+                {
+                    user.ActivationToken = Guid.NewGuid().ToString("N");
+                    user.ActivationTokenExpiresAt = DateTime.UtcNow.AddDays(14);
+                    await _userManager.UpdateAsync(user);
+                }
+                TempData["InfoMessage"] = "İlk girişiniz olduğu için lütfen yeni kalıcı şifrenizi, kişisel PIN'inizi ve ikametgah adresinizi tamamlayın.";
+                return RedirectToAction(nameof(ActivateResident), new { token = user.ActivationToken });
+            }
+
             // Canlı gmk360.com üzerinde subdomain girilmişse doğrudan o subdomainin adresine geç
             if (!string.IsNullOrEmpty(cleanSub) && Request.Host.Host.EndsWith("gmk360.com", StringComparison.OrdinalIgnoreCase))
             {
@@ -244,6 +256,15 @@ namespace GMK360.Web.Controllers
                 else if (!string.IsNullOrEmpty(model.PhoneNumber))
                 {
                     user = _userManager.Users.FirstOrDefault(u => u.PhoneNumber == model.PhoneNumber);
+                    if (user == null)
+                    {
+                        var normPhone = GMK360.Web.Services.FacilityTaskDispatchService.NormalizePhoneLast10(model.PhoneNumber);
+                        if (normPhone.Length >= 10)
+                        {
+                            var phoneCandidates = await _userManager.Users.Where(u => u.PhoneNumber != null).ToListAsync();
+                            user = phoneCandidates.FirstOrDefault(u => GMK360.Web.Services.FacilityTaskDispatchService.NormalizePhoneLast10(u.PhoneNumber) == normPhone);
+                        }
+                    }
                 }
 
                 if (user != null)
@@ -323,6 +344,18 @@ namespace GMK360.Web.Controllers
                     
                     if (result.Succeeded)
                     {
+                        if (user.MustChangePassword)
+                        {
+                            if (string.IsNullOrWhiteSpace(user.ActivationToken) || !user.ActivationTokenExpiresAt.HasValue || user.ActivationTokenExpiresAt.Value < DateTime.UtcNow)
+                            {
+                                user.ActivationToken = Guid.NewGuid().ToString("N");
+                                user.ActivationTokenExpiresAt = DateTime.UtcNow.AddDays(14);
+                                await _userManager.UpdateAsync(user);
+                            }
+                            TempData["InfoMessage"] = "İlk girişiniz olduğu için lütfen yeni kalıcı şifrenizi, kişisel PIN'inizi ve ikametgah adresinizi tamamlayın.";
+                            return RedirectToAction(nameof(ActivateResident), new { token = user.ActivationToken });
+                        }
+
                         var landingUrl = await GMK360.Web.Helpers.RoleLandingHelper.ResolveLandingUrlAsync(_userManager, _context, user);
                         bool hasCompletedAgency = await _context.AgencyConsultants.AnyAsync(c => c.UserId == user.Id && c.IsActive);
                         bool isStaleConstructionReturn = !string.IsNullOrWhiteSpace(returnUrl)
@@ -1144,7 +1177,14 @@ namespace GMK360.Web.Controllers
                 .Where(u => u.OwnerUserId == user.Id || u.TenantUserId == user.Id)
                 .ToListAsync();
 
+            var linkedStaffs = await _context.BuildingStaffs
+                .Include(s => s.Building)
+                .Where(s => s.UserId == user.Id && s.IsActive && !s.IsDeleted)
+                .ToListAsync();
+
             ViewBag.LinkedUnits = units;
+            ViewBag.LinkedStaffs = linkedStaffs;
+            ViewBag.IsStaffActivation = linkedStaffs.Any() || await _userManager.IsInRoleAsync(user, "Personel");
             ViewBag.Token = token.Trim();
             return View(user);
         }
@@ -1163,7 +1203,8 @@ namespace GMK360.Web.Controllers
             string personalPin,
             bool confirmPhoneDeclaration = false,
             string? tcIdentityNo = null,
-            int? birthYear = null)
+            int? birthYear = null,
+            string? address = null)
         {
             if (string.IsNullOrWhiteSpace(token))
             {
@@ -1181,8 +1222,16 @@ namespace GMK360.Web.Controllers
                 return RedirectToAction("Login", "Account");
             }
 
+            var linkedStaffs = await _context.BuildingStaffs
+                .Include(s => s.Building)
+                .Where(s => s.UserId == user.Id && s.IsActive && !s.IsDeleted)
+                .ToListAsync();
+            bool isStaffActivation = linkedStaffs.Any() || await _userManager.IsInRoleAsync(user, "Personel");
+
             ViewBag.LinkedUnits = await _context.BuildingUnits.Include(u => u.Building)
                 .Where(u => u.OwnerUserId == user.Id || u.TenantUserId == user.Id).ToListAsync();
+            ViewBag.LinkedStaffs = linkedStaffs;
+            ViewBag.IsStaffActivation = isStaffActivation;
             ViewBag.Token = token.Trim();
 
             var effectiveTc = GMK360.Web.Helpers.TcknHelper.Normalize(!string.IsNullOrWhiteSpace(tcIdentityNo) ? tcIdentityNo : user.TcIdentityNo);
@@ -1218,6 +1267,12 @@ namespace GMK360.Web.Controllers
                 return View(user);
             }
 
+            if (isStaffActivation && string.IsNullOrWhiteSpace(address))
+            {
+                ViewBag.ActivationError = "Personel özlük dosyası için lütfen ikametgah / açık adresinizi giriniz.";
+                return View(user);
+            }
+
             var cleanEmail = email.Trim();
             if (!string.Equals(user.Email, cleanEmail, StringComparison.OrdinalIgnoreCase))
             {
@@ -1242,6 +1297,7 @@ namespace GMK360.Web.Controllers
             if (!string.IsNullOrWhiteSpace(firstName)) user.FirstName = firstName.Trim();
             if (!string.IsNullOrWhiteSpace(lastName)) user.LastName = lastName.Trim();
             if (!string.IsNullOrWhiteSpace(phoneNumber)) user.PhoneNumber = phoneNumber.Trim();
+            if (!string.IsNullOrWhiteSpace(address)) user.Address = address.Trim();
             user.TcIdentityNo = effectiveTc;
             if (birthYear.HasValue && birthYear.Value >= 1920 && birthYear.Value <= DateTime.UtcNow.Year)
             {
@@ -1263,9 +1319,16 @@ namespace GMK360.Web.Controllers
             user.ActivationTokenExpiresAt = null;
 
             await _userManager.UpdateAsync(user);
+            var dispatchSvc = HttpContext.RequestServices.GetService(typeof(GMK360.Web.Services.FacilityTaskDispatchService)) as GMK360.Web.Services.FacilityTaskDispatchService;
+            if (dispatchSvc != null)
+            {
+                await dispatchSvc.SyncStaffProfileFromUserAsync(user);
+            }
             await _signInManager.SignInAsync(user, isPersistent: true);
 
-            TempData["SuccessMessage"] = "🎉 Profiliniz doğrulandı, şifreniz ve kişisel gizli PIN'iniz kaydedildi!";
+            TempData["SuccessMessage"] = isStaffActivation
+                ? "🎉 Personel aktivasyonunuz tamamlandı! Yeni şifreniz, kişisel gizli PIN'iniz ve adresiniz kaydedildi."
+                : "🎉 Profiliniz doğrulandı, şifreniz ve kişisel gizli PIN'iniz kaydedildi!";
             var landingUrl = await GMK360.Web.Helpers.RoleLandingHelper.ResolveLandingUrlAsync(_userManager, _context, user);
             return LocalRedirect(landingUrl);
         }

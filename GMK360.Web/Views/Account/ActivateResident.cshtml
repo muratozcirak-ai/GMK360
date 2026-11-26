@@ -3,16 +3,42 @@
     ViewData["Title"] = "Hesap Doğrulama, Şifre & Kişisel PIN Kurulumu";
     Layout = "~/Views/Shared/_Layout.cshtml";
     var units = ViewBag.LinkedUnits as List<GMK360.Core.Entities.BuildingUnit> ?? new List<GMK360.Core.Entities.BuildingUnit>();
+    var linkedStaffs = ViewBag.LinkedStaffs as List<GMK360.Core.Entities.BuildingStaff> ?? new List<GMK360.Core.Entities.BuildingStaff>();
+    bool isStaff = ViewBag.IsStaffActivation == true;
     string token = ViewBag.Token as string ?? "";
 }
 
 <div class="container py-5 mt-4" style="max-width: 680px;">
     <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
-        <div class="card-header bg-success text-white p-4 border-0">
-            <h4 class="fw-bold mb-1"><i class="bi bi-shield-lock-fill me-2"></i>Kişisel Profil &amp; Güvenlik Aktivasyonu</h4>
-            <p class="small mb-0 opacity-75">E-posta doğrulamanızı tamamlayın, kendi giriş şifrenizi ve yalnızca sizin bileceğiniz onay PIN'inizi belirleyin.</p>
+        <div class="card-header @(isStaff ? "bg-primary" : "bg-success") text-white p-4 border-0">
+            <h4 class="fw-bold mb-1">
+                <i class="bi bi-shield-lock-fill me-2"></i>@(isStaff ? "Personel İlk Giriş — Şifre, Gizli PIN & Adres Kurulumu" : "Kişisel Profil & Güvenlik Aktivasyonu")
+            </h4>
+            <p class="small mb-0 opacity-75">
+                @(isStaff
+                    ? "Geçici şifreniz yerine kalıcı giriş şifrenizi belirleyin, yalnızca sizin bileceğiniz saha PIN'inizi oluşturun ve ikametgah adresinizi kaydedin."
+                    : "E-posta doğrulamanızı tamamlayın, kendi giriş şifrenizi ve yalnızca sizin bileceğiniz onay PIN'inizi belirleyin.")
+            </p>
         </div>
         <div class="card-body p-4">
+            @if (TempData["InfoMessage"] != null)
+            {
+                <div class="alert alert-info rounded-3 small mb-3">@TempData["InfoMessage"]</div>
+            }
+            @if (linkedStaffs.Any())
+            {
+                <div class="alert alert-primary bg-opacity-10 border-primary-subtle rounded-3 small mb-3">
+                    <strong>Bağlı Olduğunuz Görev / Kadrolar:</strong>
+                    <div class="mt-1 d-flex flex-wrap gap-1">
+                        @foreach (var st in linkedStaffs)
+                        {
+                            <span class="badge bg-primary text-white">
+                                🏢 @(st.Building?.Name ?? "Tesis") — @st.RoleType
+                            </span>
+                        }
+                    </div>
+                </div>
+            }
             @if (units.Any())
             {
                 <div class="alert alert-light border rounded-3 small mb-4">
@@ -76,6 +102,17 @@
                             </label>
                         </div>
                     </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold small">
+                        Açık İkametgah Adresiniz @(isStaff ? "*" : "(İsteğe Bağlı)")
+                    </label>
+                    <textarea name="address" rows="2" class="form-control" @(isStaff ? "required" : "") placeholder="Mahalle, cadde/sokak, bina ve daire no, ilçe / il">@(Model.Address ?? linkedStaffs.FirstOrDefault()?.Address)</textarea>
+                    @if (isStaff)
+                    {
+                        <small class="text-muted" style="font-size:.72rem;">Özlük dosyanızda güncel ikametgah adresinizin kayıtlı olması yasal olarak gereklidir.</small>
+                    }
                 </div>
 
                 <hr class="my-3" />

@@ -308,6 +308,7 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         public DbSet<ResidencyPeriod> ResidencyPeriods { get; set; }
         public DbSet<ApprovalRequest> ApprovalRequests { get; set; }
         public DbSet<BuildingStaff> BuildingStaffs { get; set; }
+        public DbSet<BuildingStaffDocument> BuildingStaffDocuments { get; set; }
         public DbSet<BuildingFixedExpense> BuildingFixedExpenses { get; set; }
         public DbSet<BuildingStaffLeave> BuildingStaffLeaves { get; set; }
         public DbSet<BuildingStaffMonthlyPayroll> BuildingStaffMonthlyPayrolls { get; set; }

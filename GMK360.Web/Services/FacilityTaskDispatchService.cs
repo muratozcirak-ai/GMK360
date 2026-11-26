@@ -497,5 +497,194 @@ namespace GMK360.Web.Services
 
             return user;
         }
+
+        public static string GenerateTempPassword()
+        {
+            var num = RandomNumberGenerator.GetInt32(1000, 9999);
+            const string letters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+            var c1 = letters[RandomNumberGenerator.GetInt32(letters.Length)];
+            var c2 = char.ToLowerInvariant(letters[RandomNumberGenerator.GetInt32(letters.Length)]);
+            return $"Gmk!{num}{c1}{c2}";
+        }
+
+        public async Task<(ApplicationUser? User, string? TempPassword, string? ErrorMessage)> ProvisionStaffAccountAsync(
+            BuildingStaff staff,
+            string? creatorUserId,
+            bool resetTempPassword = true)
+        {
+            if (!await _roleManager.RoleExistsAsync("Personel"))
+            {
+                await _roleManager.CreateAsync(new ApplicationRole { Name = "Personel" });
+            }
+
+            var cleanEmail = staff.Email?.Trim();
+            var normPhone = NormalizePhoneLast10(staff.PhoneNumber);
+            var cleanTc = GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(staff.TcIdentityNo)
+                ? GMK360.Web.Helpers.TcknHelper.Normalize(staff.TcIdentityNo)
+                : null;
+
+            ApplicationUser? user = null;
+            if (!string.IsNullOrWhiteSpace(staff.UserId))
+            {
+                user = await _userManager.FindByIdAsync(staff.UserId);
+            }
+            if (user == null && !string.IsNullOrWhiteSpace(cleanTc))
+            {
+                user = await _context.Users.FirstOrDefaultAsync(u => u.TcIdentityNo == cleanTc);
+            }
+            if (user == null && !string.IsNullOrWhiteSpace(cleanEmail))
+            {
+                user = await _userManager.FindByEmailAsync(cleanEmail);
+            }
+            if (user == null && normPhone.Length >= 10)
+            {
+                var candidates = await _context.Users.Where(u => u.PhoneNumber != null).ToListAsync();
+                user = candidates.FirstOrDefault(u => NormalizePhoneLast10(u.PhoneNumber) == normPhone);
+            }
+
+            string? issuedTempPassword = null;
+
+            if (user == null)
+            {
+                var names = (staff.FullName ?? "Tesis Personeli").Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+                var effectiveEmail = !string.IsNullOrWhiteSpace(cleanEmail)
+                    ? cleanEmail
+                    : $"staff_{(!string.IsNullOrWhiteSpace(normPhone) ? normPhone : staff.Id.ToString())}_{staff.Id}@gmk360.local";
+
+                if (await _userManager.FindByEmailAsync(effectiveEmail) != null)
+                {
+                    effectiveEmail = $"staff_{staff.Id}_{Guid.NewGuid():N}".Substring(0, 22) + "@gmk360.local";
+                }
+
+                issuedTempPassword = GenerateTempPassword();
+                user = new ApplicationUser
+                {
+                    UserName = effectiveEmail,
+                    Email = effectiveEmail,
+                    EmailConfirmed = true,
+                    PhoneNumber = !string.IsNullOrWhiteSpace(staff.PhoneNumber) ? staff.PhoneNumber.Trim() : null,
+                    PhoneNumberConfirmed = false,
+                    FirstName = names.Length > 0 ? names[0] : "Personel",
+                    LastName = names.Length > 1 ? names[1] : "",
+                    DisplayName = staff.FullName?.Trim(),
+                    TcIdentityNo = cleanTc,
+                    Address = staff.Address?.Trim(),
+                    UserType = UserType.Individual,
+                    ActiveModules = "facility_staff",
+                    IsShadowAccount = true,
+                    MustChangePassword = true,
+                    ShadowCreatorId = creatorUserId,
+                    ActivationToken = Guid.NewGuid().ToString("N"),
+                    ActivationTokenExpiresAt = DateTime.UtcNow.AddDays(14)
+                };
+
+                var createRes = await _userManager.CreateAsync(user, issuedTempPassword);
+                if (!createRes.Succeeded)
+                {
+                    return (null, null, string.Join(" ", createRes.Errors.Select(e => e.Description)));
+                }
+            }
+            else
+            {
+                if (!string.IsNullOrWhiteSpace(cleanEmail) && (string.IsNullOrWhiteSpace(user.Email) || user.Email.EndsWith("@gmk360.local", StringComparison.OrdinalIgnoreCase)))
+                {
+                    var dup = await _userManager.FindByEmailAsync(cleanEmail);
+                    if (dup == null || dup.Id == user.Id)
+                    {
+                        await _userManager.SetEmailAsync(user, cleanEmail);
+                        await _userManager.SetUserNameAsync(user, cleanEmail);
+                        user.EmailConfirmed = true;
+                    }
+                }
+                if (!string.IsNullOrWhiteSpace(staff.PhoneNumber) && string.IsNullOrWhiteSpace(user.PhoneNumber))
+                {
+                    user.PhoneNumber = staff.PhoneNumber.Trim();
+                }
+                if (!string.IsNullOrWhiteSpace(cleanTc) && string.IsNullOrWhiteSpace(user.TcIdentityNo))
+                {
+                    user.TcIdentityNo = cleanTc;
+                }
+                if (string.IsNullOrWhiteSpace(user.ActiveModules))
+                {
+                    user.ActiveModules = "facility_staff";
+                }
+                else if (!user.ActiveModules.Contains("facility_staff", StringComparison.OrdinalIgnoreCase))
+                {
+                    user.ActiveModules = $"{user.ActiveModules},facility_staff";
+                }
+
+                if (resetTempPassword && (!user.IsTransactionPinSet || user.MustChangePassword || user.IsShadowAccount))
+                {
+                    issuedTempPassword = GenerateTempPassword();
+                    await _userManager.RemovePasswordAsync(user);
+                    await _userManager.AddPasswordAsync(user, issuedTempPassword);
+                    user.MustChangePassword = true;
+                }
+
+                if (user.MustChangePassword || !user.IsTransactionPinSet || string.IsNullOrWhiteSpace(user.Address))
+                {
+                    user.ActivationToken = Guid.NewGuid().ToString("N");
+                    user.ActivationTokenExpiresAt = DateTime.UtcNow.AddDays(14);
+                }
+
+                await _userManager.UpdateAsync(user);
+            }
+
+            if (!await _userManager.IsInRoleAsync(user, "Personel"))
+            {
+                await _userManager.AddToRoleAsync(user, "Personel");
+            }
+
+            staff.UserId = user.Id;
+            if (!string.IsNullOrWhiteSpace(user.Address) && string.IsNullOrWhiteSpace(staff.Address))
+            {
+                staff.Address = user.Address;
+            }
+            if (user.IsTransactionPinSet && !string.IsNullOrWhiteSpace(user.TransactionPinHash))
+            {
+                staff.QuickPinHash = user.TransactionPinHash;
+            }
+            if (!string.IsNullOrWhiteSpace(user.Email) && !user.Email.EndsWith("@gmk360.local", StringComparison.OrdinalIgnoreCase))
+            {
+                staff.Email = user.Email;
+            }
+            await _context.SaveChangesAsync();
+
+            return (user, issuedTempPassword, null);
+        }
+
+        public async Task SyncStaffProfileFromUserAsync(ApplicationUser user)
+        {
+            if (user == null) return;
+            var staffRows = await _context.BuildingStaffs
+                .Where(s => s.UserId == user.Id && !s.IsDeleted)
+                .ToListAsync();
+            if (!staffRows.Any()) return;
+
+            foreach (var s in staffRows)
+            {
+                if (user.IsTransactionPinSet && !string.IsNullOrWhiteSpace(user.TransactionPinHash))
+                {
+                    s.QuickPinHash = user.TransactionPinHash;
+                }
+                if (!string.IsNullOrWhiteSpace(user.Address))
+                {
+                    s.Address = user.Address.Trim();
+                }
+                if (!string.IsNullOrWhiteSpace(user.Email) && !user.Email.EndsWith("@gmk360.local", StringComparison.OrdinalIgnoreCase))
+                {
+                    s.Email = user.Email.Trim();
+                }
+                if (!string.IsNullOrWhiteSpace(user.PhoneNumber))
+                {
+                    s.PhoneNumber = user.PhoneNumber.Trim();
+                }
+                if (!string.IsNullOrWhiteSpace(user.TcIdentityNo) && string.IsNullOrWhiteSpace(s.TcIdentityNo))
+                {
+                    s.TcIdentityNo = user.TcIdentityNo;
+                }
+            }
+            await _context.SaveChangesAsync();
+        }
     }
 }

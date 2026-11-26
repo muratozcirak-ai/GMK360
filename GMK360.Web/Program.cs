@@ -420,6 +420,33 @@ using (var schemaScope = app.Services.CreateScope())
                     CONSTRAINT [PK_SystemEmailSettings] PRIMARY KEY ([Id])
                 );
             END
+            IF COL_LENGTH(N'dbo.AspNetUsers', N'Address') IS NULL
+                ALTER TABLE [dbo].[AspNetUsers] ADD [Address] nvarchar(500) NULL;
+            IF COL_LENGTH(N'dbo.BuildingStaffs', N'Email') IS NULL
+                ALTER TABLE [dbo].[BuildingStaffs] ADD [Email] nvarchar(200) NULL;
+            IF COL_LENGTH(N'dbo.BuildingStaffs', N'Address') IS NULL
+                ALTER TABLE [dbo].[BuildingStaffs] ADD [Address] nvarchar(500) NULL;
+            IF OBJECT_ID(N'dbo.BuildingStaffDocuments', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[BuildingStaffDocuments] (
+                    [Id] int IDENTITY(1,1) NOT NULL,
+                    [BuildingStaffId] int NOT NULL,
+                    [DocumentType] nvarchar(60) NOT NULL,
+                    [Title] nvarchar(200) NOT NULL,
+                    [FileUrl] nvarchar(500) NULL,
+                    [PhysicalArchiveLocation] nvarchar(250) NULL,
+                    [IssueDate] datetime2 NULL,
+                    [ExpiryDate] datetime2 NULL,
+                    [IsVerified] bit NOT NULL,
+                    [Notes] nvarchar(1000) NULL,
+                    [UploadedByUserId] nvarchar(450) NULL,
+                    [CreatedAt] datetime2 NOT NULL,
+                    [UpdatedAt] datetime2 NULL,
+                    [IsDeleted] bit NOT NULL,
+                    CONSTRAINT [PK_BuildingStaffDocuments] PRIMARY KEY ([Id]),
+                    CONSTRAINT [FK_BuildingStaffDocuments_BuildingStaffs_BuildingStaffId] FOREIGN KEY ([BuildingStaffId]) REFERENCES [dbo].[BuildingStaffs] ([Id]) ON DELETE CASCADE
+                );
+            END
         ");
     }
     catch (Exception schemaEx)

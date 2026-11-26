@@ -74,6 +74,7 @@ namespace GMK360.Core.Entities.Identity
         // --- KİŞİSEL AKTİVASYON & DOĞRULAMA (SAKIN / MALİK GÜVENLİĞİ) ---
         public bool MustChangePassword { get; set; } = false;
         public System.DateTime? PhoneVerifiedAt { get; set; }
+        public string? Address { get; set; }
         public string? ActivationToken { get; set; }
         public System.DateTime? ActivationTokenExpiresAt { get; set; }
 
