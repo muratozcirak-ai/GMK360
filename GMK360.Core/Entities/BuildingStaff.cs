@@ -45,6 +45,12 @@ namespace GMK360.Core.Entities
         [Required, MaxLength(80)]
         public string RoleType { get; set; } = "Kapıcı (Vergi İstisnalı)"; // "Kapıcı (Vergi İstisnalı)", "Güvenlik", "Temizlik", "Bahçıvan", "Teknik"
 
+        [MaxLength(300)]
+        public string? JobDescription { get; set; }
+
+        [MaxLength(200)]
+        public string? TerminationReason { get; set; }
+
         // Aylık Tam Bordro Kalemleri (İşletme / Aidat Kasası)
         [Column(TypeName = "decimal(18,2)")]
         public decimal NetSalary { get; set; }

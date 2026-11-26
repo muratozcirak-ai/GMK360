@@ -4221,6 +4221,12 @@ namespace GMK360.Web.Controllers
             var bStaffIds = buildingStaffs.Select(s => s.Id).ToList();
 
             ViewBag.BuildingStaffs = buildingStaffs;
+            ViewBag.FormerBuildingStaffs = await _context.BuildingStaffs
+                .Include(s => s.Documents)
+                .Include(s => s.User)
+                .Where(s => scopeIds.Contains(s.BuildingId) && !s.IsActive && !s.IsDeleted)
+                .OrderByDescending(s => s.LeaveDate ?? s.UpdatedAt ?? s.CreatedAt)
+                .ToListAsync();
             ViewBag.MonthlyPayrolls = bStaffIds.Any()
                 ? await _context.BuildingStaffMonthlyPayrolls
                     .Include(p => p.Staff)
@@ -4398,13 +4404,14 @@ namespace GMK360.Web.Controllers
             string? email,
             string? address,
             string roleType,
+            string? jobDescription,
             decimal netSalary,
             decimal sgkEmployerShare,
             decimal incomeAndStampTax,
             decimal fringeBenefits,
             decimal monthlySeveranceFund,
             DateTime hireDate,
-            bool sendActivationEmail = true)
+            bool sendActivationEmail = false)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -4420,6 +4427,7 @@ namespace GMK360.Web.Controllers
                 Address = string.IsNullOrWhiteSpace(address) ? null : address.Trim(),
                 QuickPinHash = null, // Personel kendi gizli PIN'ini ilk girişte / profilinden belirler
                 RoleType = string.IsNullOrWhiteSpace(roleType) ? "Kapıcı (Vergi İstisnalı)" : roleType.Trim(),
+                JobDescription = string.IsNullOrWhiteSpace(jobDescription) ? null : jobDescription.Trim(),
                 NetSalary = Math.Max(0m, netSalary),
                 SgkEmployerShare = Math.Max(0m, sgkEmployerShare),
                 IncomeAndStampTax = Math.Max(0m, incomeAndStampTax),
@@ -4442,7 +4450,7 @@ namespace GMK360.Web.Controllers
                     bool mailed = await PrepareStaffInviteNotificationAsync(building, staff, prov.User, prov.TempPassword, sendActivationEmail);
                     inviteExtraMsg = mailed
                         ? $" Aktivasyon bağlantısı ve geçici şifre '{staff.Email}' adresine gönderildi."
-                        : " İlk giriş bağlantısı ve geçici şifre aşağıda oluşturuldu; personel giriş yaptığında yeni şifresini, gizli PIN'ini ve adresini kendisi belirleyecek.";
+                        : " İlk giriş bağlantısı ve geçici şifre kart üzerinde / aşağıda hazırlandı.";
                 }
                 else if (!string.IsNullOrWhiteSpace(prov.ErrorMessage))
                 {
@@ -4456,11 +4464,114 @@ namespace GMK360.Web.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateBuildingStaff(
+            int buildingId,
+            int buildingStaffId,
+            string fullName,
+            string roleType,
+            string? jobDescription,
+            string? tcIdentityNo,
+            string? sgkNumber,
+            string? phoneNumber,
+            string? email,
+            string? address,
+            DateTime hireDate,
+            decimal netSalary,
+            decimal sgkEmployerShare,
+            decimal incomeAndStampTax,
+            decimal fringeBenefits,
+            decimal monthlySeveranceFund)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var staff = await _context.BuildingStaffs
+                .Include(s => s.User)
+                .FirstOrDefaultAsync(s => s.Id == buildingStaffId && !s.IsDeleted);
+            if (staff == null) return NotFound();
+            if (await GetManagedBuildingAsync(staff.BuildingId) == null) return Forbid();
+
+            staff.FullName = string.IsNullOrWhiteSpace(fullName) ? staff.FullName : fullName.Trim();
+            staff.RoleType = string.IsNullOrWhiteSpace(roleType) ? staff.RoleType : roleType.Trim();
+            staff.JobDescription = string.IsNullOrWhiteSpace(jobDescription) ? null : jobDescription.Trim();
+            staff.TcIdentityNo = string.IsNullOrWhiteSpace(tcIdentityNo) ? null : tcIdentityNo.Trim();
+            staff.SgkNumber = string.IsNullOrWhiteSpace(sgkNumber) ? null : sgkNumber.Trim();
+            staff.PhoneNumber = string.IsNullOrWhiteSpace(phoneNumber) ? staff.PhoneNumber : phoneNumber.Trim();
+            staff.Email = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
+            staff.Address = string.IsNullOrWhiteSpace(address) ? null : address.Trim();
+            if (hireDate != default) staff.HireDate = hireDate;
+            staff.NetSalary = Math.Max(0m, netSalary);
+            staff.SgkEmployerShare = Math.Max(0m, sgkEmployerShare);
+            staff.IncomeAndStampTax = Math.Max(0m, incomeAndStampTax);
+            staff.FringeBenefits = Math.Max(0m, fringeBenefits);
+            staff.MonthlySeveranceFund = Math.Max(0m, monthlySeveranceFund);
+            staff.UpdatedAt = DateTime.UtcNow;
+
+            if (staff.User != null)
+            {
+                staff.User.DisplayName = staff.FullName;
+                if (!string.IsNullOrWhiteSpace(staff.PhoneNumber)) staff.User.PhoneNumber = staff.PhoneNumber;
+                if (!string.IsNullOrWhiteSpace(staff.Address)) staff.User.Address = staff.Address;
+            }
+
+            await _context.SaveChangesAsync();
+            TempData["Success"] = $"'{staff.FullName}' kadro, görev ve maaş/SGK bilgileri güncellendi.";
+            return RedirectToAction(nameof(Accounting), new { buildingId, tab = "personel" });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeactivateBuildingStaff(
+            int buildingId,
+            int buildingStaffId,
+            string actionMode,
+            DateTime? leaveDate,
+            string? terminationReason)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var staff = await _context.BuildingStaffs.FirstOrDefaultAsync(s => s.Id == buildingStaffId && !s.IsDeleted);
+            if (staff == null) return NotFound();
+            if (await GetManagedBuildingAsync(staff.BuildingId) == null) return Forbid();
+
+            if (string.Equals(actionMode, "delete_test", StringComparison.OrdinalIgnoreCase))
+            {
+                bool hasPaidPayroll = await _context.BuildingStaffMonthlyPayrolls
+                    .AnyAsync(p => p.BuildingStaffId == staff.Id && !p.IsDeleted && (p.IsPaid || p.IsSalaryPaid || p.IsSgkPaid));
+                if (hasPaidPayroll)
+                {
+                    TempData["ErrorMessage"] = $"'{staff.FullName}' için ödenmiş bordro/kıdem kaydı bulunduğu için tamamen silinemez. Muhasebe bütünlüğü için 'Resmi İşten Çıkış Ver' seçeneğini kullanın.";
+                    return RedirectToAction(nameof(Accounting), new { buildingId, tab = "personel" });
+                }
+
+                staff.IsActive = false;
+                staff.IsDeleted = true;
+                staff.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                TempData["Success"] = $"'{staff.FullName}' kadrodan ve aktif listeden kaldırıldı.";
+            }
+            else
+            {
+                staff.IsActive = false;
+                staff.LeaveDate = leaveDate ?? DateTime.Today;
+                staff.TerminationReason = string.IsNullOrWhiteSpace(terminationReason) ? "İşten Çıkış" : terminationReason.Trim();
+                staff.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                TempData["Success"] = $"'{staff.FullName}' için {staff.LeaveDate:dd.MM.yyyy} tarihli işten çıkış işlendi. Özlük dosyası ve geçmiş bordroları yasal arşivde korundu.";
+            }
+
+            return RedirectToAction(nameof(Accounting), new { buildingId, tab = "personel" });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> SendStaffActivationInvite(
             int buildingId,
             int buildingStaffId,
             string? email,
-            string? phoneNumber)
+            string? phoneNumber,
+            bool sendEmail = false)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -4470,7 +4581,7 @@ namespace GMK360.Web.Controllers
             var staffBld = await GetManagedBuildingAsync(staff.BuildingId);
             if (staffBld == null) return Forbid();
 
-            if (!string.IsNullOrWhiteSpace(email)) staff.Email = email.Trim();
+            staff.Email = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
             if (!string.IsNullOrWhiteSpace(phoneNumber)) staff.PhoneNumber = phoneNumber.Trim();
             staff.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
@@ -4489,7 +4600,7 @@ namespace GMK360.Web.Controllers
                 return RedirectToAction(nameof(Accounting), new { buildingId, tab = "personel" });
             }
 
-            bool mailed = await PrepareStaffInviteNotificationAsync(staffBld, staff, prov.User, prov.TempPassword, sendEmail: true);
+            bool mailed = await PrepareStaffInviteNotificationAsync(staffBld, staff, prov.User, prov.TempPassword, sendEmail);
             TempData["Success"] = mailed
                 ? $"'{staff.FullName}' için yeni aktivasyon linki ve geçici şifre '{staff.Email}' adresine gönderildi."
                 : $"'{staff.FullName}' için yeni ilk giriş daveti ve geçici şifre aşağıda oluşturuldu.";

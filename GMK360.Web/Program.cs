@@ -426,6 +426,10 @@ using (var schemaScope = app.Services.CreateScope())
                 ALTER TABLE [dbo].[BuildingStaffs] ADD [Email] nvarchar(200) NULL;
             IF COL_LENGTH(N'dbo.BuildingStaffs', N'Address') IS NULL
                 ALTER TABLE [dbo].[BuildingStaffs] ADD [Address] nvarchar(500) NULL;
+            IF COL_LENGTH(N'dbo.BuildingStaffs', N'JobDescription') IS NULL
+                ALTER TABLE [dbo].[BuildingStaffs] ADD [JobDescription] nvarchar(300) NULL;
+            IF COL_LENGTH(N'dbo.BuildingStaffs', N'TerminationReason') IS NULL
+                ALTER TABLE [dbo].[BuildingStaffs] ADD [TerminationReason] nvarchar(200) NULL;
             IF OBJECT_ID(N'dbo.BuildingStaffDocuments', N'U') IS NULL
             BEGIN
                 CREATE TABLE [dbo].[BuildingStaffDocuments] (

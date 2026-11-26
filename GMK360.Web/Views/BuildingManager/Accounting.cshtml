@@ -5,6 +5,8 @@
     var bankAccounts = ViewBag.BankAccounts as List<GMK360.Core.Entities.BankAccount> ?? new List<GMK360.Core.Entities.BankAccount>();
     var buildings = ViewBag.Buildings as List<GMK360.Core.Entities.Building> ?? new List<GMK360.Core.Entities.Building>();
     var buildingStaffs = ViewBag.BuildingStaffs as List<GMK360.Core.Entities.BuildingStaff> ?? new List<GMK360.Core.Entities.BuildingStaff>();
+    var formerBuildingStaffs = ViewBag.FormerBuildingStaffs as List<GMK360.Core.Entities.BuildingStaff> ?? new List<GMK360.Core.Entities.BuildingStaff>();
+    var allStaffForDossiers = buildingStaffs.Concat(formerBuildingStaffs).ToList();
     var monthlyPayrolls = ViewBag.MonthlyPayrolls as List<GMK360.Core.Entities.BuildingStaffMonthlyPayroll> ?? new List<GMK360.Core.Entities.BuildingStaffMonthlyPayroll>();
     var expenses = ViewBag.Expenses as List<GMK360.Core.Entities.BuildingExpense> ?? new List<GMK360.Core.Entities.BuildingExpense>();
     var fixedExpenses = ViewBag.FixedExpenses as List<GMK360.Core.Entities.BuildingFixedExpense> ?? new List<GMK360.Core.Entities.BuildingFixedExpense>();
@@ -548,11 +550,19 @@
                             var requiredDocItems = GMK360.Core.Entities.BuildingStaffDocument.StandardCatalog.Where(c => c.IsRequired).ToList();
                             int requiredDoneCount = requiredDocItems.Count(rc => staffDocs.Any(d => string.Equals(d.DocumentType, rc.Code, StringComparison.OrdinalIgnoreCase)));
 
+                            string? actTokenUrl = !string.IsNullOrWhiteSpace(st.User?.ActivationToken)
+                                ? Url.Action("ActivateResident", "Account", new { token = st.User.ActivationToken }, Context.Request.Scheme)
+                                : null;
+
                             <div class="border rounded-4 p-3 mb-3 bg-light">
                                 <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
                                     <div>
                                         <span class="badge bg-dark me-1">@st.RoleType</span>
                                         <strong class="fs-5 text-dark">@st.FullName</strong>
+                                        @if (!string.IsNullOrWhiteSpace(st.JobDescription))
+                                        {
+                                            <span class="badge bg-info-subtle text-dark border border-info-subtle ms-1"><i class="bi bi-briefcase me-1"></i>@st.JobDescription</span>
+                                        }
                                         @if (hasSelfPin && !mustChangePwd)
                                         {
                                             <span class="badge bg-success-subtle text-success border border-success-subtle ms-1"><i class="bi bi-shield-check me-1"></i>Şifre &amp; Gizli PIN Aktif</span>
@@ -560,6 +570,12 @@
                                         else
                                         {
                                             <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1"><i class="bi bi-hourglass-split me-1"></i>İlk Giriş / PIN Bekleniyor</span>
+                                            @if (!string.IsNullOrEmpty(actTokenUrl))
+                                            {
+                                                <button type="button" class="btn btn-xs btn-outline-primary rounded-pill ms-1" onclick="copyTextValue('@actTokenUrl', this)">
+                                                    <i class="bi bi-link-45deg me-1"></i>İlk Giriş Linkini Kopyala
+                                                </button>
+                                            }
                                         }
                                         <span class="badge @(requiredDoneCount >= requiredDocItems.Count ? "bg-success" : "bg-secondary") ms-1">
                                             📁 Özlük: @requiredDoneCount/@requiredDocItems.Count Zorunlu
@@ -588,6 +604,25 @@
                                                 data-bs-toggle="modal" data-bs-target="#staffDossierModal_@st.Id">
                                             <i class="bi bi-folder2-open me-1"></i> Özlük Dosyası (@staffDocs.Count)
                                         </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary text-dark rounded-pill px-3 fw-semibold"
+                                                onclick="openEditStaffModal(this)"
+                                                data-id="@st.Id"
+                                                data-fullname="@st.FullName"
+                                                data-roletype="@st.RoleType"
+                                                data-jobdesc="@st.JobDescription"
+                                                data-tc="@st.TcIdentityNo"
+                                                data-sgk="@st.SgkNumber"
+                                                data-phone="@st.PhoneNumber"
+                                                data-email="@displayEmail"
+                                                data-address="@displayAddress"
+                                                data-hiredate="@st.HireDate.ToString("yyyy-MM-dd")"
+                                                data-net="@st.NetSalary.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                                data-sgkamt="@st.SgkEmployerShare.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                                data-tax="@st.IncomeAndStampTax.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                                data-fringe="@st.FringeBenefits.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                                data-sev="@st.MonthlySeveranceFund.ToString(System.Globalization.CultureInfo.InvariantCulture)">
+                                            <i class="bi bi-pencil me-1"></i> Düzenle
+                                        </button>
                                         <button type="button" class="btn btn-sm btn-outline-info text-dark rounded-pill px-3 fw-semibold"
                                                 onclick="openStaffInviteModal(@st.Id, '@System.Web.HttpUtility.JavaScriptStringEncode(st.FullName)', '@System.Web.HttpUtility.JavaScriptStringEncode(displayEmail ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(st.PhoneNumber ?? "")')">
                                             <i class="bi bi-key me-1"></i> @(hasSelfPin && !mustChangePwd ? "Davet Yenile" : "Geçici Şifre / Davet")
@@ -599,6 +634,10 @@
                                         <button type="button" class="btn btn-sm btn-outline-warning text-dark rounded-pill px-3 fw-semibold"
                                                 onclick="openLeaveModal(@st.Id, '@System.Web.HttpUtility.JavaScriptStringEncode(st.FullName)')">
                                             <i class="bi bi-calendar-range me-1"></i> İzin Planla (@remainLeave/@st.AnnualLeaveEntitlementDays gün)
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3 fw-semibold"
+                                                onclick="openRemoveStaffModal(@st.Id, '@System.Web.HttpUtility.JavaScriptStringEncode(st.FullName)')">
+                                            <i class="bi bi-person-dash me-1"></i> Çıkart
                                         </button>
                                     </div>
                                 </div>
@@ -642,6 +681,31 @@
                                 }
                             </div>
                         }
+                    }
+
+                    @if (formerBuildingStaffs.Any())
+                    {
+                        <div class="mt-3 pt-2 border-top">
+                            <button class="btn btn-xs btn-outline-secondary rounded-pill px-3 fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#formerStaffArchiveBox">
+                                <i class="bi bi-archive me-1"></i> Ayrılan / Eski Personeller &amp; Yasal Özlük Arşivi (@formerBuildingStaffs.Count)
+                            </button>
+                            <div class="collapse mt-2" id="formerStaffArchiveBox">
+                                @foreach (var fst in formerBuildingStaffs)
+                                {
+                                    int fDocsCount = (fst.Documents ?? new List<GMK360.Core.Entities.BuildingStaffDocument>()).Count(d => !d.IsDeleted);
+                                    <div class="border rounded-3 p-2 px-3 mb-2 bg-white d-flex flex-wrap justify-content-between align-items-center gap-2 small">
+                                        <div>
+                                            <span class="badge bg-secondary me-1">Ayrıldı (@(fst.LeaveDate?.ToString("dd.MM.yyyy") ?? "-"))</span>
+                                            <strong class="text-dark">@fst.FullName</strong>
+                                            <span class="text-muted">(@fst.RoleType@(string.IsNullOrWhiteSpace(fst.TerminationReason) ? "" : $" • {fst.TerminationReason}"))</span>
+                                        </div>
+                                        <button type="button" class="btn btn-xs btn-outline-dark rounded-pill px-2" data-bs-toggle="modal" data-bs-target="#staffDossierModal_@fst.Id">
+                                            <i class="bi bi-folder2-open me-1"></i> Özlük Arşivi (@fDocsCount)
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        </div>
                     }
                 </div>
             </div>
@@ -1239,7 +1303,7 @@
 </div>
 
 @* Personel Özlük Dosyası Modalları *@
-@foreach (var st in buildingStaffs)
+@foreach (var st in allStaffForDossiers)
 {
     var sDocs = (st.Documents ?? new List<GMK360.Core.Entities.BuildingStaffDocument>())
         .Where(d => !d.IsDeleted)
@@ -1251,8 +1315,12 @@
             <div class="modal-content rounded-4 border-0 shadow">
                 <div class="modal-header bg-dark text-white border-0">
                     <div>
-                        <h5 class="modal-title fw-bold mb-0"><i class="bi bi-folder2-open me-2 text-warning"></i>@st.FullName — Personel Özlük Dosyası</h5>
-                        <small class="text-white-50">@st.RoleType | İşe Giriş: @st.HireDate.ToString("dd.MM.yyyy") | TC: @(st.TcIdentityNo ?? "-") | SGK: @(st.SgkNumber ?? "-")</small>
+                        <h5 class="modal-title fw-bold mb-0 text-white" style="color:#ffffff !important;">
+                            <i class="bi bi-folder2-open me-2 text-warning"></i>@st.FullName — @st.RoleType (Özlük Dosyası)
+                        </h5>
+                        <small class="text-white-50" style="color:rgba(255,255,255,0.78) !important;">
+                            @(!string.IsNullOrWhiteSpace(st.JobDescription) ? $"{st.JobDescription} | " : "")İşe Giriş: @st.HireDate.ToString("dd.MM.yyyy") | TC: @(st.TcIdentityNo ?? "-") | SGK: @(st.SgkNumber ?? "-")
+                        </small>
                     </div>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
@@ -1406,12 +1474,16 @@
                     Personel adına yönetici PIN belirlemez. Bu işlem personele yeni bir <strong>tek seferlik geçici şifre</strong> ve aktivasyon bağlantısı üretir; personel giriş yapınca kalıcı şifresini, kendi gizli PIN kodunu ve adresini belirler.
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small fw-bold">E-Posta Adresi (Varsa mail gönderilir)</label>
+                    <label class="form-label small fw-bold">E-Posta Adresi</label>
                     <input type="email" name="email" id="siEmail" class="form-control" placeholder="ornek@mail.com" />
                 </div>
-                <div class="mb-2">
+                <div class="mb-3">
                     <label class="form-label small fw-bold">Telefon Numarası</label>
                     <input type="tel" name="phoneNumber" id="siPhone" class="form-control" placeholder="05XX XXX XX XX" />
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="sendEmail" value="true" id="siSendEmail" />
+                    <label class="form-check-label small" for="siSendEmail">Gerçek e-posta adresiyse davet maili de gönder (işaretli değilse sadece ekranda link/şifre üretir)</label>
                 </div>
             </div>
             <div class="modal-footer border-0 bg-light">
@@ -1429,23 +1501,31 @@
             @Html.AntiForgeryToken()
             <input type="hidden" name="buildingId" value="@Model.Id" />
             <div class="modal-header bg-success text-white border-0">
-                <h5 class="modal-title fw-bold">Bina / Site Kadro Personeli Ekle (Tam SGK &amp; Kıdem Kurulumu)</h5>
+                <h5 class="modal-title fw-bold text-white">Bina / Site Kadro Personeli Ekle (Tam SGK &amp; Kıdem Kurulumu)</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4 row g-3">
-                <div class="col-md-6">
+                <div class="col-md-5">
                     <label class="form-label small fw-bold">Adı Soyadı *</label>
                     <input type="text" name="fullName" class="form-control" required placeholder="Örn: Ali Yılmaz" />
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <label class="form-label small fw-bold">Personel Tipi *</label>
-                    <select name="roleType" id="staffRoleTypeSelect" class="form-select fw-semibold" onchange="onStaffRolePresetChange()">
-                        <option value="Kapıcı (Vergi İstisnalı)">Kapıcı / Konut Görevlisi (Gelir/Damga Vergisi İstisnalı)</option>
+                    <select name="roleType" id="addRoleSelect" class="form-select fw-semibold" onchange="calculateStaffPayrollFields('add')">
+                        <option value="Kapıcı (Vergi İstisnalı)">Kapıcı / Konut Görevlisi (Vergi İstisnalı)</option>
                         <option value="Güvenlik">Güvenlik Görevlisi</option>
                         <option value="Temizlik">Temizlik Personeli</option>
                         <option value="Bahçıvan">Bahçıvan</option>
                         <option value="Teknik">Teknik / Tesisat Personeli</option>
                     </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">İşe Giriş Tarihi *</label>
+                    <input type="date" name="hireDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label small fw-bold">Görev &amp; Sorumluluk Tanımı (Adının yanında görünür)</label>
+                    <input type="text" name="jobDescription" class="form-control form-control-sm" placeholder="Örn: A-B Blok çöp toplama, günlük merdiven temizliği, akşam bahçe sulama" />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label small fw-bold">TC Kimlik No</label>
@@ -1456,52 +1536,212 @@
                     <input type="text" name="sgkNumber" class="form-control" />
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label small fw-bold">İşe Giriş Tarihi *</label>
-                    <input type="date" name="hireDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
-                </div>
-                <div class="col-md-4">
                     <label class="form-label small fw-bold">Görevli Telefonu *</label>
                     <input type="tel" name="phoneNumber" class="form-control" required placeholder="05XX XXX XX XX" />
                 </div>
-                <div class="col-md-5">
-                    <label class="form-label small fw-bold">Personel E-Postası (Davet &amp; İlk Giriş)</label>
-                    <input type="email" name="email" class="form-control" placeholder="ornek@mail.com (varsa mail atılır)" />
+                <div class="col-md-7">
+                    <label class="form-label small fw-bold">Personel E-Postası (Opsiyonel)</label>
+                    <input type="email" name="email" class="form-control" placeholder="Boş bırakılırsa otomatik iç adres açılır" />
                 </div>
-                <div class="col-md-3 d-flex align-items-end">
+                <div class="col-md-5 d-flex align-items-end">
                     <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" name="sendActivationEmail" value="true" id="chkSendStaffMail" checked />
-                        <label class="form-check-label small" for="chkSendStaffMail">E-posta daveti at</label>
+                        <input class="form-check-input" type="checkbox" name="sendActivationEmail" value="true" id="chkSendStaffMail" />
+                        <label class="form-check-label small" for="chkSendStaffMail">Gerçek mailse davet gönder</label>
                     </div>
                 </div>
                 <div class="col-12">
                     <div class="alert alert-info bg-opacity-10 border-info-subtle rounded-3 py-2 px-3 small mb-0">
-                        <i class="bi bi-shield-lock me-1"></i><strong>Gizli PIN Güvenliği:</strong> Yönetici personel adına PIN belirlemez. Kaydettiğinizde sistem <strong>geçici şifre ve aktivasyon linki</strong> üretir; personel giriş yaptığında kendi şifresini, yalnızca kendisinin bileceği 4-6 haneli PIN kodunu ve ikametgah adresini girer.
+                        <i class="bi bi-shield-lock me-1"></i><strong>Gizli PIN Güvenliği:</strong> Yönetici personel adına PIN belirlemez. Kaydedince geçici şifre ve ilk giriş linki oluşur; personel ilk girişte kendi şifresini, PIN'ini ve adresini girer.
                     </div>
                 </div>
+
+                <div class="col-12 bg-light rounded-3 p-2 px-3 border d-flex flex-wrap justify-content-between align-items-center gap-2 small">
+                    <div class="d-flex flex-wrap gap-3 align-items-center">
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="addIncentiveChk" checked onchange="calculateStaffPayrollFields('add')" />
+                            <label class="form-check-label fw-semibold" for="addIncentiveChk">5510 SGK Teşviki (%18,75)</label>
+                        </div>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="addFringeChk" onchange="toggleStaffFringe('add')" />
+                            <label class="form-check-label fw-semibold" for="addFringeChk">Yol / Yemek Desteği Var</label>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-xs btn-outline-primary rounded-pill fw-bold" onclick="calculateStaffPayrollFields('add')">
+                        🧮 Maaşa Göre SGK &amp; Kıdemi Hesapla
+                    </button>
+                </div>
+
                 <div class="col-md-3">
                     <label class="form-label small fw-bold">Net Maaş (₺) *</label>
-                    <input type="number" step="0.01" name="netSalary" class="form-control" value="22104.67" required />
+                    <input type="number" step="0.01" name="netSalary" id="addNetSalary" class="form-control" value="22104.67" required oninput="calculateStaffPayrollFields('add')" />
                 </div>
                 <div class="col-md-3">
                     <label class="form-label small fw-bold">SGK İşveren + İşsizlik (₺)</label>
-                    <input type="number" step="0.01" name="sgkEmployerShare" class="form-control" value="4850" />
+                    <input type="number" step="0.01" name="sgkEmployerShare" id="addSgkShare" class="form-control" value="4876.00" />
                 </div>
                 <div class="col-md-3">
                     <label class="form-label small fw-bold">Gelir + Damga Vergisi (₺)</label>
-                    <input type="number" step="0.01" name="incomeAndStampTax" id="staffTaxInput" class="form-control" value="0" />
+                    <input type="number" step="0.01" name="incomeAndStampTax" id="addTaxInput" class="form-control" value="0" />
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold">Yol / Yemek / Yan Hak (₺)</label>
-                    <input type="number" step="0.01" name="fringeBenefits" class="form-control" value="0" />
+                <div class="col-md-3" id="addFringeWrap" style="display:none;">
+                    <label class="form-label small fw-bold">Yol / Yemek (₺)</label>
+                    <input type="number" step="0.01" name="fringeBenefits" id="addFringeInput" class="form-control" value="0" />
                 </div>
-                <div class="col-12 border-top pt-3">
-                    <label class="form-label small fw-bold text-danger">Aylık Kıdem Tazminatı Fon Karşılığı (Malik Hesabına Ayrılır - ₺)</label>
-                    <input type="number" step="0.01" name="monthlySeveranceFund" class="form-control border-danger-subtle" value="2200" />
-                    <small class="text-muted">Personel ayrıldığında toplu tazminat sorunu yaşamamak için her ay ayrı Kat Maliki fonunda biriktirilir.</small>
+                <div class="col-md-3" id="addFringeNoneHint">
+                    <label class="form-label small fw-bold text-muted">Yol / Yemek</label>
+                    <div class="form-control bg-light text-muted small">Yok (0 ₺)</div>
+                </div>
+                <div class="col-12 border-top pt-2">
+                    <label class="form-label small fw-bold text-danger">Aylık Kıdem Tazminatı Fon Karşılığı (Brüt / 12 — Malik Hesabı - ₺)</label>
+                    <input type="number" step="0.01" name="monthlySeveranceFund" id="addSeveranceInput" class="form-control border-danger-subtle" value="2167.12" />
+                    <small class="text-muted" id="addCalcNote">Tahmini KMK/SGK hesabıdır; asgari ücret/mali müşavir bordrosuna göre elle değiştirebilirsiniz.</small>
                 </div>
             </div>
             <div class="modal-footer border-0 bg-light">
                 <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold w-100">Kadroya Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 5B. Personel Düzenle (Görev, Zam, SGK & İletişim) Modal -->
+<div class="modal fade" id="editBuildingStaffModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="UpdateBuildingStaff" asp-controller="BuildingManager" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="buildingId" value="@Model.Id" />
+            <input type="hidden" name="buildingStaffId" id="editStaffId" />
+            <div class="modal-header bg-primary text-white border-0">
+                <h5 class="modal-title fw-bold text-white"><i class="bi bi-pencil-square me-2"></i>Personel Bilgileri, Görev &amp; Maaş Güncelle</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 row g-3">
+                <div class="col-md-5">
+                    <label class="form-label small fw-bold">Adı Soyadı *</label>
+                    <input type="text" name="fullName" id="editFullName" class="form-control" required />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">Personel Tipi *</label>
+                    <select name="roleType" id="editRoleSelect" class="form-select fw-semibold">
+                        <option value="Kapıcı (Vergi İstisnalı)">Kapıcı / Konut Görevlisi (Vergi İstisnalı)</option>
+                        <option value="Güvenlik">Güvenlik Görevlisi</option>
+                        <option value="Temizlik">Temizlik Personeli</option>
+                        <option value="Bahçıvan">Bahçıvan</option>
+                        <option value="Teknik">Teknik / Tesisat Personeli</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">İşe Giriş Tarihi *</label>
+                    <input type="date" name="hireDate" id="editHireDate" class="form-control" required />
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label small fw-bold">Görev &amp; Sorumluluk Tanımı</label>
+                    <input type="text" name="jobDescription" id="editJobDesc" class="form-control form-control-sm" placeholder="Örn: A-B Blok çöp, günlük temizlik, dış bahçe bakımı" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">TC Kimlik No</label>
+                    <input type="text" name="tcIdentityNo" id="editTc" maxlength="11" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">SGK Sicil No</label>
+                    <input type="text" name="sgkNumber" id="editSgkNo" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">Telefon</label>
+                    <input type="tel" name="phoneNumber" id="editPhone" class="form-control" />
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label small fw-bold">E-Posta</label>
+                    <input type="email" name="email" id="editEmail" class="form-control" />
+                </div>
+                <div class="col-md-7">
+                    <label class="form-label small fw-bold">İkametgah / Adres</label>
+                    <input type="text" name="address" id="editAddress" class="form-control" />
+                </div>
+
+                <div class="col-12 bg-light rounded-3 p-2 px-3 border d-flex flex-wrap justify-content-between align-items-center gap-2 small">
+                    <div class="d-flex flex-wrap gap-3 align-items-center">
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="editIncentiveChk" checked />
+                            <label class="form-check-label fw-semibold" for="editIncentiveChk">5510 SGK Teşviki (%18,75)</label>
+                        </div>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="editFringeChk" onchange="toggleStaffFringe('edit')" />
+                            <label class="form-check-label fw-semibold" for="editFringeChk">Yol / Yemek Desteği Var</label>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-xs btn-outline-primary rounded-pill fw-bold" onclick="calculateStaffPayrollFields('edit')">
+                        🧮 Yeni Maaşa Göre SGK &amp; Kıdemi Hesapla
+                    </button>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Net Maaş (₺) *</label>
+                    <input type="number" step="0.01" name="netSalary" id="editNetSalary" class="form-control" required />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">SGK İşveren (₺)</label>
+                    <input type="number" step="0.01" name="sgkEmployerShare" id="editSgkShare" class="form-control" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Gelir + Damga V. (₺)</label>
+                    <input type="number" step="0.01" name="incomeAndStampTax" id="editTaxInput" class="form-control" />
+                </div>
+                <div class="col-md-3" id="editFringeWrap">
+                    <label class="form-label small fw-bold">Yol / Yemek (₺)</label>
+                    <input type="number" step="0.01" name="fringeBenefits" id="editFringeInput" class="form-control" />
+                </div>
+                <div class="col-md-3" id="editFringeNoneHint" style="display:none;">
+                    <label class="form-label small fw-bold text-muted">Yol / Yemek</label>
+                    <div class="form-control bg-light text-muted small">Yok (0 ₺)</div>
+                </div>
+                <div class="col-12 border-top pt-2">
+                    <label class="form-label small fw-bold text-danger">Aylık Kıdem Tazminatı Fon Karşılığı (₺)</label>
+                    <input type="number" step="0.01" name="monthlySeveranceFund" id="editSeveranceInput" class="form-control border-danger-subtle" />
+                    <small class="text-muted" id="editCalcNote">Zam veya bordro değişikliğinde hesapla butonuna basıp kaydedebilirsiniz.</small>
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">Değişiklikleri Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 5C. Personel Çıkart / İşten Çıkış Modal -->
+<div class="modal fade" id="removeBuildingStaffModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content rounded-4 border-0 shadow" asp-action="DeactivateBuildingStaff" asp-controller="BuildingManager" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="buildingId" value="@Model.Id" />
+            <input type="hidden" name="buildingStaffId" id="rmStaffId" />
+            <div class="modal-header bg-danger text-white border-0">
+                <h5 class="modal-title fw-bold text-white"><i class="bi bi-person-dash me-2"></i><span id="rmStaffName">Personel</span> — Çıkış / Kaldırma</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">İşlem Türü</label>
+                    <select name="actionMode" id="rmActionMode" class="form-select fw-semibold" onchange="document.getElementById('rmTerminateFields').classList.toggle('d-none', this.value === 'delete_test')">
+                        <option value="terminate">Resmi İşten Çıkış Ver (Özlük Dosyası ve Bordrolar Arşivlenir)</option>
+                        <option value="delete_test">Yanlış / Test Kaydını Sil (Sadece hiç ödeme yoksa)</option>
+                    </select>
+                </div>
+                <div id="rmTerminateFields">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">İşten Ayrılma Tarihi</label>
+                        <input type="date" name="leaveDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Ayrılış Nedeni</label>
+                        <input type="text" name="terminationReason" class="form-control" placeholder="Örn: İstifa, Emeklilik, İşveren Feshi, Sözleşme Sonu" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Vazgeç</button>
+                <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">Onayla &amp; Uygula</button>
             </div>
         </form>
     </div>
@@ -1828,6 +2068,83 @@
         document.getElementById('siEmail').value = email || '';
         document.getElementById('siPhone').value = phone || '';
         new bootstrap.Modal(document.getElementById('staffInviteModal')).show();
+    }
+
+    function toggleStaffFringe(prefix) {
+        const hasFringe = document.getElementById(prefix + 'FringeChk')?.checked === true;
+        const wrap = document.getElementById(prefix + 'FringeWrap');
+        const hint = document.getElementById(prefix + 'FringeNoneHint');
+        const inp = document.getElementById(prefix + 'FringeInput');
+        if (wrap) wrap.style.display = hasFringe ? '' : 'none';
+        if (hint) hint.style.display = hasFringe ? 'none' : '';
+        if (!hasFringe && inp) inp.value = '0';
+    }
+
+    function calculateStaffPayrollFields(prefix) {
+        const net = parseFloat(document.getElementById(prefix + 'NetSalary')?.value || '0') || 0;
+        const role = document.getElementById(prefix + 'RoleSelect')?.value || '';
+        const hasIncentive = document.getElementById(prefix + 'IncentiveChk')?.checked !== false;
+        const isTaxExemptCaretaker = role.indexOf('Kapıcı') >= 0;
+
+        // Konut kapıcısı GVK Md.23/6 istisnası: Vergi = 0, İşçi SGK %15 -> Brüt = Net / 0.85
+        // Diğer rollerde asgari ücret (22.104,67 TL / 26.005,50 TL brüt) istisnası aşan kısım için yaklaşık %15.75 vergi farkı
+        let gross = 0;
+        let estTax = 0;
+        if (net > 0) {
+            if (isTaxExemptCaretaker || net <= 22105) {
+                gross = net / 0.85;
+                estTax = 0;
+            } else {
+                gross = 26005.50 + ((net - 22104.67) / 0.715);
+                estTax = Math.max(0, (gross - 26005.50) * 0.135);
+            }
+        }
+        const employerRate = hasIncentive ? 0.1875 : 0.2275;
+        const sgkEmployer = gross * employerRate;
+        const monthlySeverance = gross / 12.0;
+
+        const sgkEl = document.getElementById(prefix + 'SgkShare');
+        const taxEl = document.getElementById(prefix + 'TaxInput');
+        const sevEl = document.getElementById(prefix + 'SeveranceInput');
+        const noteEl = document.getElementById(prefix + 'CalcNote');
+        if (sgkEl) sgkEl.value = sgkEmployer.toFixed(2);
+        if (taxEl) taxEl.value = estTax.toFixed(2);
+        if (sevEl) sevEl.value = monthlySeverance.toFixed(2);
+        if (noteEl && net > 0) {
+            noteEl.innerText = `Tahmini Brüt: ${gross.toFixed(2)} ₺ • SGK İşveren (%${(employerRate * 100).toFixed(2)}): ${sgkEmployer.toFixed(2)} ₺ • Aylık Kıdem (Brüt/12): ${monthlySeverance.toFixed(2)} ₺ (Bordroya göre elle düzenlenebilir).`;
+        }
+    }
+
+    function openEditStaffModal(btn) {
+        const d = btn.dataset;
+        document.getElementById('editStaffId').value = d.id || '';
+        document.getElementById('editFullName').value = d.fullname || '';
+        const roleSel = document.getElementById('editRoleSelect');
+        if (roleSel && d.roletype) roleSel.value = d.roletype;
+        document.getElementById('editJobDesc').value = d.jobdesc || '';
+        document.getElementById('editTc').value = d.tc || '';
+        document.getElementById('editSgkNo').value = d.sgk || '';
+        document.getElementById('editPhone').value = d.phone || '';
+        document.getElementById('editEmail').value = d.email || '';
+        document.getElementById('editAddress').value = d.address || '';
+        document.getElementById('editHireDate').value = d.hiredate || '';
+        document.getElementById('editNetSalary').value = d.net || '0';
+        document.getElementById('editSgkShare').value = d.sgkamt || '0';
+        document.getElementById('editTaxInput').value = d.tax || '0';
+        const fringeVal = parseFloat(d.fringe || '0') || 0;
+        document.getElementById('editFringeInput').value = fringeVal;
+        document.getElementById('editFringeChk').checked = fringeVal > 0;
+        toggleStaffFringe('edit');
+        document.getElementById('editSeveranceInput').value = d.sev || '0';
+        new bootstrap.Modal(document.getElementById('editBuildingStaffModal')).show();
+    }
+
+    function openRemoveStaffModal(staffId, name) {
+        document.getElementById('rmStaffId').value = staffId;
+        document.getElementById('rmStaffName').innerText = name || 'Personel';
+        document.getElementById('rmActionMode').value = 'terminate';
+        document.getElementById('rmTerminateFields').classList.remove('d-none');
+        new bootstrap.Modal(document.getElementById('removeBuildingStaffModal')).show();
     }
 
     function copyTextValue(val, btn) {
