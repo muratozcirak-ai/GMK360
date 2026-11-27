@@ -148,6 +148,18 @@
                         @if (!isArchiveTab)
                         {
                             <div class="d-flex flex-wrap gap-2">
+                                <form asp-action="SendMeetingCallReminders" asp-controller="BuildingManager" method="post" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="meetingId" value="@m.Id" />
+                                    <input type="hidden" name="buildingId" value="@m.ContextId" />
+                                    <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-semibold" title="Kapsam içindeki malik ve vekillere e-posta &amp; portal çağrısı gönder">
+                                        <i class="bi bi-envelope-paper-fill me-1"></i> Çağrı Gönder
+                                    </button>
+                                </form>
+                                <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-3 fw-semibold"
+                                        onclick="copyMeetingWhatsappInvite('@System.Web.HttpUtility.JavaScriptStringEncode(scopeDisplayName)', '@System.Web.HttpUtility.JavaScriptStringEncode(m.AgendaTitle)', '@m.MeetingDate.ToString("dd.MM.yyyy HH:mm")', '@System.Web.HttpUtility.JavaScriptStringEncode(m.MeetingLocation ?? "Site Ortak Alan")', '@inviteText', @m.ContextId, @m.Id)">
+                                    <i class="bi bi-whatsapp me-1"></i> WhatsApp Çağrısı
+                                </button>
                                 <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-bold"
                                         onclick="openPromoteModal(@m.Id, @m.ContextId, '@System.Web.HttpUtility.JavaScriptStringEncode(m.AgendaTitle)')">
                                     <i class="bi bi-check2-circle me-1"></i> Görüşme Olumlu → Karar Defterine Aktar
@@ -618,6 +630,20 @@
             document.getElementById('dpULabel').innerText = label;
             document.getElementById('dpPerson').value = suggested || '';
             new bootstrap.Modal(document.getElementById('discProxyModal')).show();
+        }
+        function copyMeetingWhatsappInvite(scopeName, agendaTitle, dateStr, locStr, inviteLabel, bId, mId) {
+            const portalUrl = `${window.location.origin}/FacilityPortal/Index?buildingId=${bId}#meetingCard_${mId}`;
+            const msg = `📢 *${scopeName} — Toplantı / Görüşme Çağrısı*\n`
+                + `📌 *Konu:* ${agendaTitle}\n`
+                + `🗓️ *Tarih:* ${dateStr}\n`
+                + `📍 *Yer:* ${locStr}\n`
+                + `👥 *Kapsam:* ${inviteLabel}\n\n`
+                + `Belgeleri incelemek ve görüş/katılım bildirmek için tıklayın:\n${portalUrl}`;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(msg).then(() => alert('WhatsApp toplantı çağrısı panoya kopyalandı:\n\n' + msg));
+            } else {
+                prompt('WhatsApp toplantı çağrı metni:', msg);
+            }
         }
     </script>
 }

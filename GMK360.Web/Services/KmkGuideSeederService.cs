@@ -22,7 +22,7 @@ namespace GMK360.Web.Services
 
         public static async Task EnsureKmkGuidesSeededAsync(ApplicationDbContext context)
         {
-            if (await context.Articles.AsNoTracking().AnyAsync(a => a.Category == PublicCategory || a.Category == HandbookCategory))
+            if (await context.Articles.AsNoTracking().AnyAsync(a => a.Slug == "bina-acil-durum-toplanma-ve-yangin-yonetmeligi"))
                 return;
 
             await _seedLock.WaitAsync();
@@ -287,6 +287,26 @@ namespace GMK360.Web.Services
   <li><strong>İki Haklı İhtar:</strong> Kiracı bir kira yılı içinde iki farklı aya ait kirayı ödemeyip yazılı iki haklı ihtara muhatap kalırsa, kira yılının bitiminden itibaren <strong>1 ay içinde</strong> tahliye davası açılabilir.</li>
   <li><strong>Zorunlu Arabuluculuk:</strong> Kira ve kat mülkiyeti uyuşmazlıklarının büyük çoğunluğunda dava açmadan önce <strong>arabulucuya başvuru dava şartıdır</strong>.</li>
 </ul>"
+            },
+            new Article
+            {
+                Title = "Binalarda Acil Durum Toplanma Alanı, Yangın Güvenliği ve Sığınak Yükümlülükleri",
+                Slug = "bina-acil-durum-toplanma-ve-yangin-yonetmeligi",
+                Category = PublicCategory,
+                IsMembersOnly = false,
+                IsPublished = true,
+                PublishedAt = baseTime.AddHours(10),
+                SeoTags = "acil durum toplanma alanı, yangın tüpü dolumu, yangın dolabı hortumu, sığınak yönetmeliği, ana doğalgaz vanası",
+                HtmlContent = @"
+<p class=""lead"">Deprem, yangın ve su/gaz kaçağı gibi acil anlarda bina sakinlerinin ilk 60 saniyede doğru yere yönelmesi hayati önem taşır. <strong>Binaların Yangından Korunması Hakkında Yönetmelik</strong> ve <strong>Sığınak Yönetmeliği</strong> uyarınca yöneticilerin temel güvenlik bilgilendirmelerini görünür kılması gerekir.</p>
+<h5 class=""fw-bold mt-4"">1. Her Sakinin Bilmesi Gereken 4 Kritik Nokta</h5>
+<ul>
+  <li><strong>📍 Acil Durum Toplanma Alanı:</strong> Deprem veya tahliye sonrası site bahçesinde binaların yıkılma/cam düşme mesafesi dışında kalan açık alan veya belediye/AFAD mahalle toplanma noktası.</li>
+  <li><strong>🧯 Yangın Dolabı, Hortum &amp; Tüpler:</strong> Her kat sahanlığındaki yangın dolapları, kuru tozlu (KKT) yangın tüplerinin yeri ve yıllık dolum/basınç kontrolleri (basınç göstergesi yeşil bölgede olmalı).</li>
+  <li><strong>🔧 Ana Doğalgaz, Su Vanası &amp; Elektrik Şalteri:</strong> Giriş cephesindeki sarı ana gaz kesme kutusu ve bodrumdaki ana su/elektrik panosunun yeri kapıcı ve tüm kat sakinlerince bilinmelidir.</li>
+  <li><strong>🚪 Sığınak &amp; Kaçış Merdivenleri:</strong> Sığınak alanları özel depo/hurdalık olarak kilitli bırakılmamalı; yangın çıkış kapıları hiçbir zaman kilitlenmemeli ve önüne eşya yığılmamalıdır.</li>
+</ul>
+<div class=""alert alert-danger border-0 rounded-3 mt-3""><strong>GMK360 Kolaylığı:</strong> Bina detayından tanımladığınız toplanma yeri, yangın dolabı/hortumu ve ana vana bilgileri tüm sakinlerin telefonundaki <code>/FacilityPortal</code> ana ekranında sabit <em>""Acil Durum &amp; Güvenlik Noktaları""</em> kartı olarak görünür.</div>"
             }
         };
     }

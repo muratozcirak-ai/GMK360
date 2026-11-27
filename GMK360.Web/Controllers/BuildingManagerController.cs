@@ -2839,9 +2839,14 @@ namespace GMK360.Web.Controllers
                 }
             }
 
-            TempData["SuccessMessage"] = isPlannedOnly
+            var inviteCounts = await SendMeetingInvitationNotificationsAsync(building, meeting, sendEmails: true);
+            string notifyNote = inviteCounts.NotifiedCount > 0
+                ? $" ({inviteCounts.NotifiedCount} kişiye portal bildirimi, {inviteCounts.EmailedCount} kişiye e-posta çağrısı gönderildi.)"
+                : "";
+
+            TempData["SuccessMessage"] = (isPlannedOnly
                 ? $"📅 '{agendaTitle}' (Karar Taslağı #{meeting.DecisionNumber}) açıldı ve Kat Maliklerinin belge/görüş & ön onay ekranına yansıtıldı."
-                : $"🎉 Karar #{meeting.DecisionNumber} kaydedildi. A4/A5 Noter Defteri baskı şablonunu alabilirsiniz.";
+                : $"🎉 Karar #{meeting.DecisionNumber} kaydedildi. A4/A5 Noter Defteri baskı şablonunu alabilirsiniz.") + notifyNote;
             if (string.Equals(returnTo, "Oylamalar", StringComparison.OrdinalIgnoreCase))
             {
                 return RedirectToAction(nameof(Oylamalar), new { buildingId });
@@ -5787,7 +5792,12 @@ namespace GMK360.Web.Controllers
                 }
             }
 
-            TempData["SuccessMessage"] = $"🤝 '{meeting.AgendaTitle}' ({tplNo}) toplantı masası açıldı ve davetli malik/vekil ekranlarına yansıtıldı.";
+            var inviteCounts = await SendMeetingInvitationNotificationsAsync(building, meeting, sendEmails: true);
+            string notifyNote = inviteCounts.NotifiedCount > 0
+                ? $" ({inviteCounts.NotifiedCount} kişiye bildirim, {inviteCounts.EmailedCount} kişiye davet e-postası gönderildi.)"
+                : "";
+
+            TempData["SuccessMessage"] = $"🤝 '{meeting.AgendaTitle}' ({tplNo}) toplantı masası açıldı ve davetli malik/vekil ekranlarına yansıtıldı.{notifyNote}";
             return RedirectToAction(nameof(Toplantilar), new { buildingId });
         }
 
@@ -5928,7 +5938,11 @@ namespace GMK360.Web.Controllers
             }
 
             await _context.SaveChangesAsync();
-            TempData["SuccessMessage"] = $"✅ Görüşme olumlu sonuçlandığı için resmi Karar Defteri & Oylama masasına aktarıldı (Karar #{meeting.DecisionNumber}). Tüm belge ve yorumlar korundu.";
+            var inviteCounts = await SendMeetingInvitationNotificationsAsync(building, meeting, sendEmails: true);
+            string notifyNote = inviteCounts.NotifiedCount > 0
+                ? $" ({inviteCounts.NotifiedCount} malik/vekile oylama bildirimi, {inviteCounts.EmailedCount} kişiye e-posta gönderildi.)"
+                : "";
+            TempData["SuccessMessage"] = $"✅ Görüşme olumlu sonuçlandığı için resmi Karar Defteri & Oylama masasına aktarıldı (Karar #{meeting.DecisionNumber}). Tüm belge ve yorumlar korundu.{notifyNote}";
             return RedirectToAction(nameof(Oylamalar), new { buildingId });
         }
 
@@ -6455,6 +6469,195 @@ namespace GMK360.Web.Controllers
             ViewBag.PrevTitle = prevSlug != null ? allChapters.FirstOrDefault(x => x.Slug == prevSlug)?.Title : null;
             ViewBag.NextTitle = nextSlug != null ? allChapters.FirstOrDefault(x => x.Slug == nextSlug)?.Title : null;
             return View(activeChapter);
+        }
+
+        private async Task<(int NotifiedCount, int EmailedCount)> SendMeetingInvitationNotificationsAsync(
+            Building building,
+            SystemMeeting meeting,
+            bool sendEmails = true)
+        {
+            var scopedBuildingIds = new System.Collections.Generic.List<int> { building.Id };
+            if (meeting.IsSiteWide && building.HousingComplexId.HasValue)
+            {
+                scopedBuildingIds = await _context.Buildings
+                    .AsNoTracking()
+                    .Where(b => b.HousingComplexId == building.HousingComplexId.Value)
+                    .Select(b => b.Id)
+                    .ToListAsync();
+            }
+
+            var scopedUnits = await _context.BuildingUnits
+                .AsNoTracking()
+                .Where(u => scopedBuildingIds.Contains(u.BuildingId) && !(u.Category ?? "").StartsWith("OrtakAlan"))
+                .ToListAsync();
+
+            var recipientUserIds = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var u in scopedUnits)
+            {
+                if (!string.IsNullOrWhiteSpace(u.OwnerUserId)) recipientUserIds.Add(u.OwnerUserId);
+            }
+
+            int rootBuildingId = building.ParentBuildingId ?? building.Id;
+            var boardUserIds = await _context.BuildingManagers
+                .AsNoTracking()
+                .Where(m => m.BuildingId == rootBuildingId && m.IsActive && !string.IsNullOrWhiteSpace(m.UserId))
+                .Select(m => m.UserId)
+                .ToListAsync();
+            foreach (var bid in boardUserIds) recipientUserIds.Add(bid);
+
+            if (string.Equals(meeting.InvitationScope, "AllResidents", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var u in scopedUnits.Where(x => !x.IsEmpty && !string.IsNullOrWhiteSpace(x.TenantUserId)))
+                {
+                    recipientUserIds.Add(u.TenantUserId!);
+                }
+            }
+            else if (string.Equals(meeting.InvitationScope, "OwnersAndProxyTenants", StringComparison.OrdinalIgnoreCase))
+            {
+                var proxyUnitIds = await _context.BuildingDecisionVotes
+                    .AsNoTracking()
+                    .Where(v => v.SystemMeetingId == meeting.Id && v.ParticipationType == "Vekil" && !v.IsDeleted)
+                    .Select(v => v.BuildingUnitId)
+                    .ToListAsync();
+                foreach (var u in scopedUnits.Where(x => proxyUnitIds.Contains(x.Id) && !string.IsNullOrWhiteSpace(x.TenantUserId)))
+                {
+                    recipientUserIds.Add(u.TenantUserId!);
+                }
+            }
+
+            if (!recipientUserIds.Any()) return (0, 0);
+
+            var users = await _context.Users
+                .AsNoTracking()
+                .Where(u => recipientUserIds.Contains(u.Id))
+                .ToListAsync();
+
+            bool isDiscussion = string.Equals(meeting.WorkflowStage, "Discussion", StringComparison.OrdinalIgnoreCase);
+            string stageLabel = isDiscussion ? "Toplantı Çağrısı" : "Resmi Karar / Oylama Çağrısı";
+            string targetUrl = $"/FacilityPortal/Index?buildingId={building.Id}#meetingCard_{meeting.Id}";
+            string scopeDesc = meeting.IsSiteWide && building.HousingComplex != null
+                ? $"{building.HousingComplex.Name} (Site Geneli)"
+                : $"{building.Name} ({building.BlockName ?? "Bina"})";
+
+            int notified = 0;
+            foreach (var usr in users)
+            {
+                _context.UserNotifications.Add(new UserNotification
+                {
+                    ApplicationUserId = usr.Id,
+                    Title = $"📅 {stageLabel}: {meeting.AgendaTitle}",
+                    Message = $"{scopeDesc} • {meeting.MeetingDate:dd.MM.yyyy HH:mm} • {meeting.MeetingLocation ?? "Ortak Alan / Online"}",
+                    IsRead = false,
+                    LinkUrl = targetUrl,
+                    CreatedAt = DateTime.UtcNow
+                });
+                notified++;
+            }
+            await _context.SaveChangesAsync();
+
+            int emailed = 0;
+            if (sendEmails)
+            {
+                var emailSvc = HttpContext.RequestServices.GetService<IEmailService>();
+                if (emailSvc != null)
+                {
+                    string fullUrl = $"{Request.Scheme}://{Request.Host}{targetUrl}";
+                    string subject = $"GMK360 | {scopeDesc} — {stageLabel}: {meeting.AgendaTitle}";
+
+                    foreach (var usr in users.Where(u => !string.IsNullOrWhiteSpace(u.Email) && !u.Email.EndsWith("@gmk360.local", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        string displayName = !string.IsNullOrWhiteSpace(usr.FirstName) ? $"{usr.FirstName} {usr.LastName}".Trim() : usr.Email!;
+                        string body = $@"
+<div style=""font-family:Arial,sans-serif;max-width:580px;margin:0 auto;padding:20px;border:1px solid #e2e8f0;border-radius:14px;background:#ffffff;"">
+  <span style=""display:inline-block;background:#eff6ff;color:#1d4ed8;font-size:12px;font-weight:bold;padding:4px 10px;border-radius:999px;margin-bottom:8px;"">{System.Net.WebUtility.HtmlEncode(stageLabel)} • {System.Net.WebUtility.HtmlEncode(scopeDesc)}</span>
+  <h2 style=""color:#0f172a;margin:4px 0 12px;"">{System.Net.WebUtility.HtmlEncode(meeting.AgendaTitle)}</h2>
+  <p>Sayın <strong>{System.Net.WebUtility.HtmlEncode(displayName)}</strong>,</p>
+  <p>Tarafınızın katılımına/görüşüne açık yeni bir {(isDiscussion ? "site/blok toplantı gündemi" : "resmi karar defteri ön oylaması")} başlatılmıştır:</p>
+  <table style=""width:100%;border-collapse:collapse;background:#f8fafc;border-radius:8px;margin:14px 0;font-size:14px;"">
+    <tr><td style=""padding:8px 12px;color:#64748b;"">Tarih &amp; Saat:</td><td style=""padding:8px 12px;font-weight:bold;"">{meeting.MeetingDate:dd.MM.yyyy HH:mm}</td></tr>
+    <tr><td style=""padding:8px 12px;color:#64748b;"">Yer / Bağlantı:</td><td style=""padding:8px 12px;"">{System.Net.WebUtility.HtmlEncode(meeting.MeetingLocation ?? "Site Sosyal Alan / Online")}</td></tr>
+    <tr><td style=""padding:8px 12px;color:#64748b;"">Evrak / Sıra No:</td><td style=""padding:8px 12px;"">{System.Net.WebUtility.HtmlEncode(meeting.DecisionNumber ?? $"#{meeting.Id}")}</td></tr>
+  </table>
+  <p style=""margin:20px 0;"">
+    <a href=""{fullUrl}"" style=""background:#1d4ed8;color:#fff;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:bold;display:inline-block;"">Toplantı Masasına Git &amp; Görüş / Onay Ver</a>
+  </p>
+  <p style=""font-size:12px;color:#64748b;"">Giriş yaptıktan sonra mobil uygulama (/FacilityPortal) üzerinden belgeleri inceleyebilir, görüş yazabilir veya ön onayınızı bildirebilirsiniz.</p>
+</div>";
+                        try
+                        {
+                            var res = await emailSvc.SendEmailWithResultAsync(usr.Email!, subject, body);
+                            if (res.Success) emailed++;
+                        }
+                        catch { }
+                    }
+                }
+            }
+
+            return (notified, emailed);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SendMeetingCallReminders(int meetingId, int buildingId)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var meeting = await _context.SystemMeetings
+                .FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && m.ContextId == buildingId && !m.IsDeleted);
+            if (meeting == null) return NotFound();
+
+            var res = await SendMeetingInvitationNotificationsAsync(building, meeting, sendEmails: true);
+            TempData[res.NotifiedCount > 0 ? "SuccessMessage" : "WarningMessage"] = res.NotifiedCount > 0
+                ? $"📣 '{meeting.AgendaTitle}' için {res.NotifiedCount} yetkili üyeye portal bildirimi, {res.EmailedCount} kişiye e-posta toplantı çağrısı gönderildi."
+                : "Kapsam içinde kayıtlı kullanıcı profili bulunamadı (Malik/Kiracılara e-posta adresi tanımladığınızdan emin olun).";
+
+            return string.Equals(meeting.WorkflowStage, "Discussion", StringComparison.OrdinalIgnoreCase)
+                ? RedirectToAction(nameof(Toplantilar), new { buildingId })
+                : RedirectToAction(nameof(Oylamalar), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveEmergencySafetyInfo(
+            int buildingId,
+            string? emergencyAssemblyPoint,
+            string? fireEquipmentLocations,
+            string? utilityShutoffLocations,
+            string? emergencyContactsNote,
+            Microsoft.AspNetCore.Http.IFormFile? emergencyMapFile = null)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            building.EmergencyAssemblyPoint = string.IsNullOrWhiteSpace(emergencyAssemblyPoint) ? null : emergencyAssemblyPoint.Trim();
+            building.FireEquipmentLocations = string.IsNullOrWhiteSpace(fireEquipmentLocations) ? null : fireEquipmentLocations.Trim();
+            building.UtilityShutoffLocations = string.IsNullOrWhiteSpace(utilityShutoffLocations) ? null : utilityShutoffLocations.Trim();
+            building.EmergencyContactsNote = string.IsNullOrWhiteSpace(emergencyContactsNote) ? null : emergencyContactsNote.Trim();
+
+            if (emergencyMapFile != null && emergencyMapFile.Length > 0 && emergencyMapFile.Length <= 15 * 1024 * 1024)
+            {
+                var ext = System.IO.Path.GetExtension(emergencyMapFile.FileName)?.ToLowerInvariant() ?? "";
+                var allowed = new[] { ".pdf", ".jpg", ".jpeg", ".png", ".webp" };
+                if (allowed.Contains(ext))
+                {
+                    var env = HttpContext.RequestServices.GetService(typeof(Microsoft.AspNetCore.Hosting.IWebHostEnvironment)) as Microsoft.AspNetCore.Hosting.IWebHostEnvironment;
+                    var webRoot = env?.WebRootPath ?? System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot");
+                    var folder = System.IO.Path.Combine(webRoot, "uploads", "buildings", buildingId.ToString(), "safety");
+                    System.IO.Directory.CreateDirectory(folder);
+                    var fileName = $"safety_{DateTime.UtcNow:yyyyMMddHHmmss}{ext}";
+                    var fullPath = System.IO.Path.Combine(folder, fileName);
+                    using (var stream = new System.IO.FileStream(fullPath, System.IO.FileMode.Create))
+                    {
+                        await emergencyMapFile.CopyToAsync(stream);
+                    }
+                    building.EmergencyMapUrl = $"/uploads/buildings/{buildingId}/safety/{fileName}";
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = "🆘 Acil durum toplanma yeri, yangın dolabı/hortumu ve ana vana bilgileri kaydedildi; tüm sakinlerin telefon portalında anında görünür.";
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
     }
 }

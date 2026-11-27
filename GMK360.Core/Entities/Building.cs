@@ -114,6 +114,18 @@ namespace GMK360.Core.Entities
         public DateTime? DecisionBookOpenDate { get; set; }
         public DateTime? DecisionBookLastClosingDate { get; set; }
         public int? DecisionBookTotalPages { get; set; }
+
+        // Acil Durum Toplanma Yeri, Yangın Dolabı / Hortumu, Sığınak & Ana Vana Konumları (Sakin PWA'sında görünür)
+        [System.ComponentModel.DataAnnotations.MaxLength(400)]
+        public string? EmergencyAssemblyPoint { get; set; }
+        [System.ComponentModel.DataAnnotations.MaxLength(500)]
+        public string? FireEquipmentLocations { get; set; }
+        [System.ComponentModel.DataAnnotations.MaxLength(500)]
+        public string? UtilityShutoffLocations { get; set; }
+        [System.ComponentModel.DataAnnotations.MaxLength(400)]
+        public string? EmergencyContactsNote { get; set; }
+        [System.ComponentModel.DataAnnotations.MaxLength(500)]
+        public string? EmergencyMapUrl { get; set; }
     }
 }
 

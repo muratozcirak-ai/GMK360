@@ -541,6 +541,16 @@ using (var schemaScope = app.Services.CreateScope())
                 ALTER TABLE [dbo].[Buildings] ADD [DecisionBookLastClosingDate] datetime2 NULL;
             IF COL_LENGTH(N'dbo.Buildings', N'DecisionBookTotalPages') IS NULL
                 ALTER TABLE [dbo].[Buildings] ADD [DecisionBookTotalPages] int NULL;
+            IF COL_LENGTH(N'dbo.Buildings', N'EmergencyAssemblyPoint') IS NULL
+                ALTER TABLE [dbo].[Buildings] ADD [EmergencyAssemblyPoint] nvarchar(400) NULL;
+            IF COL_LENGTH(N'dbo.Buildings', N'FireEquipmentLocations') IS NULL
+                ALTER TABLE [dbo].[Buildings] ADD [FireEquipmentLocations] nvarchar(500) NULL;
+            IF COL_LENGTH(N'dbo.Buildings', N'UtilityShutoffLocations') IS NULL
+                ALTER TABLE [dbo].[Buildings] ADD [UtilityShutoffLocations] nvarchar(500) NULL;
+            IF COL_LENGTH(N'dbo.Buildings', N'EmergencyContactsNote') IS NULL
+                ALTER TABLE [dbo].[Buildings] ADD [EmergencyContactsNote] nvarchar(400) NULL;
+            IF COL_LENGTH(N'dbo.Buildings', N'EmergencyMapUrl') IS NULL
+                ALTER TABLE [dbo].[Buildings] ADD [EmergencyMapUrl] nvarchar(500) NULL;
             IF OBJECT_ID(N'dbo.BuildingDecisionVotes', N'U') IS NULL
             BEGIN
                 CREATE TABLE [dbo].[BuildingDecisionVotes] (

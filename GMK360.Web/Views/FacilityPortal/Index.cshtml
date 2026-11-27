@@ -23,7 +23,16 @@
     var plannedMaintenances = ViewBag.PlannedMaintenances as List<GMK360.Core.Entities.SpaceFixture> ?? new List<GMK360.Core.Entities.SpaceFixture>();
     var recentExpenses = ViewBag.RecentBuildingExpenses as List<GMK360.Core.Entities.BuildingExpense> ?? new List<GMK360.Core.Entities.BuildingExpense>();
     var meetingProposals = ViewBag.MeetingProposals as List<GMK360.Core.Entities.SupportTicket> ?? new List<GMK360.Core.Entities.SupportTicket>();
+    var unreadNotifications = ViewBag.UnreadNotifications as List<GMK360.Core.Entities.UserNotification> ?? new List<GMK360.Core.Entities.UserNotification>();
     int rootBuildingId = ViewBag.RootBuildingId is int rbid ? rbid : buildingId;
+
+    var residentUnitIdsTop = residentUnits.Select(u => u.Id).ToHashSet();
+    var activeMeetingCalls = (activeRole == "Tenant"
+        ? meetings.Where(m =>
+            !m.IsConcluded
+            && (string.Equals(m.InvitationScope, "AllResidents", StringComparison.OrdinalIgnoreCase)
+                || (m.Votes ?? new List<GMK360.Core.Entities.BuildingDecisionVote>()).Any(v => !v.IsDeleted && v.ParticipationType == "Vekil" && residentUnitIdsTop.Contains(v.BuildingUnitId))))
+        : meetings.Where(m => !m.IsConcluded)).ToList();
 
     var allDebts = residentUnits.SelectMany(u => u.Debts ?? new List<GMK360.Core.Entities.UnitDebt>()).Where(d => !d.IsArchived).ToList();
     var ownerDebts = allDebts.Where(d => d.PayerRole == "Owner").ToList();
@@ -146,6 +155,127 @@
                     </button>
                     <button type="button" class="btn-close btn-sm" aria-label="Gizle" onclick="sessionStorage.setItem('gmk_portal_pwa_hide','1');document.getElementById('portalPwaGuideCard').classList.add('d-none');"></button>
                 </div>
+            </div>
+        </div>
+
+        @* SABİT ÜST BİLDİRİM & TOPLANTI ÇAĞRI ŞERİDİ *@
+        @if (activeMeetingCalls.Any() || unreadNotifications.Any())
+        {
+            <div class="card pwa-card border border-primary bg-primary bg-opacity-10 p-3 mb-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                    <strong class="small text-primary-emphasis">
+                        <i class="bi bi-bell-fill text-primary me-1"></i>
+                        Bekleyen Toplantı Çağrısı &amp; Bildirimler (@(Math.Max(activeMeetingCalls.Count, unreadNotifications.Count)))
+                    </strong>
+                    @if (unreadNotifications.Any())
+                    {
+                        <form asp-action="MarkNotificationsRead" asp-controller="FacilityPortal" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="buildingId" value="@buildingId" />
+                            <input type="hidden" name="previewRole" value="@activeRole" />
+                            <button type="submit" class="btn btn-xs btn-outline-primary rounded-pill px-2 py-0" style="font-size:.72rem;">Bildirimleri Okundu Yap</button>
+                        </form>
+                    }
+                </div>
+                <div class="d-flex flex-column gap-2">
+                    @foreach (var callMt in activeMeetingCalls.Take(3))
+                    {
+                        bool isDisc = string.Equals(callMt.WorkflowStage, "Discussion", StringComparison.OrdinalIgnoreCase);
+                        <div class="bg-white rounded-3 p-2 px-3 border d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <div class="small">
+                                <span class="badge @(isDisc ? "bg-primary" : "bg-warning text-dark") me-1">@(isDisc ? "Toplantı Daveti" : "Karar Ön Onay")</span>
+                                <strong class="text-dark">@callMt.AgendaTitle</strong>
+                                <span class="text-muted d-block" style="font-size:.73rem;">
+                                    <i class="bi bi-calendar3 me-1"></i>@callMt.MeetingDate.ToString("dd.MM.yyyy HH:mm") • @(callMt.MeetingLocation ?? "Ortak Alan / Online")
+                                </span>
+                            </div>
+                            <a href="#meetingCard_@callMt.Id" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold text-nowrap">
+                                Katıl &amp; Görüş Yaz &rarr;
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @* SABİT ACİL DURUM TOPLANMA YERİ, YANGIN & ANA VANA GÜVENLİK KARTI (TÜM SAKİNLER GÖRÜR) *@
+        @{
+            bool hasCustomSafety = selectedBuilding != null && (!string.IsNullOrWhiteSpace(selectedBuilding.EmergencyAssemblyPoint)
+                || !string.IsNullOrWhiteSpace(selectedBuilding.FireEquipmentLocations)
+                || !string.IsNullOrWhiteSpace(selectedBuilding.UtilityShutoffLocations)
+                || !string.IsNullOrWhiteSpace(selectedBuilding.EmergencyContactsNote)
+                || !string.IsNullOrWhiteSpace(selectedBuilding.EmergencyMapUrl));
+        }
+        <div class="card pwa-card border border-danger-subtle bg-white p-3 mb-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2" role="button" data-bs-toggle="collapse" data-bs-target="#portalEmergencyCardBody" aria-expanded="@(hasCustomSafety ? "true" : "false")" style="cursor:pointer;">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-danger rounded-pill px-2 py-1"><i class="bi bi-shield-exclamation me-1"></i>ACİL</span>
+                    <strong class="small text-dark">Acil Durum Toplanma Yeri, Yangın &amp; Vana Noktaları</strong>
+                </div>
+                <span class="small text-muted fw-semibold">Detay <i class="bi bi-chevron-down ms-1"></i></span>
+            </div>
+            <div class="collapse @(hasCustomSafety ? "show" : "") mt-2 pt-2 border-top small" id="portalEmergencyCardBody">
+                @if (hasCustomSafety && selectedBuilding != null)
+                {
+                    <div class="row g-2">
+                        @if (!string.IsNullOrWhiteSpace(selectedBuilding.EmergencyAssemblyPoint))
+                        {
+                            <div class="col-md-6">
+                                <div class="p-2 rounded-3 bg-success bg-opacity-10 border border-success-subtle h-100">
+                                    <strong class="text-success-emphasis d-block"><i class="bi bi-geo-alt-fill me-1"></i>Deprem / Acil Toplanma Yeri</strong>
+                                    <span class="text-dark">@selectedBuilding.EmergencyAssemblyPoint</span>
+                                </div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(selectedBuilding.FireEquipmentLocations))
+                        {
+                            <div class="col-md-6">
+                                <div class="p-2 rounded-3 bg-danger bg-opacity-10 border border-danger-subtle h-100">
+                                    <strong class="text-danger-emphasis d-block"><i class="bi bi-fire me-1"></i>Yangın Dolabı / Hortum &amp; Tüpler</strong>
+                                    <span class="text-dark">@selectedBuilding.FireEquipmentLocations</span>
+                                </div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(selectedBuilding.UtilityShutoffLocations))
+                        {
+                            <div class="col-md-6">
+                                <div class="p-2 rounded-3 bg-warning bg-opacity-10 border border-warning-subtle h-100">
+                                    <strong class="text-warning-emphasis d-block"><i class="bi bi-wrench-adjustable me-1"></i>Ana Gaz / Su Vanası &amp; Şalter</strong>
+                                    <span class="text-dark">@selectedBuilding.UtilityShutoffLocations</span>
+                                </div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(selectedBuilding.EmergencyContactsNote))
+                        {
+                            <div class="col-md-6">
+                                <div class="p-2 rounded-3 bg-light border h-100">
+                                    <strong class="text-dark d-block"><i class="bi bi-telephone-fill text-danger me-1"></i>Acil Numaralar &amp; Sığınak</strong>
+                                    <span class="text-dark">@selectedBuilding.EmergencyContactsNote</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(selectedBuilding.EmergencyMapUrl))
+                    {
+                        <div class="mt-2">
+                            <a href="@selectedBuilding.EmergencyMapUrl" target="_blank" class="btn btn-xs btn-outline-danger rounded-pill px-3 fw-semibold">
+                                <i class="bi bi-map me-1"></i> Tahliye / Toplanma Krokisini Aç
+                            </a>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="text-muted">
+                        <strong>112 Acil / İtfaiye / AFAD:</strong> Yöneticiniz bina toplanma noktası, yangın dolabı/hortumu ve ana vana konumlarını <em>Bina Detayı &rarr; Acil Durum &amp; Toplanma Yeri</em> bölümünden tanımladığında burada otomatik görünecektir.
+                        @if (activeRole == "Manager" && buildingId > 0)
+                        {
+                            <div class="mt-2">
+                                <a href="/BuildingManager/Detail/@buildingId" class="btn btn-xs btn-danger rounded-pill px-3 fw-semibold">Şimdi Tanımla &rarr;</a>
+                            </div>
+                        }
+                    </div>
+                }
             </div>
         </div>
 
@@ -614,7 +744,7 @@
                             || eligibleUnitsForUser.Any()
                             || User.IsInRole("Admin") || User.IsInRole("SuperAdmin") || User.IsInRole("BinaYoneticisi");
 
-                        <div class="border rounded-3 p-2 mb-2 @(m.IsConcluded ? "bg-light" : isDiscussionStage ? "bg-primary bg-opacity-10 border-primary" : "bg-warning bg-opacity-10 border-warning")">
+                        <div id="meetingCard_@m.Id" class="border rounded-3 p-2 mb-2 @(m.IsConcluded ? "bg-light" : isDiscussionStage ? "bg-primary bg-opacity-10 border-primary" : "bg-warning bg-opacity-10 border-warning")">
                             <div class="d-flex justify-content-between align-items-center gap-2">
                                 <strong class="small text-dark">
                                     @(isDiscussionStage ? "Toplantı" : "Karar") #@(m.DecisionNumber ?? m.Id.ToString("D2")) — @m.AgendaTitle

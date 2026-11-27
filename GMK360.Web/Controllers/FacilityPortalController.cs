@@ -296,8 +296,16 @@ namespace GMK360.Web.Controllers
                     .ToListAsync()
                 : new List<SupportTicket>();
 
+            var unreadNotifications = await _context.UserNotifications
+                .AsNoTracking()
+                .Where(n => n.ApplicationUserId == user.Id && !n.IsRead && !n.IsDeleted)
+                .OrderByDescending(n => n.CreatedAt)
+                .Take(10)
+                .ToListAsync();
+
             ViewBag.ActiveRole = activeRole;
             ViewBag.CanSwitchPreview = isManager;
+            ViewBag.UnreadNotifications = unreadNotifications;
             ViewBag.ManagedBuildings = managedBuildings;
             ViewBag.PortalBuildings = portalBuildings;
             ViewBag.SelectedBuilding = targetBuilding;
@@ -319,6 +327,29 @@ namespace GMK360.Web.Controllers
             ViewBag.MeetingProposals = meetingProposals;
 
             return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> MarkNotificationsRead(int? buildingId, string? previewRole = null)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!string.IsNullOrEmpty(userId))
+            {
+                var unread = await _context.UserNotifications
+                    .Where(n => n.ApplicationUserId == userId && !n.IsRead && !n.IsDeleted)
+                    .ToListAsync();
+                foreach (var n in unread)
+                {
+                    n.IsRead = true;
+                    n.UpdatedAt = DateTime.UtcNow;
+                }
+                if (unread.Any())
+                {
+                    await _context.SaveChangesAsync();
+                }
+            }
+            return RedirectToAction(nameof(Index), new { buildingId, previewRole });
         }
 
         [HttpPost]
