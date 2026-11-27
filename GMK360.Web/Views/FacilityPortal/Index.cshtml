@@ -64,6 +64,9 @@
                     <div class="fw-bold fs-5 mt-1">@activeSiteName</div>
                 </div>
                 <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <button type="button" id="portalHeaderPwaBtn" class="btn btn-sm btn-warning text-dark rounded-pill px-3 fw-bold d-none" onclick="handlePortalPwaClick()" title="Telefonuna Uygulama Olarak İndir / Kur">
+                        <i class="bi bi-phone-vibrate-fill me-1"></i>Uygulamayı İndir
+                    </button>
                     <a href="/Dashboard/Hub" class="btn btn-sm btn-outline-light rounded-pill px-3" title="Ana Sayfa / Çalışma Alanlarım">
                         <i class="bi bi-grid-fill me-1"></i>Panellerim
                     </a>
@@ -138,7 +141,7 @@
                     </div>
                 </div>
                 <div class="d-flex align-items-center gap-2">
-                    <button type="button" id="portalPwaInstallBtn" class="btn btn-sm btn-warning text-dark fw-bold rounded-pill px-3 d-none" onclick="if(window.gmkTriggerPwaInstall){window.gmkTriggerPwaInstall();}">
+                    <button type="button" id="portalPwaInstallBtn" class="btn btn-sm btn-warning text-dark fw-bold rounded-pill px-3" onclick="handlePortalPwaClick()">
                         <i class="bi bi-download me-1"></i>Uygulamayı Kur
                     </button>
                     <button type="button" class="btn-close btn-sm" aria-label="Gizle" onclick="sessionStorage.setItem('gmk_portal_pwa_hide','1');document.getElementById('portalPwaGuideCard').classList.add('d-none');"></button>
@@ -1019,36 +1022,101 @@
         </div>
     </div>
 
+    <!-- PWA Kurulum Rehberi Modalı (Chrome WebView / iPhone Safari / Tüm Tarayıcılar) -->
+    <div class="modal fade" id="pwaInstallHelpModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+                <div class="modal-header bg-dark text-white border-0">
+                    <h6 class="modal-title fw-bold mb-0"><i class="bi bi-phone-vibrate-fill text-warning me-2"></i>GMK360 Telefon Uygulamasını Kur (PWA)</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 small">
+                    <div id="pwaNativeReadyBox" class="d-none alert alert-success rounded-3 mb-3">
+                        <div class="fw-bold mb-2">Tarayıcınız tek dokunuşla kuruluma hazır!</div>
+                        <button type="button" class="btn btn-success btn-sm rounded-pill px-4 fw-bold" onclick="if(window.gmkTriggerPwaInstall){window.gmkTriggerPwaInstall();}">
+                            <i class="bi bi-download me-1"></i> Şimdi Uygulamayı Kur
+                        </button>
+                    </div>
+                    <div class="p-3 rounded-3 bg-light border mb-3">
+                        <strong class="text-dark d-block mb-1"><i class="bi bi-android2 text-success me-1"></i>Android / Chrome (E-Postadan Açtıysanız):</strong>
+                        <ol class="mb-2 ps-3 lh-base">
+                            <li>Link e-posta uygulamasının iç tarayıcısında açıldıysa sağ üst <strong>⋮</strong> menüsünden <strong>"Chrome uygulamasında aç"</strong>a dokunun.</li>
+                            <li>Chrome'da sağ üst <strong>⋮</strong> menüsüne dokunup <strong>"Uygulamayı yükle"</strong> veya <strong>"Ana ekrana ekle"</strong>yi seçin.</li>
+                        </ol>
+                    </div>
+                    <div class="p-3 rounded-3 bg-light border mb-3">
+                        <strong class="text-dark d-block mb-1"><i class="bi bi-apple text-dark me-1"></i>iPhone / iPad (Safari):</strong>
+                        <ol class="mb-0 ps-3 lh-base">
+                            <li>Sayfayı <strong>Safari</strong> tarayıcısında açın.</li>
+                            <li>Ekranın altındaki <strong>Paylaş (⬆️)</strong> simgesine dokunup <strong>"Ana Ekrana Ekle"</strong>ye basın.</li>
+                        </ol>
+                    </div>
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control bg-light" id="pwaPortalCopyUrlInput" readonly />
+                        <button type="button" class="btn btn-outline-primary fw-semibold" onclick="navigator.clipboard.writeText(document.getElementById('pwaPortalCopyUrlInput').value);this.innerText='Kopyalandı ✓';">Linki Kopyala</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     @{ ViewData["FeedbackModule"] = (activeRole == "Owner" || activeRole == "Tenant") ? "SakinPortal" : "SiteYonetimi"; }
     <partial name="_FeedbackWidgetPartial" />
     <partial name="_PwaScriptsPartial" />
     <script>
+        function handlePortalPwaClick() {
+            if (window.__gmkDeferredPwaPrompt && window.gmkTriggerPwaInstall && window.gmkTriggerPwaInstall()) {
+                return;
+            }
+            var inp = document.getElementById('pwaPortalCopyUrlInput');
+            if (inp) inp.value = window.location.origin + '/FacilityPortal';
+            var modalEl = document.getElementById('pwaInstallHelpModal');
+            if (modalEl && window.bootstrap) {
+                new bootstrap.Modal(modalEl).show();
+            }
+        }
+
         (function () {
             var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
             var card = document.getElementById('portalPwaGuideCard');
             var btn = document.getElementById('portalPwaInstallBtn');
+            var hdrBtn = document.getElementById('portalHeaderPwaBtn');
             var hint = document.getElementById('portalPwaGuideHint');
-            if (!card || isStandalone || sessionStorage.getItem('gmk_portal_pwa_hide')) return;
+            var nativeBox = document.getElementById('pwaNativeReadyBox');
+            if (isStandalone) return;
+
+            if (hdrBtn) hdrBtn.classList.remove('d-none');
+            if (card && !sessionStorage.getItem('gmk_portal_pwa_hide')) {
+                card.classList.remove('d-none');
+            }
 
             var ua = navigator.userAgent || '';
             var isIos = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
-            if (isIos) {
-                card.classList.remove('d-none');
-                if (hint) hint.innerHTML = 'iPhone Safari alt menüden <strong>Paylaş</strong> &rarr; <strong>Ana Ekrana Ekle</strong> seçin.';
-            } else if (window.__gmkDeferredPwaPrompt) {
-                card.classList.remove('d-none');
-                if (btn) btn.classList.remove('d-none');
+            if (isIos && hint) {
+                hint.innerHTML = 'iPhone Safari alt menüden <strong>Paylaş</strong> &rarr; <strong>Ana Ekrana Ekle</strong> seçin.';
+            }
+
+            if (window.__gmkDeferredPwaPrompt) {
+                if (btn) btn.innerHTML = '<i class="bi bi-download me-1"></i>Tek Tıkla Kur';
+                if (nativeBox) nativeBox.classList.remove('d-none');
             }
 
             window.addEventListener('gmk:pwa-ready', function () {
-                if (sessionStorage.getItem('gmk_portal_pwa_hide')) return;
-                card.classList.remove('d-none');
-                if (btn) btn.classList.remove('d-none');
+                if (btn) btn.innerHTML = '<i class="bi bi-download me-1"></i>Tek Tıkla Kur';
+                if (nativeBox) nativeBox.classList.remove('d-none');
+                if (card && !sessionStorage.getItem('gmk_portal_pwa_hide')) {
+                    card.classList.remove('d-none');
+                }
             });
             window.addEventListener('gmk:pwa-installed', function () {
-                card.classList.add('d-none');
+                if (card) card.classList.add('d-none');
+                if (hdrBtn) hdrBtn.classList.add('d-none');
             });
+
+            if (new URLSearchParams(window.location.search).get('installPwa') === '1') {
+                setTimeout(handlePortalPwaClick, 450);
+            }
         })();
 
         function toggleAutoCleanHint() {

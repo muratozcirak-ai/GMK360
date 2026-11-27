@@ -3331,7 +3331,7 @@ namespace GMK360.Web.Controllers
             }
 
             var activateUrl = $"{Request.Scheme}://{Request.Host}/Account/ActivateResident?token={Uri.EscapeDataString(targetUser.ActivationToken)}";
-            var portalUrl = $"{Request.Scheme}://{Request.Host}/FacilityPortal";
+            var portalInstallUrl = $"{Request.Scheme}://{Request.Host}/FacilityPortal?installPwa=1";
             var emailSvc = HttpContext.RequestServices.GetService<IEmailService>();
             if (emailSvc == null)
             {
@@ -3349,14 +3349,18 @@ namespace GMK360.Web.Controllers
   <p><strong>{System.Net.WebUtility.HtmlEncode(buildingName)}</strong> yönetiminde <strong>{System.Net.WebUtility.HtmlEncode(roleTitle)}</strong> olarak hesabınız oluşturuldu.</p>
   <div style=""background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin:16px 0;"">
     <strong style=""color:#0f172a;"">1. Adım: Şifre ve Kişisel Onay PIN'inizi Belirleyin</strong>
-    <p style=""margin:8px 0 14px;font-size:14px;color:#334155;"">Aşağıdaki butona tıklayarak bilgilerinizi doğrulayın, kalıcı giriş şifrenizi ve 4–6 haneli hızlı giriş PIN kodunuzu oluşturun:</p>
+    <p style=""margin:8px 0 14px;font-size:14px;color:#334155;"">Aşağıdaki butona tıklayarak ad-soyadınızı doğrulayın, giriş şifrenizi ve 4–6 haneli hızlı giriş PIN kodunuzu belirleyin:</p>
     <a href=""{activateUrl}"" style=""background:#15803d;color:#fff;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:bold;display:inline-block;"">Profilimi Doğrula &amp; Şifre/PIN Belirle</a>
   </div>
   <div style=""background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px;margin:16px 0;font-size:13px;color:#451a03;"">
-    <strong>2. Adım: Telefonunuza Özel Uygulama (PWA) Olarak Kurun</strong>
-    <ul style=""margin:8px 0 0;padding-left:18px;line-height:1.6;"">
-      <li><strong>Android (Chrome / Edge):</strong> Aktivasyonu tamamladığınızda açılan <em>Daire Portalı</em>nda altta çıkan <strong>""Yükle""</strong> butonuna basın (veya tarayıcı ⋮ menüsünden <em>Ana ekrana ekle</em> seçin).</li>
-      <li><strong>iPhone (Safari):</strong> <a href=""{portalUrl}"" style=""color:#b45309;"">{portalUrl}</a> sayfasını Safari'de açıp alt ortadaki <strong>Paylaş</strong> simgesine dokunun ve <strong>""Ana Ekrana Ekle""</strong>yi seçin.</li>
+    <strong>2. Adım: Telefonunuza Özel Uygulama (PWA) Olarak İndirin</strong>
+    <p style=""margin:8px 0 12px;"">Şifre ve PIN kurulumundan sonra aşağıdaki butona dokunup mobil uygulamayı ana ekranınıza kurabilirsiniz <em>(Gmail içinden açılırsa sağ üst ⋮ menüsünden <strong>Chrome/Safari'de Aç</strong> seçin)</em>:</p>
+    <p style=""margin:0 0 12px;"">
+      <a href=""{portalInstallUrl}"" style=""background:#f59e0b;color:#111827;text-decoration:none;padding:10px 18px;border-radius:999px;font-weight:bold;display:inline-block;"">📲 Telefon Uygulamasını İndir / Kur</a>
+    </p>
+    <ul style=""margin:4px 0 0;padding-left:18px;line-height:1.6;"">
+      <li><strong>Android (Chrome):</strong> Portal üstündeki <em>Uygulamayı İndir</em> butonuna basın veya ⋮ menü &rarr; <em>Uygulamayı yükle</em> seçin.</li>
+      <li><strong>iPhone (Safari):</strong> Alttaki <strong>Paylaş</strong> simgesine dokunup <strong>""Ana Ekrana Ekle""</strong> seçin.</li>
     </ul>
   </div>
   <p style=""font-size:12px;color:#64748b;"">Buton çalışmazsa aktivasyon bağlantısını tarayıcınıza yapıştırın:<br/><a href=""{activateUrl}"">{activateUrl}</a></p>
