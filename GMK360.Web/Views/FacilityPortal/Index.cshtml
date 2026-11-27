@@ -127,6 +127,25 @@
             <div class="alert alert-danger rounded-4 border-0 shadow-sm">@TempData["ErrorMessage"]</div>
         }
 
+        <!-- Telefona Uygulama (PWA) Kurulum Kartı (Yalnızca tarayıcıda açıkken görünür, kurulduktan sonra gizlenir) -->
+        <div id="portalPwaGuideCard" class="card pwa-card border border-warning-subtle bg-warning bg-opacity-10 p-3 mb-3 d-none">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-phone-vibrate-fill text-warning-emphasis fs-4"></i>
+                    <div class="small">
+                        <strong class="text-dark d-block">Site / Daire Uygulamasını Telefonunuza Ekleyin (PWA)</strong>
+                        <span id="portalPwaGuideHint" class="text-muted">Tek dokunuşla ana ekranınızdan hızlı giriş yapın.</span>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" id="portalPwaInstallBtn" class="btn btn-sm btn-warning text-dark fw-bold rounded-pill px-3 d-none" onclick="if(window.gmkTriggerPwaInstall){window.gmkTriggerPwaInstall();}">
+                        <i class="bi bi-download me-1"></i>Uygulamayı Kur
+                    </button>
+                    <button type="button" class="btn-close btn-sm" aria-label="Gizle" onclick="sessionStorage.setItem('gmk_portal_pwa_hide','1');document.getElementById('portalPwaGuideCard').classList.add('d-none');"></button>
+                </div>
+            </div>
+        </div>
+
         @if (activeRole == "Manager")
         {
             <!-- ==================== ROL 1: SİTE YÖNETİCİSİ PWA ==================== -->
@@ -1005,6 +1024,33 @@
     <partial name="_FeedbackWidgetPartial" />
     <partial name="_PwaScriptsPartial" />
     <script>
+        (function () {
+            var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+            var card = document.getElementById('portalPwaGuideCard');
+            var btn = document.getElementById('portalPwaInstallBtn');
+            var hint = document.getElementById('portalPwaGuideHint');
+            if (!card || isStandalone || sessionStorage.getItem('gmk_portal_pwa_hide')) return;
+
+            var ua = navigator.userAgent || '';
+            var isIos = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+            if (isIos) {
+                card.classList.remove('d-none');
+                if (hint) hint.innerHTML = 'iPhone Safari alt menüden <strong>Paylaş</strong> &rarr; <strong>Ana Ekrana Ekle</strong> seçin.';
+            } else if (window.__gmkDeferredPwaPrompt) {
+                card.classList.remove('d-none');
+                if (btn) btn.classList.remove('d-none');
+            }
+
+            window.addEventListener('gmk:pwa-ready', function () {
+                if (sessionStorage.getItem('gmk_portal_pwa_hide')) return;
+                card.classList.remove('d-none');
+                if (btn) btn.classList.remove('d-none');
+            });
+            window.addEventListener('gmk:pwa-installed', function () {
+                card.classList.add('d-none');
+            });
+        })();
+
         function toggleAutoCleanHint() {
             const sel = document.getElementById('resCatSelect');
             const b = document.getElementById('autoCleanBadge');

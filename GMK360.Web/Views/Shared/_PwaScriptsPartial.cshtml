@@ -1,4 +1,8 @@
-<!-- PWA Service Worker Kaydı, Geçiş Yükleme Çubuğu & Uygulama Yükle Butonu -->
+@* PWA Service Worker Kaydı, Geçiş Yükleme Çubuğu & Üyelere Özel Uygulama Yükle Banner'ı *@
+@{
+    bool allowPwaInstallPrompt = User?.Identity?.IsAuthenticated == true
+        || string.Equals(ViewContext.RouteData.Values["Action"]?.ToString(), "ActivateResident", StringComparison.OrdinalIgnoreCase);
+}
 <div id="gmkNavLoadingBar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:109000;pointer-events:none;">
     <div style="height:3px;width:100%;background:linear-gradient(90deg,#f97316,#fbbf24,#38bdf8);animation:gmkNavPulse 1s ease-in-out infinite;"></div>
     <div style="position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:6px 14px;border-radius:999px;font-size:.78rem;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.25);display:flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.15);">
@@ -8,49 +12,61 @@
 </div>
 <style>@@keyframes gmkNavPulse{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}</style>
 
-<div id="gmkPwaInstallBanner" class="d-none position-fixed bottom-0 start-0 m-3 shadow-lg rounded-pill bg-dark text-white px-3 py-2 align-items-center gap-2 border border-warning" style="z-index: 1080; font-size: 0.82rem;">
-    <img src="/icons/icon-192.png" alt="GMK360" width="24" height="24" class="rounded" />
-    <span class="fw-semibold">GMK360 Uygulamasını Yükle</span>
-    <button type="button" id="gmkPwaInstallBtn" class="btn btn-warning btn-sm rounded-pill fw-bold px-3 py-0 text-dark">Yükle</button>
-    <button type="button" id="gmkPwaDismissBtn" class="btn btn-link btn-sm text-white-50 p-0 ms-1 text-decoration-none" title="Kapat" aria-label="Kapat">✕</button>
-</div>
+@if (allowPwaInstallPrompt)
+{
+    <div id="gmkPwaInstallBanner" class="d-none position-fixed bottom-0 start-0 m-3 shadow-lg rounded-pill bg-dark text-white px-3 py-2 align-items-center gap-2 border border-warning" style="z-index: 1080; font-size: 0.82rem;">
+        <img src="/icons/icon-192.png" alt="GMK360" width="24" height="24" class="rounded" />
+        <span class="fw-semibold">GMK360 Mobil Uygulamasını Yükle</span>
+        <button type="button" id="gmkPwaInstallBtn" class="btn btn-warning btn-sm rounded-pill fw-bold px-3 py-0 text-dark">Yükle</button>
+        <button type="button" id="gmkPwaDismissBtn" class="btn btn-link btn-sm text-white-50 p-0 ms-1 text-decoration-none" title="Kapat" aria-label="Kapat">✕</button>
+    </div>
+}
 
 <script>
     (function () {
-        if ('serviceWorker' in navigator) {
+        var allowInstall = @(allowPwaInstallPrompt ? "true" : "false");
+        if ('serviceWorker' in navigator && allowInstall) {
             window.addEventListener('load', function () {
                 navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () { });
             });
         }
 
-        var deferredPrompt = null;
+        window.__gmkDeferredPwaPrompt = null;
+        window.gmkTriggerPwaInstall = function () {
+            if (!window.__gmkDeferredPwaPrompt) return false;
+            window.__gmkDeferredPwaPrompt.prompt();
+            window.__gmkDeferredPwaPrompt.userChoice.then(function () {
+                window.__gmkDeferredPwaPrompt = null;
+                var b = document.getElementById('gmkPwaInstallBanner');
+                if (b) {
+                    b.classList.add('d-none');
+                    b.classList.remove('d-inline-flex');
+                }
+                window.dispatchEvent(new Event('gmk:pwa-installed'));
+            });
+            return true;
+        };
+
         var banner = document.getElementById('gmkPwaInstallBanner');
         var installBtn = document.getElementById('gmkPwaInstallBtn');
         var dismissBtn = document.getElementById('gmkPwaDismissBtn');
-
         var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-        if (isStandalone) return;
 
-        window.addEventListener('beforeinstallprompt', function (e) {
-            e.preventDefault();
-            deferredPrompt = e;
-            if (banner && !sessionStorage.getItem('gmk_pwa_dismissed')) {
-                banner.classList.remove('d-none');
-                banner.classList.add('d-inline-flex');
-            }
-        });
+        if (allowInstall && !isStandalone) {
+            window.addEventListener('beforeinstallprompt', function (e) {
+                e.preventDefault();
+                window.__gmkDeferredPwaPrompt = e;
+                window.dispatchEvent(new Event('gmk:pwa-ready'));
+                if (banner && !sessionStorage.getItem('gmk_pwa_dismissed')) {
+                    banner.classList.remove('d-none');
+                    banner.classList.add('d-inline-flex');
+                }
+            });
+        }
 
         if (installBtn) {
             installBtn.addEventListener('click', function () {
-                if (!deferredPrompt) return;
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then(function () {
-                    deferredPrompt = null;
-                    if (banner) {
-                        banner.classList.add('d-none');
-                        banner.classList.remove('d-inline-flex');
-                    }
-                });
+                window.gmkTriggerPwaInstall();
             });
         }
 
@@ -64,7 +80,6 @@
             });
         }
 
-        // Sayfa geçişlerinde kullanıcıyı bekletirken görsel yükleme göstergesi
         var navBar = document.getElementById('gmkNavLoadingBar');
         var navTimer = null;
         function scheduleNavLoader() {
