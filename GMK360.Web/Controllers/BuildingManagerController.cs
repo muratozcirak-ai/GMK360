@@ -4008,12 +4008,18 @@ namespace GMK360.Web.Controllers
                     .ToListAsync()
                 : new System.Collections.Generic.List<BuildingStaff>();
 
+            var allowedComplexIds = buildings
+                .Where(b => allowedIds.Contains(b.Id) && b.HousingComplexId.HasValue)
+                .Select(b => b.HousingComplexId!.Value)
+                .Distinct()
+                .ToList();
+
             var latestDuesDecision = allowedIds.Any()
                 ? await _context.SystemMeetings
                     .AsNoTracking()
                     .Where(m => m.ContextType == "Building" && !m.IsDeleted && m.DecisionCategory == "DuesUpdate" && m.IsExecuted
                         && (allowedIds.Contains(m.ContextId)
-                            || (m.HousingComplexId.HasValue && m.IsSiteWide && buildings.Any(b => allowedIds.Contains(b.Id) && b.HousingComplexId == m.HousingComplexId))))
+                            || (m.HousingComplexId.HasValue && m.IsSiteWide && allowedComplexIds.Contains(m.HousingComplexId.Value))))
                     .OrderByDescending(m => m.ExecutedAt ?? m.MeetingDate)
                     .FirstOrDefaultAsync()
                 : null;
