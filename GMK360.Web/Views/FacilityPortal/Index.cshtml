@@ -570,19 +570,35 @@
                         var eligibleUnitsForUser = activeRole == "Owner"
                             ? residentUnits
                             : residentUnits.Where(u => proxyUnitIds.Contains(u.Id)).ToList();
+                        bool isDiscussionStage = string.Equals(m.WorkflowStage, "Discussion", StringComparison.OrdinalIgnoreCase);
+                        bool canDiscuss = activeRole == "Owner"
+                            || string.Equals(m.InvitationScope, "AllResidents", StringComparison.OrdinalIgnoreCase)
+                            || eligibleUnitsForUser.Any()
+                            || User.IsInRole("Admin") || User.IsInRole("SuperAdmin") || User.IsInRole("BinaYoneticisi");
 
-                        <div class="border rounded-3 p-2 mb-2 @(m.IsConcluded ? "bg-light" : "bg-warning bg-opacity-10 border-warning")">
+                        <div class="border rounded-3 p-2 mb-2 @(m.IsConcluded ? "bg-light" : isDiscussionStage ? "bg-primary bg-opacity-10 border-primary" : "bg-warning bg-opacity-10 border-warning")">
                             <div class="d-flex justify-content-between align-items-center gap-2">
-                                <strong class="small text-dark">Karar #@(m.DecisionNumber ?? m.Id.ToString("D2")) — @m.AgendaTitle</strong>
-                                <span class="badge @(m.IsConcluded ? "bg-success" : "bg-warning text-dark")">
-                                    @(m.IsConcluded ? "Karara Bağlandı" : "📅 Ön Görüş & Onay")
+                                <strong class="small text-dark">
+                                    @(isDiscussionStage ? "Toplantı" : "Karar") #@(m.DecisionNumber ?? m.Id.ToString("D2")) — @m.AgendaTitle
+                                </strong>
+                                <span class="badge @(m.IsConcluded ? "bg-success" : isDiscussionStage ? "bg-primary" : "bg-warning text-dark")">
+                                    @(m.IsConcluded ? "Karara Bağlandı" : isDiscussionStage ? "🤝 Açık Toplantı & Müzakere" : "📒 Karar Defteri Oylaması")
                                 </span>
                             </div>
                             <div class="text-muted d-flex flex-wrap justify-content-between align-items-center gap-1 mt-1" style="font-size:.75rem;">
                                 <span><i class="bi bi-calendar3 me-1"></i>@m.MeetingDate.ToString("dd.MM.yyyy HH:mm")</span>
-                                <span class="badge @(quorum.IsQuorumMet ? "bg-success-subtle text-success" : "bg-light text-dark border")">
-                                    Ön Onay: @quorum.ApprovedUnits/@quorum.TotalUnits Malik (%@quorum.ApprovalUnitPercent)
-                                </span>
+                                @if (isDiscussionStage)
+                                {
+                                    <span class="badge bg-white text-primary border">
+                                        Davet: @(m.InvitationScope == "AllResidents" ? "Tüm Malik & Kiracılar" : m.InvitationScope == "OwnersOnly" ? "Sadece Mal Sahipleri" : "Malikler + Vekaletli Kiracılar")
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge @(quorum.IsQuorumMet ? "bg-success-subtle text-success" : "bg-light text-dark border")">
+                                        Ön Onay: @quorum.ApprovedUnits/@quorum.TotalUnits Malik (%@quorum.ApprovalUnitPercent)
+                                    </span>
+                                }
                             </div>
                             @if (m.Decisions != null && m.Decisions.Any())
                             {
@@ -610,7 +626,7 @@
                                     }
                                 </div>
                             }
-                            @if (!m.IsConcluded && eligibleUnitsForUser.Any())
+                            @if (!isDiscussionStage && !m.IsConcluded && eligibleUnitsForUser.Any())
                             {
                                 <div class="mt-2 pt-2 border-top bg-white rounded-3 p-2">
                                     <div class="fw-bold mb-1" style="font-size:.78rem;">
@@ -658,7 +674,7 @@
                                     }
                                 </div>
                             }
-                            @if (!m.IsConcluded)
+                            @if (!m.IsConcluded && canDiscuss)
                             {
                                 <form asp-action="AddRemoteMeetingComment" method="post" enctype="multipart/form-data" class="mt-2 pt-2 border-top row g-1">
                                     @Html.AntiForgeryToken()
@@ -666,7 +682,7 @@
                                     <input type="hidden" name="meetingId" value="@m.Id" />
                                     <input type="hidden" name="previewRole" value="@(canSwitch ? activeRole : "")" />
                                     <div class="col-7">
-                                        <input type="text" name="commentText" class="form-control form-control-sm" placeholder="Görüş / öneri yazın..." />
+                                        <input type="text" name="commentText" class="form-control form-control-sm" placeholder="@(isDiscussionStage ? "Konu hakkında görüş / öneri / itiraz yazın..." : "Görüş / öneri yazın...")" />
                                     </div>
                                     <div class="col-3">
                                         <input type="file" name="attachmentFile" class="form-control form-control-sm" title="Belge/Teklif Ekle" />
@@ -675,6 +691,12 @@
                                         <button type="submit" class="btn btn-xs btn-primary w-100 rounded-pill fw-bold">Gönder</button>
                                     </div>
                                 </form>
+                            }
+                            else if (!m.IsConcluded && isDiscussionStage && activeRole == "Tenant")
+                            {
+                                <div class="alert alert-light border py-1 px-2 mt-2 mb-0 small text-muted">
+                                    <i class="bi bi-shield-lock me-1"></i>Bu toplantıya görüş eklemek için mülk sahibiniz tarafından adınıza <strong>yazılı vekalet</strong> tanımlanmalıdır.
+                                </div>
                             }
                             @if (activeRole == "Owner" && !m.IsConcluded)
                             {

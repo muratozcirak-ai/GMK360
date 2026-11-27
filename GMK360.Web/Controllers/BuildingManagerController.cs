@@ -2867,7 +2867,8 @@ namespace GMK360.Web.Controllers
             int meetingId,
             string? commentText,
             string? documentTitle,
-            Microsoft.AspNetCore.Http.IFormFile? attachmentFile)
+            Microsoft.AspNetCore.Http.IFormFile? attachmentFile,
+            string? returnTo = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -2879,7 +2880,9 @@ namespace GMK360.Web.Controllers
             if (string.IsNullOrWhiteSpace(commentText) && string.IsNullOrWhiteSpace(fileUrl))
             {
                 TempData["ErrorMessage"] = "Lütfen bir görüş notu yazın veya belge (PDF/görsel) yükleyin.";
-                return RedirectToAction(nameof(Oylamalar), new { buildingId });
+                return string.Equals(returnTo, "Toplantilar", StringComparison.OrdinalIgnoreCase)
+                    ? RedirectToAction(nameof(Toplantilar), new { buildingId })
+                    : RedirectToAction(nameof(Oylamalar), new { buildingId });
             }
 
             _context.BuildingDecisionAttachments.Add(new BuildingDecisionAttachment
@@ -2895,8 +2898,10 @@ namespace GMK360.Web.Controllers
             });
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Belge / yönetim notu toplantı dosyasına eklendi ve malik ekranına yansıtıldı.";
-            return RedirectToAction(nameof(Oylamalar), new { buildingId });
+            TempData["SuccessMessage"] = "Belge / yönetim notu toplantı dosyasına eklendi ve davetli katılımcı ekranına yansıtıldı.";
+            return string.Equals(returnTo, "Toplantilar", StringComparison.OrdinalIgnoreCase)
+                ? RedirectToAction(nameof(Toplantilar), new { buildingId })
+                : RedirectToAction(nameof(Oylamalar), new { buildingId });
         }
 
         [HttpPost]
@@ -2909,6 +2914,7 @@ namespace GMK360.Web.Controllers
             string? participationType = "Vekil",
             string? voteChoice = null,
             Microsoft.AspNetCore.Http.IFormFile? proxyDocumentFile = null,
+            string? returnTo = null,
             [FromServices] FacilityTaskDispatchService? taskDispatch = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
@@ -2963,16 +2969,22 @@ namespace GMK360.Web.Controllers
             }
 
             await _context.SaveChangesAsync();
-            var execRes = await _governanceService.TryExecuteDecisionOnQuorumAsync(meetingId, GetUserId() ?? "system", taskDispatch);
-            if (execRes.Executed && !string.IsNullOrWhiteSpace(execRes.Message))
+            if (meeting.WorkflowStage == "Decision")
             {
-                TempData["SuccessMessage"] = $"Daire {unit.DoorNumber} vekalet/oy kaydı alındı ve yasal çoğunluk sağlandığı için karar yürürlüğe girdi: {execRes.Message}";
+                var execRes = await _governanceService.TryExecuteDecisionOnQuorumAsync(meetingId, GetUserId() ?? "system", taskDispatch);
+                if (execRes.Executed && !string.IsNullOrWhiteSpace(execRes.Message))
+                {
+                    TempData["SuccessMessage"] = $"Daire {unit.DoorNumber} vekalet/oy kaydı alındı ve yasal çoğunluk sağlandığı için karar yürürlüğe girdi: {execRes.Message}";
+                    return string.Equals(returnTo, "Toplantilar", StringComparison.OrdinalIgnoreCase)
+                        ? RedirectToAction(nameof(Toplantilar), new { buildingId })
+                        : RedirectToAction(nameof(Oylamalar), new { buildingId });
+                }
             }
-            else
-            {
-                TempData["SuccessMessage"] = $"Daire {unit.DoorNumber} için temsil/vekalet bilgisi güncellendi ({partType}).";
-            }
-            return RedirectToAction(nameof(Oylamalar), new { buildingId });
+
+            TempData["SuccessMessage"] = $"Daire {unit.DoorNumber} için temsil/vekalet bilgisi güncellendi ({partType}).";
+            return string.Equals(returnTo, "Toplantilar", StringComparison.OrdinalIgnoreCase)
+                ? RedirectToAction(nameof(Toplantilar), new { buildingId })
+                : RedirectToAction(nameof(Oylamalar), new { buildingId });
         }
 
         [HttpPost]
@@ -5324,6 +5336,7 @@ namespace GMK360.Web.Controllers
                     .Include(m => m.Votes)
                     .Include(m => m.Attachments)
                     .Where(m => m.ContextType == "Building" && !m.IsDeleted
+                        && m.WorkflowStage == "Decision"
                         && (allowedIds.Contains(m.ContextId)
                             || (m.IsSiteWide && m.HousingComplexId.HasValue && complexIds.Contains(m.HousingComplexId.Value))))
                     .OrderByDescending(m => m.MeetingDate)
@@ -5421,6 +5434,295 @@ namespace GMK360.Web.Controllers
             ViewBag.AllSiteUnits = allUnitsLoaded;
             ViewBag.OpenComplaints = openComplaints;
             return View(meetings);
+        }
+
+        // 11b. Toplantı & Ön Görüşme Masası (Müzakere & Dijital Evrak Çantası)
+        [HttpGet]
+        public async Task<IActionResult> Toplantilar(int? buildingId, string tab = "open")
+        {
+            var buildings = await GetUserManagedRootBuildingsAsync();
+            var allowedIds = buildings.Select(b => b.Id).ToList();
+            var complexIds = buildings.Where(b => b.HousingComplexId.HasValue).Select(b => b.HousingComplexId!.Value).Distinct().ToList();
+            if (buildingId.HasValue)
+            {
+                var b = await GetManagedBuildingAsync(buildingId.Value);
+                if (b == null) return Forbid();
+                allowedIds = b.HousingComplexId.HasValue
+                    ? buildings.Where(x => x.HousingComplexId == b.HousingComplexId).Select(x => x.Id).ToList()
+                    : new System.Collections.Generic.List<int> { b.Id };
+                complexIds = b.HousingComplexId.HasValue
+                    ? new System.Collections.Generic.List<int> { b.HousingComplexId.Value }
+                    : new System.Collections.Generic.List<int>();
+            }
+
+            var allDiscussions = (allowedIds.Any() || complexIds.Any())
+                ? await _context.SystemMeetings
+                    .Include(m => m.Decisions)
+                    .Include(m => m.Votes)
+                    .Include(m => m.Attachments)
+                    .Where(m => m.ContextType == "Building" && !m.IsDeleted
+                        && (m.WorkflowStage == "Discussion" || m.WorkflowStage == "ArchivedNegative")
+                        && (allowedIds.Contains(m.ContextId)
+                            || (m.IsSiteWide && m.HousingComplexId.HasValue && complexIds.Contains(m.HousingComplexId.Value))))
+                    .OrderByDescending(m => m.MeetingDate)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<SystemMeeting>();
+
+            bool isArchive = string.Equals(tab, "archive", StringComparison.OrdinalIgnoreCase);
+            var openList = allDiscussions.Where(m => m.WorkflowStage == "Discussion").ToList();
+            var archiveList = allDiscussions.Where(m => m.WorkflowStage == "ArchivedNegative").ToList();
+
+            var allUnitsLoaded = allowedIds.Any()
+                ? await _context.BuildingUnits
+                    .AsNoTracking()
+                    .Include(u => u.Building)
+                    .Where(u => allowedIds.Contains(u.BuildingId) && !(u.Category ?? "").StartsWith("OrtakAlan"))
+                    .OrderBy(u => u.Building.BlockName ?? u.Building.Name).ThenBy(u => u.FloorLevel).ThenBy(u => u.DoorNumber)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<BuildingUnit>();
+
+            var openComplaints = allowedIds.Any()
+                ? await _context.SupportTickets
+                    .AsNoTracking()
+                    .Where(t => t.ContextType == "Building" && t.ContextId.HasValue && allowedIds.Contains(t.ContextId.Value)
+                        && t.Category != "ManagerTodo" && t.Status != "Closed")
+                    .OrderByDescending(t => t.Id)
+                    .Take(30)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<SupportTicket>();
+
+            ViewBag.Buildings = buildings;
+            ViewBag.BuildingMap = buildings.ToDictionary(b => b.Id, b => b.Name);
+            ViewBag.SelectedBuildingId = buildingId;
+            ViewBag.SelectedBuildingObj = buildingId.HasValue
+                ? buildings.FirstOrDefault(b => b.Id == buildingId.Value)
+                : buildings.FirstOrDefault();
+            ViewBag.SelectedTab = isArchive ? "archive" : "open";
+            ViewBag.OpenCount = openList.Count;
+            ViewBag.ArchiveCount = archiveList.Count;
+            ViewBag.UnitsByBuilding = allUnitsLoaded.GroupBy(u => u.BuildingId).ToDictionary(g => g.Key, g => g.ToList());
+            ViewBag.UnitsByComplex = allUnitsLoaded.Where(u => u.Building?.HousingComplexId != null).GroupBy(u => u.Building!.HousingComplexId!.Value).ToDictionary(g => g.Key, g => g.ToList());
+            ViewBag.AllSiteUnits = allUnitsLoaded;
+            ViewBag.OpenComplaints = openComplaints;
+
+            return View(isArchive ? archiveList : openList);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CreateDiscussionMeeting(
+            int buildingId,
+            string agendaTitle,
+            DateTime meetingDate,
+            string? meetingTime = "20:00",
+            string? meetingLocation = null,
+            string? invitationScope = "OwnersAndProxyTenants",
+            string? decisionText = null,
+            bool isSiteWide = true,
+            Microsoft.AspNetCore.Http.IFormFile? attachmentFile = null,
+            string? attachmentTitle = null)
+        {
+            var userId = GetUserId();
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            DateTime effectiveDate = meetingDate;
+            if (!string.IsNullOrWhiteSpace(meetingTime) && TimeSpan.TryParse(meetingTime, out var parsedTime))
+            {
+                effectiveDate = meetingDate.Date.Add(parsedTime);
+            }
+
+            int yearCount = await _context.SystemMeetings.CountAsync(m =>
+                m.ContextType == "Building" && m.ContextId == buildingId && m.WorkflowStage == "Discussion" && m.MeetingDate.Year == effectiveDate.Year && !m.IsDeleted);
+            string tplNo = $"TPL-{effectiveDate.Year}/{(yearCount + 1):D2}";
+            string cleanScope = string.IsNullOrWhiteSpace(invitationScope) ? "OwnersAndProxyTenants" : invitationScope.Trim();
+
+            var meeting = new SystemMeeting
+            {
+                ContextType = "Building",
+                ContextId = buildingId,
+                IsSiteWide = isSiteWide && building.HousingComplexId.HasValue,
+                HousingComplexId = building.HousingComplexId,
+                AgendaTitle = agendaTitle.Trim(),
+                DecisionNumber = tplNo,
+                MeetingLocation = string.IsNullOrWhiteSpace(meetingLocation) ? "Site Sosyal Alan / Online Katılım" : meetingLocation.Trim(),
+                QuorumType = "Standard",
+                DecisionCategory = "General",
+                WorkflowStage = "Discussion",
+                InvitationScope = cleanScope,
+                AutoExecuteOnQuorum = true,
+                VerificationToken = Guid.NewGuid().ToString("N").Substring(0, 12).ToUpperInvariant(),
+                MeetingDate = effectiveDate,
+                IsConcluded = false,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.SystemMeetings.Add(meeting);
+            await _context.SaveChangesAsync();
+
+            if (!string.IsNullOrWhiteSpace(decisionText))
+            {
+                _context.SystemMeetingDecisions.Add(new SystemMeetingDecision
+                {
+                    SystemMeetingId = meeting.Id,
+                    DecisionText = decisionText.Trim(),
+                    CreatedAt = DateTime.UtcNow
+                });
+                await _context.SaveChangesAsync();
+            }
+
+            if (attachmentFile != null && attachmentFile.Length > 0)
+            {
+                var savedUrl = await SaveMeetingAttachmentFileAsync(buildingId, meeting.Id, attachmentFile);
+                if (!string.IsNullOrEmpty(savedUrl))
+                {
+                    _context.BuildingDecisionAttachments.Add(new BuildingDecisionAttachment
+                    {
+                        SystemMeetingId = meeting.Id,
+                        AuthorUserId = userId,
+                        AuthorName = User.Identity?.Name ?? "Site Yöneticisi",
+                        AuthorRoleLabel = "Yönetici",
+                        DocumentTitle = string.IsNullOrWhiteSpace(attachmentTitle) ? attachmentFile.FileName : attachmentTitle.Trim(),
+                        FileUrl = savedUrl,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            TempData["SuccessMessage"] = $"🤝 '{meeting.AgendaTitle}' ({tplNo}) toplantı masası açıldı ve davetli malik/vekil ekranlarına yansıtıldı.";
+            return RedirectToAction(nameof(Toplantilar), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PromoteMeetingToDecision(
+            int meetingId,
+            int buildingId,
+            string? decisionCategory = "General",
+            string? quorumType = "Standard",
+            string? decisionText = null,
+            string? proposedDues = null,
+            int? paymentDay = null,
+            string? targetName = null,
+            string? targetEmail = null,
+            string? targetPhone = null,
+            string? targetRole = null,
+            string? additionalCandidates = null,
+            int? targetUnitId = null,
+            string? exemptionMode = null,
+            string? proposedMultiplier = null,
+            string? proposedAdjustment = null,
+            string? duesNote = null,
+            int? relatedTicketId = null,
+            string? estimatedBudget = null,
+            bool autoExecuteOnQuorum = true)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var meeting = await _context.SystemMeetings
+                .Include(m => m.Decisions)
+                .FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && m.ContextId == buildingId && !m.IsDeleted);
+            if (meeting == null) return NotFound();
+
+            string cleanCategory = string.IsNullOrWhiteSpace(decisionCategory) ? "General" : decisionCategory.Trim();
+            string cleanQuorum = string.IsNullOrWhiteSpace(quorumType) ? "Standard" : quorumType.Trim();
+            if (string.Equals(cleanCategory, "ManagementPlan", StringComparison.OrdinalIgnoreCase))
+            {
+                cleanQuorum = "ManagementPlan";
+            }
+            else if (string.Equals(cleanCategory, "UnitExemption", StringComparison.OrdinalIgnoreCase) && string.Equals(cleanQuorum, "Standard", StringComparison.OrdinalIgnoreCase))
+            {
+                cleanQuorum = "Unanimous";
+            }
+            else if (string.Equals(cleanCategory, "AppointManager", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(cleanCategory, "AppointBoardMember", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(cleanCategory, "CapitalProject", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.Equals(cleanQuorum, "Standard", StringComparison.OrdinalIgnoreCase))
+                {
+                    cleanQuorum = "Innovation";
+                }
+            }
+
+            decimal? parsedDues = ParseFlexibleDecimal(proposedDues);
+            decimal? parsedBudget = ParseFlexibleDecimal(estimatedBudget);
+            decimal? parsedMult = ParseFlexibleDecimal(proposedMultiplier);
+            decimal? parsedAdj = ParseFlexibleDecimal(proposedAdjustment);
+            var proposalPayload = new DecisionProposalPayload
+            {
+                ProposedDues = parsedDues.HasValue && parsedDues.Value >= 0m ? Math.Round(parsedDues.Value, 2) : null,
+                PaymentDay = paymentDay.HasValue ? Math.Clamp(paymentDay.Value, 1, 31) : null,
+                TargetName = string.IsNullOrWhiteSpace(targetName) ? null : targetName.Trim(),
+                TargetEmail = string.IsNullOrWhiteSpace(targetEmail) ? null : targetEmail.Trim(),
+                TargetPhone = string.IsNullOrWhiteSpace(targetPhone) ? null : targetPhone.Trim(),
+                TargetRole = string.IsNullOrWhiteSpace(targetRole) ? null : targetRole.Trim(),
+                AdditionalCandidates = string.IsNullOrWhiteSpace(additionalCandidates) ? null : additionalCandidates.Trim(),
+                TargetUnitId = targetUnitId,
+                ExemptionMode = string.IsNullOrWhiteSpace(exemptionMode) ? null : exemptionMode.Trim(),
+                ProposedMultiplier = parsedMult.HasValue && parsedMult.Value > 0m ? Math.Round(parsedMult.Value, 2) : null,
+                ProposedAdjustment = parsedAdj.HasValue ? Math.Round(parsedAdj.Value, 2) : null,
+                DuesNote = string.IsNullOrWhiteSpace(duesNote) ? null : duesNote.Trim(),
+                RelatedTicketId = relatedTicketId,
+                EstimatedBudget = parsedBudget.HasValue && parsedBudget.Value > 0m ? Math.Round(parsedBudget.Value, 2) : null
+            };
+            bool hasStructuredPayload = proposalPayload.ProposedDues.HasValue
+                || !string.IsNullOrWhiteSpace(proposalPayload.TargetName)
+                || !string.IsNullOrWhiteSpace(proposalPayload.TargetEmail)
+                || !string.IsNullOrWhiteSpace(proposalPayload.TargetPhone)
+                || proposalPayload.TargetUnitId.HasValue
+                || proposalPayload.RelatedTicketId.HasValue
+                || proposalPayload.EstimatedBudget.HasValue;
+
+            int decisionSeq = await _context.SystemMeetings.CountAsync(m =>
+                m.ContextType == "Building" && m.ContextId == buildingId && m.WorkflowStage == "Decision" && m.MeetingDate.Year == meeting.MeetingDate.Year && !m.IsDeleted) + 1;
+
+            meeting.WorkflowStage = "Decision";
+            meeting.DecisionNumber = $"{meeting.MeetingDate.Year}/{decisionSeq:D2}";
+            meeting.DecisionCategory = cleanCategory;
+            meeting.QuorumType = cleanQuorum;
+            meeting.AutoExecuteOnQuorum = autoExecuteOnQuorum;
+            meeting.ProposedPayloadJson = hasStructuredPayload ? System.Text.Json.JsonSerializer.Serialize(proposalPayload) : null;
+            meeting.IsConcluded = false;
+            meeting.UpdatedAt = DateTime.UtcNow;
+
+            if (!string.IsNullOrWhiteSpace(decisionText))
+            {
+                _context.SystemMeetingDecisions.Add(new SystemMeetingDecision
+                {
+                    SystemMeetingId = meeting.Id,
+                    DecisionText = decisionText.Trim(),
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"✅ Görüşme olumlu sonuçlandığı için resmi Karar Defteri & Oylama masasına aktarıldı (Karar #{meeting.DecisionNumber}). Tüm belge ve yorumlar korundu.";
+            return RedirectToAction(nameof(Oylamalar), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CloseMeetingAsNegative(int meetingId, int buildingId, string? closingNote = null)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            var meeting = await _context.SystemMeetings.FirstOrDefaultAsync(m =>
+                m.Id == meetingId && m.ContextType == "Building" && m.ContextId == buildingId && !m.IsDeleted);
+            if (meeting == null) return NotFound();
+
+            meeting.WorkflowStage = "ArchivedNegative";
+            meeting.IsConcluded = true;
+            meeting.ClosingNote = string.IsNullOrWhiteSpace(closingNote)
+                ? "Ön görüşme olumsuz sonuçlandı — Karar Defterine işlenmeden arşive kaldırıldı."
+                : closingNote.Trim();
+            meeting.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"🗄️ '{meeting.AgendaTitle}' konusu Karar Defterine alınmadan olumsuz sonuçla arşive kaldırıldı.";
+            return RedirectToAction(nameof(Toplantilar), new { buildingId, tab = "archive" });
         }
 
         private async Task<int?> ResolvePurchasingAgencyIdForBuildingAsync(Building building)

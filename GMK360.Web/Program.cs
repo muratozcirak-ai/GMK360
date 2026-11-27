@@ -507,6 +507,12 @@ using (var schemaScope = app.Services.CreateScope())
                 ALTER TABLE [dbo].[SystemMeetings] ADD [ExecutionSummary] nvarchar(500) NULL;
             IF COL_LENGTH(N'dbo.SystemMeetings', N'VerificationToken') IS NULL
                 ALTER TABLE [dbo].[SystemMeetings] ADD [VerificationToken] nvarchar(40) NULL;
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'WorkflowStage') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [WorkflowStage] nvarchar(32) NOT NULL CONSTRAINT [DF_SystemMeetings_WorkflowStage] DEFAULT (N'Decision');
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'InvitationScope') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [InvitationScope] nvarchar(64) NULL;
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'ClosingNote') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [ClosingNote] nvarchar(500) NULL;
             IF COL_LENGTH(N'dbo.Buildings', N'DecisionBookNotaryName') IS NULL
                 ALTER TABLE [dbo].[Buildings] ADD [DecisionBookNotaryName] nvarchar(150) NULL;
             IF COL_LENGTH(N'dbo.Buildings', N'DecisionBookJournalNo') IS NULL

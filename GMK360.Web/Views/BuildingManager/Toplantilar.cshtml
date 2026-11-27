@@ -1,0 +1,549 @@
+@model IEnumerable<GMK360.Core.Entities.SystemMeeting>
+@{
+    Layout = "~/Views/Shared/_FacilityLayout.cshtml";
+    ViewData["Title"] = "Toplantı & Ön Görüşme Masası";
+    var buildings = ViewBag.Buildings as List<GMK360.Core.Entities.Building> ?? new List<GMK360.Core.Entities.Building>();
+    int? selectedBuildingId = ViewBag.SelectedBuildingId as int?;
+    var selectedBldObj = ViewBag.SelectedBuildingObj as GMK360.Core.Entities.Building;
+    var firstSiteComplex = buildings.FirstOrDefault(b => b.HousingComplexId.HasValue);
+    var buildingMap = ViewBag.BuildingMap as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var unitsByBuilding = ViewBag.UnitsByBuilding as Dictionary<int, List<GMK360.Core.Entities.BuildingUnit>> ?? new Dictionary<int, List<GMK360.Core.Entities.BuildingUnit>>();
+    var unitsByComplex = ViewBag.UnitsByComplex as Dictionary<int, List<GMK360.Core.Entities.BuildingUnit>> ?? new Dictionary<int, List<GMK360.Core.Entities.BuildingUnit>>();
+    var allSiteUnits = ViewBag.AllSiteUnits as List<GMK360.Core.Entities.BuildingUnit> ?? new List<GMK360.Core.Entities.BuildingUnit>();
+    var openComplaints = ViewBag.OpenComplaints as List<GMK360.Core.Entities.SupportTicket> ?? new List<GMK360.Core.Entities.SupportTicket>();
+    string selectedTab = ViewBag.SelectedTab as string ?? "open";
+    int openCount = ViewBag.OpenCount is int oc ? oc : 0;
+    int archiveCount = ViewBag.ArchiveCount is int ac ? ac : 0;
+    bool isArchiveTab = string.Equals(selectedTab, "archive", StringComparison.OrdinalIgnoreCase);
+}
+
+<div class="container-fluid py-3 px-1">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-3 bg-white p-4 rounded-4 shadow-sm">
+        <div>
+            <h2 class="fw-bold text-dark mb-1">
+                <i class="bi bi-people-fill text-primary me-2"></i>Toplantı, Ön Görüşme &amp; Dijital Evrak Çantası
+            </h2>
+            <p class="text-muted small mb-0">
+                Ortak alan önerileri, teklifler ve şikayetler önce burada belge/fotoğrafla tartışılır; malikler ve vekaletli kiracılar görüş yazar.
+                Olumlu çıkanlar tek tıkla <strong>Karar Defterine</strong> aktarılır; olumsuz olanlar karar defterini kirletmeden arşive kaldırılır.
+            </p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="/BuildingManager/Oylamalar@(selectedBuildingId.HasValue ? $"?buildingId={selectedBuildingId}" : "")" class="btn btn-outline-success rounded-pill px-3 fw-semibold">
+                <i class="bi bi-patch-check me-1"></i> Karar Defteri &amp; Oylamaya Geç
+            </a>
+            <button type="button" class="btn btn-warning text-dark rounded-pill px-4 fw-bold shadow-xs" data-bs-toggle="modal" data-bs-target="#newDiscussionModal" @(buildings.Any() ? "" : "disabled")>
+                <i class="bi bi-plus-circle-fill me-1"></i> + Yeni Toplantı / Müzakere Başlığı Aç
+            </button>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
+            @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
+            @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div class="d-flex gap-2">
+            <a href="/BuildingManager/Toplantilar?tab=open@(selectedBuildingId.HasValue ? $"&buildingId={selectedBuildingId}" : "")"
+               class="btn btn-sm rounded-pill px-4 fw-bold @(!isArchiveTab ? "btn-primary shadow-xs" : "btn-light border text-dark")">
+                <i class="bi bi-broadcast me-1"></i> Açık Toplantılar &amp; Tartışmalar (@openCount)
+            </a>
+            <a href="/BuildingManager/Toplantilar?tab=archive@(selectedBuildingId.HasValue ? $"&buildingId={selectedBuildingId}" : "")"
+               class="btn btn-sm rounded-pill px-4 fw-bold @(isArchiveTab ? "btn-secondary shadow-xs" : "btn-light border text-dark")">
+                <i class="bi bi-archive-fill me-1"></i> Arşiv / Olumsuz Kapananlar (@archiveCount)
+            </a>
+        </div>
+        @if (buildings.Count > 1)
+        {
+            <form method="get" class="d-flex gap-2">
+                <input type="hidden" name="tab" value="@selectedTab" />
+                <select name="buildingId" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">Tüm Site / Bloklar</option>
+                    @foreach (var b in buildings)
+                    {
+                        <option value="@b.Id" selected="@(selectedBuildingId == b.Id ? "selected" : null)">@b.Name</option>
+                    }
+                </select>
+            </form>
+        }
+    </div>
+
+    @if (!Model.Any())
+    {
+        <div class="card border-0 shadow-sm rounded-4 bg-white p-5 text-center text-muted">
+            <i class="bi bi-chat-square-dots fs-1 text-primary opacity-50 mb-2"></i>
+            @if (isArchiveTab)
+            {
+                <div class="fw-semibold">Olumsuz sonuçlanıp arşive kaldırılmış toplantı kaydı yok.</div>
+            }
+            else
+            {
+                <div class="fw-semibold mb-1">Henüz açık bir ön görüşme / müzakere başlığı bulunmuyor.</div>
+                <small>Örneğin <em>"Bahçeye Kamelya Yapımı"</em> gibi bir konu açıp görsel/teklif yükleyebilir, malik ve vekaletli kiracıların yorumunu toplayabilirsiniz.</small>
+            }
+        </div>
+    }
+    else
+    {
+        foreach (var m in Model)
+        {
+            var bName = buildingMap.ContainsKey(m.ContextId) ? buildingMap[m.ContextId] : ("Bina #" + m.ContextId);
+            var meetingBld = buildings.FirstOrDefault(b => b.Id == m.ContextId);
+            string scopeDisplayName = (m.IsSiteWide && meetingBld?.HousingComplex != null)
+                ? $"🌐 {meetingBld.HousingComplex.Name} (Site Geneli)"
+                : bName;
+            string inviteText = m.InvitationScope switch
+            {
+                "OwnersOnly" => "🏠 Sadece Mülk Sahipleri",
+                "AllResidents" => "🏢 Tüm Malik & Kiracılar",
+                "BoardOnly" => "🏛️ Sadece Yönetim Kurulu",
+                _ => "🤝 Mülk Sahipleri + Vekaletli Kiracılar"
+            };
+            var mAttachments = (m.Attachments ?? new List<GMK360.Core.Entities.BuildingDecisionAttachment>()).Where(a => !a.IsDeleted).OrderByDescending(a => a.CreatedAt).ToList();
+            var mVotes = (m.Votes ?? new List<GMK360.Core.Entities.BuildingDecisionVote>()).Where(v => !v.IsDeleted).ToDictionary(v => v.BuildingUnitId, v => v);
+            var proxyCount = mVotes.Values.Count(v => v.ParticipationType == "Vekil");
+            var bUnits = (m.IsSiteWide && m.HousingComplexId.HasValue && unitsByComplex.ContainsKey(m.HousingComplexId.Value))
+                ? unitsByComplex[m.HousingComplexId.Value]
+                : (unitsByBuilding.ContainsKey(m.ContextId) ? unitsByBuilding[m.ContextId] : new List<GMK360.Core.Entities.BuildingUnit>());
+
+            <div class="card border-0 shadow-sm rounded-4 mb-4 @(isArchiveTab ? "bg-light" : "bg-white border-start border-4 border-primary")">
+                <div class="card-body p-4">
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                        <div>
+                            <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+                                <span class="badge bg-dark rounded-pill">@(m.DecisionNumber ?? $"TPL-{m.Id:D2}")</span>
+                                <span class="badge @(isArchiveTab ? "bg-secondary" : "bg-primary") rounded-pill">
+                                    @(isArchiveTab ? "❌ Olumsuz / Arşivlendi" : "📢 Açık Tartışma & Ön Görüşme")
+                                </span>
+                                <span class="badge bg-light text-dark border rounded-pill">@scopeDisplayName</span>
+                                <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle rounded-pill">@inviteText</span>
+                                @if (proxyCount > 0)
+                                {
+                                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-pill">📝 @proxyCount Vekaletli Kiracı</span>
+                                }
+                            </div>
+                            <h5 class="fw-bold text-dark mb-1">@m.AgendaTitle</h5>
+                            <div class="small text-muted">
+                                <i class="bi bi-calendar3 me-1"></i>@m.MeetingDate.ToString("dd MMMM yyyy HH:mm")
+                                @if (!string.IsNullOrWhiteSpace(m.MeetingLocation))
+                                {
+                                    <span class="ms-3"><i class="bi bi-geo-alt me-1"></i>@m.MeetingLocation</span>
+                                }
+                            </div>
+                        </div>
+                        @if (!isArchiveTab)
+                        {
+                            <div class="d-flex flex-wrap gap-2">
+                                <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-bold"
+                                        onclick="openPromoteModal(@m.Id, @m.ContextId, '@System.Web.HttpUtility.JavaScriptStringEncode(m.AgendaTitle)')">
+                                    <i class="bi bi-check2-circle me-1"></i> Görüşme Olumlu → Karar Defterine Aktar
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3 fw-semibold"
+                                        onclick="openCloseNegativeModal(@m.Id, @m.ContextId, '@System.Web.HttpUtility.JavaScriptStringEncode(m.AgendaTitle)')">
+                                    <i class="bi bi-x-circle me-1"></i> Olumsuz / Vazgeçildi (Arşive Kaldır)
+                                </button>
+                            </div>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(m.ClosingNote))
+                    {
+                        <div class="alert alert-secondary py-2 px-3 small mb-3">
+                            <strong>Kapanış / Arşiv Notu:</strong> @m.ClosingNote
+                        </div>
+                    }
+
+                    @if (m.Decisions != null && m.Decisions.Any())
+                    {
+                        <div class="bg-light rounded-3 border p-3 small mb-3">
+                            <div class="fw-bold text-muted mb-1"><i class="bi bi-card-text me-1"></i>Gündem Açıklaması &amp; Konu Detayları:</div>
+                            @foreach (var dec in m.Decisions)
+                            {
+                                <div class="mb-1">@dec.DecisionText</div>
+                            }
+                        </div>
+                    }
+
+                    <div class="row g-3">
+                        <!-- Sol: Dijital Evrak Çantası & Yorumlar -->
+                        <div class="col-lg-7">
+                            <div class="border rounded-3 p-3 bg-light h-100">
+                                <h6 class="fw-bold small mb-2">
+                                    <i class="bi bi-briefcase-fill text-primary me-1"></i>Dijital Evrak Çantası &amp; Katılımcı Görüşleri (@mAttachments.Count)
+                                </h6>
+                                @if (mAttachments.Any())
+                                {
+                                    <div class="list-group list-group-flush border rounded-3 mb-2 bg-white small" style="max-height: 240px; overflow-y: auto;">
+                                        @foreach (var att in mAttachments)
+                                        {
+                                            <div class="list-group-item py-2">
+                                                <div class="d-flex justify-content-between">
+                                                    <strong>@att.AuthorName <span class="badge bg-light text-dark border">@att.AuthorRoleLabel</span></strong>
+                                                    <span class="text-muted" style="font-size:.72rem;">@att.CreatedAt.ToLocalTime().ToString("dd.MM HH:mm")</span>
+                                                </div>
+                                                @if (!string.IsNullOrWhiteSpace(att.CommentText))
+                                                {
+                                                    <div class="mt-1 text-dark">@att.CommentText</div>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(att.FileUrl))
+                                                {
+                                                    <a href="@att.FileUrl" target="_blank" class="d-inline-block mt-1 fw-semibold text-primary text-decoration-none">
+                                                        <i class="bi bi-paperclip me-1"></i>@(att.DocumentTitle ?? "Ekli Belge / Görsel")
+                                                    </a>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="small text-muted mb-2">Henüz belge veya katılımcı yorumu eklenmemiş. Alan görseli, kroki veya teklif ekleyip tartışmayı başlatabilirsiniz.</div>
+                                }
+
+                                @if (!isArchiveTab)
+                                {
+                                    <form asp-action="AddMeetingAttachment" asp-controller="BuildingManager" method="post" enctype="multipart/form-data" class="border rounded-3 p-2 bg-white small">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="buildingId" value="@m.ContextId" />
+                                        <input type="hidden" name="meetingId" value="@m.Id" />
+                                        <input type="hidden" name="returnTo" value="Toplantilar" />
+                                        <input type="text" name="commentText" class="form-control form-control-sm mb-1" placeholder="Konu hakkında not / yorum ekleyin..." />
+                                        <div class="row g-1">
+                                            <div class="col-5">
+                                                <input type="text" name="documentTitle" class="form-control form-control-sm" placeholder="Belge konusu (Örn: Bahçe Krokisi)" />
+                                            </div>
+                                            <div class="col-4">
+                                                <input type="file" name="attachmentFile" class="form-control form-control-sm" />
+                                            </div>
+                                            <div class="col-3">
+                                                <button type="submit" class="btn btn-xs btn-primary w-100 rounded-pill fw-semibold">Ekle</button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Sağ: Davetli & Kiracı Vekalet Masası -->
+                        <div class="col-lg-5">
+                            <div class="border rounded-3 p-3 bg-light h-100">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="fw-bold small mb-0"><i class="bi bi-person-badge text-success me-1"></i>Vekaletli Kiracı &amp; Davet Listesi (@bUnits.Count)</h6>
+                                    <span class="badge bg-white text-dark border">@proxyCount Vekil</span>
+                                </div>
+                                <div class="table-responsive bg-white border rounded-3" style="max-height: 280px; overflow-y: auto;">
+                                    <table class="table table-sm align-middle mb-0 small">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Bölüm</th>
+                                                <th>Malik / Vekil</th>
+                                                <th>İşlem</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var u in bUnits)
+                                            {
+                                                mVotes.TryGetValue(u.Id, out var uv);
+                                                <tr>
+                                                    <td class="fw-bold">@u.DoorNumber</td>
+                                                    <td>
+                                                        <div>@(u.OwnerName ?? "Malik Girilmemiş")</div>
+                                                        @if (uv?.ParticipationType == "Vekil" && !string.IsNullOrWhiteSpace(uv.ProxyPersonName))
+                                                        {
+                                                            <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">Vekil: @uv.ProxyPersonName</span>
+                                                        }
+                                                        else if (!string.IsNullOrWhiteSpace(u.TenantName))
+                                                        {
+                                                            <small class="text-muted">Kiracı: @u.TenantName</small>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (!isArchiveTab)
+                                                        {
+                                                            <button type="button" class="btn btn-xs btn-outline-primary rounded-pill"
+                                                                    onclick="openDiscussionProxyModal(@m.ContextId, @m.Id, @u.Id, '@System.Web.HttpUtility.JavaScriptStringEncode($"{u.DoorNumber} ({u.OwnerName ?? "Malik"})")', '@System.Web.HttpUtility.JavaScriptStringEncode(uv?.ProxyPersonName ?? u.TenantName ?? "")')">
+                                                                Vekil Ver
+                                                            </button>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@if (buildings.Any())
+{
+    <!-- Yeni Toplantı / Müzakere Başlığı Modalı -->
+    <div class="modal fade" id="newDiscussionModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <form class="modal-content rounded-4 border-0 shadow" asp-action="CreateDiscussionMeeting" asp-controller="BuildingManager" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <div class="modal-header bg-warning bg-opacity-25 text-dark border-0">
+                    <div>
+                        <h5 class="modal-title fw-bold mb-0"><i class="bi bi-people-fill text-primary me-2"></i>Yeni Toplantı &amp; Dijital Evrak Çantası Aç</h5>
+                        <small class="text-muted">Karar defterine geçmeden önce konuyu, belgeleri ve mülk sahibi/vekil görüşlerini burada toplayın.</small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Toplantı Konusu / Başlığı *</label>
+                            <input type="text" name="agendaTitle" class="form-control" required placeholder="Örn: Bahçeye Kamelya Yapımı & Yer Seçimi" />
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label fw-bold small mb-0">Tarih *</label>
+                                <div class="d-flex gap-1">
+                                    <span class="badge bg-light text-primary border" style="cursor:pointer;" onclick="setDiscDate(0)">Bugün</span>
+                                    <span class="badge bg-light text-primary border" style="cursor:pointer;" onclick="setDiscDate(1)">Yarın</span>
+                                </div>
+                            </div>
+                            <input type="date" name="meetingDate" id="discMeetingDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small">Saat</label>
+                            <input type="time" name="meetingTime" class="form-control" value="20:00" />
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Kapsam (Site Geneli / Blok)</label>
+                            <input type="hidden" name="buildingId" id="discBuildingIdHidden" value="@(selectedBldObj?.Id ?? buildings.First().Id)" />
+                            <input type="hidden" name="isSiteWide" id="discIsSiteWideHidden" value="@(firstSiteComplex != null && buildings.Count > 1 ? "true" : "false")" />
+                            <select id="discScopeSelect" class="form-select" onchange="syncDiscScope()">
+                                @if (firstSiteComplex != null && buildings.Count > 1)
+                                {
+                                    <option value="SITE:@firstSiteComplex.Id" selected>🌐 @(firstSiteComplex.HousingComplex?.Name ?? "Site Geneli") (Tüm Bloklar)</option>
+                                }
+                                @foreach (var b in buildings)
+                                {
+                                    <option value="BLK:@b.Id" selected="@(firstSiteComplex == null && buildings.Count == 1 ? "selected" : null)">🏢 @(buildings.Count > 1 ? $"Sadece {b.BlockName ?? b.Name}" : b.Name)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Katılım &amp; Davetliler *</label>
+                            <select name="invitationScope" class="form-select fw-semibold">
+                                <option value="OwnersAndProxyTenants" selected>🤝 Mülk Sahipleri + Vekaletli Kiracılar (Önerilen)</option>
+                                <option value="OwnersOnly">🏠 Sadece Mülk Sahipleri (Malikler)</option>
+                                <option value="AllResidents">🏢 Tüm Malik &amp; Kiracılar (Açık Katılım)</option>
+                                <option value="BoardOnly">🏛️ Sadece Yönetim &amp; Denetim Kurulu</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Toplantı Yeri / Bağlantı</label>
+                        <input type="text" name="meetingLocation" class="form-control" value="Site Bahçesi / Sosyal Alan &amp; Online Katılım" />
+                    </div>
+
+                    <div class="p-3 rounded-3 bg-light border mb-3">
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold mb-1"><i class="bi bi-paperclip text-danger me-1"></i>Toplantıda Sunulacak Belge / Fotoğraf (Varsa)</label>
+                                <input type="file" name="attachmentFile" class="form-control form-control-sm" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold mb-1">Belge Konusu / Adı (Arşiv Tedbiri)</label>
+                                <input type="text" name="attachmentTitle" class="form-control form-control-sm" placeholder="Örn: Kamelya Alan Krokisi ve 2 Firma Teklifi" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-1">
+                        <label class="form-label fw-bold small">Görüşmede Anlatılacak Konu Başlıkları / Ön Bilgi</label>
+                        <textarea name="decisionText" class="form-control" rows="3" placeholder="Örn: 1) Kamelyanın konacağı bahçe alanı gösterilecek, 2) Maliyet ve firma alternatifleri değerlendirilecek, olumlu bulunursa Karar Defterinde oylanacaktır..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-warning text-dark rounded-pill px-4 fw-bold">
+                        <i class="bi bi-check2-circle me-1"></i> Başlığı Aç &amp; Davet Et
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Olumlu Sonuçlanan Toplantıyı Karar Defterine Aktarma Modalı -->
+    <div class="modal fade" id="promoteDecisionModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <form class="modal-content rounded-4 border-0 shadow" asp-action="PromoteMeetingToDecision" asp-controller="BuildingManager" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="meetingId" id="promMeetingId" />
+                <input type="hidden" name="buildingId" id="promBuildingId" />
+                <div class="modal-header bg-success text-white border-0">
+                    <div>
+                        <h5 class="modal-title fw-bold mb-0"><i class="bi bi-patch-check me-2"></i>Karar Defterine Aktar (Oylamaya Aç)</h5>
+                        <small class="opacity-75" id="promTitleLabel"></small>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Resmi KMK Karar Şablonu *</label>
+                        <select name="decisionCategory" id="promCategorySelect" class="form-select fw-semibold" onchange="onPromoteCategoryChanged()">
+                            <option value="General">📝 Genel Yönetim / İş Planı Maddesi (KMK Md. 30 • &gt;%50)</option>
+                            <option value="CapitalProject">🛠️ Ortak Alan / Kamelya / Yenilik &amp; Yatırım (KMK Md. 42 • &gt;%50 Sayı + Pay)</option>
+                            <option value="DuesUpdate">💰 Aidat &amp; İşletme Bütçesi Belirleme (KMK Md. 37 • &gt;%50 Sayı + Pay)</option>
+                            <option value="AppointManager">🧑‍💼 Yeni Yönetici Atama (KMK Md. 34 • &gt;%50 Sayı + Pay)</option>
+                            <option value="AppointBoardMember">🏛️ Aza / Denetçi Seçimi (KMK Md. 34/41 • &gt;%50 Sayı + Pay)</option>
+                            <option value="UnitExemption">🛡️ Daire Aidat Muafiyeti / Özel Fark (KMK Md. 20 • Oy Birliği %100)</option>
+                            <option value="ComplaintResolution">📣 Şikayet &amp; Talep Kararı (KMK Md. 18/30 • &gt;%50)</option>
+                            <option value="ManagementPlan">📜 Yönetim Planı Değişikliği (KMK Md. 28 • 4/5 = %80)</option>
+                        </select>
+                    </div>
+                    <div id="promDuesPanel" class="row g-2 mb-3 d-none">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Önerilen Baz Aidat (₺)</label>
+                            <input type="number" step="0.01" name="proposedDues" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Ödeme Günü</label>
+                            <input type="number" min="1" max="31" name="paymentDay" class="form-control form-control-sm" value="5" />
+                        </div>
+                    </div>
+                    <div id="promCapitalPanel" class="mb-3 d-none">
+                        <label class="form-label small fw-bold mb-1">Onaya Sunulan Tahmini Bütçe (₺)</label>
+                        <input type="number" step="100" name="estimatedBudget" class="form-control form-control-sm" placeholder="Örn: 85000" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Karar Defteri Oylama Metni (KMK Md. 32)</label>
+                        <textarea name="decisionText" class="form-control" rows="3" placeholder="Toplantıda mutabık kalınan net karar teklifini yazın (Örn: Bahçe doğu köşesine 85.000 TL bütçe ile kamelya yapılmasına...)"></textarea>
+                    </div>
+                    <div class="form-check form-switch small">
+                        <input class="form-check-input" type="checkbox" name="autoExecuteOnQuorum" value="true" id="promAutoExec" checked />
+                        <label class="form-check-label fw-semibold text-success" for="promAutoExec">
+                            ⚡ Yasal çoğunluk yakalandığında kararı otomatik yürürlüğe al
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold">Karar Defterine Aktar &amp; Oylamayı Başlat</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Olumsuz Sonuçla Kapatma Modalı -->
+    <div class="modal fade" id="closeNegativeModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content rounded-4 border-0 shadow" asp-action="CloseMeetingAsNegative" asp-controller="BuildingManager" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="meetingId" id="negMeetingId" />
+                <input type="hidden" name="buildingId" id="negBuildingId" />
+                <div class="modal-header bg-danger text-white border-0">
+                    <h5 class="modal-title fw-bold">Görüşmeyi Olumsuz Sonuçla Kapat</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="small text-muted mb-2">
+                        <strong id="negTitleLabel"></strong> konusu ön görüşmede olumsuz değerlendirildiği için <strong>Karar Defterine hiç işlenmeden</strong> yalnızca toplantı arşivine kaldırılacaktır.
+                    </p>
+                    <label class="form-label small fw-bold">Kapanış / Gerekçe Notu</label>
+                    <textarea name="closingNote" class="form-control" rows="2" placeholder="Örn: Maliyet yüksek bulunduğu için kat malikleri tarafından uygun görülmedi."></textarea>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">Arşive Kaldır</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Vekil Atama Modalı (Toplantı için Kiracı Vekaleti) -->
+    <div class="modal fade" id="discProxyModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content rounded-4 border-0 shadow" asp-action="AssignUnitProxyVote" asp-controller="BuildingManager" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="buildingId" id="dpBldId" />
+                <input type="hidden" name="meetingId" id="dpMeetId" />
+                <input type="hidden" name="buildingUnitId" id="dpUId" />
+                <input type="hidden" name="returnTo" value="Toplantilar" />
+                <input type="hidden" name="participationType" value="Vekil" />
+                <div class="modal-header bg-primary text-white border-0">
+                    <h5 class="modal-title fw-bold">Vekaletli Katılımcı / Kiracı (<span id="dpULabel"></span>)</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Vekil Adı Soyadı *</label>
+                        <input type="text" name="proxyPersonName" id="dpPerson" class="form-control" required placeholder="Örn: Kiracı adı veya yakını" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Yazılı Vekaletname Belgesi (Opsiyonel PDF/Foto)</label>
+                        <input type="file" name="proxyDocumentFile" class="form-control form-control-sm" />
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">Vekaleti Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function setDiscDate(offsetDays) {
+            const d = new Date();
+            d.setDate(d.getDate() + offsetDays);
+            document.getElementById('discMeetingDate').value = d.toISOString().split('T')[0];
+        }
+        function syncDiscScope() {
+            const sel = document.getElementById('discScopeSelect');
+            const parts = (sel?.value || '').split(':');
+            if (parts.length === 2) {
+                document.getElementById('discBuildingIdHidden').value = parts[1];
+                document.getElementById('discIsSiteWideHidden').value = parts[0] === 'SITE' ? 'true' : 'false';
+            }
+        }
+        function openPromoteModal(mId, bId, title) {
+            document.getElementById('promMeetingId').value = mId;
+            document.getElementById('promBuildingId').value = bId;
+            document.getElementById('promTitleLabel').innerText = title || '';
+            new bootstrap.Modal(document.getElementById('promoteDecisionModal')).show();
+        }
+        function onPromoteCategoryChanged() {
+            const cat = document.getElementById('promCategorySelect')?.value || 'General';
+            document.getElementById('promDuesPanel')?.classList.toggle('d-none', cat !== 'DuesUpdate');
+            document.getElementById('promCapitalPanel')?.classList.toggle('d-none', cat !== 'CapitalProject');
+        }
+        function openCloseNegativeModal(mId, bId, title) {
+            document.getElementById('negMeetingId').value = mId;
+            document.getElementById('negBuildingId').value = bId;
+            document.getElementById('negTitleLabel').innerText = title || '';
+            new bootstrap.Modal(document.getElementById('closeNegativeModal')).show();
+        }
+        function openDiscussionProxyModal(bId, mId, uId, label, suggested) {
+            document.getElementById('dpBldId').value = bId;
+            document.getElementById('dpMeetId').value = mId;
+            document.getElementById('dpUId').value = uId;
+            document.getElementById('dpULabel').innerText = label;
+            document.getElementById('dpPerson').value = suggested || '';
+            new bootstrap.Modal(document.getElementById('discProxyModal')).show();
+        }
+    </script>
+}

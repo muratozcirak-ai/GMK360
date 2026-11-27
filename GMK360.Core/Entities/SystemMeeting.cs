@@ -48,6 +48,15 @@ namespace GMK360.Core.Entities
 
         public bool IsConcluded { get; set; } = false; // Toplantı tamamlandı mı?
 
+        [MaxLength(32)]
+        public string WorkflowStage { get; set; } = "Decision"; // Discussion (Ön Görüşme/Toplantı), Decision (Karar Defteri), ArchivedNegative (Olumsuz Kapatıldı)
+
+        [MaxLength(64)]
+        public string? InvitationScope { get; set; } // OwnersAndProxyTenants, OwnersOnly, AllResidents, BoardOnly
+
+        [MaxLength(500)]
+        public string? ClosingNote { get; set; }
+
         // Toplantıya bağlı kararlar
         public virtual ICollection<SystemMeetingDecision> Decisions { get; set; } = new List<SystemMeetingDecision>();
 

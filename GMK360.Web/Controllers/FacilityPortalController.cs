@@ -213,11 +213,13 @@ namespace GMK360.Web.Controllers
                     .Include(m => m.Votes)
                     .Include(m => m.Attachments)
                     .Where(m => m.ContextType == "Building" && !m.IsDeleted
+                        && m.WorkflowStage != "ArchivedNegative"
                         && (meetingBuildingIds.Contains(m.ContextId)
                             || (m.IsSiteWide && m.HousingComplexId.HasValue && m.HousingComplexId == targetComplexId)))
-                    .OrderBy(m => m.IsConcluded)
+                    .OrderBy(m => m.WorkflowStage == "Discussion" ? 0 : 1)
+                    .ThenBy(m => m.IsConcluded)
                     .ThenByDescending(m => m.MeetingDate)
-                    .Take(20)
+                    .Take(25)
                     .ToListAsync()
                 : new List<SystemMeeting>();
 
@@ -645,8 +647,25 @@ namespace GMK360.Web.Controllers
             var userId = GetUserId();
             if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
-            var meeting = await _context.SystemMeetings.FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && !m.IsDeleted);
+            var meeting = await _context.SystemMeetings
+                .Include(m => m.Votes)
+                .FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && !m.IsDeleted);
             if (meeting == null) return NotFound();
+
+            bool isTenantPoster = string.Equals(previewRole, "Tenant", StringComparison.OrdinalIgnoreCase);
+            if (!IsManagerOrAdmin() && isTenantPoster)
+            {
+                var posterEmail = User.FindFirstValue(ClaimTypes.Email);
+                bool isAllResidents = string.Equals(meeting.InvitationScope, "AllResidents", StringComparison.OrdinalIgnoreCase);
+                bool hasTenantProxy = await _context.BuildingDecisionVotes.AnyAsync(v =>
+                    v.SystemMeetingId == meeting.Id && !v.IsDeleted && v.ParticipationType == "Vekil"
+                    && _context.BuildingUnits.Any(u => u.Id == v.BuildingUnitId && (u.TenantUserId == userId || (!string.IsNullOrEmpty(posterEmail) && u.TenantEmail == posterEmail))));
+                if (!isAllResidents && !hasTenantProxy)
+                {
+                    TempData["ErrorMessage"] = "Bu toplantıda görüş/belge eklemek için malikinizin sizin adınıza vekalet tanımlamış olması gerekir.";
+                    return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+                }
+            }
 
             string? savedUrl = null;
             if (attachmentFile != null && attachmentFile.Length > 0 && attachmentFile.Length <= 15 * 1024 * 1024)
