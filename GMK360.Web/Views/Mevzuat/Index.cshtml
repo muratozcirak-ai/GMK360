@@ -1,0 +1,154 @@
+@model IEnumerable<GMK360.Core.Entities.Article>
+@using System.Text.RegularExpressions
+@{
+    ViewData["Title"] = "KMK Mevzuat, Site Yönetimi & Hukuk Rehberi";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var articles = (Model ?? Enumerable.Empty<GMK360.Core.Entities.Article>()).ToList();
+    string scope = ViewBag.Scope as string ?? "all";
+    string searchQuery = ViewBag.SearchQuery as string ?? "";
+    bool isAuth = ViewBag.IsAuthenticated is bool auth && auth;
+
+    string StripHtmlSummary(string? html, int maxLen = 175)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return "";
+        var plain = Regex.Replace(html, "<.*?>", " ");
+        plain = System.Net.WebUtility.HtmlDecode(plain);
+        plain = Regex.Replace(plain, @"\s+", " ").Trim();
+        return plain.Length <= maxLen ? plain : plain.Substring(0, maxLen).TrimEnd() + "...";
+    }
+}
+
+<div class="bg-navy text-white py-5" style="background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%); margin-top: 72px;">
+    <div class="container py-4">
+        <div class="row align-items-center g-4">
+            <div class="col-lg-8">
+                <span class="badge bg-orange text-white rounded-pill px-3 py-2 mb-3 fw-bold">
+                    <i class="bi bi-bank2 me-1"></i> Merkezi KMK Mevzuat &amp; Yasal Prosedür Kütüphanesi
+                </span>
+                <h1 class="display-5 fw-bolder text-white mb-3">Bina, Site &amp; Mülk Yönetimi Rehberi</h1>
+                <p class="lead text-white-50 mb-4">
+                    634 sayılı Kat Mülkiyeti Kanunu (KMK) uyarınca karar defteri tutma, noter tasdiki, toplantı çağrıları, oy oranları, aidat/icra takibi ve kiracı-malik hakları için GMK360 Hukuk Merkezi tarafından güncel tutulan resmi bilgi bankası.
+                </p>
+                <div class="d-flex flex-wrap gap-2">
+                    @if (isAuth)
+                    {
+                        <a href="/BuildingManager/MevzuatRehberi" class="btn btn-success rounded-pill px-4 fw-bold shadow-sm">
+                            <i class="bi bi-book-half me-2"></i> Yönetici El Kitabım (Tam Erişim)
+                        </a>
+                    }
+                    else
+                    {
+                        <a href="/Account/Register?preselect=Corporate" class="btn btn-orange rounded-pill px-4 fw-bold shadow-sm">
+                            <i class="bi bi-person-plus me-2"></i> Ücretsiz Katıl &amp; El Kitabını Aç
+                        </a>
+                        <a href="/Auth/Login" class="btn btn-outline-light rounded-pill px-4 fw-semibold">
+                            <i class="bi bi-box-arrow-in-right me-1"></i> Giriş Yap
+                        </a>
+                    }
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card bg-white bg-opacity-10 border border-white border-opacity-25 rounded-4 p-4 text-white">
+                    <div class="fw-bold mb-2"><i class="bi bi-shield-lock-fill text-warning me-2"></i>Merkezi Mevzuat Güvencesi</div>
+                    <p class="small text-white-50 mb-2">
+                        Yasa veya yönetmelikler değiştiğinde bu içerikler GMK360 merkezinden güncellenir ve tüm üye sitelerin Yönetici El Kitabı otomatik olarak yenilenir.
+                    </p>
+                    <div class="small text-warning fw-semibold">
+                        <i class="bi bi-check2-circle me-1"></i> Örnek karar şablonları &amp; form doldurma rehberi üyelere açıktır.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container py-5">
+    <!-- Arama ve Filtre -->
+    <div class="row g-3 align-items-center mb-4">
+        <div class="col-lg-7 d-flex flex-wrap gap-2">
+            <a href="/Mevzuat?scope=all&q=@Uri.EscapeDataString(searchQuery)" class="btn rounded-pill px-4 fw-semibold @(scope == "all" ? "btn-primary" : "btn-outline-secondary")">
+                Tümü (@articles.Count)
+            </a>
+            <a href="/Mevzuat?scope=public&q=@Uri.EscapeDataString(searchQuery)" class="btn rounded-pill px-4 fw-semibold @(scope == "public" ? "btn-success" : "btn-outline-secondary")">
+                <i class="bi bi-globe2 me-1"></i> Halka Açık Rehberler
+            </a>
+            <a href="/Mevzuat?scope=handbook&q=@Uri.EscapeDataString(searchQuery)" class="btn rounded-pill px-4 fw-semibold @(scope == "handbook" ? "btn-warning text-dark" : "btn-outline-secondary")">
+                <i class="bi bi-book-fill me-1"></i> Yönetici El Kitabı (Üyelere Özel)
+            </a>
+        </div>
+        <div class="col-lg-5">
+            <form method="get" action="/Mevzuat" class="input-group shadow-xs">
+                <input type="hidden" name="scope" value="@scope" />
+                <input type="text" name="q" value="@searchQuery" class="form-control rounded-start-pill ps-4" placeholder="Konu veya KMK maddesi ara (örn: karar defteri, aidat, 69)..." />
+                <button type="submit" class="btn btn-dark rounded-end-pill px-4 fw-semibold"><i class="bi bi-search me-1"></i> Ara</button>
+            </form>
+        </div>
+    </div>
+
+    @if (!articles.Any())
+    {
+        <div class="card border-0 shadow-sm rounded-4 p-5 text-center bg-white">
+            <i class="bi bi-journal-x fs-1 text-muted mb-2"></i>
+            <h5 class="fw-bold">Aramanızla eşleşen mevzuat rehberi bulunamadı</h5>
+            <p class="text-muted small mb-3">Filtreyi temizleyerek tüm kütüphaneyi inceleyebilirsiniz.</p>
+            <div>
+                <a href="/Mevzuat" class="btn btn-outline-primary rounded-pill px-4">Tüm Rehberleri Göster</a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            @foreach (var item in articles)
+            {
+                bool locked = item.IsMembersOnly && !isAuth;
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden @(item.IsMembersOnly ? "border-top border-warning border-4" : "border-top border-primary border-4")">
+                        <div class="card-body p-4 d-flex flex-column">
+                            <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+                                <span class="badge @(item.IsMembersOnly ? "bg-warning text-dark" : "bg-primary-subtle text-primary border border-primary-subtle") rounded-pill px-3 py-1">
+                                    @if (item.IsMembersOnly)
+                                    {
+                                        <i class="bi bi-book-half me-1"></i>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-globe2 me-1"></i>
+                                    }
+                                    @item.Category
+                                </span>
+                                @if (locked)
+                                {
+                                    <span class="badge bg-dark text-warning rounded-pill"><i class="bi bi-lock-fill me-1"></i>Üye Kitabı</span>
+                                }
+                                else if (item.IsMembersOnly)
+                                {
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill"><i class="bi bi-unlock-fill me-1"></i>Açık</span>
+                                }
+                            </div>
+                            <h5 class="fw-bold text-dark mb-2">@item.Title</h5>
+                            <p class="text-muted small flex-grow-1 mb-3">@StripHtmlSummary(item.HtmlContent, 165)</p>
+                            <div class="d-flex justify-content-between align-items-center pt-3 border-top small">
+                                <span class="text-muted">
+                                    <i class="bi bi-arrow-repeat me-1"></i>Güncel: @((item.UpdatedAt ?? item.PublishedAt ?? item.CreatedAt).ToLocalTime().ToString("dd.MM.yyyy"))
+                                </span>
+                                @if (locked)
+                                {
+                                    <a href="/Mevzuat/@item.Slug" class="btn btn-sm btn-warning text-dark rounded-pill px-3 fw-bold">
+                                        <i class="bi bi-lock me-1"></i>Önizle / Üye Ol
+                                    </a>
+                                }
+                                else
+                                {
+                                    <a href="/Mevzuat/@item.Slug" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-semibold">
+                                        Rehberi Oku &rarr;
+                                    </a>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>

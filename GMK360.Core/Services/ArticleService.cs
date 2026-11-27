@@ -58,6 +58,8 @@ namespace GMK360.Core.Services
                 existing.HtmlContent = article.HtmlContent;
                 existing.CoverImageUrl = article.CoverImageUrl;
                 existing.SeoTags = article.SeoTags;
+                existing.Category = string.IsNullOrWhiteSpace(article.Category) ? "Genel" : article.Category;
+                existing.IsMembersOnly = article.IsMembersOnly;
                 
                 // Yayınlanma durumu değiştiyse tarihi güncelle
                 if (article.IsPublished && !existing.IsPublished)

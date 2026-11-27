@@ -1,27 +1,26 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
-using GMK360.Core.Interfaces;
-using GMK360.Core.Entities;
+using GMK360.Data.Contexts;
+using GMK360.Web.Services;
 
 namespace GMK360.Web.Controllers
 {
     [AllowAnonymous] // Ziyaretçilere açık (Public View)
     public class BlogController : Controller
     {
-        private readonly IArticleService _articleService;
+        private readonly ApplicationDbContext _context;
 
-        public BlogController(IArticleService articleService)
+        public BlogController(ApplicationDbContext context)
         {
-            _articleService = articleService;
+            _context = context;
         }
 
         // GET: /Blog
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string? q = null, string? scope = null)
         {
-            // Sadece yayında olan makaleleri getirir
-            var articles = await _articleService.GetAllArticlesAsync(includeUnpublished: false);
-            return View(articles); // Views/Blog/Index.cshtml
+            await KmkGuideSeederService.EnsureKmkGuidesSeededAsync(_context);
+            return RedirectToAction("Index", "Mevzuat", new { q, scope });
         }
 
         // GET: /Blog/{slug}
@@ -30,24 +29,11 @@ namespace GMK360.Web.Controllers
         {
             if (string.IsNullOrWhiteSpace(slug))
             {
-                return RedirectToAction("Index");
+                return RedirectToAction("Index", "Mevzuat");
             }
 
-            var article = await _articleService.GetArticleBySlugAsync(slug);
-            if (article == null)
-            {
-                return NotFound();
-            }
-
-            // CTA Pazarlama Aracı: Makale üyelere özelse üye olmaya yönlendir
-            if (article.IsMembersOnly && !User.Identity.IsAuthenticated)
-            {
-                TempData["MarketingMessage"] = "Bu makalenin tamamını ve vergi avantajları rehberini okumak için GMK360 platformuna ücretsiz katılın!";
-                return RedirectToAction("Register", "Account");
-            }
-
-            // View içerisinde article.Author üzerinden Danışman Kartviziti oluşturulacak
-            return View(article); 
+            await KmkGuideSeederService.EnsureKmkGuidesSeededAsync(_context);
+            return RedirectToAction("Detail", "Mevzuat", new { slug });
         }
     }
 }

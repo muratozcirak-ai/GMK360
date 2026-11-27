@@ -1,0 +1,114 @@
+@model GMK360.Core.Entities.Article
+@using System.Text.RegularExpressions
+@{
+    ViewData["Title"] = Model.Title;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    bool isAuth = ViewBag.IsAuthenticated is bool a && a;
+    bool isLocked = ViewBag.IsLockedPreview is bool lp && lp;
+    var related = ViewBag.RelatedArticles as List<GMK360.Core.Entities.Article> ?? new List<GMK360.Core.Entities.Article>();
+
+    string ExtractLeadPreview(string? html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return "";
+        var plain = Regex.Replace(html, "<.*?>", " ");
+        plain = System.Net.WebUtility.HtmlDecode(plain);
+        plain = Regex.Replace(plain, @"\s+", " ").Trim();
+        return plain.Length <= 320 ? plain : plain.Substring(0, 320).TrimEnd() + "...";
+    }
+}
+
+<div class="container py-5" style="margin-top: 76px;">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb small">
+            <li class="breadcrumb-item"><a href="/" class="text-decoration-none">Ana Sayfa</a></li>
+            <li class="breadcrumb-item"><a href="/Mevzuat" class="text-decoration-none">KMK Mevzuat &amp; Rehber</a></li>
+            <li class="breadcrumb-item active text-truncate" style="max-width: 340px;">@Model.Title</li>
+        </ol>
+    </nav>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <article class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
+                <div class="p-4 p-md-5">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                        <span class="badge @(Model.IsMembersOnly ? "bg-warning text-dark" : "bg-primary-subtle text-primary border border-primary-subtle") rounded-pill px-3 py-2">
+                            @Model.Category
+                        </span>
+                        <span class="badge bg-light text-muted border rounded-pill px-3 py-2">
+                            <i class="bi bi-shield-check text-success me-1"></i> Merkezi GMK360 Mevzuatı • Güncelleme: @((Model.UpdatedAt ?? Model.PublishedAt ?? Model.CreatedAt).ToLocalTime().ToString("dd.MM.yyyy"))
+                        </span>
+                    </div>
+
+                    <h1 class="fw-bolder text-dark mb-4" style="line-height:1.25;">@Model.Title</h1>
+
+                    @if (isLocked)
+                    {
+                        <p class="lead text-muted mb-4">@ExtractLeadPreview(Model.HtmlContent)</p>
+                        <div class="card border-warning bg-warning bg-opacity-10 rounded-4 p-4 text-center my-4">
+                            <i class="bi bi-book-half text-warning-emphasis fs-1 mb-2"></i>
+                            <h5 class="fw-bold text-dark mb-2">Bu Bölüm Üyelere Özel "Yönetici El Kitabı" İçindedir</h5>
+                            <p class="text-muted small mx-auto mb-3" style="max-width: 540px;">
+                                Birebir örnek karar metinleri, adım adım karar defteri/ihtarname doldurma formları, yasal oy oranları tablosu ve yönetici kontrol listelerini görmek için ücretsiz GMK360 hesabınızla giriş yapın.
+                            </p>
+                            <div class="d-flex flex-wrap justify-content-center gap-2">
+                                <a href="/Auth/Login?returnUrl=/BuildingManager/MevzuatRehberi?slug=@Model.Slug" class="btn btn-dark rounded-pill px-4 fw-bold">
+                                    <i class="bi bi-box-arrow-in-right me-1"></i> Giriş Yap &amp; Kitabı Oku
+                                </a>
+                                <a href="/Account/Register?preselect=Corporate" class="btn btn-orange rounded-pill px-4 fw-bold">
+                                    <i class="bi bi-person-plus me-1"></i> Ücretsiz Yönetici Hesabı Aç
+                                </a>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="kmk-article-body lh-lg text-dark">
+                            @Html.Raw(Model.HtmlContent)
+                        </div>
+
+                        <div class="alert alert-light border rounded-4 mt-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+                            <div class="small text-muted">
+                                <i class="bi bi-lock-fill text-primary me-1"></i>
+                                Bu metin GMK360 Merkezi Hukuk &amp; Mevzuat Ekibi tarafından yönetilmektedir (salt okunur).
+                            </div>
+                            @if (isAuth)
+                            {
+                                <a href="/BuildingManager/MevzuatRehberi?slug=@Model.Slug" class="btn btn-sm btn-success rounded-pill px-3 fw-bold">
+                                    <i class="bi bi-book-half me-1"></i> Yönetim Panelimdeki El Kitabında Aç
+                                </a>
+                            }
+                            else
+                            {
+                                <a href="/Account/Register?preselect=Corporate" class="btn btn-sm btn-orange rounded-pill px-3 fw-bold">
+                                    Site/Apartmanını GMK360 ile Yönet &rarr;
+                                </a>
+                            }
+                        </div>
+                    }
+                </div>
+            </article>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4 bg-white p-4 mb-4">
+                <h6 class="fw-bold text-dark mb-3"><i class="bi bi-journals text-primary me-2"></i>Diğer Mevzuat &amp; Kitap Bölümleri</h6>
+                <div class="list-group list-group-flush">
+                    @foreach (var rel in related)
+                    {
+                        <a href="/Mevzuat/@rel.Slug" class="list-group-item list-group-item-action px-0 py-2 border-bottom">
+                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                <span class="small fw-semibold text-dark">@rel.Title</span>
+                                @if (rel.IsMembersOnly && !isAuth)
+                                {
+                                    <i class="bi bi-lock-fill text-warning small flex-shrink-0"></i>
+                                }
+                            </div>
+                            <small class="text-muted" style="font-size:.72rem;">@rel.Category</small>
+                        </a>
+                    }
+                </div>
+                <a href="/Mevzuat" class="btn btn-outline-primary btn-sm rounded-pill w-100 mt-3 fw-semibold">Tüm Kütüphaneyi Gör</a>
+            </div>
+        </div>
+    </div>
+</div>

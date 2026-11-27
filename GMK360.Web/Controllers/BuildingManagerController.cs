@@ -6315,5 +6315,53 @@ namespace GMK360.Web.Controllers
             TempData["SuccessMessage"] = $"'{itemName}' planlı işler bakım takvimine eklendi.";
             return RedirectToAction(nameof(BakimTakvimi), new { buildingId });
         }
+
+        // 13. Yasal Prosedürler & Yönetici El Kitabı (Merkezden Güncellenen Salt Okunur Kitap Modülü)
+        [HttpGet]
+        public async Task<IActionResult> MevzuatRehberi(string? slug = null, string? q = null)
+        {
+            await KmkGuideSeederService.EnsureKmkGuidesSeededAsync(_context);
+
+            var allChapters = await _context.Articles
+                .AsNoTracking()
+                .Where(a => a.IsPublished)
+                .OrderBy(a => a.IsMembersOnly)
+                .ThenBy(a => a.PublishedAt ?? a.CreatedAt)
+                .ToListAsync();
+
+            var filteredChapters = allChapters;
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var term = q.Trim();
+                filteredChapters = allChapters
+                    .Where(a =>
+                        a.Title.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                        (a.SeoTags != null && a.SeoTags.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                        a.Category.Contains(term, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+
+            var activeChapter = !string.IsNullOrWhiteSpace(slug)
+                ? allChapters.FirstOrDefault(a => string.Equals(a.Slug, slug, StringComparison.OrdinalIgnoreCase))
+                : filteredChapters.FirstOrDefault() ?? allChapters.FirstOrDefault();
+
+            string? prevSlug = null;
+            string? nextSlug = null;
+            if (activeChapter != null && allChapters.Count > 1)
+            {
+                int idx = allChapters.FindIndex(a => a.Id == activeChapter.Id);
+                if (idx > 0) prevSlug = allChapters[idx - 1].Slug;
+                if (idx >= 0 && idx < allChapters.Count - 1) nextSlug = allChapters[idx + 1].Slug;
+            }
+
+            ViewBag.AllChapters = filteredChapters;
+            ViewBag.TotalChapterCount = allChapters.Count;
+            ViewBag.SearchQuery = q ?? "";
+            ViewBag.PrevSlug = prevSlug;
+            ViewBag.NextSlug = nextSlug;
+            ViewBag.PrevTitle = prevSlug != null ? allChapters.FirstOrDefault(x => x.Slug == prevSlug)?.Title : null;
+            ViewBag.NextTitle = nextSlug != null ? allChapters.FirstOrDefault(x => x.Slug == nextSlug)?.Title : null;
+            return View(activeChapter);
+        }
     }
 }

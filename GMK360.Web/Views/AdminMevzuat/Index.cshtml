@@ -1,0 +1,253 @@
+@model IEnumerable<GMK360.Core.Entities.Article>
+@{
+    Layout = "~/Views/Shared/_AdminLayout.cshtml";
+    ViewData["Title"] = "Merkezi Mevzuat & Yönetici El Kitabı CMS";
+    var articles = (Model ?? Enumerable.Empty<GMK360.Core.Entities.Article>()).ToList();
+    int totalCount = articles.Count;
+    int publicCount = articles.Count(a => !a.IsMembersOnly && a.IsPublished);
+    int handbookCount = articles.Count(a => a.IsMembersOnly && a.IsPublished);
+    string searchQuery = ViewBag.SearchQuery as string ?? "";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold text-dark mb-1"><i class="bi bi-bank2 text-primary me-2"></i>Merkezi Mevzuat &amp; Yönetici El Kitabı CMS</h2>
+        <p class="text-muted small mb-0">
+            Buradan eklediğiniz veya güncellediğiniz her madde hem <strong>halka açık /Mevzuat</strong> sayfasında hem de tüm site yöneticilerinin <strong>El Kitabında</strong> otomatik yayınlanır. Site yöneticileri içeriğe müdahale edemez.
+        </p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/Mevzuat" target="_blank" class="btn btn-outline-secondary rounded-pill px-3 fw-semibold">
+            <i class="bi bi-box-arrow-up-right me-1"></i> Halka Açık Sayfa
+        </a>
+        <a href="/BuildingManager/MevzuatRehberi" target="_blank" class="btn btn-outline-primary rounded-pill px-3 fw-semibold">
+            <i class="bi bi-book-half me-1"></i> Üye El Kitabı Önizle
+        </a>
+        <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold" onclick="openArticleModal(0)">
+            <i class="bi bi-plus-circle me-1"></i> Yeni Mevzuat / Bölüm Ekle
+        </button>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show rounded-3 border-0 shadow-sm mb-3">
+        @TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show rounded-3 border-0 shadow-sm mb-3">
+        @TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="glass-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="small text-muted fw-bold">TOPLAM REHBER / BÖLÜM</div>
+                <div class="fs-3 fw-bold text-dark">@totalCount</div>
+            </div>
+            <i class="bi bi-journals fs-2 text-primary"></i>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="glass-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="small text-muted fw-bold">HALKA AÇIK YAYINDA</div>
+                <div class="fs-3 fw-bold text-success">@publicCount</div>
+            </div>
+            <i class="bi bi-globe2 fs-2 text-success"></i>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="glass-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="small text-muted fw-bold">ÜYE EL KİTABI BÖLÜMÜ</div>
+                <div class="fs-3 fw-bold text-warning-emphasis">@handbookCount</div>
+            </div>
+            <i class="bi bi-book-fill fs-2 text-warning"></i>
+        </div>
+    </div>
+</div>
+
+<div class="glass-card">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h5 class="fw-bold mb-0">Merkezi Kütüphane Kayıtları</h5>
+        <form method="get" action="/AdminMevzuat/Index" class="input-group input-group-sm" style="max-width: 340px;">
+            <input type="text" name="q" value="@searchQuery" class="form-control" placeholder="Başlık veya kategori ara..." />
+            <button type="submit" class="btn btn-dark">Ara</button>
+        </form>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light small">
+                <tr>
+                    <th>Başlık / Slug</th>
+                    <th>Kategori</th>
+                    <th>Erişim</th>
+                    <th>Durum</th>
+                    <th>Son Güncelleme</th>
+                    <th class="text-end">İşlemler</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in articles)
+                {
+                    <tr>
+                        <td>
+                            <div class="fw-bold text-dark">@item.Title</div>
+                            <code class="small text-muted">/Mevzuat/@item.Slug</code>
+                        </td>
+                        <td><span class="badge bg-light text-dark border">@item.Category</span></td>
+                        <td>
+                            @if (item.IsMembersOnly)
+                            {
+                                <span class="badge bg-warning text-dark"><i class="bi bi-book-half me-1"></i>Üye El Kitabı</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-globe2 me-1"></i>Halka Açık</span>
+                            }
+                        </td>
+                        <td>
+                            @if (item.IsPublished)
+                            {
+                                <span class="badge bg-success">Yayında</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Taslak</span>
+                            }
+                        </td>
+                        <td class="small text-muted">@((item.UpdatedAt ?? item.PublishedAt ?? item.CreatedAt).ToLocalTime().ToString("dd.MM.yyyy HH:mm"))</td>
+                        <td class="text-end text-nowrap">
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-primary rounded-pill px-3"
+                                    onclick='openArticleModal(@item.Id, @Html.Raw(System.Text.Json.JsonSerializer.Serialize(item.Title)), @Html.Raw(System.Text.Json.JsonSerializer.Serialize(item.Slug)), @Html.Raw(System.Text.Json.JsonSerializer.Serialize(item.Category)), @Html.Raw(System.Text.Json.JsonSerializer.Serialize(item.SeoTags ?? "")), @Html.Raw(System.Text.Json.JsonSerializer.Serialize(item.HtmlContent)), @(item.IsMembersOnly ? "true" : "false"), @(item.IsPublished ? "true" : "false"))'>
+                                <i class="bi bi-pencil-square me-1"></i>Düzenle
+                            </button>
+                            <form asp-action="TogglePublish" asp-controller="AdminMevzuat" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@item.Id" />
+                                <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill px-2" title="Yayım durumunu değiştir">
+                                    <i class="bi @(item.IsPublished ? "bi-eye-slash" : "bi-eye")"></i>
+                                </button>
+                            </form>
+                            <form asp-action="Delete" asp-controller="AdminMevzuat" method="post" class="d-inline" onsubmit="return confirm('Bu mevzuat kaydını kalıcı olarak silmek istediğinize emin misiniz?');">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@item.Id" />
+                                <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-2" title="Sil">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Düzenle / Yeni Ekle Modalı -->
+<div class="modal fade" id="articleEditorModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-dark text-white border-0">
+                <h5 class="modal-title fw-bold" id="articleModalTitle">Yeni Mevzuat / El Kitabı Bölümü</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="Save" asp-controller="AdminMevzuat" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" id="artId" value="0" />
+                <div class="modal-body p-4">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold">Başlık *</label>
+                            <input type="text" name="title" id="artTitle" class="form-control" required />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">URL Slug (Boş bırakılırsa otomatik üretilir)</label>
+                            <input type="text" name="slug" id="artSlug" class="form-control" placeholder="orn-karar-defteri-rehberi" />
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Kategori</label>
+                            <select name="category" id="artCategory" class="form-select">
+                                <option value="KMK Bilgilendirme (Genel)">KMK Bilgilendirme (Genel)</option>
+                                <option value="Yönetici El Kitabı & Yasal Prosedürler">Yönetici El Kitabı &amp; Yasal Prosedürler</option>
+                                <option value="Yasal Mevzuat">Yasal Mevzuat</option>
+                                <option value="Kira &amp; Tahliye Hukuku">Kira &amp; Tahliye Hukuku</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">SEO Etiketleri (Virgülle)</label>
+                            <input type="text" name="seoTags" id="artTags" class="form-control" placeholder="kmk 32, karar defteri, aidat" />
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end gap-4 pb-1">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="isMembersOnly" value="true" id="artMembersOnly">
+                                <label class="form-check-label small fw-bold" for="artMembersOnly">Üyelere Özel El Kitabı</label>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="isPublished" value="true" id="artPublished" checked>
+                                <label class="form-check-label small fw-bold" for="artPublished">Yayında</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">İçerik (HTML desteklidir — &lt;h5&gt;, &lt;p&gt;, &lt;ul&gt;, &lt;table&gt;) *</label>
+                        <textarea name="htmlContent" id="artHtml" class="form-control font-monospace small" rows="13" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">
+                        <i class="bi bi-save me-1"></i> Kaydet ve Tüm Kullanıcılarda Güncelle
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openArticleModal(id, title, slug, category, seoTags, htmlContent, isMembersOnly, isPublished) {
+            document.getElementById('artId').value = id || 0;
+            document.getElementById('artTitle').value = title || '';
+            document.getElementById('artSlug').value = slug || '';
+            document.getElementById('artTags').value = seoTags || '';
+            document.getElementById('artHtml').value = htmlContent || '';
+            document.getElementById('artMembersOnly').checked = !!isMembersOnly;
+            document.getElementById('artPublished').checked = (id === 0 ? true : !!isPublished);
+
+            var catSel = document.getElementById('artCategory');
+            if (category) {
+                var matched = false;
+                for (var i = 0; i < catSel.options.length; i++) {
+                    if (catSel.options[i].value === category) { catSel.selectedIndex = i; matched = true; break; }
+                }
+                if (!matched) {
+                    var opt = new Option(category, category, true, true);
+                    catSel.add(opt);
+                }
+            } else {
+                catSel.selectedIndex = 1;
+            }
+
+            document.getElementById('articleModalTitle').innerText = id > 0
+                ? 'Merkezi Mevzuat Kaydını Düzenle'
+                : 'Yeni Mevzuat / Yönetici El Kitabı Bölümü Ekle';
+
+            new bootstrap.Modal(document.getElementById('articleEditorModal')).show();
+        }
+    </script>
+}

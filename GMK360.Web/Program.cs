@@ -167,6 +167,7 @@ builder.Services.AddScoped<GMK360.Web.Services.B2BSupplierSyncService>();
 builder.Services.AddScoped<GMK360.Web.Services.ISeoService, GMK360.Web.Services.SeoService>();
 builder.Services.AddScoped<GMK360.Web.Services.Construction.DnaTimeOffsetService>();
 builder.Services.AddScoped<GMK360.Core.Interfaces.IConstructionFeasibilityPdfService, GMK360.Web.Services.Construction.ConstructionFeasibilityPdfService>();
+builder.Services.AddScoped<GMK360.Core.Interfaces.IArticleService, GMK360.Core.Services.ArticleService>();
 
 // Register Background Services
 builder.Services.AddHostedService<LocationIntelligenceWorker>();
@@ -583,6 +584,7 @@ using (var schemaScope = app.Services.CreateScope())
                 );
             END
         ");
+        await GMK360.Web.Services.KmkGuideSeederService.EnsureKmkGuidesSeededAsync(schemaDb);
     }
     catch (Exception schemaEx)
     {

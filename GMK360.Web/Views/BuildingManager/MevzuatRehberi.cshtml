@@ -1,0 +1,207 @@
+@model GMK360.Core.Entities.Article?
+@{
+    Layout = "~/Views/Shared/_FacilityLayout.cshtml";
+    ViewData["Title"] = "Yasal Prosedürler & Yönetici El Kitabı";
+    var chapters = ViewBag.AllChapters as List<GMK360.Core.Entities.Article> ?? new List<GMK360.Core.Entities.Article>();
+    int totalCount = ViewBag.TotalChapterCount is int tc ? tc : chapters.Count;
+    string searchQuery = ViewBag.SearchQuery as string ?? "";
+    string? prevSlug = ViewBag.PrevSlug as string;
+    string? nextSlug = ViewBag.NextSlug as string;
+    string? prevTitle = ViewBag.PrevTitle as string;
+    string? nextTitle = ViewBag.NextTitle as string;
+}
+
+<style>
+    .handbook-sidebar-item {
+        border-radius: 0.75rem;
+        border: 1px solid #e5e7eb;
+        transition: all 0.15s ease;
+    }
+    .handbook-sidebar-item:hover {
+        background-color: #f8fafc;
+        border-color: #93c5fd;
+    }
+    .handbook-sidebar-item.active {
+        background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);
+        color: #fff !important;
+        border-color: #1e3a8a;
+    }
+    .handbook-sidebar-item.active .text-muted {
+        color: rgba(255,255,255,0.72) !important;
+    }
+    .handbook-paper {
+        background: #fff;
+        border-top: 5px solid #1e3a8a;
+    }
+    @@media print {
+        header, aside, .no-print, .col-xl-2, .col-lg-3.col-md-4 { display: none !important; }
+        .col-lg-8, .col-xl-9 { width: 100% !important; max-width: 100% !important; flex: 0 0 100% !important; }
+        main { margin-top: 0 !important; }
+    }
+</style>
+
+<div class="container-fluid py-3 px-1">
+    <!-- Üst Kitap Başlığı -->
+    <div class="bg-white p-4 rounded-4 shadow-sm mb-3 d-flex flex-wrap justify-content-between align-items-center gap-3 no-print">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3">
+                    <i class="bi bi-shield-lock-fill me-1"></i> Merkezi Yönetmelik &amp; Salt Okunur Rehber (@totalCount Bölüm)
+                </span>
+            </div>
+            <h2 class="fw-bold text-dark mb-1">
+                <i class="bi bi-journal-bookmark-fill text-primary me-2"></i>Yasal Prosedürler &amp; Yönetici El Kitabı
+            </h2>
+            <p class="text-muted small mb-0">
+                634 sayılı KMK çerçevesinde yeni seçilen yöneticiler için adım adım uygulama kitabı, örnek karar metinleri, form doldurma usulleri ve yasal haklar.
+                <strong>Yönetmelik değiştikçe GMK360 merkezinden otomatik güncellenir.</strong>
+            </p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="/BuildingManager/Oylamalar" class="btn btn-outline-success btn-sm rounded-pill px-3 fw-semibold">
+                <i class="bi bi-journal-check me-1"></i> Karar Defterine Git
+            </a>
+            <a href="/BuildingManager/Toplantilar" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-semibold">
+                <i class="bi bi-people-fill me-1"></i> Toplantı Masası
+            </a>
+            <a href="/Mevzuat" target="_blank" class="btn btn-outline-secondary btn-sm rounded-pill px-3 fw-semibold">
+                <i class="bi bi-globe2 me-1"></i> Halka Açık Sayfayı Gör
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <!-- SOL SÜTUN: KİTAP İÇİNDEKİLER -->
+        <div class="col-lg-4 col-xl-3 no-print">
+            <div class="card border-0 shadow-sm rounded-4 bg-white sticky-lg-top" style="top: 76px;">
+                <div class="card-header bg-dark text-white rounded-top-4 p-3">
+                    <div class="fw-bold small d-flex align-items-center justify-content-between">
+                        <span><i class="bi bi-book-half text-warning me-2"></i>EL KİTABI İÇİNDEKİLER</span>
+                        <span class="badge bg-warning text-dark">@chapters.Count</span>
+                    </div>
+                </div>
+                <div class="card-body p-3">
+                    <form method="get" action="/BuildingManager/MevzuatRehberi" class="input-group input-group-sm mb-3">
+                        <input type="text" name="q" value="@searchQuery" class="form-control" placeholder="Konu ara (Örn: defter, 4/5, icra)..." />
+                        <button type="submit" class="btn btn-primary fw-semibold"><i class="bi bi-search"></i></button>
+                        @if (!string.IsNullOrWhiteSpace(searchQuery))
+                        {
+                            <a href="/BuildingManager/MevzuatRehberi" class="btn btn-outline-secondary" title="Temizle"><i class="bi bi-x-lg"></i></a>
+                        }
+                    </form>
+
+                    @if (!chapters.Any())
+                    {
+                        <div class="text-center py-4 text-muted small">
+                            Aramanızla eşleşen kitap bölümü bulunamadı.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-column gap-2" style="max-height: 62vh; overflow-y: auto;">
+                            @{ int chapterIdx = 1; }
+                            @foreach (var ch in chapters)
+                            {
+                                bool isActive = Model != null && Model.Id == ch.Id;
+                                <a href="/BuildingManager/MevzuatRehberi?slug=@ch.Slug@(string.IsNullOrWhiteSpace(searchQuery) ? "" : $"&q={Uri.EscapeDataString(searchQuery)}")"
+                                   class="p-2 px-3 text-decoration-none handbook-sidebar-item @(isActive ? "active shadow-xs" : "text-dark")">
+                                    <div class="d-flex align-items-start gap-2">
+                                        <span class="badge @(isActive ? "bg-warning text-dark" : ch.IsMembersOnly ? "bg-primary-subtle text-primary" : "bg-success-subtle text-success") rounded-pill mt-1">@chapterIdx</span>
+                                        <div style="min-width:0;">
+                                            <div class="fw-bold small lh-sm">@ch.Title</div>
+                                            <div class="text-muted mt-1" style="font-size:.69rem;">
+                                                @(ch.IsMembersOnly ? "📘 Yönetici El Kitabı" : "🌐 Halka Açık Bilgi")
+                                            </div>
+                                        </div>
+                                    </div>
+                                </a>
+                                chapterIdx++;
+                            }
+                        </div>
+                    }
+
+                    <div class="mt-3 p-2 rounded-3 bg-light border small text-muted" style="font-size:.73rem;">
+                        <i class="bi bi-info-circle-fill text-primary me-1"></i>
+                        <strong>Merkezi Güncelleme:</strong> Bu sayfadaki hukuki prosedürler GMK360 merkez ekibince güncellenir; kullanıcılar metni değiştiremez.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SAĞ SÜTUN: AÇIK KİTAP SAYFASI -->
+        <div class="col-lg-8 col-xl-9">
+            @if (Model == null)
+            {
+                <div class="card border-0 shadow-sm rounded-4 p-5 text-center bg-white">
+                    <i class="bi bi-book fs-1 text-muted mb-2"></i>
+                    <h5 class="fw-bold">Görüntülenecek El Kitabı Bölümü Seçilmedi</h5>
+                    <p class="text-muted small mb-0">Sol menüdeki konu başlıklarından birini seçerek okumaya başlayabilirsiniz.</p>
+                </div>
+            }
+            else
+            {
+                <div class="card border-0 shadow-sm rounded-4 handbook-paper">
+                    <div class="card-body p-4 p-md-5">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pb-3 mb-3 border-bottom">
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                <span class="badge @(Model.IsMembersOnly ? "bg-warning text-dark" : "bg-success-subtle text-success border border-success-subtle") rounded-pill px-3 py-1">
+                                    @Model.Category
+                                </span>
+                                <span class="badge bg-light text-muted border rounded-pill px-3 py-1">
+                                    <i class="bi bi-arrow-repeat text-primary me-1"></i>Merkezi Güncelleme: @((Model.UpdatedAt ?? Model.PublishedAt ?? Model.CreatedAt).ToLocalTime().ToString("dd.MM.yyyy"))
+                                </span>
+                            </div>
+                            <button type="button" onclick="window.print()" class="btn btn-sm btn-outline-dark rounded-pill px-3 no-print">
+                                <i class="bi bi-printer me-1"></i> Sayfayı Yazdır / PDF
+                            </button>
+                        </div>
+
+                        <h2 class="fw-bolder text-dark mb-4" style="line-height: 1.3;">@Model.Title</h2>
+
+                        <div class="lh-lg text-dark mb-4">
+                            @Html.Raw(Model.HtmlContent)
+                        </div>
+
+                        <!-- Hızlı Uygulama Kısayolları -->
+                        <div class="p-3 rounded-4 bg-light border d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4 no-print">
+                            <span class="small fw-bold text-dark">
+                                <i class="bi bi-lightning-charge-fill text-warning me-1"></i>Öğrendiğinizi Hemen Uygulayın:
+                            </span>
+                            <div class="d-flex flex-wrap gap-2">
+                                <a href="/BuildingManager/Oylamalar" class="btn btn-xs btn-success rounded-pill px-3 fw-semibold">
+                                    <i class="bi bi-journal-check me-1"></i>Karar Defteri Sayfası Aç
+                                </a>
+                                <a href="/BuildingManager/Toplantilar" class="btn btn-xs btn-primary rounded-pill px-3 fw-semibold">
+                                    <i class="bi bi-people-fill me-1"></i>Ön Görüşme Başlat
+                                </a>
+                                <a href="/BuildingManager/Aidatlar" class="btn btn-xs btn-outline-dark rounded-pill px-3 fw-semibold">
+                                    <i class="bi bi-cash-stack me-1"></i>İşletme Projesi &amp; Aidat
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Önceki / Sonraki Kitap Bölümü -->
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pt-3 border-top no-print">
+                            <div>
+                                @if (!string.IsNullOrWhiteSpace(prevSlug))
+                                {
+                                    <a href="/BuildingManager/MevzuatRehberi?slug=@prevSlug" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+                                        &larr; Önceki Bölüm
+                                    </a>
+                                }
+                            </div>
+                            <div>
+                                @if (!string.IsNullOrWhiteSpace(nextSlug))
+                                {
+                                    <a href="/BuildingManager/MevzuatRehberi?slug=@nextSlug" class="btn btn-primary btn-sm rounded-pill px-4 fw-bold">
+                                        Sonraki Bölüm &rarr;
+                                    </a>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
