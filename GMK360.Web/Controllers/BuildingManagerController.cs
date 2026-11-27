@@ -5731,6 +5731,120 @@ namespace GMK360.Web.Controllers
             return RedirectToAction(nameof(Toplantilar), new { buildingId, tab = "archive" });
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SeedDemoResidentsForSite(int buildingId, bool includeAllSiteBlocks = true)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+
+            List<int> targetBuildingIds;
+            if (includeAllSiteBlocks && building.HousingComplexId.HasValue)
+            {
+                targetBuildingIds = await _context.Buildings
+                    .AsNoTracking()
+                    .Where(b => b.HousingComplexId == building.HousingComplexId)
+                    .Select(b => b.Id)
+                    .ToListAsync();
+            }
+            else
+            {
+                targetBuildingIds = new System.Collections.Generic.List<int> { building.Id };
+            }
+
+            var emptyUnits = await _context.BuildingUnits
+                .Where(u => targetBuildingIds.Contains(u.BuildingId)
+                    && !(u.Category ?? "").StartsWith("OrtakAlan")
+                    && string.IsNullOrWhiteSpace(u.OwnerName))
+                .OrderBy(u => u.BuildingId)
+                .ThenBy(u => u.FloorLevel)
+                .ThenBy(u => u.DoorNumber)
+                .ToListAsync();
+
+            if (!emptyUnits.Any())
+            {
+                TempData["SuccessMessage"] = "Tüm bağımsız bölümlerde zaten malik bilgisi girili durumda.";
+                return RedirectToAction(nameof(Sakinler), new { buildingId });
+            }
+
+            string[] ownerPool = new[]
+            {
+                "Ahmet Yılmaz", "Mehmet Demir", "Ayşe Kaya", "Fatma Şahin", "Mustafa Çelik",
+                "Emine Yıldız", "Ali Koç", "Hatice Arslan", "Hüseyin Doğan", "Zehra Öztürk",
+                "İbrahim Aydın", "Merve Özkan", "Ömer Kılıç", "Elif Aslan", "Yusuf Çetin",
+                "Büşra Erdoğan", "İsmail Aksoy", "Esra Kurt", "Ramazan Özdemir", "Gamze Polat",
+                "Serkan Şimşek", "Sevgi Yavuz", "Murat Tekin", "Gülşen Kaplan", "Kadir Korkmaz",
+                "Derya Güneş", "Burak Acar", "Seda Taş", "Orhan Tunç", "Nermin Bulut"
+            };
+            string[] tenantPool = new[]
+            {
+                "Caner Vural", "Deniz Aktaş", "Eren Karataş", "Selin Yalçın", "Tolga Işık",
+                "Gizem Yüksel", "Furkan Güler", "Pınar Sarı", "Volkan Keskin", "Melis Duman",
+                "Barış Toprak", "Damla Köse", "Sinan Ünal", "Ceren Kılıç", "Onur Uçar",
+                "Tuğçe Sönmez", "Hakan Mutlu", "Ece Ergün", "Berkay Altun", "İrem Özer"
+            };
+
+            int ownerOccupiedCount = 0;
+            int tenantOccupiedCount = 0;
+
+            for (int i = 0; i < emptyUnits.Count; i++)
+            {
+                var u = emptyUnits[i];
+                bool isTenantOccupied;
+
+                if (i < 5)
+                {
+                    // İlk 5 boş daire tek malik ("Hasan Karahan"): 1'i kendi oturuyor, 4'ü kiracılı
+                    u.OwnerName = "Hasan Karahan";
+                    u.OwnerPhone = "05329010001";
+                    u.OwnerEmail = "hasan.karahan@gmk360.local";
+                    isTenantOccupied = i > 0;
+                }
+                else if (i < 7)
+                {
+                    // İkinci çoklu malik ("Zeynep Aydın"): 2 daire (1'i oturan + 1'i kiracılı)
+                    u.OwnerName = "Zeynep Aydın";
+                    u.OwnerPhone = "05329020002";
+                    u.OwnerEmail = "zeynep.aydin@gmk360.local";
+                    isTenantOccupied = (i == 6);
+                }
+                else
+                {
+                    var name = ownerPool[(i - 7) % ownerPool.Length];
+                    int suffix = ((i - 7) / ownerPool.Length);
+                    u.OwnerName = suffix > 0 ? $"{name} ({suffix + 1})" : name;
+                    u.OwnerPhone = $"0532{(1100000 + u.Id * 7):D7}";
+                    u.OwnerEmail = $"malik{u.Id}@gmk360.local";
+                    // Kalanlarda yaklaşık %60 malik kendi oturuyor (i % 5 >= 3 ise kiracılı)
+                    isTenantOccupied = (i % 5) >= 3;
+                }
+
+                u.IsEmpty = false;
+                if (isTenantOccupied)
+                {
+                    var tName = tenantPool[i % tenantPool.Length];
+                    u.TenantName = $"{tName}";
+                    u.TenantPhone = $"0542{(2200000 + u.Id * 9):D7}";
+                    u.TenantEmail = $"kiraci{u.Id}@gmk360.local";
+                    tenantOccupiedCount++;
+                }
+                else
+                {
+                    u.TenantName = null;
+                    u.TenantPhone = null;
+                    u.TenantEmail = null;
+                    ownerOccupiedCount++;
+                }
+
+                await SyncResidentUsersAndPeriodsAsync(u);
+            }
+
+            await _context.SaveChangesAsync();
+            int ownPct = (int)Math.Round(ownerOccupiedCount * 100.0 / emptyUnits.Count);
+            TempData["SuccessMessage"] = $"⚡ {emptyUnits.Count} boş bölüm örnek verilerle dolduruldu: {ownerOccupiedCount} kendi oturan malik (~%{ownPct}), {tenantOccupiedCount} kiracılı (Hasan Karahan için 5 daire: 1 oturan + 4 kiracılı tanımlandı).";
+            return RedirectToAction(nameof(Sakinler), new { buildingId });
+        }
+
         private async Task<int?> ResolvePurchasingAgencyIdForBuildingAsync(Building building)
         {
             var userId = GetUserId();
