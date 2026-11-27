@@ -7,9 +7,61 @@
     int targetWizardId = selectedBuildingId ?? buildings.FirstOrDefault()?.Id ?? 0;
     bool hasAuthorityDoc = ViewBag.HasAuthorityDoc is bool ha && ha;
     var residentProfiles = ViewBag.ResidentProfiles as Dictionary<string, GMK360.Core.Entities.Identity.ApplicationUser> ?? new Dictionary<string, GMK360.Core.Entities.Identity.ApplicationUser>();
+    var governanceMembers = ViewBag.GovernanceMembers as List<GMK360.Core.Entities.BuildingManager> ?? new List<GMK360.Core.Entities.BuildingManager>();
 
     int aptCount = Model.Count(u => u.Category != "Dukkan" && u.Category != "Dükkan");
     int shopCount = Model.Count(u => u.Category == "Dukkan" || u.Category == "Dükkan");
+
+    string NormPhone(string? p)
+    {
+        if (string.IsNullOrWhiteSpace(p)) return "";
+        var d = new string(p.Where(char.IsDigit).ToArray());
+        return d.Length > 10 ? d.Substring(d.Length - 10) : d;
+    }
+
+    var boardIndex = 0;
+    var azaRankById = new Dictionary<int, int>();
+    foreach (var gm in governanceMembers.Where(x => x.Role == GMK360.Core.Entities.BuildingManagerRole.BoardMember))
+    {
+        boardIndex++;
+        azaRankById[gm.Id] = boardIndex;
+    }
+    int totalAzas = boardIndex;
+
+    List<(string Label, string BadgeCss)> ResolveUnitRoles(GMK360.Core.Entities.BuildingUnit u)
+    {
+        var list = new List<(string Label, string BadgeCss)>();
+        var ownerPhone = NormPhone(u.OwnerPhone);
+        var tenantPhone = NormPhone(u.TenantPhone);
+        var ownerMail = (u.OwnerEmail ?? "").Trim().ToLowerInvariant();
+        var tenantMail = (u.TenantEmail ?? "").Trim().ToLowerInvariant();
+
+        foreach (var gm in governanceMembers)
+        {
+            var gMail = (gm.User?.Email ?? "").Trim().ToLowerInvariant();
+            var gPhone = NormPhone(gm.User?.PhoneNumber);
+            bool matchesOwner = (!string.IsNullOrEmpty(u.OwnerUserId) && gm.UserId == u.OwnerUserId)
+                || (!string.IsNullOrEmpty(ownerMail) && gMail == ownerMail)
+                || (ownerPhone.Length >= 10 && gPhone == ownerPhone);
+            bool matchesTenant = (!string.IsNullOrEmpty(u.TenantUserId) && gm.UserId == u.TenantUserId)
+                || (!string.IsNullOrEmpty(tenantMail) && gMail == tenantMail)
+                || (tenantPhone.Length >= 10 && gPhone == tenantPhone);
+
+            if (!matchesOwner && !matchesTenant) continue;
+
+            string targetWho = matchesOwner && !matchesTenant ? "Malik" : (!matchesOwner && matchesTenant ? "Kiracı" : "Sakin");
+            if (gm.Role == GMK360.Core.Entities.BuildingManagerRole.HeadManager)
+                list.Add(($"👑 Ana Yönetici ({targetWho})", "bg-primary text-white"));
+            else if (gm.Role == GMK360.Core.Entities.BuildingManagerRole.Auditor)
+                list.Add(($"🔍 Denetçi ({targetWho})", "bg-warning text-dark"));
+            else
+            {
+                var rank = azaRankById.TryGetValue(gm.Id, out var r) && totalAzas > 1 ? $" #{r}" : "";
+                list.Add(($"🏛️ Aza{rank} ({targetWho})", "bg-success text-white"));
+            }
+        }
+        return list;
+    }
 }
 
 <div class="container-fluid py-3 px-1">
@@ -57,37 +109,53 @@
     }
 
     <div class="card shadow-sm border-0 rounded-4 mb-4 bg-white overflow-hidden">
-        <div class="card-header bg-white border-bottom p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-door-open text-primary me-2"></i>Daire &amp; Dükkan Sakin Listesi (@Model.Count() Bölüm)</h5>
-            <form method="get" class="d-flex gap-2">
-                <select name="buildingId" class="form-select form-select-sm" onchange="this.form.submit()">
-                    <option value="">Tüm Binalar</option>
-                    @foreach (var b in buildings)
-                    {
-                        if (selectedBuildingId == b.Id)
-                        {
-                            <option value="@b.Id" selected>@b.Name</option>
-                        }
-                        else
-                        {
-                            <option value="@b.Id">@b.Name</option>
-                        }
-                    }
-                </select>
-            </form>
+        <div class="card-header bg-white border-bottom p-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-door-open text-primary me-2"></i>Daire &amp; Dükkan Sakin Listesi (@Model.Count() Bölüm)</h5>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <div class="input-group input-group-sm" style="width: 230px;">
+                        <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                        <input type="text" id="sakinSearchInput" class="form-control" placeholder="Daire, ad, tel, görev ara..." oninput="filterSakinRows()" />
+                    </div>
+                    <form method="get" class="d-flex gap-2">
+                        <select name="buildingId" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="">Tüm Binalar / Bloklar</option>
+                            @foreach (var b in buildings)
+                            {
+                                if (selectedBuildingId == b.Id)
+                                {
+                                    <option value="@b.Id" selected>@b.Name</option>
+                                }
+                                else
+                                {
+                                    <option value="@b.Id">@b.Name</option>
+                                }
+                            }
+                        </select>
+                    </form>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap gap-1 align-items-center pt-1" id="sakinQuickFilterBar">
+                <button type="button" class="btn btn-xs btn-dark rounded-pill px-3 fw-semibold active" data-filter="all" onclick="setSakinFilter(this, 'all')">Tümü (@Model.Count())</button>
+                <button type="button" class="btn btn-xs btn-outline-primary rounded-pill px-3 fw-semibold" data-filter="owner" onclick="setSakinFilter(this, 'owner')">🏠 Mülk Sahipleri</button>
+                <button type="button" class="btn btn-xs btn-outline-info text-dark rounded-pill px-3 fw-semibold" data-filter="tenant" onclick="setSakinFilter(this, 'tenant')">🔑 Kiracılar</button>
+                <button type="button" class="btn btn-xs btn-outline-success rounded-pill px-3 fw-semibold" data-filter="board" onclick="setSakinFilter(this, 'board')">🏛️ Yönetici / Aza / Denetçi</button>
+                <button type="button" class="btn btn-xs btn-outline-warning text-dark rounded-pill px-3 fw-semibold" data-filter="rule" onclick="setSakinFilter(this, 'rule')">🛡️ Muaf / Farklı Aidat</button>
+                <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill px-3 fw-semibold" data-filter="empty" onclick="setSakinFilter(this, 'empty')">⏳ Boş / Girilmemiş</button>
+            </div>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
+                <table class="table table-hover align-middle mb-0" id="sakinlerTable">
                     <thead class="table-light small">
                         <tr>
                             <th class="ps-3">Bina</th>
                             <th>Kat / Kapı No</th>
-                            <th>Tür</th>
+                            <th>Tür &amp; Aylık Aidat / Muafiyet</th>
                             <th>Ev Sahibi (Malik)</th>
                             <th>Kiracı (Sakin)</th>
-                            <th>Durum</th>
-                            <th class="pe-3 text-end">İşlemler</th>
+                            <th>Durum &amp; Kurul Görevi</th>
+                            <th class="pe-3 text-end">İşlemler &amp; KMK Karar</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -110,41 +178,58 @@
                             foreach (var unit in Model)
                             {
                                 bool isShop = unit.Category == "Dukkan" || unit.Category == "Dükkan";
-                                <tr>
-                                    <td class="ps-3"><span class="badge bg-light text-dark border">@unit.Building?.Name</span></td>
+                                var effCalc = GMK360.Web.Services.FacilityGovernanceService.ComputeUnitEffectiveMonthlyDues(unit, unit.Building?.DefaultBaseMonthlyDues ?? 0m);
+                                decimal diffPct = Math.Round((unit.DuesMultiplier - 1.00m) * 100m, 2);
+                                bool isUnitExempt = unit.IsDuesExempt || unit.DuesMultiplier <= 0m || (unit.FixedMonthlyDues.HasValue && unit.FixedMonthlyDues.Value == 0m);
+                                bool hasDuesRule = isUnitExempt || diffPct != 0m || unit.DuesAdjustmentAmount != 0m || (unit.FixedMonthlyDues.HasValue && unit.FixedMonthlyDues > 0) || unit.IsExemptFromElevator || unit.IsExemptFromStairwell || unit.CleaningParticipationPercent != 100m;
+                                bool hasOwner = !string.IsNullOrWhiteSpace(unit.OwnerName);
+                                bool hasTenantRow = !unit.IsEmpty && (!string.IsNullOrWhiteSpace(unit.TenantName) || !string.IsNullOrWhiteSpace(unit.TenantPhone) || !string.IsNullOrWhiteSpace(unit.TenantEmail));
+                                var rowRoles = ResolveUnitRoles(unit);
+                                bool isBoardMember = rowRoles.Any();
+                                var searchBlob = $"{unit.Building?.Name} {unit.DoorNumber} {unit.OwnerName} {unit.OwnerPhone} {unit.TenantName} {unit.TenantPhone} {unit.DuesRuleNote} {string.Join(" ", rowRoles.Select(r => r.Label))}".ToLowerInvariant();
+                                <tr class="sakin-row"
+                                    data-has-owner="@(hasOwner ? "1" : "0")"
+                                    data-has-tenant="@(hasTenantRow ? "1" : "0")"
+                                    data-is-board="@(isBoardMember ? "1" : "0")"
+                                    data-has-rule="@(hasDuesRule ? "1" : "0")"
+                                    data-is-empty="@((unit.IsEmpty || !hasOwner) ? "1" : "0")"
+                                    data-search="@searchBlob">
+                                    <td class="ps-3"><span class="badge bg-light text-dark border">@(unit.Building?.BlockName ?? unit.Building?.Name)</span></td>
                                     <td>
                                         <div class="fw-bold text-dark">@(isShop ? $"Dükkan {unit.DoorNumber}" : $"Daire {unit.DoorNumber}")</div>
                                         <small class="text-muted d-block">@(unit.FloorName ?? $"{unit.FloorLevel}. Kat")</small>
                                         <span class="badge bg-light text-secondary border mt-1" style="font-size:.66rem;" title="Oran ve muafiyet kuralları kişiye değil bu mülk ID'sine bağlıdır">Mülk ID #@unit.Id</span>
                                     </td>
                                     <td>
-                                        @if (isShop)
-                                        {
-                                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Dükkan</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Daire (@(unit.RoomLayout ?? "3+1"))</span>
-                                        }
-                                        @{
-                                            var effCalc = GMK360.Web.Services.FacilityGovernanceService.ComputeUnitEffectiveMonthlyDues(unit);
-                                            decimal diffPct = Math.Round((unit.DuesMultiplier - 1.00m) * 100m, 2);
-                                        }
-                                        <div class="d-flex flex-wrap gap-1 mt-1">
-                                            @if (effCalc.Amount > 0m)
+                                        <div class="d-flex flex-wrap align-items-center gap-1">
+                                            @if (isShop)
                                             {
-                                                <span class="badge bg-success-subtle text-success border border-success-subtle" title="@effCalc.BreakdownNote">@effCalc.Amount.ToString("N0") ₺/ay</span>
-                                            }
-                                            @if (unit.IsDuesExempt || unit.DuesMultiplier <= 0m || (unit.FixedMonthlyDues.HasValue && unit.FixedMonthlyDues.Value == 0m))
-                                            {
-                                                <span class="badge bg-dark text-white">Aidattan Muaf (0 ₺)</span>
+                                                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Dükkan</span>
                                             }
                                             else
+                                            {
+                                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Daire (@(unit.RoomLayout ?? "3+1"))</span>
+                                            }
+                                            @if (isUnitExempt)
+                                            {
+                                                <span class="badge bg-dark text-white">🛡️ Aidattan Muaf (0 ₺)</span>
+                                            }
+                                            else if (effCalc.Amount > 0m)
+                                            {
+                                                <span class="badge bg-success-subtle text-success border border-success-subtle fw-bold" title="@effCalc.BreakdownNote">💰 @effCalc.Amount.ToString("N0") ₺/ay</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-light text-muted border">Baz Aidat Girilmedi</span>
+                                            }
+                                        </div>
+                                        <div class="d-flex flex-wrap gap-1 mt-1">
+                                            @if (!isUnitExempt)
                                             {
                                                 @if (diffPct != 0m)
                                                 {
                                                     <span class="badge @(diffPct > 0m ? "bg-warning-subtle text-warning-emphasis border border-warning-subtle" : "bg-info-subtle text-info-emphasis border border-info-subtle")">
-                                                        @(diffPct > 0m ? $"+%{diffPct:0.##} Fark" : $"-%{Math.Abs(diffPct):0.##} İndirim")
+                                                        @(diffPct > 0m ? $"+%{diffPct:0.##} Fazla Ödeme" : $"-%{Math.Abs(diffPct):0.##} İndirim")
                                                     </span>
                                                 }
                                                 @if (unit.FixedMonthlyDues.HasValue && unit.FixedMonthlyDues > 0)
@@ -207,14 +292,20 @@
                                         }
                                     </td>
                                     <td>
-                                        @if (unit.IsEmpty)
-                                        {
-                                            <span class="badge bg-secondary">Boş</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="badge bg-success">Dolu</span>
-                                        }
+                                        <div class="d-flex flex-wrap gap-1 align-items-center mb-1">
+                                            @if (unit.IsEmpty)
+                                            {
+                                                <span class="badge bg-secondary">Boş</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-success">Dolu</span>
+                                            }
+                                            @foreach (var r in rowRoles)
+                                            {
+                                                <span class="badge @r.BadgeCss rounded-pill">@r.Label</span>
+                                            }
+                                        </div>
                                         @{
                                             bool hasOwnerPin = !string.IsNullOrWhiteSpace(unit.OwnerQuickPinHash) || !string.IsNullOrWhiteSpace(unit.ResidentQuickPinHash);
                                             bool hasTenant = !unit.IsEmpty && (!string.IsNullOrWhiteSpace(unit.TenantName) || !string.IsNullOrWhiteSpace(unit.TenantPhone) || !string.IsNullOrWhiteSpace(unit.TenantEmail));
@@ -301,13 +392,42 @@
                                         }
                                     </td>
                                     <td class="pe-3 text-end">
-                                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold"
-                                                onclick="openEditUnitModal(@unit.Id, @unit.BuildingId, '@System.Web.HttpUtility.JavaScriptStringEncode(unit.DoorNumber)', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerEmail ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantEmail ?? "")', @(unit.IsEmpty ? "true" : "false"), '@unit.LandShare.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)', '@((unit.GrossSquareMeters ?? 0).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))', '@unit.DuesMultiplier.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)', '@(unit.FixedMonthlyDues.HasValue ? unit.FixedMonthlyDues.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : "")', @(unit.IsExemptFromElevator ? "true" : "false"), @(unit.IsExemptFromStairwell ? "true" : "false"), '@unit.CleaningParticipationPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.DuesRuleNote ?? "")', '@ownerToken', '@tenantToken', @(unit.IsDuesExempt ? "true" : "false"), '@unit.DuesAdjustmentAmount.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)', '@((unit.Building?.DefaultBaseMonthlyDues ?? 0m).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))')">
-                                            <i class="bi bi-pencil-square me-1"></i> Bilgi Gir / Düzenle
-                                        </button>
-                                        <a href="/BuildingManager/Detail/@unit.BuildingId" class="btn btn-sm btn-outline-secondary rounded-pill" title="Bina Masası">
-                                            <i class="bi bi-building"></i>
-                                        </a>
+                                        <div class="d-flex flex-wrap justify-content-end gap-1">
+                                            <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold"
+                                                    onclick="openEditUnitModal(@unit.Id, @unit.BuildingId, '@System.Web.HttpUtility.JavaScriptStringEncode(unit.DoorNumber)', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerEmail ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantEmail ?? "")', @(unit.IsEmpty ? "true" : "false"), '@unit.LandShare.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)', '@((unit.GrossSquareMeters ?? 0).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))', '@unit.DuesMultiplier.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)', '@(unit.FixedMonthlyDues.HasValue ? unit.FixedMonthlyDues.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : "")', @(unit.IsExemptFromElevator ? "true" : "false"), @(unit.IsExemptFromStairwell ? "true" : "false"), '@unit.CleaningParticipationPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.DuesRuleNote ?? "")', '@ownerToken', '@tenantToken', @(unit.IsDuesExempt ? "true" : "false"), '@unit.DuesAdjustmentAmount.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)', '@((unit.Building?.DefaultBaseMonthlyDues ?? 0m).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))')">
+                                                <i class="bi bi-pencil-square me-1"></i> Düzenle
+                                            </button>
+                                            <div class="btn-group">
+                                                <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-2 dropdown-toggle fw-semibold" data-bs-toggle="dropdown" title="Bu bölüm için Karar Defterinden oylama başlat">
+                                                    ⚖️ Karar
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end shadow-sm small">
+                                                    <li>
+                                                        <a class="dropdown-item" href="/BuildingManager/Oylamalar?buildingId=@unit.BuildingId&preset=UnitExemption&unitId=@unit.Id">
+                                                            🛡️ Aidat Muafiyeti / Ek Fark Kararı (Oy Birliği)
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="/BuildingManager/Oylamalar?buildingId=@unit.BuildingId&preset=AppointBoardMember&unitId=@unit.Id">
+                                                            🏛️ Aza / Denetçi Seçimi Başlat (+ Muafiyet)
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="/BuildingManager/Oylamalar?buildingId=@unit.BuildingId&preset=AppointManager&unitId=@unit.Id">
+                                                            👑 Yönetici Adayı Göster (+ Muafiyet)
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="/BuildingManager/Oylamalar?buildingId=@unit.BuildingId&preset=ComplaintResolution&unitId=@unit.Id">
+                                                            📣 Şikayet / Talep Gündemi Aç
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                            <a href="/BuildingManager/Detail/@unit.BuildingId" class="btn btn-sm btn-outline-secondary rounded-pill" title="Bina Masası">
+                                                <i class="bi bi-building"></i>
+                                            </a>
+                                        </div>
                                     </td>
                                 </tr>
                             }
@@ -861,5 +981,33 @@
         } else {
             prompt('Aşağıdaki mesajı kopyalayın:', text);
         }
+    }
+
+    let _activeSakinFilter = 'all';
+    function setSakinFilter(btn, filterKey) {
+        _activeSakinFilter = filterKey || 'all';
+        document.querySelectorAll('#sakinQuickFilterBar button').forEach(b => {
+            const isActive = b === btn;
+            b.classList.toggle('btn-dark', isActive);
+            b.classList.toggle('text-white', isActive);
+            if (!isActive) b.classList.remove('btn-dark');
+        });
+        filterSakinRows();
+    }
+
+    function filterSakinRows() {
+        const q = (document.getElementById('sakinSearchInput')?.value || '').trim().toLowerCase();
+        document.querySelectorAll('#sakinlerTable tbody tr.sakin-row').forEach(row => {
+            let matchFilter = true;
+            if (_activeSakinFilter === 'owner') matchFilter = row.dataset.hasOwner === '1';
+            else if (_activeSakinFilter === 'tenant') matchFilter = row.dataset.hasTenant === '1';
+            else if (_activeSakinFilter === 'board') matchFilter = row.dataset.isBoard === '1';
+            else if (_activeSakinFilter === 'rule') matchFilter = row.dataset.hasRule === '1';
+            else if (_activeSakinFilter === 'empty') matchFilter = row.dataset.isEmpty === '1';
+
+            const hay = row.dataset.search || '';
+            const matchSearch = !q || hay.includes(q);
+            row.style.display = (matchFilter && matchSearch) ? '' : 'none';
+        });
     }
 </script>

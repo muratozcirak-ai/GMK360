@@ -14,6 +14,10 @@
     var selectedBldObj = ViewBag.SelectedBuildingObj as GMK360.Core.Entities.Building;
     var firstSiteComplex = buildings.FirstOrDefault(b => b.HousingComplexId.HasValue);
     var presetCategory = Context.Request.Query["preset"].ToString();
+    var presetUnitId = Context.Request.Query["unitId"].ToString();
+    var presetTicketId = Context.Request.Query["ticketId"].ToString();
+    var allSiteUnits = ViewBag.AllSiteUnits as List<GMK360.Core.Entities.BuildingUnit> ?? new List<GMK360.Core.Entities.BuildingUnit>();
+    var openComplaints = ViewBag.OpenComplaints as List<GMK360.Core.Entities.SupportTicket> ?? new List<GMK360.Core.Entities.SupportTicket>();
 }
 
 <div class="container-fluid py-3 px-1">
@@ -185,6 +189,8 @@
                                             "DuesUpdate" => "💰 Aidat Belirleme",
                                             "AppointManager" => "🧑‍💼 Yönetici Atama",
                                             "AppointBoardMember" => "🏛️ Aza / Denetçi Seçimi",
+                                            "UnitExemption" => "🛡️ Daire Muafiyet / Ek Fark",
+                                            "ComplaintResolution" => "📣 Şikayet & Talep Kararı",
                                             "CapitalProject" => "🛠️ Yenilik / Yatırım",
                                             "ManagementPlan" => "📜 Yönetim Planı",
                                             _ => m.DecisionCategory
@@ -486,8 +492,10 @@
                         <select name="decisionCategory" id="newDecCategorySelect" class="form-select fw-semibold" onchange="onDecisionCategoryChanged()">
                             <option value="General">📝 Genel Yönetim / İş Planı Maddesi (KMK Md. 30 • &gt;%50)</option>
                             <option value="DuesUpdate">💰 Aidat &amp; İşletme Bütçesi Belirleme (KMK Md. 37 • &gt;%50 Sayı + Pay)</option>
-                            <option value="AppointManager">🧑‍💼 Yeni Yönetici Atama / Yetki Devri (KMK Md. 34 • &gt;%50 Sayı + Pay)</option>
+                            <option value="AppointManager">🧑‍💼 Yeni Yönetici Atama / Aday Oylaması (KMK Md. 34 • &gt;%50 Sayı + Pay)</option>
                             <option value="AppointBoardMember">🏛️ Yönetim Kurulu Azası / Denetçi Seçimi (KMK Md. 34/41 • &gt;%50 Sayı + Pay)</option>
+                            <option value="UnitExemption">🛡️ Daire Aidat Muafiyeti / Özel Fark (KMK Md. 20 • Oy Birliği %100)</option>
+                            <option value="ComplaintResolution">📣 Malik / Kiracı Şikayet &amp; Talep Kararı (KMK Md. 18/30 • &gt;%50)</option>
                             <option value="CapitalProject">🛠️ Önemli Yenilik / Mantolama / Demirbaş Yatırımı (KMK Md. 42 • &gt;%50 Sayı + Pay)</option>
                             <option value="ManagementPlan">📜 Yönetim Planı Değişikliği (KMK Md. 28 • 4/5 = %80)</option>
                         </select>
@@ -515,7 +523,7 @@
                                 </select>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label small fw-bold mb-1">Aday Adı Soyadı *</label>
+                                <label class="form-label small fw-bold mb-1">Seçilecek Aday Adı *</label>
                                 <input type="text" name="targetName" id="inputTargetName" class="form-control form-control-sm" placeholder="Örn: Mehmet Kaya" />
                             </div>
                             <div class="col-md-4">
@@ -525,6 +533,90 @@
                             <div class="col-md-4">
                                 <label class="form-label small fw-bold mb-1">Telefon</label>
                                 <input type="text" name="targetPhone" id="inputTargetPhone" class="form-control form-control-sm" placeholder="05XX XXX XX XX" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-bold mb-1">Diğer Adaylar / Seçim Pusulası Notu (Opsiyonel)</label>
+                                <input type="text" name="additionalCandidates" class="form-control form-control-sm" placeholder="Örn: 2. Aday: Ayşe Demir (Daire 8) • 3. Aday: Ali Yılmaz (Daire 12)" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold mb-1">Adayın Dairesi (Aidat Muafiyeti İçin Opsiyonel)</label>
+                                <select name="targetUnitId" id="appointTargetUnitSelect" class="form-select form-select-sm" disabled onchange="prefillCandidateFromUnit(this)">
+                                    <option value="">-- Bölüm Seçilmedi --</option>
+                                    @foreach (var su in allSiteUnits)
+                                    {
+                                        <option value="@su.Id" data-name="@su.OwnerName" data-email="@su.OwnerEmail" data-phone="@su.OwnerPhone">
+                                            @(su.Building?.BlockName ?? su.Building?.Name) • @(su.Category == "Dukkan" || su.Category == "Dükkan" ? "Dükkan" : "Daire") @su.DoorNumber (@(su.OwnerName ?? "Malik Girilmedi"))
+                                        </option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold mb-1">Görev Süresince Aidat Muafiyeti (KMK Md. 40)</label>
+                                <select name="exemptionMode" id="appointExemptionMode" class="form-select form-select-sm" disabled>
+                                    <option value="None">Muafiyet Yok (Tam Aidat Öder)</option>
+                                    <option value="FullExempt">🛡️ %100 Aidattan Muaf Olsun</option>
+                                    <option value="HalfExempt">🏷️ %50 İndirimli Aidat Ödesin</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="panelUnitExemption" class="row g-2 mt-2 d-none">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold mb-1">İlgili Daire / Dükkan *</label>
+                                <select name="targetUnitId" id="exemptionUnitSelect" class="form-select form-select-sm" disabled>
+                                    <option value="">-- Bölüm Seçiniz --</option>
+                                    @foreach (var su in allSiteUnits)
+                                    {
+                                        <option value="@su.Id">
+                                            @(su.Building?.BlockName ?? su.Building?.Name) • @(su.Category == "Dukkan" || su.Category == "Dükkan" ? "Dükkan" : "Daire") @su.DoorNumber (@(su.OwnerName ?? "Malik Girilmedi"))
+                                        </option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold mb-1">Uygulanacak Karar</label>
+                                <select name="exemptionMode" id="unitExemptionModeSelect" class="form-select form-select-sm" disabled onchange="toggleCustomExemptionFields()">
+                                    <option value="FullExempt">🛡️ Tam Aidat Muafiyeti (0 ₺ Öder)</option>
+                                    <option value="CustomAdjust">⚖️ Özel Katsayı / Fazla veya Eksik Ödeme (₺)</option>
+                                    <option value="ClearExemption">♻️ Muafiyeti Kaldır (Standart Tarifeye Dön)</option>
+                                </select>
+                            </div>
+                            <div class="col-6 d-none" id="wrapExMultiplier">
+                                <label class="form-label small fw-bold mb-1">Aidat Katsayısı (1.00 = Standart)</label>
+                                <input type="number" step="0.05" min="0" name="proposedMultiplier" class="form-control form-control-sm" value="1.00" />
+                            </div>
+                            <div class="col-6 d-none" id="wrapExAdjustment">
+                                <label class="form-label small fw-bold mb-1">Ek Fark / İndirim Tutarı (+/- ₺)</label>
+                                <input type="number" step="10" name="proposedAdjustment" class="form-control form-control-sm" placeholder="Örn: +500 veya -250" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-bold mb-1">Muafiyet / Ek Ödeme Gerekçesi *</label>
+                                <input type="text" name="duesNote" id="inputDuesNote" class="form-control form-control-sm" placeholder="Örn: Giriş kat asansör muafiyeti / Dükkan ekstra çöp-su farkı / Aza görevi" />
+                            </div>
+                        </div>
+
+                        <div id="panelComplaint" class="row g-2 mt-2 d-none">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold mb-1">Bağlı Şikayet / Talep Kaydı (Varsa)</label>
+                                <select name="relatedTicketId" id="complaintTicketSelect" class="form-select form-select-sm">
+                                    <option value="">-- Genel Şikayet / Yeni Konu --</option>
+                                    @foreach (var tk in openComplaints)
+                                    {
+                                        <option value="@tk.Id">#@tk.Id • @tk.Title (@tk.Category)</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold mb-1">İlgili Daire / Taraf (Opsiyonel)</label>
+                                <select name="targetUnitId" id="complaintUnitSelect" class="form-select form-select-sm" disabled>
+                                    <option value="">-- Tüm Site / Genel --</option>
+                                    @foreach (var su in allSiteUnits)
+                                    {
+                                        <option value="@su.Id">
+                                            @(su.Building?.BlockName ?? su.Building?.Name) • @(su.Category == "Dukkan" || su.Category == "Dükkan" ? "Dükkan" : "Daire") @su.DoorNumber (@(su.OwnerName ?? su.TenantName ?? "Bölüm"))
+                                        </option>
+                                    }
+                                </select>
                             </div>
                         </div>
 
@@ -843,25 +935,60 @@
             document.getElementById('dpAgendaLabel').textContent = btn.getAttribute('data-title') || '';
         });
 
+        function prefillCandidateFromUnit(sel) {
+            const opt = sel?.options?.[sel.selectedIndex];
+            if (!opt || !opt.value) return;
+            const n = opt.getAttribute('data-name') || '';
+            const e = opt.getAttribute('data-email') || '';
+            const p = opt.getAttribute('data-phone') || '';
+            if (n && !document.getElementById('inputTargetName').value.trim()) document.getElementById('inputTargetName').value = n;
+            if (e && !document.getElementById('inputTargetEmail').value.trim()) document.getElementById('inputTargetEmail').value = e;
+            if (p && !document.getElementById('inputTargetPhone').value.trim()) document.getElementById('inputTargetPhone').value = p;
+        }
+
+        function toggleCustomExemptionFields() {
+            const m = document.getElementById('unitExemptionModeSelect')?.value || 'FullExempt';
+            const showCustom = (m === 'CustomAdjust');
+            document.getElementById('wrapExMultiplier')?.classList.toggle('d-none', !showCustom);
+            document.getElementById('wrapExAdjustment')?.classList.toggle('d-none', !showCustom);
+        }
+
         function onDecisionCategoryChanged() {
             const cat = document.getElementById('newDecCategorySelect')?.value || 'General';
             const duesPanel = document.getElementById('panelDuesUpdate');
             const personPanel = document.getElementById('panelPersonAppoint');
             const roleWrap = document.getElementById('wrapTargetRole');
+            const exPanel = document.getElementById('panelUnitExemption');
+            const compPanel = document.getElementById('panelComplaint');
             const capPanel = document.getElementById('panelCapitalProject');
             const quorumSel = document.getElementById('newDecQuorumSelect');
             const titleEl = document.getElementById('newDecAgendaTitle');
             const hintEl = document.getElementById('decCategoryHint');
 
+            const appointUnitSel = document.getElementById('appointTargetUnitSelect');
+            const appointExMode = document.getElementById('appointExemptionMode');
+            const exUnitSel = document.getElementById('exemptionUnitSelect');
+            const exModeSel = document.getElementById('unitExemptionModeSelect');
+            const compUnitSel = document.getElementById('complaintUnitSelect');
+
             duesPanel?.classList.add('d-none');
             personPanel?.classList.add('d-none');
             roleWrap?.classList.add('d-none');
+            exPanel?.classList.add('d-none');
+            compPanel?.classList.add('d-none');
             capPanel?.classList.add('d-none');
+
+            if (appointUnitSel) appointUnitSel.disabled = true;
+            if (appointExMode) appointExMode.disabled = true;
+            if (exUnitSel) exUnitSel.disabled = true;
+            if (exModeSel) exModeSel.disabled = true;
+            if (compUnitSel) compUnitSel.disabled = true;
 
             const duesInput = document.getElementById('inputProposedDues');
             const nameInput = document.getElementById('inputTargetName');
             if (duesInput) duesInput.required = false;
             if (nameInput) nameInput.required = false;
+            if (exUnitSel) exUnitSel.required = false;
 
             if (cat === 'DuesUpdate') {
                 duesPanel?.classList.remove('d-none');
@@ -871,17 +998,35 @@
                 if (hintEl) hintEl.textContent = 'KMK Md. 37: Kat malikleri çoğunluğu sağlandığı anda yeni baz aidat otomatik aktif edilir.';
             } else if (cat === 'AppointManager') {
                 personPanel?.classList.remove('d-none');
+                if (appointUnitSel) appointUnitSel.disabled = false;
+                if (appointExMode) appointExMode.disabled = false;
                 if (nameInput) nameInput.required = true;
                 if (quorumSel) quorumSel.value = 'Innovation';
                 if (titleEl && !titleEl.value.trim()) titleEl.value = 'Yeni Site / Apartman Yöneticisi Atama Kararı';
-                if (hintEl) hintEl.textContent = 'KMK Md. 34: Sayı ve arsa payı salt çoğunluğu (>%50) yakalandığında yöneticilik yetkisi otomatik atanır.';
+                if (hintEl) hintEl.textContent = 'KMK Md. 34/40: Salt çoğunluk (>%50 sayı+pay) sağlandığında yönetici atanır ve seçilmişse görev muafiyeti uygulanır.';
             } else if (cat === 'AppointBoardMember') {
                 personPanel?.classList.remove('d-none');
                 roleWrap?.classList.remove('d-none');
+                if (appointUnitSel) appointUnitSel.disabled = false;
+                if (appointExMode) appointExMode.disabled = false;
                 if (nameInput) nameInput.required = true;
                 if (quorumSel) quorumSel.value = 'Innovation';
                 if (titleEl && !titleEl.value.trim()) titleEl.value = 'Yönetim Kurulu Azası / Denetçi Seçimi Kararı';
-                if (hintEl) hintEl.textContent = 'KMK Md. 34/41: Çoğunluk sağlandığında aday otomatik olarak Kurul Üyesi / Aza listesine eklenir.';
+                if (hintEl) hintEl.textContent = 'KMK Md. 34/40/41: Çoğunluk sağlandığında aday Kurul Üyesi / Aza atanır ve seçilmişse görev muafiyeti uygulanır.';
+            } else if (cat === 'UnitExemption') {
+                exPanel?.classList.remove('d-none');
+                if (exUnitSel) { exUnitSel.disabled = false; exUnitSel.required = true; }
+                if (exModeSel) exModeSel.disabled = false;
+                toggleCustomExemptionFields();
+                if (quorumSel) quorumSel.value = 'Unanimous';
+                if (titleEl && !titleEl.value.trim()) titleEl.value = 'Bağımsız Bölüm Aidat Muafiyeti / Özel Fark Kararı';
+                if (hintEl) hintEl.textContent = 'KMK Md. 20: Daire/Dükkan aidat muafiyeti veya özel katsayı kararları oy birliği (%100) ile yürürlüğe alınır.';
+            } else if (cat === 'ComplaintResolution') {
+                compPanel?.classList.remove('d-none');
+                if (compUnitSel) compUnitSel.disabled = false;
+                if (quorumSel) quorumSel.value = 'Standard';
+                if (titleEl && !titleEl.value.trim()) titleEl.value = 'Malik / Kiracı Şikayet & Talep Değerlendirme Kararı';
+                if (hintEl) hintEl.textContent = 'KMK Md. 18/30: Malik veya kiracı şikayetleri genel kurul oylamasıyla karara bağlanır ve iş planına aktarılır.';
             } else if (cat === 'CapitalProject') {
                 capPanel?.classList.remove('d-none');
                 if (quorumSel) quorumSel.value = 'Innovation';
@@ -897,11 +1042,29 @@
 
         document.addEventListener('DOMContentLoaded', function () {
             const preset = '@System.Web.HttpUtility.JavaScriptStringEncode(presetCategory ?? "")';
+            const presetUnit = '@System.Web.HttpUtility.JavaScriptStringEncode(presetUnitId ?? "")';
+            const presetTicket = '@System.Web.HttpUtility.JavaScriptStringEncode(presetTicketId ?? "")';
             if (preset) {
                 const catSel = document.getElementById('newDecCategorySelect');
                 if (catSel) {
                     catSel.value = preset;
                     onDecisionCategoryChanged();
+                    if (presetUnit) {
+                        if (preset === 'UnitExemption') {
+                            const s = document.getElementById('exemptionUnitSelect');
+                            if (s) s.value = presetUnit;
+                        } else if (preset === 'ComplaintResolution') {
+                            const s = document.getElementById('complaintUnitSelect');
+                            if (s) s.value = presetUnit;
+                        } else if (preset === 'AppointManager' || preset === 'AppointBoardMember') {
+                            const s = document.getElementById('appointTargetUnitSelect');
+                            if (s) { s.value = presetUnit; prefillCandidateFromUnit(s); }
+                        }
+                    }
+                    if (presetTicket) {
+                        const tk = document.getElementById('complaintTicketSelect');
+                        if (tk) tk.value = presetTicket;
+                    }
                     const modalEl = document.getElementById('newDecisionModal');
                     if (modalEl && typeof bootstrap !== 'undefined') {
                         new bootstrap.Modal(modalEl).show();

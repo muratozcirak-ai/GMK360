@@ -2650,6 +2650,13 @@ namespace GMK360.Web.Controllers
             string? targetEmail = null,
             string? targetPhone = null,
             string? targetRole = null,
+            string? additionalCandidates = null,
+            int? targetUnitId = null,
+            string? exemptionMode = null,
+            string? proposedMultiplier = null,
+            string? proposedAdjustment = null,
+            string? duesNote = null,
+            int? relatedTicketId = null,
             string? estimatedBudget = null,
             bool autoExecuteOnQuorum = true)
         {
@@ -2673,6 +2680,10 @@ namespace GMK360.Web.Controllers
             {
                 cleanQuorum = "ManagementPlan";
             }
+            else if (string.Equals(cleanCategory, "UnitExemption", StringComparison.OrdinalIgnoreCase) && string.Equals(cleanQuorum, "Standard", StringComparison.OrdinalIgnoreCase))
+            {
+                cleanQuorum = "Unanimous";
+            }
             else if (string.Equals(cleanCategory, "AppointManager", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(cleanCategory, "AppointBoardMember", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(cleanCategory, "CapitalProject", StringComparison.OrdinalIgnoreCase))
@@ -2685,6 +2696,8 @@ namespace GMK360.Web.Controllers
 
             decimal? parsedDues = ParseFlexibleDecimal(proposedDues);
             decimal? parsedBudget = ParseFlexibleDecimal(estimatedBudget);
+            decimal? parsedMult = ParseFlexibleDecimal(proposedMultiplier);
+            decimal? parsedAdj = ParseFlexibleDecimal(proposedAdjustment);
             var proposalPayload = new DecisionProposalPayload
             {
                 ProposedDues = parsedDues.HasValue && parsedDues.Value >= 0m ? Math.Round(parsedDues.Value, 2) : null,
@@ -2693,12 +2706,21 @@ namespace GMK360.Web.Controllers
                 TargetEmail = string.IsNullOrWhiteSpace(targetEmail) ? null : targetEmail.Trim(),
                 TargetPhone = string.IsNullOrWhiteSpace(targetPhone) ? null : targetPhone.Trim(),
                 TargetRole = string.IsNullOrWhiteSpace(targetRole) ? null : targetRole.Trim(),
+                AdditionalCandidates = string.IsNullOrWhiteSpace(additionalCandidates) ? null : additionalCandidates.Trim(),
+                TargetUnitId = targetUnitId,
+                ExemptionMode = string.IsNullOrWhiteSpace(exemptionMode) ? null : exemptionMode.Trim(),
+                ProposedMultiplier = parsedMult.HasValue && parsedMult.Value > 0m ? Math.Round(parsedMult.Value, 2) : null,
+                ProposedAdjustment = parsedAdj.HasValue ? Math.Round(parsedAdj.Value, 2) : null,
+                DuesNote = string.IsNullOrWhiteSpace(duesNote) ? null : duesNote.Trim(),
+                RelatedTicketId = relatedTicketId,
                 EstimatedBudget = parsedBudget.HasValue && parsedBudget.Value > 0m ? Math.Round(parsedBudget.Value, 2) : null
             };
             bool hasStructuredPayload = proposalPayload.ProposedDues.HasValue
                 || !string.IsNullOrWhiteSpace(proposalPayload.TargetName)
                 || !string.IsNullOrWhiteSpace(proposalPayload.TargetEmail)
                 || !string.IsNullOrWhiteSpace(proposalPayload.TargetPhone)
+                || proposalPayload.TargetUnitId.HasValue
+                || proposalPayload.RelatedTicketId.HasValue
                 || proposalPayload.EstimatedBudget.HasValue;
 
             var meeting = new SystemMeeting
@@ -2726,14 +2748,27 @@ namespace GMK360.Web.Controllers
             var finalDecisionText = decisionText?.Trim();
             if (string.IsNullOrWhiteSpace(finalDecisionText))
             {
+                string candInfo = !string.IsNullOrWhiteSpace(proposalPayload.AdditionalCandidates)
+                    ? $" (Diğer adaylar: {proposalPayload.AdditionalCandidates})"
+                    : "";
+                string exInfo = proposalPayload.ExemptionMode switch
+                {
+                    "FullExempt" => " ve görev süresince dairesinin aidattan %100 muaf tutulmasına",
+                    "HalfExempt" => " ve görev süresince dairesine %50 aidat indirimi uygulanmasına",
+                    _ => ""
+                };
                 finalDecisionText = cleanCategory switch
                 {
                     "DuesUpdate" when proposalPayload.ProposedDues.HasValue =>
                         $"Kat Mülkiyeti Kanunu Md. 37 uyarınca aylık baz aidatın {proposalPayload.ProposedDues.Value:N2} ₺ olarak belirlenmesine ve her ayın {(proposalPayload.PaymentDay ?? building.DuesPaymentDay ?? 5)}. günü tahsil edilmesine karar verilmesi oylamaya sunulmuştur.",
                     "AppointManager" when !string.IsNullOrWhiteSpace(proposalPayload.TargetName) =>
-                        $"KMK Md. 34 gereğince {proposalPayload.TargetName} ({proposalPayload.TargetEmail ?? proposalPayload.TargetPhone ?? "yetkili"}) adlı kişinin Ana Yönetici olarak atanmasına ve tüm yönetim yetkilerinin devredilmesine ilişkin karar önerisidir.",
+                        $"KMK Md. 34/40 gereğince {proposalPayload.TargetName} ({proposalPayload.TargetEmail ?? proposalPayload.TargetPhone ?? "yetkili"}) adlı kişinin Ana Yönetici olarak atanmasına{exInfo} ilişkin karar önerisidir.{candInfo}",
                     "AppointBoardMember" when !string.IsNullOrWhiteSpace(proposalPayload.TargetName) =>
-                        $"KMK Md. 34/41 uyarınca {proposalPayload.TargetName} adlı kişinin {(string.Equals(proposalPayload.TargetRole, "Auditor", StringComparison.OrdinalIgnoreCase) ? "Denetçi" : "Yönetim Kurulu Azası")} olarak seçilmesine ilişkin karar önerisidir.",
+                        $"KMK Md. 34/40/41 uyarınca {proposalPayload.TargetName} adlı kişinin {(string.Equals(proposalPayload.TargetRole, "Auditor", StringComparison.OrdinalIgnoreCase) ? "Denetçi" : "Yönetim Kurulu Azası")} olarak seçilmesine{exInfo} ilişkin karar önerisidir.{candInfo}",
+                    "UnitExemption" when proposalPayload.TargetUnitId.HasValue =>
+                        $"KMK Md. 20/40 kapsamında Bölüm ID #{proposalPayload.TargetUnitId.Value} için '{proposalPayload.DuesNote ?? proposalPayload.ExemptionMode ?? "Aidat Muafiyeti / Özel Tarife"}' düzenlemesinin oylanmasına ilişkin karar önerisidir.",
+                    "ComplaintResolution" =>
+                        $"KMK Md. 18/30 uyarınca '{agendaTitle}' konulu malik/kiracı şikayet ve talebinin karara bağlanmasına ilişkin gündem maddesidir.",
                     "CapitalProject" when proposalPayload.EstimatedBudget.HasValue =>
                         $"KMK Md. 42 kapsamında '{agendaTitle}' işinin tahmini {proposalPayload.EstimatedBudget.Value:N0} ₺ bütçe ile onaylanarak yönetici iş planına alınmasına karar önerisidir.",
                     _ => null
@@ -3672,10 +3707,26 @@ namespace GMK360.Web.Controllers
                     .ToDictionaryAsync(u => u.Id, u => u)
                 : new System.Collections.Generic.Dictionary<string, GMK360.Core.Entities.Identity.ApplicationUser>();
 
+            var rootIdsForManagers = buildings
+                .Where(b => allowedIds.Contains(b.Id))
+                .Select(b => b.ParentBuildingId ?? b.Id)
+                .Distinct()
+                .ToList();
+            var governanceMembers = rootIdsForManagers.Any()
+                ? await _context.BuildingManagers
+                    .AsNoTracking()
+                    .Include(m => m.User)
+                    .Where(m => rootIdsForManagers.Contains(m.BuildingId) && m.IsActive)
+                    .OrderBy(m => m.Role)
+                    .ThenBy(m => m.Id)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<BuildingManager>();
+
             ViewBag.Buildings = buildings;
             ViewBag.SelectedBuildingId = buildingId;
             ViewBag.HasAuthorityDoc = checkBuildingId > 0 && await HasDecisionAuthorityAsync(checkBuildingId);
             ViewBag.ResidentProfiles = residentProfiles;
+            ViewBag.GovernanceMembers = governanceMembers;
             return View(units);
         }
 
@@ -5350,6 +5401,16 @@ namespace GMK360.Web.Controllers
                 if (matched.Any()) staffsByMeeting[mId] = matched;
             }
 
+            var openComplaints = allowedIds.Any()
+                ? await _context.SupportTickets
+                    .AsNoTracking()
+                    .Where(t => t.ContextType == "Building" && t.ContextId.HasValue && allowedIds.Contains(t.ContextId.Value)
+                        && t.Category != "ManagerTodo" && t.Status != "Closed")
+                    .OrderByDescending(t => t.Id)
+                    .Take(30)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<SupportTicket>();
+
             ViewBag.Buildings = buildings;
             ViewBag.BuildingMap = buildings.ToDictionary(b => b.Id, b => b.Name);
             ViewBag.SelectedBuildingId = buildingId;
@@ -5357,6 +5418,8 @@ namespace GMK360.Web.Controllers
             ViewBag.QuotesByMeeting = meetingQuotes.GroupBy(q => q.SourceReferenceId).ToDictionary(g => g.Key, g => g.ToList());
             ViewBag.JobsByMeeting = jobsByMeeting;
             ViewBag.StaffsByMeeting = staffsByMeeting;
+            ViewBag.AllSiteUnits = allUnitsLoaded;
+            ViewBag.OpenComplaints = openComplaints;
             return View(meetings);
         }
 

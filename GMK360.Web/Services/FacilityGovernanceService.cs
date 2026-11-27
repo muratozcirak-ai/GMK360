@@ -32,6 +32,13 @@ namespace GMK360.Web.Services
         public string? TargetEmail { get; set; }
         public string? TargetPhone { get; set; }
         public string? TargetRole { get; set; }
+        public string? AdditionalCandidates { get; set; }
+        public int? TargetUnitId { get; set; }
+        public string? ExemptionMode { get; set; }
+        public decimal? ProposedMultiplier { get; set; }
+        public decimal? ProposedAdjustment { get; set; }
+        public string? DuesNote { get; set; }
+        public int? RelatedTicketId { get; set; }
         public decimal? EstimatedBudget { get; set; }
         public string? WorkPlanTitle { get; set; }
     }
@@ -1517,7 +1524,8 @@ namespace GMK360.Web.Services
                 var displayName = !string.IsNullOrWhiteSpace(targetUser.FirstName)
                     ? $"{targetUser.FirstName} {targetUser.LastName}".Trim()
                     : (payload?.TargetName ?? targetUser.Email ?? "Yeni Yönetici");
-                summary = $"Yeni yönetici yetkisi KMK çoğunluğuyla {displayName} hesabına atandı/devredildi. Dayanak: Karar #{meeting.DecisionNumber}";
+                string exNote = await ApplyDecisionUnitExemptionIfRequestedAsync(payload, meeting.DecisionNumber, "Yönetici Görev Muafiyeti");
+                summary = $"Yeni yönetici yetkisi KMK çoğunluğuyla {displayName} hesabına atandı/devredildi.{exNote} Dayanak: Karar #{meeting.DecisionNumber}";
             }
             else if (string.Equals(category, "AppointBoardMember", StringComparison.OrdinalIgnoreCase))
             {
@@ -1555,7 +1563,83 @@ namespace GMK360.Web.Services
                 var displayName = !string.IsNullOrWhiteSpace(targetUser.FirstName)
                     ? $"{targetUser.FirstName} {targetUser.LastName}".Trim()
                     : (payload?.TargetName ?? targetUser.Email ?? "Kurul Üyesi");
-                summary = $"{displayName}, KMK çoğunluğuyla '{roleLabel}' görevine seçilerek kurul listesine eklendi. Dayanak: Karar #{meeting.DecisionNumber}";
+                string exNote = await ApplyDecisionUnitExemptionIfRequestedAsync(payload, meeting.DecisionNumber, $"{roleLabel} Muafiyeti");
+                summary = $"{displayName}, KMK çoğunluğuyla '{roleLabel}' görevine seçilerek kurul listesine eklendi.{exNote} Dayanak: Karar #{meeting.DecisionNumber}";
+            }
+            else if (string.Equals(category, "UnitExemption", StringComparison.OrdinalIgnoreCase))
+            {
+                if (payload?.TargetUnitId == null)
+                {
+                    return (false, "Aidat muafiyeti / özel fark kararı için hedef bölüm bulunamadı.");
+                }
+
+                var unit = await _context.BuildingUnits.FirstOrDefaultAsync(u => u.Id == payload.TargetUnitId.Value);
+                if (unit == null)
+                {
+                    return (false, "Hedef bağımsız bölüm bulunamadı.");
+                }
+
+                string mode = (payload.ExemptionMode ?? "FullExempt").Trim();
+                string noteText = string.IsNullOrWhiteSpace(payload.DuesNote)
+                    ? $"Karar #{meeting.DecisionNumber} — Genel Kurul Onaylı"
+                    : $"Karar #{meeting.DecisionNumber}: {payload.DuesNote.Trim()}";
+
+                if (string.Equals(mode, "ClearExemption", StringComparison.OrdinalIgnoreCase))
+                {
+                    unit.IsDuesExempt = false;
+                    unit.DuesMultiplier = 1.00m;
+                    unit.DuesAdjustmentAmount = 0m;
+                    unit.DuesRuleNote = noteText;
+                    summary = $"Daire/Dükkan {unit.DoorNumber} aidat muafiyeti kaldırılarak standart tarifeye alındı. Dayanak: Karar #{meeting.DecisionNumber}";
+                }
+                else if (string.Equals(mode, "CustomAdjust", StringComparison.OrdinalIgnoreCase))
+                {
+                    unit.IsDuesExempt = false;
+                    if (payload.ProposedMultiplier.HasValue && payload.ProposedMultiplier.Value > 0m)
+                        unit.DuesMultiplier = payload.ProposedMultiplier.Value;
+                    if (payload.ProposedAdjustment.HasValue)
+                        unit.DuesAdjustmentAmount = payload.ProposedAdjustment.Value;
+                    unit.DuesRuleNote = noteText;
+                    summary = $"Daire/Dükkan {unit.DoorNumber} için özel tarife (Katsayı ×{unit.DuesMultiplier:0.##}, Fark {unit.DuesAdjustmentAmount:+#,##0.##;-#,##0.##;0} ₺) yürürlüğe alındı. Dayanak: Karar #{meeting.DecisionNumber}";
+                }
+                else
+                {
+                    unit.IsDuesExempt = true;
+                    unit.DuesAdjustmentAmount = 0m;
+                    unit.DuesRuleNote = noteText;
+                    summary = $"Daire/Dükkan {unit.DoorNumber}, KMK onaylı karar ile tam aidat muafiyetine (0 ₺) alındı. Dayanak: Karar #{meeting.DecisionNumber}";
+                }
+            }
+            else if (string.Equals(category, "ComplaintResolution", StringComparison.OrdinalIgnoreCase))
+            {
+                var firstDecText = meeting.Decisions?.FirstOrDefault()?.DecisionText;
+                if (payload?.RelatedTicketId.HasValue == true)
+                {
+                    var ticket = await _context.SupportTickets.FirstOrDefaultAsync(t => t.Id == payload.RelatedTicketId.Value);
+                    if (ticket != null)
+                    {
+                        ticket.Status = "Resolved";
+                        ticket.UpdatedAt = DateTime.UtcNow;
+                        ticket.Description = $"{ticket.Description}\n[Karar #{meeting.DecisionNumber}]: {(string.IsNullOrWhiteSpace(firstDecText) ? meeting.AgendaTitle : firstDecText)}";
+                    }
+                }
+
+                _context.SupportTickets.Add(new SupportTicket
+                {
+                    Title = $"[Karar #{meeting.DecisionNumber}] Şikayet/Talep Çözümü: {meeting.AgendaTitle}",
+                    Description = !string.IsNullOrWhiteSpace(firstDecText) ? firstDecText : meeting.AgendaTitle,
+                    Category = "ManagerTodo",
+                    Status = "Open",
+                    Priority = "High",
+                    CreatorUserId = string.IsNullOrWhiteSpace(actorUserId) ? "system" : actorUserId,
+                    AssignedToUserId = string.IsNullOrWhiteSpace(actorUserId) ? null : actorUserId,
+                    ContextType = "Building",
+                    ContextId = building.Id,
+                    ContextInfo = $"Şikayet / Talep Kararı • Karar #{meeting.DecisionNumber}",
+                    CreatedAt = DateTime.UtcNow
+                });
+
+                summary = $"Malik/Kiracı şikayet & talep maddesi çoğunlukla karara bağlanarak yönetici iş planına işlendi. Dayanak: Karar #{meeting.DecisionNumber}";
             }
             else if (string.Equals(category, "CapitalProject", StringComparison.OrdinalIgnoreCase))
             {
@@ -1624,6 +1708,36 @@ namespace GMK360.Web.Services
 
             await _context.SaveChangesAsync();
             return (true, summary);
+        }
+
+        private async Task<string> ApplyDecisionUnitExemptionIfRequestedAsync(
+            DecisionProposalPayload? payload,
+            string? decisionNumber,
+            string defaultReason)
+        {
+            if (payload?.TargetUnitId == null || string.IsNullOrWhiteSpace(payload.ExemptionMode) || string.Equals(payload.ExemptionMode, "None", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Empty;
+            }
+
+            var unit = await _context.BuildingUnits.FirstOrDefaultAsync(u => u.Id == payload.TargetUnitId.Value);
+            if (unit == null) return string.Empty;
+
+            if (string.Equals(payload.ExemptionMode, "FullExempt", StringComparison.OrdinalIgnoreCase))
+            {
+                unit.IsDuesExempt = true;
+                unit.DuesAdjustmentAmount = 0m;
+                unit.DuesRuleNote = $"Karar #{decisionNumber} — {defaultReason} (%100 Muaf)";
+                return $" Daire/Dükkan {unit.DoorNumber} aidattan tam muaf tutuldu.";
+            }
+            if (string.Equals(payload.ExemptionMode, "HalfExempt", StringComparison.OrdinalIgnoreCase))
+            {
+                unit.IsDuesExempt = false;
+                unit.DuesMultiplier = 0.50m;
+                unit.DuesRuleNote = $"Karar #{decisionNumber} — {defaultReason} (%50 İndirim)";
+                return $" Daire/Dükkan {unit.DoorNumber} için %50 aidat indirimi tanımlandı.";
+            }
+            return string.Empty;
         }
 
         private async Task<ApplicationUser?> ResolveOrProvisionDecisionTargetUserAsync(
