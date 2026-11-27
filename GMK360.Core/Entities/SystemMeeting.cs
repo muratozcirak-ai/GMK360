@@ -57,6 +57,25 @@ namespace GMK360.Core.Entities
         [MaxLength(500)]
         public string? ClosingNote { get; set; }
 
+        public int? BookPageNumber { get; set; } // Resmi Noter Defteri Sayfa No
+
+        public DateTime? SourceDocDate { get; set; } // Karara esas olan evrakın tarihi
+
+        [MaxLength(60)]
+        public string? SourceDocNumber { get; set; } // Karara esas olan evrakın numarası (Örn: TPL-2026/01)
+
+        [MaxLength(200)]
+        public string? SourceDocSender { get; set; } // Karara esas olan evrakın nereden gönderildiği
+
+        [MaxLength(150)]
+        public string? ChairpersonName { get; set; } // Toplantı / Kurul Başkanı adı soyadı
+
+        [MaxLength(500)]
+        public string? BoardMembersSummary { get; set; } // Azaların adı soyadı
+
+        [MaxLength(20)]
+        public string? MeetingEndTime { get; set; } // Örn: 21:15'te sona erdi
+
         // Toplantıya bağlı kararlar
         public virtual ICollection<SystemMeetingDecision> Decisions { get; set; } = new List<SystemMeetingDecision>();
 

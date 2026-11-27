@@ -13,6 +13,7 @@
     var taskTickets = ViewBag.TaskTickets as List<GMK360.Core.Entities.BuildingTaskTicket> ?? new List<GMK360.Core.Entities.BuildingTaskTicket>();
     var commonFixtures = ViewBag.CommonFixtures as List<GMK360.Core.Entities.SpaceFixture> ?? new List<GMK360.Core.Entities.SpaceFixture>();
     var expenseGroups = ViewBag.ExpenseGroups as List<GMK360.Core.Entities.DefinitionValue> ?? new List<GMK360.Core.Entities.DefinitionValue>();
+    var decisionsForExpense = ViewBag.DecisionsForExpense as List<GMK360.Core.Entities.SystemMeeting> ?? new List<GMK360.Core.Entities.SystemMeeting>();
     var budget = ViewBag.BudgetSummary as GMK360.Web.Services.BuildingMonthlyBudgetSummary ?? new GMK360.Web.Services.BuildingMonthlyBudgetSummary();
     var holidays = ViewBag.Holidays as List<GMK360.Web.Helpers.TurkishHolidayItem> ?? new List<GMK360.Web.Helpers.TurkishHolidayItem>();
 
@@ -306,14 +307,21 @@
                                             <td><span class="badge bg-light text-dark border">@GetGroupDisplayName(exp.ExpenseGroup)</span></td>
                                             <td>
                                                 <strong>@exp.Description</strong>
-                                                @if (!string.IsNullOrWhiteSpace(exp.LinkedSourceLabel))
-                                                {
-                                                    <div class="small mt-1">
+                                                <div class="small mt-1 d-flex flex-wrap gap-1 align-items-center">
+                                                    @if (exp.LinkedDecisionMeetingId.HasValue)
+                                                    {
+                                                        <a href="/BuildingManager/PrintDecisionSheet?meetingId=@exp.LinkedDecisionMeetingId.Value" target="_blank"
+                                                           class="badge bg-success-subtle text-success border border-success-subtle text-decoration-none" title="Dayanak Karar Defteri Sayfasını Aç">
+                                                            <i class="bi bi-journal-check me-1"></i>@(string.IsNullOrWhiteSpace(exp.LinkedSourceLabel) ? $"Karar Defteri #{exp.LinkedDecisionMeetingId}" : exp.LinkedSourceLabel)
+                                                        </a>
+                                                    }
+                                                    else if (!string.IsNullOrWhiteSpace(exp.LinkedSourceLabel))
+                                                    {
                                                         <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">
                                                             <i class="bi bi-link-45deg me-1"></i>@exp.LinkedSourceLabel
                                                         </span>
-                                                    </div>
-                                                }
+                                                    }
+                                                </div>
                                                 <div class="small text-muted d-flex flex-wrap align-items-center gap-1 mt-1">
                                                     @if (exp.ScopeType == GMK360.Core.Entities.ExpenseScopeType.HousingComplex)
                                                     {
@@ -1255,6 +1263,16 @@
                 <div class="col-md-6">
                     <label class="form-label fw-bold small">Asıl Kağıt Fatura / Klasör Yeri (Denetim)</label>
                     <input type="text" name="physicalArchiveLocation" id="neArchiveLoc" class="form-control" placeholder="Örn: 2026 Kasım Klasörü · Sıra 14" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-bold small text-success"><i class="bi bi-journal-check me-1"></i>Dayanak Karar Defteri Maddesi ("Bu Karara Göre Alındı")</label>
+                    <select name="linkedDecisionMeetingId" class="form-select form-select-sm fw-semibold">
+                        <option value="">-- Karar Defteri Bağlantısı Yok (Rutin Fatura) --</option>
+                        @foreach (var dec in decisionsForExpense)
+                        {
+                            <option value="@dec.Id">📒 Sayfa #@(dec.BookPageNumber ?? dec.Id) · Karar #@(dec.DecisionNumber ?? dec.Id.ToString("D2")) — @dec.AgendaTitle (@dec.MeetingDate.ToString("dd.MM.yyyy"))</option>
+                        }
+                    </select>
                 </div>
             </div>
             <div class="modal-footer border-0 bg-light">

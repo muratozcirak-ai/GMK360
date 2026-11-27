@@ -2658,7 +2658,14 @@ namespace GMK360.Web.Controllers
             string? duesNote = null,
             int? relatedTicketId = null,
             string? estimatedBudget = null,
-            bool autoExecuteOnQuorum = true)
+            bool autoExecuteOnQuorum = true,
+            int? bookPageNumber = null,
+            DateTime? sourceDocDate = null,
+            string? sourceDocNumber = null,
+            string? sourceDocSender = null,
+            string? chairpersonName = null,
+            string? boardMembersSummary = null,
+            string? meetingEndTime = null)
         {
             var userId = GetUserId();
             var building = await _context.Buildings.Include(b => b.HousingComplex).FirstOrDefaultAsync(b => b.Id == buildingId && (b.ManagerUserId == userId || b.CreatedByUserId == userId || User.IsInRole("Admin") || User.IsInRole("SuperAdmin") || _context.BuildingManagers.Any(m => m.BuildingId == (b.ParentBuildingId ?? b.Id) && m.UserId == userId && m.IsActive)));
@@ -2723,6 +2730,26 @@ namespace GMK360.Web.Controllers
                 || proposalPayload.RelatedTicketId.HasValue
                 || proposalPayload.EstimatedBudget.HasValue;
 
+            int rootBldIdForMgr = building.ParentBuildingId ?? building.Id;
+            var activeMgrs = await _context.BuildingManagers
+                .AsNoTracking()
+                .Include(m => m.User)
+                .Where(m => m.BuildingId == rootBldIdForMgr && m.IsActive)
+                .OrderBy(m => m.Role)
+                .ToListAsync();
+            string? defaultChair = activeMgrs
+                .Where(m => m.Role == BuildingManagerRole.HeadManager)
+                .Select(m => !string.IsNullOrWhiteSpace(m.User?.FirstName) ? $"{m.User.FirstName} {m.User.LastName}".Trim() : (m.User?.DisplayName ?? m.User?.Email))
+                .FirstOrDefault();
+            string? defaultAzas = string.Join(", ", activeMgrs
+                .Where(m => m.Role == BuildingManagerRole.BoardMember || m.Role == BuildingManagerRole.Auditor)
+                .Select(m => !string.IsNullOrWhiteSpace(m.User?.FirstName) ? $"{m.User.FirstName} {m.User.LastName}".Trim() : (m.User?.DisplayName ?? m.User?.Email))
+                .Where(n => !string.IsNullOrWhiteSpace(n)));
+            int computedNextPage = bookPageNumber
+                ?? ((await _context.SystemMeetings
+                    .Where(m => m.ContextType == "Building" && m.ContextId == buildingId && !m.IsDeleted && m.BookPageNumber.HasValue)
+                    .MaxAsync(m => (int?)m.BookPageNumber) ?? 0) + 1);
+
             var meeting = new SystemMeeting
             {
                 ContextType = "Building",
@@ -2731,6 +2758,13 @@ namespace GMK360.Web.Controllers
                 HousingComplexId = building.HousingComplexId,
                 AgendaTitle = agendaTitle,
                 DecisionNumber = effectiveDecNo,
+                BookPageNumber = computedNextPage,
+                SourceDocDate = sourceDocDate,
+                SourceDocNumber = string.IsNullOrWhiteSpace(sourceDocNumber) ? null : sourceDocNumber.Trim(),
+                SourceDocSender = string.IsNullOrWhiteSpace(sourceDocSender) ? null : sourceDocSender.Trim(),
+                ChairpersonName = string.IsNullOrWhiteSpace(chairpersonName) ? defaultChair : chairpersonName.Trim(),
+                BoardMembersSummary = string.IsNullOrWhiteSpace(boardMembersSummary) ? (string.IsNullOrWhiteSpace(defaultAzas) ? null : defaultAzas) : boardMembersSummary.Trim(),
+                MeetingEndTime = string.IsNullOrWhiteSpace(meetingEndTime) ? null : meetingEndTime.Trim(),
                 MeetingLocation = string.IsNullOrWhiteSpace(meetingLocation) ? "Site Yönetim Odası / Ortak Alan" : meetingLocation.Trim(),
                 QuorumType = cleanQuorum,
                 DecisionCategory = cleanCategory,
@@ -3092,7 +3126,16 @@ namespace GMK360.Web.Controllers
                 .ThenBy(u => u.DoorNumber)
                 .ToList();
 
+            int rootIdForBoard = building != null ? (building.ParentBuildingId ?? building.Id) : meeting.ContextId;
+            var boardRoster = await _context.BuildingManagers
+                .AsNoTracking()
+                .Include(m => m.User)
+                .Where(m => m.BuildingId == rootIdForBoard && m.IsActive)
+                .OrderBy(m => m.Role)
+                .ToListAsync();
+
             ViewBag.Building = building;
+            ViewBag.BoardRoster = boardRoster;
             ViewBag.EligibleUnits = eligibleUnits;
             ViewBag.Format = string.Equals(format, "a5", StringComparison.OrdinalIgnoreCase) ? "a5" : "a4";
             ViewBag.QuorumSummary = GMK360.Web.Helpers.KmkQuorumHelper.Compute(eligibleUnits, meeting.Votes, meeting.QuorumType);
@@ -3507,7 +3550,8 @@ namespace GMK360.Web.Controllers
             string? linkedSourceType = null,
             int? linkedTaskTicketId = null,
             int? linkedFixedExpenseId = null,
-            string? linkedSourceLabel = null)
+            string? linkedSourceLabel = null,
+            int? linkedDecisionMeetingId = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -3527,6 +3571,21 @@ namespace GMK360.Web.Controllers
                 {
                     var f = await _context.BuildingFixedExpenses.AsNoTracking().FirstOrDefaultAsync(x => x.Id == linkedFixedExpenseId.Value);
                     if (f != null) resolvedSourceLabel = $"Abonelik: {f.Title}";
+                }
+            }
+
+            SystemMeeting? linkedDec = linkedDecisionMeetingId.HasValue
+                ? await _context.SystemMeetings.AsNoTracking().FirstOrDefaultAsync(m => m.Id == linkedDecisionMeetingId.Value && m.ContextType == "Building" && !m.IsDeleted)
+                : null;
+            if (linkedDec != null)
+            {
+                string decCitation = $"Defter Sayfa #{linkedDec.BookPageNumber ?? linkedDec.Id} · Karar #{linkedDec.DecisionNumber ?? linkedDec.Id.ToString("D2")}";
+                resolvedSourceLabel = string.IsNullOrWhiteSpace(resolvedSourceLabel)
+                    ? $"{decCitation} — {linkedDec.AgendaTitle}"
+                    : $"{resolvedSourceLabel} | {decCitation}";
+                if (string.IsNullOrWhiteSpace(linkedSourceType) || linkedSourceType == "Genel")
+                {
+                    linkedSourceType = "KararDefteri";
                 }
             }
 
@@ -3554,6 +3613,16 @@ namespace GMK360.Web.Controllers
                 linkedTaskTicketId,
                 linkedFixedExpenseId,
                 resolvedSourceLabel);
+
+            if (result.Success && result.CreatedExpenseId.HasValue && linkedDec != null)
+            {
+                var exp = await _context.BuildingExpenses.FirstOrDefaultAsync(e => e.Id == result.CreatedExpenseId.Value);
+                if (exp != null)
+                {
+                    exp.LinkedDecisionMeetingId = linkedDec.Id;
+                    await _context.SaveChangesAsync();
+                }
+            }
 
             TempData[result.Success ? "SuccessMessage" : "ErrorMessage"] = result.Message;
             if (string.Equals(returnAction, "Aidatlar", StringComparison.OrdinalIgnoreCase))
@@ -4024,12 +4093,25 @@ namespace GMK360.Web.Controllers
                     .FirstOrDefaultAsync()
                 : null;
 
+            var decisionsForExpense = allowedIds.Any()
+                ? await _context.SystemMeetings
+                    .AsNoTracking()
+                    .Where(m => m.ContextType == "Building" && !m.IsDeleted && m.WorkflowStage == "Decision"
+                        && (allowedIds.Contains(m.ContextId)
+                            || (m.HousingComplexId.HasValue && m.IsSiteWide && allowedComplexIds.Contains(m.HousingComplexId.Value))))
+                    .OrderByDescending(m => m.BookPageNumber ?? 0)
+                    .ThenByDescending(m => m.MeetingDate)
+                    .Take(30)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<SystemMeeting>();
+
             ViewBag.Buildings = buildings;
             ViewBag.SelectedBuildingId = buildingId;
             ViewBag.LivingUnits = livingUnits;
             ViewBag.FixedExpenses = fixedExpenses;
             ViewBag.BuildingStaffs = buildingStaffs;
             ViewBag.LatestDuesDecision = latestDuesDecision;
+            ViewBag.DecisionsForExpense = decisionsForExpense;
             return View(debts);
         }
 
@@ -4722,6 +4804,21 @@ namespace GMK360.Web.Controllers
             ViewBag.SiteTitleLabel = !string.IsNullOrWhiteSpace(building.HousingComplex?.Name)
                 ? building.HousingComplex!.Name
                 : (building.Name ?? "Site Geneli");
+            var accComplexIds = scopeBuildings
+                .Where(b => b.HousingComplexId.HasValue)
+                .Select(b => b.HousingComplexId!.Value)
+                .Distinct()
+                .ToList();
+            ViewBag.DecisionsForExpense = await _context.SystemMeetings
+                .AsNoTracking()
+                .Where(m => m.ContextType == "Building" && !m.IsDeleted && m.WorkflowStage == "Decision"
+                    && (scopeIds.Contains(m.ContextId)
+                        || (m.HousingComplexId.HasValue && m.IsSiteWide && accComplexIds.Contains(m.HousingComplexId.Value))))
+                .OrderByDescending(m => m.BookPageNumber ?? 0)
+                .ThenByDescending(m => m.MeetingDate)
+                .Take(30)
+                .ToListAsync();
+
             ViewBag.BudgetSummary = await _payrollService.CalculateMultiBuildingBudgetSummaryAsync(scopeIds, building.Id);
             ViewBag.Holidays = GMK360.Web.Helpers.TurkishHolidayHelper.GetHolidaysForYear(DateTime.Today.Year);
             ViewBag.Buildings = buildings;
@@ -5439,6 +5536,7 @@ namespace GMK360.Web.Controllers
             ViewBag.StaffsByMeeting = staffsByMeeting;
             ViewBag.AllSiteUnits = allUnitsLoaded;
             ViewBag.OpenComplaints = openComplaints;
+            ViewBag.NextBookPage = (meetings.Where(m => m.BookPageNumber.HasValue).Select(m => m.BookPageNumber!.Value).DefaultIfEmpty(0).Max()) + 1;
             return View(meetings);
         }
 
@@ -5622,7 +5720,14 @@ namespace GMK360.Web.Controllers
             string? duesNote = null,
             int? relatedTicketId = null,
             string? estimatedBudget = null,
-            bool autoExecuteOnQuorum = true)
+            bool autoExecuteOnQuorum = true,
+            int? bookPageNumber = null,
+            DateTime? sourceDocDate = null,
+            string? sourceDocNumber = null,
+            string? sourceDocSender = null,
+            string? chairpersonName = null,
+            string? boardMembersSummary = null,
+            string? meetingEndTime = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -5683,9 +5788,35 @@ namespace GMK360.Web.Controllers
 
             int decisionSeq = await _context.SystemMeetings.CountAsync(m =>
                 m.ContextType == "Building" && m.ContextId == buildingId && m.WorkflowStage == "Decision" && m.MeetingDate.Year == meeting.MeetingDate.Year && !m.IsDeleted) + 1;
+            int nextPageNo = bookPageNumber
+                ?? ((await _context.SystemMeetings
+                    .Where(m => m.ContextType == "Building" && m.ContextId == buildingId && !m.IsDeleted && m.WorkflowStage == "Decision" && m.BookPageNumber.HasValue)
+                    .MaxAsync(m => (int?)m.BookPageNumber) ?? 0) + 1);
+            int rootIdProm = building.ParentBuildingId ?? building.Id;
+            var promMgrs = await _context.BuildingManagers
+                .AsNoTracking()
+                .Include(m => m.User)
+                .Where(m => m.BuildingId == rootIdProm && m.IsActive)
+                .OrderBy(m => m.Role)
+                .ToListAsync();
+            string? defChairProm = promMgrs
+                .Where(m => m.Role == BuildingManagerRole.HeadManager)
+                .Select(m => !string.IsNullOrWhiteSpace(m.User?.FirstName) ? $"{m.User.FirstName} {m.User.LastName}".Trim() : (m.User?.DisplayName ?? m.User?.Email))
+                .FirstOrDefault();
+            string? defAzasProm = string.Join(", ", promMgrs
+                .Where(m => m.Role == BuildingManagerRole.BoardMember || m.Role == BuildingManagerRole.Auditor)
+                .Select(m => !string.IsNullOrWhiteSpace(m.User?.FirstName) ? $"{m.User.FirstName} {m.User.LastName}".Trim() : (m.User?.DisplayName ?? m.User?.Email))
+                .Where(n => !string.IsNullOrWhiteSpace(n)));
 
+            meeting.SourceDocNumber ??= meeting.DecisionNumber;
+            meeting.SourceDocDate ??= meeting.MeetingDate;
+            meeting.SourceDocSender ??= "Ön Görüşme & Müzakere Masası";
             meeting.WorkflowStage = "Decision";
             meeting.DecisionNumber = $"{meeting.MeetingDate.Year}/{decisionSeq:D2}";
+            meeting.BookPageNumber = nextPageNo;
+            meeting.ChairpersonName = !string.IsNullOrWhiteSpace(chairpersonName) ? chairpersonName.Trim() : (meeting.ChairpersonName ?? defChairProm);
+            meeting.BoardMembersSummary = !string.IsNullOrWhiteSpace(boardMembersSummary) ? boardMembersSummary.Trim() : (meeting.BoardMembersSummary ?? (string.IsNullOrWhiteSpace(defAzasProm) ? null : defAzasProm));
+            if (!string.IsNullOrWhiteSpace(meetingEndTime)) meeting.MeetingEndTime = meetingEndTime.Trim();
             meeting.DecisionCategory = cleanCategory;
             meeting.QuorumType = cleanQuorum;
             meeting.AutoExecuteOnQuorum = autoExecuteOnQuorum;

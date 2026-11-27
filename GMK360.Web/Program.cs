@@ -513,6 +513,22 @@ using (var schemaScope = app.Services.CreateScope())
                 ALTER TABLE [dbo].[SystemMeetings] ADD [InvitationScope] nvarchar(64) NULL;
             IF COL_LENGTH(N'dbo.SystemMeetings', N'ClosingNote') IS NULL
                 ALTER TABLE [dbo].[SystemMeetings] ADD [ClosingNote] nvarchar(500) NULL;
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'BookPageNumber') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [BookPageNumber] int NULL;
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'SourceDocDate') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [SourceDocDate] datetime2 NULL;
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'SourceDocNumber') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [SourceDocNumber] nvarchar(60) NULL;
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'SourceDocSender') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [SourceDocSender] nvarchar(200) NULL;
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'ChairpersonName') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [ChairpersonName] nvarchar(150) NULL;
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'BoardMembersSummary') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [BoardMembersSummary] nvarchar(500) NULL;
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'MeetingEndTime') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [MeetingEndTime] nvarchar(20) NULL;
+            IF COL_LENGTH(N'dbo.BuildingExpenses', N'LinkedDecisionMeetingId') IS NULL
+                ALTER TABLE [dbo].[BuildingExpenses] ADD [LinkedDecisionMeetingId] int NULL;
             IF COL_LENGTH(N'dbo.Buildings', N'DecisionBookNotaryName') IS NULL
                 ALTER TABLE [dbo].[Buildings] ADD [DecisionBookNotaryName] nvarchar(150) NULL;
             IF COL_LENGTH(N'dbo.Buildings', N'DecisionBookJournalNo') IS NULL

@@ -54,6 +54,9 @@ namespace GMK360.Core.Entities
         [MaxLength(250)]
         public string? LinkedSourceLabel { get; set; } // Örn: "Talep #12: Asansör Kapı Tamiri" veya "Enerjisa Elektrik"
 
+        // Hangi Karar Defteri maddesine (SystemMeeting.Id) dayanarak harcandığı / alındığı
+        public int? LinkedDecisionMeetingId { get; set; }
+
         // PayerType: Kim Ödemeli? "Tenant", "Owner", "All"
         // Yeni Mimaride BuildingExpenseType üzerinden yürüyecek ama geriye dönük uyum için tutulabilir
         public string? PayerType { get; set; } 

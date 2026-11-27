@@ -2,6 +2,7 @@
 @{
     Layout = null;
     var building = ViewBag.Building as GMK360.Core.Entities.Building;
+    var boardRoster = ViewBag.BoardRoster as List<GMK360.Core.Entities.BuildingManager> ?? new List<GMK360.Core.Entities.BuildingManager>();
     var units = ViewBag.EligibleUnits as List<GMK360.Core.Entities.BuildingUnit>
         ?? (building?.Units ?? new List<GMK360.Core.Entities.BuildingUnit>())
             .Where(u => !(u.Category ?? "").StartsWith("OrtakAlan", StringComparison.OrdinalIgnoreCase))
@@ -25,36 +26,49 @@
         building?.District?.Name,
         building?.City?.Name
     }.Where(x => !string.IsNullOrWhiteSpace(x)));
-    if (string.IsNullOrWhiteSpace(addressLine)) addressLine = "Bina adresi yönetim kaydından tamamlanabilir";
+    if (string.IsNullOrWhiteSpace(addressLine)) addressLine = building?.Address ?? "Bina adresi yönetim kaydından tamamlanabilir";
+
+    string defaultChair = boardRoster
+        .Where(m => m.Role == GMK360.Core.Entities.BuildingManagerRole.HeadManager)
+        .Select(m => !string.IsNullOrWhiteSpace(m.User?.FirstName) ? $"{m.User.FirstName} {m.User.LastName}".Trim() : (m.User?.DisplayName ?? m.User?.Email))
+        .FirstOrDefault() ?? "-";
+    string defaultAzas = string.Join(", ", boardRoster
+        .Where(m => m.Role == GMK360.Core.Entities.BuildingManagerRole.BoardMember || m.Role == GMK360.Core.Entities.BuildingManagerRole.Auditor)
+        .Select(m => !string.IsNullOrWhiteSpace(m.User?.FirstName) ? $"{m.User.FirstName} {m.User.LastName}".Trim() : (m.User?.DisplayName ?? m.User?.Email))
+        .Where(n => !string.IsNullOrWhiteSpace(n)));
+    string chairText = !string.IsNullOrWhiteSpace(Model.ChairpersonName) ? Model.ChairpersonName! : defaultChair;
+    string azasText = !string.IsNullOrWhiteSpace(Model.BoardMembersSummary) ? Model.BoardMembersSummary! : (string.IsNullOrWhiteSpace(defaultAzas) ? "-" : defaultAzas);
+    int displayPageNo = Model.BookPageNumber ?? Model.Id;
+    string displayDecNo = Model.DecisionNumber ?? $"{Model.MeetingDate.Year}/{Model.Id:D2}";
 }
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Noter Karar Tutanağı (#@(Model.DecisionNumber ?? Model.Id.ToString("D2"))) - @Model.AgendaTitle</title>
+    <title>Karar Defteri (Sayfa @displayPageNo · Karar #@displayDecNo) - @Model.AgendaTitle</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
     <style>
         @@page {
             size: @(isA5 ? "A5 portrait" : "A4 portrait");
-            margin: @(isA5 ? "7mm" : "10mm");
+            margin: @(isA5 ? "6mm" : "9mm");
         }
         body {
             background-color: #f1f5f9;
             font-family: 'Times New Roman', Times, serif;
             color: #111827;
-            font-size: @(isA5 ? "10.5px" : "13px");
-            line-height: 1.4;
+            font-size: @(isA5 ? "10px" : "12.5px");
+            line-height: 1.38;
         }
         .sheet-page {
             width: @(isA5 ? "148mm" : "210mm");
             min-height: @(isA5 ? "210mm" : "297mm");
-            padding: @(isA5 ? "9mm 10mm" : "14mm 16mm");
+            padding: @(isA5 ? "8mm 9mm" : "12mm 14mm");
             margin: 18px auto;
             background: #ffffff;
             box-shadow: 0 4px 18px rgba(0,0,0,0.12);
-            border: 1px dashed #cbd5e1;
+            border: 1px solid #cbd5e1;
             position: relative;
             box-sizing: border-box;
         }
@@ -67,58 +81,98 @@
             z-index: 999;
             font-family: system-ui, -apple-system, sans-serif;
         }
-        .header-title {
-            text-align: center;
-            border-bottom: 2px solid #000;
-            padding-bottom: 6px;
-            margin-bottom: 10px;
+        .page-no-corner {
+            position: absolute;
+            top: @(isA5 ? "7mm" : "10mm");
+            right: @(isA5 ? "9mm" : "14mm");
+            border: 1.5px solid #000;
+            padding: 2px 10px;
+            font-weight: bold;
+            font-size: @(isA5 ? "11px" : "14px");
         }
-        .header-title h4 { font-size: @(isA5 ? "12.5px" : "15.5px"); font-weight: bold; margin: 0; text-transform: uppercase; }
-        .header-title h5 { font-size: @(isA5 ? "10.5px" : "13px"); margin: 2px 0 0 0; font-weight: normal; }
-        .meta-box {
-            border: 1px solid #000;
-            padding: @(isA5 ? "5px 8px" : "8px 12px");
-            margin-bottom: 10px;
+        .ledger-top-title {
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .ledger-top-title h4 {
+            font-size: @(isA5 ? "12.5px" : "16px");
+            font-weight: bold;
+            margin: 0;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+        }
+        .ledger-top-title small { font-size: @(isA5 ? "8.5px" : "10.5px"); color: #334155; }
+        table.notary-grid {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 8px;
+            font-size: @(isA5 ? "9px" : "11.5px");
+        }
+        table.notary-grid th, table.notary-grid td {
+            border: 1.2px solid #000;
+            padding: @(isA5 ? "3px 5px" : "4px 7px");
+            vertical-align: top;
+        }
+        table.notary-grid th {
+            background: #f8fafc;
+            text-align: center;
+            font-weight: bold;
+        }
+        .meeting-roster-line {
+            border: 1.2px solid #000;
+            border-top: none;
+            padding: @(isA5 ? "5px 7px" : "7px 10px");
+            margin-top: -8px;
+            margin-bottom: 8px;
             font-size: @(isA5 ? "9.5px" : "12px");
         }
-        .decision-title {
-            font-size: @(isA5 ? "11px" : "13.5px");
+        .karar-metni-band {
+            border: 1.2px solid #000;
+            border-bottom: 1.2px solid #000;
+            background: #f8fafc;
+            text-align: center;
             font-weight: bold;
-            text-decoration: underline;
-            margin: 8px 0 4px 0;
+            letter-spacing: 1px;
+            padding: 3px;
+            font-size: @(isA5 ? "10px" : "12.5px");
         }
-        .decision-body { text-align: justify; margin-bottom: 10px; }
+        .karar-metni-body {
+            border: 1.2px solid #000;
+            border-top: none;
+            padding: @(isA5 ? "6px 8px" : "8px 12px");
+            margin-bottom: 8px;
+            text-align: justify;
+        }
         table.hazirun-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 6px;
-            font-size: @(isA5 ? "9px" : "11px");
+            font-size: @(isA5 ? "8.5px" : "10.5px");
         }
         table.hazirun-table th, table.hazirun-table td {
             border: 1px solid #000;
-            padding: @(isA5 ? "3px 4px" : "4px 6px");
+            padding: @(isA5 ? "2.5px 4px" : "3.5px 6px");
             vertical-align: middle;
         }
         table.hazirun-table th { background-color: #f1f5f9; text-align: center; font-weight: bold; }
-        .sign-area { min-height: @(isA5 ? "20px" : "26px"); height: @(isA5 ? "22px" : "28px"); }
+        .sign-area { min-height: @(isA5 ? "18px" : "24px"); height: @(isA5 ? "18px" : "24px"); }
         .signature-box {
-            margin-top: @(isA5 ? "14px" : "20px");
+            margin-top: @(isA5 ? "12px" : "16px");
             display: flex;
             justify-content: space-between;
             text-align: center;
-            font-size: @(isA5 ? "9.5px" : "12px");
+            font-size: @(isA5 ? "9.5px" : "11.5px");
         }
-        .sign-col { width: 30%; }
-        .sign-line { margin-top: @(isA5 ? "24px" : "34px"); border-top: 1px dashed #000; padding-top: 3px; font-weight: bold; }
+        .sign-col { width: 31%; }
+        .sign-line { margin-top: @(isA5 ? "20px" : "28px"); border-top: 1px dashed #000; padding-top: 3px; font-weight: bold; }
         .seal-corner-note {
-            margin-top: 10px;
-            padding-top: 6px;
+            margin-top: 8px;
+            padding-top: 5px;
             border-top: 1px solid #cbd5e1;
             display: flex;
             justify-content: space-between;
             align-items: center;
             gap: 10px;
-            font-size: @(isA5 ? "8.5px" : "10px");
+            font-size: @(isA5 ? "8px" : "9.5px");
             color: #475569;
         }
         @@media print {
@@ -140,13 +194,13 @@
     <div class="no-print-bar d-flex flex-wrap justify-content-between align-items-center gap-2">
         <div class="d-flex align-items-center gap-2">
             <a href="/BuildingManager/Oylamalar?buildingId=@building?.Id" class="btn btn-sm btn-outline-light rounded-pill px-3">
-                <i class="bi bi-arrow-left me-1"></i> Toplantı &amp; Karar Masası
+                <i class="bi bi-arrow-left me-1"></i> Karar Defteri Masası
             </a>
-            <span class="fw-bold small">KMK Md. 32 Noter Karar Defteri Baskısı (@(isA5 ? "A5 Yapıştırma" : "A4 Tam"))</span>
+            <span class="fw-bold small">Resmi Noter Karar Defteri Dijital İkizi • Sayfa @displayPageNo • Karar #@displayDecNo</span>
         </div>
         <div class="d-flex gap-2 align-items-center">
-            <a href="/BuildingManager/PrintDecisionSheet?meetingId=@Model.Id&format=a4" class="btn btn-sm @(!isA5 ? "btn-light text-dark fw-bold" : "btn-outline-light") rounded-pill px-3">A4 Boyut</a>
-            <a href="/BuildingManager/PrintDecisionSheet?meetingId=@Model.Id&format=a5" class="btn btn-sm @(isA5 ? "btn-light text-dark fw-bold" : "btn-outline-light") rounded-pill px-3">A5 Yapıştırma Boyutu</a>
+            <a href="/BuildingManager/PrintDecisionSheet?meetingId=@Model.Id&format=a4" class="btn btn-sm @(!isA5 ? "btn-light text-dark fw-bold" : "btn-outline-light") rounded-pill px-3">A4 Tam</a>
+            <a href="/BuildingManager/PrintDecisionSheet?meetingId=@Model.Id&format=a5" class="btn btn-sm @(isA5 ? "btn-light text-dark fw-bold" : "btn-outline-light") rounded-pill px-3">A5 Yapıştırma</a>
             <button onclick="window.print()" class="btn btn-warning btn-sm fw-bold rounded-pill px-4">
                 <i class="bi bi-printer-fill me-1"></i> Yazdır / PDF
             </button>
@@ -154,71 +208,98 @@
     </div>
 
     <div class="sheet-page">
-        <div class="header-title">
-            <h4>@propertyHeading — YÖNETİM KARAR TUTANAĞI</h4>
-            <h5>T.C. 634 Sayılı Kat Mülkiyeti Kanunu (KMK Md. 32) Uyarınca Düzenlenmiştir</h5>
-            <small style="font-size: @(isA5 ? "8.5px" : "10.5px"); font-style: italic;">
-                (Noter Tasdikli Fiziki Karar Defteri sayfasına taşmayacak şekilde yapıştırılıp köşeleri mühürlenmelidir)
-            </small>
+        <div class="page-no-corner">SAYFA NO: @displayPageNo</div>
+        <div class="ledger-top-title">
+            <h4>@propertyHeading — KARAR DEFTERİ</h4>
+            <small>634 Sayılı Kat Mülkiyeti Kanunu Md. 32 Uyarınca Resmi Karar Kaydı • @addressLine</small>
         </div>
 
-        <div class="meta-box">
-            <div class="row g-1">
-                <div class="col-7">
-                    <strong>Ana Gayrimenkul:</strong> @(building?.Name ?? "-") @(building?.BlockName != null ? $"({building.BlockName})" : "")<br />
-                    <strong>Adres:</strong> @addressLine<br />
-                    <strong>Bağımsız Bölüm:</strong> @units.Count Adet (@units.Count(u => u.Category != "Dukkan") Mesken, @units.Count(u => u.Category == "Dukkan") Dükkan)
-                </div>
-                <div class="col-5">
-                    <strong>Karar Sıra No:</strong> #@(Model.DecisionNumber ?? $"{Model.MeetingDate.Year}/{Model.Id:D2}")<br />
-                    <strong>Tarih / Saat:</strong> @Model.MeetingDate.ToString("dd.MM.yyyy - HH:mm")<br />
-                    <strong>Toplantı Yeri:</strong> @(Model.MeetingLocation ?? "Site Yönetim Odası")
-                </div>
+        <!-- RESMİ NOTER DEFTERİ ÜST CETVELİ -->
+        <table class="notary-grid">
+            <thead>
+                <tr>
+                    <th rowspan="2" style="width: 12%; vertical-align: middle;">Karar Sıra No</th>
+                    <th colspan="3" style="width: 42%;">Karara Esas Olan Evrakın</th>
+                    <th rowspan="2" style="width: 46%; vertical-align: middle;">Mevzuun Mahiyeti ve Hülâsası</th>
+                </tr>
+                <tr>
+                    <th style="width: 12%;">Tarihi</th>
+                    <th style="width: 12%;">No</th>
+                    <th style="width: 18%;">Nereden Gönderildiği</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="text-align: center; font-weight: bold; font-size: 1.05em;">@displayDecNo</td>
+                    <td style="text-align: center;">@(Model.SourceDocDate?.ToString("dd.MM.yyyy") ?? Model.MeetingDate.ToString("dd.MM.yyyy"))</td>
+                    <td style="text-align: center;">@(Model.SourceDocNumber ?? "-")</td>
+                    <td>@(Model.SourceDocSender ?? "Yönetim / Genel Kurul Gündemi")</td>
+                    <td>
+                        <strong>@Model.AgendaTitle</strong>
+                        <div style="font-size: 0.9em; color: #334155;">
+                            Kapsam: @(isSiteDecision ? "Site Geneli (Tüm Bloklar)" : $"Sadece {building?.BlockName ?? building?.Name}") • Yeter Sayı: @quorum.RuleLabel
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- TOPLANTI TARİHİ, BAŞKAN VE AZALAR -->
+        <div class="meeting-roster-line">
+            <div class="d-flex justify-content-between flex-wrap mb-1">
+                <span><strong>Toplantı Tarihi :</strong> @Model.MeetingDate.ToString("dd / MM / yyyy") günü, saat @Model.MeetingDate.ToString("HH:mm")</span>
+                <span><strong>Toplantı Yeri :</strong> @(Model.MeetingLocation ?? "Site Yönetim Odası")</span>
             </div>
-            <div class="mt-1 pt-1 border-top" style="font-size: @(isA5 ? "8.5px" : "10.5px");">
-                <strong>Yeter Sayı / Ön Onay:</strong> @quorum.RuleLabel —
-                <strong>@quorum.ApprovedUnits / @quorum.TotalUnits</strong> Kat Maliki Kabul (%@quorum.ApprovalUnitPercent) •
-                Arsa Payı: <strong>%@quorum.ApprovalSharePercent</strong> •
-                Durum: <strong>@(quorum.IsQuorumMet ? "Yasal Çoğunluk Sağlandı" : "Fiziki İmza / Çoğunluk Bekleniyor")</strong>
+            <div><strong>Başkanın Adı ve Soyadı :</strong> @chairText</div>
+            <div><strong>Azaların Adı ve Soyadı :</strong> @azasText</div>
+            <div style="margin-top: 3px; font-size: 0.9em; color: #334155;">
+                <strong>Katılım &amp; Çoğunluk :</strong> @quorum.ParticipatedUnits / @quorum.TotalUnits Bağımsız Bölüm Katıldı •
+                <strong>@quorum.ApprovedUnits Kabul</strong> / @quorum.RejectedUnits Ret (%@quorum.ApprovalUnitPercent Adet, %@quorum.ApprovalSharePercent Arsa Payı) —
+                <strong>@(quorum.IsQuorumMet ? "YASAL ÇOĞUNLUK SAĞLANDI" : "OYLAMA / İMZA AŞAMASINDA")</strong>
             </div>
         </div>
 
-        <div class="decision-title">
-            GÜNDEM / KONU: @Model.AgendaTitle.ToUpper()
-        </div>
-
-        <div class="decision-body">
+        <!-- KARARIN METNİ -->
+        <div class="karar-metni-band">KARARIN METNİ</div>
+        <div class="karar-metni-body">
             @if (decisions.Any())
             {
                 int dNo = 1;
                 foreach (var d in decisions)
                 {
-                    <p style="margin-bottom: 5px;">
-                        <strong>@(dNo++). KARAR MADDESİ:</strong> @d.DecisionText
+                    <p style="margin-bottom: 4px;">
+                        <strong>@(dNo++))</strong> @d.DecisionText
                     </p>
                 }
             }
             else
             {
-                <p style="margin-bottom: 5px;">
-                    <strong>1. KARAR MADDESİ:</strong> Yukarıda belirtilen gündem konusu kat maliklerince incelenmiş olup, belgeler ve görüşler değerlendirilerek aşağıdaki katılım ve imza cetvelindeki oylarla karara bağlanmıştır.
+                <p style="margin-bottom: 4px;">
+                    <strong>1)</strong> @Model.AgendaTitle konusu incelenmiş olup aşağıdaki katılımcıların oylarıyla kabul edilmiştir.
                 </p>
             }
+            @if (Model.IsExecuted && !string.IsNullOrWhiteSpace(Model.ExecutionSummary))
+            {
+                <p style="margin-bottom: 4px; font-style: italic; color: #166534;">
+                    <strong>Uygulama Kaydı:</strong> @Model.ExecutionSummary
+                </p>
+            }
+            <div style="margin-top: 6px;">
+                <strong>Toplantı saat @(!string.IsNullOrWhiteSpace(Model.MeetingEndTime) ? Model.MeetingEndTime : Model.MeetingDate.AddHours(1).ToString("HH:mm"))'da sona erdi.</strong>
+                <span style="margin-left: 12px; text-decoration: underline;">İmzalar:</span>
+            </div>
         </div>
 
-        <div class="fw-bold" style="font-size: @(isA5 ? "9.5px" : "11.5px"); margin-bottom: 3px;">
-            KAT MALİKLERİ KATILIM, DİJİTAL ÖN ONAY VE ISLAK İMZA CETVELİ:
-        </div>
-
+        <!-- KATILANLAR & HAZİRUN İMZA CETVELİ -->
         <table class="hazirun-table">
             <thead>
                 <tr>
                     <th style="width: 5%;">No</th>
-                    <th style="width: 11%;">Bölüm</th>
-                    <th style="width: 24%;">Kat Maliki Adı Soyadı</th>
-                    <th style="width: 13%;">Katılım (Asil/Vekil)</th>
-                    <th style="width: 17%;">Karar Oyu / Şerh</th>
-                    <th style="width: 15%;">Dijital Onay &amp; Tarih</th>
+                    <th style="width: 12%;">Bölüm</th>
+                    <th style="width: 24%;">Katılan Malik Adı Soyadı</th>
+                    <th style="width: 14%;">Katılım Şekli</th>
+                    <th style="width: 16%;">Oy / Şerh</th>
+                    <th style="width: 14%;">Dijital Onay Kodu</th>
                     <th style="width: 15%;">Islak İmza</th>
                 </tr>
             </thead>
@@ -235,16 +316,16 @@
                         "Vekil" => !string.IsNullOrWhiteSpace(vote.ProxyPersonName) ? $"Vekil ({vote.ProxyPersonName})" : "Vekil",
                         "Katilmadi" => "Katılmadı",
                         "Asil" => "Asil",
-                        _ => "Asil / Vekil"
+                        _ => "Asil"
                     };
                     <tr>
                         <td style="text-align: center;">@(row++)</td>
-                        <td style="text-align: center; font-weight: bold;">@(isSiteDecision && unit.Building != null ? $"{unit.Building.BlockName ?? unit.Building.Name} • {unit.DoorNumber}" : unit.DoorNumber)</td>
+                        <td style="text-align: center; font-weight: bold;">@(isSiteDecision && unit.Building != null ? $"{unit.Building.BlockName ?? unit.Building.Name} · {unit.DoorNumber}" : unit.DoorNumber)</td>
                         <td>
                             @(unit.OwnerName ?? "Malik Girilmemiş")
                             @if (sumLandShare > 0)
                             {
-                                <div style="font-size: 0.8em; color: #555;">Pay: @unit.LandShare.ToString("0.##")</div>
+                                <span style="font-size: 0.8em; color: #555;"> (Pay: @unit.LandShare.ToString("0.##"))</span>
                             }
                         </td>
                         <td style="text-align: center;">@participationLabel</td>
@@ -258,12 +339,12 @@
                                 <strong>RET</strong>
                                 @if (!string.IsNullOrWhiteSpace(vote.DissentNote))
                                 {
-                                    <div style="font-size: 0.8em;">(Şerh: @vote.DissentNote)</div>
+                                    <div style="font-size: 0.8em;">(@vote.DissentNote)</div>
                                 }
                             }
                             else
                             {
-                                <span>[ &nbsp; ] Kabul &nbsp; [ &nbsp; ] Ret</span>
+                                <span>[ ] Kabul [ ] Ret</span>
                             }
                         </td>
                         <td style="text-align: center; font-size: 0.85em;">
@@ -284,29 +365,28 @@
 
         <div class="signature-box">
             <div class="sign-col">
-                <div>Divan Başkanı</div>
-                <div class="sign-line">İmza / Kaşe</div>
+                <div>Divan / Yönetim Başkanı</div>
+                <div class="sign-line">@chairText</div>
             </div>
             <div class="sign-col">
-                <div>Apartman / Site Yöneticisi</div>
+                <div>Azalar (Yönetim Kurulu)</div>
+                <div class="sign-line">@azasText</div>
+            </div>
+            <div class="sign-col">
+                <div>Denetim / Noter Onayı</div>
                 <div class="sign-line">İmza / Mühür</div>
-            </div>
-            <div class="sign-col">
-                <div>Denetçi / Katip Üye</div>
-                <div class="sign-line">İmza</div>
             </div>
         </div>
 
         <div class="seal-corner-note">
             <div>
-                <strong>Doğrulama &amp; Defter Bütünlük Notu:</strong> Bu çıktı GMK360 üzerinden üretilmiştir (Kod: <b>@Model.VerificationToken</b>).
-                Noter Defterine yapıştırıldıktan sonra kağıt ile defter birleşim köşelerine yönetici parafı/mührü basılmalıdır.
+                <strong>Doğrulama &amp; Defter İkizi Bütünlüğü:</strong> Sayfa #@displayPageNo • Karar #@displayDecNo (Doğrulama Kodu: <b>@Model.VerificationToken</b>).
                 @if (!string.IsNullOrWhiteSpace(building?.DecisionBookNotaryName))
                 {
-                    <span> • Noter: @building.DecisionBookNotaryName (Yevmiye: @(building.DecisionBookJournalNo ?? "-"))</span>
+                    <span>Noter: @building.DecisionBookNotaryName (Yevmiye: @(building.DecisionBookJournalNo ?? "-"))</span>
                 }
             </div>
-            <div id="decisionQrBox" style="width: 56px; height: 56px; flex-shrink: 0;"></div>
+            <div id="decisionQrBox" style="width: 54px; height: 54px; flex-shrink: 0;"></div>
         </div>
     </div>
 
@@ -315,8 +395,8 @@
         if (window.QRCode && '@verifyUrl') {
             new QRCode(document.getElementById("decisionQrBox"), {
                 text: "@Html.Raw(verifyUrl)",
-                width: 56,
-                height: 56,
+                width: 54,
+                height: 54,
                 correctLevel: QRCode.CorrectLevel.M
             });
         }
