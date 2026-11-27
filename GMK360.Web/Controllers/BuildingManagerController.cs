@@ -125,7 +125,7 @@ namespace GMK360.Web.Controllers
             }
 
             var buildings = await query
-                .OrderByDescending(b => b.Id)
+                .OrderBy(b => b.Id)
                 .ToListAsync();
 
             // Yalnizca tohum/ornek verilerden kalan birebir ayni isimli coklu ornek kayit varsa koru (gercek bloklara dokunma)
@@ -142,6 +142,68 @@ namespace GMK360.Web.Controllers
                 .ToList();
             var allDebts = allUnits.SelectMany(u => u.Debts ?? new System.Collections.Generic.List<UnitDebt>()).ToList();
 
+            var managedScopeIds = buildings
+                .SelectMany(b => new[] { b.Id }.Concat((b.ChildBuildings ?? new System.Collections.Generic.List<Building>()).Select(cb => cb.Id)))
+                .Distinct()
+                .ToList();
+
+            var openFaults = managedScopeIds.Any()
+                ? await _context.BuildingTaskTickets
+                    .AsNoTracking()
+                    .Include(t => t.Building)
+                    .Include(t => t.BuildingUnit)
+                    .Include(t => t.AssignedStaff)
+                    .Where(t => !t.IsDeleted && managedScopeIds.Contains(t.BuildingId) && t.Status != "Tamamlandi" && t.Status != "Iptal")
+                    .OrderByDescending(t => t.Priority == "Acil")
+                    .ThenByDescending(t => t.Id)
+                    .Take(12)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<BuildingTaskTicket>();
+
+            var allScopedTickets = managedScopeIds.Any()
+                ? await _context.SupportTickets
+                    .AsNoTracking()
+                    .Include(t => t.CreatorUser)
+                    .Where(t => !t.IsDeleted && t.ContextType == "Building" && t.ContextId.HasValue && managedScopeIds.Contains(t.ContextId.Value))
+                    .OrderByDescending(t => t.CreatedAt)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<SupportTicket>();
+
+            var residentRequests = allScopedTickets
+                .Where(t => !string.Equals(t.Category, "ManagerTodo", StringComparison.OrdinalIgnoreCase)
+                    && t.Status != "Closed" && t.Status != "Resolved" && t.Status != "Tamamlandı")
+                .Take(12)
+                .ToList();
+
+            var managerWorkPlans = allScopedTickets
+                .Where(t => string.Equals(t.Category, "ManagerTodo", StringComparison.OrdinalIgnoreCase) && t.CreatorUserId == userId)
+                .OrderBy(t => t.Status == "Resolved" || t.Status == "Closed")
+                .ThenByDescending(t => t.Priority == "Urgent" || t.Priority == "High")
+                .ThenByDescending(t => t.Id)
+                .Take(15)
+                .ToList();
+
+            var complexIds = buildings.Where(b => b.HousingComplexId.HasValue).Select(b => b.HousingComplexId!.Value).Distinct().ToList();
+            var upcomingMeetings = managedScopeIds.Any()
+                ? await _context.SystemMeetings
+                    .AsNoTracking()
+                    .Where(m => !m.IsDeleted && !m.IsConcluded && m.ContextType == "Building"
+                        && (managedScopeIds.Contains(m.ContextId) || (m.IsSiteWide && m.HousingComplexId.HasValue && complexIds.Contains(m.HousingComplexId.Value))))
+                    .OrderBy(m => m.MeetingDate)
+                    .Take(5)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<SystemMeeting>();
+
+            var upcomingMaintenances = managedScopeIds.Any()
+                ? await _context.SpaceFixtures
+                    .AsNoTracking()
+                    .Include(f => f.UnitSpace).ThenInclude(s => s.BuildingUnit).ThenInclude(u => u.Building)
+                    .Where(f => !f.IsDeleted && f.NextMaintenanceDate.HasValue && managedScopeIds.Contains(f.UnitSpace.BuildingUnit.BuildingId))
+                    .OrderBy(f => f.NextMaintenanceDate)
+                    .Take(5)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<SpaceFixture>();
+
             ViewBag.TotalBuildings = buildings.Count;
             ViewBag.TotalUnits = allUnits.Count;
             ViewBag.ResidentialUnits = allUnits.Count(u => u.Category != "Dukkan");
@@ -151,10 +213,95 @@ namespace GMK360.Web.Controllers
             ViewBag.TotalPaid = allDebts.Where(d => d.IsPaid).Sum(d => d.Amount);
             ViewBag.TotalUnpaid = allDebts.Where(d => !d.IsPaid).Sum(d => d.Amount);
             ViewBag.TotalExpenses = buildings.SelectMany(b => b.Expenses ?? new List<BuildingExpense>()).Sum(e => e.TotalAmount);
-            ViewBag.PendingTicketsCount = await _context.SupportTickets
-                .CountAsync(t => t.ContextType == "Building" && t.Status != "Closed" && t.Status != "Tamamlandı");
+            ViewBag.PendingTicketsCount = residentRequests.Count;
+            ViewBag.OpenFaults = openFaults;
+            ViewBag.ResidentRequests = residentRequests;
+            ViewBag.ManagerWorkPlans = managerWorkPlans;
+            ViewBag.UpcomingMeetings = upcomingMeetings;
+            ViewBag.UpcomingMaintenances = upcomingMaintenances;
 
             return View(buildings);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddManagerWorkPlan(
+            int buildingId,
+            string title,
+            string? scheduleNote,
+            string priority = "Normal")
+        {
+            var userId = GetUserId();
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null || string.IsNullOrEmpty(userId)) return Forbid();
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                TempData["ErrorMessage"] = "Lütfen iş planı başlığını giriniz.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            _context.SupportTickets.Add(new SupportTicket
+            {
+                Title = title.Trim(),
+                Description = string.IsNullOrWhiteSpace(scheduleNote) ? "Yönetici iş planı notu" : scheduleNote.Trim(),
+                Category = "ManagerTodo",
+                Status = "Open",
+                Priority = string.IsNullOrWhiteSpace(priority) ? "Normal" : priority.Trim(),
+                CreatorUserId = userId,
+                AssignedToUserId = userId,
+                ContextType = "Building",
+                ContextId = building.Id,
+                ContextInfo = string.IsNullOrWhiteSpace(scheduleNote) ? DateTime.Today.ToString("dd.MM.yyyy") : scheduleNote.Trim(),
+                CreatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "İş planı / hatırlatıcı eklendi.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ToggleManagerWorkPlan(int planId, string? targetStatus = null)
+        {
+            var userId = GetUserId();
+            var item = await _context.SupportTickets.FirstOrDefaultAsync(t =>
+                t.Id == planId && t.Category == "ManagerTodo" && t.CreatorUserId == userId && !t.IsDeleted);
+            if (item == null) return NotFound();
+
+            if (targetStatus == "Delete")
+            {
+                item.IsDeleted = true;
+            }
+            else
+            {
+                bool isDone = item.Status == "Resolved" || item.Status == "Closed";
+                item.Status = isDone ? "Open" : "Resolved";
+            }
+            item.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> QuickResolveResidentTicket(int ticketId)
+        {
+            var userId = GetUserId();
+            var ticket = await _context.SupportTickets.FirstOrDefaultAsync(t => t.Id == ticketId && !t.IsDeleted);
+            if (ticket == null) return NotFound();
+            if (ticket.ContextId.HasValue)
+            {
+                var b = await GetManagedBuildingAsync(ticket.ContextId.Value);
+                if (b == null && !IsAdminOrSuperAdmin()) return Forbid();
+            }
+
+            ticket.Status = "Resolved";
+            ticket.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = $"'{ticket.Title}' talebi tamamlandı olarak işaretlendi.";
+            return RedirectToAction(nameof(Index));
         }
 
         // Tek Tıkla Örnek Site Yükleme (Demo için 12 Bağımsız Bölüm + Demirbaş & Aidat Çetelesi)
@@ -4245,7 +4392,7 @@ namespace GMK360.Web.Controllers
             var bStaffIds = buildingStaffs.Select(s => s.Id).ToList();
 
             ViewBag.BuildingStaffs = buildingStaffs;
-            ViewBag.FormerBuildingStaffs = await _context.BuildingStaffs
+            var formerBuildingStaffs = await _context.BuildingStaffs
                 .Include(s => s.Documents)
                 .Include(s => s.User)
                 .Include(s => s.HousingComplex)
@@ -4255,10 +4402,12 @@ namespace GMK360.Web.Controllers
                         || (s.IsSiteWide && s.HousingComplexId.HasValue && building.HousingComplexId == s.HousingComplexId)))
                 .OrderByDescending(s => s.LeaveDate ?? s.UpdatedAt ?? s.CreatedAt)
                 .ToListAsync();
-            ViewBag.MonthlyPayrolls = bStaffIds.Any()
+            ViewBag.FormerBuildingStaffs = formerBuildingStaffs;
+            var allPayrollStaffIds = bStaffIds.Concat(formerBuildingStaffs.Select(fs => fs.Id)).Distinct().ToList();
+            ViewBag.MonthlyPayrolls = allPayrollStaffIds.Any()
                 ? await _context.BuildingStaffMonthlyPayrolls
                     .Include(p => p.Staff)
-                    .Where(p => bStaffIds.Contains(p.BuildingStaffId) && !p.IsDeleted)
+                    .Where(p => allPayrollStaffIds.Contains(p.BuildingStaffId) && !p.IsDeleted)
                     .OrderByDescending(p => p.Year)
                     .ThenByDescending(p => p.Month)
                     .ThenByDescending(p => p.Id)
