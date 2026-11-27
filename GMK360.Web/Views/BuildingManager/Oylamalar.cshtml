@@ -1,7 +1,7 @@
 ﻿@model IEnumerable<GMK360.Core.Entities.SystemMeeting>
 @{
     Layout = "~/Views/Shared/_FacilityLayout.cshtml";
-    ViewData["Title"] = "Toplantı & Karar Masası";
+    ViewData["Title"] = "Karar Defteri & Oylama";
     var buildings = ViewBag.Buildings as List<GMK360.Core.Entities.Building> ?? new List<GMK360.Core.Entities.Building>();
     int? selectedBuildingId = ViewBag.SelectedBuildingId as int?;
     var approvals = ViewBag.Approvals as List<GMK360.Core.Entities.ApprovalRequest> ?? new List<GMK360.Core.Entities.ApprovalRequest>();
@@ -24,10 +24,13 @@
 <div class="container-fluid py-3 px-1">
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 bg-white p-4 rounded-4 shadow-sm">
         <div>
-            <h2 class="fw-bold text-dark mb-1"><i class="bi bi-patch-check text-success me-2"></i>Toplantı &amp; Karar Masası</h2>
-            <p class="text-muted small mb-0">Uzaktan belge/görüş &amp; PIN'siz ön onay mutabakatı, KMK çoğunluk hesabı ve Noter Defteri A4/A5 çıktı akışı</p>
+            <h2 class="fw-bold text-dark mb-1"><i class="bi bi-journal-check text-success me-2"></i>Karar Defteri &amp; Oylama (Noter İkizi)</h2>
+            <p class="text-muted small mb-0">634 sayılı KMK resmi karar kayıtları, dijital ön onay salt çoğunluk hesabı ve Noter Defteri A4/A5 çıktı masası</p>
         </div>
         <div class="d-flex flex-wrap gap-2">
+            <a href="/BuildingManager/Toplantilar@(selectedBuildingId.HasValue ? $"?buildingId={selectedBuildingId}" : "")" class="btn btn-outline-primary rounded-pill px-3 fw-semibold">
+                <i class="bi bi-people-fill me-1"></i> Ön Görüşme Toplantıları
+            </a>
             @if (selectedBldObj != null)
             {
                 <button class="btn btn-outline-dark rounded-pill px-3 fw-semibold" data-bs-toggle="modal" data-bs-target="#decisionBookModal">
@@ -35,7 +38,7 @@
                 </button>
             }
             <button class="btn btn-success rounded-pill px-4 fw-bold" data-bs-toggle="modal" data-bs-target="#newDecisionModal" @(buildings.Any() ? "" : "disabled")>
-                <i class="bi bi-plus-circle me-1"></i> Yeni Toplantı / Karar Ekle
+                <i class="bi bi-plus-circle me-1"></i> Yeni Karar Kaydı Ekle
             </button>
         </div>
     </div>
@@ -134,14 +137,14 @@
 
     <div class="card border-0 shadow-sm rounded-4 bg-white">
         <div class="card-header bg-white border-bottom p-3 fw-bold text-dark">
-            <i class="bi bi-journal-bookmark text-primary me-2"></i>Genel Kurul Toplantıları &amp; Alınan Kararlar
+            <i class="bi bi-journal-bookmark text-primary me-2"></i>Resmi Karar Defteri Kayıtları &amp; Oylamalar
         </div>
         <div class="card-body p-4">
             @if (!Model.Any())
             {
                 <div class="text-center py-5 text-muted">
                     <i class="bi bi-book fs-1 d-block mb-2"></i>
-                    Henüz kayıtlı toplantı veya karar bulunmuyor.
+                    Henüz karar defterine işlenmiş karar bulunmuyor. İsterseniz önce <a href="/BuildingManager/Toplantilar" class="fw-semibold">Toplantı &amp; Ön Görüşme Masası</a>'ndan konu tartışıp buraya aktarabilirsiniz.
                 </div>
             }
             else
@@ -169,7 +172,7 @@
                                 <span class="badge bg-dark rounded-pill me-1">Karar #@(m.DecisionNumber ?? m.Id.ToString("D2"))</span>
                                 @if (!m.IsConcluded)
                                 {
-                                    <span class="badge bg-warning text-dark rounded-pill me-1">📅 Ön Görüş &amp; Onay Aşaması</span>
+                                    <span class="badge bg-warning text-dark rounded-pill me-1">🗳️ Resmi Oylama &amp; Ön Onayda</span>
                                 }
                                 else
                                 {
@@ -498,12 +501,12 @@
 @if (buildings.Any())
 {
     <div class="modal fade" id="newDecisionModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
             <form class="modal-content rounded-4 border-0 shadow" asp-action="CreateMeeting" asp-controller="BuildingManager" method="post" enctype="multipart/form-data">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="returnTo" value="Oylamalar" />
                 <div class="modal-header bg-success text-white border-0">
-                    <h5 class="modal-title fw-bold">Yeni Toplantı &amp; Karar Kaydı</h5>
+                    <h5 class="modal-title fw-bold"><i class="bi bi-journal-plus me-2"></i>Yeni Resmi Karar Defteri Kaydı</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
@@ -703,12 +706,12 @@
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold small">Toplantı / Gündem Başlığı *</label>
+                        <label class="form-label fw-bold small">Karar Konusu / Başlık *</label>
                         <input type="text" name="agendaTitle" id="newDecAgendaTitle" class="form-control" required placeholder="Örn: 2026 Yılı Baz Aidat Belirleme Kararı" />
                     </div>
                     <div class="row g-2 mb-3">
                         <div class="col-md-4">
-                            <label class="form-label fw-bold small">Toplantı Tarihi</label>
+                            <label class="form-label fw-bold small">Karar Tarihi</label>
                             <input type="date" name="meetingDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
                         </div>
                         <div class="col-md-3">
@@ -716,10 +719,10 @@
                             <input type="time" name="meetingTime" class="form-control" value="20:00" />
                         </div>
                         <div class="col-md-5">
-                            <label class="form-label fw-bold small">Durum</label>
+                            <label class="form-label fw-bold small">Defter İşlem Durumu</label>
                             <select name="isPlannedOnly" class="form-select" id="oylMeetingPlanned">
-                                <option value="true" selected>📅 Ön Görüş &amp; Onaya Aç</option>
-                                <option value="false">✅ Doğrudan Karar Defterine Yaz</option>
+                                <option value="true" selected>🗳️ Oylamaya Aç (Çoğunluk Onayı Beklenir)</option>
+                                <option value="false">✅ Kesinleşmiş Karar Olarak Deftere Yaz</option>
                             </select>
                         </div>
                     </div>
@@ -734,13 +737,13 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-bold small">Toplantı Yeri</label>
+                            <label class="form-label fw-bold small">Karar / Kurul Yeri</label>
                             <input type="text" name="meetingLocation" class="form-control" value="Site Yönetim Odası / Ortak Alan" />
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold small">Gündem / Karar Taslağı Metni (Boş bırakılırsa otomatik üretilir)</label>
-                        <textarea name="decisionText" id="oylDecisionText" class="form-control" rows="2" placeholder="Teklifleri, tutarı veya karara geçecek metni yazın..."></textarea>
+                        <label class="form-label fw-bold small">Resmi Karar Metni (KMK Md. 32 — Boş bırakılırsa otomatik üretilir)</label>
+                        <textarea name="decisionText" id="oylDecisionText" class="form-control" rows="2" placeholder="Teklifleri, tutarı veya karara geçecek resmi karar metnini yazın..."></textarea>
                     </div>
                     <div class="row g-2">
                         <div class="col-md-6">
