@@ -39,6 +39,11 @@ namespace GMK360.Core.Interfaces
         /// Mahalle bazında otomatik yatırım ve sosyal analiz raporu (HTML/Markdown) çıkarır.
         /// </summary>
         Task<string> AnalyzeNeighborhoodAsync(string districtName, string neighborhoodName);
+
+        /// <summary>
+        /// Merkezi KMK mevzuat ve El Kitabi baglamina dayanarak yonetici / sakin sorusunu yanitlar.
+        /// </summary>
+        Task<string> AskKmkAdvisorAsync(string question, string knowledgeContext, bool isMember, string? activeChapterTitle = null);
     }
 }
 

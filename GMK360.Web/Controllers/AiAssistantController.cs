@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
@@ -7,20 +7,54 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
+using GMK360.Web.Services;
 
 namespace GMK360.Web.Controllers
 {
+    public class KmkAskRequestDto
+    {
+        public string Question { get; set; } = "";
+        public string? ActiveSlug { get; set; }
+    }
+
     [Authorize]
     public class AiAssistantController : Controller
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _config;
+        private readonly KmkAiAdvisorService _advisorService;
 
-        public AiAssistantController(IHttpClientFactory httpClientFactory, IConfiguration config)
+        public AiAssistantController(
+            IHttpClientFactory httpClientFactory,
+            IConfiguration config,
+            KmkAiAdvisorService advisorService)
         {
             _httpClientFactory = httpClientFactory;
             _config = config;
+            _advisorService = advisorService;
+        }
+
+        [AllowAnonymous]
+        [HttpPost("/AiAssistant/Ask")]
+        [EnableRateLimiting("GlobalLimiter")]
+        public async Task<IActionResult> Ask([FromBody] KmkAskRequestDto? request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.Question))
+            {
+                return BadRequest(new { error = "LÃ¼tfen danÄ±ÅŸmak istediÄŸiniz konuyu veya soruyu yazÄ±n." });
+            }
+
+            string cleanQ = request.Question.Trim();
+            if (cleanQ.Length > 1000)
+            {
+                cleanQ = cleanQ.Substring(0, 1000);
+            }
+
+            bool isMember = User?.Identity?.IsAuthenticated == true;
+            var result = await _advisorService.AskAsync(cleanQ, isMember, request.ActiveSlug);
+            return Json(result);
         }
 
         public IActionResult Index()
@@ -36,7 +70,7 @@ namespace GMK360.Web.Controllers
                 string geminiApiKey = _config["GeminiApiKey"];
                 if (string.IsNullOrEmpty(geminiApiKey))
                 {
-                    return Json(new { success = false, message = "Sistem yapýlandýrma hatasý: AI API anahtarý eksik." });
+                    return Json(new { success = false, message = "Sistem yapÄ±landÄ±rma hatasÄ±: AI API anahtarÄ± eksik." });
                 }
 
                 var client = _httpClientFactory.CreateClient();
@@ -44,10 +78,10 @@ namespace GMK360.Web.Controllers
 
                 var parts = new List<object>
                 {
-                    new { text = message ?? "Sana bir görsel gönderdim, lütfen incele." }
+                    new { text = message ?? "Sana bir gÃ¶rsel gÃ¶nderdim, lÃ¼tfen incele." }
                 };
 
-                // Eðer dosya (görsel/fatura) yüklendiyse
+                // EÄŸer dosya (gÃ¶rsel/fatura) yÃ¼klendiyse
                 if (file != null && file.Length > 0)
                 {
                     using var ms = new MemoryStream();
@@ -65,7 +99,7 @@ namespace GMK360.Web.Controllers
                     });
                 }
 
-                string systemPrompt = "Sen 'GMK360' (Türkiye'nin yeni nesil dijital emlak, site yönetimi ve hizmet ekosistemi) platformunun resmi iç yapay zeka asistaný olan 'Asker'sin. Görevin: Sistem kullanýcýlarýna, emlakçýlara ve yöneticilere yardýmcý olmaktýr. Gayrimenkul hukuku, kira gelir vergisi, giderlerin vergiden düþülmesi gibi konularda uzman tavsiyesi verirsin. Eðer sana bir fatura, fiþ veya makbuz fotoðrafý gönderilirse, üzerindeki yazýlarý okuyup vergi uzmaný gibi yorumlar, 'Þu kadarý KDV, þu kadarý vergiden düþülebilir' gibi yönlendirmeler yaparsýn. Her zaman çok nazik, net, Türkçe kurallarýna uyan ve profesyonel bir dil kullanýrsýn.";
+                string systemPrompt = "Sen 'GMK360' (TÃ¼rkiye'nin yeni nesil dijital emlak, site yÃ¶netimi ve hizmet ekosistemi) platformunun resmi iÃ§ yapay zeka asistanÄ± olan 'Asker'sin. GÃ¶revin: Sistem kullanÄ±cÄ±larÄ±na, emlakÃ§Ä±lara ve yÃ¶neticilere yardÄ±mcÄ± olmaktÄ±r. Gayrimenkul hukuku, kira gelir vergisi, giderlerin vergiden dÃ¼ÅŸÃ¼lmesi gibi konularda uzman tavsiyesi verirsin. EÄŸer sana bir fatura, fiÅŸ veya makbuz fotoÄŸrafÄ± gÃ¶nderilirse, Ã¼zerindeki yazÄ±larÄ± okuyup vergi uzmanÄ± gibi yorumlar, 'Åžu kadarÄ± KDV, ÅŸu kadarÄ± vergiden dÃ¼ÅŸÃ¼lebilir' gibi yÃ¶nlendirmeler yaparsÄ±n. Her zaman Ã§ok nazik, net, TÃ¼rkÃ§e kurallarÄ±na uyan ve profesyonel bir dil kullanÄ±rsÄ±n.";
 
                 var requestBody = new
                 {
@@ -84,7 +118,7 @@ namespace GMK360.Web.Controllers
                 if (!response.IsSuccessStatusCode)
                 {
                     var errorStr = await response.Content.ReadAsStringAsync();
-                    return Json(new { success = false, message = "AI Asker ile iletiþim kurulamadý.", error = errorStr });
+                    return Json(new { success = false, message = "AI Asker ile iletiÅŸim kurulamadÄ±.", error = errorStr });
                 }
 
                 var jsonStr = await response.Content.ReadAsStringAsync();
@@ -93,14 +127,14 @@ namespace GMK360.Web.Controllers
                     var aiText = doc.RootElement.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString();
                     
                     // Basit markdown to html (sadece kalin yazilari dondurelim simdilik)
-                    var htmlText = aiText.Replace("\n", "<br/>").Replace("**", "<b>").Replace("<b>", "<b>").Replace("</b>", "</b>"); // basit düzeltme
+                    var htmlText = aiText.Replace("\n", "<br/>").Replace("**", "<b>").Replace("<b>", "<b>").Replace("</b>", "</b>"); // basit dÃ¼zeltme
                     
                     return Json(new { success = true, reply = htmlText });
                 }
             }
             catch (Exception ex)
             {
-                return Json(new { success = false, message = "Beklenmeyen bir hata oluþtu: " + ex.Message });
+                return Json(new { success = false, message = "Beklenmeyen bir hata oluÅŸtu: " + ex.Message });
             }
         }
     }

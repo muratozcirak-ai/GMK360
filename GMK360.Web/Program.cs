@@ -168,6 +168,7 @@ builder.Services.AddScoped<GMK360.Web.Services.ISeoService, GMK360.Web.Services.
 builder.Services.AddScoped<GMK360.Web.Services.Construction.DnaTimeOffsetService>();
 builder.Services.AddScoped<GMK360.Core.Interfaces.IConstructionFeasibilityPdfService, GMK360.Web.Services.Construction.ConstructionFeasibilityPdfService>();
 builder.Services.AddScoped<GMK360.Core.Interfaces.IArticleService, GMK360.Core.Services.ArticleService>();
+builder.Services.AddScoped<GMK360.Web.Services.KmkAiAdvisorService>();
 
 // Register Background Services
 builder.Services.AddHostedService<LocationIntelligenceWorker>();
