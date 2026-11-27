@@ -1246,21 +1246,25 @@ namespace GMK360.Web.Controllers
             string? effectiveTc = null;
             if (!isStaffActivation)
             {
-                effectiveTc = GMK360.Web.Helpers.TcknHelper.Normalize(!string.IsNullOrWhiteSpace(tcIdentityNo) ? tcIdentityNo : user.TcIdentityNo);
-                if (!GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(effectiveTc))
+                if (!string.IsNullOrWhiteSpace(tcIdentityNo))
                 {
-                    ViewBag.ActivationError = "Lütfen geçerli 11 haneli T.C. Kimlik Numaranızı giriniz.";
-                    return View(user);
+                    var normTc = GMK360.Web.Helpers.TcknHelper.Normalize(tcIdentityNo);
+                    if (!GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(normTc))
+                    {
+                        ViewBag.ActivationError = "Girdiğiniz T.C. Kimlik Numarası 11 haneli geçerli formatta olmalıdır (isterseniz boş bırakabilirsiniz).";
+                        return View(user);
+                    }
+                    bool tcUsedByOther = await _context.Users.AnyAsync(u => u.Id != user.Id && u.TcIdentityNo == normTc);
+                    if (tcUsedByOther)
+                    {
+                        ViewBag.ActivationError = "Bu T.C. Kimlik Numarası başka bir GMK360 hesabında zaten kayıtlı.";
+                        return View(user);
+                    }
+                    effectiveTc = normTc;
                 }
 
-                bool tcUsedByOther = await _context.Users.AnyAsync(u => u.Id != user.Id && u.TcIdentityNo == effectiveTc);
-                if (tcUsedByOther)
-                {
-                    ViewBag.ActivationError = "Bu T.C. Kimlik Numarası başka bir GMK360 hesabında zaten kayıtlı. Lütfen yöneticinizden mevcut hesabınızı bağlamasını isteyiniz.";
-                    return View(user);
-                }
-
-                if (string.IsNullOrWhiteSpace(email) || !email.Contains("@") || email.EndsWith("@gmk360.local", StringComparison.OrdinalIgnoreCase))
+                var effectiveEmailInput = !string.IsNullOrWhiteSpace(email) ? email.Trim() : user.Email;
+                if (string.IsNullOrWhiteSpace(effectiveEmailInput) || !effectiveEmailInput.Contains("@") || effectiveEmailInput.EndsWith("@gmk360.local", StringComparison.OrdinalIgnoreCase))
                 {
                     ViewBag.ActivationError = "Lütfen doğrulama için geçerli kişisel e-posta adresinizi giriniz.";
                     return View(user);
@@ -1330,7 +1334,7 @@ namespace GMK360.Web.Controllers
             var pwRes = await _userManager.AddPasswordAsync(user, newPassword);
             if (!pwRes.Succeeded)
             {
-                ViewBag.ActivationError = string.Join(" ", pwRes.Errors.Select(e => e.Description));
+                ViewBag.ActivationError = "Şifreniz en az 8 karakter olmalı ve en az 1 büyük harf, 1 küçük harf, 1 rakam ile 1 özel karakter (örn. Site2026!) içermelidir.";
                 return View(user);
             }
 
