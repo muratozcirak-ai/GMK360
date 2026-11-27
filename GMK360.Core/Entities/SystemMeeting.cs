@@ -30,6 +30,20 @@ namespace GMK360.Core.Entities
         public string QuorumType { get; set; } = "Standard"; // Standard (>50%), Innovation (KMK42 >50%), ManagementPlan (80%), Unanimous (100%)
 
         [MaxLength(40)]
+        public string DecisionCategory { get; set; } = "General"; // General, DuesUpdate, AppointManager, AppointBoardMember, CapitalProject, ManagementPlan
+
+        public string? ProposedPayloadJson { get; set; }
+
+        public bool AutoExecuteOnQuorum { get; set; } = true;
+
+        public bool IsExecuted { get; set; } = false;
+
+        public DateTime? ExecutedAt { get; set; }
+
+        [MaxLength(500)]
+        public string? ExecutionSummary { get; set; }
+
+        [MaxLength(40)]
         public string? VerificationToken { get; set; } // QR Kod doğrulama kodu
 
         public bool IsConcluded { get; set; } = false; // Toplantı tamamlandı mı?

@@ -493,6 +493,18 @@ using (var schemaScope = app.Services.CreateScope())
                 ALTER TABLE [dbo].[SystemMeetings] ADD [MeetingLocation] nvarchar(200) NULL;
             IF COL_LENGTH(N'dbo.SystemMeetings', N'QuorumType') IS NULL
                 ALTER TABLE [dbo].[SystemMeetings] ADD [QuorumType] nvarchar(30) NOT NULL CONSTRAINT [DF_SystemMeetings_QuorumType] DEFAULT (N'Standard');
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'DecisionCategory') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [DecisionCategory] nvarchar(40) NOT NULL CONSTRAINT [DF_SystemMeetings_DecisionCategory] DEFAULT (N'General');
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'ProposedPayloadJson') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [ProposedPayloadJson] nvarchar(max) NULL;
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'AutoExecuteOnQuorum') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [AutoExecuteOnQuorum] bit NOT NULL CONSTRAINT [DF_SystemMeetings_AutoExecuteOnQuorum] DEFAULT (1);
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'IsExecuted') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [IsExecuted] bit NOT NULL CONSTRAINT [DF_SystemMeetings_IsExecuted] DEFAULT (0);
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'ExecutedAt') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [ExecutedAt] datetime2 NULL;
+            IF COL_LENGTH(N'dbo.SystemMeetings', N'ExecutionSummary') IS NULL
+                ALTER TABLE [dbo].[SystemMeetings] ADD [ExecutionSummary] nvarchar(500) NULL;
             IF COL_LENGTH(N'dbo.SystemMeetings', N'VerificationToken') IS NULL
                 ALTER TABLE [dbo].[SystemMeetings] ADD [VerificationToken] nvarchar(40) NULL;
             IF COL_LENGTH(N'dbo.Buildings', N'DecisionBookNotaryName') IS NULL

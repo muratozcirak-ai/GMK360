@@ -549,7 +549,8 @@ namespace GMK360.Web.Controllers
             int buildingUnitId,
             string voteChoice,
             string? dissentNote = null,
-            string? previewRole = null)
+            string? previewRole = null,
+            [FromServices] FacilityGovernanceService? governanceService = null)
         {
             var userId = GetUserId();
             var userEmail = User.FindFirstValue(ClaimTypes.Email);
@@ -615,6 +616,16 @@ namespace GMK360.Web.Controllers
             }
 
             await _context.SaveChangesAsync();
+            if (cleanChoice == "Kabul" && governanceService != null)
+            {
+                var execRes = await governanceService.TryExecuteDecisionOnQuorumAsync(meetingId, userId, _taskService);
+                if (execRes.Executed && !string.IsNullOrWhiteSpace(execRes.Message))
+                {
+                    TempData["SuccessMessage"] = $"✅ Daire {unit.DoorNumber} onayınız kaydedildi! Yasal çoğunluk sağlandığı için karar yürürlüğe girdi: {execRes.Message}";
+                    return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+                }
+            }
+
             TempData["SuccessMessage"] = cleanChoice == "Kabul"
                 ? $"✅ Daire {unit.DoorNumber} için ön onayınız (Kabul) kaydedildi."
                 : $"📝 Daire {unit.DoorNumber} için çekinceniz / şerhiniz kaydedildi.";

@@ -24,6 +24,18 @@ namespace GMK360.Web.Services
         public string Message { get; set; } = string.Empty;
     }
 
+    public sealed class DecisionProposalPayload
+    {
+        public decimal? ProposedDues { get; set; }
+        public int? PaymentDay { get; set; }
+        public string? TargetName { get; set; }
+        public string? TargetEmail { get; set; }
+        public string? TargetPhone { get; set; }
+        public string? TargetRole { get; set; }
+        public decimal? EstimatedBudget { get; set; }
+        public string? WorkPlanTitle { get; set; }
+    }
+
     public sealed class ExpenseDistributionPreviewItem
     {
         public int BuildingUnitId { get; set; }
@@ -1384,6 +1396,267 @@ namespace GMK360.Web.Services
 
             await _context.SaveChangesAsync();
             await tx.CommitAsync();
+        }
+
+        public async Task<(bool Executed, string? Message)> TryExecuteDecisionOnQuorumAsync(
+            int meetingId,
+            string actorUserId,
+            FacilityTaskDispatchService? taskDispatch = null,
+            bool forceOverrideAutoFlag = false)
+        {
+            var meeting = await _context.SystemMeetings
+                .Include(m => m.Decisions)
+                .Include(m => m.Votes)
+                .FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && !m.IsDeleted);
+
+            if (meeting == null) return (false, null);
+            if (meeting.IsExecuted) return (false, meeting.ExecutionSummary);
+            if (!meeting.AutoExecuteOnQuorum && !forceOverrideAutoFlag) return (false, null);
+
+            var building = await _context.Buildings
+                .FirstOrDefaultAsync(b => b.Id == meeting.ContextId);
+            if (building == null) return (false, null);
+
+            List<Building> scopeBuildings;
+            if (meeting.IsSiteWide && building.HousingComplexId.HasValue)
+            {
+                scopeBuildings = await _context.Buildings
+                    .Where(b => b.HousingComplexId == building.HousingComplexId && b.ParentBuildingId == null)
+                    .ToListAsync();
+            }
+            else
+            {
+                scopeBuildings = new List<Building> { building };
+            }
+
+            if (!scopeBuildings.Any()) scopeBuildings = new List<Building> { building };
+            var scopeIds = scopeBuildings.Select(b => b.Id).ToList();
+
+            var eligibleUnits = await _context.BuildingUnits
+                .AsNoTracking()
+                .Where(u => scopeIds.Contains(u.BuildingId) && !(u.Category ?? "").StartsWith("OrtakAlan"))
+                .ToListAsync();
+
+            var quorum = GMK360.Web.Helpers.KmkQuorumHelper.Compute(eligibleUnits, meeting.Votes, meeting.QuorumType);
+            if (!quorum.IsQuorumMet)
+            {
+                return (false, null);
+            }
+
+            DecisionProposalPayload? payload = null;
+            if (!string.IsNullOrWhiteSpace(meeting.ProposedPayloadJson))
+            {
+                try
+                {
+                    payload = JsonSerializer.Deserialize<DecisionProposalPayload>(meeting.ProposedPayloadJson);
+                }
+                catch
+                {
+                    payload = null;
+                }
+            }
+
+            var category = string.IsNullOrWhiteSpace(meeting.DecisionCategory) ? "General" : meeting.DecisionCategory.Trim();
+            string summary;
+
+            if (string.Equals(category, "DuesUpdate", StringComparison.OrdinalIgnoreCase))
+            {
+                if (payload?.ProposedDues == null || payload.ProposedDues.Value < 0m)
+                {
+                    return (false, "Aidat belirleme kararı için geçerli tutar teklifi bulunamadı.");
+                }
+
+                decimal appliedDues = Math.Round(payload.ProposedDues.Value, 2);
+                int? appliedDay = payload.PaymentDay.HasValue ? Math.Clamp(payload.PaymentDay.Value, 1, 31) : null;
+                foreach (var b in scopeBuildings)
+                {
+                    b.DefaultBaseMonthlyDues = appliedDues;
+                    if (appliedDay.HasValue) b.DuesPaymentDay = appliedDay.Value;
+                }
+
+                summary = appliedDay.HasValue
+                    ? $"Baz aidat KMK çoğunluğuyla {appliedDues:N2} ₺ (Ödeme günü: her ayın {appliedDay.Value}. günü) olarak {scopeBuildings.Count} yapı için yürürlüğe alındı. Dayanak: Karar #{meeting.DecisionNumber}"
+                    : $"Baz aidat KMK çoğunluğuyla {appliedDues:N2} ₺ olarak {scopeBuildings.Count} yapı için yürürlüğe alındı. Dayanak: Karar #{meeting.DecisionNumber}";
+            }
+            else if (string.Equals(category, "AppointManager", StringComparison.OrdinalIgnoreCase))
+            {
+                var targetUser = await ResolveOrProvisionDecisionTargetUserAsync(payload, actorUserId, taskDispatch);
+                if (targetUser == null)
+                {
+                    return (false, "Yeni yönetici ataması için geçerli e-posta veya 10 haneli telefon bilgisi bulunamadı.");
+                }
+
+                int rootId = building.ParentBuildingId ?? building.Id;
+                var rootIds = scopeBuildings.Select(b => b.ParentBuildingId ?? b.Id).Distinct().ToList();
+                var activeHeads = await _context.BuildingManagers
+                    .Where(m => rootIds.Contains(m.BuildingId) && m.IsActive && m.Role == BuildingManagerRole.HeadManager)
+                    .ToListAsync();
+                foreach (var h in activeHeads)
+                {
+                    h.IsActive = false;
+                    h.UpdatedAt = DateTime.UtcNow;
+                }
+
+                _context.BuildingManagers.Add(new BuildingManager
+                {
+                    BuildingId = rootId,
+                    UserId = targetUser.Id,
+                    Role = BuildingManagerRole.HeadManager,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                });
+
+                var allScopeBlocks = await _context.Buildings
+                    .Where(b => scopeIds.Contains(b.Id) || (b.ParentBuildingId.HasValue && rootIds.Contains(b.ParentBuildingId.Value)))
+                    .ToListAsync();
+                foreach (var blk in allScopeBlocks)
+                {
+                    blk.ManagerUserId = targetUser.Id;
+                }
+
+                var displayName = !string.IsNullOrWhiteSpace(targetUser.FirstName)
+                    ? $"{targetUser.FirstName} {targetUser.LastName}".Trim()
+                    : (payload?.TargetName ?? targetUser.Email ?? "Yeni Yönetici");
+                summary = $"Yeni yönetici yetkisi KMK çoğunluğuyla {displayName} hesabına atandı/devredildi. Dayanak: Karar #{meeting.DecisionNumber}";
+            }
+            else if (string.Equals(category, "AppointBoardMember", StringComparison.OrdinalIgnoreCase))
+            {
+                var targetUser = await ResolveOrProvisionDecisionTargetUserAsync(payload, actorUserId, taskDispatch);
+                if (targetUser == null)
+                {
+                    return (false, "Kurul üyesi / aza seçimi için geçerli e-posta veya 10 haneli telefon bilgisi bulunamadı.");
+                }
+
+                var assignedRole = string.Equals(payload?.TargetRole, "Auditor", StringComparison.OrdinalIgnoreCase)
+                    ? BuildingManagerRole.Auditor
+                    : BuildingManagerRole.BoardMember;
+                string roleLabel = assignedRole == BuildingManagerRole.Auditor ? "Denetçi" : "Aza (Yönetim Kurulu)";
+
+                int rootId = building.ParentBuildingId ?? building.Id;
+                var existingMember = await _context.BuildingManagers
+                    .FirstOrDefaultAsync(m => m.BuildingId == rootId && m.UserId == targetUser.Id && m.IsActive);
+                if (existingMember != null)
+                {
+                    existingMember.Role = assignedRole;
+                    existingMember.UpdatedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    _context.BuildingManagers.Add(new BuildingManager
+                    {
+                        BuildingId = rootId,
+                        UserId = targetUser.Id,
+                        Role = assignedRole,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+
+                var displayName = !string.IsNullOrWhiteSpace(targetUser.FirstName)
+                    ? $"{targetUser.FirstName} {targetUser.LastName}".Trim()
+                    : (payload?.TargetName ?? targetUser.Email ?? "Kurul Üyesi");
+                summary = $"{displayName}, KMK çoğunluğuyla '{roleLabel}' görevine seçilerek kurul listesine eklendi. Dayanak: Karar #{meeting.DecisionNumber}";
+            }
+            else if (string.Equals(category, "CapitalProject", StringComparison.OrdinalIgnoreCase))
+            {
+                var firstDecText = meeting.Decisions?.FirstOrDefault()?.DecisionText;
+                var workDesc = !string.IsNullOrWhiteSpace(firstDecText) ? firstDecText : meeting.AgendaTitle;
+                if (payload?.EstimatedBudget.HasValue == true && payload.EstimatedBudget.Value > 0m)
+                {
+                    workDesc = $"{workDesc} (Tahmini Bütçe: {payload.EstimatedBudget.Value:N0} ₺)";
+                }
+
+                _context.SupportTickets.Add(new SupportTicket
+                {
+                    Title = $"[Karar #{meeting.DecisionNumber}] {meeting.AgendaTitle}",
+                    Description = workDesc,
+                    Category = "ManagerTodo",
+                    Status = "Open",
+                    Priority = "High",
+                    CreatorUserId = string.IsNullOrWhiteSpace(actorUserId) ? "system" : actorUserId,
+                    AssignedToUserId = string.IsNullOrWhiteSpace(actorUserId) ? null : actorUserId,
+                    ContextType = "Building",
+                    ContextId = building.Id,
+                    ContextInfo = $"KMK Onaylı İş Planı • Karar #{meeting.DecisionNumber}",
+                    CreatedAt = DateTime.UtcNow
+                });
+
+                summary = $"Yenilik / yatırım kararı onaylandı ve yönetici iş planına işlendi. Dayanak: Karar #{meeting.DecisionNumber}";
+            }
+            else if (string.Equals(category, "ManagementPlan", StringComparison.OrdinalIgnoreCase))
+            {
+                summary = $"Yönetim Planı değişikliği (%80 / 4-5 çoğunluk) onaylandı. Tapu şerhi için A4 tutanak hazır. Dayanak: Karar #{meeting.DecisionNumber}";
+            }
+            else
+            {
+                var firstDecText = meeting.Decisions?.FirstOrDefault()?.DecisionText;
+                _context.SupportTickets.Add(new SupportTicket
+                {
+                    Title = $"[Karar #{meeting.DecisionNumber}] {meeting.AgendaTitle}",
+                    Description = !string.IsNullOrWhiteSpace(firstDecText) ? firstDecText : meeting.AgendaTitle,
+                    Category = "ManagerTodo",
+                    Status = "Open",
+                    Priority = "Normal",
+                    CreatorUserId = string.IsNullOrWhiteSpace(actorUserId) ? "system" : actorUserId,
+                    AssignedToUserId = string.IsNullOrWhiteSpace(actorUserId) ? null : actorUserId,
+                    ContextType = "Building",
+                    ContextId = building.Id,
+                    ContextInfo = $"Karar #{meeting.DecisionNumber}",
+                    CreatedAt = DateTime.UtcNow
+                });
+
+                summary = $"Karar çoğunluğu sağlandı ve yönetici iş planına işlendi. Dayanak: Karar #{meeting.DecisionNumber}";
+            }
+
+            meeting.IsExecuted = true;
+            meeting.IsConcluded = true;
+            meeting.ExecutedAt = DateTime.UtcNow;
+            meeting.ExecutionSummary = summary;
+            meeting.UpdatedAt = DateTime.UtcNow;
+
+            WriteAuditLog(actorUserId, "DECISION_AUTO_EXECUTED", "SystemMeeting", meeting.Id.ToString(), new
+            {
+                meeting.DecisionNumber,
+                DecisionCategory = category,
+                Quorum = $"{quorum.ApprovedUnits}/{quorum.TotalUnits} ({quorum.ApprovalSharePercent}% pay)",
+                Summary = summary
+            });
+
+            await _context.SaveChangesAsync();
+            return (true, summary);
+        }
+
+        private async Task<ApplicationUser?> ResolveOrProvisionDecisionTargetUserAsync(
+            DecisionProposalPayload? payload,
+            string actorUserId,
+            FacilityTaskDispatchService? taskDispatch)
+        {
+            if (payload == null) return null;
+            var cleanEmail = payload.TargetEmail?.Trim();
+            var normPhone = FacilityTaskDispatchService.NormalizePhoneLast10(payload.TargetPhone);
+
+            ApplicationUser? target = null;
+            if (!string.IsNullOrWhiteSpace(cleanEmail))
+            {
+                target = await _context.Users.FirstOrDefaultAsync(u => u.Email == cleanEmail || u.UserName == cleanEmail);
+            }
+            if (target == null && normPhone.Length >= 10)
+            {
+                var candidates = await _context.Users.Where(u => u.PhoneNumber != null).ToListAsync();
+                target = candidates.FirstOrDefault(u => FacilityTaskDispatchService.NormalizePhoneLast10(u.PhoneNumber) == normPhone);
+            }
+            if (target == null && taskDispatch != null)
+            {
+                target = await taskDispatch.ProvisionResidentProfileAsync(
+                    null,
+                    string.IsNullOrWhiteSpace(payload.TargetName) ? "Kurul Üyesi" : payload.TargetName,
+                    cleanEmail,
+                    payload.TargetPhone,
+                    "Owner",
+                    string.IsNullOrWhiteSpace(actorUserId) ? "system" : actorUserId,
+                    null);
+            }
+            return target;
         }
 
         private void WriteAuditLog(string userId, string actionType, string entityName, string entityId, object payload)

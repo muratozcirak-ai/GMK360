@@ -13,6 +13,7 @@
     var unitsByComplex = ViewBag.UnitsByComplex as Dictionary<int, List<GMK360.Core.Entities.BuildingUnit>> ?? new Dictionary<int, List<GMK360.Core.Entities.BuildingUnit>>();
     var selectedBldObj = ViewBag.SelectedBuildingObj as GMK360.Core.Entities.Building;
     var firstSiteComplex = buildings.FirstOrDefault(b => b.HousingComplexId.HasValue);
+    var presetCategory = Context.Request.Query["preset"].ToString();
 }
 
 <div class="container-fluid py-3 px-1">
@@ -177,6 +178,19 @@
                                         <span class="ms-2"><i class="bi bi-geo-alt me-1"></i>@m.MeetingLocation</span>
                                     }
                                     <span class="ms-2 badge bg-white text-dark border">@quorum.RuleLabel</span>
+                                    @if (!string.IsNullOrWhiteSpace(m.DecisionCategory) && m.DecisionCategory != "General")
+                                    {
+                                        var catBadge = m.DecisionCategory switch
+                                        {
+                                            "DuesUpdate" => "💰 Aidat Belirleme",
+                                            "AppointManager" => "🧑‍💼 Yönetici Atama",
+                                            "AppointBoardMember" => "🏛️ Aza / Denetçi Seçimi",
+                                            "CapitalProject" => "🛠️ Yenilik / Yatırım",
+                                            "ManagementPlan" => "📜 Yönetim Planı",
+                                            _ => m.DecisionCategory
+                                        };
+                                        <span class="ms-1 badge bg-info text-dark">@catBadge</span>
+                                    }
                                 </div>
                             </div>
                             <div class="d-flex flex-wrap gap-1">
@@ -204,6 +218,27 @@
                             <div class="progress" style="height: 6px;">
                                 <div class="progress-bar @(quorum.IsQuorumMet ? "bg-success" : "bg-primary")" style="width: @(Math.Min(100m, quorum.ApprovalUnitPercent).ToString(System.Globalization.CultureInfo.InvariantCulture))%"></div>
                             </div>
+                            @if (m.IsExecuted && !string.IsNullOrWhiteSpace(m.ExecutionSummary))
+                            {
+                                <div class="alert alert-success py-1 px-2 mt-2 mb-0 small d-flex align-items-center gap-2">
+                                    <i class="bi bi-lightning-charge-fill"></i>
+                                    <span><strong>Yürürlüğe Alındı:</strong> @m.ExecutionSummary</span>
+                                </div>
+                            }
+                            else if (quorum.IsQuorumMet && !m.IsExecuted)
+                            {
+                                <div class="mt-2 d-flex justify-content-between align-items-center gap-2">
+                                    <span class="text-success fw-semibold"><i class="bi bi-check2-all me-1"></i>Salt çoğunluk oranı yakalandı! Kararı sisteme uygulayabilirsiniz.</span>
+                                    <form asp-action="ExecuteApprovedDecision" asp-controller="BuildingManager" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="meetingId" value="@m.Id" />
+                                        <input type="hidden" name="buildingId" value="@m.ContextId" />
+                                        <button type="submit" class="btn btn-xs btn-success rounded-pill px-3 fw-bold">
+                                            ⚡ Kararı Şimdi Yürürlüğe Al
+                                        </button>
+                                    </form>
+                                </div>
+                            }
                         </div>
                         @if (m.Decisions != null && m.Decisions.Any())
                         {
@@ -446,6 +481,68 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
+                    <div class="mb-3 p-3 bg-light rounded-3 border">
+                        <label class="form-label fw-bold small text-dark"><i class="bi bi-bookmark-star text-success me-1"></i>Resmi KMK Karar Konusu (Şablon) *</label>
+                        <select name="decisionCategory" id="newDecCategorySelect" class="form-select fw-semibold" onchange="onDecisionCategoryChanged()">
+                            <option value="General">📝 Genel Yönetim / İş Planı Maddesi (KMK Md. 30 • &gt;%50)</option>
+                            <option value="DuesUpdate">💰 Aidat &amp; İşletme Bütçesi Belirleme (KMK Md. 37 • &gt;%50 Sayı + Pay)</option>
+                            <option value="AppointManager">🧑‍💼 Yeni Yönetici Atama / Yetki Devri (KMK Md. 34 • &gt;%50 Sayı + Pay)</option>
+                            <option value="AppointBoardMember">🏛️ Yönetim Kurulu Azası / Denetçi Seçimi (KMK Md. 34/41 • &gt;%50 Sayı + Pay)</option>
+                            <option value="CapitalProject">🛠️ Önemli Yenilik / Mantolama / Demirbaş Yatırımı (KMK Md. 42 • &gt;%50 Sayı + Pay)</option>
+                            <option value="ManagementPlan">📜 Yönetim Planı Değişikliği (KMK Md. 28 • 4/5 = %80)</option>
+                        </select>
+                        <small class="text-muted d-block mt-1" id="decCategoryHint">
+                            Seçilen karar konusunun yasal KMK salt çoğunluk oranı otomatik kilitlenir ve oran yakalandığında karar uygulanır.
+                        </small>
+
+                        <div id="panelDuesUpdate" class="row g-2 mt-2 d-none">
+                            <div class="col-6">
+                                <label class="form-label small fw-bold mb-1">Önerilen Yeni Baz Aidat (₺) *</label>
+                                <input type="number" step="0.01" min="0" name="proposedDues" id="inputProposedDues" class="form-control form-control-sm" placeholder="Örn: 1850" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold mb-1">Aylık Ödeme Günü</label>
+                                <input type="number" min="1" max="31" name="paymentDay" class="form-control form-control-sm" value="5" />
+                            </div>
+                        </div>
+
+                        <div id="panelPersonAppoint" class="row g-2 mt-2 d-none">
+                            <div class="col-12 d-none" id="wrapTargetRole">
+                                <label class="form-label small fw-bold mb-1">Atanacak Kurul Görevi</label>
+                                <select name="targetRole" class="form-select form-select-sm">
+                                    <option value="BoardMember">Yönetim Kurulu Azası</option>
+                                    <option value="Auditor">Denetçi (Denetim Kurulu)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold mb-1">Aday Adı Soyadı *</label>
+                                <input type="text" name="targetName" id="inputTargetName" class="form-control form-control-sm" placeholder="Örn: Mehmet Kaya" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold mb-1">E-Posta *</label>
+                                <input type="email" name="targetEmail" id="inputTargetEmail" class="form-control form-control-sm" placeholder="aday@ornek.com" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold mb-1">Telefon</label>
+                                <input type="text" name="targetPhone" id="inputTargetPhone" class="form-control form-control-sm" placeholder="05XX XXX XX XX" />
+                            </div>
+                        </div>
+
+                        <div id="panelCapitalProject" class="row g-2 mt-2 d-none">
+                            <div class="col-12">
+                                <label class="form-label small fw-bold mb-1">Tahmini Yatırım / Proje Bütçesi (₺)</label>
+                                <input type="number" step="100" min="0" name="estimatedBudget" class="form-control form-control-sm" placeholder="Örn: 250000" />
+                            </div>
+                        </div>
+
+                        <div class="form-check form-switch mt-2 small">
+                            <input class="form-check-input" type="checkbox" name="autoExecuteOnQuorum" value="true" id="autoExecSwitch" checked />
+                            <label class="form-check-label fw-semibold text-success" for="autoExecSwitch">
+                                ⚡ Yasal çoğunluk yakalandığı anda kararı otomatik yürürlüğe al (Aidat / Atama / İş Planı)
+                            </label>
+                        </div>
+                    </div>
+
                     <div class="row g-2 mb-3">
                         <div class="col-md-8">
                             <label class="form-label fw-bold small">Kapsam (Site Geneli / Bina)</label>
@@ -469,7 +566,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-bold small">Toplantı / Gündem Başlığı *</label>
-                        <input type="text" name="agendaTitle" class="form-control" required placeholder="Örn: 2026 Olağan Genel Kurul ve Çatı Yalıtımı" />
+                        <input type="text" name="agendaTitle" id="newDecAgendaTitle" class="form-control" required placeholder="Örn: 2026 Yılı Baz Aidat Belirleme Kararı" />
                     </div>
                     <div class="row g-2 mb-3">
                         <div class="col-md-4">
@@ -482,7 +579,7 @@
                         </div>
                         <div class="col-md-5">
                             <label class="form-label fw-bold small">Durum</label>
-                            <select name="isPlannedOnly" class="form-select" id="oylMeetingPlanned" onchange="document.getElementById('oylDecisionText').required = (this.value !== 'true')">
+                            <select name="isPlannedOnly" class="form-select" id="oylMeetingPlanned">
                                 <option value="true" selected>📅 Ön Görüş &amp; Onaya Aç</option>
                                 <option value="false">✅ Doğrudan Karar Defterine Yaz</option>
                             </select>
@@ -491,9 +588,9 @@
                     <div class="row g-2 mb-3">
                         <div class="col-md-6">
                             <label class="form-label fw-bold small">Yasal Çoğunluk Kuralı (KMK)</label>
-                            <select name="quorumType" class="form-select">
+                            <select name="quorumType" id="newDecQuorumSelect" class="form-select">
                                 <option value="Standard">Genel Karar (KMK Md.30 • &gt;%50)</option>
-                                <option value="Innovation">Önemli Yenilik / Yönetici (KMK Md.34/42 • &gt;%50 Sayı+Pay)</option>
+                                <option value="Innovation">Önemli Yenilik / Yönetici / Aidat (KMK Md.34/37/42 • &gt;%50 Sayı+Pay)</option>
                                 <option value="ManagementPlan">Yönetim Planı Değişikliği (KMK Md.28 • 4/5 = %80)</option>
                                 <option value="Unanimous">Oy Birliği (%100 Tüm Malikler)</option>
                             </select>
@@ -504,8 +601,8 @@
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold small">Gündem / Karar Taslağı Metni (KMK Md. 32)</label>
-                        <textarea name="decisionText" id="oylDecisionText" class="form-control" rows="3" placeholder="Teklifleri, tutarı veya karara geçecek metni yazın..."></textarea>
+                        <label class="form-label fw-bold small">Gündem / Karar Taslağı Metni (Boş bırakılırsa otomatik üretilir)</label>
+                        <textarea name="decisionText" id="oylDecisionText" class="form-control" rows="2" placeholder="Teklifleri, tutarı veya karara geçecek metni yazın..."></textarea>
                     </div>
                     <div class="row g-2">
                         <div class="col-md-6">
@@ -744,6 +841,73 @@
             document.getElementById('dpMeetingId').value = btn.getAttribute('data-meeting-id') || '';
             document.getElementById('dpBuildingId').value = btn.getAttribute('data-building-id') || '';
             document.getElementById('dpAgendaLabel').textContent = btn.getAttribute('data-title') || '';
+        });
+
+        function onDecisionCategoryChanged() {
+            const cat = document.getElementById('newDecCategorySelect')?.value || 'General';
+            const duesPanel = document.getElementById('panelDuesUpdate');
+            const personPanel = document.getElementById('panelPersonAppoint');
+            const roleWrap = document.getElementById('wrapTargetRole');
+            const capPanel = document.getElementById('panelCapitalProject');
+            const quorumSel = document.getElementById('newDecQuorumSelect');
+            const titleEl = document.getElementById('newDecAgendaTitle');
+            const hintEl = document.getElementById('decCategoryHint');
+
+            duesPanel?.classList.add('d-none');
+            personPanel?.classList.add('d-none');
+            roleWrap?.classList.add('d-none');
+            capPanel?.classList.add('d-none');
+
+            const duesInput = document.getElementById('inputProposedDues');
+            const nameInput = document.getElementById('inputTargetName');
+            if (duesInput) duesInput.required = false;
+            if (nameInput) nameInput.required = false;
+
+            if (cat === 'DuesUpdate') {
+                duesPanel?.classList.remove('d-none');
+                if (duesInput) duesInput.required = true;
+                if (quorumSel) quorumSel.value = 'Innovation';
+                if (titleEl && !titleEl.value.trim()) titleEl.value = 'Aylık Baz Aidat & İşletme Bütçesi Belirlenmesi';
+                if (hintEl) hintEl.textContent = 'KMK Md. 37: Kat malikleri çoğunluğu sağlandığı anda yeni baz aidat otomatik aktif edilir.';
+            } else if (cat === 'AppointManager') {
+                personPanel?.classList.remove('d-none');
+                if (nameInput) nameInput.required = true;
+                if (quorumSel) quorumSel.value = 'Innovation';
+                if (titleEl && !titleEl.value.trim()) titleEl.value = 'Yeni Site / Apartman Yöneticisi Atama Kararı';
+                if (hintEl) hintEl.textContent = 'KMK Md. 34: Sayı ve arsa payı salt çoğunluğu (>%50) yakalandığında yöneticilik yetkisi otomatik atanır.';
+            } else if (cat === 'AppointBoardMember') {
+                personPanel?.classList.remove('d-none');
+                roleWrap?.classList.remove('d-none');
+                if (nameInput) nameInput.required = true;
+                if (quorumSel) quorumSel.value = 'Innovation';
+                if (titleEl && !titleEl.value.trim()) titleEl.value = 'Yönetim Kurulu Azası / Denetçi Seçimi Kararı';
+                if (hintEl) hintEl.textContent = 'KMK Md. 34/41: Çoğunluk sağlandığında aday otomatik olarak Kurul Üyesi / Aza listesine eklenir.';
+            } else if (cat === 'CapitalProject') {
+                capPanel?.classList.remove('d-none');
+                if (quorumSel) quorumSel.value = 'Innovation';
+                if (hintEl) hintEl.textContent = 'KMK Md. 42: Onaylandığında bütçesiyle birlikte Yönetici İş Planına eklenir.';
+            } else if (cat === 'ManagementPlan') {
+                if (quorumSel) quorumSel.value = 'ManagementPlan';
+                if (hintEl) hintEl.textContent = 'KMK Md. 28: Yönetim planı değişiklikleri için kat maliklerinin 4/5 (%80) oyu aranır.';
+            } else {
+                if (quorumSel) quorumSel.value = 'Standard';
+                if (hintEl) hintEl.textContent = 'KMK Md. 30: Genel kararlar toplantı/katılım çoğunluğu ile karara bağlanır ve iş planına eklenir.';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const preset = '@System.Web.HttpUtility.JavaScriptStringEncode(presetCategory ?? "")';
+            if (preset) {
+                const catSel = document.getElementById('newDecCategorySelect');
+                if (catSel) {
+                    catSel.value = preset;
+                    onDecisionCategoryChanged();
+                    const modalEl = document.getElementById('newDecisionModal');
+                    if (modalEl && typeof bootstrap !== 'undefined') {
+                        new bootstrap.Modal(modalEl).show();
+                    }
+                }
+            }
         });
     </script>
 }
