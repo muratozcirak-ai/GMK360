@@ -306,10 +306,27 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
+                    <div class="mb-3 p-3 rounded-3 bg-light border">
+                        <label class="form-label fw-bold small text-dark mb-1">
+                            <i class="bi bi-bookmark-star-fill text-warning me-1"></i>1. Toplantı Konu Türü &amp; KMK Kapsamı (Önce Seçiniz) *
+                        </label>
+                        <select id="discTopicSelect" class="form-select fw-semibold" onchange="onDiscussionTopicPresetChanged()">
+                            <option value="Custom">📝 Serbest Gündem / Genel Konu</option>
+                            <option value="BlockMaintenance">🧱 Blok Çatı / Asansör / Dış Cephe Onarımı (KMK Md. 69 • Sadece İlgili Blok)</option>
+                            <option value="SiteCommonProject">🌳 Site Geneli Ortak Alan / Bahçe / Kamelya / Güvenlik (Tüm Bloklar)</option>
+                            <option value="BudgetAndDues">💰 İşletme Bütçesi / Aidat Belirleme Ön Görüşmesi</option>
+                            <option value="BoardElection">🏛️ Yönetici / Aza Seçimi Ön Görüşmesi (KMK Md. 34)</option>
+                            <option value="ResidentComplaint">📣 Kat Maliki Şikayeti &amp; Ortak Yaşam Gündemi</option>
+                        </select>
+                        <small class="text-muted d-block mt-1" id="discTopicHint">
+                            KMK Md. 69: Çatı/asansör/dış cephe gibi sadece bir bloğu ilgilendiren konular yalnızca o bloğun maliklerine gider; bahçe/güvenlik tüm siteye açılır.
+                        </small>
+                    </div>
+
                     <div class="row g-2 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-bold small">Toplantı Konusu / Başlığı *</label>
-                            <input type="text" name="agendaTitle" class="form-control" required placeholder="Örn: Bahçeye Kamelya Yapımı & Yer Seçimi" />
+                            <label class="form-label fw-bold small">2. Toplantı Konusu / Başlığı *</label>
+                            <input type="text" name="agendaTitle" id="discAgendaTitleInput" class="form-control" required placeholder="Örn: A Blok Çatı Akıntısı &amp; Yalıtım Onarımı" />
                         </div>
                         <div class="col-md-3">
                             <div class="d-flex justify-content-between align-items-center mb-1">
@@ -518,6 +535,42 @@
             if (parts.length === 2) {
                 document.getElementById('discBuildingIdHidden').value = parts[1];
                 document.getElementById('discIsSiteWideHidden').value = parts[0] === 'SITE' ? 'true' : 'false';
+            }
+        }
+        function onDiscussionTopicPresetChanged() {
+            const topic = document.getElementById('discTopicSelect')?.value || 'Custom';
+            const scopeSel = document.getElementById('discScopeSelect');
+            const titleEl = document.getElementById('discAgendaTitleInput');
+            const hintEl = document.getElementById('discTopicHint');
+            if (!scopeSel) return;
+
+            const siteOpt = Array.from(scopeSel.options).find(o => o.value.startsWith('SITE:'));
+            const firstBlkOpt = Array.from(scopeSel.options).find(o => o.value.startsWith('BLK:'));
+
+            if (topic === 'BlockMaintenance') {
+                if (firstBlkOpt) scopeSel.value = firstBlkOpt.value;
+                syncDiscScope();
+                if (titleEl && !titleEl.value.trim()) titleEl.value = 'Blok Çatı / Ortak Alan Bakım ve Onarım Görüşmesi';
+                if (hintEl) hintEl.innerHTML = '<span class="text-danger fw-semibold"><i class="bi bi-shield-exclamation me-1"></i>KMK Md. 69 (Blok Ortak Gideri):</span> Tapuda Site Yönetim Planı aksini söylemiyorsa yalnızca seçili bloğun maliklerine açılır ve diğer bloklara borç çıkarılmaz.';
+            } else if (topic === 'SiteCommonProject') {
+                if (siteOpt) scopeSel.value = siteOpt.value;
+                syncDiscScope();
+                if (titleEl && !titleEl.value.trim()) titleEl.value = 'Site Geneli Ortak Alan Düzenleme / Yatırım Görüşmesi';
+                if (hintEl) hintEl.textContent = 'KMK Md. 69: Tüm siteyi ilgilendiren bahçe, güvenlik, kamelya ve ortak yollar tüm blok maliklerine açılır.';
+            } else if (topic === 'BudgetAndDues') {
+                if (siteOpt) scopeSel.value = siteOpt.value;
+                syncDiscScope();
+                if (titleEl && !titleEl.value.trim()) titleEl.value = 'Yeni Dönem İşletme Bütçesi ve Aidat Belirleme Görüşmesi';
+                if (hintEl) hintEl.textContent = 'Site geneli veya ilgili blok işletme bütçesi ve aidat planlaması ön görüşmeye açılır.';
+            } else if (topic === 'BoardElection') {
+                if (siteOpt) scopeSel.value = siteOpt.value;
+                syncDiscScope();
+                if (titleEl && !titleEl.value.trim()) titleEl.value = 'Yönetici & Aza Seçimi Aday Değerlendirme Görüşmesi';
+                if (hintEl) hintEl.textContent = 'KMK Md. 34: Yönetici ve yönetim kurulu azası adayları ve görev koşulları görüşülür.';
+            } else if (topic === 'ResidentComplaint') {
+                if (hintEl) hintEl.textContent = 'KMK Md. 18: Malik şikayet ve ortak yaşam kuralları ihlalleri belgeleriyle değerlendirilir.';
+            } else {
+                if (hintEl) hintEl.textContent = 'KMK Md. 69: Çatı/asansör/dış cephe gibi sadece bir bloğu ilgilendiren konular yalnızca o bloğun maliklerine gider; bahçe/güvenlik tüm siteye açılır.';
             }
         }
         function openPromoteModal(mId, bId, title) {

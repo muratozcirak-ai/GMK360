@@ -573,13 +573,19 @@
                     var allEligibleBuildingUnits = ViewBag.AllEligibleBuildingUnits as List<GMK360.Core.Entities.BuildingUnit> ?? new List<GMK360.Core.Entities.BuildingUnit>();
                     @foreach (var m in tenantAuthorizedMeetings.Take(6))
                     {
-                        var quorum = GMK360.Web.Helpers.KmkQuorumHelper.Compute(allEligibleBuildingUnits, m.Votes, m.QuorumType);
+                        var scopeUnitsForMeeting = m.IsSiteWide
+                            ? allEligibleBuildingUnits
+                            : allEligibleBuildingUnits.Where(u => u.BuildingId == m.ContextId).ToList();
+                        var quorum = GMK360.Web.Helpers.KmkQuorumHelper.Compute(scopeUnitsForMeeting, m.Votes, m.QuorumType);
                         var mVotes = (m.Votes ?? new List<GMK360.Core.Entities.BuildingDecisionVote>()).Where(v => !v.IsDeleted).ToList();
                         var mAttachments = (m.Attachments ?? new List<GMK360.Core.Entities.BuildingDecisionAttachment>()).Where(a => !a.IsDeleted).OrderByDescending(a => a.CreatedAt).ToList();
                         var proxyUnitIds = mVotes.Where(v => v.ParticipationType == "Vekil").Select(v => v.BuildingUnitId).ToHashSet();
-                        var eligibleUnitsForUser = activeRole == "Owner"
+                        var scopedResidentUnits = m.IsSiteWide
                             ? residentUnits
-                            : residentUnits.Where(u => proxyUnitIds.Contains(u.Id)).ToList();
+                            : residentUnits.Where(u => u.BuildingId == m.ContextId).ToList();
+                        var eligibleUnitsForUser = activeRole == "Owner"
+                            ? scopedResidentUnits
+                            : scopedResidentUnits.Where(u => proxyUnitIds.Contains(u.Id)).ToList();
                         bool isDiscussionStage = string.Equals(m.WorkflowStage, "Discussion", StringComparison.OrdinalIgnoreCase);
                         bool canDiscuss = activeRole == "Owner"
                             || string.Equals(m.InvitationScope, "AllResidents", StringComparison.OrdinalIgnoreCase)

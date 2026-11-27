@@ -199,22 +199,30 @@ namespace GMK360.Web.Controllers
             var siteBlockIds = targetComplexId.HasValue
                 ? await _context.Buildings.AsNoTracking().Where(b => b.HousingComplexId == targetComplexId.Value && b.ParentBuildingId == null).Select(b => b.Id).ToListAsync()
                 : new List<int>();
-            var meetingBuildingIds = new List<int>();
-            if (targetBuildingId > 0) meetingBuildingIds.Add(targetBuildingId);
-            if (rootBuildingId > 0 && rootBuildingId != targetBuildingId) meetingBuildingIds.Add(rootBuildingId);
+            var ownBuildingIds = new List<int>();
+            if (targetBuildingId > 0) ownBuildingIds.Add(targetBuildingId);
+            if (targetBuilding?.ParentBuildingId.HasValue == true && rootBuildingId > 0 && !ownBuildingIds.Contains(rootBuildingId))
+            {
+                ownBuildingIds.Add(rootBuildingId);
+            }
+            if (!ownBuildingIds.Any() && managedBuildings.Any())
+            {
+                ownBuildingIds.AddRange(managedBuildings.Select(b => b.Id));
+            }
+            var unitQueryIds = new List<int>(ownBuildingIds);
             foreach (var sbid in siteBlockIds)
             {
-                if (!meetingBuildingIds.Contains(sbid)) meetingBuildingIds.Add(sbid);
+                if (!unitQueryIds.Contains(sbid)) unitQueryIds.Add(sbid);
             }
 
-            var meetings = (meetingBuildingIds.Any() || targetComplexId.HasValue)
+            var meetings = (ownBuildingIds.Any() || targetComplexId.HasValue)
                 ? await _context.SystemMeetings
                     .Include(m => m.Decisions)
                     .Include(m => m.Votes)
                     .Include(m => m.Attachments)
                     .Where(m => m.ContextType == "Building" && !m.IsDeleted
                         && m.WorkflowStage != "ArchivedNegative"
-                        && (meetingBuildingIds.Contains(m.ContextId)
+                        && (ownBuildingIds.Contains(m.ContextId)
                             || (m.IsSiteWide && m.HousingComplexId.HasValue && m.HousingComplexId == targetComplexId)))
                     .OrderBy(m => m.WorkflowStage == "Discussion" ? 0 : 1)
                     .ThenBy(m => m.IsConcluded)
@@ -223,10 +231,10 @@ namespace GMK360.Web.Controllers
                     .ToListAsync()
                 : new List<SystemMeeting>();
 
-            var allEligibleUnitsForMeetings = meetingBuildingIds.Any()
+            var allEligibleUnitsForMeetings = unitQueryIds.Any()
                 ? await _context.BuildingUnits
                     .AsNoTracking()
-                    .Where(u => meetingBuildingIds.Contains(u.BuildingId) && !(u.Category ?? "").StartsWith("OrtakAlan"))
+                    .Where(u => unitQueryIds.Contains(u.BuildingId) && !(u.Category ?? "").StartsWith("OrtakAlan"))
                     .ToListAsync()
                 : new List<BuildingUnit>();
             ViewBag.AllEligibleBuildingUnits = allEligibleUnitsForMeetings;
@@ -561,6 +569,11 @@ namespace GMK360.Web.Controllers
             var meeting = await _context.SystemMeetings.FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && !m.IsDeleted);
             var unit = await _context.BuildingUnits.FirstOrDefaultAsync(u => u.Id == buildingUnitId && !u.IsEmpty);
             if (meeting == null || unit == null) return NotFound();
+            if (!meeting.IsSiteWide && unit.BuildingId != meeting.ContextId && !IsManagerOrAdmin())
+            {
+                TempData["ErrorMessage"] = "634 sayılı KMK Madde 69 gereği yalnızca bu bloğun kat malikleri bu karar hakkında oy kullanabilir.";
+                return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+            }
             if (meeting.IsConcluded)
             {
                 TempData["ErrorMessage"] = "Bu toplantı karara bağlandığı için ön onay değiştirilemez.";
@@ -652,10 +665,23 @@ namespace GMK360.Web.Controllers
                 .FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && !m.IsDeleted);
             if (meeting == null) return NotFound();
 
+            var posterEmail = User.FindFirstValue(ClaimTypes.Email);
+            if (!meeting.IsSiteWide && !IsManagerOrAdmin())
+            {
+                bool belongsToBlock = await _context.BuildingUnits.AnyAsync(u =>
+                    u.BuildingId == meeting.ContextId
+                    && (u.OwnerUserId == userId || u.TenantUserId == userId
+                        || (!string.IsNullOrEmpty(posterEmail) && (u.OwnerEmail == posterEmail || u.TenantEmail == posterEmail))));
+                if (!belongsToBlock)
+                {
+                    TempData["ErrorMessage"] = "634 sayılı KMK Madde 69 gereği yalnızca ilgili bloğun kat malikleri bu görüşmeye katılım sağlayabilir.";
+                    return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+                }
+            }
+
             bool isTenantPoster = string.Equals(previewRole, "Tenant", StringComparison.OrdinalIgnoreCase);
             if (!IsManagerOrAdmin() && isTenantPoster)
             {
-                var posterEmail = User.FindFirstValue(ClaimTypes.Email);
                 bool isAllResidents = string.Equals(meeting.InvitationScope, "AllResidents", StringComparison.OrdinalIgnoreCase);
                 bool hasTenantProxy = await _context.BuildingDecisionVotes.AnyAsync(v =>
                     v.SystemMeetingId == meeting.Id && !v.IsDeleted && v.ParticipationType == "Vekil"
