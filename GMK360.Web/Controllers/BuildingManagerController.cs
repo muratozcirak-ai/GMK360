@@ -5733,7 +5733,7 @@ namespace GMK360.Web.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> SeedDemoResidentsForSite(int buildingId, bool includeAllSiteBlocks = true)
+        public async Task<IActionResult> SeedDemoResidentsForSite(int buildingId, bool includeAllSiteBlocks = true, int? selectedBuildingFilter = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
@@ -5842,7 +5842,9 @@ namespace GMK360.Web.Controllers
             await _context.SaveChangesAsync();
             int ownPct = (int)Math.Round(ownerOccupiedCount * 100.0 / emptyUnits.Count);
             TempData["SuccessMessage"] = $"⚡ {emptyUnits.Count} boş bölüm örnek verilerle dolduruldu: {ownerOccupiedCount} kendi oturan malik (~%{ownPct}), {tenantOccupiedCount} kiracılı (Hasan Karahan için 5 daire: 1 oturan + 4 kiracılı tanımlandı).";
-            return RedirectToAction(nameof(Sakinler), new { buildingId });
+            return selectedBuildingFilter.HasValue
+                ? RedirectToAction(nameof(Sakinler), new { buildingId = selectedBuildingFilter.Value })
+                : RedirectToAction(nameof(Sakinler));
         }
 
         private async Task<int?> ResolvePurchasingAgencyIdForBuildingAsync(Building building)
