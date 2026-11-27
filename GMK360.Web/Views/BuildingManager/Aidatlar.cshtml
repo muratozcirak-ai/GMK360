@@ -235,6 +235,9 @@
                                         <button type="button" class="btn btn-sm btn-outline-primary rounded-pill fw-semibold flex-grow-1" onclick="copyRecommendedToBaseDues()">
                                             <i class="bi bi-arrow-up-circle me-1"></i> Önerileni Baz Aidata Aktar
                                         </button>
+                                        <button type="button" class="btn btn-sm btn-warning text-dark rounded-pill fw-bold flex-grow-1" onclick="sendBudgetRecommendationToDecision(@activeBld.Id)">
+                                            <i class="bi bi-balance-scale me-1"></i> Öneriyi Karar Defterine Taşı
+                                        </button>
                                         <button type="submit" class="btn btn-sm btn-success rounded-pill fw-semibold flex-grow-1">
                                             <i class="bi bi-save me-1"></i> Yıllık Bütçe Kalemlerini Kaydet
                                         </button>
@@ -261,8 +264,8 @@
     <div class="card shadow-sm border-0 rounded-4 mb-4 bg-white overflow-hidden">
         <div class="card-header bg-dark text-white d-flex flex-wrap justify-content-between align-items-center gap-2 p-3">
             <div>
-                <h5 class="mb-0 fw-bold"><i class="bi bi-cash-stack me-2"></i>Aidat / Gider Borçları &amp; Tahakkuk Defteri</h5>
-                <small class="text-white-50">@livingUnits.Count aktif bağımsız bölüm • @fixedExpenses.Count tanımlı sabit bütçe kalemi</small>
+                <h5 class="mb-0 fw-bold text-white"><i class="bi bi-cash-stack text-warning me-2"></i>Aidat / Gider Borçları &amp; Tahakkuk Defteri</h5>
+                <small class="text-light opacity-75">@livingUnits.Count aktif bağımsız bölüm • @fixedExpenses.Count tanımlı sabit bütçe kalemi</small>
             </div>
             <div class="d-flex flex-wrap gap-2">
                 <form method="get" class="d-flex">
@@ -281,6 +284,9 @@
                         }
                     </select>
                 </form>
+                <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-3 fw-semibold" data-bs-toggle="modal" data-bs-target="#anonymousSummaryModal">
+                    <i class="bi bi-shield-lock me-1"></i> Anonim Kurul Özeti (İsimsiz)
+                </button>
                 <a href="/BuildingManager/Sakinler@(defaultBuildingId > 0 ? $"?buildingId={defaultBuildingId}" : "")" class="btn btn-sm btn-outline-light rounded-pill px-3">
                     <i class="bi bi-sliders me-1"></i> Daire / Ofis / Dükkan Katsayıları
                 </a>
@@ -292,9 +298,28 @@
                 </button>
             </div>
         </div>
+        <div class="bg-warning bg-opacity-10 border-bottom px-3 py-2 d-flex flex-wrap justify-content-between align-items-center gap-2 small">
+            <span class="text-dark">
+                <i class="bi bi-shield-lock-fill text-danger me-1"></i>
+                <strong>KVKK &amp; Yargıtay Deşifre Yasağı:</strong> Kişi/daire bazlı ödenmemiş borç listesi <u>yalnızca Yönetici, Aza ve Denetçi</u> ekranındadır. Sakin portallarında sadece kişinin kendi borcu görünür; pano/duyuruya borçlu ismi asılmaz.
+            </span>
+        </div>
+        <div class="bg-light border-bottom px-3 py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="d-flex flex-wrap gap-1" id="aidatQuickFilters">
+                <button type="button" class="btn btn-xs btn-dark rounded-pill px-3 fw-semibold active" onclick="setAidatFilter(this, 'all')">Tümü (@Model.Count())</button>
+                <button type="button" class="btn btn-xs btn-outline-danger rounded-pill px-3 fw-semibold" onclick="setAidatFilter(this, 'unpaid')">🔴 Ödenmemiş / Geciken (@Model.Count(d => !d.IsPaid))</button>
+                <button type="button" class="btn btn-xs btn-outline-success rounded-pill px-3 fw-semibold" onclick="setAidatFilter(this, 'paid')">✅ Ödenenler (@Model.Count(d => d.IsPaid))</button>
+                <button type="button" class="btn btn-xs btn-outline-warning text-dark rounded-pill px-3 fw-semibold" onclick="setAidatFilter(this, 'owner')">🏠 Malik Payı</button>
+                <button type="button" class="btn btn-xs btn-outline-primary rounded-pill px-3 fw-semibold" onclick="setAidatFilter(this, 'tenant')">🔑 Kiracı Payı</button>
+            </div>
+            <div class="input-group input-group-sm" style="width: 230px;">
+                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                <input type="text" id="aidatSearchInput" class="form-control" placeholder="Kapı no, ad, açıklama ara..." oninput="filterAidatRows()" />
+            </div>
+        </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
+                <table class="table table-hover align-middle mb-0" id="aidatDebtsTable">
                     <thead class="table-light small">
                         <tr>
                             <th class="ps-3">Tarih</th>
@@ -309,14 +334,20 @@
                     <tbody>
                         @if (!Model.Any())
                         {
-                            <tr><td colspan="7" class="text-center text-muted py-5">Henüz tahakkuk / borç kaydı bulunamadı. Yukarıdan <strong>Toplu Aidat Borçlandır</strong> ile dönem aidatı oluşturabilirsiniz.</td></tr>
+                            <tr><td colspan="7" class="text-center text-muted py-5">Henüz tahakkuk / borç kaydı bulunamadı. Yukarıdan <strong>Aylık Aidat Kes</strong> ile dönem aidatı oluşturabilirsiniz.</td></tr>
                         }
                         else
                         {
                             foreach (var debt in Model)
                             {
                                 bool isOwnerRole = string.Equals(debt.PayerRole, "Owner", StringComparison.OrdinalIgnoreCase);
-                                <tr>
+                                string targetPerson = isOwnerRole ? (debt.BuildingUnit?.OwnerName ?? "Malik") : (string.IsNullOrEmpty(debt.BuildingUnit?.TenantName) ? (debt.BuildingUnit?.OwnerName ?? "Sakin") : debt.BuildingUnit!.TenantName);
+                                string targetPhone = isOwnerRole ? (debt.BuildingUnit?.OwnerPhone ?? "") : (!string.IsNullOrWhiteSpace(debt.BuildingUnit?.TenantPhone) ? debt.BuildingUnit!.TenantPhone : (debt.BuildingUnit?.OwnerPhone ?? ""));
+                                string rowBlob = $"{debt.BuildingUnit?.Building?.Name} {debt.BuildingUnit?.DoorNumber} {debt.BuildingExpense?.Description} {targetPerson}".ToLowerInvariant();
+                                <tr class="aidat-row"
+                                    data-paid="@(debt.IsPaid ? "1" : "0")"
+                                    data-role="@(isOwnerRole ? "owner" : "tenant")"
+                                    data-search="@rowBlob">
                                     <td class="ps-3 small">@(debt.BuildingExpense?.Date.ToString("dd.MM.yyyy") ?? "-")</td>
                                     <td>
                                         <span class="badge bg-light text-dark border">@(debt.BuildingUnit?.Building?.Name ?? "-")</span>
@@ -357,15 +388,21 @@
                                     <td class="pe-3 text-end">
                                         @if (!debt.IsPaid)
                                         {
-                                            <form asp-action="MarkDebtAsPaid" asp-controller="BuildingManager" method="post" class="d-inline">
-                                                @Html.AntiForgeryToken()
-                                                <input type="hidden" name="debtId" value="@debt.Id" />
-                                                <input type="hidden" name="returnAction" value="Aidatlar" />
-                                                <input type="hidden" name="paidBy" value="@(isOwnerRole ? (debt.BuildingUnit?.OwnerName ?? "Malik") : (string.IsNullOrEmpty(debt.BuildingUnit?.TenantName) ? (debt.BuildingUnit?.OwnerName ?? "Sakin") : debt.BuildingUnit!.TenantName))" />
-                                                <button type="submit" class="btn btn-sm btn-outline-success rounded-pill px-3" title="Tahsil Edildi İşaretle">
-                                                    <i class="bi bi-check2-circle me-1"></i> Tahsil Et
+                                            <div class="d-flex flex-wrap justify-content-end gap-1">
+                                                <button type="button" class="btn btn-sm btn-outline-warning text-dark rounded-pill px-2 fw-semibold" title="Kişiye özel (deşifresiz) birebir ödeme hatırlatması"
+                                                        onclick="sendPrivateDebtReminder('@System.Web.HttpUtility.JavaScriptStringEncode(targetPhone)', '@System.Web.HttpUtility.JavaScriptStringEncode(targetPerson)', '@System.Web.HttpUtility.JavaScriptStringEncode(debt.BuildingUnit?.DoorNumber ?? "")', '@debt.Amount.ToString("N2")', '@System.Web.HttpUtility.JavaScriptStringEncode(debt.BuildingExpense?.Description ?? "Aidat")')">
+                                                    <i class="bi bi-whatsapp me-1"></i> Hatırlat
                                                 </button>
-                                            </form>
+                                                <form asp-action="MarkDebtAsPaid" asp-controller="BuildingManager" method="post" class="d-inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="debtId" value="@debt.Id" />
+                                                    <input type="hidden" name="returnAction" value="Aidatlar" />
+                                                    <input type="hidden" name="paidBy" value="@targetPerson" />
+                                                    <button type="submit" class="btn btn-sm btn-outline-success rounded-pill px-3" title="Tahsil Edildi İşaretle">
+                                                        <i class="bi bi-check2-circle me-1"></i> Tahsil Et
+                                                    </button>
+                                                </form>
+                                            </div>
                                         }
                                     </td>
                                 </tr>
@@ -380,6 +417,53 @@
 
 @if (buildings.Any())
 {
+    <!-- ANONİM GENEL KURUL MALİ ÖZETİ MODALI (KVKK UYUMLU - İSİMSİZ / DAİRESİZ) -->
+    <div class="modal fade" id="anonymousSummaryModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow">
+                <div class="modal-header bg-info bg-opacity-10 border-0">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-shield-lock text-primary me-2"></i>Anonim Mali Durum Özeti (KVKK Uyumlu)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4" id="anonSummaryPrintable">
+                    <div class="alert alert-light border small mb-3">
+                        <i class="bi bi-check-circle-fill text-success me-1"></i>
+                        Bu özet genel kurul veya pano bilgilendirmesi için hazırlanmıştır; <strong>hiçbir kat maliki/kiracı adı veya daire numarası içermez.</strong>
+                    </div>
+                    @{
+                        var grandTotalBilled = totalCollected + totalUnpaid;
+                        var ratePct = grandTotalBilled > 0m ? Math.Round((totalCollected / grandTotalBilled) * 100m, 1) : 0m;
+                        var unpaidCountAnon = Model.Where(d => !d.IsPaid).Select(d => d.BuildingUnitId).Distinct().Count();
+                    }
+                    <ul class="list-group list-group-flush small">
+                        <li class="list-group-item d-flex justify-content-between py-2">
+                            <span class="text-muted">Toplam Tahakkuk (Aidat + Demirbaş):</span>
+                            <strong>@grandTotalBilled.ToString("N2") ₺</strong>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between py-2">
+                            <span class="text-success fw-semibold">Kasaya Tahsil Edilen:</span>
+                            <strong class="text-success">@totalCollected.ToString("N2") ₺ (%@ratePct)</strong>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between py-2">
+                            <span class="text-danger fw-semibold">Toplam Tahsil Edilecek Alacak:</span>
+                            <strong class="text-danger">@totalUnpaid.ToString("N2") ₺</strong>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between py-2">
+                            <span class="text-muted">Ödeme Bekleyen Bölüm Adedi (Anonim):</span>
+                            <strong>@unpaidCountAnon / @livingUnits.Count Bölüm</strong>
+                        </li>
+                    </ul>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Kapat</button>
+                    <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold" onclick="window.print()">
+                        <i class="bi bi-printer me-1"></i> İsimsiz Özeti Yazdır
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- EK DEMİRBAŞ / ÖZEL GİDER PAYLAŞTIRMA MODALI (Çatı, Mantolama vb.) -->
     <div class="modal fade" id="extraExpenseSplitModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -591,6 +675,51 @@
             target.focus();
             target.classList.add('bg-warning-subtle');
             setTimeout(() => target.classList.remove('bg-warning-subtle'), 1800);
+        }
+
+        function sendBudgetRecommendationToDecision(bId) {
+            recalcAnnualBudget();
+            const rec = parseFloat(document.getElementById('wizRecBaseHidden').value || '0') || 0;
+            const rounded = rec > 0 ? Math.ceil(rec) : '';
+            window.location.href = `/BuildingManager/Oylamalar?buildingId=${bId}&preset=DuesUpdate&proposedDues=${encodeURIComponent(rounded)}`;
+        }
+
+        let _activeAidatFilter = 'all';
+        function setAidatFilter(btn, key) {
+            _activeAidatFilter = key || 'all';
+            document.querySelectorAll('#aidatQuickFilters button').forEach(b => {
+                const act = b === btn;
+                b.classList.toggle('btn-dark', act);
+                b.classList.toggle('text-white', act);
+                if (!act) b.classList.remove('btn-dark');
+            });
+            filterAidatRows();
+        }
+
+        function filterAidatRows() {
+            const q = (document.getElementById('aidatSearchInput')?.value || '').trim().toLowerCase();
+            document.querySelectorAll('#aidatDebtsTable tbody tr.aidat-row').forEach(r => {
+                let ok = true;
+                if (_activeAidatFilter === 'unpaid') ok = r.dataset.paid === '0';
+                else if (_activeAidatFilter === 'paid') ok = r.dataset.paid === '1';
+                else if (_activeAidatFilter === 'owner') ok = r.dataset.role === 'owner';
+                else if (_activeAidatFilter === 'tenant') ok = r.dataset.role === 'tenant';
+                const s = r.dataset.search || '';
+                r.style.display = (ok && (!q || s.includes(q))) ? '' : 'none';
+            });
+        }
+
+        function sendPrivateDebtReminder(phone, name, doorNo, amount, desc) {
+            const msg = `Sayın ${name}, ${doorNo} nolu bölüm için "${desc}" kaleminde ${amount} TL ödenmemiş bakiyeniz bulunmaktadır. KMK Md. 20 gereği gecikme tazminatı doğmaması için bireysel portalınızdan veya site banka hesabına ödeme yapabilirsiniz. (Bu bildirim KVKK gereği yalnızca size özel iletilmiştir.)`;
+            const digits = (phone || '').replace(/\D/g, '');
+            if (digits.length >= 10) {
+                const intl = digits.length === 10 ? '90' + digits : (digits.startsWith('0') ? '9' + digits : digits);
+                window.open('https://wa.me/' + intl + '?text=' + encodeURIComponent(msg), '_blank');
+            } else if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(msg).then(() => alert('Kişiye özel ödeme hatırlatma metni panoya kopyalandı (telefon eksik olduğu için WhatsApp açılmadı):\n\n' + msg));
+            } else {
+                prompt('Hatırlatma metnini kopyalayın:', msg);
+            }
         }
 
         document.addEventListener('DOMContentLoaded', recalcAnnualBudget);
