@@ -318,6 +318,7 @@ public DbSet<GMK360.Core.Entities.B2B.B2BQuoteInviteItem> B2BQuoteInviteItems { 
         public DbSet<SystemMeeting> SystemMeetings { get; set; }
         public DbSet<SystemMeetingDecision> SystemMeetingDecisions { get; set; }
         public DbSet<BuildingDecisionVote> BuildingDecisionVotes { get; set; }
+        public DbSet<BoardDecisionVote> BoardDecisionVotes { get; set; }
         public DbSet<BuildingDecisionAttachment> BuildingDecisionAttachments { get; set; }
         public DbSet<MeetingSurvey> MeetingSurveys { get; set; }
         public DbSet<SurveyOption> SurveyOptions { get; set; }

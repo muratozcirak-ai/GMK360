@@ -219,6 +219,7 @@ namespace GMK360.Web.Controllers
                 ? await _context.SystemMeetings
                     .Include(m => m.Decisions)
                     .Include(m => m.Votes)
+                    .Include(m => m.BoardVotes)
                     .Include(m => m.Attachments)
                     .Where(m => m.ContextType == "Building" && !m.IsDeleted
                         && m.WorkflowStage != "ArchivedNegative"
@@ -303,7 +304,30 @@ namespace GMK360.Web.Controllers
                 .Take(10)
                 .ToListAsync();
 
+            var visibleBoardMembers = (targetBuildingId > 0 || rootBuildingId > 0)
+                ? await _context.BuildingManagers
+                    .AsNoTracking()
+                    .Include(m => m.User)
+                    .Where(m => m.IsActive && m.IsVisibleToResidents
+                        && (m.BuildingId == targetBuildingId || m.BuildingId == rootBuildingId))
+                    .OrderBy(m => m.Role)
+                    .ThenBy(m => m.HierarchyOrder)
+                    .ToListAsync()
+                : new List<BuildingManager>();
+
+            var allActiveBoardRoster = (targetBuildingId > 0 || rootBuildingId > 0)
+                ? await _context.BuildingManagers
+                    .AsNoTracking()
+                    .Include(m => m.User)
+                    .Where(m => m.IsActive && (m.BuildingId == targetBuildingId || m.BuildingId == rootBuildingId))
+                    .OrderBy(m => m.Role)
+                    .ThenBy(m => m.HierarchyOrder)
+                    .ToListAsync()
+                : new List<BuildingManager>();
+
             ViewBag.ActiveRole = activeRole;
+            ViewBag.VisibleBoardMembers = visibleBoardMembers;
+            ViewBag.AllActiveBoardRoster = allActiveBoardRoster;
             ViewBag.CanSwitchPreview = isManager;
             ViewBag.UnreadNotifications = unreadNotifications;
             ViewBag.ManagedBuildings = managedBuildings;
@@ -771,6 +795,74 @@ namespace GMK360.Web.Controllers
 
             await _context.SaveChangesAsync();
             TempData["SuccessMessage"] = "Görüşünüz / belgeniz toplantı dosyasına eklendi.";
+            return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SubmitRemoteBoardVote(
+            int buildingId,
+            int meetingId,
+            int buildingManagerId,
+            string voteChoice,
+            string? dissentNote = null,
+            string? previewRole = null)
+        {
+            var userId = GetUserId();
+            if (string.IsNullOrEmpty(userId)) return Challenge();
+
+            var meeting = await _context.SystemMeetings.FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && !m.IsDeleted);
+            var member = await _context.BuildingManagers
+                .Include(m => m.User)
+                .FirstOrDefaultAsync(m => m.Id == buildingManagerId && m.IsActive);
+            if (meeting == null || member == null) return NotFound();
+
+            if (!IsManagerOrAdmin() && member.UserId != userId)
+            {
+                return Forbid();
+            }
+
+            if (!member.CanVoteBoardDecisions())
+            {
+                TempData["ErrorMessage"] = "Görev süresi dolan, yedek veya denetçi statüsündeki kurul üyeleri oy kullanamaz (Sadece Seviye 1-3 aktif asil üyeler).";
+                return RedirectToAction(nameof(Index), new { previewRole, buildingId });
+            }
+
+            var cleanChoice = string.Equals(voteChoice, "Ret", StringComparison.OrdinalIgnoreCase) ? "Ret" : "Kabul";
+            var vote = await _context.BoardDecisionVotes
+                .FirstOrDefaultAsync(v => v.SystemMeetingId == meetingId && v.BuildingManagerId == member.Id && !v.IsDeleted);
+            string voterDisplay = !string.IsNullOrWhiteSpace(member.User?.FirstName)
+                ? $"{member.User.FirstName} {member.User.LastName}".Trim()
+                : (member.User?.DisplayName ?? member.User?.Email ?? "Kurul Üyesi");
+
+            if (vote == null)
+            {
+                _context.BoardDecisionVotes.Add(new BoardDecisionVote
+                {
+                    SystemMeetingId = meetingId,
+                    BuildingManagerId = member.Id,
+                    VoterUserId = userId,
+                    VoterName = voterDisplay,
+                    RoleTitle = BuildingManager.GetRoleLabel(member.Role),
+                    HierarchyLevel = BuildingManager.GetHierarchyLevel(member.Role),
+                    VoteChoice = cleanChoice,
+                    DissentNote = string.IsNullOrWhiteSpace(dissentNote) ? null : dissentNote.Trim(),
+                    ApprovalTraceCode = $"PIN-{Guid.NewGuid().ToString("N").Substring(0, 6).ToUpperInvariant()}",
+                    VotedAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                vote.VoteChoice = cleanChoice;
+                vote.DissentNote = string.IsNullOrWhiteSpace(dissentNote) ? null : dissentNote.Trim();
+                vote.VotedAt = DateTime.UtcNow;
+                vote.ApprovalTraceCode ??= $"PIN-{Guid.NewGuid().ToString("N").Substring(0, 6).ToUpperInvariant()}";
+                vote.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"Kurul oyunuz ({cleanChoice}) dijital imza kodu ile karar defterine işlendi.";
             return RedirectToAction(nameof(Index), new { previewRole, buildingId });
         }
     }

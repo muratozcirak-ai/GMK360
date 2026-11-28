@@ -126,6 +126,15 @@ namespace GMK360.Core.Entities
         public string? EmergencyContactsNote { get; set; }
         [System.ComponentModel.DataAnnotations.MaxLength(500)]
         public string? EmergencyMapUrl { get; set; }
+
+        // Noter Onaylı İmza Sirküleri / Yetki Belgesi PDF / Görsel Yolu
+        [System.ComponentModel.DataAnnotations.MaxLength(500)]
+        public string? SignatureCircularUrl { get; set; }
+
+        // KMK Md. 34/41 Kurul Üye Hedefleri (Null ise bağımsız bölüm sayısından otomatik hesaplanır; dolu ise Yönetim Planı özel sayısı geçerlidir)
+        public int? BoardTargetAsilCount { get; set; }
+        public int? BoardTargetYedekCount { get; set; }
+        public int? BoardTargetDenetciCount { get; set; }
     }
 }
 

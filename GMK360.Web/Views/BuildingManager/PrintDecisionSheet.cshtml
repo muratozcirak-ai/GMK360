@@ -33,9 +33,22 @@
         .Select(m => !string.IsNullOrWhiteSpace(m.User?.FirstName) ? $"{m.User.FirstName} {m.User.LastName}".Trim() : (m.User?.DisplayName ?? m.User?.Email))
         .FirstOrDefault() ?? "-";
     string defaultAzas = string.Join(", ", boardRoster
-        .Where(m => m.Role == GMK360.Core.Entities.BuildingManagerRole.BoardMember || m.Role == GMK360.Core.Entities.BuildingManagerRole.Auditor)
+        .Where(m => m.Role == GMK360.Core.Entities.BuildingManagerRole.ViceChair
+            || m.Role == GMK360.Core.Entities.BuildingManagerRole.BoardMember
+            || m.Role == GMK360.Core.Entities.BuildingManagerRole.Auditor)
         .Select(m => !string.IsNullOrWhiteSpace(m.User?.FirstName) ? $"{m.User.FirstName} {m.User.LastName}".Trim() : (m.User?.DisplayName ?? m.User?.Email))
         .Where(n => !string.IsNullOrWhiteSpace(n)));
+    bool isBoardMajority = string.Equals(Model.QuorumType, "BoardMajority", StringComparison.OrdinalIgnoreCase);
+    var boardVotesByMgr = (Model.BoardVotes ?? new List<GMK360.Core.Entities.BoardDecisionVote>())
+        .Where(v => !v.IsDeleted)
+        .GroupBy(v => v.BuildingManagerId)
+        .ToDictionary(g => g.Key, g => g.First());
+    var votingBoardMembers = boardRoster
+        .Where(m => m.CanVoteBoardDecisions())
+        .OrderBy(m => GMK360.Core.Entities.BuildingManager.GetHierarchyLevel(m.Role))
+        .ThenBy(m => m.HierarchyOrder)
+        .ToList();
+    string taxNoText = !string.IsNullOrWhiteSpace(building?.TaxNumber) ? building!.TaxNumber! : "Girilmemiş";
     string chairText = !string.IsNullOrWhiteSpace(Model.ChairpersonName) ? Model.ChairpersonName! : defaultChair;
     string azasText = !string.IsNullOrWhiteSpace(Model.BoardMembersSummary) ? Model.BoardMembersSummary! : (string.IsNullOrWhiteSpace(defaultAzas) ? "-" : defaultAzas);
     int displayPageNo = Model.BookPageNumber ?? Model.Id;
@@ -211,7 +224,7 @@
         <div class="page-no-corner">SAYFA NO: @displayPageNo</div>
         <div class="ledger-top-title">
             <h4>@propertyHeading — KARAR DEFTERİ</h4>
-            <small>634 Sayılı Kat Mülkiyeti Kanunu Md. 32 Uyarınca Resmi Karar Kaydı • @addressLine</small>
+            <small>634 Sayılı Kat Mülkiyeti Kanunu Md. 32 Uyarınca Resmi Karar Kaydı • Vergi / Potansiyel Vergi No: <strong>@taxNoText</strong> • @addressLine</small>
         </div>
 
         <!-- RESMİ NOTER DEFTERİ ÜST CETVELİ -->
@@ -253,9 +266,16 @@
             <div><strong>Başkanın Adı ve Soyadı :</strong> @chairText</div>
             <div><strong>Azaların Adı ve Soyadı :</strong> @azasText</div>
             <div style="margin-top: 3px; font-size: 0.9em; color: #334155;">
-                <strong>Katılım &amp; Çoğunluk :</strong> @quorum.ParticipatedUnits / @quorum.TotalUnits Bağımsız Bölüm Katıldı •
-                <strong>@quorum.ApprovedUnits Kabul</strong> / @quorum.RejectedUnits Ret (%@quorum.ApprovalUnitPercent Adet, %@quorum.ApprovalSharePercent Arsa Payı) —
-                <strong>@(quorum.IsQuorumMet ? "YASAL ÇOĞUNLUK SAĞLANDI" : "OYLAMA / İMZA AŞAMASINDA")</strong>
+                @if (isBoardMajority)
+                {
+                    <strong>Kurul Yeter Sayısı (Seviye 1-3 Asil) :</strong> @($"{quorum.ApprovedUnits} / {quorum.TotalUnits} Asil Onayı (Salt Çoğunluk Hedefi: {quorum.RequiredUnitCount})") <span>•</span>
+                }
+                else
+                {
+                    <strong>Katılım &amp; Çoğunluk :</strong> @($"{quorum.ParticipatedUnits} / {quorum.TotalUnits} Bağımsız Bölüm Katıldı •")
+                    <strong>@quorum.ApprovedUnits Kabul</strong> <span>/ @quorum.RejectedUnits Ret (%@quorum.ApprovalUnitPercent Adet, %@quorum.ApprovalSharePercent Arsa Payı) —</span>
+                }
+                <strong>@(quorum.IsQuorumMet ? "YETER SAYI SAĞLANDI / YAZDIRILABİLİR" : $"ONAY BEKLİYOR ({quorum.ApprovedUnits}/{quorum.RequiredUnitCount})")</strong>
             </div>
         </div>
 
@@ -292,6 +312,63 @@
 
         <!-- KATILANLAR & HAZİRUN İMZA CETVELİ -->
         <table class="hazirun-table">
+            @if (isBoardMajority)
+            {
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">Sıra</th>
+                        <th style="width: 24%;">Kurul Üyesi Adı Soyadı</th>
+                        <th style="width: 20%;">Görevi / Unvanı</th>
+                        <th style="width: 20%;">Oy / Karşı Oy Şerhi</th>
+                        <th style="width: 15%;">PIN Onay Zamanı</th>
+                        <th style="width: 16%;">Islak İmza</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{ int bRow = 1; }
+                    @foreach (var bm in votingBoardMembers)
+                    {
+                        boardVotesByMgr.TryGetValue(bm.Id, out var bVote);
+                        string bmName = !string.IsNullOrWhiteSpace(bm.User?.FirstName) ? $"{bm.User.FirstName} {bm.User.LastName}".Trim() : (bm.User?.DisplayName ?? bm.User?.Email ?? "Üye");
+                        <tr>
+                            <td style="text-align: center;">@(bRow++)</td>
+                            <td><strong>@bmName</strong></td>
+                            <td style="text-align: center;">@GMK360.Core.Entities.BuildingManager.GetRoleLabel(bm.Role)</td>
+                            <td style="text-align: center;">
+                                @if (bVote != null && bVote.VoteChoice == "Kabul")
+                                {
+                                    <strong>KABUL</strong>
+                                }
+                                else if (bVote != null && bVote.VoteChoice == "Ret")
+                                {
+                                    <strong>RET (Muhalif)</strong>
+                                    @if (!string.IsNullOrWhiteSpace(bVote.DissentNote))
+                                    {
+                                        <div style="font-size: 0.8em;">Şerh: @bVote.DissentNote</div>
+                                    }
+                                }
+                                else
+                                {
+                                    <span>[ ] Kabul [ ] Ret</span>
+                                }
+                            </td>
+                            <td style="text-align: center; font-size: 0.85em;">
+                                @if (bVote != null && bVote.VotedAt.HasValue && bVote.VoteChoice != "Pending")
+                                {
+                                    <span>@(bVote.ApprovalTraceCode ?? "PIN")<br />@bVote.VotedAt.Value.ToLocalTime().ToString("dd.MM.yy HH:mm")</span>
+                                }
+                                else
+                                {
+                                    <span>-</span>
+                                }
+                            </td>
+                            <td class="sign-area"></td>
+                        </tr>
+                    }
+                </tbody>
+            }
+            else
+            {
             <thead>
                 <tr>
                     <th style="width: 5%;">No</th>
@@ -361,7 +438,13 @@
                     </tr>
                 }
             </tbody>
+            }
         </table>
+
+        <div style="margin-top: 8px; padding: 5px 8px; border: 1px dashed #64748b; background: #f8fafc; font-size: @(isA5 ? "8px" : "9.5px"); display: flex; justify-content: space-between; align-items: center;">
+            <span><strong>Noter Defteri Yapıştırma &amp; Taşırma Kılavuzu:</strong> Çıktı noter tasdikli karar defteri sayfasına yapıştırıldıktan sonra yönetim kaşesi/imzasının <strong>yarısı bu çıktıya, yarısı defterin kendi sayfasına taşırılarak</strong> basılmalıdır.</span>
+            <span style="border: 1px dashed #000; padding: 3px 8px; white-space: nowrap; font-weight: bold;">KAŞE / MÜHÜR TAŞIRMA ALANI</span>
+        </div>
 
         <div class="signature-box">
             <div class="sign-col">

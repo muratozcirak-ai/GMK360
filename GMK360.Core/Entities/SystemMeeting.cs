@@ -82,6 +82,9 @@ namespace GMK360.Core.Entities
         // Uzaktan ön onay oyları ve vekalet kayıtları
         public virtual ICollection<BuildingDecisionVote> Votes { get; set; } = new List<BuildingDecisionVote>();
 
+        // Yönetim kurulu asil üye (Seviye 1-3) PIN oyları
+        public virtual ICollection<BoardDecisionVote> BoardVotes { get; set; } = new List<BoardDecisionVote>();
+
         // Uzaktan eklenen teklif, keşif belgesi ve görüşler
         public virtual ICollection<BuildingDecisionAttachment> Attachments { get; set; } = new List<BuildingDecisionAttachment>();
         

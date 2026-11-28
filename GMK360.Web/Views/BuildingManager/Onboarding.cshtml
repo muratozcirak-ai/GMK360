@@ -352,6 +352,19 @@
                     </div>
                 </div>
 
+                <!-- Otomatik KMK Yönetim Kurulu İskeleti Önizlemesi (Sihirbaza Veri Girilince Sıralı Kadro) -->
+                <div class="p-3 rounded-4 border border-primary border-opacity-25 bg-primary bg-opacity-10 mb-4">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                        <div>
+                            <div class="small fw-bold text-primary text-uppercase"><i class="bi bi-diagram-3-fill me-1"></i>Otomatik Yönetim Kurulu İskeleti (KMK Md. 34 / 41)</div>
+                            <div class="fw-bold text-dark" id="sumBoardTierLabel">Bağımsız bölüm sayısına göre kurul önerisi hazırlanıyor...</div>
+                        </div>
+                        <span class="badge bg-primary text-white rounded-pill px-3 py-2" id="sumBoardQuorumBadge">Salt Çoğunluk: -</span>
+                    </div>
+                    <div class="small text-muted mb-2" id="sumBoardRuleNote"></div>
+                    <div class="row g-2 small" id="sumBoardSlotsPreview"></div>
+                </div>
+
                 <!-- Zorunlu KMK & KVKK Yönetici Yetki Taahhütnamesi -->
                 <div class="p-3 rounded-4 border bg-light mb-3">
                     <div class="form-check">
@@ -1267,6 +1280,8 @@
             document.getElementById('sumPricingPrice').innerText = tierName + ' • ' + price.toLocaleString('tr-TR') + ' TL / yıl';
             document.getElementById('sumPricingDesc').innerText = desc;
 
+            renderBoardSkeletonPreview(totalLivingUnits);
+
             var hasDecisionDoc = !!document.querySelector('#decisionDocPreview [data-doc-id]');
             var authBox = document.getElementById('sumAuthorityBox');
             if (hasDecisionDoc) {
@@ -1280,6 +1295,59 @@
             }
 
             goToStep(3);
+        }
+
+        function renderBoardSkeletonPreview(unitCount) {
+            var asil = 1, yedek = 0, denetci = 0, ruleText = '', tierText = '';
+            if (unitCount <= 7) {
+                asil = 1; yedek = 0; denetci = 0;
+                tierText = unitCount + ' Bölüm • 1 Yönetici (İsteğe Bağlı) • 0-1 Yedek • 0-1 Denetçi';
+                ruleText = '1-7 dairede yönetici seçimi isteğe bağlıdır. Kurucu yöneticiniz Seviye 1 olarak otomatik atanır; yönetim kurulundan özel sayı tanımlayabilirsiniz.';
+            } else if (unitCount <= 24) {
+                asil = 3; yedek = 1; denetci = 1;
+                tierText = unitCount + ' Bölüm • 3 Asil (1 Başkan + 2 Aza) • 1 Yedek • 1 Denetçi';
+                ruleText = '8-24 dairede KMK Md. 34 gereği yönetim seçimi zorunludur. Boş koltuklar "Atama Bekliyor" olarak sıralanır.';
+            } else if (unitCount <= 79) {
+                asil = 3; yedek = 2; denetci = 1;
+                tierText = unitCount + ' Bölüm • 3 Asil (1 Başkan + 2 Aza) • 2 Yedek • 1 Denetçi';
+                ruleText = '25-79 dairede 3 kişilik asil yönetim kurulu, yedekler ve kat maliki denetçi kadrosu otomatik hazırlanır.';
+            } else if (unitCount <= 199) {
+                asil = 5; yedek = 3; denetci = 3;
+                tierText = unitCount + ' Bölüm • 5 Asil (Başkan + Bşk.Yrd. + 3 Aza) • 3 Yedek • 3 Denetçi';
+                ruleText = '80-199 daire için 5 kişilik genişletilmiş kurul ve 3 kişilik denetim kurulu (tapu sahibi zorunlu) önerilir.';
+            } else {
+                asil = 7; yedek = 5; denetci = 3;
+                tierText = unitCount + ' Bölüm • 5/7 Asil (Blok Temsilcili) • 5 Yedek • 3 Denetçi';
+                ruleText = '200+ toplu yapı için tek sayılı blok temsilcili kurul ve 3 kişilik denetim kurulu önerilir; Yönetim Planına göre sayıyı sonradan özelleştirebilirsiniz.';
+            }
+
+            var quorumNeed = Math.floor(asil / 2) + 1;
+            var tierEl = document.getElementById('sumBoardTierLabel');
+            var noteEl = document.getElementById('sumBoardRuleNote');
+            var qEl = document.getElementById('sumBoardQuorumBadge');
+            var grid = document.getElementById('sumBoardSlotsPreview');
+            if (tierEl) tierEl.innerText = tierText;
+            if (noteEl) noteEl.innerText = ruleText;
+            if (qEl) qEl.innerText = 'Salt Çoğunluk Kilidi: ' + quorumNeed + '/' + asil + ' Asil Onayı';
+            if (!grid) return;
+
+            var slotsHtml = '';
+            slotsHtml += '<div class="col-md-4"><div class="bg-white rounded-3 p-2 border border-success"><span class="badge bg-success mb-1">Seviye 1 • Dolu</span><div class="fw-bold text-dark">Başkan / Yönetici</div><div class="text-muted">Kurucu hesabınız otomatik atanır (1 Yıl)</div></div></div>';
+            var remAsil = asil - 1;
+            if (asil >= 5) {
+                slotsHtml += '<div class="col-md-4"><div class="bg-white rounded-3 p-2 border border-warning"><span class="badge bg-warning text-dark mb-1">Seviye 2 • Atama Bekliyor</span><div class="fw-bold text-dark">Başkan Yrd. / Muhasip</div><div class="text-muted">Müşterek imza yetkili koltuk</div></div></div>';
+                remAsil--;
+            }
+            for (var i = 1; i <= remAsil; i++) {
+                slotsHtml += '<div class="col-md-4"><div class="bg-white rounded-3 p-2 border border-secondary border-opacity-50"><span class="badge bg-secondary-subtle text-dark mb-1">Seviye 3 • Atama Bekliyor</span><div class="fw-bold text-dark">Asil Üye (Aza ' + i + ')</div><div class="text-muted">Karar oylaması (PIN) yetkili</div></div></div>';
+            }
+            for (var r = 1; r <= yedek; r++) {
+                slotsHtml += '<div class="col-md-4"><div class="bg-white rounded-3 p-2 border border-light"><span class="badge bg-light text-muted border mb-1">Seviye 4 • Atama Bekliyor</span><div class="fw-bold text-dark">Yedek Üye ' + r + '</div><div class="text-muted">Asil boşalınca sıradan yükselir</div></div></div>';
+            }
+            for (var d = 1; d <= denetci; d++) {
+                slotsHtml += '<div class="col-md-4"><div class="bg-white rounded-3 p-2 border border-info border-opacity-50"><span class="badge bg-info-subtle text-info-emphasis mb-1">Seviye 5 • Atama Bekliyor</span><div class="fw-bold text-dark">Denetçi ' + d + '</div><div class="text-muted">KMK Md. 41 • Malik şart</div></div></div>';
+            }
+            grid.innerHTML = slotsHtml;
         }
 
         async function submitFacilityStep2() {

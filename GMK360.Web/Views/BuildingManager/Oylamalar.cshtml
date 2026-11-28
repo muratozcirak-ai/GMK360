@@ -16,6 +16,9 @@
     var presetProposedDues = Context.Request.Query["proposedDues"].ToString();
     var allSiteUnits = ViewBag.AllSiteUnits as List<GMK360.Core.Entities.BuildingUnit> ?? new List<GMK360.Core.Entities.BuildingUnit>();
     var openComplaints = ViewBag.OpenComplaints as List<GMK360.Core.Entities.SupportTicket> ?? new List<GMK360.Core.Entities.SupportTicket>();
+    var boardRoster = ViewBag.BoardRoster as List<GMK360.Core.Entities.BuildingManager> ?? new List<GMK360.Core.Entities.BuildingManager>();
+    var boardPlan = ViewBag.BoardPlan as GMK360.Web.Helpers.KmkBoardPlan ?? new GMK360.Web.Helpers.KmkBoardPlan();
+    var scansByMeeting = ViewBag.ScansByMeeting as Dictionary<int, List<GMK360.Core.Entities.DocumentArchive>> ?? new Dictionary<int, List<GMK360.Core.Entities.DocumentArchive>>();
     string defaultChair = ViewBag.DefaultChairpersonName as string ?? "";
     string defaultAzas = ViewBag.DefaultBoardMembersSummary as string ?? "";
 
@@ -301,7 +304,8 @@
                                         <div class="col-md-6">
                                             <small class="text-muted d-block" style="font-size:.7rem;">Konu Türü</small>
                                             <select name="decisionCategory" id="newDecCategorySelect" class="form-select form-select-sm fw-semibold" onchange="onDecisionCategoryChanged()">
-                                                <option value="General">📝 Genel Yönetim Kararı (KMK Md. 30)</option>
+                                                <option value="BoardDecision">🏛️ Yönetim Kurulu Kararı (Seviye 1-3 Asil PIN • Salt Çoğunluk)</option>
+                                                <option value="General" selected>📝 Genel Yönetim / Kurul Kararı (KMK Md. 30)</option>
                                                 <option value="DuesUpdate">💰 Aidat &amp; Bütçe Belirleme (KMK Md. 37)</option>
                                                 <option value="AppointManager">🧑‍💼 Yönetici Seçimi (KMK Md. 34)</option>
                                                 <option value="AppointBoardMember">🏛️ Aza / Denetçi Seçimi (KMK Md. 41)</option>
@@ -535,8 +539,14 @@
             string scopeDisplayName = (m.IsSiteWide && meetingBld?.HousingComplex != null)
                 ? $"{meetingBld.HousingComplex.Name} (Site Geneli)"
                 : bName;
-            var quorum = GMK360.Web.Helpers.KmkQuorumHelper.Compute(bUnits, m.Votes, m.QuorumType);
+            var quorum = string.Equals(m.QuorumType, "BoardMajority", StringComparison.OrdinalIgnoreCase)
+                ? GMK360.Web.Helpers.KmkQuorumHelper.ComputeBoardMajority(boardRoster, m.BoardVotes)
+                : GMK360.Web.Helpers.KmkQuorumHelper.Compute(bUnits, m.Votes, m.QuorumType);
+            bool isBoardDecision = string.Equals(m.QuorumType, "BoardMajority", StringComparison.OrdinalIgnoreCase);
+            bool isPrintableReady = m.IsConcluded || quorum.IsQuorumMet;
+            var mScans = scansByMeeting.TryGetValue(m.Id, out var scList) ? scList : new List<GMK360.Core.Entities.DocumentArchive>();
             var mVotes = (m.Votes ?? new List<GMK360.Core.Entities.BuildingDecisionVote>()).Where(v => !v.IsDeleted).ToDictionary(v => v.BuildingUnitId, v => v);
+            var mBoardVotes = (m.BoardVotes ?? new List<GMK360.Core.Entities.BoardDecisionVote>()).Where(v => !v.IsDeleted).GroupBy(v => v.BuildingManagerId).ToDictionary(g => g.Key, g => g.First());
             string chairToShow = !string.IsNullOrWhiteSpace(m.ChairpersonName) ? m.ChairpersonName! : (string.IsNullOrWhiteSpace(defaultChair) ? "-" : defaultChair);
             string azaToShow = !string.IsNullOrWhiteSpace(m.BoardMembersSummary) ? m.BoardMembersSummary! : (string.IsNullOrWhiteSpace(defaultAzas) ? "-" : defaultAzas);
 
@@ -546,9 +556,14 @@
                     <div class="d-flex flex-wrap align-items-center gap-1">
                         <span class="badge bg-primary rounded-pill">Sayfa #@(m.BookPageNumber ?? m.Id)</span>
                         <span class="badge bg-dark rounded-pill">Karar #@(m.DecisionNumber ?? m.Id.ToString("D2"))</span>
-                        <span class="badge @(m.IsConcluded ? "bg-success" : "bg-warning text-dark") rounded-pill">
-                            @(m.IsConcluded ? "✅ Kesinleşen Karar" : "🗳️ Sayfa Üzerinde Oylama Açık")
-                        </span>
+                        @if (isPrintableReady)
+                        {
+                            <span class="badge bg-success rounded-pill">✅ Kesinleşti / Yazdırılabilir (@quorum.ApprovedUnits/@quorum.RequiredUnitCount)</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning text-dark rounded-pill">⏳ Onay Bekliyor (@quorum.ApprovedUnits/@quorum.RequiredUnitCount)</span>
+                        }
                         <span class="badge bg-light text-dark border rounded-pill">@scopeDisplayName</span>
                     </div>
                     <div class="d-flex flex-wrap gap-1">
@@ -558,17 +573,29 @@
                                 @Html.AntiForgeryToken()
                                 <input type="hidden" name="meetingId" value="@m.Id" />
                                 <input type="hidden" name="buildingId" value="@m.ContextId" />
-                                <button type="submit" class="btn btn-xs btn-outline-primary rounded-pill px-3 fw-semibold" title="Kat maliklerine oylama çağrısı gönder">
+                                <button type="submit" class="btn btn-xs btn-outline-primary rounded-pill px-3 fw-semibold" title="Kat maliklerine / kurula oylama çağrısı gönder">
                                     <i class="bi bi-envelope-paper me-1"></i> Çağrı Gönder
                                 </button>
                             </form>
                         }
-                        <a href="/BuildingManager/PrintDecisionSheet?meetingId=@m.Id&format=a4" target="_blank" class="btn btn-xs btn-outline-dark rounded-pill px-3 fw-semibold">
-                            <i class="bi bi-printer me-1"></i> A4 Noter Çıktısı
-                        </a>
-                        <a href="/BuildingManager/PrintDecisionSheet?meetingId=@m.Id&format=a5" target="_blank" class="btn btn-xs btn-outline-secondary rounded-pill px-3 fw-semibold">
-                            <i class="bi bi-scissors me-1"></i> A5 Yapıştırma
-                        </a>
+                        @if (isPrintableReady)
+                        {
+                            <a href="/BuildingManager/PrintDecisionSheet?meetingId=@m.Id&format=a4" target="_blank" class="btn btn-xs btn-success rounded-pill px-3 fw-bold">
+                                <i class="bi bi-printer me-1"></i> A4 Noter Çıktısı (Yazdırılabilir)
+                            </a>
+                            <a href="/BuildingManager/PrintDecisionSheet?meetingId=@m.Id&format=a5" target="_blank" class="btn btn-xs btn-outline-dark rounded-pill px-3 fw-semibold">
+                                <i class="bi bi-scissors me-1"></i> A5 Yapıştırma
+                            </a>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary-subtle text-secondary border rounded-pill py-1 px-3 align-self-center" title="Salt çoğunluk sağlanmadan resmi çıktı kilidi açılmaz">
+                                <i class="bi bi-lock-fill me-1"></i>Yazdırma Kilitli (@quorum.ApprovedUnits/@quorum.RequiredUnitCount)
+                            </span>
+                            <a href="/BuildingManager/PrintDecisionSheet?meetingId=@m.Id&format=a4" target="_blank" class="btn btn-xs btn-outline-secondary rounded-pill px-2" title="Önizleme taslağı">
+                                Taslak Önizle
+                            </a>
+                        }
                     </div>
                 </div>
 
@@ -638,7 +665,10 @@
                             <input type="hidden" name="returnTo" value="Oylamalar" />
                             <div class="input-group input-group-sm">
                                 <input type="text" name="decisionText" class="form-control" required placeholder="Alınan nihai kararı deftere işleyip kapatın..." />
-                                <button type="submit" class="btn btn-success fw-bold px-3">Kararı Deftere İşle &amp; Kapat</button>
+                                <button type="submit" class="btn @(quorum.IsQuorumMet ? "btn-success" : "btn-secondary") fw-bold px-3" @(quorum.IsQuorumMet ? "" : "disabled")
+                                        title="@(quorum.IsQuorumMet ? "Kararı kesinleştir" : $"Onay Bekliyor ({quorum.ApprovedUnits}/{quorum.RequiredUnitCount}): Çoğunluk sağlanmadan kesinleştirilemez")">
+                                    @(quorum.IsQuorumMet ? "Kararı Deftere İşle & Kapat" : $"⏳ Onay Bekliyor ({quorum.ApprovedUnits}/{quorum.RequiredUnitCount})")
+                                </button>
                             </div>
                         </form>
                     }
@@ -648,20 +678,28 @@
                 <div class="border rounded-3 bg-white p-3">
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2 small">
                         <div>
-                            <strong class="text-dark"><i class="bi bi-people-fill text-success me-1"></i>Katılanlar, Oylama &amp; İmzalar (@quorum.ParticipatedUnits / @quorum.TotalUnits Malik):</strong>
-                            <span class="ms-2 text-success fw-bold">@quorum.ApprovedUnits Kabul</span> /
-                            <span class="text-danger fw-bold">@quorum.RejectedUnits Ret</span>
-                            <span class="text-muted">(Sayı: %@quorum.ApprovalUnitPercent • Arsa Payı: %@quorum.ApprovalSharePercent)</span>
+                            @if (isBoardDecision)
+                            {
+                                <strong class="text-dark"><i class="bi bi-shield-check text-primary me-1"></i>Yönetim Kurulu Asil Üye (Seviye 1-3) PIN Oylaması (@quorum.ApprovedUnits / @quorum.TotalUnits Onay):</strong>
+                                <span class="ms-2 text-danger fw-bold">@quorum.RejectedUnits Ret</span>
+                            }
+                            else
+                            {
+                                <strong class="text-dark"><i class="bi bi-people-fill text-success me-1"></i>Katılanlar, Oylama &amp; İmzalar (@quorum.ParticipatedUnits / @quorum.TotalUnits Malik):</strong>
+                                <span class="ms-2 text-success fw-bold">@quorum.ApprovedUnits Kabul</span> <span>/</span>
+                                <span class="text-danger fw-bold">@quorum.RejectedUnits Ret</span>
+                                <span class="text-muted">(Sayı: %@quorum.ApprovalUnitPercent • Arsa Payı: %@quorum.ApprovalSharePercent)</span>
+                            }
                         </div>
                         <div class="d-flex align-items-center gap-2">
                             <span class="badge @(quorum.IsQuorumMet ? "bg-success" : "bg-warning text-dark")">
-                                @(quorum.IsQuorumMet ? "✅ Yasal Çoğunluk Sağlandı" : $"⏳ Hedef: En az {quorum.RequiredUnitCount} Malik")
+                                @(quorum.IsQuorumMet ? "✅ Yeter Sayı Sağlandı / Yazdırılabilir" : $"⏳ Onay Bekliyor ({quorum.ApprovedUnits}/{quorum.RequiredUnitCount})")
                             </span>
                             @if (m.IsExecuted && !string.IsNullOrWhiteSpace(m.ExecutionSummary))
                             {
                                 <span class="badge bg-primary">⚡ Yürürlükte: @m.ExecutionSummary</span>
                             }
-                            else if (quorum.IsQuorumMet && !m.IsExecuted)
+                            else if (!isBoardDecision && quorum.IsQuorumMet && !m.IsExecuted)
                             {
                                 <form asp-action="ExecuteApprovedDecision" asp-controller="BuildingManager" method="post" class="d-inline">
                                     @Html.AntiForgeryToken()
@@ -676,6 +714,77 @@
                     <div class="progress mb-3" style="height: 6px;">
                         <div class="progress-bar @(quorum.IsQuorumMet ? "bg-success" : "bg-primary")" style="width: @(Math.Min(100m, quorum.ApprovalUnitPercent).ToString(System.Globalization.CultureInfo.InvariantCulture))%"></div>
                     </div>
+
+                    @if (isBoardDecision)
+                    {
+                        <!-- YÖNETİM KURULU KARARI: SEVIYE 1-3 ASİL ÜYE PIN OYLAMASI -->
+                        <div class="row g-2 small">
+                            @foreach (var bm in boardRoster.OrderBy(x => GMK360.Core.Entities.BuildingManager.GetHierarchyLevel(x.Role)).ThenBy(x => x.HierarchyOrder))
+                            {
+                                bool canVote = bm.CanVoteBoardDecisions();
+                                int lvl = GMK360.Core.Entities.BuildingManager.GetHierarchyLevel(bm.Role);
+                                string bmNm = !string.IsNullOrWhiteSpace(bm.User?.FirstName) ? $"{bm.User.FirstName} {bm.User.LastName}".Trim() : (bm.User?.DisplayName ?? bm.User?.Email ?? "Kurul Üyesi");
+                                mBoardVotes.TryGetValue(bm.Id, out var bmv);
+                                <div class="col-lg-6">
+                                    <div class="participant-grid-row">
+                                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                            <div>
+                                                <span class="badge bg-dark me-1">S@lvl</span>
+                                                <span class="fw-bold text-dark">@bmNm</span>
+                                                <span class="text-muted">(@GMK360.Core.Entities.BuildingManager.GetRoleLabel(bm.Role))</span>
+                                            </div>
+                                            <div>
+                                                @if (!canVote)
+                                                {
+                                                    <span class="badge bg-light text-muted border">@(bm.IsTermExpired() ? "Süresi Doldu (Kilitli)" : "Oy Hakkı Yok")</span>
+                                                }
+                                                else if (bmv?.VoteChoice == "Kabul")
+                                                {
+                                                    <span class="badge bg-success">✅ Onaylandı (@bmv.ApprovalTraceCode)</span>
+                                                }
+                                                else if (bmv?.VoteChoice == "Ret")
+                                                {
+                                                    <span class="badge bg-danger">❌ Muhalif (@bmv.ApprovalTraceCode)</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-light text-muted border">Onay Bekliyor</span>
+                                                }
+                                            </div>
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(bmv?.DissentNote))
+                                        {
+                                            <div class="text-danger mt-1" style="font-size:.74rem;"><strong>Karşı Oy Şerhi:</strong> @bmv.DissentNote</div>
+                                        }
+                                        @if (!m.IsConcluded && canVote)
+                                        {
+                                            <div class="d-flex flex-wrap gap-1 align-items-center mt-2 pt-1 border-top">
+                                                <form asp-action="SubmitBoardMemberVote" asp-controller="BuildingManager" method="post" class="d-inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="buildingId" value="@m.ContextId" />
+                                                    <input type="hidden" name="meetingId" value="@m.Id" />
+                                                    <input type="hidden" name="buildingManagerId" value="@bm.Id" />
+                                                    <input type="hidden" name="voteChoice" value="Kabul" />
+                                                    <button type="submit" class="btn btn-xs btn-outline-success rounded-pill px-2 fw-bold">✓ Onayla</button>
+                                                </form>
+                                                <form asp-action="SubmitBoardMemberVote" asp-controller="BuildingManager" method="post" class="d-flex gap-1 flex-grow-1">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="buildingId" value="@m.ContextId" />
+                                                    <input type="hidden" name="meetingId" value="@m.Id" />
+                                                    <input type="hidden" name="buildingManagerId" value="@bm.Id" />
+                                                    <input type="hidden" name="voteChoice" value="Ret" />
+                                                    <input type="text" name="dissentNote" class="form-control form-control-sm py-0" value="@bmv?.DissentNote" placeholder="Karşı oy gerekçesi..." style="font-size:.74rem;" />
+                                                    <button type="submit" class="btn btn-xs btn-outline-danger rounded-pill px-2 text-nowrap">✕ Ret</button>
+                                                </form>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
 
                     <!-- 2 Sütunlu Defter Katılımcı & Oylama Listesi (Fotoğraf 2 Formatı) -->
                     <div class="row g-2 small">
@@ -721,15 +830,8 @@
                                                 <input type="hidden" name="voteChoice" value="Kabul" />
                                                 <button type="submit" class="btn btn-xs btn-outline-success py-0 px-2" title="Asil Kabul İşaretle">✓</button>
                                             </form>
-                                            <form asp-action="AssignUnitProxyVote" asp-controller="BuildingManager" method="post" class="d-inline">
-                                                @Html.AntiForgeryToken()
-                                                <input type="hidden" name="buildingId" value="@m.ContextId" />
-                                                <input type="hidden" name="meetingId" value="@m.Id" />
-                                                <input type="hidden" name="buildingUnitId" value="@u.Id" />
-                                                <input type="hidden" name="participationType" value="Asil" />
-                                                <input type="hidden" name="voteChoice" value="Ret" />
-                                                <button type="submit" class="btn btn-xs btn-outline-danger py-0 px-2" title="Ret İşaretle">✕</button>
-                                            </form>
+                                            <button type="button" class="btn btn-xs btn-outline-danger py-0 px-2" title="Karşı Oy / Şerh Girerek Ret İşaretle"
+                                                    onclick="document.getElementById('dissentBox_@(m.Id)_@(u.Id)').classList.toggle('d-none')">✕</button>
                                             <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2"
                                                     onclick="openAssignProxyModal(@m.ContextId, @m.Id, @u.Id, '@System.Web.HttpUtility.JavaScriptStringEncode($"{u.DoorNumber} ({ownerLabel})")', '@System.Web.HttpUtility.JavaScriptStringEncode(uv?.ProxyPersonName ?? u.TenantName ?? "")')">
                                                 Vekil
@@ -737,9 +839,56 @@
                                         }
                                     </div>
                                 </div>
+                                @if (!string.IsNullOrWhiteSpace(uv?.DissentNote))
+                                {
+                                    <div class="px-2 pt-1 text-danger" style="font-size:.73rem;"><strong>Muhalefet Şerhi:</strong> @uv.DissentNote</div>
+                                }
+                                @if (!m.IsConcluded)
+                                {
+                                    <form asp-action="AssignUnitProxyVote" asp-controller="BuildingManager" method="post" id="dissentBox_@(m.Id)_@(u.Id)" class="d-none mt-1 d-flex gap-1">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="buildingId" value="@m.ContextId" />
+                                        <input type="hidden" name="meetingId" value="@m.Id" />
+                                        <input type="hidden" name="buildingUnitId" value="@u.Id" />
+                                        <input type="hidden" name="participationType" value="Asil" />
+                                        <input type="hidden" name="voteChoice" value="Ret" />
+                                        <input type="text" name="dissentNote" class="form-control form-control-sm py-0" value="@uv?.DissentNote" placeholder="Karşı oy gerekçesi / şerh yazın (isteğe bağlı)..." style="font-size:.74rem;" />
+                                        <button type="submit" class="btn btn-xs btn-danger text-nowrap px-2">Ret Kaydet</button>
+                                    </form>
+                                }
                             </div>
                             rowNo++;
                         }
+                    </div>
+                    }
+
+                    <!-- 4. ISLAK İMZALI NOTER DEFTERİ SURETİ YÜKLE & DİJİTAL ARŞİV -->
+                    <div class="mt-3 pt-2 border-top d-flex flex-wrap justify-content-between align-items-center gap-2 small">
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <strong class="text-dark"><i class="bi bi-camera-fill text-success me-1"></i>Islak İmzalı Defter Sureti:</strong>
+                            @if (mScans.Any())
+                            {
+                                foreach (var sc in mScans)
+                                {
+                                    <a href="@sc.DocumentUrl" target="_blank" class="badge bg-success-subtle text-success border border-success-subtle text-decoration-none py-1 px-2">
+                                        <i class="bi bi-file-earmark-check me-1"></i>@sc.FileName (@sc.UploadDate.ToString("dd.MM.yyyy"))
+                                    </a>
+                                }
+                            }
+                            else
+                            {
+                                <span class="text-muted">Noter sayfasına yapıştırıp imzaladıktan sonra fotoğrafını/PDF'ini yükleyin.</span>
+                            }
+                        </div>
+                        <form asp-action="UploadMeetingScan" asp-controller="BuildingManager" method="post" enctype="multipart/form-data" class="d-flex align-items-center gap-1">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="meetingId" value="@m.Id" />
+                            <input type="hidden" name="returnTo" value="Oylamalar" />
+                            <input type="file" name="scanFile" class="form-control form-control-sm" accept=".pdf,.jpg,.jpeg,.png,.webp" style="max-width:210px;" required />
+                            <button type="submit" class="btn btn-xs btn-outline-success rounded-pill px-3 fw-bold text-nowrap">
+                                <i class="bi bi-cloud-upload me-1"></i>Suret Yükle
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -845,12 +994,35 @@
             door = u.DoorNumber,
             owner = !string.IsNullOrWhiteSpace(u.OwnerName) ? u.OwnerName : "Malik Girilmemiş"
         })));
+        const activeBoardVotersData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+            boardRoster.Where(m => m.CanVoteBoardDecisions())
+                .OrderBy(m => GMK360.Core.Entities.BuildingManager.GetHierarchyLevel(m.Role))
+                .ThenBy(m => m.HierarchyOrder)
+                .Select(m => new {
+                    name = !string.IsNullOrWhiteSpace(m.User?.FirstName) ? $"{m.User.FirstName} {m.User.LastName}".Trim() : (m.User?.DisplayName ?? m.User?.Email ?? "Kurul Üyesi"),
+                    roleTitle = GMK360.Core.Entities.BuildingManager.GetRoleLabel(m.Role),
+                    level = GMK360.Core.Entities.BuildingManager.GetHierarchyLevel(m.Role)
+                })));
 
         function renderPreviewParticipants() {
             const scopeVal = document.getElementById('newDecScopeSelect')?.value || '';
+            const catVal = document.getElementById('newDecCategorySelect')?.value || '';
             const grid = document.getElementById('previewParticipantsGrid');
             const cntEl = document.getElementById('previewVoterCount');
             if (!grid) return;
+
+            if (catVal === 'BoardDecision') {
+                if (cntEl) cntEl.innerText = activeBoardVotersData.length + ' Kurul Asil Üyesi';
+                if (activeBoardVotersData.length === 0) {
+                    grid.innerHTML = '<div class="col-12 text-warning fw-semibold">Aktif ve süresi dolmamış Seviye 1-3 Kurul Üyesi bulunmuyor. Yönetim Kurulundan atama yapın.</div>';
+                    return;
+                }
+                const needReq = Math.floor(activeBoardVotersData.length / 2) + 1;
+                grid.innerHTML = activeBoardVotersData.map((b, i) =>
+                    `<div class="col-md-6"><div class="participant-grid-row d-flex justify-content-between align-items-center"><span><b>S${b.level})</b> ${escapeVoterHtml(b.name)} <span class="text-muted">(${escapeVoterHtml(b.roleTitle)})</span></span><span class="badge bg-primary-subtle text-primary border">Salt Çoğunluk: ${needReq}/${activeBoardVotersData.length}</span></div></div>`
+                ).join('');
+                return;
+            }
 
             let filtered = allVoterUnitsData;
             if (scopeVal.startsWith('BLK:')) {
@@ -962,7 +1134,11 @@
             if (nameInput) nameInput.required = false;
             if (exUnitSel) exUnitSel.required = false;
 
-            if (cat === 'DuesUpdate') {
+            if (cat === 'BoardDecision') {
+                if (quorumHidden) quorumHidden.value = 'BoardMajority';
+                if (titleEl && !titleEl.value.trim()) titleEl.value = 'Yönetim Kurulu Kararı';
+                if (hintEl) hintEl.textContent = 'Yönetim Kurulu Asil Üyeleri (Seviye 1-3) PIN oylaması: Salt çoğunluk (AktifAsil/2)+1 sağlandığında yazdırılabilir.';
+            } else if (cat === 'DuesUpdate') {
                 duesPanel?.classList.remove('d-none');
                 if (duesInput) duesInput.required = true;
                 if (quorumHidden) quorumHidden.value = 'Innovation';
@@ -1010,6 +1186,7 @@
                 if (quorumHidden) quorumHidden.value = 'Standard';
                 if (hintEl) hintEl.textContent = 'KMK Md. 30: Salt çoğunluk ile karara bağlanır.';
             }
+            renderPreviewParticipants();
         }
 
         document.addEventListener('DOMContentLoaded', function () {

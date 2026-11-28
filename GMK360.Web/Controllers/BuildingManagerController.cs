@@ -204,6 +204,18 @@ namespace GMK360.Web.Controllers
                     .ToListAsync()
                 : new System.Collections.Generic.List<SpaceFixture>();
 
+            var rootIdsForBoard = buildings.Select(b => b.Id).Distinct().ToList();
+            var expiringBoardMembers = rootIdsForBoard.Any()
+                ? await _context.BuildingManagers
+                    .AsNoTracking()
+                    .Include(m => m.User)
+                    .Include(m => m.Building)
+                    .Where(m => m.IsActive && rootIdsForBoard.Contains(m.BuildingId)
+                        && m.TermEndDate.HasValue && m.TermEndDate.Value.Date <= DateTime.Today.AddDays(30))
+                    .OrderBy(m => m.TermEndDate)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<BuildingManager>();
+
             ViewBag.TotalBuildings = buildings.Count;
             ViewBag.TotalUnits = allUnits.Count;
             ViewBag.ResidentialUnits = allUnits.Count(u => u.Category != "Dukkan");
@@ -219,6 +231,7 @@ namespace GMK360.Web.Controllers
             ViewBag.ManagerWorkPlans = managerWorkPlans;
             ViewBag.UpcomingMeetings = upcomingMeetings;
             ViewBag.UpcomingMaintenances = upcomingMaintenances;
+            ViewBag.ExpiringBoardMembers = expiringBoardMembers;
 
             return View(buildings);
         }
@@ -1029,6 +1042,10 @@ namespace GMK360.Web.Controllers
                                 UserId = userId,
                                 Role = BuildingManagerRole.HeadManager,
                                 IsActive = true,
+                                TermStartDate = DateTime.Today,
+                                TermEndDate = DateTime.Today.AddYears(1),
+                                IsVisibleToResidents = true,
+                                HierarchyOrder = 1,
                                 CreatedAt = DateTime.UtcNow
                             });
                         }
@@ -1043,6 +1060,9 @@ namespace GMK360.Web.Controllers
                 }
             }
 
+            int totalBlocks = structures.Sum(s => s.LayoutPattern == "Tekil Yapı" ? 1 : Math.Max(1, s.Children?.Count ?? 1));
+            int totalUnits = structures.Sum(s => s.TotalApartments + s.TotalShops + (s.Children?.Sum(c => c.TotalApartments + c.TotalShops) ?? 0));
+
             // 3. Bina Yönetim Kadrosu (HeadManager) ve KVKK/KMK Taahhüt Logu
             if (!string.IsNullOrEmpty(userId))
             {
@@ -1056,13 +1076,15 @@ namespace GMK360.Web.Controllers
                         UserId = userId,
                         Role = BuildingManagerRole.HeadManager,
                         IsActive = true,
+                        SignatureAuthorityType = totalUnits <= 7 ? SignatureAuthorityType.Single : SignatureAuthorityType.Joint,
+                        TermStartDate = DateTime.Today,
+                        TermEndDate = DateTime.Today.AddYears(1),
+                        IsVisibleToResidents = true,
+                        HierarchyOrder = 1,
                         CreatedAt = DateTime.UtcNow
                     });
                 }
             }
-
-            int totalBlocks = structures.Sum(s => s.LayoutPattern == "Tekil Yapı" ? 1 : Math.Max(1, s.Children?.Count ?? 1));
-            int totalUnits = structures.Sum(s => s.TotalApartments + s.TotalShops + (s.Children?.Sum(c => c.TotalApartments + c.TotalShops) ?? 0));
             var pricing = GMK360.Web.Helpers.FacilityPricingHelper.Calculate(isSite, totalBlocks, totalUnits);
             var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
@@ -2287,6 +2309,14 @@ namespace GMK360.Web.Controllers
             string? fullName = null,
             string? phoneNumber = null,
             string? tcIdentityNo = null,
+            SignatureAuthorityType signatureAuthorityType = SignatureAuthorityType.None,
+            bool isExternalAppointee = false,
+            DateTime? termStartDate = null,
+            DateTime? termEndDate = null,
+            int? appointmentMeetingId = null,
+            bool isVisibleToResidents = true,
+            int hierarchyOrder = 0,
+            string? customRoleNote = null,
             string? returnTo = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
@@ -2301,6 +2331,14 @@ namespace GMK360.Web.Controllers
             if (string.IsNullOrWhiteSpace(cleanEmail) && FacilityTaskDispatchService.NormalizePhoneLast10(cleanPhone).Length < 10 && string.IsNullOrWhiteSpace(cleanTc))
             {
                 TempData["ErrorMessage"] = "Lütfen kurul üyesi / aza için geçerli bir e-posta, 10 haneli telefon veya TCKN giriniz.";
+                return string.Equals(returnTo, "Governance", StringComparison.OrdinalIgnoreCase)
+                    ? RedirectToAction(nameof(Governance), new { buildingId })
+                    : RedirectToAction(nameof(Detail), new { id = buildingId });
+            }
+
+            if (role == BuildingManagerRole.Auditor && isExternalAppointee)
+            {
+                TempData["ErrorMessage"] = "KMK Madde 41 gereği Denetçi / Denetim Kurulu Üyesi dışarıdan atanamaz; mutlaka tapu sahibi (kat maliki) olmalıdır.";
                 return string.Equals(returnTo, "Governance", StringComparison.OrdinalIgnoreCase)
                     ? RedirectToAction(nameof(Governance), new { buildingId })
                     : RedirectToAction(nameof(Detail), new { id = buildingId });
@@ -2347,11 +2385,46 @@ namespace GMK360.Web.Controllers
                 }
             }
 
+            // KMK Madde 41: Denetçi mutlaka bu bina/sitede tapu sahibi (kat maliki) olmalıdır
+            if (role == BuildingManagerRole.Auditor)
+            {
+                var complexId = building.HousingComplexId;
+                var scopedUnitOwners = await _context.BuildingUnits
+                    .AsNoTracking()
+                    .Where(u => !(u.Category ?? "").StartsWith("OrtakAlan")
+                        && (u.BuildingId == rootId || u.Building.ParentBuildingId == rootId || (complexId.HasValue && u.Building.HousingComplexId == complexId)))
+                    .Select(u => new { u.OwnerUserId, u.OwnerEmail, u.OwnerPhone })
+                    .ToListAsync();
+                var normTargetPhone = FacilityTaskDispatchService.NormalizePhoneLast10(targetUser.PhoneNumber ?? cleanPhone);
+                bool isOwnerInScope = scopedUnitOwners.Any(u =>
+                    (!string.IsNullOrEmpty(u.OwnerUserId) && u.OwnerUserId == targetUser.Id)
+                    || (!string.IsNullOrWhiteSpace(u.OwnerEmail) && !string.IsNullOrWhiteSpace(targetUser.Email) && string.Equals(u.OwnerEmail.Trim(), targetUser.Email.Trim(), StringComparison.OrdinalIgnoreCase))
+                    || (!string.IsNullOrWhiteSpace(normTargetPhone) && normTargetPhone.Length >= 10 && FacilityTaskDispatchService.NormalizePhoneLast10(u.OwnerPhone) == normTargetPhone));
+                if (!isOwnerInScope)
+                {
+                    TempData["ErrorMessage"] = "KMK Madde 41 gereği Denetçi mutlaka bu bina/sitede tapu sahibi (kat maliki) olmalıdır. Daire maliki kayıtlarında eşleşme bulunamadı.";
+                    return string.Equals(returnTo, "Governance", StringComparison.OrdinalIgnoreCase)
+                        ? RedirectToAction(nameof(Governance), new { buildingId })
+                        : RedirectToAction(nameof(Detail), new { id = buildingId });
+                }
+            }
+
+            var resolvedStart = termStartDate ?? DateTime.Today;
+            var resolvedEnd = termEndDate ?? resolvedStart.AddYears(1);
+
             var existing = await _context.BuildingManagers
                 .FirstOrDefaultAsync(m => m.BuildingId == rootId && m.UserId == targetUser.Id && m.IsActive);
             if (existing != null)
             {
                 existing.Role = role;
+                existing.SignatureAuthorityType = signatureAuthorityType;
+                existing.IsExternalAppointee = isExternalAppointee;
+                existing.TermStartDate = resolvedStart;
+                existing.TermEndDate = resolvedEnd;
+                existing.AppointmentMeetingId = appointmentMeetingId;
+                existing.IsVisibleToResidents = isVisibleToResidents;
+                existing.HierarchyOrder = hierarchyOrder;
+                existing.CustomRoleNote = string.IsNullOrWhiteSpace(customRoleNote) ? null : customRoleNote.Trim();
                 existing.UpdatedAt = DateTime.UtcNow;
             }
             else
@@ -2362,6 +2435,14 @@ namespace GMK360.Web.Controllers
                     UserId = targetUser.Id,
                     Role = role,
                     IsActive = true,
+                    SignatureAuthorityType = signatureAuthorityType,
+                    IsExternalAppointee = isExternalAppointee,
+                    TermStartDate = resolvedStart,
+                    TermEndDate = resolvedEnd,
+                    AppointmentMeetingId = appointmentMeetingId,
+                    IsVisibleToResidents = isVisibleToResidents,
+                    HierarchyOrder = hierarchyOrder,
+                    CustomRoleNote = string.IsNullOrWhiteSpace(customRoleNote) ? null : customRoleNote.Trim(),
                     CreatedAt = DateTime.UtcNow
                 });
             }
@@ -2373,7 +2454,7 @@ namespace GMK360.Web.Controllers
                 EntityName = "BuildingManager",
                 EntityId = rootId.ToString(),
                 OldValues = "{}",
-                NewValues = System.Text.Json.JsonSerializer.Serialize(new { TargetUserId = targetUser.Id, targetUser.Email, Role = role.ToString() }),
+                NewValues = System.Text.Json.JsonSerializer.Serialize(new { TargetUserId = targetUser.Id, targetUser.Email, Role = role.ToString(), SignatureAuthorityType = signatureAuthorityType.ToString(), IsExternalAppointee = isExternalAppointee }),
                 AffectedColumns = "BuildingManagers",
                 Timestamp = DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow
@@ -2381,7 +2462,7 @@ namespace GMK360.Web.Controllers
 
             await _context.SaveChangesAsync();
 
-            var roleText = role == BuildingManagerRole.BoardMember ? "Aza (Yönetim Kurulu)" : (role == BuildingManagerRole.Auditor ? "Denetçi" : "Yönetici");
+            var roleText = BuildingManager.GetRoleLabel(role);
             var displayName = !string.IsNullOrWhiteSpace(targetUser.FirstName)
                 ? $"{targetUser.FirstName} {targetUser.LastName}".Trim()
                 : (cleanName ?? targetUser.Email ?? "Üye");
@@ -2564,6 +2645,191 @@ namespace GMK360.Web.Controllers
                 : RedirectToAction(nameof(Index));
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateBoardMemberMeta(
+            int buildingId,
+            int managerId,
+            BuildingManagerRole role,
+            SignatureAuthorityType signatureAuthorityType,
+            DateTime? termStartDate = null,
+            DateTime? termEndDate = null,
+            int? appointmentMeetingId = null,
+            bool isExternalAppointee = false,
+            bool isVisibleToResidents = true,
+            int hierarchyOrder = 0,
+            string? customRoleNote = null)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+            int rootId = building.ParentBuildingId ?? building.Id;
+
+            var member = await _context.BuildingManagers
+                .FirstOrDefaultAsync(m => m.Id == managerId && m.BuildingId == rootId && m.IsActive);
+            if (member == null) return NotFound();
+
+            if (role == BuildingManagerRole.Auditor && isExternalAppointee)
+            {
+                TempData["ErrorMessage"] = "KMK Madde 41 gereği Denetçi / Denetim Kurulu Üyesi dışarıdan atanamaz; mutlaka kat maliki olmalıdır.";
+                return RedirectToAction(nameof(Governance), new { buildingId });
+            }
+
+            member.Role = role;
+            member.SignatureAuthorityType = signatureAuthorityType;
+            member.IsExternalAppointee = isExternalAppointee;
+            member.TermStartDate = termStartDate;
+            member.TermEndDate = termEndDate ?? (termStartDate.HasValue ? termStartDate.Value.AddYears(1) : null);
+            member.AppointmentMeetingId = appointmentMeetingId;
+            member.IsVisibleToResidents = isVisibleToResidents;
+            member.HierarchyOrder = hierarchyOrder;
+            member.CustomRoleNote = string.IsNullOrWhiteSpace(customRoleNote) ? null : customRoleNote.Trim();
+            member.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = "Kurul üyesi görev, imza yetkisi ve dönem bilgileri güncellendi.";
+            return RedirectToAction(nameof(Governance), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SetCustomBoardCounts(int buildingId, int? asilCount, int? yedekCount, int? denetciCount, bool resetToAuto = false)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+            int rootId = building.ParentBuildingId ?? building.Id;
+            var rootBuilding = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == rootId);
+            if (rootBuilding == null) return NotFound();
+
+            if (resetToAuto)
+            {
+                rootBuilding.BoardTargetAsilCount = null;
+                rootBuilding.BoardTargetYedekCount = null;
+                rootBuilding.BoardTargetDenetciCount = null;
+                TempData["SuccessMessage"] = "Yönetim kurulu üye sayıları bağımsız bölüm sayısına göre KMK otomatik önerisine sıfırlandı.";
+            }
+            else
+            {
+                rootBuilding.BoardTargetAsilCount = asilCount.HasValue ? Math.Max(1, Math.Min(15, asilCount.Value)) : (int?)null;
+                rootBuilding.BoardTargetYedekCount = yedekCount.HasValue ? Math.Max(0, Math.Min(15, yedekCount.Value)) : (int?)null;
+                rootBuilding.BoardTargetDenetciCount = denetciCount.HasValue ? Math.Max(0, Math.Min(9, denetciCount.Value)) : (int?)null;
+                TempData["SuccessMessage"] = "Yönetim Planı özel kurul sayıları güncellendi.";
+            }
+
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Governance), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PromoteReserveToActive(int buildingId, int managerId)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+            int rootId = building.ParentBuildingId ?? building.Id;
+
+            var reserve = await _context.BuildingManagers
+                .Include(m => m.User)
+                .FirstOrDefaultAsync(m => m.Id == managerId && m.BuildingId == rootId && m.IsActive && m.Role == BuildingManagerRole.ReserveMember);
+            if (reserve == null)
+            {
+                TempData["ErrorMessage"] = "Yükseltilecek aktif yedek üye bulunamadı.";
+                return RedirectToAction(nameof(Governance), new { buildingId });
+            }
+
+            reserve.Role = BuildingManagerRole.BoardMember;
+            reserve.HierarchyOrder = 1;
+            reserve.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var displayName = !string.IsNullOrWhiteSpace(reserve.User?.FirstName)
+                ? $"{reserve.User.FirstName} {reserve.User.LastName}".Trim()
+                : (reserve.User?.Email ?? "Yedek Üye");
+            TempData["SuccessMessage"] = $"{displayName} yedek sıradan Asil Yönetim Kurulu Üyesi (Seviye 3) kadrosuna yükseltildi.";
+            return RedirectToAction(nameof(Governance), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ToggleManagerResidentVisibility(int buildingId, int managerId)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+            int rootId = building.ParentBuildingId ?? building.Id;
+
+            var member = await _context.BuildingManagers
+                .FirstOrDefaultAsync(m => m.Id == managerId && m.BuildingId == rootId && m.IsActive);
+            if (member == null) return NotFound();
+
+            member.IsVisibleToResidents = !member.IsVisibleToResidents;
+            member.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = member.IsVisibleToResidents
+                ? "Kurul üyesi iletişim bilgisi Daire Sakinleri panelinde görünür yapıldı."
+                : "Kurul üyesi iletişim bilgisi Daire Sakinleri panelinden gizlendi.";
+            return RedirectToAction(nameof(Governance), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UploadSignatureCircular(int buildingId, Microsoft.AspNetCore.Http.IFormFile? circularFile, string? docTitle = null)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+            int rootId = building.ParentBuildingId ?? building.Id;
+            var rootBuilding = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == rootId);
+            if (rootBuilding == null) return NotFound();
+
+            if (circularFile == null || circularFile.Length == 0)
+            {
+                TempData["ErrorMessage"] = "Lütfen noter onaylı imza sirküleri PDF veya görsel dosyasını seçiniz.";
+                return RedirectToAction(nameof(Governance), new { buildingId });
+            }
+
+            var ext = System.IO.Path.GetExtension(circularFile.FileName)?.ToLowerInvariant();
+            var allowedExts = new[] { ".pdf", ".jpg", ".jpeg", ".png", ".webp" };
+            if (string.IsNullOrEmpty(ext) || !allowedExts.Contains(ext))
+            {
+                TempData["ErrorMessage"] = "Yalnızca PDF veya görsel (JPG, PNG, WEBP) dosyaları yüklenebilir.";
+                return RedirectToAction(nameof(Governance), new { buildingId });
+            }
+
+            var env = HttpContext.RequestServices.GetService(typeof(Microsoft.AspNetCore.Hosting.IWebHostEnvironment)) as Microsoft.AspNetCore.Hosting.IWebHostEnvironment;
+            var webRoot = env?.WebRootPath ?? System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot");
+            var folder = System.IO.Path.Combine(webRoot, "uploads", "buildings", rootId.ToString(), "governance");
+            System.IO.Directory.CreateDirectory(folder);
+
+            var uniqueName = $"sirkuler_{Guid.NewGuid():N}{ext}";
+            var fullPath = System.IO.Path.Combine(folder, uniqueName);
+            using (var stream = new System.IO.FileStream(fullPath, System.IO.FileMode.Create))
+            {
+                await circularFile.CopyToAsync(stream);
+            }
+
+            var docUrl = $"/uploads/buildings/{rootId}/governance/{uniqueName}";
+            rootBuilding.SignatureCircularUrl = docUrl;
+
+            _context.DocumentArchives.Add(new DocumentArchive
+            {
+                BuildingId = rootId,
+                Title = string.IsNullOrWhiteSpace(docTitle) ? $"Noter Onaylı İmza Sirküleri ({rootBuilding.Name})" : docTitle.Trim(),
+                FileName = circularFile.FileName,
+                FileExtension = ext,
+                Category = "ImzaSirkuleri",
+                SourceModule = "BuildingManager",
+                SourceRecordId = rootId,
+                DocumentUrl = docUrl,
+                Status = "Aktif",
+                UploadDate = DateTime.Now,
+                Year = DateTime.Today.Year,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = "Noter onaylı imza sirküleri / banka yetki belgesi arşivlendi.";
+            return RedirectToAction(nameof(Governance), new { buildingId });
+        }
+
         [HttpGet]
         public async Task<IActionResult> Governance(int? buildingId)
         {
@@ -2583,6 +2849,7 @@ namespace GMK360.Web.Controllers
                     .Where(m => m.BuildingId == rootId.Value)
                     .OrderByDescending(m => m.IsActive)
                     .ThenBy(m => m.Role)
+                    .ThenBy(m => m.HierarchyOrder)
                     .ThenByDescending(m => m.CreatedAt)
                     .ToListAsync()
                 : new System.Collections.Generic.List<BuildingManager>();
@@ -2603,27 +2870,65 @@ namespace GMK360.Web.Controllers
             }
             else if (selected != null)
             {
-                siteBlocks.Add(selected);
+                var loadedSelected = await _context.Buildings
+                    .AsNoTracking()
+                    .Include(b => b.Units)
+                    .FirstOrDefaultAsync(b => b.Id == selected.Id);
+                siteBlocks.Add(loadedSelected ?? selected);
             }
 
             var govDecisions = selected != null
                 ? await _context.SystemMeetings
                     .AsNoTracking()
                     .Include(m => m.Votes)
+                    .Include(m => m.Decisions)
                     .Where(m => m.ContextType == "Building" && !m.IsDeleted
                         && (m.ContextId == selected.Id || (selected.HousingComplexId.HasValue && m.IsSiteWide && m.HousingComplexId == selected.HousingComplexId)))
                     .OrderByDescending(m => m.MeetingDate)
-                    .Take(12)
+                    .Take(20)
                     .ToListAsync()
                 : new System.Collections.Generic.List<SystemMeeting>();
+
+            var govDecisionIds = govDecisions.Select(d => d.Id).ToList();
+            var decisionScans = govDecisionIds.Any()
+                ? await _context.DocumentArchives
+                    .AsNoTracking()
+                    .Where(d => !d.IsDeleted && d.Category == "KararDefteri" && d.SourceRecordId.HasValue && govDecisionIds.Contains(d.SourceRecordId.Value))
+                    .OrderByDescending(d => d.Id)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<DocumentArchive>();
+
+            var circularDocs = rootId.HasValue
+                ? await _context.DocumentArchives
+                    .AsNoTracking()
+                    .Where(d => !d.IsDeleted && d.BuildingId == rootId.Value && d.Category == "ImzaSirkuleri")
+                    .OrderByDescending(d => d.Id)
+                    .Take(5)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<DocumentArchive>();
+
+            var scopedUnits = siteBlocks
+                .SelectMany(b => b.Units ?? new System.Collections.Generic.List<BuildingUnit>())
+                .Where(u => !(u.Category ?? "").StartsWith("OrtakAlan"))
+                .OrderBy(u => u.Building?.BlockName ?? u.Building?.Name)
+                .ThenBy(u => u.FloorLevel)
+                .ThenBy(u => u.DoorNumber)
+                .ToList();
+
+            var boardPlan = GMK360.Web.Helpers.KmkBoardRecommendationHelper.BuildPlan(scopedUnits.Count, selected, managers);
 
             ViewBag.Buildings = buildings;
             ViewBag.SelectedBuilding = selected;
             ViewBag.RootBuildingId = rootId;
             ViewBag.Complex = complex;
             ViewBag.SiteBlocks = siteBlocks;
+            ViewBag.TotalScopedUnits = scopedUnits.Count;
+            ViewBag.SiteOwnerUnits = scopedUnits.Where(u => !string.IsNullOrWhiteSpace(u.OwnerName)).ToList();
             ViewBag.Managers = managers;
+            ViewBag.BoardPlan = boardPlan;
             ViewBag.RecentGovernanceDecisions = govDecisions;
+            ViewBag.DecisionScansByMeeting = decisionScans.GroupBy(d => d.SourceRecordId!.Value).ToDictionary(g => g.Key, g => g.First());
+            ViewBag.CircularDocs = circularDocs;
             return View();
         }
 
@@ -2683,7 +2988,11 @@ namespace GMK360.Web.Controllers
 
             string cleanCategory = string.IsNullOrWhiteSpace(decisionCategory) ? "General" : decisionCategory.Trim();
             string cleanQuorum = string.IsNullOrWhiteSpace(quorumType) ? "Standard" : quorumType.Trim();
-            if (string.Equals(cleanCategory, "ManagementPlan", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(cleanCategory, "BoardDecision", StringComparison.OrdinalIgnoreCase))
+            {
+                cleanQuorum = "BoardMajority";
+            }
+            else if (string.Equals(cleanCategory, "ManagementPlan", StringComparison.OrdinalIgnoreCase))
             {
                 cleanQuorum = "ManagementPlan";
             }
@@ -2767,6 +3076,7 @@ namespace GMK360.Web.Controllers
                 MeetingEndTime = string.IsNullOrWhiteSpace(meetingEndTime) ? null : meetingEndTime.Trim(),
                 MeetingLocation = string.IsNullOrWhiteSpace(meetingLocation) ? "Site Yönetim Odası / Ortak Alan" : meetingLocation.Trim(),
                 QuorumType = cleanQuorum,
+                InvitationScope = string.Equals(cleanQuorum, "BoardMajority", StringComparison.OrdinalIgnoreCase) ? "BoardOnly" : "OwnersAndProxyTenants",
                 DecisionCategory = cleanCategory,
                 ProposedPayloadJson = hasStructuredPayload ? System.Text.Json.JsonSerializer.Serialize(proposalPayload) : null,
                 AutoExecuteOnQuorum = autoExecuteOnQuorum,
@@ -2952,6 +3262,7 @@ namespace GMK360.Web.Controllers
             string? proxyPersonName = null,
             string? participationType = "Vekil",
             string? voteChoice = null,
+            string? dissentNote = null,
             Microsoft.AspNetCore.Http.IFormFile? proxyDocumentFile = null,
             string? returnTo = null,
             [FromServices] FacilityTaskDispatchService? taskDispatch = null)
@@ -2987,6 +3298,7 @@ namespace GMK360.Web.Controllers
                     ProxyPersonName = string.IsNullOrWhiteSpace(proxyPersonName) ? null : proxyPersonName.Trim(),
                     ProxyDocumentUrl = proxyDocUrl,
                     VoteChoice = !string.IsNullOrWhiteSpace(voteChoice) ? voteChoice.Trim() : "Pending",
+                    DissentNote = string.IsNullOrWhiteSpace(dissentNote) ? null : dissentNote.Trim(),
                     UnitLandShareSnapshot = unit.LandShare,
                     ApprovalTraceCode = !string.IsNullOrWhiteSpace(voteChoice) && voteChoice != "Pending"
                         ? $"VEK-{Guid.NewGuid().ToString("N").Substring(0, 5).ToUpperInvariant()}"
@@ -3001,6 +3313,7 @@ namespace GMK360.Web.Controllers
                 vote.ParticipationType = partType;
                 if (!string.IsNullOrWhiteSpace(proxyPersonName)) vote.ProxyPersonName = proxyPersonName.Trim();
                 if (!string.IsNullOrWhiteSpace(proxyDocUrl)) vote.ProxyDocumentUrl = proxyDocUrl;
+                if (dissentNote != null) vote.DissentNote = string.IsNullOrWhiteSpace(dissentNote) ? null : dissentNote.Trim();
                 if (!string.IsNullOrWhiteSpace(voteChoice))
                 {
                     vote.VoteChoice = voteChoice.Trim();
@@ -3034,6 +3347,72 @@ namespace GMK360.Web.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SubmitBoardMemberVote(
+            int buildingId,
+            int meetingId,
+            int buildingManagerId,
+            string voteChoice,
+            string? dissentNote = null,
+            [FromServices] FacilityTaskDispatchService? taskDispatch = null)
+        {
+            var building = await GetManagedBuildingAsync(buildingId);
+            if (building == null) return Forbid();
+            int rootId = building.ParentBuildingId ?? building.Id;
+
+            var meeting = await _context.SystemMeetings.FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && m.ContextId == buildingId);
+            var member = await _context.BuildingManagers
+                .Include(m => m.User)
+                .FirstOrDefaultAsync(m => m.Id == buildingManagerId && m.BuildingId == rootId && m.IsActive);
+            if (meeting == null || member == null) return NotFound();
+
+            if (!member.CanVoteBoardDecisions())
+            {
+                TempData["ErrorMessage"] = "Yalnızca görev süresi dolmamış Seviye 1-3 Asil Yönetim Kurulu üyeleri kurul karar oylamasına katılabilir (Yedek ve Denetçi oy kullanamaz).";
+                return RedirectToAction(nameof(Oylamalar), new { buildingId });
+            }
+
+            var cleanChoice = string.Equals(voteChoice, "Ret", StringComparison.OrdinalIgnoreCase) ? "Ret" : "Kabul";
+            var existingVote = await _context.BoardDecisionVotes
+                .FirstOrDefaultAsync(v => v.SystemMeetingId == meetingId && v.BuildingManagerId == buildingManagerId && !v.IsDeleted);
+
+            string voterDisplay = !string.IsNullOrWhiteSpace(member.User?.FirstName)
+                ? $"{member.User.FirstName} {member.User.LastName}".Trim()
+                : (member.User?.DisplayName ?? member.User?.Email ?? "Kurul Üyesi");
+            string roleTitle = BuildingManager.GetRoleLabel(member.Role);
+
+            if (existingVote == null)
+            {
+                _context.BoardDecisionVotes.Add(new BoardDecisionVote
+                {
+                    SystemMeetingId = meetingId,
+                    BuildingManagerId = member.Id,
+                    VoterUserId = member.UserId,
+                    VoterName = voterDisplay,
+                    RoleTitle = roleTitle,
+                    HierarchyLevel = BuildingManager.GetHierarchyLevel(member.Role),
+                    VoteChoice = cleanChoice,
+                    DissentNote = string.IsNullOrWhiteSpace(dissentNote) ? null : dissentNote.Trim(),
+                    ApprovalTraceCode = $"KRL-{Guid.NewGuid().ToString("N").Substring(0, 6).ToUpperInvariant()}",
+                    VotedAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                existingVote.VoteChoice = cleanChoice;
+                existingVote.DissentNote = string.IsNullOrWhiteSpace(dissentNote) ? null : dissentNote.Trim();
+                existingVote.VotedAt = DateTime.UtcNow;
+                existingVote.ApprovalTraceCode ??= $"KRL-{Guid.NewGuid().ToString("N").Substring(0, 6).ToUpperInvariant()}";
+                existingVote.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+            TempData["SuccessMessage"] = $"{voterDisplay} ({roleTitle}) için kurul oyu kaydedildi: {cleanChoice}.";
+            return RedirectToAction(nameof(Oylamalar), new { buildingId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> ExecuteApprovedDecision(
             int meetingId,
             int buildingId,
@@ -3063,8 +3442,50 @@ namespace GMK360.Web.Controllers
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
 
-            var meeting = await _context.SystemMeetings.FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && m.ContextId == buildingId);
+            var meeting = await _context.SystemMeetings
+                .Include(m => m.Votes)
+                .Include(m => m.BoardVotes)
+                .FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && m.ContextId == buildingId);
             if (meeting == null) return NotFound();
+
+            if (string.Equals(meeting.WorkflowStage, "Decision", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.Equals(meeting.QuorumType, "BoardMajority", StringComparison.OrdinalIgnoreCase))
+                {
+                    int boardRootId = building.ParentBuildingId ?? building.Id;
+                    var roster = await _context.BuildingManagers
+                        .AsNoTracking()
+                        .Where(m => m.BuildingId == boardRootId && m.IsActive)
+                        .ToListAsync();
+                    var boardQuorum = GMK360.Web.Helpers.KmkQuorumHelper.ComputeBoardMajority(roster, meeting.BoardVotes);
+                    if (boardQuorum.TotalUnits > 0 && !boardQuorum.IsQuorumMet)
+                    {
+                        TempData["ErrorMessage"] = $"Kurul Onay Kilidi: Yeterli Asil Üye (Seviye 1-3) onayı sağlanmadı (Onay Bekliyor: {boardQuorum.ApprovedUnits}/{boardQuorum.RequiredUnitCount}). Karar kesinleştirilemez.";
+                        return string.Equals(returnTo, "Oylamalar", StringComparison.OrdinalIgnoreCase)
+                            ? RedirectToAction(nameof(Oylamalar), new { buildingId })
+                            : RedirectToAction(nameof(Detail), new { id = buildingId });
+                    }
+                }
+                else
+                {
+                    var scopeUnits = (meeting.IsSiteWide && meeting.HousingComplexId.HasValue)
+                        ? await _context.BuildingUnits
+                            .Where(u => u.Building.HousingComplexId == meeting.HousingComplexId.Value && !(u.Category ?? "").StartsWith("OrtakAlan"))
+                            .ToListAsync()
+                        : await _context.BuildingUnits
+                            .Where(u => u.BuildingId == buildingId && !(u.Category ?? "").StartsWith("OrtakAlan"))
+                            .ToListAsync();
+
+                    var quorum = GMK360.Web.Helpers.KmkQuorumHelper.Compute(scopeUnits, meeting.Votes, meeting.QuorumType);
+                    if (scopeUnits.Any() && !quorum.IsQuorumMet)
+                    {
+                        TempData["ErrorMessage"] = $"Onay Kilidi: Yeterli çoğunluk / PIN onayı sağlanmadan karar kesinleştirilemez (Onay Bekliyor: {quorum.ApprovedUnits}/{quorum.RequiredUnitCount} Malik).";
+                        return string.Equals(returnTo, "Oylamalar", StringComparison.OrdinalIgnoreCase)
+                            ? RedirectToAction(nameof(Oylamalar), new { buildingId })
+                            : RedirectToAction(nameof(Detail), new { id = buildingId });
+                    }
+                }
+            }
 
             if (!string.IsNullOrWhiteSpace(decisionText))
             {
@@ -3095,6 +3516,7 @@ namespace GMK360.Web.Controllers
             var meeting = await _context.SystemMeetings
                 .Include(m => m.Decisions)
                 .Include(m => m.Votes)
+                .Include(m => m.BoardVotes)
                 .Include(m => m.Attachments)
                 .FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building");
 
@@ -3149,7 +3571,9 @@ namespace GMK360.Web.Controllers
             ViewBag.BoardRoster = boardRoster;
             ViewBag.EligibleUnits = eligibleUnits;
             ViewBag.Format = string.Equals(format, "a5", StringComparison.OrdinalIgnoreCase) ? "a5" : "a4";
-            ViewBag.QuorumSummary = GMK360.Web.Helpers.KmkQuorumHelper.Compute(eligibleUnits, meeting.Votes, meeting.QuorumType);
+            ViewBag.QuorumSummary = string.Equals(meeting.QuorumType, "BoardMajority", StringComparison.OrdinalIgnoreCase)
+                ? GMK360.Web.Helpers.KmkQuorumHelper.ComputeBoardMajority(boardRoster, meeting.BoardVotes)
+                : GMK360.Web.Helpers.KmkQuorumHelper.Compute(eligibleUnits, meeting.Votes, meeting.QuorumType);
             ViewBag.VerifyUrl = Url.Action("VerifyDecision", "BuildingManager", new { meetingId = meeting.Id, code = meeting.VerificationToken }, Request.Scheme);
             return View(meeting);
         }
@@ -3260,7 +3684,7 @@ namespace GMK360.Web.Controllers
 
         // 3.5 Islak İmzalı Defter Sayfası Arşivleme
         [HttpPost]
-        public async Task<IActionResult> UploadMeetingScan(int meetingId, Microsoft.AspNetCore.Http.IFormFile? scanFile)
+        public async Task<IActionResult> UploadMeetingScan(int meetingId, Microsoft.AspNetCore.Http.IFormFile? scanFile, string? returnTo = null)
         {
             var meeting = await _context.SystemMeetings.FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building");
             if (meeting == null) return NotFound();
@@ -3271,7 +3695,9 @@ namespace GMK360.Web.Controllers
             if (scanFile == null || scanFile.Length == 0)
             {
                 TempData["ErrorMessage"] = "Lütfen yüklenecek PDF veya görsel dosyasını seçiniz.";
-                return RedirectToAction(nameof(Detail), new { id = building.Id });
+                return string.Equals(returnTo, "Oylamalar", StringComparison.OrdinalIgnoreCase)
+                    ? RedirectToAction(nameof(Oylamalar), new { buildingId = building.Id })
+                    : RedirectToAction(nameof(Detail), new { id = building.Id });
             }
 
             var ext = System.IO.Path.GetExtension(scanFile.FileName)?.ToLowerInvariant();
@@ -3279,7 +3705,9 @@ namespace GMK360.Web.Controllers
             if (string.IsNullOrEmpty(ext) || !allowedExts.Contains(ext))
             {
                 TempData["ErrorMessage"] = "Yalnızca PDF veya görsel (JPG, PNG, WEBP) dosyaları yüklenebilir.";
-                return RedirectToAction(nameof(Detail), new { id = building.Id });
+                return string.Equals(returnTo, "Oylamalar", StringComparison.OrdinalIgnoreCase)
+                    ? RedirectToAction(nameof(Oylamalar), new { buildingId = building.Id })
+                    : RedirectToAction(nameof(Detail), new { id = building.Id });
             }
 
             var env = HttpContext.RequestServices.GetService(typeof(Microsoft.AspNetCore.Hosting.IWebHostEnvironment)) as Microsoft.AspNetCore.Hosting.IWebHostEnvironment;
@@ -3312,7 +3740,9 @@ namespace GMK360.Web.Controllers
             await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = "Noter onaylı ve ıslak imzalı karar sayfası dijital arşive kaydedildi.";
-            return RedirectToAction(nameof(Detail), new { id = building.Id });
+            return string.Equals(returnTo, "Oylamalar", StringComparison.OrdinalIgnoreCase)
+                ? RedirectToAction(nameof(Oylamalar), new { buildingId = building.Id })
+                : RedirectToAction(nameof(Detail), new { id = building.Id });
         }
 
         private async Task<bool> TrySendActivationEmailAsync(
@@ -5541,6 +5971,7 @@ namespace GMK360.Web.Controllers
                 ? await _context.SystemMeetings
                     .Include(m => m.Decisions)
                     .Include(m => m.Votes)
+                    .Include(m => m.BoardVotes)
                     .Include(m => m.Attachments)
                     .Where(m => m.ContextType == "Building" && !m.IsDeleted
                         && m.WorkflowStage == "Decision"
@@ -5661,23 +6092,42 @@ namespace GMK360.Web.Controllers
                 }
             }
             var azaNamesList = boardManagers
-                .Where(m => m.Role == BuildingManagerRole.BoardMember || m.Role == BuildingManagerRole.Auditor)
+                .Where(m => m.Role == BuildingManagerRole.ViceChair || m.Role == BuildingManagerRole.BoardMember || m.Role == BuildingManagerRole.ReserveMember || m.Role == BuildingManagerRole.Auditor)
                 .Select(m =>
                 {
                     var nm = FormatMgrName(m.User);
                     if (string.IsNullOrWhiteSpace(nm)) return "";
-                    return m.Role == BuildingManagerRole.Auditor ? $"{nm} (Denetçi)" : nm;
+                    return m.Role switch
+                    {
+                        BuildingManagerRole.ViceChair => $"{nm} (Bşk. Yrd.)",
+                        BuildingManagerRole.ReserveMember => $"{nm} (Yedek)",
+                        BuildingManagerRole.Auditor => $"{nm} (Denetçi)",
+                        _ => nm
+                    };
                 })
                 .Where(n => !string.IsNullOrWhiteSpace(n))
                 .Distinct()
                 .ToList();
 
+            var decisionScans = meetingIds.Any()
+                ? await _context.DocumentArchives
+                    .AsNoTracking()
+                    .Where(d => !d.IsDeleted && d.Category == "KararDefteri" && d.SourceRecordId.HasValue && meetingIds.Contains(d.SourceRecordId.Value))
+                    .OrderByDescending(d => d.Id)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<DocumentArchive>();
+
+            var boardPlan = GMK360.Web.Helpers.KmkBoardRecommendationHelper.BuildPlan(allUnitsLoaded.Count, selectedBld, boardManagers);
+
             ViewBag.Buildings = buildings;
             ViewBag.BuildingMap = buildings.ToDictionary(b => b.Id, b => b.Name);
             ViewBag.SelectedBuildingId = buildingId;
             ViewBag.SelectedBuildingObj = selectedBld;
+            ViewBag.BoardRoster = boardManagers;
+            ViewBag.BoardPlan = boardPlan;
             ViewBag.DefaultChairpersonName = defaultChairName;
             ViewBag.DefaultBoardMembersSummary = string.Join(", ", azaNamesList);
+            ViewBag.ScansByMeeting = decisionScans.GroupBy(d => d.SourceRecordId!.Value).ToDictionary(g => g.Key, g => g.ToList());
             ViewBag.Approvals = approvals;
             ViewBag.QuotesByMeeting = meetingQuotes.GroupBy(q => q.SourceReferenceId).ToDictionary(g => g.Key, g => g.ToList());
             ViewBag.JobsByMeeting = jobsByMeeting;
@@ -5711,6 +6161,7 @@ namespace GMK360.Web.Controllers
                 ? await _context.SystemMeetings
                     .Include(m => m.Decisions)
                     .Include(m => m.Votes)
+                    .Include(m => m.BoardVotes)
                     .Include(m => m.Attachments)
                     .Where(m => m.ContextType == "Building" && !m.IsDeleted
                         && (m.WorkflowStage == "Discussion" || m.WorkflowStage == "ArchivedNegative")
@@ -5892,7 +6343,12 @@ namespace GMK360.Web.Controllers
 
             string cleanCategory = string.IsNullOrWhiteSpace(decisionCategory) ? "General" : decisionCategory.Trim();
             string cleanQuorum = string.IsNullOrWhiteSpace(quorumType) ? "Standard" : quorumType.Trim();
-            if (string.Equals(cleanCategory, "ManagementPlan", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(cleanCategory, "BoardDecision", StringComparison.OrdinalIgnoreCase))
+            {
+                cleanQuorum = "BoardMajority";
+                meeting.InvitationScope = "BoardOnly";
+            }
+            else if (string.Equals(cleanCategory, "ManagementPlan", StringComparison.OrdinalIgnoreCase))
             {
                 cleanQuorum = "ManagementPlan";
             }

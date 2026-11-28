@@ -551,6 +551,52 @@ using (var schemaScope = app.Services.CreateScope())
                 ALTER TABLE [dbo].[Buildings] ADD [EmergencyContactsNote] nvarchar(400) NULL;
             IF COL_LENGTH(N'dbo.Buildings', N'EmergencyMapUrl') IS NULL
                 ALTER TABLE [dbo].[Buildings] ADD [EmergencyMapUrl] nvarchar(500) NULL;
+            IF COL_LENGTH(N'dbo.Buildings', N'SignatureCircularUrl') IS NULL
+                ALTER TABLE [dbo].[Buildings] ADD [SignatureCircularUrl] nvarchar(500) NULL;
+            IF COL_LENGTH(N'dbo.Buildings', N'BoardTargetAsilCount') IS NULL
+                ALTER TABLE [dbo].[Buildings] ADD [BoardTargetAsilCount] int NULL;
+            IF COL_LENGTH(N'dbo.Buildings', N'BoardTargetYedekCount') IS NULL
+                ALTER TABLE [dbo].[Buildings] ADD [BoardTargetYedekCount] int NULL;
+            IF COL_LENGTH(N'dbo.Buildings', N'BoardTargetDenetciCount') IS NULL
+                ALTER TABLE [dbo].[Buildings] ADD [BoardTargetDenetciCount] int NULL;
+            IF COL_LENGTH(N'dbo.BuildingManagers', N'SignatureAuthorityType') IS NULL
+                ALTER TABLE [dbo].[BuildingManagers] ADD [SignatureAuthorityType] int NOT NULL CONSTRAINT [DF_BuildingManagers_SigAuth] DEFAULT 0;
+            IF COL_LENGTH(N'dbo.BuildingManagers', N'IsExternalAppointee') IS NULL
+                ALTER TABLE [dbo].[BuildingManagers] ADD [IsExternalAppointee] bit NOT NULL CONSTRAINT [DF_BuildingManagers_ExtApp] DEFAULT 0;
+            IF COL_LENGTH(N'dbo.BuildingManagers', N'TermStartDate') IS NULL
+                ALTER TABLE [dbo].[BuildingManagers] ADD [TermStartDate] datetime2 NULL;
+            IF COL_LENGTH(N'dbo.BuildingManagers', N'TermEndDate') IS NULL
+                ALTER TABLE [dbo].[BuildingManagers] ADD [TermEndDate] datetime2 NULL;
+            IF COL_LENGTH(N'dbo.BuildingManagers', N'AppointmentMeetingId') IS NULL
+                ALTER TABLE [dbo].[BuildingManagers] ADD [AppointmentMeetingId] int NULL;
+            IF COL_LENGTH(N'dbo.BuildingManagers', N'IsVisibleToResidents') IS NULL
+                ALTER TABLE [dbo].[BuildingManagers] ADD [IsVisibleToResidents] bit NOT NULL CONSTRAINT [DF_BuildingManagers_VisRes] DEFAULT 1;
+            IF COL_LENGTH(N'dbo.BuildingManagers', N'CustomRoleNote') IS NULL
+                ALTER TABLE [dbo].[BuildingManagers] ADD [CustomRoleNote] nvarchar(200) NULL;
+            IF COL_LENGTH(N'dbo.BuildingManagers', N'HierarchyOrder') IS NULL
+                ALTER TABLE [dbo].[BuildingManagers] ADD [HierarchyOrder] int NOT NULL CONSTRAINT [DF_BuildingManagers_HierOrder] DEFAULT 0;
+            IF OBJECT_ID(N'dbo.BoardDecisionVotes', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[BoardDecisionVotes] (
+                    [Id] int IDENTITY(1,1) NOT NULL,
+                    [SystemMeetingId] int NOT NULL,
+                    [BuildingManagerId] int NOT NULL,
+                    [VoterUserId] nvarchar(450) NULL,
+                    [VoterName] nvarchar(150) NOT NULL,
+                    [RoleTitle] nvarchar(80) NOT NULL,
+                    [HierarchyLevel] int NOT NULL,
+                    [VoteChoice] nvarchar(20) NOT NULL,
+                    [DissentNote] nvarchar(1000) NULL,
+                    [ApprovalTraceCode] nvarchar(40) NULL,
+                    [VotedAt] datetime2 NULL,
+                    [CreatedAt] datetime2 NOT NULL,
+                    [UpdatedAt] datetime2 NULL,
+                    [IsDeleted] bit NOT NULL,
+                    CONSTRAINT [PK_BoardDecisionVotes] PRIMARY KEY ([Id]),
+                    CONSTRAINT [FK_BoardDecisionVotes_SystemMeetings_SystemMeetingId] FOREIGN KEY ([SystemMeetingId]) REFERENCES [dbo].[SystemMeetings] ([Id]) ON DELETE CASCADE,
+                    CONSTRAINT [FK_BoardDecisionVotes_BuildingManagers_BuildingManagerId] FOREIGN KEY ([BuildingManagerId]) REFERENCES [dbo].[BuildingManagers] ([Id]) ON DELETE CASCADE
+                );
+            END
             IF OBJECT_ID(N'dbo.BuildingDecisionVotes', N'U') IS NULL
             BEGIN
                 CREATE TABLE [dbo].[BuildingDecisionVotes] (

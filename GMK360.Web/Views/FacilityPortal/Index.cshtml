@@ -37,13 +37,9 @@
     var allDebts = residentUnits.SelectMany(u => u.Debts ?? new List<GMK360.Core.Entities.UnitDebt>()).Where(d => !d.IsArchived).ToList();
     var ownerDebts = allDebts.Where(d => d.PayerRole == "Owner").ToList();
     var tenantDebts = allDebts.Where(d => d.PayerRole != "Owner").ToList();
-    string boardRoleLabel = boardMembership?.Role == GMK360.Core.Entities.BuildingManagerRole.BoardMember
-        ? "Aza (Yönetim Kurulu)"
-        : boardMembership?.Role == GMK360.Core.Entities.BuildingManagerRole.Auditor
-            ? "Denetçi"
-            : boardMembership?.Role == GMK360.Core.Entities.BuildingManagerRole.HeadManager
-                ? "Yönetici"
-                : "";
+    var allActiveBoardRoster = ViewBag.AllActiveBoardRoster as List<GMK360.Core.Entities.BuildingManager> ?? new List<GMK360.Core.Entities.BuildingManager>();
+    var visibleBoardMembers = ViewBag.VisibleBoardMembers as List<GMK360.Core.Entities.BuildingManager> ?? new List<GMK360.Core.Entities.BuildingManager>();
+    string boardRoleLabel = boardMembership != null ? GMK360.Core.Entities.BuildingManager.GetRoleLabel(boardMembership.Role) : "";
 }
 <!DOCTYPE html>
 <html lang="tr">
@@ -703,11 +699,53 @@
             }
 
             var residentUnitIdSet = residentUnits.Select(u => u.Id).ToHashSet();
+            if (visibleBoardMembers.Any())
+            {
+                <div class="card pwa-card bg-white p-3 mt-3 mb-3 border border-primary border-opacity-25">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-people-fill text-primary me-1"></i> Aktif Yönetim Kurulu İletişim</h6>
+                        <span class="badge bg-primary-subtle text-primary border">@visibleBoardMembers.Count Görevli</span>
+                    </div>
+                    <div class="row g-2 small">
+                        @foreach (var vb in visibleBoardMembers.Where(x => !x.IsTermExpired()))
+                        {
+                            string vbName = !string.IsNullOrWhiteSpace(vb.User?.FirstName) ? $"{vb.User.FirstName} {vb.User.LastName}".Trim() : (vb.User?.DisplayName ?? vb.User?.Email ?? "Kurul Üyesi");
+                            string vbPhone = new string((vb.User?.PhoneNumber ?? "").Where(char.IsDigit).ToArray());
+                            string vbWa = vbPhone.StartsWith("90") ? vbPhone : (vbPhone.StartsWith("0") ? "9" + vbPhone : (vbPhone.Length == 10 ? "90" + vbPhone : vbPhone));
+                            <div class="col-12">
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 bg-light rounded-3 p-2 border">
+                                    <div>
+                                        <span class="badge bg-dark me-1">@GMK360.Core.Entities.BuildingManager.GetRoleLabel(vb.Role)</span>
+                                        <strong class="text-dark">@vbName</strong>
+                                        @if (vb.SignatureAuthorityType != GMK360.Core.Entities.SignatureAuthorityType.None)
+                                        {
+                                            <span class="badge bg-warning-subtle text-warning-emphasis border ms-1">@GMK360.Core.Entities.BuildingManager.GetSignatureLabel(vb.SignatureAuthorityType)</span>
+                                        }
+                                    </div>
+                                    <div class="d-flex gap-1">
+                                        @if (!string.IsNullOrEmpty(vbPhone))
+                                        {
+                                            <a href="tel:@vbPhone" class="btn btn-xs btn-outline-primary rounded-pill px-2"><i class="bi bi-telephone-fill me-1"></i>Ara</a>
+                                            <a href="https://wa.me/@vbWa" target="_blank" class="btn btn-xs btn-outline-success rounded-pill px-2"><i class="bi bi-whatsapp"></i></a>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Telefon eklenmemiş</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
             var tenantAuthorizedMeetings = activeRole == "Tenant"
                 ? meetings.Where(m =>
-                    string.Equals(m.InvitationScope, "AllResidents", StringComparison.OrdinalIgnoreCase)
-                    || (m.Votes ?? new List<GMK360.Core.Entities.BuildingDecisionVote>()).Any(v => !v.IsDeleted && v.ParticipationType == "Vekil" && residentUnitIdSet.Contains(v.BuildingUnitId))).ToList()
-                : meetings;
+                    !string.Equals(m.QuorumType, "BoardMajority", StringComparison.OrdinalIgnoreCase)
+                    && (string.Equals(m.InvitationScope, "AllResidents", StringComparison.OrdinalIgnoreCase)
+                    || (m.Votes ?? new List<GMK360.Core.Entities.BuildingDecisionVote>()).Any(v => !v.IsDeleted && v.ParticipationType == "Vekil" && residentUnitIdSet.Contains(v.BuildingUnitId)))).ToList()
+                : meetings.Where(m => !string.Equals(m.QuorumType, "BoardMajority", StringComparison.OrdinalIgnoreCase) || boardMembership != null || User.IsInRole("Admin") || User.IsInRole("SuperAdmin") || User.IsInRole("BinaYoneticisi")).ToList();
             if (activeRole == "Owner" || tenantAuthorizedMeetings.Any())
             {
             <!-- TOPLANTILAR & KARAR DEFTERİ (MALİK TOPLANTI & OYLAMA YAPAR; KİRACI YALNIZCA VEKALET VARSA GÖRÜR) -->
@@ -728,7 +766,10 @@
                         var scopeUnitsForMeeting = m.IsSiteWide
                             ? allEligibleBuildingUnits
                             : allEligibleBuildingUnits.Where(u => u.BuildingId == m.ContextId).ToList();
-                        var quorum = GMK360.Web.Helpers.KmkQuorumHelper.Compute(scopeUnitsForMeeting, m.Votes, m.QuorumType);
+                        bool isBoardDecision = string.Equals(m.QuorumType, "BoardMajority", StringComparison.OrdinalIgnoreCase);
+                        var quorum = isBoardDecision
+                            ? GMK360.Web.Helpers.KmkQuorumHelper.ComputeBoardMajority(allActiveBoardRoster, m.BoardVotes)
+                            : GMK360.Web.Helpers.KmkQuorumHelper.Compute(scopeUnitsForMeeting, m.Votes, m.QuorumType);
                         var mVotes = (m.Votes ?? new List<GMK360.Core.Entities.BuildingDecisionVote>()).Where(v => !v.IsDeleted).ToList();
                         var mAttachments = (m.Attachments ?? new List<GMK360.Core.Entities.BuildingDecisionAttachment>()).Where(a => !a.IsDeleted).OrderByDescending(a => a.CreatedAt).ToList();
                         var proxyUnitIds = mVotes.Where(v => v.ParticipationType == "Vekil").Select(v => v.BuildingUnitId).ToHashSet();
@@ -794,7 +835,54 @@
                                     }
                                 </div>
                             }
-                            @if (!isDiscussionStage && !m.IsConcluded && eligibleUnitsForUser.Any())
+                            @if (!m.IsConcluded && isBoardDecision && boardMembership != null)
+                            {
+                                var myBoardVote = (m.BoardVotes ?? new List<GMK360.Core.Entities.BoardDecisionVote>())
+                                    .FirstOrDefault(v => !v.IsDeleted && v.BuildingManagerId == boardMembership.Id);
+                                <div class="mt-2 pt-2 border-top bg-white rounded-3 p-2">
+                                    <div class="d-flex justify-content-between align-items-center mb-2 small">
+                                        <strong><i class="bi bi-shield-check text-primary me-1"></i>Kurul Karar Oylaması (Salt Çoğunluk: @quorum.ApprovedUnits/@quorum.RequiredUnitCount)</strong>
+                                        <span class="badge @(quorum.IsQuorumMet ? "bg-success" : "bg-warning text-dark")">
+                                            @(quorum.IsQuorumMet ? "✅ Yeter Sayı Sağlandı" : $"⏳ Onay Bekliyor ({quorum.ApprovedUnits}/{quorum.RequiredUnitCount})")
+                                        </span>
+                                    </div>
+                                    @if (boardMembership.CanVoteBoardDecisions())
+                                    {
+                                        <div class="d-flex flex-wrap gap-1 align-items-center">
+                                            <form asp-action="SubmitRemoteBoardVote" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="buildingId" value="@buildingId" />
+                                                <input type="hidden" name="meetingId" value="@m.Id" />
+                                                <input type="hidden" name="buildingManagerId" value="@boardMembership.Id" />
+                                                <input type="hidden" name="voteChoice" value="Kabul" />
+                                                <input type="hidden" name="previewRole" value="@(canSwitch ? activeRole : "")" />
+                                                <button type="submit" class="btn btn-xs @(myBoardVote?.VoteChoice == "Kabul" ? "btn-success" : "btn-outline-success") rounded-pill px-3 fw-bold">
+                                                    ✅ Kurul Onayı Ver
+                                                </button>
+                                            </form>
+                                            <form asp-action="SubmitRemoteBoardVote" method="post" class="d-flex gap-1 flex-grow-1">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="buildingId" value="@buildingId" />
+                                                <input type="hidden" name="meetingId" value="@m.Id" />
+                                                <input type="hidden" name="buildingManagerId" value="@boardMembership.Id" />
+                                                <input type="hidden" name="voteChoice" value="Ret" />
+                                                <input type="hidden" name="previewRole" value="@(canSwitch ? activeRole : "")" />
+                                                <input type="text" name="dissentNote" class="form-control form-control-sm" value="@myBoardVote?.DissentNote" placeholder="Karşı oy gerekçesi / şerh" style="font-size:.74rem;" />
+                                                <button type="submit" class="btn btn-xs @(myBoardVote?.VoteChoice == "Ret" ? "btn-danger" : "btn-outline-danger") rounded-pill px-2 fw-bold text-nowrap">
+                                                    ❌ Muhalif / Ret
+                                                </button>
+                                            </form>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="small text-muted">
+                                            <i class="bi bi-lock me-1"></i>@(boardMembership.IsTermExpired() ? "Görev süreniz dolduğu için oylama yetkiniz kapalıdır." : $"{GMK360.Core.Entities.BuildingManager.GetRoleLabel(boardMembership.Role)} statüsünde kurul karar oylamasına katılmazsınız (İzleyici/Denetim).")
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            @if (!isDiscussionStage && !m.IsConcluded && eligibleUnitsForUser.Any() && !isBoardDecision)
                             {
                                 <div class="mt-2 pt-2 border-top bg-white rounded-3 p-2">
                                     <div class="fw-bold mb-1" style="font-size:.78rem;">

@@ -1,260 +1,567 @@
 @{
+    ViewData["Title"] = "Yönetim Kurulu & Yetkiler";
     Layout = "~/Views/Shared/_FacilityLayout.cshtml";
-    ViewData["Title"] = "Kurul, Yetkiler & Site Ayarları";
     var buildings = ViewBag.Buildings as List<GMK360.Core.Entities.Building> ?? new List<GMK360.Core.Entities.Building>();
     var selected = ViewBag.SelectedBuilding as GMK360.Core.Entities.Building;
     var complex = ViewBag.Complex as GMK360.Core.Entities.HousingComplex;
     var siteBlocks = ViewBag.SiteBlocks as List<GMK360.Core.Entities.Building> ?? new List<GMK360.Core.Entities.Building>();
     var managers = ViewBag.Managers as List<GMK360.Core.Entities.BuildingManager> ?? new List<GMK360.Core.Entities.BuildingManager>();
+    var siteOwnerUnits = ViewBag.SiteOwnerUnits as List<GMK360.Core.Entities.BuildingUnit> ?? new List<GMK360.Core.Entities.BuildingUnit>();
+    var boardPlan = ViewBag.BoardPlan as GMK360.Web.Helpers.KmkBoardPlan ?? new GMK360.Web.Helpers.KmkBoardPlan();
     var recentDecisions = ViewBag.RecentGovernanceDecisions as List<GMK360.Core.Entities.SystemMeeting> ?? new List<GMK360.Core.Entities.SystemMeeting>();
+    var decisionScans = ViewBag.DecisionScansByMeeting as Dictionary<int, GMK360.Core.Entities.DocumentArchive> ?? new Dictionary<int, GMK360.Core.Entities.DocumentArchive>();
+    var circularDocs = ViewBag.CircularDocs as List<GMK360.Core.Entities.DocumentArchive> ?? new List<GMK360.Core.Entities.DocumentArchive>();
 
-    var activeManagers = managers.Where(m => m.IsActive).ToList();
-    var archivedManagers = managers.Where(m => !m.IsActive).ToList();
+    var activeManagers = managers.Where(m => m.IsActive).OrderBy(m => GMK360.Core.Entities.BuildingManager.GetHierarchyLevel(m.Role)).ThenBy(m => m.HierarchyOrder).ToList();
+    var archivedManagers = managers.Where(m => !m.IsActive || m.IsTermExpired()).ToList();
+    var expiringSoonOrExpired = activeManagers.Where(m => m.TermEndDate.HasValue && m.TermEndDate.Value.Date <= DateTime.Today.AddDays(30)).OrderBy(m => m.TermEndDate).ToList();
+    var activeReserves = activeManagers.Where(m => m.Role == GMK360.Core.Entities.BuildingManagerRole.ReserveMember && !m.IsTermExpired()).OrderBy(m => m.HierarchyOrder).ToList();
+    var firstReserve = activeReserves.FirstOrDefault();
+
+    string displayFacilityName = complex != null ? complex.Name : (selected?.Name ?? "Site / Bina");
     string currentSubdomain = complex?.Subdomain ?? selected?.Subdomain ?? "";
-    string displayFacilityName = complex?.Name ?? selected?.Name ?? "Site / Bina Yönetimi";
+    var decById = recentDecisions.ToDictionary(d => d.Id, d => d);
+    string latestCircularUrl = circularDocs.FirstOrDefault()?.DocumentUrl ?? selected?.SignatureCircularUrl ?? "";
 }
 
 <div class="container-fluid py-3 px-1">
-    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 bg-white p-4 rounded-4 shadow-sm">
+    <!-- Üst Başlık & Bina Seçimi -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-3 bg-white p-4 rounded-4 shadow-sm">
         <div>
-            <h2 class="fw-bold text-dark mb-1">
-                <i class="bi bi-diagram-3 text-primary me-2"></i>Kurul, Yetkiler &amp; Site Ayarları
-            </h2>
-            <p class="text-muted small mb-0">
-                Yönetici, aza ve denetçi yetkilendirmeleri, KMK karar bazlı atamalar, kurumsal site adresi ve yapı/adres düzenleme merkezi.
-            </p>
+            <h2 class="fw-bold text-dark mb-1"><i class="bi bi-award-fill text-warning me-2"></i>Yönetim Kurulu, İmza Yetkileri &amp; Sirküler</h2>
+            <p class="text-muted small mb-0">634 sayılı KMK Md. 34 ve Md. 41 uyarınca sıralı yönetim kadrosu, imza sirküleri, görev dönemi ve sakin şeffaflık yönetimi.</p>
         </div>
-        @if (selected != null)
-        {
-            <div class="d-flex flex-wrap gap-2">
-                <a href="/BuildingManager/Oylamalar?buildingId=@selected.Id&preset=AppointManager" class="btn btn-outline-primary rounded-pill px-3 fw-semibold">
-                    <i class="bi bi-person-check me-1"></i> Yönetici Atama Kararı Aç
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            @if (buildings.Count > 1)
+            {
+                <form method="get" asp-action="Governance" class="d-flex align-items-center gap-2">
+                    <select name="buildingId" class="form-select form-select-sm rounded-pill px-3" onchange="this.form.submit()">
+                        @foreach (var b in buildings)
+                        {
+                            <option value="@b.Id" selected="@(selected?.Id == b.Id ? "selected" : null)">@b.Name</option>
+                        }
+                    </select>
+                </form>
+            }
+            @if (selected != null)
+            {
+                <a href="/BuildingManager/Oylamalar?buildingId=@selected.Id" class="btn btn-sm btn-outline-dark rounded-pill px-3 fw-semibold">
+                    <i class="bi bi-journal-check me-1"></i> Karar Defteri
                 </a>
-                <a href="/BuildingManager/Oylamalar?buildingId=@selected.Id&preset=AppointBoardMember" class="btn btn-outline-success rounded-pill px-3 fw-semibold">
-                    <i class="bi bi-people-fill me-1"></i> Aza / Denetçi Kararı Aç
+                <a href="/BuildingManager/Toplantilar?buildingId=@selected.Id" class="btn btn-sm btn-success rounded-pill px-3 fw-bold">
+                    <i class="bi bi-plus-circle me-1"></i> Genel Kurul Çağrısı Aç
                 </a>
-                <a href="/BuildingManager/Onboarding/@selected.Id" class="btn btn-dark rounded-pill px-3 fw-semibold">
-                    <i class="bi bi-buildings me-1"></i> Yapı, Blok &amp; Adres Düzenle
-                </a>
-            </div>
-        }
+            }
+        </div>
     </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-4 shadow-sm border-0 mb-3" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i><strong>@TempData["SuccessMessage"]</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-4 shadow-sm border-0 mb-3" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
 
     @if (TempData["LastActivationUrl"] != null)
     {
-        <div class="alert alert-info rounded-4 shadow-sm d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
-            <div>
-                <div class="fw-bold"><i class="bi bi-key-fill me-1"></i>@(TempData["LastActivationLabel"] ?? "Kurul Üyesi") İlk Giriş Bağlantısı</div>
-                <small class="text-muted">Üye bu linkten kendi şifresini belirleyerek sisteme ve kurul paneline erişebilir:</small>
-                <div class="mt-1"><code class="user-select-all">@TempData["LastActivationUrl"]</code></div>
+        <div class="card border-0 shadow-sm rounded-4 bg-success-subtle mb-3 p-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div class="small text-dark">
+                    <i class="bi bi-link-45deg me-1"></i><strong>@TempData["LastActivationLabel"]</strong> için Profil Aktivasyon Bağlantısı:
+                    <code class="ms-1 user-select-all">@TempData["LastActivationUrl"]</code>
+                </div>
+                <button type="button" class="btn btn-xs btn-success rounded-pill px-3 fw-bold"
+                        onclick="navigator.clipboard.writeText('@TempData["LastActivationUrl"]'); this.innerText='Kopyalandı!';">
+                    Bağlantıyı Kopyala
+                </button>
             </div>
-            <button type="button" class="btn btn-sm btn-primary rounded-pill px-3" onclick="navigator.clipboard?.writeText('@TempData["LastActivationUrl"]')">
-                <i class="bi bi-clipboard me-1"></i> Bağlantıyı Kopyala
-            </button>
         </div>
     }
 
     @if (selected == null)
     {
-        <div class="alert alert-warning rounded-4">
-            Henüz yönetilen aktif bir site veya bina bulunamadı.
-        </div>
+        <div class="alert alert-info rounded-4">Yönetim kurulu tanımlamak için önce bina/site oluşturunuz.</div>
     }
     else
     {
-        @if (buildings.Count > 1)
+        <!-- KMK 1 YIL GÖREV SÜRESİ DOLUM / 30 GÜN UYARISI -->
+        @if (expiringSoonOrExpired.Any())
         {
-            <div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
-                <span class="small fw-bold text-muted me-1">Seçili Yapı / Site:</span>
-                @foreach (var b in buildings)
-                {
-                    <a href="/BuildingManager/Governance?buildingId=@b.Id"
-                       class="btn btn-sm @(b.Id == selected.Id ? "btn-primary" : "btn-outline-secondary") rounded-pill px-3">
-                        @b.Name
-                    </a>
-                }
+            var expiredList = expiringSoonOrExpired.Where(x => x.IsTermExpired()).ToList();
+            <div class="alert @(expiredList.Any() ? "alert-danger border-danger" : "alert-warning border-warning") border-start border-4 rounded-4 shadow-sm mb-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div class="small">
+                        <i class="bi bi-exclamation-octagon-fill me-2 fs-5 align-middle"></i>
+                        @if (expiredList.Any())
+                        {
+                            <strong>Görev Süresi Doldu (İmza &amp; PIN Oylaması Kilitlendi):</strong>
+                            <span>@expiredList.Count kurul üyesinin 1 yıllık görev süresi dolmuştur. Yeni Genel Kurul kararı ile yönetim atayın veya dönemi yenileyin.</span>
+                        }
+                        else
+                        {
+                            var soon = expiringSoonOrExpired.First();
+                            int daysLeft = soon.TermEndDate.HasValue ? (int)Math.Ceiling((soon.TermEndDate.Value.Date - DateTime.Today).TotalDays) : 0;
+                            <strong>Görev Süresi Hatırlatması (KMK 1 Yıl Kuralı):</strong>
+                            <span>Yönetim Kurulu görev süreniz <strong>@daysLeft gün içinde</strong> (@soon.TermEndDate?.ToString("dd.MM.yyyy")) doluyor; Olağan Genel Kurul çağrısı planlanmalıdır.</span>
+                        }
+                    </div>
+                    <a href="/BuildingManager/Toplantilar?buildingId=@selected.Id" class="btn btn-xs btn-dark rounded-pill px-3 fw-bold">Olağan Genel Kurul Çağrısı</a>
+                </div>
             </div>
         }
 
-        <div class="row g-4">
-            <!-- Sol Sütun: Aktif Kurul Kadrosu & Aza Ekleme -->
-            <div class="col-lg-7">
-                <div class="card border-0 shadow-sm rounded-4 mb-4">
-                    <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
-                        <div>
-                            <h5 class="fw-bold mb-0"><i class="bi bi-shield-check text-success me-2"></i>Aktif Yönetim &amp; Denetim Kurulu</h5>
-                            <small class="text-muted">@displayFacilityName • @activeManagers.Count aktif yetkili</small>
+        <!-- KMK OTOMATİK ÖNERİ & ÖZET ŞERİDİ -->
+        <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden">
+            <div class="card-body p-4 bg-white">
+                <div class="row g-3 align-items-center">
+                    <div class="col-lg-8">
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3">@boardPlan.TierRangeLabel</span>
+                            <span class="badge bg-dark rounded-pill px-3">@boardPlan.LegalStatusLabel</span>
+                            @if (boardPlan.UsesCustomPlanCounts)
+                            {
+                                <span class="badge bg-info-subtle text-info-emphasis border rounded-pill px-3">Yönetim Planı Özel Sayısı Aktif</span>
+                            }
                         </div>
-                        <span class="badge bg-light text-dark border rounded-pill">KMK Md. 34 &amp; 41</span>
+                        <h5 class="fw-bold text-dark mb-1">@displayFacilityName — KMK Otomatik Kadro Planı &amp; Salt Çoğunluk</h5>
+                        <p class="small text-muted mb-2">
+                            <strong>Önerilen:</strong> @boardPlan.RecommendedAsilNote • Yedek: @boardPlan.RecommendedYedekNote • Denetçi: @boardPlan.RecommendedDenetciNote
+                        </p>
+                        <div class="d-flex flex-wrap gap-2 small">
+                            <span class="badge bg-success-subtle text-success border px-3 py-2">
+                                Aktif Asil (Seviye 1-3): <strong>@boardPlan.ActiveAsilCount / @boardPlan.TargetAsilCount</strong>
+                            </span>
+                            <span class="badge bg-primary-subtle text-primary border px-3 py-2">
+                                PIN Salt Çoğunluk Formülü (Asil/2)+1: <strong>@(boardPlan.BoardQuorumRequired > 0 ? $"{boardPlan.BoardQuorumRequired}/{boardPlan.ActiveAsilCount}" : "Asil Üye Atayın")</strong>
+                            </span>
+                            <span class="badge bg-secondary-subtle text-dark border px-3 py-2">
+                                Yedek: <strong>@boardPlan.ActiveReserveCount / @boardPlan.TargetYedekCount</strong>
+                            </span>
+                            <span class="badge bg-info-subtle text-info-emphasis border px-3 py-2">
+                                Denetçi (Malik Şart): <strong>@boardPlan.ActiveAuditorCount / @boardPlan.TargetDenetciCount</strong>
+                            </span>
+                        </div>
                     </div>
-                    <div class="card-body p-3">
-                        @if (activeManagers.Any())
-                        {
-                            <div class="list-group list-group-flush mb-3">
-                                @foreach (var m in activeManagers)
-                                {
-                                    var roleBadge = m.Role == GMK360.Core.Entities.BuildingManagerRole.HeadManager
-                                        ? ("Ana Yönetici (Başkan)", "bg-primary")
-                                        : m.Role == GMK360.Core.Entities.BuildingManagerRole.Auditor
-                                            ? ("Denetçi", "bg-warning text-dark")
-                                            : ("Aza (Yönetim Kurulu)", "bg-success");
-                                    var fullName = m.User != null && !string.IsNullOrWhiteSpace(m.User.FirstName)
-                                        ? $"{m.User.FirstName} {m.User.LastName}".Trim()
-                                        : (m.User?.DisplayName ?? m.User?.Email ?? "Yetkili Hesap");
-                                    <div class="list-group-item px-2 py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
-                                        <div>
-                                            <span class="badge @roleBadge.Item2 rounded-pill me-2">@roleBadge.Item1</span>
-                                            <span class="fw-bold text-dark">@fullName</span>
-                                            <div class="small text-muted mt-1">
-                                                @if (!string.IsNullOrWhiteSpace(m.User?.Email))
-                                                {
-                                                    <span class="me-3"><i class="bi bi-envelope me-1"></i>@m.User.Email</span>
-                                                }
-                                                @if (!string.IsNullOrWhiteSpace(m.User?.PhoneNumber))
-                                                {
-                                                    <span class="me-3"><i class="bi bi-telephone me-1"></i>@m.User.PhoneNumber</span>
-                                                }
-                                                <span><i class="bi bi-calendar3 me-1"></i>Yetki Başlangıcı: @m.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy")</span>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            @if (m.Role == GMK360.Core.Entities.BuildingManagerRole.HeadManager && activeManagers.Count(x => x.Role == GMK360.Core.Entities.BuildingManagerRole.HeadManager) <= 1)
-                                            {
-                                                <span class="badge bg-light text-muted border rounded-pill">Ana Yönetici (Devir ile değişir)</span>
-                                            }
-                                            else
-                                            {
-                                                <form asp-action="RemoveGovernanceMember" asp-controller="BuildingManager" method="post" class="d-inline"
-                                                      onsubmit="return confirm('Bu üyeyi aktif kuruldan çıkarıp arşive almak istiyor musunuz? Geçmiş işlemler silinmez.');">
-                                                    @Html.AntiForgeryToken()
-                                                    <input type="hidden" name="buildingId" value="@selected.Id" />
-                                                    <input type="hidden" name="managerId" value="@m.Id" />
-                                                    <input type="hidden" name="returnTo" value="Governance" />
-                                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-3">
-                                                        <i class="bi bi-person-dash me-1"></i> Pasife Al
-                                                    </button>
-                                                </form>
-                                            }
-                                        </div>
-                                    </div>
-                                }
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="alert alert-light border small mb-3">
-                                Henüz kurumsal yönetici dışında atanmış Aza veya Denetçi kaydı bulunmuyor. Aşağıdan ekleyebilir veya Karar Defteri ile seçim başlatabilirsiniz.
-                            </div>
-                        }
-
-                        <div class="border-top pt-3 mt-2">
-                            <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
-                                <h6 class="fw-bold mb-0"><i class="bi bi-person-plus text-primary me-1"></i>Doğrudan Aza / Denetçi / Kurul Üyesi Tanımla</h6>
-                                <a href="/BuildingManager/Oylamalar?buildingId=@selected.Id&preset=AppointBoardMember" class="small text-decoration-none fw-semibold">
-                                    Veya Karar Defteri Oylamasıyla Seç →
-                                </a>
-                            </div>
-                            <form asp-action="AssignGovernanceMember" asp-controller="BuildingManager" method="post" class="row g-2">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="buildingId" value="@selected.Id" />
-                                <input type="hidden" name="returnTo" value="Governance" />
-                                <div class="col-md-4">
-                                    <label class="form-label small fw-bold mb-1">Görev / Yetki</label>
-                                    <select name="role" class="form-select form-select-sm">
-                                        <option value="@((int)GMK360.Core.Entities.BuildingManagerRole.BoardMember)" selected>Aza (Yönetim Kurulu)</option>
-                                        <option value="@((int)GMK360.Core.Entities.BuildingManagerRole.Auditor)">Denetçi (Denetim Kurulu)</option>
-                                        <option value="@((int)GMK360.Core.Entities.BuildingManagerRole.HeadManager)">Yardımcı Yönetici (Başkan)</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label small fw-bold mb-1">Adı Soyadı *</label>
-                                    <input type="text" name="fullName" class="form-control form-control-sm" required placeholder="Örn: Ahmet Demir" />
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label small fw-bold mb-1">Telefon</label>
-                                    <input type="text" name="phoneNumber" class="form-control form-control-sm" placeholder="05XX XXX XX XX" />
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label small fw-bold mb-1">E-Posta (Aktivasyon Daveti İçin)</label>
-                                    <input type="email" name="email" class="form-control form-control-sm" placeholder="uye@ornek.com" />
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label small fw-bold mb-1">TCKN (Opsiyonel)</label>
-                                    <input type="text" name="tcIdentityNo" class="form-control form-control-sm" maxlength="11" placeholder="11 hane" />
-                                </div>
-                                <div class="col-md-3 d-flex align-items-end">
-                                    <button type="submit" class="btn btn-sm btn-primary w-100 rounded-pill fw-semibold">
-                                        Kurula Ekle
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-
-                        @if (archivedManagers.Any())
-                        {
-                            <div class="mt-3 pt-2 border-top">
-                                <button class="btn btn-link btn-sm text-muted text-decoration-none p-0" type="button" data-bs-toggle="collapse" data-bs-target="#archivedMgrList">
-                                    <i class="bi bi-clock-history me-1"></i> Geçmiş Dönem Yöneticileri &amp; Azalar (@archivedManagers.Count)
-                                </button>
-                                <div class="collapse mt-2" id="archivedMgrList">
-                                    <ul class="list-group list-group-flush small">
-                                        @foreach (var am in archivedManagers)
-                                        {
-                                            <li class="list-group-item px-0 py-1 text-muted d-flex justify-content-between">
-                                                <span>@(am.User?.DisplayName ?? am.User?.Email ?? am.UserId) (@am.Role)</span>
-                                                <span>Arşiv • @(am.UpdatedAt?.ToLocalTime().ToString("dd.MM.yyyy") ?? am.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy"))</span>
-                                            </li>
-                                        }
-                                    </ul>
-                                </div>
-                            </div>
-                        }
+                    <div class="col-lg-4 text-lg-end">
+                        <button type="button" class="btn btn-sm btn-outline-dark rounded-pill px-3 fw-semibold" data-bs-toggle="collapse" data-bs-target="#customBoardCountBox">
+                            <i class="bi bi-sliders me-1"></i> Özel Sayı Belirle (Yönetim Planı)
+                        </button>
                     </div>
                 </div>
 
-                <!-- Karar Defteri Dayanaklı Atama & Aidat Geçmişi -->
-                <div class="card border-0 shadow-sm rounded-4">
-                    <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
-                        <h6 class="fw-bold mb-0"><i class="bi bi-journal-check text-success me-2"></i>Son Karar Defteri Oylamaları</h6>
-                        <a href="/BuildingManager/Oylamalar?buildingId=@selected.Id" class="btn btn-xs btn-outline-success rounded-pill fw-semibold">Tümünü Yönet →</a>
+                <div class="collapse mt-3 pt-3 border-top" id="customBoardCountBox">
+                    <form asp-action="SetCustomBoardCounts" asp-controller="BuildingManager" method="post" class="row g-2 align-items-end small">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="buildingId" value="@selected.Id" />
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold mb-1">Hedef Asil Üye (Başkan+Aza)</label>
+                            <input type="number" name="asilCount" min="1" max="15" class="form-control form-control-sm" value="@boardPlan.TargetAsilCount" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold mb-1">Hedef Yedek Üye</label>
+                            <input type="number" name="yedekCount" min="0" max="15" class="form-control form-control-sm" value="@boardPlan.TargetYedekCount" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold mb-1">Hedef Denetçi</label>
+                            <input type="number" name="denetciCount" min="0" max="9" class="form-control form-control-sm" value="@boardPlan.TargetDenetciCount" />
+                        </div>
+                        <div class="col-md-3 d-flex gap-1">
+                            <button type="submit" class="btn btn-sm btn-dark rounded-pill px-3 fw-bold">Uygula</button>
+                            <button type="submit" name="resetToAuto" value="true" class="btn btn-sm btn-outline-secondary rounded-pill px-2" title="KMK otomatik öneriye dön">Otomatik</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- AKTİF DÖNEM YÖNETİM KURULU KARTLARI (SIRALI KADRO: DOLU + ATAMA BEKLİYOR) -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
+            <h5 class="fw-bold text-dark mb-0"><i class="bi bi-people-fill text-primary me-2"></i>Mevcut Dönem Yönetim Kurulu &amp; Sıralı Kadro (@boardPlan.Slots.Count Koltuk)</h5>
+            <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold" onclick="document.getElementById('assignBoardCard').scrollIntoView({behavior:'smooth'});">
+                <i class="bi bi-person-plus-fill me-1"></i> Yeni Üye / Aza / Denetçi Ekle
+            </button>
+        </div>
+
+        <div class="row g-3 mb-4">
+            @foreach (var slot in boardPlan.Slots)
+            {
+                var mem = slot.AssignedMember;
+                if (mem == null)
+                {
+                    <!-- ATAMA BEKLİYOR BOŞ KOLTUK KARTI -->
+                    <div class="col-md-6 col-xl-4">
+                        <div class="card h-100 rounded-4 shadow-none bg-light" style="border: 2px dashed #94a3b8;">
+                            <div class="card-body p-3 d-flex flex-column justify-content-between">
+                                <div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge bg-secondary rounded-pill">Seviye @slot.LevelNo • Sıra #@slot.SlotOrder</span>
+                                        <span class="badge bg-warning text-dark rounded-pill">⏳ Atama Bekliyor</span>
+                                    </div>
+                                    <h6 class="fw-bold text-dark mb-1">@slot.SlotTitle</h6>
+                                    <p class="small text-muted mb-2">
+                                        @(slot.LevelNo == 5 ? "KMK Md. 41: Mutlaka tapu sahibi (kat maliki) seçilmelidir." :
+                                          slot.LevelNo == 4 ? "Asil üyelerden biri ayrıldığında sıradan asile yükselir." :
+                                          slot.LevelNo <= 3 ? $"Karar oylamasında (PIN) oy hakkına sahip koltuk • Önerilen Yetki: {GMK360.Core.Entities.BuildingManager.GetSignatureLabel(slot.SuggestedSignatureType)}" : "")
+                                    </p>
+                                </div>
+                                <div class="d-flex flex-wrap gap-2 mt-2">
+                                    <button type="button" class="btn btn-xs btn-primary rounded-pill px-3 fw-bold"
+                                            onclick="prefillAssignForm('@slot.TargetRole', @((int)slot.SuggestedSignatureType), @slot.SlotOrder)">
+                                        <i class="bi bi-person-plus me-1"></i> Bu Koltuğa Kişi Ata
+                                    </button>
+                                    @if (slot.LevelNo <= 3 && firstReserve != null)
+                                    {
+                                        <form asp-action="PromoteReserveToActive" asp-controller="BuildingManager" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="buildingId" value="@selected.Id" />
+                                            <input type="hidden" name="managerId" value="@firstReserve.Id" />
+                                            <button type="submit" class="btn btn-xs btn-outline-success rounded-pill px-2 fw-semibold" title="Sıradaki Yedek Üyeyi Asil Kadroya Yükselt">
+                                                ⬆️ Yedekten Yükselt
+                                            </button>
+                                        </form>
+                                    }
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="card-body p-3">
-                        @if (recentDecisions.Any())
-                        {
-                            <div class="list-group list-group-flush small">
-                                @foreach (var dec in recentDecisions.Take(6))
-                                {
-                                    <div class="list-group-item px-0 py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                }
+                else
+                {
+                    <!-- ATANMIŞ YÖNETİM KURULU KARTI -->
+                    int lvl = GMK360.Core.Entities.BuildingManager.GetHierarchyLevel(mem.Role);
+                    bool expired = mem.IsTermExpired();
+                    bool expiringSoon = !expired && mem.TermEndDate.HasValue && mem.TermEndDate.Value.Date <= DateTime.Today.AddDays(30);
+                    string fullNm = !string.IsNullOrWhiteSpace(mem.User?.FirstName)
+                        ? $"{mem.User.FirstName} {mem.User.LastName}".Trim()
+                        : (mem.User?.DisplayName ?? mem.User?.Email ?? "Kurul Üyesi");
+                    string cleanPhoneDigits = new string((mem.User?.PhoneNumber ?? "").Where(char.IsDigit).ToArray());
+                    string waPhone = cleanPhoneDigits.StartsWith("90") ? cleanPhoneDigits : (cleanPhoneDigits.StartsWith("0") ? "9" + cleanPhoneDigits : (cleanPhoneDigits.Length == 10 ? "90" + cleanPhoneDigits : cleanPhoneDigits));
+                    GMK360.Core.Entities.SystemMeeting? appDec = (mem.AppointmentMeetingId.HasValue && decById.TryGetValue(mem.AppointmentMeetingId.Value, out var dFound)) ? dFound : null;
+                    GMK360.Core.Entities.DocumentArchive? appScan = (mem.AppointmentMeetingId.HasValue && decisionScans.TryGetValue(mem.AppointmentMeetingId.Value, out var sFound)) ? sFound : null;
+
+                    <div class="col-md-6 col-xl-4">
+                        <div class="card h-100 border-0 shadow-sm rounded-4 @(expired ? "border border-danger bg-danger-subtle bg-opacity-10" : "bg-white")">
+                            <div class="card-body p-3 d-flex flex-column justify-content-between">
+                                <div>
+                                    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                                         <div>
-                                            <span class="badge bg-light text-dark border me-1">#@(dec.DecisionNumber ?? dec.Id.ToString())</span>
-                                            <strong>@dec.AgendaTitle</strong>
-                                            @if (!string.IsNullOrWhiteSpace(dec.ExecutionSummary))
+                                            <span class="badge @(lvl == 1 ? "bg-success" : lvl == 2 ? "bg-primary" : lvl == 3 ? "bg-dark" : lvl == 4 ? "bg-secondary" : "bg-info text-dark") rounded-pill">
+                                                Seviye @lvl • @GMK360.Core.Entities.BuildingManager.GetRoleLabel(mem.Role)
+                                            </span>
+                                            @if (expired)
                                             {
-                                                <div class="text-success mt-1"><i class="bi bi-check-all me-1"></i>@dec.ExecutionSummary</div>
+                                                <span class="badge bg-danger rounded-pill ms-1">Süresi Doldu</span>
+                                            }
+                                            else if (expiringSoon)
+                                            {
+                                                <span class="badge bg-warning text-dark rounded-pill ms-1">Süre Doluyor</span>
                                             }
                                         </div>
-                                        @if (dec.IsExecuted)
+                                        <span class="badge @(mem.IsExternalAppointee ? "bg-warning-subtle text-warning-emphasis" : "bg-light text-dark") border rounded-pill">
+                                            @(mem.IsExternalAppointee ? "Dışarıdan Atama" : "Site İçi Malik")
+                                        </span>
+                                    </div>
+
+                                    <h6 class="fw-bold text-dark mb-1">@fullNm</h6>
+                                    <div class="small text-muted mb-2">
+                                        @if (!string.IsNullOrWhiteSpace(mem.User?.PhoneNumber))
                                         {
-                                            <span class="badge bg-success rounded-pill">Yürürlüğe Girdi</span>
+                                            <span class="me-2"><i class="bi bi-telephone me-1"></i>@mem.User.PhoneNumber</span>
                                         }
-                                        else
+                                        @if (!string.IsNullOrWhiteSpace(mem.User?.Email))
                                         {
-                                            <span class="badge bg-warning text-dark rounded-pill">Oylamada / Bekliyor</span>
+                                            <span class="d-block text-truncate"><i class="bi bi-envelope me-1"></i>@mem.User.Email</span>
                                         }
                                     </div>
-                                }
+
+                                    <div class="d-flex flex-wrap gap-1 mb-2 small">
+                                        <span class="badge @(mem.SignatureAuthorityType == GMK360.Core.Entities.SignatureAuthorityType.Single ? "bg-danger-subtle text-danger border border-danger-subtle" : mem.SignatureAuthorityType == GMK360.Core.Entities.SignatureAuthorityType.Joint ? "bg-warning-subtle text-warning-emphasis border border-warning-subtle" : "bg-light text-muted border")">
+                                            <i class="bi bi-pen-fill me-1"></i>@GMK360.Core.Entities.BuildingManager.GetSignatureLabel(mem.SignatureAuthorityType)
+                                        </span>
+                                        @if (!string.IsNullOrWhiteSpace(mem.CustomRoleNote))
+                                        {
+                                            <span class="badge bg-light text-dark border">@mem.CustomRoleNote</span>
+                                        }
+                                    </div>
+
+                                    <div class="small text-muted bg-light rounded-3 px-2 py-1 mb-2">
+                                        <i class="bi bi-calendar3 me-1"></i>
+                                        Dönem: @(mem.TermStartDate?.ToString("dd.MM.yyyy") ?? "-") – <strong>@(mem.TermEndDate?.ToString("dd.MM.yyyy") ?? "Belirtilmemiş")</strong>
+                                        @if (expired)
+                                        {
+                                            <span class="text-danger fw-bold d-block">İmza ve PIN oylama yetkisi otomatik kilitli.</span>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- Kart Alt Aksiyonları -->
+                                <div class="border-top pt-2 mt-1 d-flex flex-wrap justify-content-between align-items-center gap-1">
+                                    <div class="d-flex flex-wrap gap-1">
+                                        @if (!string.IsNullOrEmpty(cleanPhoneDigits))
+                                        {
+                                            <a href="tel:@cleanPhoneDigits" class="btn btn-xs btn-outline-primary rounded-pill px-2" title="Ara"><i class="bi bi-telephone-fill"></i></a>
+                                            <a href="https://wa.me/@waPhone" target="_blank" class="btn btn-xs btn-outline-success rounded-pill px-2" title="WhatsApp"><i class="bi bi-whatsapp"></i></a>
+                                        }
+                                        @if (appDec != null)
+                                        {
+                                            <button type="button" class="btn btn-xs btn-outline-dark rounded-pill px-2 fw-semibold"
+                                                    onclick="showAppointmentDecisionModal('@System.Web.HttpUtility.JavaScriptStringEncode($"Karar #{appDec.DecisionNumber ?? appDec.Id.ToString("D2")} ({appDec.MeetingDate:dd.MM.yyyy}) — {appDec.AgendaTitle}")', '@System.Web.HttpUtility.JavaScriptStringEncode(string.Join("\n", appDec.Decisions.Select(d => d.DecisionText)))', '@(appScan?.DocumentUrl ?? "")', @appDec.Id)">
+                                                <i class="bi bi-file-earmark-text me-1"></i>Atama Kararını Gör
+                                            </button>
+                                        }
+                                        @if (mem.Role == GMK360.Core.Entities.BuildingManagerRole.ReserveMember && !expired)
+                                        {
+                                            <form asp-action="PromoteReserveToActive" asp-controller="BuildingManager" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="buildingId" value="@selected.Id" />
+                                                <input type="hidden" name="managerId" value="@mem.Id" />
+                                                <button type="submit" class="btn btn-xs btn-outline-success rounded-pill px-2 fw-semibold">Asile Yükselt</button>
+                                            </form>
+                                        }
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        <form asp-action="ToggleManagerResidentVisibility" asp-controller="BuildingManager" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="buildingId" value="@selected.Id" />
+                                            <input type="hidden" name="managerId" value="@mem.Id" />
+                                            <button type="submit" class="btn btn-xs @(mem.IsVisibleToResidents ? "btn-outline-info text-dark" : "btn-outline-secondary") rounded-pill px-2" title="Daire Sakinleri Portalında Göster / Gizle">
+                                                <i class="bi @(mem.IsVisibleToResidents ? "bi-eye-fill" : "bi-eye-slash-fill") me-1"></i>@(mem.IsVisibleToResidents ? "Sakinlere Açık" : "Gizli")
+                                            </button>
+                                        </form>
+                                        <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill px-2"
+                                                onclick="openEditBoardMemberModal(@mem.Id, '@System.Web.HttpUtility.JavaScriptStringEncode(fullNm)', '@mem.Role', @((int)mem.SignatureAuthorityType), '@(mem.TermStartDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))', '@(mem.TermEndDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.AddYears(1).ToString("yyyy-MM-dd"))', '@(mem.AppointmentMeetingId?.ToString() ?? "")', @(mem.IsExternalAppointee ? "true" : "false"), @(mem.IsVisibleToResidents ? "true" : "false"), @mem.HierarchyOrder, '@System.Web.HttpUtility.JavaScriptStringEncode(mem.CustomRoleNote ?? "")')">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <form asp-action="RemoveGovernanceMember" asp-controller="BuildingManager" method="post" class="d-inline"
+                                              onsubmit="return confirm('Bu üyeyi geçmiş döneme/arşive taşımak istediğinize emin misiniz?');">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="buildingId" value="@selected.Id" />
+                                            <input type="hidden" name="managerId" value="@mem.Id" />
+                                            <input type="hidden" name="returnTo" value="Governance" />
+                                            <button type="submit" class="btn btn-xs btn-outline-danger rounded-pill px-2" title="Pasife Al (Geçmiş Döneme Taşı)"><i class="bi bi-archive"></i></button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+
+        <div class="row g-4">
+            <!-- Sol Sütun: Yeni Kurul Üyesi / Aza / Denetçi Atama Formu + Geçmiş Dönem Arşivi -->
+            <div class="col-lg-7">
+                <div class="card border-0 shadow-sm rounded-4 mb-4" id="assignBoardCard">
+                    <div class="card-header bg-white border-bottom p-3">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-person-plus-fill text-primary me-2"></i>Kurul Üyesi, Aza, Yedek veya Denetçi Ata (KMK Md. 34 / 41)</h6>
+                    </div>
+                    <form asp-action="AssignGovernanceMember" asp-controller="BuildingManager" method="post" class="card-body p-3">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="buildingId" value="@selected.Id" />
+                        <input type="hidden" name="returnTo" value="Governance" />
+                        <input type="hidden" name="hierarchyOrder" id="assignHierarchyOrderInput" value="0" />
+
+                        <div class="row g-2 small">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold mb-1">Görev Unvanı (Seviye 1–5) *</label>
+                                <select name="role" id="assignRoleSelect" class="form-select form-select-sm" onchange="onAssignRoleOrSourceChanged()">
+                                    <option value="HeadManager">Seviye 1 — Yönetim Kurulu Başkanı / Tek Yönetici</option>
+                                    <option value="ViceChair">Seviye 2 — Başkan Yardımcısı / Muhasip Üye</option>
+                                    <option value="BoardMember" selected>Seviye 3 — Yönetim Kurulu Üyesi (Aza)</option>
+                                    <option value="ReserveMember">Seviye 4 — Yedek Üye</option>
+                                    <option value="Auditor">Seviye 5 — Denetçi (KMK Md. 41: Kat Maliki Şart)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold mb-1">Banka &amp; Evrak İmza Yetkisi</label>
+                                <select name="signatureAuthorityType" id="assignSigSelect" class="form-select form-select-sm">
+                                    <option value="0">0 - İmza Yetkisi Yok (Üye / Aza / Denetçi)</option>
+                                    <option value="1">1 - Tek Başına İmzaya Yetkili</option>
+                                    <option value="2">2 - Müşterek (Çift İmzalı) Yetkili</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold mb-1">Üye Kaynağı (KMK Md. 34/41)</label>
+                                <select name="isExternalAppointee" id="assignSourceSelect" class="form-select form-select-sm" onchange="onAssignRoleOrSourceChanged()">
+                                    <option value="false" selected>Site İçi (Tapu Sahibi / Kat Maliki)</option>
+                                    <option value="true">Dışarıdan Atama (Profesyonel / Kiracı)</option>
+                                </select>
+                                <small class="text-danger d-none" id="auditorKmkWarning">Denetçi dışarıdan atanamaz; sadece kat maliki seçilebilir.</small>
+                            </div>
+                            <div class="col-md-6" id="siteOwnerPickWrap">
+                                <label class="form-label fw-bold mb-1">Mevcut Maliklerden Hızlı Seç</label>
+                                <select class="form-select form-select-sm" onchange="pickSiteOwnerForAssign(this)">
+                                    <option value="">-- Daire / Malik Seçin --</option>
+                                    @foreach (var su in siteOwnerUnits)
+                                    {
+                                        <option value="@su.Id" data-name="@su.OwnerName" data-email="@su.OwnerEmail" data-phone="@su.OwnerPhone">
+                                            @(su.Building?.BlockName ?? su.Building?.Name) • @su.DoorNumber (@su.OwnerName)
+                                        </option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold mb-1">Ad Soyad *</label>
+                                <input type="text" name="fullName" id="assignFullName" class="form-control form-control-sm" required placeholder="Örn: Ahmet Demir" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold mb-1">Cep Telefonu (05XX)</label>
+                                <input type="text" name="phoneNumber" id="assignPhone" class="form-control form-control-sm" placeholder="0532 000 00 00" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold mb-1">E-Posta Adresi</label>
+                                <input type="email" name="email" id="assignEmail" class="form-control form-control-sm" placeholder="uye@ornek.com" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold mb-1">T.C. Kimlik No (Opsiyonel)</label>
+                                <input type="text" name="tcIdentityNo" maxlength="11" class="form-control form-control-sm" placeholder="11 hane" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold mb-1">Görev Başlangıcı</label>
+                                <input type="date" name="termStartDate" class="form-control form-control-sm" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold mb-1">Görev Bitişi (Varsayılan +1 Yıl)</label>
+                                <input type="date" name="termEndDate" class="form-control form-control-sm" value="@DateTime.Today.AddYears(1).ToString("yyyy-MM-dd")" />
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold mb-1">Atandığı Karar Defteri Kaydı</label>
+                                <select name="appointmentMeetingId" class="form-select form-select-sm">
+                                    <option value="">-- Bağlanmadı --</option>
+                                    @foreach (var d in recentDecisions)
+                                    {
+                                        <option value="@d.Id">Karar #@(d.DecisionNumber ?? d.Id.ToString("D2")) (@d.MeetingDate.ToString("dd.MM.yyyy")) — @d.AgendaTitle</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold mb-1">Unvan Notu (Örn: Blok Temsilcisi)</label>
+                                <input type="text" name="customRoleNote" class="form-control form-control-sm" placeholder="Opsiyonel kısa not" />
+                            </div>
+
+                            <div class="col-12 d-flex flex-wrap justify-content-between align-items-center gap-2 pt-2">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="isVisibleToResidents" value="true" id="assignVisibleResidents" checked />
+                                    <label class="form-check-label fw-semibold" for="assignVisibleResidents">Daire Sakinleri Panelinde İletişimi Göster</label>
+                                </div>
+                                <button type="submit" class="btn btn-sm btn-primary rounded-pill px-4 fw-bold">
+                                    <i class="bi bi-check2-circle me-1"></i> Kurula Ekle &amp; Aktivasyon Hazırla
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- GEÇMİŞ DÖNEM YÖNETİMLERİ ARŞİVİ -->
+                <div class="card border-0 shadow-sm rounded-4 mb-4">
+                    <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-clock-history text-secondary me-2"></i>Geçmiş Dönem Yönetimleri &amp; Süresi Dolanlar (@archivedManagers.Count)</h6>
+                    </div>
+                    <div class="card-body p-3">
+                        @if (archivedManagers.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle small mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Ad Soyad</th>
+                                            <th>Görev / Seviye</th>
+                                            <th>Dönem</th>
+                                            <th>Durum</th>
+                                            <th>Karar</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var am in archivedManagers)
+                                        {
+                                            string amName = !string.IsNullOrWhiteSpace(am.User?.FirstName) ? $"{am.User.FirstName} {am.User.LastName}".Trim() : (am.User?.Email ?? "Eski Üye");
+                                            <tr>
+                                                <td class="fw-semibold">@amName</td>
+                                                <td>@GMK360.Core.Entities.BuildingManager.GetRoleLabel(am.Role)</td>
+                                                <td>@(am.TermStartDate?.ToString("dd.MM.yy") ?? am.CreatedAt.ToString("dd.MM.yy")) – @(am.TermEndDate?.ToString("dd.MM.yy") ?? "-")</td>
+                                                <td>
+                                                    <span class="badge @(am.IsTermExpired() ? "bg-danger-subtle text-danger" : "bg-secondary-subtle text-secondary")">
+                                                        @(am.IsTermExpired() ? "Süresi Doldu" : "Pasif / Eski Dönem")
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    @if (am.AppointmentMeetingId.HasValue && decById.TryGetValue(am.AppointmentMeetingId.Value, out var decRec))
+                                                    {
+                                                        <span class="badge bg-light text-dark border">#@(decRec.DecisionNumber ?? decRec.Id.ToString())</span>
+                                                    }
+                                                    else { <span class="text-muted">-</span> }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
                             </div>
                         }
                         else
                         {
-                            <div class="small text-muted">Henüz karar defteri kaydı yok. Yeni yönetici atama veya aidat belirleme için karar açabilirsiniz.</div>
+                            <div class="small text-muted">Henüz geçmiş döneme aktarılmış yönetim kurulu kaydı bulunmuyor.</div>
                         }
                     </div>
                 </div>
             </div>
 
-            <!-- Sağ Sütun: Site Kimliği, Yapı & Adres Özeti, Yetki Devri -->
+            <!-- Sağ Sütun: Noter Onaylı İmza Sirküleri, Site Kimliği, Yetki Devri -->
             <div class="col-lg-5">
+                <!-- NOTER ONAYLI İMZA SİRKÜLERİ / YETKİ BELGESİ -->
+                <div class="card border-0 shadow-sm rounded-4 mb-4 border-start border-4 border-primary">
+                    <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-file-earmark-lock-fill text-primary me-2"></i>Banka &amp; Noter İmza Sirküleri</h6>
+                        @if (!string.IsNullOrWhiteSpace(latestCircularUrl))
+                        {
+                            <a href="@latestCircularUrl" target="_blank" class="btn btn-xs btn-success rounded-pill px-3 fw-bold">
+                                <i class="bi bi-eye me-1"></i> Belgeyi Aç
+                            </a>
+                        }
+                    </div>
+                    <div class="card-body p-3">
+                        <p class="small text-muted mb-2">Banka, SGK ve resmi kurum işlemlerinde hızlıca ulaşmak için noter onaylı imza sirkülerini (PDF/Görsel) buraya yükleyin.</p>
+                        <form asp-action="UploadSignatureCircular" asp-controller="BuildingManager" method="post" enctype="multipart/form-data" class="row g-2 mb-2">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="buildingId" value="@selected.Id" />
+                            <div class="col-12">
+                                <input type="text" name="docTitle" class="form-control form-control-sm" placeholder="Belge başlığı (Örn: 2026 Noter İmza Sirküleri)" />
+                            </div>
+                            <div class="col-8">
+                                <input type="file" name="circularFile" class="form-control form-control-sm" accept=".pdf,.jpg,.jpeg,.png,.webp" required />
+                            </div>
+                            <div class="col-4">
+                                <button type="submit" class="btn btn-sm btn-primary w-100 rounded-pill fw-bold">Yükle</button>
+                            </div>
+                        </form>
+                        @if (circularDocs.Any())
+                        {
+                            <div class="list-group list-group-flush small border-top pt-2">
+                                @foreach (var cd in circularDocs)
+                                {
+                                    <a href="@cd.DocumentUrl" target="_blank" class="list-group-item list-group-item-action px-0 py-1 d-flex justify-content-between align-items-center">
+                                        <span><i class="bi bi-file-pdf text-danger me-1"></i>@cd.Title</span>
+                                        <span class="text-muted">@cd.UploadDate.ToString("dd.MM.yyyy")</span>
+                                    </a>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Kurumsal Site Adresi & Kimlik -->
                 <div class="card border-0 shadow-sm rounded-4 mb-4">
                     <div class="card-header bg-white border-bottom p-3">
                         <h6 class="fw-bold mb-0"><i class="bi bi-globe text-info me-2"></i>Kurumsal Site Adresi &amp; Kimlik</h6>
@@ -281,6 +588,7 @@
                     </form>
                 </div>
 
+                <!-- Ana Yönetici Yetki Devri -->
                 <div class="card border-0 shadow-sm rounded-4 mb-4">
                     <div class="card-header bg-white border-bottom p-3">
                         <h6 class="fw-bold mb-0"><i class="bi bi-arrow-left-right text-warning me-2"></i>Ana Yönetici Yetki Devri</h6>
@@ -305,6 +613,7 @@
                     </div>
                 </div>
 
+                <!-- Site, Blok & Adres Yapısı -->
                 <div class="card border-0 shadow-sm rounded-4">
                     <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
                         <h6 class="fw-bold mb-0"><i class="bi bi-building-gear text-secondary me-2"></i>Site, Blok &amp; Adres Yapısı</h6>
@@ -332,3 +641,174 @@
         </div>
     }
 </div>
+
+<!-- Atama Kararı & Islak İmzalı Sayfa Önizleme Modalı -->
+<div class="modal fade" id="appointmentDecisionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-dark text-white border-0">
+                <h6 class="modal-title fw-bold" id="appDecModalTitle">Atama Kararı</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="bg-light border rounded-3 p-3 small mb-3" id="appDecModalBody" style="white-space: pre-line;"></div>
+                <div id="appDecScanWrap" class="d-none border rounded-3 p-3 text-center">
+                    <div class="small fw-bold text-success mb-2"><i class="bi bi-patch-check-fill me-1"></i>Islak İmzalı Noter Defteri Sureti</div>
+                    <a id="appDecScanLink" href="#" target="_blank" class="btn btn-sm btn-outline-success rounded-pill px-4 fw-bold">
+                        <i class="bi bi-file-earmark-image me-1"></i> Tam Boyut / PDF Görüntüle
+                    </a>
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <a id="appDecPrintLink" href="#" target="_blank" class="btn btn-sm btn-outline-dark rounded-pill px-3 fw-semibold">
+                    <i class="bi bi-printer me-1"></i> Noter Çıktısı (A4)
+                </a>
+                <button type="button" class="btn btn-sm btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Kurul Üyesi Düzenle Modalı -->
+@if (selected != null)
+{
+    <div class="modal fade" id="editBoardMemberModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content rounded-4 border-0 shadow" asp-action="UpdateBoardMemberMeta" asp-controller="BuildingManager" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="buildingId" value="@selected.Id" />
+                <input type="hidden" name="managerId" id="editMgrId" />
+                <input type="hidden" name="hierarchyOrder" id="editHierarchyOrder" value="0" />
+                <div class="modal-header bg-primary text-white border-0">
+                    <h6 class="modal-title fw-bold"><i class="bi bi-pencil-square me-2"></i>Kurul Üyesi Düzenle: <span id="editMgrName"></span></h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 row g-2 small">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold mb-1">Görev Unvanı</label>
+                        <select name="role" id="editMgrRole" class="form-select form-select-sm">
+                            <option value="HeadManager">Seviye 1 — Başkan / Tek Yönetici</option>
+                            <option value="ViceChair">Seviye 2 — Başkan Yrd. / Muhasip</option>
+                            <option value="BoardMember">Seviye 3 — Asil Üye (Aza)</option>
+                            <option value="ReserveMember">Seviye 4 — Yedek Üye</option>
+                            <option value="Auditor">Seviye 5 — Denetçi (Malik Şart)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold mb-1">İmza Yetkisi</label>
+                        <select name="signatureAuthorityType" id="editMgrSig" class="form-select form-select-sm">
+                            <option value="0">İmza Yetkisi Yok</option>
+                            <option value="1">Tek Başına İmzaya Yetkili</option>
+                            <option value="2">Müşterek (Çift İmza) Yetkili</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold mb-1">Başlangıç</label>
+                        <input type="date" name="termStartDate" id="editMgrStart" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold mb-1">Bitiş (1 Yıl)</label>
+                        <input type="date" name="termEndDate" id="editMgrEnd" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold mb-1">Atandığı Karar Kaydı</label>
+                        <select name="appointmentMeetingId" id="editMgrMeeting" class="form-select form-select-sm">
+                            <option value="">-- Bağlanmadı --</option>
+                            @foreach (var d in recentDecisions)
+                            {
+                                <option value="@d.Id">#@(d.DecisionNumber ?? d.Id.ToString("D2")) — @d.AgendaTitle</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold mb-1">Kaynak</label>
+                        <select name="isExternalAppointee" id="editMgrExternal" class="form-select form-select-sm">
+                            <option value="false">Site İçi Malik</option>
+                            <option value="true">Dışarıdan Atama</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold mb-1">Unvan Notu</label>
+                        <input type="text" name="customRoleNote" id="editMgrNote" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-12 pt-1">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="isVisibleToResidents" value="true" id="editMgrVisible" />
+                            <label class="form-check-label" for="editMgrVisible">Daire Sakinleri Panelinde Göster</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-sm btn-light rounded-pill" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-sm btn-primary rounded-pill px-4 fw-bold">Güncelle</button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+<script>
+    function prefillAssignForm(roleVal, sigTypeVal, slotOrder) {
+        const roleSel = document.getElementById('assignRoleSelect');
+        const sigSel = document.getElementById('assignSigSelect');
+        const ordInp = document.getElementById('assignHierarchyOrderInput');
+        if (roleSel) roleSel.value = roleVal;
+        if (sigSel) sigSel.value = String(sigTypeVal || 0);
+        if (ordInp) ordInp.value = String(slotOrder || 0);
+        onAssignRoleOrSourceChanged();
+        const card = document.getElementById('assignBoardCard');
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function onAssignRoleOrSourceChanged() {
+        const role = document.getElementById('assignRoleSelect')?.value;
+        const src = document.getElementById('assignSourceSelect');
+        const warn = document.getElementById('auditorKmkWarning');
+        const extOpt = src?.querySelector('option[value="true"]');
+        if (role === 'Auditor') {
+            if (src) src.value = 'false';
+            if (extOpt) extOpt.disabled = true;
+            warn?.classList.remove('d-none');
+        } else {
+            if (extOpt) extOpt.disabled = false;
+            warn?.classList.add('d-none');
+        }
+    }
+
+    function pickSiteOwnerForAssign(sel) {
+        const opt = sel?.options?.[sel.selectedIndex];
+        if (!opt || !opt.value) return;
+        document.getElementById('assignFullName').value = opt.getAttribute('data-name') || '';
+        document.getElementById('assignEmail').value = opt.getAttribute('data-email') || '';
+        document.getElementById('assignPhone').value = opt.getAttribute('data-phone') || '';
+    }
+
+    function showAppointmentDecisionModal(title, body, scanUrl, meetingId) {
+        document.getElementById('appDecModalTitle').innerText = title || 'Atama Kararı';
+        document.getElementById('appDecModalBody').innerText = body || 'Karar metni eklenmemiş.';
+        document.getElementById('appDecPrintLink').href = '/BuildingManager/PrintDecisionSheet?meetingId=' + meetingId + '&format=a4';
+        const wrap = document.getElementById('appDecScanWrap');
+        if (scanUrl) {
+            wrap.classList.remove('d-none');
+            document.getElementById('appDecScanLink').href = scanUrl;
+        } else {
+            wrap.classList.add('d-none');
+        }
+        new bootstrap.Modal(document.getElementById('appointmentDecisionModal')).show();
+    }
+
+    function openEditBoardMemberModal(id, name, role, sigType, startDt, endDt, meetingId, isExt, isVis, order, note) {
+        document.getElementById('editMgrId').value = id;
+        document.getElementById('editMgrName').innerText = name;
+        document.getElementById('editMgrRole').value = role;
+        document.getElementById('editMgrSig').value = String(sigType);
+        document.getElementById('editMgrStart').value = startDt;
+        document.getElementById('editMgrEnd').value = endDt;
+        document.getElementById('editMgrMeeting').value = meetingId || '';
+        document.getElementById('editMgrExternal').value = isExt ? 'true' : 'false';
+        document.getElementById('editMgrVisible').checked = !!isVis;
+        document.getElementById('editHierarchyOrder').value = String(order || 0);
+        document.getElementById('editMgrNote').value = note || '';
+        new bootstrap.Modal(document.getElementById('editBoardMemberModal')).show();
+    }
+</script>
