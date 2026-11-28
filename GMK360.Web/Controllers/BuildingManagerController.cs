@@ -52,10 +52,39 @@ namespace GMK360.Web.Controllers
             bool hasRoster = _context.BuildingManagers.Any(m => m.BuildingId == rootId);
             if (hasRoster)
             {
-                return _context.BuildingManagers.Any(m => m.BuildingId == rootId && m.UserId == userId && m.IsActive);
+                var today = DateTime.Today;
+                return _context.BuildingManagers.Any(m =>
+                    m.BuildingId == rootId
+                    && m.UserId == userId
+                    && m.IsActive
+                    && m.Role != BuildingManagerRole.ReserveMember
+                    && (!m.TermEndDate.HasValue || m.TermEndDate.Value.Date >= today));
             }
 
             return building.ManagerUserId == userId || building.CreatedByUserId == userId;
+        }
+
+        private async Task<bool> CanEditGovernanceRecordsAsync(Building? building)
+        {
+            if (building == null) return false;
+            if (IsAdminOrSuperAdmin()) return true;
+            var userId = GetUserId();
+            if (string.IsNullOrEmpty(userId)) return false;
+
+            int rootId = building.ParentBuildingId ?? building.Id;
+            bool hasRoster = await _context.BuildingManagers.AnyAsync(m => m.BuildingId == rootId);
+            if (!hasRoster)
+            {
+                return building.ManagerUserId == userId || building.CreatedByUserId == userId;
+            }
+
+            var today = DateTime.Today;
+            return await _context.BuildingManagers.AnyAsync(m =>
+                m.BuildingId == rootId
+                && m.UserId == userId
+                && m.IsActive
+                && (m.Role == BuildingManagerRole.HeadManager || m.Role == BuildingManagerRole.ViceChair || m.Role == BuildingManagerRole.BoardMember)
+                && (!m.TermEndDate.HasValue || m.TermEndDate.Value.Date >= today));
         }
 
         private async Task<Building?> GetManagedBuildingAsync(int buildingId)
@@ -75,9 +104,14 @@ namespace GMK360.Web.Controllers
 
             if (!IsAdminOrSuperAdmin())
             {
+                var today = DateTime.Today;
                 query = query.Where(b =>
                     b.BuildingManagers.Any(m => m.IsActive)
-                        ? b.BuildingManagers.Any(m => m.UserId == userId && m.IsActive)
+                        ? b.BuildingManagers.Any(m =>
+                            m.UserId == userId
+                            && m.IsActive
+                            && m.Role != BuildingManagerRole.ReserveMember
+                            && (!m.TermEndDate.HasValue || m.TermEndDate.Value.Date >= today))
                         : (b.ManagerUserId == userId || b.CreatedByUserId == userId));
             }
 
@@ -118,9 +152,14 @@ namespace GMK360.Web.Controllers
 
             if (!User.IsInRole("Admin") && !User.IsInRole("SuperAdmin"))
             {
+                var today = DateTime.Today;
                 query = query.Where(b =>
                     b.BuildingManagers.Any(m => m.IsActive)
-                        ? b.BuildingManagers.Any(m => m.UserId == userId && m.IsActive)
+                        ? b.BuildingManagers.Any(m =>
+                            m.UserId == userId
+                            && m.IsActive
+                            && m.Role != BuildingManagerRole.ReserveMember
+                            && (!m.TermEndDate.HasValue || m.TermEndDate.Value.Date >= today))
                         : (b.ManagerUserId == userId || b.CreatedByUserId == userId));
             }
 
@@ -2317,10 +2356,16 @@ namespace GMK360.Web.Controllers
             bool isVisibleToResidents = true,
             int hierarchyOrder = 0,
             string? customRoleNote = null,
+            int? replaceManagerId = null,
             string? returnTo = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
+            if (!await CanEditGovernanceRecordsAsync(building))
+            {
+                TempData["ErrorMessage"] = "Denetçi / izleyici statüsünde kurul ataması veya yetki değişikliği yapılamaz.";
+                return RedirectToAction(nameof(Governance), new { buildingId });
+            }
 
             var cleanEmail = email?.Trim();
             var cleanPhone = phoneNumber?.Trim();
@@ -2384,6 +2429,18 @@ namespace GMK360.Web.Controllers
                         : RedirectToAction(nameof(Detail), new { id = buildingId });
                 }
             }
+            else if (!string.IsNullOrWhiteSpace(cleanTc))
+            {
+                if (!string.IsNullOrWhiteSpace(targetUser.TcIdentityNo) && !string.Equals(targetUser.TcIdentityNo.Trim(), cleanTc, StringComparison.Ordinal))
+                {
+                    TempData["ErrorMessage"] = "Girilen T.C. Kimlik Numarası bu kullanıcının kayıtlı TCKN bilgisi ile uyuşmuyor. Lütfen kontrol ediniz.";
+                    return RedirectToAction(nameof(Governance), new { buildingId });
+                }
+                if (string.IsNullOrWhiteSpace(targetUser.TcIdentityNo))
+                {
+                    targetUser.TcIdentityNo = cleanTc;
+                }
+            }
 
             // KMK Madde 41: Denetçi mutlaka bu bina/sitede tapu sahibi (kat maliki) olmalıdır
             if (role == BuildingManagerRole.Auditor)
@@ -2411,6 +2468,36 @@ namespace GMK360.Web.Controllers
 
             var resolvedStart = termStartDate ?? DateTime.Today;
             var resolvedEnd = termEndDate ?? resolvedStart.AddYears(1);
+
+            if (replaceManagerId.HasValue)
+            {
+                var prevHolder = await _context.BuildingManagers
+                    .FirstOrDefaultAsync(m => m.Id == replaceManagerId.Value && m.BuildingId == rootId && m.IsActive && m.UserId != targetUser.Id);
+                if (prevHolder != null)
+                {
+                    prevHolder.IsActive = false;
+                    prevHolder.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+
+            if (role == BuildingManagerRole.HeadManager)
+            {
+                var otherHeads = await _context.BuildingManagers
+                    .Where(m => m.BuildingId == rootId && m.IsActive && m.Role == BuildingManagerRole.HeadManager && m.UserId != targetUser.Id)
+                    .ToListAsync();
+                foreach (var oh in otherHeads)
+                {
+                    oh.IsActive = false;
+                    oh.UpdatedAt = DateTime.UtcNow;
+                }
+                var scopedBlds = await _context.Buildings
+                    .Where(b => b.Id == rootId || b.ParentBuildingId == rootId || (building.HousingComplexId.HasValue && b.HousingComplexId == building.HousingComplexId))
+                    .ToListAsync();
+                foreach (var sb in scopedBlds)
+                {
+                    sb.ManagerUserId = targetUser.Id;
+                }
+            }
 
             var existing = await _context.BuildingManagers
                 .FirstOrDefaultAsync(m => m.BuildingId == rootId && m.UserId == targetUser.Id && m.IsActive);
@@ -2493,6 +2580,11 @@ namespace GMK360.Web.Controllers
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
+            if (!await CanEditGovernanceRecordsAsync(building))
+            {
+                TempData["ErrorMessage"] = "Denetçi / izleyici statüsünde kurul üyesi çıkarılamaz.";
+                return RedirectToAction(nameof(Governance), new { buildingId });
+            }
 
             int rootId = building.ParentBuildingId ?? building.Id;
             var member = await _context.BuildingManagers
@@ -2589,6 +2681,11 @@ namespace GMK360.Web.Controllers
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
+            if (!await CanEditGovernanceRecordsAsync(building))
+            {
+                TempData["ErrorMessage"] = "Denetçi statüsünde ana yönetici devri yapılamaz.";
+                return RedirectToAction(nameof(Governance), new { buildingId });
+            }
 
             int rootId = building.ParentBuildingId ?? building.Id;
             var newUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == newManagerEmail.Trim() || u.UserName == newManagerEmail.Trim());
@@ -2658,13 +2755,21 @@ namespace GMK360.Web.Controllers
             bool isExternalAppointee = false,
             bool isVisibleToResidents = true,
             int hierarchyOrder = 0,
+            string? tcIdentityNo = null,
+            string? phoneNumber = null,
             string? customRoleNote = null)
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
+            if (!await CanEditGovernanceRecordsAsync(building))
+            {
+                TempData["ErrorMessage"] = "Denetçi statüsünde yönetim kurulu kaydı güncellenemez.";
+                return RedirectToAction(nameof(Governance), new { buildingId });
+            }
             int rootId = building.ParentBuildingId ?? building.Id;
 
             var member = await _context.BuildingManagers
+                .Include(m => m.User)
                 .FirstOrDefaultAsync(m => m.Id == managerId && m.BuildingId == rootId && m.IsActive);
             if (member == null) return NotFound();
 
@@ -2672,6 +2777,27 @@ namespace GMK360.Web.Controllers
             {
                 TempData["ErrorMessage"] = "KMK Madde 41 gereği Denetçi / Denetim Kurulu Üyesi dışarıdan atanamaz; mutlaka kat maliki olmalıdır.";
                 return RedirectToAction(nameof(Governance), new { buildingId });
+            }
+
+            if (!string.IsNullOrWhiteSpace(tcIdentityNo))
+            {
+                if (!GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(tcIdentityNo))
+                {
+                    TempData["ErrorMessage"] = "Lütfen geçerli 11 haneli T.C. Kimlik Numarası giriniz.";
+                    return RedirectToAction(nameof(Governance), new { buildingId });
+                }
+                var normTc = GMK360.Web.Helpers.TcknHelper.Normalize(tcIdentityNo);
+                bool usedElsewhere = await _context.Users.AnyAsync(u => u.Id != member.UserId && u.TcIdentityNo == normTc);
+                if (usedElsewhere)
+                {
+                    TempData["ErrorMessage"] = "Bu T.C. Kimlik Numarası sistemde başka bir hesaba tanımlıdır.";
+                    return RedirectToAction(nameof(Governance), new { buildingId });
+                }
+                if (member.User != null) member.User.TcIdentityNo = normTc;
+            }
+            if (!string.IsNullOrWhiteSpace(phoneNumber) && member.User != null)
+            {
+                member.User.PhoneNumber = phoneNumber.Trim();
             }
 
             member.Role = role;
@@ -2686,7 +2812,7 @@ namespace GMK360.Web.Controllers
             member.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
-            TempData["SuccessMessage"] = "Kurul üyesi görev, imza yetkisi ve dönem bilgileri güncellendi.";
+            TempData["SuccessMessage"] = "Kurul üyesi TCKN, yetki ve dönem bilgileri güncellendi.";
             return RedirectToAction(nameof(Governance), new { buildingId });
         }
 
@@ -2696,6 +2822,11 @@ namespace GMK360.Web.Controllers
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
+            if (!await CanEditGovernanceRecordsAsync(building))
+            {
+                TempData["ErrorMessage"] = "Denetçi statüsünde kurul sayısı değiştirilemez.";
+                return RedirectToAction(nameof(Governance), new { buildingId });
+            }
             int rootId = building.ParentBuildingId ?? building.Id;
             var rootBuilding = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == rootId);
             if (rootBuilding == null) return NotFound();
@@ -2725,6 +2856,11 @@ namespace GMK360.Web.Controllers
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
+            if (!await CanEditGovernanceRecordsAsync(building))
+            {
+                TempData["ErrorMessage"] = "Denetçi statüsünde yedek üye terfisi yapılamaz.";
+                return RedirectToAction(nameof(Governance), new { buildingId });
+            }
             int rootId = building.ParentBuildingId ?? building.Id;
 
             var reserve = await _context.BuildingManagers
@@ -2776,6 +2912,11 @@ namespace GMK360.Web.Controllers
         {
             var building = await GetManagedBuildingAsync(buildingId);
             if (building == null) return Forbid();
+            if (!await CanEditGovernanceRecordsAsync(building))
+            {
+                TempData["ErrorMessage"] = "Denetçi statüsünde imza sirküleri yüklenemez.";
+                return RedirectToAction(nameof(Governance), new { buildingId });
+            }
             int rootId = building.ParentBuildingId ?? building.Id;
             var rootBuilding = await _context.Buildings.FirstOrDefaultAsync(b => b.Id == rootId);
             if (rootBuilding == null) return NotFound();
@@ -2929,6 +3070,7 @@ namespace GMK360.Web.Controllers
             ViewBag.RecentGovernanceDecisions = govDecisions;
             ViewBag.DecisionScansByMeeting = decisionScans.GroupBy(d => d.SourceRecordId!.Value).ToDictionary(g => g.Key, g => g.First());
             ViewBag.CircularDocs = circularDocs;
+            ViewBag.CanEditGovernance = await CanEditGovernanceRecordsAsync(selected);
             return View();
         }
 

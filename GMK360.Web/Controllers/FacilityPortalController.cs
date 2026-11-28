@@ -44,13 +44,17 @@ namespace GMK360.Web.Controllers
 
             bool isManager = IsManagerOrAdmin();
 
+            var todayPortal = DateTime.Today;
+
             // Yöneticinin yönettiği binalar
             var managedBuildings = isManager
                 ? await _context.Buildings
                     .Where(b => b.ParentBuildingId == null
                         && (User.IsInRole("Admin") || User.IsInRole("SuperAdmin")
                             || (b.BuildingManagers.Any(m => m.IsActive)
-                                ? b.BuildingManagers.Any(m => m.UserId == userId && m.IsActive)
+                                ? b.BuildingManagers.Any(m => m.UserId == userId && m.IsActive
+                                    && m.Role != BuildingManagerRole.ReserveMember
+                                    && (!m.TermEndDate.HasValue || m.TermEndDate.Value.Date >= todayPortal))
                                 : (b.ManagerUserId == userId || b.CreatedByUserId == userId))))
                     .OrderByDescending(b => b.Id)
                     .ToListAsync()
@@ -77,11 +81,11 @@ namespace GMK360.Web.Controllers
                         || (!string.IsNullOrEmpty(userEmail) && (u.OwnerEmail == userEmail || u.TenantEmail == userEmail))))
                 .ToListAsync();
 
-            // Kurul / Aza / Denetçi eşleşmesi
+            // Kurul / Aza / Denetçi eşleşmesi (süresi dolmamış kayıtlar)
             var boardMembership = userId != null
                 ? await _context.BuildingManagers
                     .Include(m => m.Building)
-                    .Where(m => m.UserId == userId && m.IsActive)
+                    .Where(m => m.UserId == userId && m.IsActive && (!m.TermEndDate.HasValue || m.TermEndDate.Value.Date >= todayPortal))
                     .OrderBy(m => m.Role)
                     .FirstOrDefaultAsync()
                 : null;

@@ -46,6 +46,18 @@ namespace GMK360.Core.Entities
 
         public bool CanVoteBoardDecisions() => IsEffectiveActive() && GetHierarchyLevel(Role) <= 3;
 
+        public bool HasPanelAccess() => IsEffectiveActive() && Role != BuildingManagerRole.ReserveMember;
+
+        public bool CanWriteRecords() => HasPanelAccess() && Role != BuildingManagerRole.Auditor;
+
+        public string GetMaskedTcIdentity()
+        {
+            var tc = User?.TcIdentityNo?.Trim();
+            if (string.IsNullOrWhiteSpace(tc)) return "TCKN Girilmemiş";
+            if (tc.Length == 11) return $"{tc.Substring(0, 3)}*****{tc.Substring(8, 3)}";
+            return tc.Length >= 4 ? $"{tc.Substring(0, 2)}***{tc.Substring(tc.Length - 2)}" : "Kayıtlı";
+        }
+
         public static int GetHierarchyLevel(BuildingManagerRole role) => role switch
         {
             BuildingManagerRole.HeadManager => 1,
