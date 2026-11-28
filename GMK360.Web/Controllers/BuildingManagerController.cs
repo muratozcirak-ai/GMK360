@@ -2996,6 +2996,10 @@ namespace GMK360.Web.Controllers
             {
                 cleanQuorum = "ManagementPlan";
             }
+            else if (string.Equals(cleanCategory, "SecondAssembly", StringComparison.OrdinalIgnoreCase))
+            {
+                cleanQuorum = "SecondAssembly";
+            }
             else if (string.Equals(cleanCategory, "UnitExemption", StringComparison.OrdinalIgnoreCase) && string.Equals(cleanQuorum, "Standard", StringComparison.OrdinalIgnoreCase))
             {
                 cleanQuorum = "Unanimous";
@@ -3407,7 +3411,28 @@ namespace GMK360.Web.Controllers
             }
 
             await _context.SaveChangesAsync();
-            TempData["SuccessMessage"] = $"{voterDisplay} ({roleTitle}) için kurul oyu kaydedildi: {cleanChoice}.";
+
+            var activeBoard = await _context.BuildingManagers
+                .AsNoTracking()
+                .Where(m => m.BuildingId == rootId && m.IsActive)
+                .ToListAsync();
+            var allBoardVotes = await _context.BoardDecisionVotes
+                .AsNoTracking()
+                .Where(v => v.SystemMeetingId == meetingId && !v.IsDeleted)
+                .ToListAsync();
+            var qCheck = GMK360.Web.Helpers.KmkQuorumHelper.ComputeBoardMajority(activeBoard, allBoardVotes);
+            if (qCheck.IsRejectedByMath)
+            {
+                TempData["ErrorMessage"] = $"{voterDisplay} ({roleTitle}) oyu kaydedildi. {qCheck.StatusText} ({qCheck.ApprovedUnits} Evet / {qCheck.RejectedUnits} Ret).";
+            }
+            else if (qCheck.IsQuorumMet)
+            {
+                TempData["SuccessMessage"] = $"{voterDisplay} ({roleTitle}) oyu kaydedildi. Salt çoğunluk sağlandı ({qCheck.ApprovedUnits}/{qCheck.RequiredUnitCount}) — Karar yazdırılabilir.";
+            }
+            else
+            {
+                TempData["SuccessMessage"] = $"{voterDisplay} ({roleTitle}) için kurul oyu kaydedildi ({cleanChoice}). Durum: {qCheck.StatusText}.";
+            }
             return RedirectToAction(nameof(Oylamalar), new { buildingId });
         }
 
@@ -6351,6 +6376,10 @@ namespace GMK360.Web.Controllers
             else if (string.Equals(cleanCategory, "ManagementPlan", StringComparison.OrdinalIgnoreCase))
             {
                 cleanQuorum = "ManagementPlan";
+            }
+            else if (string.Equals(cleanCategory, "SecondAssembly", StringComparison.OrdinalIgnoreCase))
+            {
+                cleanQuorum = "SecondAssembly";
             }
             else if (string.Equals(cleanCategory, "UnitExemption", StringComparison.OrdinalIgnoreCase) && string.Equals(cleanQuorum, "Standard", StringComparison.OrdinalIgnoreCase))
             {

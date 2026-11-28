@@ -313,6 +313,7 @@
                                                 <option value="UnitExemption">🛡️ Daire Muafiyeti / Özel Fark (KMK Md. 20)</option>
                                                 <option value="ComplaintResolution">📣 Şikayet &amp; Talep Kararı (KMK Md. 18)</option>
                                                 <option value="ManagementPlan">📜 Yönetim Planı Değişikliği (KMK Md. 28)</option>
+                                                <option value="SecondAssembly">🔁 2. Genel Kurul Toplantısı (KMK Md. 30/2 • Katılan >%50)</option>
                                             </select>
                                         </div>
                                         <div class="col-12">
@@ -560,9 +561,13 @@
                         {
                             <span class="badge bg-success rounded-pill">✅ Kesinleşti / Yazdırılabilir (@quorum.ApprovedUnits/@quorum.RequiredUnitCount)</span>
                         }
+                        else if (quorum.IsRejectedByMath)
+                        {
+                            <span class="badge bg-danger rounded-pill">❌ @quorum.StatusText (@quorum.ApprovedUnits Evet / @quorum.RejectedUnits Ret)</span>
+                        }
                         else
                         {
-                            <span class="badge bg-warning text-dark rounded-pill">⏳ Onay Bekliyor (@quorum.ApprovedUnits/@quorum.RequiredUnitCount)</span>
+                            <span class="badge bg-warning text-dark rounded-pill">⏳ @quorum.StatusText</span>
                         }
                         <span class="badge bg-light text-dark border rounded-pill">@scopeDisplayName</span>
                     </div>
@@ -665,9 +670,9 @@
                             <input type="hidden" name="returnTo" value="Oylamalar" />
                             <div class="input-group input-group-sm">
                                 <input type="text" name="decisionText" class="form-control" required placeholder="Alınan nihai kararı deftere işleyip kapatın..." />
-                                <button type="submit" class="btn @(quorum.IsQuorumMet ? "btn-success" : "btn-secondary") fw-bold px-3" @(quorum.IsQuorumMet ? "" : "disabled")
-                                        title="@(quorum.IsQuorumMet ? "Kararı kesinleştir" : $"Onay Bekliyor ({quorum.ApprovedUnits}/{quorum.RequiredUnitCount}): Çoğunluk sağlanmadan kesinleştirilemez")">
-                                    @(quorum.IsQuorumMet ? "Kararı Deftere İşle & Kapat" : $"⏳ Onay Bekliyor ({quorum.ApprovedUnits}/{quorum.RequiredUnitCount})")
+                                <button type="submit" class="btn @(quorum.IsQuorumMet ? "btn-success" : quorum.IsRejectedByMath ? "btn-danger" : "btn-secondary") fw-bold px-3" @(quorum.IsQuorumMet ? "" : "disabled")
+                                        title="@(quorum.IsQuorumMet ? "Kararı kesinleştir" : $"{quorum.StatusText}: Çoğunluk sağlanmadan karar kabul edilemez")">
+                                    @(quorum.IsQuorumMet ? "Kararı Deftere İşle & Kapat" : quorum.IsRejectedByMath ? $"❌ {quorum.StatusText}" : $"⏳ {quorum.StatusText}")
                                 </button>
                             </div>
                         </form>
@@ -692,8 +697,8 @@
                             }
                         </div>
                         <div class="d-flex align-items-center gap-2">
-                            <span class="badge @(quorum.IsQuorumMet ? "bg-success" : "bg-warning text-dark")">
-                                @(quorum.IsQuorumMet ? "✅ Yeter Sayı Sağlandı / Yazdırılabilir" : $"⏳ Onay Bekliyor ({quorum.ApprovedUnits}/{quorum.RequiredUnitCount})")
+                            <span class="badge @(quorum.IsQuorumMet ? "bg-success" : quorum.IsRejectedByMath ? "bg-danger" : "bg-warning text-dark")">
+                                @(quorum.IsQuorumMet ? $"✅ {quorum.StatusText}" : quorum.IsRejectedByMath ? $"❌ {quorum.StatusText}" : $"⏳ {quorum.StatusText} (Maks İtiraz: {quorum.MaxRejectionAllowance})")
                             </span>
                             @if (m.IsExecuted && !string.IsNullOrWhiteSpace(m.ExecutionSummary))
                             {
@@ -1182,6 +1187,9 @@
             } else if (cat === 'ManagementPlan') {
                 if (quorumHidden) quorumHidden.value = 'ManagementPlan';
                 if (hintEl) hintEl.textContent = 'KMK Md. 28: Kat maliklerinin 4/5 (%80) oyu aranır.';
+            } else if (cat === 'SecondAssembly') {
+                if (quorumHidden) quorumHidden.value = 'SecondAssembly';
+                if (hintEl) hintEl.textContent = 'KMK Md. 30/2 (2. Toplantı): İlk toplantıdan en az 7 gün sonra katılanların salt çoğunluğu (Evet > Katılan/2.0) yeterlidir.';
             } else {
                 if (quorumHidden) quorumHidden.value = 'Standard';
                 if (hintEl) hintEl.textContent = 'KMK Md. 30: Salt çoğunluk ile karara bağlanır.';

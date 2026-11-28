@@ -21,6 +21,10 @@ namespace GMK360.Web.Helpers
         public int RequiredUnitCount { get; set; }
         public decimal RequiredShareThreshold { get; set; }
         public bool IsQuorumMet { get; set; }
+        public bool IsRejectedByMath { get; set; }
+        public bool IsTie { get; set; }
+        public int MaxRejectionAllowance => Math.Max(0, TotalUnits - RequiredUnitCount);
+        public string StatusText { get; set; } = string.Empty;
     }
 
     public static class KmkQuorumHelper
@@ -48,6 +52,7 @@ namespace GMK360.Web.Helpers
             int approvedUnits = 0;
             int rejectedUnits = 0;
             decimal approvedShare = 0m;
+            decimal rejectedShare = 0m;
 
             foreach (var u in units)
             {
@@ -61,8 +66,12 @@ namespace GMK360.Web.Helpers
                 else if (string.Equals(vote.VoteChoice, "Ret", StringComparison.OrdinalIgnoreCase))
                 {
                     rejectedUnits++;
+                    rejectedShare += unitShare;
                 }
             }
+
+            int participatedUnits = approvedUnits + rejectedUnits;
+            decimal participatedShare = approvedShare + rejectedShare;
 
             int reqUnits;
             decimal reqShare;
@@ -84,31 +93,73 @@ namespace GMK360.Web.Helpers
                     reqShare = (totalShare / 2m) + (usesCustomShare ? 0.0001m : 1m);
                     ruleLabel = "Önemli Yenilik / Yönetici Seçimi (KMK Md. 34/42 • >%50 Sayı + Arsa Payı)";
                     break;
+                case "SecondAssembly":
+                    reqUnits = participatedUnits > 0 ? (participatedUnits / 2) + 1 : (totalUnits / 2) + 1;
+                    reqShare = (participatedShare / 2m) + (usesCustomShare ? 0.0001m : 1m);
+                    ruleLabel = "2. Genel Kurul Toplantısı (KMK Md. 30/2 • Katılanların >%50'si)";
+                    break;
                 default:
                     qType = "Standard";
                     reqUnits = (totalUnits / 2) + 1;
                     reqShare = (totalShare / 2m) + (usesCustomShare ? 0.0001m : 1m);
-                    ruleLabel = "Genel Kurul Kararı (KMK Md. 30 • >%50 Çoğunluk)";
+                    ruleLabel = "Genel Kurul Kararı (KMK Md. 30 • >%50 Sayı + Arsa Payı)";
                     break;
             }
 
             bool isMet = false;
+            bool isRejected = false;
+            bool isTie = false;
             if (totalUnits > 0)
             {
                 isMet = qType switch
                 {
                     "Unanimous" => approvedUnits == totalUnits && (!usesCustomShare || approvedShare >= totalShare),
                     "ManagementPlan" => approvedUnits * 5 >= totalUnits * 4 && approvedShare * 5m >= totalShare * 4m,
-                    _ => approvedUnits * 2 > totalUnits && (!usesCustomShare || approvedShare * 2m > totalShare)
+                    "SecondAssembly" => participatedUnits > 0 && approvedUnits > (participatedUnits / 2.0) && (!usesCustomShare || approvedShare * 2m > participatedShare),
+                    _ => approvedUnits > (totalUnits / 2.0) && (!usesCustomShare || approvedShare * 2m > totalShare)
                 };
+
+                if (!isMet)
+                {
+                    if (qType == "SecondAssembly")
+                    {
+                        isTie = participatedUnits > 0 && approvedUnits == rejectedUnits && approvedUnits * 2 == participatedUnits;
+                        isRejected = participatedUnits > 0 && (isTie || approvedUnits <= (participatedUnits / 2.0));
+                    }
+                    else
+                    {
+                        int maxPossibleUnits = totalUnits - rejectedUnits;
+                        decimal maxPossibleShare = totalShare - rejectedShare;
+                        bool unitImpossible = qType switch
+                        {
+                            "Unanimous" => rejectedUnits > 0,
+                            "ManagementPlan" => maxPossibleUnits * 5 < totalUnits * 4,
+                            _ => maxPossibleUnits <= (totalUnits / 2.0)
+                        };
+                        bool shareImpossible = usesCustomShare && qType switch
+                        {
+                            "Unanimous" => rejectedShare > 0m,
+                            "ManagementPlan" => maxPossibleShare * 5m < totalShare * 4m,
+                            _ => maxPossibleShare * 2m <= totalShare
+                        };
+                        isTie = participatedUnits == totalUnits && approvedUnits == rejectedUnits && approvedUnits * 2 == totalUnits;
+                        isRejected = unitImpossible || shareImpossible;
+                    }
+                }
             }
+
+            string statusText = isMet
+                ? "Yeter Sayı Sağlandı / Yazdırılabilir"
+                : isRejected
+                    ? (isTie ? "Reddedildi (Eşitlik — Karar Alınamadı)" : "Reddedildi (Yeterli Oy Sağlanamadı)")
+                    : $"Onay Bekliyor ({approvedUnits}/{reqUnits})";
 
             return new KmkQuorumSummary
             {
                 QuorumType = qType,
                 RuleLabel = ruleLabel,
                 TotalUnits = totalUnits,
-                ParticipatedUnits = approvedUnits + rejectedUnits,
+                ParticipatedUnits = participatedUnits,
                 ApprovedUnits = approvedUnits,
                 RejectedUnits = rejectedUnits,
                 UsesCustomLandShare = usesCustomShare,
@@ -118,7 +169,10 @@ namespace GMK360.Web.Helpers
                 ApprovalSharePercent = totalShare > 0m ? Math.Round(approvedShare * 100m / totalShare, 1) : 0m,
                 RequiredUnitCount = reqUnits,
                 RequiredShareThreshold = Math.Round(reqShare, 2),
-                IsQuorumMet = isMet
+                IsQuorumMet = isMet,
+                IsRejectedByMath = isRejected,
+                IsTie = isTie,
+                StatusText = statusText
             };
         }
 
@@ -147,14 +201,22 @@ namespace GMK360.Web.Helpers
                 else if (string.Equals(v.VoteChoice, "Ret", StringComparison.OrdinalIgnoreCase)) rejected++;
             }
 
-            // KMK Yönetim Kurulu Salt Çoğunluk: (AktifAsilSayisi / 2) + 1
+            // KMK Kesin Salt Çoğunluk: EvetSayisi > (ToplamAsilUyeSayisi / 2.0) ; Eşitlikte karar reddedilir.
             int required = totalAsil > 0 ? (totalAsil / 2) + 1 : 0;
-            bool met = totalAsil > 0 && approved >= required;
+            int maxPossibleApproved = totalAsil - rejected;
+            bool met = totalAsil > 0 && approved > (totalAsil / 2.0);
+            bool isTie = totalAsil > 0 && (approved + rejected) == totalAsil && approved == rejected && approved * 2 == totalAsil;
+            bool isRejected = totalAsil > 0 && !met && maxPossibleApproved <= (totalAsil / 2.0);
+            string statusText = met
+                ? "Yeter Sayı Sağlandı / Yazdırılabilir"
+                : isRejected
+                    ? (isTie ? "Reddedildi (Eşitlik — Karar Alınamadı)" : "Reddedildi (Yeterli Oy Sağlanamadı)")
+                    : $"Onay Bekliyor ({approved}/{required})";
 
             return new KmkQuorumSummary
             {
                 QuorumType = "BoardMajority",
-                RuleLabel = $"Yönetim Kurulu Kararı (Seviye 1-3 Asil • Salt Çoğunluk: {required}/{totalAsil})",
+                RuleLabel = $"Yönetim Kurulu Kararı (Seviye 1-3 Asil • Salt Çoğunluk: {required}/{totalAsil}, Maks İtiraz: {Math.Max(0, totalAsil - required)})",
                 TotalUnits = totalAsil,
                 ParticipatedUnits = approved + rejected,
                 ApprovedUnits = approved,
@@ -166,7 +228,10 @@ namespace GMK360.Web.Helpers
                 ApprovalSharePercent = totalAsil > 0 ? Math.Round(approved * 100m / totalAsil, 1) : 0m,
                 RequiredUnitCount = required,
                 RequiredShareThreshold = required,
-                IsQuorumMet = met
+                IsQuorumMet = met,
+                IsRejectedByMath = isRejected,
+                IsTie = isTie,
+                StatusText = statusText
             };
         }
     }
