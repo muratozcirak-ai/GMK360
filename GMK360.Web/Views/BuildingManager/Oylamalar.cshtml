@@ -1,14 +1,11 @@
 ﻿@model IEnumerable<GMK360.Core.Entities.SystemMeeting>
 @{
     Layout = "~/Views/Shared/_FacilityLayout.cshtml";
-    ViewData["Title"] = "Karar Defteri & Oylama";
+    ViewData["Title"] = "Karar Defteri & Oylama (Noter İkizi)";
     var buildings = ViewBag.Buildings as List<GMK360.Core.Entities.Building> ?? new List<GMK360.Core.Entities.Building>();
     int? selectedBuildingId = ViewBag.SelectedBuildingId as int?;
     var approvals = ViewBag.Approvals as List<GMK360.Core.Entities.ApprovalRequest> ?? new List<GMK360.Core.Entities.ApprovalRequest>();
     var buildingMap = ViewBag.BuildingMap as Dictionary<int, string> ?? new Dictionary<int, string>();
-    var quotesByMeeting = ViewBag.QuotesByMeeting as Dictionary<int, List<GMK360.Core.Entities.B2B.B2BQuoteRequest>> ?? new Dictionary<int, List<GMK360.Core.Entities.B2B.B2BQuoteRequest>>();
-    var jobsByMeeting = ViewBag.JobsByMeeting as Dictionary<int, List<GMK360.Core.Entities.Marketplace.MarketplaceJob>> ?? new Dictionary<int, List<GMK360.Core.Entities.Marketplace.MarketplaceJob>>();
-    var staffsByMeeting = ViewBag.StaffsByMeeting as Dictionary<int, List<GMK360.Core.Entities.BuildingStaff>> ?? new Dictionary<int, List<GMK360.Core.Entities.BuildingStaff>>();
     var unitsByBuilding = ViewBag.UnitsByBuilding as Dictionary<int, List<GMK360.Core.Entities.BuildingUnit>> ?? new Dictionary<int, List<GMK360.Core.Entities.BuildingUnit>>();
     var unitsByComplex = ViewBag.UnitsByComplex as Dictionary<int, List<GMK360.Core.Entities.BuildingUnit>> ?? new Dictionary<int, List<GMK360.Core.Entities.BuildingUnit>>();
     var selectedBldObj = ViewBag.SelectedBuildingObj as GMK360.Core.Entities.Building;
@@ -19,16 +16,69 @@
     var presetProposedDues = Context.Request.Query["proposedDues"].ToString();
     var allSiteUnits = ViewBag.AllSiteUnits as List<GMK360.Core.Entities.BuildingUnit> ?? new List<GMK360.Core.Entities.BuildingUnit>();
     var openComplaints = ViewBag.OpenComplaints as List<GMK360.Core.Entities.SupportTicket> ?? new List<GMK360.Core.Entities.SupportTicket>();
+    string defaultChair = ViewBag.DefaultChairpersonName as string ?? "";
+    string defaultAzas = ViewBag.DefaultBoardMembersSummary as string ?? "";
+
+    var decisionList = (Model ?? Enumerable.Empty<GMK360.Core.Entities.SystemMeeting>()).ToList();
+    int totalBookPages = selectedBldObj?.DecisionBookTotalPages ?? 100;
+    if (totalBookPages < 1) totalBookPages = 100;
+    var usedPageMap = decisionList
+        .Where(x => x.BookPageNumber.HasValue)
+        .GroupBy(x => x.BookPageNumber!.Value)
+        .ToDictionary(g => g.Key, g => g.First());
+    int nextEmptyPage = 1;
+    while (usedPageMap.ContainsKey(nextEmptyPage) && nextEmptyPage <= totalBookPages) { nextEmptyPage++; }
+    if (ViewBag.NextBookPage is int nbp && !usedPageMap.ContainsKey(nbp)) { nextEmptyPage = nbp; }
+    bool openSheetByDefault = !decisionList.Any() || !string.IsNullOrEmpty(presetCategory);
 }
 
+<style>
+    .notary-paper {
+        background: #fffdf7;
+        border: 2px solid #1e293b;
+        border-radius: 12px;
+        box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+    }
+    .notary-head-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #ffffff;
+    }
+    .notary-head-table th, .notary-head-table td {
+        border: 1.5px solid #334155;
+        padding: 8px 10px;
+        vertical-align: top;
+    }
+    .notary-head-table th {
+        background: #f1f5f9;
+        font-size: 0.76rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: #1e293b;
+        font-weight: 700;
+    }
+    .notary-ruled-area {
+        background-image: repeating-linear-gradient(transparent, transparent 27px, #e2e8f0 27px, #e2e8f0 28px);
+        line-height: 28px;
+        background-color: #fffef9;
+    }
+    .participant-grid-row {
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 6px 10px;
+    }
+</style>
+
 <div class="container-fluid py-3 px-1">
-    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 bg-white p-4 rounded-4 shadow-sm">
+    <!-- Sade Üst Başlık -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-3 bg-white p-4 rounded-4 shadow-sm">
         <div>
             <h2 class="fw-bold text-dark mb-1"><i class="bi bi-journal-check text-success me-2"></i>Karar Defteri &amp; Oylama (Noter İkizi)</h2>
-            <p class="text-muted small mb-0">634 sayılı KMK resmi karar kayıtları, dijital ön onay salt çoğunluk hesabı ve Noter Defteri A4/A5 çıktı masası</p>
+            <p class="text-muted small mb-0">Belge ve teklif tartışmaları ön toplantıda kalır; burada sadece resmi karar metni, kurul ve katılımcı oylaması aynı defter yaprağında tutulur.</p>
         </div>
         <div class="d-flex flex-wrap gap-2">
-            <a href="/BuildingManager/MevzuatRehberi?slug=karar-defteri-formu-nasil-doldurulur" class="btn btn-outline-secondary rounded-pill px-3 fw-semibold" title="Karar defteri formu nasıl doldurulur?">
+            <a href="/BuildingManager/MevzuatRehberi?slug=karar-defteri-formu-nasil-doldurulur" class="btn btn-outline-secondary rounded-pill px-3 fw-semibold" title="Form nasıl doldurulur?">
                 <i class="bi bi-book-half me-1"></i> Nasıl Doldurulur?
             </a>
             <a href="/BuildingManager/Toplantilar@(selectedBuildingId.HasValue ? $"?buildingId={selectedBuildingId}" : "")" class="btn btn-outline-primary rounded-pill px-3 fw-semibold">
@@ -36,33 +86,77 @@
             </a>
             @if (selectedBldObj != null)
             {
-                <button class="btn btn-outline-dark rounded-pill px-3 fw-semibold" data-bs-toggle="modal" data-bs-target="#decisionBookModal">
-                    <i class="bi bi-journal-text me-1"></i> Noter Defteri Künyesi
+                <button type="button" class="btn btn-outline-dark rounded-pill px-3 fw-semibold" data-bs-toggle="modal" data-bs-target="#decisionBookModal">
+                    <i class="bi bi-journal-text me-1"></i> Defter Künyesi
                 </button>
             }
-            <button class="btn btn-success rounded-pill px-4 fw-bold" data-bs-toggle="modal" data-bs-target="#newDecisionModal" @(buildings.Any() ? "" : "disabled")>
-                <i class="bi bi-plus-circle me-1"></i> Yeni Karar Kaydı Ekle
+            <button type="button" class="btn btn-success rounded-pill px-4 fw-bold" onclick="openLedgerPageForm(@nextEmptyPage)" @(buildings.Any() ? "" : "disabled")>
+                <i class="bi bi-journal-plus me-1"></i> Sayfa #@nextEmptyPage Yaz / Karar Aç
             </button>
         </div>
     </div>
 
+    <!-- Fiziksel Noter Defteri Künyesi & 1..N Sayfa Haritası -->
     @if (selectedBldObj != null)
     {
         bool closingDue = selectedBldObj.DecisionBookLastClosingDate == null || selectedBldObj.DecisionBookLastClosingDate.Value.Year < DateTime.Today.Year;
-        <div class="alert @(closingDue && DateTime.Today.Month == 1 ? "alert-warning" : "alert-light border") rounded-4 shadow-sm mb-3 py-2 px-3 d-flex flex-wrap justify-content-between align-items-center gap-2 small">
-            <div>
-                <i class="bi bi-book-half text-primary me-1"></i>
-                <strong>@selectedBldObj.Name Fiziksel Noter Defteri:</strong>
-                Noter: <b>@(selectedBldObj.DecisionBookNotaryName ?? "Girilmemiş")</b> |
-                Yevmiye No: <b>@(selectedBldObj.DecisionBookJournalNo ?? "-")</b> |
-                Açılış: <b>@(selectedBldObj.DecisionBookOpenDate?.ToString("dd.MM.yyyy") ?? "-")</b> |
-                Son Ocak Kapanış ("Görüldü"): <b>@(selectedBldObj.DecisionBookLastClosingDate?.ToString("dd.MM.yyyy") ?? "Bekleniyor")</b>
-                @if (closingDue)
-                {
-                    <span class="badge bg-warning text-dark ms-1">Ocak sonuna kadar noter "Görüldü" kapanışı hatırlatması</span>
-                }
+        int usedPagesCount = usedPageMap.Count;
+        int remainingPages = Math.Max(0, totalBookPages - usedPagesCount);
+        <div class="card border-0 shadow-sm rounded-4 bg-white mb-3">
+            <div class="card-body p-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pb-2 mb-2 border-bottom small">
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <i class="bi bi-book-half text-primary fs-5"></i>
+                        <strong>@selectedBldObj.Name Resmi Noter Defteri:</strong>
+                        <span>Noter: <b>@(selectedBldObj.DecisionBookNotaryName ?? "Girilmemiş")</b></span>
+                        <span class="text-muted">|</span>
+                        <span>Yevmiye: <b>@(selectedBldObj.DecisionBookJournalNo ?? "-")</b></span>
+                        <span class="text-muted">|</span>
+                        <span>Açılış: <b>@(selectedBldObj.DecisionBookOpenDate?.ToString("dd.MM.yyyy") ?? "-")</b></span>
+                        <span class="text-muted">|</span>
+                        <span class="badge bg-dark rounded-pill">Toplam @totalBookPages Sayfa</span>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">Kullanılan: @usedPagesCount · Kalan: @remainingPages</span>
+                        @if (closingDue)
+                        {
+                            <span class="badge bg-warning text-dark">Ocak sonuna kadar "Görüldü" kapanışı hatırlatması</span>
+                        }
+                    </div>
+                    <button type="button" class="btn btn-xs btn-outline-primary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#decisionBookModal">Künyeyi Düzenle</button>
+                </div>
+
+                <!-- Sayfa Yaprağı Haritası -->
+                <div class="d-flex flex-wrap align-items-center gap-1 small">
+                    <span class="text-muted fw-bold me-1">Defter Sayfaları:</span>
+                    @{
+                        int maxChipPage = Math.Min(totalBookPages, Math.Max(12, nextEmptyPage + 6));
+                    }
+                    @for (int p = 1; p <= maxChipPage; p++)
+                    {
+                        if (usedPageMap.TryGetValue(p, out var occMeeting))
+                        {
+                            <a href="#decisionSheet_@occMeeting.Id" class="btn btn-xs @(occMeeting.IsConcluded ? "btn-success" : "btn-warning text-dark") rounded-pill px-2 py-0 fw-bold" title="@occMeeting.AgendaTitle">
+                                @(occMeeting.IsConcluded ? "✓" : "🗳️") S.@p
+                            </a>
+                        }
+                        else if (p == nextEmptyPage)
+                        {
+                            <button type="button" class="btn btn-xs btn-primary rounded-pill px-2 py-0 fw-bold" onclick="openLedgerPageForm(@p)" title="Sıradaki boş sayfayı yaz">
+                                📝 S.@p (Sıradaki)
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill px-2 py-0" onclick="openLedgerPageForm(@p)" title="@p. sayfayı aç">
+                                S.@p
+                            </button>
+                        }
+                    }
+                    @if (totalBookPages > maxChipPage)
+                    {
+                        <span class="text-muted ms-1">... (@totalBookPages sayfaya kadar)</span>
+                    }
+                </div>
             </div>
-            <button type="button" class="btn btn-xs btn-outline-primary rounded-pill" data-bs-toggle="modal" data-bs-target="#decisionBookModal">Düzenle</button>
         </div>
     }
 
@@ -80,56 +174,53 @@
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     }
-
-    <div class="card border-0 shadow-sm rounded-4 mb-4">
-        <div class="card-body p-3">
-            <form method="get" class="row g-2 align-items-center">
-                <div class="col-md-9">
-                    <select name="buildingId" class="form-select">
-                        <option value="">Tüm Binalarım</option>
-                        @foreach (var b in buildings)
-                        {
-                            if (selectedBuildingId == b.Id)
-                            {
-                                <option value="@b.Id" selected>@b.Name</option>
-                            }
-                            else
-                            {
-                                <option value="@b.Id">@b.Name</option>
-                            }
-                        }
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <button type="submit" class="btn btn-outline-secondary w-100">Filtrele</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    @if (approvals.Any())
+    @if (TempData["WarningMessage"] != null)
     {
-        <div class="card border-warning shadow-sm rounded-4 mb-4">
-            <div class="card-header bg-warning bg-opacity-10 border-0 p-3 fw-bold text-dark">
-                <i class="bi bi-shield-lock-fill text-warning me-2"></i>2 Aza Multi-Sig Onay Talepleri (@approvals.Count)
+        <div class="alert alert-warning alert-dismissible fade show rounded-4 border-0 shadow-sm mb-3">
+            @TempData["WarningMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (buildings.Count > 1)
+    {
+        <div class="card border-0 shadow-sm rounded-4 mb-3 bg-white">
+            <div class="card-body p-2 px-3">
+                <form method="get" class="row g-2 align-items-center">
+                    <div class="col-md-9">
+                        <select name="buildingId" class="form-select form-select-sm">
+                            <option value="">Tüm Binalarım / Yerleşke</option>
+                            @foreach (var b in buildings)
+                            {
+                                <option value="@b.Id" selected="@(selectedBuildingId == b.Id ? "selected" : null)">@b.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary w-100">Filtrele</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    }
+
+    @if (approvals.Any(a => a.Status == "PENDING"))
+    {
+        <div class="card border-warning shadow-sm rounded-4 mb-3 bg-white">
+            <div class="card-header bg-warning bg-opacity-10 border-0 p-3 fw-bold text-dark small">
+                <i class="bi bi-shield-lock-fill text-warning me-2"></i>Bekleyen Aza Multi-Sig Onayları
             </div>
             <div class="card-body p-3">
                 <div class="row g-2">
-                    @foreach (var req in approvals)
+                    @foreach (var req in approvals.Where(a => a.Status == "PENDING"))
                     {
                         <div class="col-md-6">
-                            <div class="border rounded-3 p-3 bg-white d-flex justify-content-between align-items-center">
+                            <div class="border rounded-3 p-2 px-3 bg-light d-flex justify-content-between align-items-center small">
                                 <div>
-                                    <span class="badge @(req.Status == "PENDING" ? "bg-warning text-dark" : req.Status == "EXECUTED" ? "bg-success" : "bg-danger") mb-1">
-                                        @req.RequestType • @req.Status (@req.ApprovalCount/@req.RequiredApprovals)
-                                    </span>
-                                    <div class="small fw-semibold">@req.Reason</div>
-                                    <small class="text-muted">@req.Building?.Name • @req.CreatedAt.ToString("dd.MM.yyyy HH:mm")</small>
+                                    <span class="badge bg-warning text-dark me-1">@req.RequestType (@req.ApprovalCount/@req.RequiredApprovals)</span>
+                                    <span class="fw-semibold">@req.Reason</span>
                                 </div>
-                                @if (req.Status == "PENDING")
-                                {
-                                    <a href="/BuildingManager/Detail/@req.BuildingId" class="btn btn-sm btn-outline-primary rounded-pill">Binada İncele</a>
-                                }
+                                <a href="/BuildingManager/Detail/@req.BuildingId" class="btn btn-xs btn-outline-primary rounded-pill">İncele</a>
                             </div>
                         </div>
                     }
@@ -138,680 +229,526 @@
         </div>
     }
 
-    <div class="card border-0 shadow-sm rounded-4 bg-white">
-        <div class="card-header bg-white border-bottom p-3 fw-bold text-dark">
-            <i class="bi bi-journal-bookmark text-primary me-2"></i>Resmi Karar Defteri Kayıtları &amp; Oylamalar
-        </div>
-        <div class="card-body p-4">
-            @if (!Model.Any())
-            {
-                <div class="text-center py-5 text-muted">
-                    <i class="bi bi-book fs-1 d-block mb-2"></i>
-                    Henüz karar defterine işlenmiş karar bulunmuyor. İsterseniz önce <a href="/BuildingManager/Toplantilar" class="fw-semibold">Toplantı &amp; Ön Görüşme Masası</a>'ndan konu tartışıp buraya aktarabilirsiniz.
+    <!-- BİREBİR KAĞIT NOTER KARAR DEFTERİ FORMU (SAYFA ÜZERİNDE YENİ KARAR YAZMA) -->
+    @if (buildings.Any())
+    {
+        <div id="newDecisionSheetCard" class="mb-4 @(openSheetByDefault ? "" : "d-none")">
+            <form asp-action="CreateMeeting" asp-controller="BuildingManager" method="post" class="notary-paper p-3 p-md-4">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="returnTo" value="Oylamalar" />
+                <input type="hidden" name="autoExecuteOnQuorum" value="true" />
+                <input type="hidden" name="quorumType" id="newDecQuorumHidden" value="Standard" />
+                <input type="hidden" name="buildingId" id="newDecBuildingIdHidden" value="@(selectedBldObj?.Id ?? buildings.First().Id)" />
+                <input type="hidden" name="isSiteWide" id="newDecIsSiteWideHidden" value="@(firstSiteComplex != null && buildings.Count > 1 ? "true" : "false")" />
+
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <div>
+                        <span class="badge bg-dark rounded-pill px-3 py-1 me-1">YENİ DEFTER YAPRAĞI</span>
+                        <span class="fw-bold text-dark">Resmi Karar Defteri Sayfası Düzenle</span>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" onclick="document.getElementById('newDecisionSheetCard').classList.add('d-none')">
+                        <i class="bi bi-chevron-up me-1"></i> Formu Gizle
+                    </button>
                 </div>
-            }
-            else
-            {
-                foreach (var m in Model)
-                {
-                    var bName = buildingMap.ContainsKey(m.ContextId) ? buildingMap[m.ContextId] : ("Bina #" + m.ContextId);
-                    var linkedQuotes = quotesByMeeting.ContainsKey(m.Id) ? quotesByMeeting[m.Id] : new List<GMK360.Core.Entities.B2B.B2BQuoteRequest>();
-                    var linkedJobs = jobsByMeeting.ContainsKey(m.Id) ? jobsByMeeting[m.Id] : new List<GMK360.Core.Entities.Marketplace.MarketplaceJob>();
-                    var linkedStaffs = staffsByMeeting.ContainsKey(m.Id) ? staffsByMeeting[m.Id] : new List<GMK360.Core.Entities.BuildingStaff>();
-                    var bUnits = (m.IsSiteWide && m.HousingComplexId.HasValue && unitsByComplex.ContainsKey(m.HousingComplexId.Value))
-                        ? unitsByComplex[m.HousingComplexId.Value]
-                        : (unitsByBuilding.ContainsKey(m.ContextId) ? unitsByBuilding[m.ContextId] : new List<GMK360.Core.Entities.BuildingUnit>());
-                    var meetingBld = buildings.FirstOrDefault(b => b.Id == m.ContextId);
-                    string scopeDisplayName = (m.IsSiteWide && meetingBld?.HousingComplex != null)
-                        ? $"🌐 {meetingBld.HousingComplex.Name} (Site Geneli)"
-                        : bName;
-                    var quorum = GMK360.Web.Helpers.KmkQuorumHelper.Compute(bUnits, m.Votes, m.QuorumType);
-                    var mVotes = (m.Votes ?? new List<GMK360.Core.Entities.BuildingDecisionVote>()).Where(v => !v.IsDeleted).ToDictionary(v => v.BuildingUnitId, v => v);
-                    var mAttachments = (m.Attachments ?? new List<GMK360.Core.Entities.BuildingDecisionAttachment>()).Where(a => !a.IsDeleted).OrderByDescending(a => a.CreatedAt).ToList();
-                    <div class="border rounded-4 p-3 @(m.IsConcluded ? "bg-light" : "bg-warning bg-opacity-10 border-warning") mb-3">
-                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
-                            <div>
-                                <span class="badge bg-primary rounded-pill me-1">Defter Sayfa #@(m.BookPageNumber ?? m.Id)</span>
-                                <span class="badge bg-dark rounded-pill me-1">Karar #@(m.DecisionNumber ?? m.Id.ToString("D2"))</span>
-                                @if (!m.IsConcluded)
-                                {
-                                    <span class="badge bg-warning text-dark rounded-pill me-1">🗳️ Resmi Oylama &amp; Ön Onayda</span>
-                                }
-                                else
-                                {
-                                    <span class="badge bg-success rounded-pill me-1">✅ Karara Bağlandı</span>
-                                }
-                                <span class="badge bg-secondary bg-opacity-25 text-dark rounded-pill me-2">@scopeDisplayName</span>
-                                <span class="fw-bold text-dark fs-5">@m.AgendaTitle</span>
-                                <div class="small text-muted mt-1">
-                                    <i class="bi bi-calendar3 me-1"></i>@m.MeetingDate.ToString("dd MMMM yyyy HH:mm")
-                                    @if (!string.IsNullOrWhiteSpace(m.MeetingEndTime))
-                                    {
-                                        <span>– @m.MeetingEndTime</span>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(m.MeetingLocation))
-                                    {
-                                        <span class="ms-2"><i class="bi bi-geo-alt me-1"></i>@m.MeetingLocation</span>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(m.ChairpersonName) || !string.IsNullOrWhiteSpace(m.BoardMembersSummary))
-                                    {
-                                        <div class="mt-1">
-                                            @if (!string.IsNullOrWhiteSpace(m.ChairpersonName))
-                                            {
-                                                <span class="me-3"><i class="bi bi-person-badge me-1"></i><strong>Başkan:</strong> @m.ChairpersonName</span>
-                                            }
-                                            @if (!string.IsNullOrWhiteSpace(m.BoardMembersSummary))
-                                            {
-                                                <span class="me-3"><strong>Azalar:</strong> @m.BoardMembersSummary</span>
-                                            }
-                                            <span><strong>Katılan:</strong> @quorum.ParticipatedUnits / @quorum.TotalUnits Malik</span>
+
+                <!-- 1. ÜST NOTER ÇİZELGESİ (ÖRNEK DEFTERDEKİ TABLO) -->
+                <div class="table-responsive mb-3">
+                    <table class="notary-head-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 14%;">Karar Sıra &amp; Sayfa No</th>
+                                <th colspan="3" style="width: 34%;">Karara Esas Olan Evrak (Varsa)</th>
+                                <th style="width: 52%;">Mevzuun Mahiyeti ve Hülâsası (Konu &amp; Kapsam)</th>
+                            </tr>
+                            <tr>
+                                <th class="bg-white text-start fw-normal">
+                                    <div class="mb-1">
+                                        <small class="text-muted d-block" style="font-size:.7rem;">Sayfa No *</small>
+                                        <input type="number" min="1" max="@totalBookPages" name="bookPageNumber" id="newDecPageNoInput" class="form-control form-control-sm fw-bold text-center" value="@nextEmptyPage" />
+                                    </div>
+                                    <div>
+                                        <small class="text-muted d-block" style="font-size:.7rem;">Karar No</small>
+                                        <input type="text" name="decisionNumber" class="form-control form-control-sm text-center" placeholder="2026/..." />
+                                    </div>
+                                </th>
+                                <th class="bg-white text-start fw-normal" style="width:11%;">
+                                    <small class="text-muted d-block" style="font-size:.7rem;">Tarih</small>
+                                    <input type="date" name="sourceDocDate" class="form-control form-control-sm" />
+                                </th>
+                                <th class="bg-white text-start fw-normal" style="width:11%;">
+                                    <small class="text-muted d-block" style="font-size:.7rem;">No</small>
+                                    <input type="text" name="sourceDocNumber" class="form-control form-control-sm" placeholder="TPL-01" />
+                                </th>
+                                <th class="bg-white text-start fw-normal" style="width:12%;">
+                                    <small class="text-muted d-block" style="font-size:.7rem;">Nereden Geldi</small>
+                                    <input type="text" name="sourceDocSender" class="form-control form-control-sm" placeholder="Kurul / Malik" />
+                                </th>
+                                <th class="bg-white text-start fw-normal">
+                                    <div class="row g-2">
+                                        <div class="col-md-6">
+                                            <small class="text-muted d-block" style="font-size:.7rem;">Kapsam</small>
+                                            <select id="newDecScopeSelect" class="form-select form-select-sm fw-semibold" onchange="syncNewDecisionScope()">
+                                                @if (firstSiteComplex != null && buildings.Count > 1)
+                                                {
+                                                    <option value="SITE:@firstSiteComplex.Id" selected>🌐 @(firstSiteComplex.HousingComplex?.Name ?? "Site Geneli") (Tüm Bloklar)</option>
+                                                }
+                                                @foreach (var b in buildings)
+                                                {
+                                                    <option value="BLK:@b.Id" selected="@(firstSiteComplex == null && buildings.Count == 1 ? "selected" : null)">🏢 @(buildings.Count > 1 ? $"Sadece {b.BlockName ?? b.Name}" : b.Name)</option>
+                                                }
+                                            </select>
                                         </div>
-                                    }
-                                    <span class="ms-2 badge bg-white text-dark border">@quorum.RuleLabel</span>
-                                    @if (!string.IsNullOrWhiteSpace(m.DecisionCategory) && m.DecisionCategory != "General")
-                                    {
-                                        var catBadge = m.DecisionCategory switch
-                                        {
-                                            "DuesUpdate" => "💰 Aidat Belirleme",
-                                            "AppointManager" => "🧑‍💼 Yönetici Atama",
-                                            "AppointBoardMember" => "🏛️ Aza / Denetçi Seçimi",
-                                            "UnitExemption" => "🛡️ Daire Muafiyet / Ek Fark",
-                                            "ComplaintResolution" => "📣 Şikayet & Talep Kararı",
-                                            "CapitalProject" => "🛠️ Yenilik / Yatırım",
-                                            "ManagementPlan" => "📜 Yönetim Planı",
-                                            _ => m.DecisionCategory
-                                        };
-                                        <span class="ms-1 badge bg-info text-dark">@catBadge</span>
-                                    }
-                                </div>
-                            </div>
-                            <div class="d-flex flex-wrap gap-1">
-                                <a href="/BuildingManager/PrintDecisionSheet?meetingId=@m.Id&format=a4" target="_blank" class="btn btn-sm btn-outline-dark rounded-pill px-3">
-                                    <i class="bi bi-printer me-1"></i> A4 Noter Şablonu
-                                </a>
-                                <a href="/BuildingManager/PrintDecisionSheet?meetingId=@m.Id&format=a5" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
-                                    <i class="bi bi-scissors me-1"></i> A5 Yapıştırma
-                                </a>
-                            </div>
+                                        <div class="col-md-6">
+                                            <small class="text-muted d-block" style="font-size:.7rem;">Konu Türü</small>
+                                            <select name="decisionCategory" id="newDecCategorySelect" class="form-select form-select-sm fw-semibold" onchange="onDecisionCategoryChanged()">
+                                                <option value="General">📝 Genel Yönetim Kararı (KMK Md. 30)</option>
+                                                <option value="DuesUpdate">💰 Aidat &amp; Bütçe Belirleme (KMK Md. 37)</option>
+                                                <option value="AppointManager">🧑‍💼 Yönetici Seçimi (KMK Md. 34)</option>
+                                                <option value="AppointBoardMember">🏛️ Aza / Denetçi Seçimi (KMK Md. 41)</option>
+                                                <option value="CapitalProject">🛠️ Tadilat / Yatırım Onayı (KMK Md. 42)</option>
+                                                <option value="UnitExemption">🛡️ Daire Muafiyeti / Özel Fark (KMK Md. 20)</option>
+                                                <option value="ComplaintResolution">📣 Şikayet &amp; Talep Kararı (KMK Md. 18)</option>
+                                                <option value="ManagementPlan">📜 Yönetim Planı Değişikliği (KMK Md. 28)</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-12">
+                                            <input type="text" name="agendaTitle" id="newDecAgendaTitle" class="form-control form-control-sm fw-bold" required placeholder="Karar Konusu / Gündem Başlığı * (Örn: 2026 Yılı Aidat ve Çatı Onarım Kararı)" />
+                                        </div>
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                    </table>
+                </div>
+
+                <!-- Seçilen Konuya Özel Sade Detay Satırı (Varsa) -->
+                <div id="panelDuesUpdate" class="row g-2 p-2 mb-3 bg-white border rounded-3 d-none">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold mb-1">Yeni Aylık Baz Aidat (₺) *</label>
+                        <input type="number" step="0.01" min="0" name="proposedDues" id="inputProposedDues" class="form-control form-control-sm" placeholder="Örn: 1850" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold mb-1">Aylık Ödeme Günü</label>
+                        <input type="number" min="1" max="31" name="paymentDay" class="form-control form-control-sm" value="5" />
+                    </div>
+                </div>
+
+                <div id="panelPersonAppoint" class="row g-2 p-2 mb-3 bg-white border rounded-3 d-none">
+                    <div class="col-md-3 d-none" id="wrapTargetRole">
+                        <label class="form-label small fw-bold mb-1">Görevi</label>
+                        <select name="targetRole" class="form-select form-select-sm">
+                            <option value="BoardMember">Yönetim Kurulu Azası</option>
+                            <option value="Auditor">Denetçi</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold mb-1">Seçilecek Aday Adı *</label>
+                        <input type="text" name="targetName" id="inputTargetName" class="form-control form-control-sm" placeholder="Örn: Mehmet Kaya" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold mb-1">E-Posta</label>
+                        <input type="email" name="targetEmail" id="inputTargetEmail" class="form-control form-control-sm" placeholder="aday@ornek.com" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold mb-1">Telefon</label>
+                        <input type="text" name="targetPhone" id="inputTargetPhone" class="form-control form-control-sm" placeholder="05XX..." />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold mb-1">Dairesi (İsteğe Bağlı)</label>
+                        <select name="targetUnitId" id="appointTargetUnitSelect" class="form-select form-select-sm" disabled onchange="prefillCandidateFromUnit(this)">
+                            <option value="">-- Bölüm Seçilmedi --</option>
+                            @foreach (var su in allSiteUnits)
+                            {
+                                <option value="@su.Id" data-name="@su.OwnerName" data-email="@su.OwnerEmail" data-phone="@su.OwnerPhone">
+                                    @(su.Building?.BlockName ?? su.Building?.Name) • @su.DoorNumber (@(su.OwnerName ?? "Malik Girilmedi"))
+                                </option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold mb-1">Görev Süresince Aidat Muafiyeti (KMK Md. 40)</label>
+                        <select name="exemptionMode" id="appointExemptionMode" class="form-select form-select-sm" disabled>
+                            <option value="None">Muafiyet Yok</option>
+                            <option value="FullExempt">%100 Aidattan Muaf</option>
+                            <option value="HalfExempt">%50 İndirimli</option>
+                        </select>
+                    </div>
+                    <input type="hidden" name="additionalCandidates" value="" />
+                </div>
+
+                <div id="panelUnitExemption" class="row g-2 p-2 mb-3 bg-white border rounded-3 d-none">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold mb-1">İlgili Daire / Dükkan *</label>
+                        <select name="targetUnitId" id="exemptionUnitSelect" class="form-select form-select-sm" disabled>
+                            <option value="">-- Bölüm Seçiniz --</option>
+                            @foreach (var su in allSiteUnits)
+                            {
+                                <option value="@su.Id">@(su.Building?.BlockName ?? su.Building?.Name) • @su.DoorNumber (@(su.OwnerName ?? "Malik"))</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold mb-1">Uygulanacak Karar</label>
+                        <select name="exemptionMode" id="unitExemptionModeSelect" class="form-select form-select-sm" disabled onchange="toggleCustomExemptionFields()">
+                            <option value="FullExempt">Tam Aidat Muafiyeti (0 ₺)</option>
+                            <option value="CustomAdjust">Özel Katsayı / Ek Fark</option>
+                            <option value="ClearExemption">Muafiyeti Kaldır</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold mb-1">Gerekçe *</label>
+                        <input type="text" name="duesNote" id="inputDuesNote" class="form-control form-control-sm" placeholder="Örn: Giriş kat muafiyeti" />
+                    </div>
+                    <div class="col-6 d-none" id="wrapExMultiplier">
+                        <input type="number" step="0.05" min="0" name="proposedMultiplier" class="form-control form-control-sm" value="1.00" placeholder="Katsayı (1.00)" />
+                    </div>
+                    <div class="col-6 d-none" id="wrapExAdjustment">
+                        <input type="number" step="10" name="proposedAdjustment" class="form-control form-control-sm" placeholder="Ek fark +/- ₺" />
+                    </div>
+                </div>
+
+                <div id="panelComplaint" class="row g-2 p-2 mb-3 bg-white border rounded-3 d-none">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold mb-1">Bağlı Şikayet Kaydı</label>
+                        <select name="relatedTicketId" id="complaintTicketSelect" class="form-select form-select-sm">
+                            <option value="">-- Genel Şikayet --</option>
+                            @foreach (var tk in openComplaints)
+                            {
+                                <option value="@tk.Id">#@tk.Id • @tk.Title</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold mb-1">İlgili Daire</label>
+                        <select name="targetUnitId" id="complaintUnitSelect" class="form-select form-select-sm" disabled>
+                            <option value="">-- Tüm Site --</option>
+                            @foreach (var su in allSiteUnits)
+                            {
+                                <option value="@su.Id">@(su.Building?.BlockName ?? su.Building?.Name) • @su.DoorNumber</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div id="panelCapitalProject" class="row g-2 p-2 mb-3 bg-white border rounded-3 d-none">
+                    <div class="col-12">
+                        <label class="form-label small fw-bold mb-1">Tahmini Yatırım / Tadilat Bütçesi (₺)</label>
+                        <input type="number" step="100" min="0" name="estimatedBudget" class="form-control form-control-sm" placeholder="Örn: 85000" />
+                    </div>
+                </div>
+
+                <!-- 2. ORTA BÖLÜM: KARARIN METNİ & KURUL (OTOMATİK DOLU) -->
+                <div class="border border-dark rounded-3 bg-white p-3 mb-3">
+                    <div class="text-center fw-bold border-bottom border-dark pb-1 mb-3" style="letter-spacing:0.08em;">KARARIN METNİ</div>
+
+                    <div class="row g-2 mb-3 small">
+                        <div class="col-md-3 col-6">
+                            <label class="form-label fw-bold mb-1">Karar Tarihi</label>
+                            <input type="date" name="meetingDate" class="form-control form-control-sm" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                        </div>
+                        <div class="col-md-2 col-6">
+                            <label class="form-label fw-bold mb-1">Başlangıç</label>
+                            <input type="time" name="meetingTime" class="form-control form-control-sm" value="20:00" />
+                        </div>
+                        <div class="col-md-2 col-6">
+                            <label class="form-label fw-bold mb-1">Bitiş</label>
+                            <input type="time" name="meetingEndTime" class="form-control form-control-sm" value="21:00" />
+                        </div>
+                        <div class="col-md-5 col-6">
+                            <label class="form-label fw-bold mb-1">Toplantı / Karar Yeri</label>
+                            <input type="text" name="meetingLocation" class="form-control form-control-sm" value="Site Yönetim Odası / Ortak Alan" />
                         </div>
 
-                        <div class="bg-white rounded-3 border p-2 px-3 mb-2 small">
-                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
-                                <span>
-                                    <strong>KMK Ön Onay Durumu:</strong>
-                                    <span class="text-success fw-bold">@quorum.ApprovedUnits Kabul</span> /
-                                    <span class="text-danger fw-bold">@quorum.RejectedUnits Ret</span>
-                                    (@quorum.TotalUnits Kat Maliki içinde <b>%@quorum.ApprovalUnitPercent</b> • Arsa Payı: <b>%@quorum.ApprovalSharePercent</b>)
-                                </span>
-                                <span class="badge @(quorum.IsQuorumMet ? "bg-success" : "bg-warning text-dark")">
-                                    @(quorum.IsQuorumMet ? "✅ Yasal Çoğunluk Sağlandı (İmza Çıktısı Alınabilir)" : $"⏳ Yasal Hedef: En az {quorum.RequiredUnitCount} Malik")
-                                </span>
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold mb-1">
+                                Başkanın Adı ve Soyadı
+                                <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">Kuruldan Dolu</span>
+                            </label>
+                            <input type="text" name="chairpersonName" class="form-control form-control-sm fw-semibold" value="@defaultChair" placeholder="Yönetici / Divan Başkanı" />
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label fw-bold mb-1">
+                                Azaların Adı ve Soyadı (Yönetim Kurulu)
+                                <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">Kuruldan Dolu</span>
+                                @if (string.IsNullOrWhiteSpace(defaultAzas))
+                                {
+                                    <a href="/BuildingManager/Governance" class="ms-1 text-primary text-decoration-none">(Kuruldan Seç &rarr;)</a>
+                                }
+                            </label>
+                            <input type="text" name="boardMembersSummary" class="form-control form-control-sm fw-semibold" value="@defaultAzas" placeholder="Kurul & Yetkiler'den seçilen azalar otomatik gelir" />
+                        </div>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-bold small mb-1">Deftere Yazılacak Karar Maddeleri (Boş bırakılırsa seçilen konuya göre otomatik üretilir)</label>
+                        <textarea name="decisionText" id="oylDecisionText" class="form-control notary-ruled-area" rows="4" placeholder="1) ... &#10;2) ..."></textarea>
+                    </div>
+
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pt-2 border-top small">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="fw-bold text-dark">Defter İşlem Durumu:</span>
+                            <select name="isPlannedOnly" class="form-select form-select-sm w-auto fw-semibold">
+                                <option value="true" selected>🗳️ Oylamaya Aç (Sayfada Katılımcılar İşaretlesin)</option>
+                                <option value="false">✅ Alınan Karar Olarak Doğrudan Kesinleştir</option>
+                            </select>
+                        </div>
+                        <span class="text-muted" id="decCategoryHint">Kapsam ve konu kuralı otomatik uygulanır.</span>
+                    </div>
+                </div>
+
+                <!-- 3. ALT BÖLÜM: SAYFA ÜZERİNDE KATILANLAR / OYLAMA LİSTESİ ÖNİZLEMESİ -->
+                <div class="border rounded-3 bg-white p-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong class="small text-dark"><i class="bi bi-people-fill text-primary me-1"></i>Sayfaya Açılacak Katılımcılar &amp; İmza / Oylama Cetveli (<span id="previewVoterCount">0</span> Kat Maliki)</strong>
+                        <small class="text-muted">Sayfa açıldığında oylama ve imza sütunu doğrudan bu isimlerin yanında görünür.</small>
+                    </div>
+                    <div id="previewParticipantsGrid" class="row g-2 small"></div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-light rounded-pill px-4" onclick="document.getElementById('newDecisionSheetCard').classList.add('d-none')">İptal</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold shadow-sm">
+                        <i class="bi bi-check2-circle me-1"></i> Defter Sayfasını Aç &amp; Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    }
+
+    <!-- KAYITLI RESMİ KARAR DEFTERİ YAPRAKLARI (HER ŞEY AYNI SAYFA ÜSTÜNDE) -->
+    @if (!decisionList.Any())
+    {
+        <div class="card border-0 shadow-sm rounded-4 bg-white p-4 text-center text-muted small">
+            <i class="bi bi-journal-bookmark fs-2 d-block mb-1"></i>
+            Yukarıdaki resmi defter sayfasını doldurup kaydettiğinizde, tüm oylama ve katılımcı imza cetveli sayfa üzerinde burada yerini alacaktır.
+        </div>
+    }
+    else
+    {
+        foreach (var m in decisionList)
+        {
+            var bName = buildingMap.ContainsKey(m.ContextId) ? buildingMap[m.ContextId] : ("Bina #" + m.ContextId);
+            var bUnits = (m.IsSiteWide && m.HousingComplexId.HasValue && unitsByComplex.ContainsKey(m.HousingComplexId.Value))
+                ? unitsByComplex[m.HousingComplexId.Value]
+                : (unitsByBuilding.ContainsKey(m.ContextId) ? unitsByBuilding[m.ContextId] : new List<GMK360.Core.Entities.BuildingUnit>());
+            var meetingBld = buildings.FirstOrDefault(b => b.Id == m.ContextId);
+            string scopeDisplayName = (m.IsSiteWide && meetingBld?.HousingComplex != null)
+                ? $"{meetingBld.HousingComplex.Name} (Site Geneli)"
+                : bName;
+            var quorum = GMK360.Web.Helpers.KmkQuorumHelper.Compute(bUnits, m.Votes, m.QuorumType);
+            var mVotes = (m.Votes ?? new List<GMK360.Core.Entities.BuildingDecisionVote>()).Where(v => !v.IsDeleted).ToDictionary(v => v.BuildingUnitId, v => v);
+            string chairToShow = !string.IsNullOrWhiteSpace(m.ChairpersonName) ? m.ChairpersonName! : (string.IsNullOrWhiteSpace(defaultChair) ? "-" : defaultChair);
+            string azaToShow = !string.IsNullOrWhiteSpace(m.BoardMembersSummary) ? m.BoardMembersSummary! : (string.IsNullOrWhiteSpace(defaultAzas) ? "-" : defaultAzas);
+
+            <div id="decisionSheet_@m.Id" class="notary-paper p-3 p-md-4 mb-4">
+                <!-- Üst Araç Çubuğu -->
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                    <div class="d-flex flex-wrap align-items-center gap-1">
+                        <span class="badge bg-primary rounded-pill">Sayfa #@(m.BookPageNumber ?? m.Id)</span>
+                        <span class="badge bg-dark rounded-pill">Karar #@(m.DecisionNumber ?? m.Id.ToString("D2"))</span>
+                        <span class="badge @(m.IsConcluded ? "bg-success" : "bg-warning text-dark") rounded-pill">
+                            @(m.IsConcluded ? "✅ Kesinleşen Karar" : "🗳️ Sayfa Üzerinde Oylama Açık")
+                        </span>
+                        <span class="badge bg-light text-dark border rounded-pill">@scopeDisplayName</span>
+                    </div>
+                    <div class="d-flex flex-wrap gap-1">
+                        @if (!m.IsConcluded)
+                        {
+                            <form asp-action="SendMeetingCallReminders" asp-controller="BuildingManager" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="meetingId" value="@m.Id" />
+                                <input type="hidden" name="buildingId" value="@m.ContextId" />
+                                <button type="submit" class="btn btn-xs btn-outline-primary rounded-pill px-3 fw-semibold" title="Kat maliklerine oylama çağrısı gönder">
+                                    <i class="bi bi-envelope-paper me-1"></i> Çağrı Gönder
+                                </button>
+                            </form>
+                        }
+                        <a href="/BuildingManager/PrintDecisionSheet?meetingId=@m.Id&format=a4" target="_blank" class="btn btn-xs btn-outline-dark rounded-pill px-3 fw-semibold">
+                            <i class="bi bi-printer me-1"></i> A4 Noter Çıktısı
+                        </a>
+                        <a href="/BuildingManager/PrintDecisionSheet?meetingId=@m.Id&format=a5" target="_blank" class="btn btn-xs btn-outline-secondary rounded-pill px-3 fw-semibold">
+                            <i class="bi bi-scissors me-1"></i> A5 Yapıştırma
+                        </a>
+                    </div>
+                </div>
+
+                <!-- 1. Üst Resmi Noter Tablosu -->
+                <div class="table-responsive mb-2">
+                    <table class="notary-head-table">
+                        <thead>
+                            <tr>
+                                <th style="width:13%;">Karar Sıra No</th>
+                                <th colspan="3" style="width:33%;">Karara Esas Olan Evrakın</th>
+                                <th style="width:54%;">Mevzuun Mahiyeti ve Hülâsası</th>
+                            </tr>
+                            <tr>
+                                <th class="bg-white">@(m.DecisionNumber ?? $"#{m.Id:D2}") <span class="text-muted fw-normal d-block">Sayfa @(m.BookPageNumber ?? m.Id)</span></th>
+                                <th class="bg-white fw-normal">@(m.SourceDocDate?.ToString("dd.MM.yyyy") ?? "-")</th>
+                                <th class="bg-white fw-normal">@(m.SourceDocNumber ?? "-")</th>
+                                <th class="bg-white fw-normal">@(m.SourceDocSender ?? "-")</th>
+                                <th class="bg-white text-start">
+                                    <span class="fw-bold text-dark">@m.AgendaTitle</span>
+                                    <span class="badge bg-light text-dark border ms-1">@quorum.RuleLabel</span>
+                                </th>
+                            </tr>
+                        </thead>
+                    </table>
+                </div>
+
+                <!-- 2. Kararın Metni & Yönetim Kurulu -->
+                <div class="border border-dark rounded-3 bg-white p-3 mb-3">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 border-bottom pb-2 mb-2 small">
+                        <div>
+                            <strong>Başkan:</strong> @chairToShow
+                            <span class="mx-2 text-muted">|</span>
+                            <strong>Azalar:</strong> @azaToShow
+                        </div>
+                        <div class="text-muted">
+                            <strong>Tarih:</strong> @m.MeetingDate.ToString("dd.MM.yyyy")
+                            <strong>Saat:</strong> @m.MeetingDate.ToString("HH:mm")@(!string.IsNullOrWhiteSpace(m.MeetingEndTime) ? $" – {m.MeetingEndTime}" : "")
+                            @if (!string.IsNullOrWhiteSpace(m.MeetingLocation))
+                            {
+                                <span class="ms-2"><strong>Yer:</strong> @m.MeetingLocation</span>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="notary-ruled-area p-2 px-3 rounded border mb-2 small">
+                        @if (m.Decisions != null && m.Decisions.Any())
+                        {
+                            int dIdx = 1;
+                            foreach (var dec in m.Decisions)
+                            {
+                                <div class="mb-1"><strong>@dIdx)</strong> @dec.DecisionText</div>
+                                dIdx++;
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-muted">Karar metni oylama sonunda buraya işlenecektir.</div>
+                        }
+                    </div>
+
+                    @if (!m.IsConcluded)
+                    {
+                        <form asp-action="ConcludeMeetingWithDecision" asp-controller="BuildingManager" method="post" class="mt-2">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="meetingId" value="@m.Id" />
+                            <input type="hidden" name="buildingId" value="@m.ContextId" />
+                            <input type="hidden" name="returnTo" value="Oylamalar" />
+                            <div class="input-group input-group-sm">
+                                <input type="text" name="decisionText" class="form-control" required placeholder="Alınan nihai kararı deftere işleyip kapatın..." />
+                                <button type="submit" class="btn btn-success fw-bold px-3">Kararı Deftere İşle &amp; Kapat</button>
                             </div>
-                            <div class="progress" style="height: 6px;">
-                                <div class="progress-bar @(quorum.IsQuorumMet ? "bg-success" : "bg-primary")" style="width: @(Math.Min(100m, quorum.ApprovalUnitPercent).ToString(System.Globalization.CultureInfo.InvariantCulture))%"></div>
-                            </div>
+                        </form>
+                    }
+                </div>
+
+                <!-- 3. AYNI SAYFA ÜZERİNDE KATILANLAR, OYLAMA & İMZA CETVELİ -->
+                <div class="border rounded-3 bg-white p-3">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2 small">
+                        <div>
+                            <strong class="text-dark"><i class="bi bi-people-fill text-success me-1"></i>Katılanlar, Oylama &amp; İmzalar (@quorum.ParticipatedUnits / @quorum.TotalUnits Malik):</strong>
+                            <span class="ms-2 text-success fw-bold">@quorum.ApprovedUnits Kabul</span> /
+                            <span class="text-danger fw-bold">@quorum.RejectedUnits Ret</span>
+                            <span class="text-muted">(Sayı: %@quorum.ApprovalUnitPercent • Arsa Payı: %@quorum.ApprovalSharePercent)</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge @(quorum.IsQuorumMet ? "bg-success" : "bg-warning text-dark")">
+                                @(quorum.IsQuorumMet ? "✅ Yasal Çoğunluk Sağlandı" : $"⏳ Hedef: En az {quorum.RequiredUnitCount} Malik")
+                            </span>
                             @if (m.IsExecuted && !string.IsNullOrWhiteSpace(m.ExecutionSummary))
                             {
-                                <div class="alert alert-success py-1 px-2 mt-2 mb-0 small d-flex align-items-center gap-2">
-                                    <i class="bi bi-lightning-charge-fill"></i>
-                                    <span><strong>Yürürlüğe Alındı:</strong> @m.ExecutionSummary</span>
-                                </div>
+                                <span class="badge bg-primary">⚡ Yürürlükte: @m.ExecutionSummary</span>
                             }
                             else if (quorum.IsQuorumMet && !m.IsExecuted)
                             {
-                                <div class="mt-2 d-flex justify-content-between align-items-center gap-2">
-                                    <span class="text-success fw-semibold"><i class="bi bi-check2-all me-1"></i>Salt çoğunluk oranı yakalandı! Kararı sisteme uygulayabilirsiniz.</span>
-                                    <form asp-action="ExecuteApprovedDecision" asp-controller="BuildingManager" method="post" class="d-inline">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="meetingId" value="@m.Id" />
-                                        <input type="hidden" name="buildingId" value="@m.ContextId" />
-                                        <button type="submit" class="btn btn-xs btn-success rounded-pill px-3 fw-bold">
-                                            ⚡ Kararı Şimdi Yürürlüğe Al
-                                        </button>
-                                    </form>
-                                </div>
+                                <form asp-action="ExecuteApprovedDecision" asp-controller="BuildingManager" method="post" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="meetingId" value="@m.Id" />
+                                    <input type="hidden" name="buildingId" value="@m.ContextId" />
+                                    <button type="submit" class="btn btn-xs btn-success rounded-pill px-3 fw-bold">⚡ Kararı Yürürlüğe Al</button>
+                                </form>
                             }
                         </div>
-                        @if (m.Decisions != null && m.Decisions.Any())
-                        {
-                            <div class="bg-white rounded-3 border p-3 small mb-2">
-                                @foreach (var dec in m.Decisions)
-                                {
-                                    <div class="mb-1"><i class="bi bi-check2-circle text-success me-1"></i>@dec.DecisionText</div>
-                                }
-                            </div>
-                        }
-                        @if (!m.IsConcluded)
-                        {
-                            <form asp-action="ConcludeMeetingWithDecision" asp-controller="BuildingManager" method="post" class="bg-white rounded-3 border p-2 mb-2">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="meetingId" value="@m.Id" />
-                                <input type="hidden" name="buildingId" value="@m.ContextId" />
-                                <input type="hidden" name="returnTo" value="Oylamalar" />
-                                <div class="input-group input-group-sm">
-                                    <input type="text" name="decisionText" class="form-control" required placeholder="Toplantıda alınan kararı yazıp Noter Defterine kaydedin..." />
-                                    <button type="submit" class="btn btn-success fw-bold">Karara Bağla</button>
-                                </div>
-                            </form>
-                        }
-
-                        @* Bağlı Pazar Yeri, B2B Teklif ve PIN Yetkileri *@
-                        @if (linkedJobs.Any() || linkedQuotes.Any() || linkedStaffs.Any())
-                        {
-                            <div class="bg-white rounded-3 border p-2 px-3 mb-2 small d-flex flex-column gap-2">
-                                @foreach (var job in linkedJobs)
-                                {
-                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-                                        <div>
-                                            <span class="badge bg-warning text-dark rounded-pill me-1">📢 Pazar Yeri İlanı #@job.Id</span>
-                                            <span class="fw-semibold">@job.Title</span>
-                                            <span class="text-muted ms-2">(@(job.Bids?.Count ?? 0) teklif@(job.EstimatedBudget.HasValue ? $" • Bütçe: {job.EstimatedBudget.Value:N0} ₺" : ""))</span>
-                                        </div>
-                                        <a href="/Marketplace/Detail/@job.Id" class="btn btn-sm btn-outline-warning text-dark fw-bold rounded-pill px-3">
-                                            İlana Git &amp; Teklifleri Gör <i class="bi bi-arrow-right ms-1"></i>
-                                        </a>
-                                    </div>
-                                }
-                                @foreach (var quote in linkedQuotes)
-                                {
-                                    var inviteCount = quote.Invites?.Count ?? 0;
-                                    var pricedCount = quote.Invites?.Count(i => i.OfferedPrice.HasValue && i.OfferedPrice.Value > 0) ?? 0;
-                                    var acceptedInvite = quote.Invites?.FirstOrDefault(i => i.Status == GMK360.Core.Entities.B2B.QuoteInviteStatus.Accepted);
-                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-                                        <div>
-                                            <span class="badge bg-primary rounded-pill me-1">📊 B2B Teklif Masası #@quote.Id</span>
-                                            <span class="text-muted">@inviteCount firma daveti • <strong>@pricedCount fiyat geldi</strong></span>
-                                            @if (acceptedInvite != null)
-                                            {
-                                                <span class="badge bg-success ms-1">✅ Onaylı: @(acceptedInvite.NetworkContact?.CompanyName ?? "Firma") (@(acceptedInvite.OfferedPrice?.ToString("N0") ?? "0") ₺)</span>
-                                            }
-                                        </div>
-                                        <a href="/B2BPurchasing/Details/@quote.Id" class="btn btn-sm btn-outline-primary fw-bold rounded-pill px-3">
-                                            Teklif Kıyasla &amp; Dış Link Paylaş <i class="bi bi-arrow-right ms-1"></i>
-                                        </a>
-                                    </div>
-                                }
-                                @foreach (var st in linkedStaffs)
-                                {
-                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-                                        <div>
-                                            <span class="badge bg-info text-dark rounded-pill me-1">🔑 PIN Yetkilisi</span>
-                                            <span class="fw-semibold">@st.FullName</span>
-                                            <span class="text-muted ms-1">(@st.RoleType)</span>
-                                            <span class="badge bg-light text-dark border ms-1">@st.PhoneNumber</span>
-                                        </div>
-                                        <span class="text-success small fw-semibold">/FacilityPortal girişi aktif</span>
-                                    </div>
-                                }
-                            </div>
-                        }
-
-                        @* Karar Sonrası Satınalma & Yetkilendirme Aksiyonları *@
-                        <div class="d-flex flex-wrap align-items-center gap-2 pt-1">
-                            <button type="button"
-                                    class="btn btn-sm btn-warning text-dark fw-bold rounded-pill px-3"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#marketplaceJobModal"
-                                    data-meeting-id="@m.Id"
-                                    data-building-id="@m.ContextId"
-                                    data-title="@($"{bName} — {m.AgendaTitle}")">
-                                <i class="bi bi-megaphone me-1"></i> Pazar Yerinde İlan Aç
-                            </button>
-
-                            <form asp-action="OpenB2BQuoteFromMeeting" asp-controller="BuildingManager" method="post" class="d-inline">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="meetingId" value="@m.Id" />
-                                <input type="hidden" name="buildingId" value="@m.ContextId" />
-                                <input type="hidden" name="title" value="@($"{bName} — {m.AgendaTitle}")" />
-                                <button type="submit" class="btn btn-sm btn-primary fw-bold rounded-pill px-3">
-                                    <i class="bi bi-diagram-3 me-1"></i> @(linkedQuotes.Any() ? "B2B Teklif & Kıyas Masasını Aç" : "Teklif Topla & Kıyasla (B2B / Dış Link)")
-                                </button>
-                            </form>
-
-                            <button type="button"
-                                    class="btn btn-sm btn-outline-info text-dark fw-bold rounded-pill px-3"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#decisionPinModal"
-                                    data-meeting-id="@m.Id"
-                                    data-building-id="@m.ContextId"
-                                    data-title="@m.AgendaTitle">
-                                <i class="bi bi-key me-1"></i> Yetkili / Usta PIN Aç
-                            </button>
-
-                            <button type="button"
-                                    class="btn btn-sm btn-outline-dark fw-semibold rounded-pill px-3"
-                                    data-bs-toggle="collapse"
-                                    data-bs-target="#meetingDetailPanel_@m.Id">
-                                <i class="bi bi-folder2-open me-1"></i> Belgeler (@mAttachments.Count), Görüşler &amp; Vekalet (@quorum.ParticipatedUnits/@quorum.TotalUnits)
-                            </button>
-                        </div>
-
-                        <div class="collapse mt-3" id="meetingDetailPanel_@m.Id">
-                            <div class="bg-white rounded-3 border p-3 row g-3">
-                                <div class="col-lg-5">
-                                    <h6 class="fw-bold small mb-2"><i class="bi bi-paperclip text-primary me-1"></i>Belgeler, Teklifler &amp; Malik Görüşleri (@mAttachments.Count)</h6>
-                                    @if (mAttachments.Any())
-                                    {
-                                        <div class="list-group list-group-flush border rounded-3 mb-2 small" style="max-height: 210px; overflow-y: auto;">
-                                            @foreach (var att in mAttachments)
-                                            {
-                                                <div class="list-group-item py-2">
-                                                    <div class="d-flex justify-content-between">
-                                                        <strong>@att.AuthorName <span class="badge bg-light text-dark border">@att.AuthorRoleLabel</span></strong>
-                                                        <span class="text-muted" style="font-size:.7rem;">@att.CreatedAt.ToLocalTime().ToString("dd.MM HH:mm")</span>
-                                                    </div>
-                                                    @if (!string.IsNullOrWhiteSpace(att.CommentText))
-                                                    {
-                                                        <div class="mt-1">@att.CommentText</div>
-                                                    }
-                                                    @if (!string.IsNullOrWhiteSpace(att.FileUrl))
-                                                    {
-                                                        <a href="@att.FileUrl" target="_blank" class="d-inline-block mt-1 text-decoration-none fw-semibold">
-                                                            <i class="bi bi-file-earmark-text me-1"></i>@(att.DocumentTitle ?? "Ekli Belgeyi Aç")
-                                                        </a>
-                                                    }
-                                                </div>
-                                            }
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <div class="small text-muted mb-2">Henüz belge veya görüş eklenmemiş.</div>
-                                    }
-                                    <form asp-action="AddMeetingAttachment" asp-controller="BuildingManager" method="post" enctype="multipart/form-data" class="border rounded-3 p-2 bg-light small">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="buildingId" value="@m.ContextId" />
-                                        <input type="hidden" name="meetingId" value="@m.Id" />
-                                        <input type="text" name="commentText" class="form-control form-control-sm mb-1" placeholder="Yönetici açıklaması / özet not..." />
-                                        <div class="row g-1 mb-1">
-                                            <div class="col-6"><input type="text" name="documentTitle" class="form-control form-control-sm" placeholder="Belge adı (Örn: Çatı Teklifi)" /></div>
-                                            <div class="col-6"><input type="file" name="attachmentFile" class="form-control form-control-sm" /></div>
-                                        </div>
-                                        <button type="submit" class="btn btn-xs btn-primary rounded-pill px-3 fw-semibold">Belge / Not Ekle</button>
-                                    </form>
-                                </div>
-
-                                <div class="col-lg-7">
-                                    <h6 class="fw-bold small mb-2"><i class="bi bi-people text-success me-1"></i>Kat Malikleri Ön Onay &amp; Vekalet Cetveli (@bUnits.Count)</h6>
-                                    <div class="table-responsive" style="max-height: 290px; overflow-y: auto;">
-                                        <table class="table table-sm table-bordered align-middle small mb-0">
-                                            <thead class="table-light">
-                                                <tr>
-                                                    <th>Bölüm</th>
-                                                    <th>Kat Maliki</th>
-                                                    <th>Katılım</th>
-                                                    <th>Ön Onay</th>
-                                                    <th>Vekil İşlemi</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach (var u in bUnits)
-                                                {
-                                                    mVotes.TryGetValue(u.Id, out var uv);
-                                                    <tr>
-                                                        <td class="fw-bold">@u.DoorNumber</td>
-                                                        <td>@(u.OwnerName ?? "Malik Girilmemiş")</td>
-                                                        <td>
-                                                            @(uv?.ParticipationType ?? "Asil")
-                                                            @if (!string.IsNullOrWhiteSpace(uv?.ProxyPersonName))
-                                                            {
-                                                                <span class="text-muted">(@uv.ProxyPersonName)</span>
-                                                            }
-                                                            @if (!string.IsNullOrWhiteSpace(uv?.ProxyDocumentUrl))
-                                                            {
-                                                                <a href="@uv.ProxyDocumentUrl" target="_blank" class="ms-1"><i class="bi bi-file-earmark-check"></i></a>
-                                                            }
-                                                        </td>
-                                                        <td>
-                                                            @if (uv?.VoteChoice == "Kabul")
-                                                            {
-                                                                <span class="badge bg-success">Kabul</span>
-                                                            }
-                                                            else if (uv?.VoteChoice == "Ret")
-                                                            {
-                                                                <span class="badge bg-danger">Ret</span>
-                                                                @if (!string.IsNullOrWhiteSpace(uv.DissentNote))
-                                                                {
-                                                                    <small class="text-muted d-block">@uv.DissentNote</small>
-                                                                }
-                                                            }
-                                                            else
-                                                            {
-                                                                <span class="badge bg-light text-muted border">Bekliyor</span>
-                                                            }
-                                                        </td>
-                                                        <td>
-                                                            <button type="button" class="btn btn-xs btn-outline-primary rounded-pill"
-                                                                    onclick="openAssignProxyModal(@m.ContextId, @m.Id, @u.Id, '@System.Web.HttpUtility.JavaScriptStringEncode($"{u.DoorNumber} ({u.OwnerName ?? "Malik"})")', '@System.Web.HttpUtility.JavaScriptStringEncode(uv?.ProxyPersonName ?? u.TenantName ?? "")')">
-                                                                Vekil / Oy
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                }
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                     </div>
-                }
-            }
-        </div>
-    </div>
+
+                    <div class="progress mb-3" style="height: 6px;">
+                        <div class="progress-bar @(quorum.IsQuorumMet ? "bg-success" : "bg-primary")" style="width: @(Math.Min(100m, quorum.ApprovalUnitPercent).ToString(System.Globalization.CultureInfo.InvariantCulture))%"></div>
+                    </div>
+
+                    <!-- 2 Sütunlu Defter Katılımcı & Oylama Listesi (Fotoğraf 2 Formatı) -->
+                    <div class="row g-2 small">
+                        @{ int rowNo = 1; }
+                        @foreach (var u in bUnits)
+                        {
+                            mVotes.TryGetValue(u.Id, out var uv);
+                            string bShort = buildings.Count > 1 && u.Building != null ? $"{u.Building.BlockName ?? u.Building.Name} · " : "";
+                            string ownerLabel = !string.IsNullOrWhiteSpace(u.OwnerName) ? u.OwnerName : "Malik Girilmemiş";
+                            <div class="col-lg-6">
+                                <div class="participant-grid-row d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                    <div>
+                                        <span class="fw-bold text-muted me-1">@rowNo)</span>
+                                        <span class="fw-bold text-dark">@ownerLabel</span>
+                                        <span class="text-muted">(@bShort@u.DoorNumber)</span>
+                                        @if (uv?.ParticipationType == "Vekil" && !string.IsNullOrWhiteSpace(uv.ProxyPersonName))
+                                        {
+                                            <span class="badge bg-info-subtle text-info-emphasis border ms-1">Vekil: @uv.ProxyPersonName</span>
+                                        }
+                                    </div>
+                                    <div class="d-flex align-items-center gap-1">
+                                        @if (uv?.VoteChoice == "Kabul")
+                                        {
+                                            <span class="badge bg-success">✅ Kabul @(!string.IsNullOrWhiteSpace(uv.ApprovalTraceCode) ? $"({uv.ApprovalTraceCode})" : "")</span>
+                                        }
+                                        else if (uv?.VoteChoice == "Ret")
+                                        {
+                                            <span class="badge bg-danger" title="@uv.DissentNote">❌ Ret</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-light text-muted border">Bekliyor</span>
+                                        }
+
+                                        @if (!m.IsConcluded)
+                                        {
+                                            <form asp-action="AssignUnitProxyVote" asp-controller="BuildingManager" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="buildingId" value="@m.ContextId" />
+                                                <input type="hidden" name="meetingId" value="@m.Id" />
+                                                <input type="hidden" name="buildingUnitId" value="@u.Id" />
+                                                <input type="hidden" name="participationType" value="Asil" />
+                                                <input type="hidden" name="voteChoice" value="Kabul" />
+                                                <button type="submit" class="btn btn-xs btn-outline-success py-0 px-2" title="Asil Kabul İşaretle">✓</button>
+                                            </form>
+                                            <form asp-action="AssignUnitProxyVote" asp-controller="BuildingManager" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="buildingId" value="@m.ContextId" />
+                                                <input type="hidden" name="meetingId" value="@m.Id" />
+                                                <input type="hidden" name="buildingUnitId" value="@u.Id" />
+                                                <input type="hidden" name="participationType" value="Asil" />
+                                                <input type="hidden" name="voteChoice" value="Ret" />
+                                                <button type="submit" class="btn btn-xs btn-outline-danger py-0 px-2" title="Ret İşaretle">✕</button>
+                                            </form>
+                                            <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2"
+                                                    onclick="openAssignProxyModal(@m.ContextId, @m.Id, @u.Id, '@System.Web.HttpUtility.JavaScriptStringEncode($"{u.DoorNumber} ({ownerLabel})")', '@System.Web.HttpUtility.JavaScriptStringEncode(uv?.ProxyPersonName ?? u.TenantName ?? "")')">
+                                                Vekil
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                            rowNo++;
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    }
 </div>
 
 @if (buildings.Any())
 {
-    <div class="modal fade" id="newDecisionModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
-            <form class="modal-content rounded-4 border-0 shadow" asp-action="CreateMeeting" asp-controller="BuildingManager" method="post" enctype="multipart/form-data">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="returnTo" value="Oylamalar" />
-                <div class="modal-header bg-success text-white border-0">
-                    <h5 class="modal-title fw-bold"><i class="bi bi-journal-plus me-2"></i>Yeni Resmi Karar Defteri Kaydı</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <div class="mb-3 p-3 bg-light rounded-3 border">
-                        <label class="form-label fw-bold small text-dark"><i class="bi bi-bookmark-star text-success me-1"></i>Resmi KMK Karar Konusu (Şablon) *</label>
-                        <select name="decisionCategory" id="newDecCategorySelect" class="form-select fw-semibold" onchange="onDecisionCategoryChanged()">
-                            <option value="General">📝 Genel Yönetim / İş Planı Maddesi (KMK Md. 30 • &gt;%50)</option>
-                            <option value="DuesUpdate">💰 Aidat &amp; İşletme Bütçesi Belirleme (KMK Md. 37 • &gt;%50 Sayı + Pay)</option>
-                            <option value="AppointManager">🧑‍💼 Yeni Yönetici Atama / Aday Oylaması (KMK Md. 34 • &gt;%50 Sayı + Pay)</option>
-                            <option value="AppointBoardMember">🏛️ Yönetim Kurulu Azası / Denetçi Seçimi (KMK Md. 34/41 • &gt;%50 Sayı + Pay)</option>
-                            <option value="UnitExemption">🛡️ Daire Aidat Muafiyeti / Özel Fark (KMK Md. 20 • Oy Birliği %100)</option>
-                            <option value="ComplaintResolution">📣 Malik / Kiracı Şikayet &amp; Talep Kararı (KMK Md. 18/30 • &gt;%50)</option>
-                            <option value="CapitalProject">🛠️ Önemli Yenilik / Mantolama / Demirbaş Yatırımı (KMK Md. 42 • &gt;%50 Sayı + Pay)</option>
-                            <option value="ManagementPlan">📜 Yönetim Planı Değişikliği (KMK Md. 28 • 4/5 = %80)</option>
-                        </select>
-                        <small class="text-muted d-block mt-1" id="decCategoryHint">
-                            Seçilen karar konusunun yasal KMK salt çoğunluk oranı otomatik kilitlenir ve oran yakalandığında karar uygulanır.
-                        </small>
-
-                        <div id="panelDuesUpdate" class="row g-2 mt-2 d-none">
-                            <div class="col-6">
-                                <label class="form-label small fw-bold mb-1">Önerilen Yeni Baz Aidat (₺) *</label>
-                                <input type="number" step="0.01" min="0" name="proposedDues" id="inputProposedDues" class="form-control form-control-sm" placeholder="Örn: 1850" />
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label small fw-bold mb-1">Aylık Ödeme Günü</label>
-                                <input type="number" min="1" max="31" name="paymentDay" class="form-control form-control-sm" value="5" />
-                            </div>
-                        </div>
-
-                        <div id="panelPersonAppoint" class="row g-2 mt-2 d-none">
-                            <div class="col-12 d-none" id="wrapTargetRole">
-                                <label class="form-label small fw-bold mb-1">Atanacak Kurul Görevi</label>
-                                <select name="targetRole" class="form-select form-select-sm">
-                                    <option value="BoardMember">Yönetim Kurulu Azası</option>
-                                    <option value="Auditor">Denetçi (Denetim Kurulu)</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold mb-1">Seçilecek Aday Adı *</label>
-                                <input type="text" name="targetName" id="inputTargetName" class="form-control form-control-sm" placeholder="Örn: Mehmet Kaya" />
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold mb-1">E-Posta *</label>
-                                <input type="email" name="targetEmail" id="inputTargetEmail" class="form-control form-control-sm" placeholder="aday@ornek.com" />
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold mb-1">Telefon</label>
-                                <input type="text" name="targetPhone" id="inputTargetPhone" class="form-control form-control-sm" placeholder="05XX XXX XX XX" />
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label small fw-bold mb-1">Diğer Adaylar / Seçim Pusulası Notu (Opsiyonel)</label>
-                                <input type="text" name="additionalCandidates" class="form-control form-control-sm" placeholder="Örn: 2. Aday: Ayşe Demir (Daire 8) • 3. Aday: Ali Yılmaz (Daire 12)" />
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold mb-1">Adayın Dairesi (Aidat Muafiyeti İçin Opsiyonel)</label>
-                                <select name="targetUnitId" id="appointTargetUnitSelect" class="form-select form-select-sm" disabled onchange="prefillCandidateFromUnit(this)">
-                                    <option value="">-- Bölüm Seçilmedi --</option>
-                                    @foreach (var su in allSiteUnits)
-                                    {
-                                        <option value="@su.Id" data-name="@su.OwnerName" data-email="@su.OwnerEmail" data-phone="@su.OwnerPhone">
-                                            @(su.Building?.BlockName ?? su.Building?.Name) • @(su.Category == "Dukkan" || su.Category == "Dükkan" ? "Dükkan" : "Daire") @su.DoorNumber (@(su.OwnerName ?? "Malik Girilmedi"))
-                                        </option>
-                                    }
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold mb-1">Görev Süresince Aidat Muafiyeti (KMK Md. 40)</label>
-                                <select name="exemptionMode" id="appointExemptionMode" class="form-select form-select-sm" disabled>
-                                    <option value="None">Muafiyet Yok (Tam Aidat Öder)</option>
-                                    <option value="FullExempt">🛡️ %100 Aidattan Muaf Olsun</option>
-                                    <option value="HalfExempt">🏷️ %50 İndirimli Aidat Ödesin</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div id="panelUnitExemption" class="row g-2 mt-2 d-none">
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold mb-1">İlgili Daire / Dükkan *</label>
-                                <select name="targetUnitId" id="exemptionUnitSelect" class="form-select form-select-sm" disabled>
-                                    <option value="">-- Bölüm Seçiniz --</option>
-                                    @foreach (var su in allSiteUnits)
-                                    {
-                                        <option value="@su.Id">
-                                            @(su.Building?.BlockName ?? su.Building?.Name) • @(su.Category == "Dukkan" || su.Category == "Dükkan" ? "Dükkan" : "Daire") @su.DoorNumber (@(su.OwnerName ?? "Malik Girilmedi"))
-                                        </option>
-                                    }
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold mb-1">Uygulanacak Karar</label>
-                                <select name="exemptionMode" id="unitExemptionModeSelect" class="form-select form-select-sm" disabled onchange="toggleCustomExemptionFields()">
-                                    <option value="FullExempt">🛡️ Tam Aidat Muafiyeti (0 ₺ Öder)</option>
-                                    <option value="CustomAdjust">⚖️ Özel Katsayı / Fazla veya Eksik Ödeme (₺)</option>
-                                    <option value="ClearExemption">♻️ Muafiyeti Kaldır (Standart Tarifeye Dön)</option>
-                                </select>
-                            </div>
-                            <div class="col-6 d-none" id="wrapExMultiplier">
-                                <label class="form-label small fw-bold mb-1">Aidat Katsayısı (1.00 = Standart)</label>
-                                <input type="number" step="0.05" min="0" name="proposedMultiplier" class="form-control form-control-sm" value="1.00" />
-                            </div>
-                            <div class="col-6 d-none" id="wrapExAdjustment">
-                                <label class="form-label small fw-bold mb-1">Ek Fark / İndirim Tutarı (+/- ₺)</label>
-                                <input type="number" step="10" name="proposedAdjustment" class="form-control form-control-sm" placeholder="Örn: +500 veya -250" />
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label small fw-bold mb-1">Muafiyet / Ek Ödeme Gerekçesi *</label>
-                                <input type="text" name="duesNote" id="inputDuesNote" class="form-control form-control-sm" placeholder="Örn: Giriş kat asansör muafiyeti / Dükkan ekstra çöp-su farkı / Aza görevi" />
-                            </div>
-                        </div>
-
-                        <div id="panelComplaint" class="row g-2 mt-2 d-none">
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold mb-1">Bağlı Şikayet / Talep Kaydı (Varsa)</label>
-                                <select name="relatedTicketId" id="complaintTicketSelect" class="form-select form-select-sm">
-                                    <option value="">-- Genel Şikayet / Yeni Konu --</option>
-                                    @foreach (var tk in openComplaints)
-                                    {
-                                        <option value="@tk.Id">#@tk.Id • @tk.Title (@tk.Category)</option>
-                                    }
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold mb-1">İlgili Daire / Taraf (Opsiyonel)</label>
-                                <select name="targetUnitId" id="complaintUnitSelect" class="form-select form-select-sm" disabled>
-                                    <option value="">-- Tüm Site / Genel --</option>
-                                    @foreach (var su in allSiteUnits)
-                                    {
-                                        <option value="@su.Id">
-                                            @(su.Building?.BlockName ?? su.Building?.Name) • @(su.Category == "Dukkan" || su.Category == "Dükkan" ? "Dükkan" : "Daire") @su.DoorNumber (@(su.OwnerName ?? su.TenantName ?? "Bölüm"))
-                                        </option>
-                                    }
-                                </select>
-                            </div>
-                        </div>
-
-                        <div id="panelCapitalProject" class="row g-2 mt-2 d-none">
-                            <div class="col-12">
-                                <label class="form-label small fw-bold mb-1">Tahmini Yatırım / Proje Bütçesi (₺)</label>
-                                <input type="number" step="100" min="0" name="estimatedBudget" class="form-control form-control-sm" placeholder="Örn: 250000" />
-                            </div>
-                        </div>
-
-                        <div class="form-check form-switch mt-2 small">
-                            <input class="form-check-input" type="checkbox" name="autoExecuteOnQuorum" value="true" id="autoExecSwitch" checked />
-                            <label class="form-check-label fw-semibold text-success" for="autoExecSwitch">
-                                ⚡ Yasal çoğunluk yakalandığı anda kararı otomatik yürürlüğe al (Aidat / Atama / İş Planı)
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-8">
-                            <label class="form-label fw-bold small">Kapsam (Site Geneli / Bina)</label>
-                            <input type="hidden" name="buildingId" id="newDecBuildingIdHidden" value="@(selectedBldObj?.Id ?? buildings.First().Id)" />
-                            <input type="hidden" name="isSiteWide" id="newDecIsSiteWideHidden" value="@(firstSiteComplex != null && buildings.Count > 1 ? "true" : "false")" />
-                            <select id="newDecScopeSelect" class="form-select" onchange="syncNewDecisionScope()">
-                                @if (firstSiteComplex != null && buildings.Count > 1)
-                                {
-                                    <option value="SITE:@firstSiteComplex.Id" selected>🌐 @(firstSiteComplex.HousingComplex?.Name ?? "Site Geneli") (Tüm Bloklar — Genel Karar)</option>
-                                }
-                                @foreach (var b in buildings)
-                                {
-                                    <option value="BLK:@b.Id" selected="@(firstSiteComplex == null && buildings.Count == 1 ? "selected" : null)">🏢 @(buildings.Count > 1 ? $"Sadece {b.BlockName ?? b.Name}" : b.Name)</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold small">Karar Sıra No</label>
-                            <input type="text" name="decisionNumber" class="form-control" placeholder="Otomatik (2026/01)" />
-                        </div>
-                    </div>
-                    <div class="row g-2 mb-3 bg-light p-2 rounded-3 border">
-                        <div class="col-md-3 col-6">
-                            <label class="form-label fw-bold small mb-1">Defter Sayfa No</label>
-                            <input type="number" min="1" name="bookPageNumber" class="form-control form-control-sm fw-bold" value="@(ViewBag.NextBookPage ?? 1)" />
-                        </div>
-                        <div class="col-md-3 col-6">
-                            <label class="form-label fw-bold small mb-1">Bitiş Saati</label>
-                            <input type="time" name="meetingEndTime" class="form-control form-control-sm" value="21:00" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold small mb-1">Başkanın Adı Soyadı (Boşsa Yönetici)</label>
-                            <input type="text" name="chairpersonName" class="form-control form-control-sm" placeholder="Divan / Yönetim Başkanı" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold small mb-1">Azaların Adı Soyadı</label>
-                            <input type="text" name="boardMembersSummary" class="form-control form-control-sm" placeholder="Örn: Ahmet Demir, Ayşe Kaya" />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-bold small mb-1">Esas Evrak No</label>
-                            <input type="text" name="sourceDocNumber" class="form-control form-control-sm" placeholder="Örn: TPL-2026/01" />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-bold small mb-1">Nereden Geldi</label>
-                            <input type="text" name="sourceDocSender" class="form-control form-control-sm" placeholder="Malik / Firma" />
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small">Karar Konusu / Başlık *</label>
-                        <input type="text" name="agendaTitle" id="newDecAgendaTitle" class="form-control" required placeholder="Örn: 2026 Yılı Baz Aidat Belirleme Kararı" />
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold small">Karar Tarihi</label>
-                            <input type="date" name="meetingDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-bold small">Saat</label>
-                            <input type="time" name="meetingTime" class="form-control" value="20:00" />
-                        </div>
-                        <div class="col-md-5">
-                            <label class="form-label fw-bold small">Defter İşlem Durumu</label>
-                            <select name="isPlannedOnly" class="form-select" id="oylMeetingPlanned">
-                                <option value="true" selected>🗳️ Oylamaya Aç (Çoğunluk Onayı Beklenir)</option>
-                                <option value="false">✅ Kesinleşmiş Karar Olarak Deftere Yaz</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold small">Yasal Çoğunluk Kuralı (KMK)</label>
-                            <select name="quorumType" id="newDecQuorumSelect" class="form-select">
-                                <option value="Standard">Genel Karar (KMK Md.30 • &gt;%50)</option>
-                                <option value="Innovation">Önemli Yenilik / Yönetici / Aidat (KMK Md.34/37/42 • &gt;%50 Sayı+Pay)</option>
-                                <option value="ManagementPlan">Yönetim Planı Değişikliği (KMK Md.28 • 4/5 = %80)</option>
-                                <option value="Unanimous">Oy Birliği (%100 Tüm Malikler)</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold small">Karar / Kurul Yeri</label>
-                            <input type="text" name="meetingLocation" class="form-control" value="Site Yönetim Odası / Ortak Alan" />
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small">Resmi Karar Metni (KMK Md. 32 — Boş bırakılırsa otomatik üretilir)</label>
-                        <textarea name="decisionText" id="oylDecisionText" class="form-control" rows="2" placeholder="Teklifleri, tutarı veya karara geçecek resmi karar metnini yazın..."></textarea>
-                    </div>
-                    <div class="row g-2">
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold small">Belge / Teklif Başlığı (Opsiyonel)</label>
-                            <input type="text" name="attachmentTitle" class="form-control form-control-sm" placeholder="Örn: Firma Teklifi PDF" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold small">Karşılaştırma / Teklif Dosyası Ekle</label>
-                            <input type="file" name="attachmentFile" class="form-control form-control-sm" />
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer border-0 bg-light">
-                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
-                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold">Kararı Kaydet</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    @* Pazar Yeri İlan Açma Modalı *@
-    <div class="modal fade" id="marketplaceJobModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <form class="modal-content rounded-4 border-0 shadow" asp-action="OpenMarketplaceJobFromMeeting" asp-controller="BuildingManager" method="post">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="meetingId" id="mpMeetingId" />
-                <input type="hidden" name="buildingId" id="mpBuildingId" />
-                <div class="modal-header bg-warning text-dark border-0">
-                    <h5 class="modal-title fw-bold"><i class="bi bi-megaphone me-2"></i>Pazar Yerinde İş İlanı Aç</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small">İlan Başlığı *</label>
-                        <input type="text" name="title" id="mpTitle" class="form-control" required />
-                    </div>
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold small">İş / Sektör Türü *</label>
-                            <select name="jobType" class="form-select" required>
-                                <option value="Taşeron / Usta">Taşeron / Usta</option>
-                                <option value="Tadilat & Onarım">Tadilat &amp; Onarım</option>
-                                <option value="Tedarik / Malzeme">Tedarik / Malzeme</option>
-                                <option value="Hizmet / Bakım">Hizmet / Bakım</option>
-                                <option value="Teknik Servis">Teknik Servis</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold small">Tahmini Bütçe (₺)</label>
-                            <input type="number" name="estimatedBudget" class="form-control" step="100" min="0" placeholder="Opsiyonel" />
-                        </div>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label fw-bold small">Keşif / İş Kapsamı Notu</label>
-                        <textarea name="extraNote" class="form-control" rows="3" placeholder="Metraj, malzeme tercihi veya saha keşif saati gibi ek detayları yazabilirsiniz..."></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer border-0 bg-light">
-                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
-                    <button type="submit" class="btn btn-warning text-dark rounded-pill px-4 fw-bold">İlanı Pazar Yerinde Yayınla</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     @* Vekil Atama / Yazılı Vekalet & Temsil Modalı *@
     <div class="modal fade" id="assignProxyModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -821,7 +758,7 @@
                 <input type="hidden" name="meetingId" id="pxMeetingId" />
                 <input type="hidden" name="buildingUnitId" id="pxUnitId" />
                 <div class="modal-header bg-primary text-white border-0">
-                    <h5 class="modal-title fw-bold"><i class="bi bi-person-badge me-2"></i>Vekil / Temsil Atama (<span id="pxUnitLabel"></span>)</h5>
+                    <h5 class="modal-title fw-bold"><i class="bi bi-person-badge me-2"></i>Vekil / Katılım (<span id="pxUnitLabel"></span>)</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
@@ -834,15 +771,15 @@
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-bold">Vekil Adı Soyadı *</label>
-                        <input type="text" name="proxyPersonName" id="pxPersonName" class="form-control" required placeholder="Örn: Caner Yılmaz (Kiracı)" />
+                        <label class="form-label small fw-bold">Vekil Adı Soyadı</label>
+                        <input type="text" name="proxyPersonName" id="pxPersonName" class="form-control" placeholder="Örn: Caner Yılmaz (Kiracı)" />
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-bold">Yazılı Vekaletname Görseli / PDF (Opsiyonel)</label>
+                        <label class="form-label small fw-bold">Yazılı Vekaletname (Opsiyonel)</label>
                         <input type="file" name="proxyDocumentFile" class="form-control form-control-sm" />
                     </div>
                     <div class="mb-2">
-                        <label class="form-label small fw-bold">Ön Onay Kararı (Opsiyonel — boş bırakılırsa vekil kendi ekranından basar)</label>
+                        <label class="form-label small fw-bold">Oy Kararı (Opsiyonel)</label>
                         <select name="voteChoice" class="form-select">
                             <option value="">Vekil kendi ekranından oylasın</option>
                             <option value="Kabul">Kabul (Ön Onay)</option>
@@ -872,11 +809,11 @@
                     <div class="modal-body p-4 row g-3">
                         <div class="col-md-7">
                             <label class="form-label small fw-bold">Noterlik Adı</label>
-                            <input type="text" name="notaryName" class="form-control" value="@selectedBldObj.DecisionBookNotaryName" placeholder="Örn: Kadıköy 12. Noterliği" />
+                            <input type="text" name="notaryName" class="form-control" value="@selectedBldObj.DecisionBookNotaryName" placeholder="Örn: Bostancı 4. Noterliği" />
                         </div>
                         <div class="col-md-5">
                             <label class="form-label small fw-bold">Yevmiye / Tasdik No</label>
-                            <input type="text" name="journalNo" class="form-control" value="@selectedBldObj.DecisionBookJournalNo" placeholder="Örn: 2026/1458" />
+                            <input type="text" name="journalNo" class="form-control" value="@selectedBldObj.DecisionBookJournalNo" placeholder="Örn: 2026/2650" />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label small fw-bold">Açılış Tasdik Tarihi</label>
@@ -888,7 +825,7 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label small fw-bold">Defter Sayfa Sayısı</label>
-                            <input type="number" name="totalPages" class="form-control" value="@selectedBldObj.DecisionBookTotalPages" placeholder="100" />
+                            <input type="number" name="totalPages" class="form-control" value="@selectedBldObj.DecisionBookTotalPages" placeholder="150" />
                         </div>
                     </div>
                     <div class="modal-footer border-0 bg-light">
@@ -900,56 +837,54 @@
         </div>
     }
 
-    @* Karar Sonrası Yetkili / Usta PIN Hesabı Açma Modalı *@
-    <div class="modal fade" id="decisionPinModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <form class="modal-content rounded-4 border-0 shadow" asp-action="GrantDecisionPinAccess" asp-controller="BuildingManager" method="post">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="meetingId" id="dpMeetingId" />
-                <input type="hidden" name="buildingId" id="dpBuildingId" />
-                <div class="modal-header bg-info text-dark border-0">
-                    <h5 class="modal-title fw-bold"><i class="bi bi-key me-2"></i>Karar Yetkilisi / Usta PIN Hesabı Aç</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <div class="alert alert-light border small mb-3">
-                        <strong id="dpAgendaLabel"></strong> kararı kapsamında saha takibi veya yüklenici yetkisi verilecek kişiye geçici şifre / aktivasyon daveti oluşturulur. Kişi ilk girişinde kendi kalıcı şifresini ve kişisel PIN kodunu kendisi belirleyecektir.
-                    </div>
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold small">Ad Soyad *</label>
-                            <input type="text" name="fullName" class="form-control" required placeholder="Örn: Ahmet Yılmaz" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold small">Yetki / Görev *</label>
-                            <select name="roleTitle" class="form-select" required>
-                                <option value="Yüklenici / Usta Yetkilisi">Yüklenici / Usta Yetkilisi</option>
-                                <option value="Kat Maliki Karar Denetçisi">Kat Maliki Karar Denetçisi</option>
-                                <option value="Teknik Kontrol / Şef">Teknik Kontrol / Şef</option>
-                                <option value="Satınalma Yetkilisi">Satınalma Yetkilisi</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold small">Telefon Numarası *</label>
-                            <input type="text" name="phoneNumber" class="form-control" required placeholder="05XX XXX XX XX" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold small">E-Posta Adresi (Davet İçin)</label>
-                            <input type="email" name="email" class="form-control" placeholder="ornek@mail.com" />
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer border-0 bg-light">
-                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">İptal</button>
-                    <button type="submit" class="btn btn-info text-dark rounded-pill px-4 fw-bold">Yetki &amp; İlk Giriş Daveti Oluştur</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <script>
+        const allVoterUnitsData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(allSiteUnits.Select(u => new {
+            id = u.Id,
+            buildingId = u.BuildingId,
+            blockName = u.Building != null ? (u.Building.BlockName ?? u.Building.Name) : "",
+            door = u.DoorNumber,
+            owner = !string.IsNullOrWhiteSpace(u.OwnerName) ? u.OwnerName : "Malik Girilmemiş"
+        })));
+
+        function renderPreviewParticipants() {
+            const scopeVal = document.getElementById('newDecScopeSelect')?.value || '';
+            const grid = document.getElementById('previewParticipantsGrid');
+            const cntEl = document.getElementById('previewVoterCount');
+            if (!grid) return;
+
+            let filtered = allVoterUnitsData;
+            if (scopeVal.startsWith('BLK:')) {
+                const bid = parseInt(scopeVal.split(':')[1] || '0', 10);
+                filtered = allVoterUnitsData.filter(u => u.buildingId === bid);
+            }
+            if (cntEl) cntEl.innerText = filtered.length;
+
+            if (filtered.length === 0) {
+                grid.innerHTML = '<div class="col-12 text-muted">Bu kapsamda henüz kayıtlı kat maliki bulunmuyor.</div>';
+                return;
+            }
+            const showBlock = filtered.some(x => x.buildingId !== filtered[0].buildingId);
+            grid.innerHTML = filtered.map((u, i) => {
+                const bPart = showBlock && u.blockName ? (u.blockName + ' · ') : '';
+                return `<div class="col-md-6"><div class="participant-grid-row d-flex justify-content-between align-items-center"><span><b>${i + 1})</b> ${escapeVoterHtml(u.owner)} <span class="text-muted">(${escapeVoterHtml(bPart + u.door)})</span></span><span class="badge bg-light text-muted border">Oy / İmza Bekliyor</span></div></div>`;
+            }).join('');
+        }
+
+        function escapeVoterHtml(s) {
+            return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function openLedgerPageForm(pageNo) {
+            const card = document.getElementById('newDecisionSheetCard');
+            const pInp = document.getElementById('newDecPageNoInput');
+            if (pInp && pageNo) pInp.value = pageNo;
+            if (card) {
+                card.classList.remove('d-none');
+                card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            renderPreviewParticipants();
+        }
+
         function syncNewDecisionScope() {
             const sel = document.getElementById('newDecScopeSelect');
             const bEl = document.getElementById('newDecBuildingIdHidden');
@@ -960,6 +895,7 @@
                 bEl.value = parts[1];
                 swEl.value = parts[0] === 'SITE' ? 'true' : 'false';
             }
+            renderPreviewParticipants();
         }
 
         function openAssignProxyModal(bId, mId, uId, unitLabel, suggestedProxy) {
@@ -970,22 +906,6 @@
             document.getElementById('pxPersonName').value = suggestedProxy || '';
             new bootstrap.Modal(document.getElementById('assignProxyModal')).show();
         }
-
-        document.getElementById('marketplaceJobModal')?.addEventListener('show.bs.modal', function (event) {
-            const btn = event.relatedTarget;
-            if (!btn) return;
-            document.getElementById('mpMeetingId').value = btn.getAttribute('data-meeting-id') || '';
-            document.getElementById('mpBuildingId').value = btn.getAttribute('data-building-id') || '';
-            document.getElementById('mpTitle').value = btn.getAttribute('data-title') || '';
-        });
-
-        document.getElementById('decisionPinModal')?.addEventListener('show.bs.modal', function (event) {
-            const btn = event.relatedTarget;
-            if (!btn) return;
-            document.getElementById('dpMeetingId').value = btn.getAttribute('data-meeting-id') || '';
-            document.getElementById('dpBuildingId').value = btn.getAttribute('data-building-id') || '';
-            document.getElementById('dpAgendaLabel').textContent = btn.getAttribute('data-title') || '';
-        });
 
         function prefillCandidateFromUnit(sel) {
             const opt = sel?.options?.[sel.selectedIndex];
@@ -1013,7 +933,7 @@
             const exPanel = document.getElementById('panelUnitExemption');
             const compPanel = document.getElementById('panelComplaint');
             const capPanel = document.getElementById('panelCapitalProject');
-            const quorumSel = document.getElementById('newDecQuorumSelect');
+            const quorumHidden = document.getElementById('newDecQuorumHidden');
             const titleEl = document.getElementById('newDecAgendaTitle');
             const hintEl = document.getElementById('decCategoryHint');
 
@@ -1045,54 +965,56 @@
             if (cat === 'DuesUpdate') {
                 duesPanel?.classList.remove('d-none');
                 if (duesInput) duesInput.required = true;
-                if (quorumSel) quorumSel.value = 'Innovation';
+                if (quorumHidden) quorumHidden.value = 'Innovation';
                 if (titleEl && !titleEl.value.trim()) titleEl.value = 'Aylık Baz Aidat & İşletme Bütçesi Belirlenmesi';
-                if (hintEl) hintEl.textContent = 'KMK Md. 37: Kat malikleri çoğunluğu sağlandığı anda yeni baz aidat otomatik aktif edilir.';
+                if (hintEl) hintEl.textContent = 'KMK Md. 37: Çoğunluk sağlandığında yeni baz aidat otomatik yürürlüğe girer.';
             } else if (cat === 'AppointManager') {
                 personPanel?.classList.remove('d-none');
                 if (appointUnitSel) appointUnitSel.disabled = false;
                 if (appointExMode) appointExMode.disabled = false;
                 if (nameInput) nameInput.required = true;
-                if (quorumSel) quorumSel.value = 'Innovation';
-                if (titleEl && !titleEl.value.trim()) titleEl.value = 'Yeni Site / Apartman Yöneticisi Atama Kararı';
-                if (hintEl) hintEl.textContent = 'KMK Md. 34/40: Salt çoğunluk (>%50 sayı+pay) sağlandığında yönetici atanır ve seçilmişse görev muafiyeti uygulanır.';
+                if (quorumHidden) quorumHidden.value = 'Innovation';
+                if (titleEl && !titleEl.value.trim()) titleEl.value = 'Yeni Site / Apartman Yöneticisi Seçimi Kararı';
+                if (hintEl) hintEl.textContent = 'KMK Md. 34: Sayı ve arsa payı çoğunluğu (>%50) ile seçilir.';
             } else if (cat === 'AppointBoardMember') {
                 personPanel?.classList.remove('d-none');
                 roleWrap?.classList.remove('d-none');
                 if (appointUnitSel) appointUnitSel.disabled = false;
                 if (appointExMode) appointExMode.disabled = false;
                 if (nameInput) nameInput.required = true;
-                if (quorumSel) quorumSel.value = 'Innovation';
+                if (quorumHidden) quorumHidden.value = 'Innovation';
                 if (titleEl && !titleEl.value.trim()) titleEl.value = 'Yönetim Kurulu Azası / Denetçi Seçimi Kararı';
-                if (hintEl) hintEl.textContent = 'KMK Md. 34/40/41: Çoğunluk sağlandığında aday Kurul Üyesi / Aza atanır ve seçilmişse görev muafiyeti uygulanır.';
+                if (hintEl) hintEl.textContent = 'KMK Md. 34/41: Kurul azası / denetçi atama kararıdır.';
             } else if (cat === 'UnitExemption') {
                 exPanel?.classList.remove('d-none');
                 if (exUnitSel) { exUnitSel.disabled = false; exUnitSel.required = true; }
                 if (exModeSel) exModeSel.disabled = false;
                 toggleCustomExemptionFields();
-                if (quorumSel) quorumSel.value = 'Unanimous';
+                if (quorumHidden) quorumHidden.value = 'Unanimous';
                 if (titleEl && !titleEl.value.trim()) titleEl.value = 'Bağımsız Bölüm Aidat Muafiyeti / Özel Fark Kararı';
-                if (hintEl) hintEl.textContent = 'KMK Md. 20: Daire/Dükkan aidat muafiyeti veya özel katsayı kararları oy birliği (%100) ile yürürlüğe alınır.';
+                if (hintEl) hintEl.textContent = 'KMK Md. 20: Oy birliği (%100) ile uygulanır.';
             } else if (cat === 'ComplaintResolution') {
                 compPanel?.classList.remove('d-none');
                 if (compUnitSel) compUnitSel.disabled = false;
-                if (quorumSel) quorumSel.value = 'Standard';
-                if (titleEl && !titleEl.value.trim()) titleEl.value = 'Malik / Kiracı Şikayet & Talep Değerlendirme Kararı';
-                if (hintEl) hintEl.textContent = 'KMK Md. 18/30: Malik veya kiracı şikayetleri genel kurul oylamasıyla karara bağlanır ve iş planına aktarılır.';
+                if (quorumHidden) quorumHidden.value = 'Standard';
+                if (titleEl && !titleEl.value.trim()) titleEl.value = 'Malik / Kiracı Talep & Şikayet Kararı';
+                if (hintEl) hintEl.textContent = 'KMK Md. 18/30: Salt çoğunluk ile karara bağlanır.';
             } else if (cat === 'CapitalProject') {
                 capPanel?.classList.remove('d-none');
-                if (quorumSel) quorumSel.value = 'Innovation';
-                if (hintEl) hintEl.textContent = 'KMK Md. 42: Onaylandığında bütçesiyle birlikte Yönetici İş Planına eklenir.';
+                if (quorumHidden) quorumHidden.value = 'Innovation';
+                if (hintEl) hintEl.textContent = 'KMK Md. 42: Sayı ve arsa payı çoğunluğu ile kabul edilir.';
             } else if (cat === 'ManagementPlan') {
-                if (quorumSel) quorumSel.value = 'ManagementPlan';
-                if (hintEl) hintEl.textContent = 'KMK Md. 28: Yönetim planı değişiklikleri için kat maliklerinin 4/5 (%80) oyu aranır.';
+                if (quorumHidden) quorumHidden.value = 'ManagementPlan';
+                if (hintEl) hintEl.textContent = 'KMK Md. 28: Kat maliklerinin 4/5 (%80) oyu aranır.';
             } else {
-                if (quorumSel) quorumSel.value = 'Standard';
-                if (hintEl) hintEl.textContent = 'KMK Md. 30: Genel kararlar toplantı/katılım çoğunluğu ile karara bağlanır ve iş planına eklenir.';
+                if (quorumHidden) quorumHidden.value = 'Standard';
+                if (hintEl) hintEl.textContent = 'KMK Md. 30: Salt çoğunluk ile karara bağlanır.';
             }
         }
 
         document.addEventListener('DOMContentLoaded', function () {
+            renderPreviewParticipants();
+
             const preset = '@System.Web.HttpUtility.JavaScriptStringEncode(presetCategory ?? "")';
             const presetUnit = '@System.Web.HttpUtility.JavaScriptStringEncode(presetUnitId ?? "")';
             const presetTicket = '@System.Web.HttpUtility.JavaScriptStringEncode(presetTicketId ?? "")';
@@ -1122,10 +1044,7 @@
                         const tk = document.getElementById('complaintTicketSelect');
                         if (tk) tk.value = presetTicket;
                     }
-                    const modalEl = document.getElementById('newDecisionModal');
-                    if (modalEl && typeof bootstrap !== 'undefined') {
-                        new bootstrap.Modal(modalEl).show();
-                    }
+                    openLedgerPageForm(@nextEmptyPage);
                 }
             }
         });

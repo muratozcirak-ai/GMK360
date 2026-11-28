@@ -2949,7 +2949,7 @@ namespace GMK360.Web.Controllers
             int buildingId,
             int meetingId,
             int buildingUnitId,
-            string proxyPersonName,
+            string? proxyPersonName = null,
             string? participationType = "Vekil",
             string? voteChoice = null,
             Microsoft.AspNetCore.Http.IFormFile? proxyDocumentFile = null,
@@ -2960,8 +2960,14 @@ namespace GMK360.Web.Controllers
             if (building == null) return Forbid();
 
             var meeting = await _context.SystemMeetings.FirstOrDefaultAsync(m => m.Id == meetingId && m.ContextType == "Building" && m.ContextId == buildingId);
-            var unit = await _context.BuildingUnits.FirstOrDefaultAsync(u => u.Id == buildingUnitId && u.BuildingId == buildingId);
+            var unit = await _context.BuildingUnits
+                .Include(u => u.Building)
+                .FirstOrDefaultAsync(u => u.Id == buildingUnitId);
             if (meeting == null || unit == null) return NotFound();
+
+            bool unitAllowed = unit.BuildingId == buildingId
+                || (meeting.IsSiteWide && meeting.HousingComplexId.HasValue && unit.Building?.HousingComplexId == meeting.HousingComplexId.Value);
+            if (!unitAllowed) return Forbid();
 
             var vote = await _context.BuildingDecisionVotes
                 .FirstOrDefaultAsync(v => v.SystemMeetingId == meetingId && v.BuildingUnitId == buildingUnitId && !v.IsDeleted);
@@ -5625,9 +5631,53 @@ namespace GMK360.Web.Controllers
                     .ToListAsync()
                 : new System.Collections.Generic.List<SupportTicket>();
 
+            var selectedBld = buildingId.HasValue
+                ? buildings.FirstOrDefault(b => b.Id == buildingId.Value)
+                : buildings.FirstOrDefault();
+            int rosterRootId = selectedBld != null ? (selectedBld.ParentBuildingId ?? selectedBld.Id) : 0;
+            var boardManagers = rosterRootId > 0
+                ? await _context.BuildingManagers
+                    .AsNoTracking()
+                    .Include(m => m.User)
+                    .Where(m => m.BuildingId == rosterRootId && m.IsActive)
+                    .OrderBy(m => m.Role)
+                    .ToListAsync()
+                : new System.Collections.Generic.List<BuildingManager>();
+
+            string FormatMgrName(GMK360.Core.Entities.Identity.ApplicationUser? usr) =>
+                usr == null ? "" : (!string.IsNullOrWhiteSpace(usr.FirstName) ? $"{usr.FirstName} {usr.LastName}".Trim() : (usr.DisplayName ?? usr.Email ?? ""));
+
+            string defaultChairName = boardManagers
+                .Where(m => m.Role == BuildingManagerRole.HeadManager)
+                .Select(m => FormatMgrName(m.User))
+                .FirstOrDefault(n => !string.IsNullOrWhiteSpace(n)) ?? "";
+            if (string.IsNullOrWhiteSpace(defaultChairName))
+            {
+                var curUid = GetUserId();
+                if (!string.IsNullOrEmpty(curUid))
+                {
+                    var curU = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == curUid);
+                    defaultChairName = FormatMgrName(curU);
+                }
+            }
+            var azaNamesList = boardManagers
+                .Where(m => m.Role == BuildingManagerRole.BoardMember || m.Role == BuildingManagerRole.Auditor)
+                .Select(m =>
+                {
+                    var nm = FormatMgrName(m.User);
+                    if (string.IsNullOrWhiteSpace(nm)) return "";
+                    return m.Role == BuildingManagerRole.Auditor ? $"{nm} (Denetçi)" : nm;
+                })
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Distinct()
+                .ToList();
+
             ViewBag.Buildings = buildings;
             ViewBag.BuildingMap = buildings.ToDictionary(b => b.Id, b => b.Name);
             ViewBag.SelectedBuildingId = buildingId;
+            ViewBag.SelectedBuildingObj = selectedBld;
+            ViewBag.DefaultChairpersonName = defaultChairName;
+            ViewBag.DefaultBoardMembersSummary = string.Join(", ", azaNamesList);
             ViewBag.Approvals = approvals;
             ViewBag.QuotesByMeeting = meetingQuotes.GroupBy(q => q.SourceReferenceId).ToDictionary(g => g.Key, g => g.ToList());
             ViewBag.JobsByMeeting = jobsByMeeting;
