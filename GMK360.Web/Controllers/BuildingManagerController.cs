@@ -2775,26 +2775,11 @@ namespace GMK360.Web.Controllers
 
             if (role == BuildingManagerRole.Auditor && isExternalAppointee)
             {
+                TempData["OpenSeatOrder"] = hierarchyOrder;
                 TempData["ErrorMessage"] = "KMK Madde 41 gereği Denetçi / Denetim Kurulu Üyesi dışarıdan atanamaz; mutlaka kat maliki olmalıdır.";
                 return RedirectToAction(nameof(Governance), new { buildingId });
             }
 
-            if (!string.IsNullOrWhiteSpace(tcIdentityNo))
-            {
-                if (!GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(tcIdentityNo))
-                {
-                    TempData["ErrorMessage"] = "Lütfen geçerli 11 haneli T.C. Kimlik Numarası giriniz.";
-                    return RedirectToAction(nameof(Governance), new { buildingId });
-                }
-                var normTc = GMK360.Web.Helpers.TcknHelper.Normalize(tcIdentityNo);
-                bool usedElsewhere = await _context.Users.AnyAsync(u => u.Id != member.UserId && u.TcIdentityNo == normTc);
-                if (usedElsewhere)
-                {
-                    TempData["ErrorMessage"] = "Bu T.C. Kimlik Numarası sistemde başka bir hesaba tanımlıdır.";
-                    return RedirectToAction(nameof(Governance), new { buildingId });
-                }
-                if (member.User != null) member.User.TcIdentityNo = normTc;
-            }
             if (!string.IsNullOrWhiteSpace(phoneNumber) && member.User != null)
             {
                 member.User.PhoneNumber = phoneNumber.Trim();
@@ -2811,8 +2796,38 @@ namespace GMK360.Web.Controllers
             member.CustomRoleNote = string.IsNullOrWhiteSpace(customRoleNote) ? null : customRoleNote.Trim();
             member.UpdatedAt = DateTime.UtcNow;
 
+            string? tcWarning = null;
+            if (!string.IsNullOrWhiteSpace(tcIdentityNo))
+            {
+                if (!GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(tcIdentityNo))
+                {
+                    tcWarning = $"İmza yetkisi ve dönem bilgileri kaydedildi; ancak '{tcIdentityNo}' T.C. Kimlik No son 2 hane algoritma doğrulamasından geçemediği için TCKN kaydedilmedi. Geçerli 11 haneli TCKN giriniz.";
+                }
+                else
+                {
+                    var normTc = GMK360.Web.Helpers.TcknHelper.Normalize(tcIdentityNo);
+                    bool usedElsewhere = await _context.Users.AnyAsync(u => u.Id != member.UserId && u.TcIdentityNo == normTc);
+                    if (usedElsewhere)
+                    {
+                        tcWarning = "Diğer bilgiler kaydedildi; ancak bu T.C. Kimlik Numarası sistemde başka bir hesaba tanımlı olduğu için güncellenemedi.";
+                    }
+                    else if (member.User != null)
+                    {
+                        member.User.TcIdentityNo = normTc;
+                    }
+                }
+            }
+
             await _context.SaveChangesAsync();
-            TempData["SuccessMessage"] = "Kurul üyesi TCKN, yetki ve dönem bilgileri güncellendi.";
+            TempData["OpenSeatOrder"] = hierarchyOrder;
+            if (!string.IsNullOrWhiteSpace(tcWarning))
+            {
+                TempData["ErrorMessage"] = tcWarning;
+            }
+            else
+            {
+                TempData["SuccessMessage"] = "Kurul üyesi TCKN, yetki ve dönem bilgileri güncellendi.";
+            }
             return RedirectToAction(nameof(Governance), new { buildingId });
         }
 

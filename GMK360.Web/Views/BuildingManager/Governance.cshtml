@@ -23,6 +23,7 @@
     string currentSubdomain = complex?.Subdomain ?? selected?.Subdomain ?? "";
     var decById = recentDecisions.ToDictionary(d => d.Id, d => d);
     string latestCircularUrl = circularDocs.FirstOrDefault()?.DocumentUrl ?? selected?.SignatureCircularUrl ?? "";
+    int? openSeatOrder = TempData["OpenSeatOrder"] is int oso ? oso : null;
 }
 
 <style>
@@ -229,6 +230,18 @@
                 }
             </div>
             <div class="card-body p-3 p-md-4 bg-light bg-opacity-50">
+                @if (TempData["ErrorMessage"] != null)
+                {
+                    <div class="alert alert-danger rounded-3 shadow-sm small py-2 px-3 mb-3">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>@TempData["ErrorMessage"]
+                    </div>
+                }
+                @if (TempData["SuccessMessage"] != null)
+                {
+                    <div class="alert alert-success rounded-3 shadow-sm small py-2 px-3 mb-3">
+                        <i class="bi bi-check-circle-fill me-1"></i><strong>@TempData["SuccessMessage"]</strong>
+                    </div>
+                }
                 <div class="accordion d-flex flex-column gap-2" id="boardSeatsAccordion">
                     @foreach (var slot in boardPlan.Slots)
                     {
@@ -311,7 +324,7 @@
                             </div>
 
                             <!-- TAM ALTINDA AÇILAN DETAY / ATAMA PANELİ -->
-                            <div id="@collapseId" class="collapse border-top bg-white" data-bs-parent="#boardSeatsAccordion">
+                            <div id="@collapseId" class="collapse @(openSeatOrder == slot.SlotOrder ? "show" : "") border-top bg-white" data-bs-parent="#boardSeatsAccordion">
                                 <div class="p-3 p-md-4">
                                     @if (isWaiting)
                                     {
@@ -878,3 +891,11 @@
         new bootstrap.Modal(document.getElementById('appointmentDecisionModal')).show();
     }
 </script>
+@if (openSeatOrder.HasValue)
+{
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            document.getElementById('seatCollapse_@openSeatOrder')?.closest('.board-step-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+    </script>
+}
