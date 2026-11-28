@@ -2438,17 +2438,33 @@ namespace GMK360.Web.Controllers
                         : RedirectToAction(nameof(Detail), new { id = buildingId });
                 }
             }
-            else if (!string.IsNullOrWhiteSpace(cleanTc))
+            else
             {
-                if (!string.IsNullOrWhiteSpace(targetUser.TcIdentityNo) && !string.Equals(targetUser.TcIdentityNo.Trim(), cleanTc, StringComparison.Ordinal))
+                if (!string.IsNullOrWhiteSpace(cleanPhone) && (replaceManagerId.HasValue || string.IsNullOrWhiteSpace(targetUser.PhoneNumber)))
                 {
-                    TempData["ErrorMessage"] = "Girilen T.C. Kimlik Numarası bu kullanıcının kayıtlı TCKN bilgisi ile uyuşmuyor. Lütfen kontrol ediniz.";
-                    return RedirectToAction(nameof(Governance), new { buildingId });
+                    targetUser.PhoneNumber = cleanPhone;
+                    _context.Entry(targetUser).Property(u => u.PhoneNumber).IsModified = true;
                 }
-                if (string.IsNullOrWhiteSpace(targetUser.TcIdentityNo))
+                if (!string.IsNullOrWhiteSpace(cleanTc))
                 {
-                    targetUser.TcIdentityNo = cleanTc;
-                    _context.Entry(targetUser).Property(u => u.TcIdentityNo).IsModified = true;
+                    bool tcConflict = await _context.Users.AnyAsync(u => u.Id != targetUser.Id && u.TcIdentityNo == cleanTc);
+                    if (tcConflict)
+                    {
+                        TempData["OpenSeatOrder"] = hierarchyOrder;
+                        TempData["ErrorMessage"] = "Bu T.C. Kimlik Numarası sistemde başka bir hesaba tanımlıdır.";
+                        return RedirectToAction(nameof(Governance), new { buildingId });
+                    }
+                    if (replaceManagerId.HasValue || string.IsNullOrWhiteSpace(targetUser.TcIdentityNo) || string.Equals(targetUser.TcIdentityNo.Trim(), cleanTc, StringComparison.Ordinal))
+                    {
+                        targetUser.TcIdentityNo = cleanTc;
+                        _context.Entry(targetUser).Property(u => u.TcIdentityNo).IsModified = true;
+                    }
+                    else
+                    {
+                        TempData["OpenSeatOrder"] = hierarchyOrder;
+                        TempData["ErrorMessage"] = "Girilen T.C. Kimlik Numarası bu kullanıcının kayıtlı TCKN bilgisi ile uyuşmuyor. Lütfen kontrol ediniz.";
+                        return RedirectToAction(nameof(Governance), new { buildingId });
+                    }
                 }
             }
 
@@ -2579,9 +2595,12 @@ namespace GMK360.Web.Controllers
                 TempData["SuccessMessage"] = $"{displayName} ({roleText}) yönetim kadrosuna eklendi.";
             }
 
-            return string.Equals(returnTo, "Governance", StringComparison.OrdinalIgnoreCase)
-                ? RedirectToAction(nameof(Governance), new { buildingId })
-                : RedirectToAction(nameof(Detail), new { id = buildingId });
+            if (string.Equals(returnTo, "Governance", StringComparison.OrdinalIgnoreCase))
+            {
+                if (hierarchyOrder > 0) TempData["OpenSeatOrder"] = hierarchyOrder;
+                return RedirectToAction(nameof(Governance), new { buildingId });
+            }
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
 
         [HttpPost]
@@ -2625,9 +2644,12 @@ namespace GMK360.Web.Controllers
             await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = "Kurul / aza üyesi pasife alındı (denetim geçmişi korundu).";
-            return string.Equals(returnTo, "Governance", StringComparison.OrdinalIgnoreCase)
-                ? RedirectToAction(nameof(Governance), new { buildingId })
-                : RedirectToAction(nameof(Detail), new { id = buildingId });
+            if (string.Equals(returnTo, "Governance", StringComparison.OrdinalIgnoreCase))
+            {
+                if (member.HierarchyOrder > 0) TempData["OpenSeatOrder"] = member.HierarchyOrder;
+                return RedirectToAction(nameof(Governance), new { buildingId });
+            }
+            return RedirectToAction(nameof(Detail), new { id = buildingId });
         }
 
         [HttpPost]
@@ -3043,7 +3065,8 @@ namespace GMK360.Web.Controllers
                     .FirstOrDefaultAsync(c => c.Id == selected.HousingComplexId.Value);
                 siteBlocks = await _context.Buildings
                     .AsNoTracking()
-                    .Include(b => b.Units)
+                    .Include(b => b.Units).ThenInclude(u => u.OwnerUser)
+                    .Include(b => b.Units).ThenInclude(u => u.TenantUser)
                     .Where(b => b.HousingComplexId == selected.HousingComplexId)
                     .OrderBy(b => b.Id)
                     .ToListAsync();
@@ -3052,9 +3075,23 @@ namespace GMK360.Web.Controllers
             {
                 var loadedSelected = await _context.Buildings
                     .AsNoTracking()
-                    .Include(b => b.Units)
-                    .FirstOrDefaultAsync(b => b.Id == selected.Id);
-                siteBlocks.Add(loadedSelected ?? selected);
+                    .Include(b => b.Units).ThenInclude(u => u.OwnerUser)
+                    .Include(b => b.Units).ThenInclude(u => u.TenantUser)
+                    .Include(b => b.ChildBuildings).ThenInclude(cb => cb.Units).ThenInclude(u => u.OwnerUser)
+                    .Include(b => b.ChildBuildings).ThenInclude(cb => cb.Units).ThenInclude(u => u.TenantUser)
+                    .FirstOrDefaultAsync(b => b.Id == (selected.ParentBuildingId ?? selected.Id));
+                if (loadedSelected != null)
+                {
+                    siteBlocks.Add(loadedSelected);
+                    if (loadedSelected.ChildBuildings != null && loadedSelected.ChildBuildings.Any())
+                    {
+                        siteBlocks.AddRange(loadedSelected.ChildBuildings.OrderBy(cb => cb.Id));
+                    }
+                }
+                else
+                {
+                    siteBlocks.Add(selected);
+                }
             }
 
             var govDecisions = selected != null
@@ -3103,7 +3140,7 @@ namespace GMK360.Web.Controllers
             ViewBag.Complex = complex;
             ViewBag.SiteBlocks = siteBlocks;
             ViewBag.TotalScopedUnits = scopedUnits.Count;
-            ViewBag.SiteOwnerUnits = scopedUnits.Where(u => !string.IsNullOrWhiteSpace(u.OwnerName)).ToList();
+            ViewBag.SiteOwnerUnits = scopedUnits.Where(u => !string.IsNullOrWhiteSpace(u.OwnerName) || !string.IsNullOrWhiteSpace(u.TenantName)).ToList();
             ViewBag.Managers = managers;
             ViewBag.BoardPlan = boardPlan;
             ViewBag.RecentGovernanceDecisions = govDecisions;
