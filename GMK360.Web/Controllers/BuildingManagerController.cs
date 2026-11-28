@@ -2370,12 +2370,20 @@ namespace GMK360.Web.Controllers
             var cleanEmail = email?.Trim();
             var cleanPhone = phoneNumber?.Trim();
             var cleanName = fullName?.Trim();
-            var cleanTc = GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(tcIdentityNo)
-                ? GMK360.Web.Helpers.TcknHelper.Normalize(tcIdentityNo)
-                : null;
+            var rawNormTc = GMK360.Web.Helpers.TcknHelper.Normalize(tcIdentityNo);
+            if (!string.IsNullOrWhiteSpace(tcIdentityNo) && rawNormTc.Length != 11)
+            {
+                TempData["OpenSeatOrder"] = hierarchyOrder;
+                TempData["ErrorMessage"] = $"T.C. Kimlik Numarası tam 11 haneli rakam olmalıdır (girilen: {rawNormTc.Length} hane).";
+                return string.Equals(returnTo, "Governance", StringComparison.OrdinalIgnoreCase)
+                    ? RedirectToAction(nameof(Governance), new { buildingId })
+                    : RedirectToAction(nameof(Detail), new { id = buildingId });
+            }
+            var cleanTc = rawNormTc.Length == 11 ? rawNormTc : null;
             if (string.IsNullOrWhiteSpace(cleanEmail) && FacilityTaskDispatchService.NormalizePhoneLast10(cleanPhone).Length < 10 && string.IsNullOrWhiteSpace(cleanTc))
             {
-                TempData["ErrorMessage"] = "Lütfen kurul üyesi / aza için geçerli bir e-posta, 10 haneli telefon veya TCKN giriniz.";
+                TempData["OpenSeatOrder"] = hierarchyOrder;
+                TempData["ErrorMessage"] = "Lütfen kurul üyesi / aza için geçerli bir e-posta, 10 haneli telefon veya 11 haneli TCKN giriniz.";
                 return string.Equals(returnTo, "Governance", StringComparison.OrdinalIgnoreCase)
                     ? RedirectToAction(nameof(Governance), new { buildingId })
                     : RedirectToAction(nameof(Detail), new { id = buildingId });
@@ -2383,6 +2391,7 @@ namespace GMK360.Web.Controllers
 
             if (role == BuildingManagerRole.Auditor && isExternalAppointee)
             {
+                TempData["OpenSeatOrder"] = hierarchyOrder;
                 TempData["ErrorMessage"] = "KMK Madde 41 gereği Denetçi / Denetim Kurulu Üyesi dışarıdan atanamaz; mutlaka tapu sahibi (kat maliki) olmalıdır.";
                 return string.Equals(returnTo, "Governance", StringComparison.OrdinalIgnoreCase)
                     ? RedirectToAction(nameof(Governance), new { buildingId })
@@ -2439,6 +2448,7 @@ namespace GMK360.Web.Controllers
                 if (string.IsNullOrWhiteSpace(targetUser.TcIdentityNo))
                 {
                     targetUser.TcIdentityNo = cleanTc;
+                    _context.Entry(targetUser).Property(u => u.TcIdentityNo).IsModified = true;
                 }
             }
 
@@ -2783,6 +2793,7 @@ namespace GMK360.Web.Controllers
             if (!string.IsNullOrWhiteSpace(phoneNumber) && member.User != null)
             {
                 member.User.PhoneNumber = phoneNumber.Trim();
+                _context.Entry(member.User).Property(u => u.PhoneNumber).IsModified = true;
             }
 
             member.Role = role;
@@ -2796,33 +2807,46 @@ namespace GMK360.Web.Controllers
             member.CustomRoleNote = string.IsNullOrWhiteSpace(customRoleNote) ? null : customRoleNote.Trim();
             member.UpdatedAt = DateTime.UtcNow;
 
-            string? tcWarning = null;
+            string? tcNotice = null;
+            string? tcError = null;
             if (!string.IsNullOrWhiteSpace(tcIdentityNo))
             {
-                if (!GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(tcIdentityNo))
+                var normTc = GMK360.Web.Helpers.TcknHelper.Normalize(tcIdentityNo);
+                if (normTc.Length != 11)
                 {
-                    tcWarning = $"İmza yetkisi ve dönem bilgileri kaydedildi; ancak '{tcIdentityNo}' T.C. Kimlik No son 2 hane algoritma doğrulamasından geçemediği için TCKN kaydedilmedi. Geçerli 11 haneli TCKN giriniz.";
+                    tcError = $"Diğer bilgiler kaydedildi; ancak '{tcIdentityNo}' {normTc.Length} haneli olduğu için TCKN kaydedilmedi (tam 11 haneli rakam olmalıdır).";
                 }
                 else
                 {
-                    var normTc = GMK360.Web.Helpers.TcknHelper.Normalize(tcIdentityNo);
-                    bool usedElsewhere = await _context.Users.AnyAsync(u => u.Id != member.UserId && u.TcIdentityNo == normTc);
-                    if (usedElsewhere)
+                    var conflictUser = await _context.Users.AsNoTracking()
+                        .Where(u => u.Id != member.UserId && u.TcIdentityNo == normTc)
+                        .Select(u => new { u.Email, u.FirstName, u.LastName })
+                        .FirstOrDefaultAsync();
+                    if (conflictUser != null)
                     {
-                        tcWarning = "Diğer bilgiler kaydedildi; ancak bu T.C. Kimlik Numarası sistemde başka bir hesaba tanımlı olduğu için güncellenemedi.";
+                        tcError = $"Diğer bilgiler kaydedildi; ancak {normTc} TCKN başka bir hesapta ({conflictUser.Email}) zaten kayıtlıdır.";
                     }
                     else if (member.User != null)
                     {
                         member.User.TcIdentityNo = normTc;
+                        _context.Entry(member.User).Property(u => u.TcIdentityNo).IsModified = true;
+                        if (!GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(normTc))
+                        {
+                            tcNotice = "Kurul bilgileri ve 11 haneli TCKN kaydedildi (Not: Girilen numara MERNIS son 2 hane kontrolünden farklıdır; deneme numarası olarak kaydedildi).";
+                        }
                     }
                 }
             }
 
             await _context.SaveChangesAsync();
             TempData["OpenSeatOrder"] = hierarchyOrder;
-            if (!string.IsNullOrWhiteSpace(tcWarning))
+            if (!string.IsNullOrWhiteSpace(tcError))
             {
-                TempData["ErrorMessage"] = tcWarning;
+                TempData["ErrorMessage"] = tcError;
+            }
+            else if (!string.IsNullOrWhiteSpace(tcNotice))
+            {
+                TempData["SuccessMessage"] = tcNotice;
             }
             else
             {
