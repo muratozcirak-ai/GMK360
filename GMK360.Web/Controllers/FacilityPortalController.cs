@@ -81,14 +81,44 @@ namespace GMK360.Web.Controllers
                         || (!string.IsNullOrEmpty(userEmail) && (u.OwnerEmail == userEmail || u.TenantEmail == userEmail))))
                 .ToListAsync();
 
-            // Kurul / Aza / Denetçi eşleşmesi (süresi dolmamış kayıtlar)
-            var boardMembership = userId != null
+            // Çoklu yapı destekli Kurul / Aza / Denetçi eşleşmeleri (süresi dolmamış kayıtlar)
+            var allBoardMemberships = userId != null
                 ? await _context.BuildingManagers
                     .Include(m => m.Building)
                     .Where(m => m.UserId == userId && m.IsActive && (!m.TermEndDate.HasValue || m.TermEndDate.Value.Date >= todayPortal))
                     .OrderBy(m => m.Role)
-                    .FirstOrDefaultAsync()
+                    .ToListAsync()
+                : new List<BuildingManager>();
+
+            var portalBuildingsMap = new Dictionary<int, GMK360.Core.Entities.Building>();
+            foreach (var b in managedBuildings) portalBuildingsMap[b.Id] = b;
+            foreach (var u in residentUnits.Where(x => x.Building != null)) portalBuildingsMap[u.BuildingId] = u.Building;
+            if (staffProfile?.Building != null) portalBuildingsMap[staffProfile.BuildingId] = staffProfile.Building;
+            foreach (var bm in allBoardMemberships.Where(x => x.Building != null)) portalBuildingsMap[bm.BuildingId] = bm.Building;
+            var portalBuildings = portalBuildingsMap.Values.OrderBy(b => b.Name).ThenBy(b => b.Id).ToList();
+
+            int targetBuildingId = buildingId
+                ?? managedBuildings.FirstOrDefault()?.Id
+                ?? residentUnits.FirstOrDefault()?.BuildingId
+                ?? allBoardMemberships.FirstOrDefault()?.BuildingId
+                ?? staffProfile?.BuildingId
+                ?? 0;
+
+            if (targetBuildingId > 0 && !portalBuildingsMap.ContainsKey(targetBuildingId) && !isManager)
+            {
+                targetBuildingId = portalBuildings.FirstOrDefault()?.Id ?? 0;
+            }
+
+            var targetSelectedBld = targetBuildingId > 0
+                ? (portalBuildingsMap.TryGetValue(targetBuildingId, out var foundBld)
+                    ? foundBld
+                    : await _context.Buildings.AsNoTracking().FirstOrDefaultAsync(b => b.Id == targetBuildingId))
                 : null;
+            int scopedRootForBoard = targetSelectedBld != null ? (targetSelectedBld.ParentBuildingId ?? targetSelectedBld.Id) : targetBuildingId;
+            var boardMembership = allBoardMemberships
+                .Where(m => m.BuildingId == targetBuildingId || m.BuildingId == scopedRootForBoard)
+                .OrderBy(m => m.Role)
+                .FirstOrDefault();
 
             // Etkin görünüm rolü (Yönetici test etmek isterse previewRole ile 3 rolü de önizleyebilir)
             string activeRole = "Resident";
@@ -106,7 +136,7 @@ namespace GMK360.Web.Controllers
             {
                 activeRole = "Staff";
             }
-            else if (boardMembership != null && !residentUnits.Any())
+            else if (boardMembership != null && !residentUnits.Any(u => u.BuildingId == targetBuildingId))
             {
                 activeRole = "Owner";
             }
@@ -114,25 +144,6 @@ namespace GMK360.Web.Controllers
             {
                 bool isTenantHere = residentUnits.Any(u => u.TenantUserId == userId || (!string.IsNullOrEmpty(userEmail) && u.TenantEmail == userEmail));
                 activeRole = isTenantHere ? "Tenant" : "Owner";
-            }
-
-            int targetBuildingId = buildingId
-                ?? managedBuildings.FirstOrDefault()?.Id
-                ?? staffProfile?.BuildingId
-                ?? residentUnits.FirstOrDefault()?.BuildingId
-                ?? boardMembership?.BuildingId
-                ?? 0;
-
-            var portalBuildingsMap = new Dictionary<int, GMK360.Core.Entities.Building>();
-            foreach (var b in managedBuildings) portalBuildingsMap[b.Id] = b;
-            foreach (var u in residentUnits.Where(x => x.Building != null)) portalBuildingsMap[u.BuildingId] = u.Building;
-            if (staffProfile?.Building != null) portalBuildingsMap[staffProfile.BuildingId] = staffProfile.Building;
-            if (boardMembership?.Building != null) portalBuildingsMap[boardMembership.BuildingId] = boardMembership.Building;
-            var portalBuildings = portalBuildingsMap.Values.OrderBy(b => b.Name).ThenBy(b => b.Id).ToList();
-
-            if (targetBuildingId > 0 && !portalBuildingsMap.ContainsKey(targetBuildingId) && !isManager)
-            {
-                targetBuildingId = portalBuildings.FirstOrDefault()?.Id ?? 0;
             }
 
             var staffList = targetBuildingId > 0

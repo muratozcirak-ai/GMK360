@@ -2371,15 +2371,15 @@ namespace GMK360.Web.Controllers
             var cleanPhone = phoneNumber?.Trim();
             var cleanName = fullName?.Trim();
             var rawNormTc = GMK360.Web.Helpers.TcknHelper.Normalize(tcIdentityNo);
-            if (!string.IsNullOrWhiteSpace(tcIdentityNo) && rawNormTc.Length != 11)
+            if (!string.IsNullOrWhiteSpace(tcIdentityNo) && !GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(tcIdentityNo))
             {
                 TempData["OpenSeatOrder"] = hierarchyOrder;
-                TempData["ErrorMessage"] = $"T.C. Kimlik Numarası tam 11 haneli rakam olmalıdır (girilen: {rawNormTc.Length} hane).";
+                TempData["ErrorMessage"] = "Lütfen geçerli resmi 11 haneli T.C. Kimlik Numarası giriniz (MERNIS / NVI kontrol basamağı doğrulaması).";
                 return string.Equals(returnTo, "Governance", StringComparison.OrdinalIgnoreCase)
                     ? RedirectToAction(nameof(Governance), new { buildingId })
                     : RedirectToAction(nameof(Detail), new { id = buildingId });
             }
-            var cleanTc = rawNormTc.Length == 11 ? rawNormTc : null;
+            var cleanTc = GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(tcIdentityNo) ? rawNormTc : null;
             if (string.IsNullOrWhiteSpace(cleanEmail) && FacilityTaskDispatchService.NormalizePhoneLast10(cleanPhone).Length < 10 && string.IsNullOrWhiteSpace(cleanTc))
             {
                 TempData["OpenSeatOrder"] = hierarchyOrder;
@@ -2833,13 +2833,13 @@ namespace GMK360.Web.Controllers
             string? tcError = null;
             if (!string.IsNullOrWhiteSpace(tcIdentityNo))
             {
-                var normTc = GMK360.Web.Helpers.TcknHelper.Normalize(tcIdentityNo);
-                if (normTc.Length != 11)
+                if (!GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(tcIdentityNo))
                 {
-                    tcError = $"Diğer bilgiler kaydedildi; ancak '{tcIdentityNo}' {normTc.Length} haneli olduğu için TCKN kaydedilmedi (tam 11 haneli rakam olmalıdır).";
+                    tcError = $"Diğer bilgiler kaydedildi; ancak '{tcIdentityNo}' resmi T.C. Kimlik No (MERNIS / NVI algoritma) doğrulamasından geçemediği için TCKN kaydedilmedi.";
                 }
                 else
                 {
+                    var normTc = GMK360.Web.Helpers.TcknHelper.Normalize(tcIdentityNo);
                     var conflictUser = await _context.Users.AsNoTracking()
                         .Where(u => u.Id != member.UserId && u.TcIdentityNo == normTc)
                         .Select(u => new { u.Email, u.FirstName, u.LastName })
@@ -2852,10 +2852,6 @@ namespace GMK360.Web.Controllers
                     {
                         member.User.TcIdentityNo = normTc;
                         _context.Entry(member.User).Property(u => u.TcIdentityNo).IsModified = true;
-                        if (!GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(normTc))
-                        {
-                            tcNotice = "Kurul bilgileri ve 11 haneli TCKN kaydedildi (Not: Girilen numara MERNIS son 2 hane kontrolünden farklıdır; deneme numarası olarak kaydedildi).";
-                        }
                     }
                 }
             }
@@ -4291,6 +4287,11 @@ namespace GMK360.Web.Controllers
             building.TotalUnits += 1;
             await _context.SaveChangesAsync();
             await SyncResidentUsersAndPeriodsAsync(unit, ownerTcNo, tenantTcNo);
+            if ((!string.IsNullOrWhiteSpace(ownerTcNo) && !GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(ownerTcNo))
+                || (!string.IsNullOrWhiteSpace(tenantTcNo) && !GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(tenantTcNo)))
+            {
+                TempData["WarningMessage"] = "Diğer bölüm bilgileri güncellendi; ancak girilen T.C. Kimlik Numarası resmi 11 haneli MERNIS/NVI algoritma doğrulamasından geçemediği için TCKN işlenmedi.";
+            }
 
             var inviteRes = await SendUnitActivationInvitesAsync(building, unit);
             var mailNote = (inviteRes.OwnerSent || inviteRes.TenantSent)
@@ -4700,6 +4701,11 @@ namespace GMK360.Web.Controllers
                 unit.TenantQuickPinHash = FacilityTaskDispatchService.HashQuickPin(tenantQuickPin.Trim());
             }
             await SyncResidentUsersAndPeriodsAsync(unit, ownerTcNo, tenantTcNo);
+            if ((!string.IsNullOrWhiteSpace(ownerTcNo) && !GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(ownerTcNo))
+                || (!string.IsNullOrWhiteSpace(tenantTcNo) && !GMK360.Web.Helpers.TcknHelper.IsValidTcIdentity(tenantTcNo)))
+            {
+                TempData["WarningMessage"] = "Diğer bölüm bilgileri güncellendi; ancak girilen T.C. Kimlik Numarası resmi 11 haneli MERNIS/NVI algoritma doğrulamasından geçemediği için TCKN işlenmedi.";
+            }
 
             var inviteRes = await SendUnitActivationInvitesAsync(building, unit);
             if (!inviteRes.OwnerSent && !inviteRes.TenantSent && !string.IsNullOrWhiteSpace(inviteRes.FallbackUrl))

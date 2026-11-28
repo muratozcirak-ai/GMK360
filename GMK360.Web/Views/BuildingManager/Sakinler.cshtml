@@ -365,6 +365,18 @@
                                             var tenantProfile = (!string.IsNullOrEmpty(unit.TenantUserId) && residentProfiles.ContainsKey(unit.TenantUserId)) ? residentProfiles[unit.TenantUserId] : null;
                                             string ownerToken = ownerProfile?.ActivationToken ?? "";
                                             string tenantToken = tenantProfile?.ActivationToken ?? "";
+                                            string ownerTcRaw = ownerProfile?.TcIdentityNo ?? "";
+                                            string tenantTcRaw = tenantProfile?.TcIdentityNo ?? "";
+                                            string ownerTcMasked = ownerTcRaw.Length == 11 ? $"{ownerTcRaw.Substring(0, 3)}*****{ownerTcRaw.Substring(8, 3)}" : (string.IsNullOrWhiteSpace(ownerTcRaw) ? "" : "Kayıtlı");
+                                            string tenantTcMasked = tenantTcRaw.Length == 11 ? $"{tenantTcRaw.Substring(0, 3)}*****{tenantTcRaw.Substring(8, 3)}" : (string.IsNullOrWhiteSpace(tenantTcRaw) ? "" : "Kayıtlı");
+                                        }
+                                        @if (!string.IsNullOrEmpty(ownerTcMasked))
+                                        {
+                                            <span class="badge bg-light text-dark border mt-1 me-1" style="font-size:.68rem;">Malik TCKN: @ownerTcMasked</span>
+                                        }
+                                        @if (hasTenant && !string.IsNullOrEmpty(tenantTcMasked))
+                                        {
+                                            <span class="badge bg-light text-info-emphasis border mt-1" style="font-size:.68rem;">Kiracı TCKN: @tenantTcMasked</span>
                                         }
                                         @if (ownerProfile != null && ownerProfile.IsTransactionPinSet)
                                         {
@@ -445,7 +457,7 @@
                                     <td class="pe-3 text-end">
                                         <div class="d-flex flex-wrap justify-content-end gap-1">
                                             <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold"
-                                                    onclick="openEditUnitModal(@unit.Id, @unit.BuildingId, '@System.Web.HttpUtility.JavaScriptStringEncode(unit.DoorNumber)', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerEmail ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantEmail ?? "")', @(unit.IsEmpty ? "true" : "false"), '@unit.LandShare.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)', '@((unit.GrossSquareMeters ?? 0).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))', '@unit.DuesMultiplier.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)', '@(unit.FixedMonthlyDues.HasValue ? unit.FixedMonthlyDues.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : "")', @(unit.IsExemptFromElevator ? "true" : "false"), @(unit.IsExemptFromStairwell ? "true" : "false"), '@unit.CleaningParticipationPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.DuesRuleNote ?? "")', '@ownerToken', '@tenantToken', @(unit.IsDuesExempt ? "true" : "false"), '@unit.DuesAdjustmentAmount.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)', '@((unit.Building?.DefaultBaseMonthlyDues ?? 0m).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))')">
+                                                    onclick="openEditUnitModal(@unit.Id, @unit.BuildingId, '@System.Web.HttpUtility.JavaScriptStringEncode(unit.DoorNumber)', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.OwnerEmail ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantName ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantPhone ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.TenantEmail ?? "")', @(unit.IsEmpty ? "true" : "false"), '@unit.LandShare.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)', '@((unit.GrossSquareMeters ?? 0).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))', '@unit.DuesMultiplier.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)', '@(unit.FixedMonthlyDues.HasValue ? unit.FixedMonthlyDues.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : "")', @(unit.IsExemptFromElevator ? "true" : "false"), @(unit.IsExemptFromStairwell ? "true" : "false"), '@unit.CleaningParticipationPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)', '@System.Web.HttpUtility.JavaScriptStringEncode(unit.DuesRuleNote ?? "")', '@ownerToken', '@tenantToken', @(unit.IsDuesExempt ? "true" : "false"), '@unit.DuesAdjustmentAmount.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)', '@((unit.Building?.DefaultBaseMonthlyDues ?? 0m).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))', '@System.Web.HttpUtility.JavaScriptStringEncode(ownerTcRaw)', '@System.Web.HttpUtility.JavaScriptStringEncode(tenantTcRaw)')">
                                                 <i class="bi bi-pencil-square me-1"></i> Bilgi Gir / Düzenle
                                             </button>
                                             <a href="/BuildingManager/Detail/@unit.BuildingId" class="btn btn-sm btn-outline-secondary rounded-pill" title="Bina Masası">
@@ -513,8 +525,8 @@
                                     <input type="email" name="ownerEmail" id="euOwnerEmail" class="form-control form-control-sm" placeholder="malik@ornek.com" />
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label fw-semibold small mb-1">Malik T.C. Kimlik No (Opsiyonel)</label>
-                                    <input type="text" inputmode="numeric" maxlength="11" name="ownerTcNo" class="form-control form-control-sm" placeholder="Biliniyorsa 11 hane (Yoksa kullanıcı aktivasyonda girer)" />
+                                    <label class="form-label fw-semibold small mb-1">Malik T.C. Kimlik No (MERNIS Resmi 11 Hane)</label>
+                                    <input type="text" inputmode="numeric" maxlength="11" name="ownerTcNo" id="euOwnerTcNo" class="form-control form-control-sm" placeholder="11 hane (Yoksa kullanıcı aktivasyonda girer)" />
                                 </div>
                             </div>
                         </div>
@@ -540,8 +552,8 @@
                                     <input type="email" name="tenantEmail" id="euTenantEmail" class="form-control form-control-sm" placeholder="kiraci@ornek.com" />
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label fw-semibold small mb-1">Kiracı T.C. Kimlik No (Opsiyonel)</label>
-                                    <input type="text" inputmode="numeric" maxlength="11" name="tenantTcNo" class="form-control form-control-sm" placeholder="Biliniyorsa 11 hane (Yoksa kiracı aktivasyonda girer)" />
+                                    <label class="form-label fw-semibold small mb-1">Kiracı T.C. Kimlik No (MERNIS Resmi 11 Hane)</label>
+                                    <input type="text" inputmode="numeric" maxlength="11" name="tenantTcNo" id="euTenantTcNo" class="form-control form-control-sm" placeholder="11 hane (Yoksa kiracı aktivasyonda girer)" />
                                 </div>
                             </div>
                         </div>
@@ -846,7 +858,7 @@
     let _euTenantToken = '';
     let _euBuildingBaseDues = 0;
 
-    function openEditUnitModal(unitId, buildingId, doorNo, oName, oPhone, oEmail, tName, tPhone, tEmail, isEmpty, landShare, grossSqm, mult, fixedDues, exElev, exStair, cleanPct, ruleNote, ownerToken, tenantToken, isDuesExempt, duesAdj, baseDues) {
+    function openEditUnitModal(unitId, buildingId, doorNo, oName, oPhone, oEmail, tName, tPhone, tEmail, isEmpty, landShare, grossSqm, mult, fixedDues, exElev, exStair, cleanPct, ruleNote, ownerToken, tenantToken, isDuesExempt, duesAdj, baseDues, oTc, tTc) {
         _euOwnerToken = ownerToken || '';
         _euTenantToken = tenantToken || '';
         _euBuildingBaseDues = parseFloat(baseDues || '0') || 0;
@@ -856,9 +868,11 @@
         document.getElementById('euOwnerName').value = oName || '';
         document.getElementById('euOwnerPhone').value = oPhone || '';
         document.getElementById('euOwnerEmail').value = oEmail || '';
+        if (document.getElementById('euOwnerTcNo')) document.getElementById('euOwnerTcNo').value = oTc || '';
         document.getElementById('euTenantName').value = tName || '';
         document.getElementById('euTenantPhone').value = tPhone || '';
         document.getElementById('euTenantEmail').value = tEmail || '';
+        if (document.getElementById('euTenantTcNo')) document.getElementById('euTenantTcNo').value = tTc || '';
         document.getElementById('euLandShare').value = landShare || '0';
         document.getElementById('euGrossSqm').value = grossSqm || '0';
 
